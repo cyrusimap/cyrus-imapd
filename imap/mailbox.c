@@ -1562,6 +1562,7 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     case 14:
     case 15:
     case 16:
+    case 17:
         headerlen = 160;
         break;
     default:
@@ -1614,6 +1615,10 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
 
     i->createdmodseq = align_ntohll(buf+OFFSET_MAILBOX_CREATEDMODSEQ);
 
+    if (i->minor_version < 17) goto crc;
+
+    i->changes_epoch = ntohl(*((bit32 *)(buf+OFFSET_CHANGES_EPOCH)));
+
 crc:
     /* CRC is always the last 4 bytes */
     crc = ntohl(*((bit32 *)(buf+headerlen-4)));
@@ -1630,6 +1635,10 @@ done:
     if (i->minor_version < 12) {
         i->deletedmodseq = i->highestmodseq;
         i->exists = i->num_records;
+    }
+
+    if (i->minor_version < 17) {
+        i->changes_epoch = time(0);
     }
 
     return 0;
@@ -2553,6 +2562,10 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
         align_htonll(buf+OFFSET_MAILBOX_CREATEDMODSEQ, i->createdmodseq);
     }
 
+    if (i->minor_version > 16) {
+        *((bit32 *)(buf+OFFSET_CHANGES_EPOCH)) = htonl(i->changes_epoch);
+    }
+
     /* Update checksum */
     crc = htonl(crc32_map((char *)buf, headerlen-4));
     *((bit32 *)(buf+headerlen-4)) = crc;
@@ -2939,7 +2952,7 @@ static int mailbox_is_virtannot(struct mailbox *mailbox, const char *entry)
     if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) return 1;
 
     if (mailbox->i.minor_version < 16) return 0;
-    // createdmodseq was introduced in v15
+    // createdmodseq was introduced in v16
     if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq")) return 1;
 
     return 0;
@@ -4148,6 +4161,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
         repack->newmailbox.i.record_size = 104;
         break;
     case 16:
+    case 17:
         repack->newmailbox.i.start_offset = 160;
         repack->newmailbox.i.record_size = 112;
         break;
@@ -4465,8 +4479,10 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
         /* we aren't keeping unlinked files, that's kind of the point */
         if (copyrecord.internal_flags & FLAG_INTERNAL_UNLINKED) {
             /* track the modseq for QRESYNC purposes */
-            if (copyrecord.modseq > repack->newmailbox.i.deletedmodseq)
+            if (copyrecord.modseq > repack->newmailbox.i.deletedmodseq) {
                 repack->newmailbox.i.deletedmodseq = copyrecord.modseq;
+                repack->newmailbox.i.changes_epoch = copyrecord.last_updated;
+            }
             continue;
         }
 
@@ -5119,6 +5135,7 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->i.uidvalidity = uidvalidity;
     mailbox->i.createdmodseq = createdmodseq;
     mailbox->i.highestmodseq = highestmodseq;
+    mailbox->i.changes_epoch = time(0);
     mailbox->i.synccrcs.basic = CRC_INIT_BASIC;
     mailbox->i.synccrcs.annot = CRC_INIT_ANNOT;
 

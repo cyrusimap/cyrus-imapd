@@ -74,7 +74,7 @@
  * make sure all the mailbox upgrade and downgrade code in mailbox.c is
  * changed to be able to convert both backwards and forwards between the
  * new version and all supported previous versions */
-#define MAILBOX_MINOR_VERSION   16
+#define MAILBOX_MINOR_VERSION   17
 #define MAILBOX_CACHE_MINOR_VERSION 9
 
 #define FNAME_HEADER "/cyrus.header"
@@ -207,6 +207,7 @@ struct index_header {
     uint32_t exists;
     time_t first_expunged;
     time_t last_repack_time;
+    time_t changes_epoch;
 
     modseq_t createdmodseq;
 
@@ -353,7 +354,7 @@ struct mailbox_iter {
  * files. We've created the header space now, but will also need code
  * changes, so holding off */
 #define OFFSET_MAILBOX_CREATEDMODSEQ 128 /* MODSEQ at creation time */
-#define OFFSET_SPARE0 136
+#define OFFSET_CHANGES_EPOCH 136   /* time from which we can calculate changes */
 #define OFFSET_SPARE1 140
 #define OFFSET_SPARE2 144
 #define OFFSET_SPARE3 148
