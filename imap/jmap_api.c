@@ -592,6 +592,7 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_contact_capabilities(capas);
         jmap_calendar_capabilities(capas);
         jmap_backup_capabilities(capas);
+        jmap_notes_capabilities(capas);
     }
     else {
         /* Lookup capabilities for shared account */

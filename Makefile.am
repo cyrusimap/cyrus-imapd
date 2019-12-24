@@ -1298,6 +1298,7 @@ imap_httpd_SOURCES += \
 	imap/jmap_mail_query.h \
 	imap/jmap_mail_submission.c \
 	imap/jmap_mailbox.c \
+	imap/jmap_notes.c \
 	imap/jmap_util.c \
 	imap/jmap_util.h \
 	imap/jmap_vacation.c \
