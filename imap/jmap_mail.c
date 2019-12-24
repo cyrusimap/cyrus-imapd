@@ -672,31 +672,33 @@ static json_t *_emailaddresses_from_addr(struct address *addr)
     struct buf buf = BUF_INITIALIZER;
 
     while (addr) {
-        json_t *e = json_pack("{}");
-
         const char *domain = addr->domain;
         if (!strcmpsafe(domain, "unspecified-domain")) {
             domain = NULL;
         }
 
         if (!addr->name && addr->mailbox && !domain) {
-            /* That's a group */
-            json_object_set_new(e, "name", json_string(addr->mailbox));
-            json_object_set_new(e, "email", json_null());
-            json_array_append_new(addresses, e);
+            /* That's a group. Ignore. */
             addr = addr->next;
             continue;
         }
 
+        if (!addr->name && !addr->mailbox) {
+            addr = addr->next;
+            continue;
+        }
+
+        /* It's a legit EmailAddress */
+        json_t *jemailaddr = json_pack("{}");
+
         /* name */
         if (addr->name) {
             char *tmp = _decode_mimeheader(addr->name);
-            if (tmp) json_object_set_new(e, "name", json_string(tmp));
+            if (tmp) json_object_set_new(jemailaddr, "name", json_string(tmp));
             free(tmp);
         } else {
-            json_object_set_new(e, "name", json_null());
+            json_object_set_new(jemailaddr, "name", json_null());
         }
-
         /* email */
         if (addr->mailbox) {
             buf_setcstr(&buf, addr->mailbox);
@@ -704,12 +706,13 @@ static json_t *_emailaddresses_from_addr(struct address *addr)
                 buf_putc(&buf, '@');
                 buf_appendcstr(&buf, domain);
             }
-            json_object_set_new(e, "email", json_string(buf_cstring(&buf)));
+            json_object_set_new(jemailaddr, "email", json_string(buf_cstring(&buf)));
             buf_reset(&buf);
         } else {
-            json_object_set_new(e, "email", json_null());
+            json_object_set_new(jemailaddr, "email", json_null());
         }
-        json_array_append_new(addresses, e);
+
+        json_array_append_new(addresses, jemailaddr);
         addr = addr->next;
     }
 
