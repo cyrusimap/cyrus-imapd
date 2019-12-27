@@ -2728,8 +2728,9 @@ static int eventpatch_updates_peruserprops_only(json_t *jdiff, const char *parti
     const char *prop;
     json_t *jval;
     int ret = 1;
+    void *tmp;
 
-    json_object_foreach(jdiff, prop, jval) {
+    json_object_foreach_safe(jdiff, tmp, prop, jval) {
         if (!strcmp(prop, "recurrenceOverrides")) {
             const char *recurid;
             json_t *joverride;
