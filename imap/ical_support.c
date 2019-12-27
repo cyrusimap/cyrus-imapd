@@ -1896,6 +1896,12 @@ EXPORTED icalproperty *icalproperty_new_name(const char *v)
     return prop;
 }
 
+#endif /* HAVE_RFC7986_PROPS */
+
+#ifndef HAVE_RFC7986_COLOR
+
+/* Replacement for missing function in 3.0.0 <= libical < 3.0.5 */
+
 EXPORTED icalproperty *icalproperty_new_color(const char *v)
 {
     icalproperty *prop = icalproperty_new_x(v);
@@ -1903,7 +1909,7 @@ EXPORTED icalproperty *icalproperty_new_color(const char *v)
     return prop;
 }
 
-#endif /* HAVE_RFC7986_PROPS */
+#endif /* HAVE_RFC7986_COLOR */
 
 
 #ifdef HAVE_IANA_PARAMS

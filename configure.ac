@@ -1595,6 +1595,9 @@ dnl
         AC_CHECK_LIB(ical, icalproperty_new_name,
                 AC_DEFINE(HAVE_RFC7986_PROPS,[],
                         [Do we have built-in support for RFC7986 props?]))
+        AC_CHECK_LIB(ical, icalproperty_new_color,
+                AC_DEFINE(HAVE_RFC7986_COLOR,[],
+                        [Do we have built-in support for RFC7986 color prop?]))
 
         AC_CHECK_LIB(ical, icalparameter_new_iana, [
                 AC_DEFINE(HAVE_IANA_PARAMS,[],
