@@ -4040,6 +4040,7 @@ static int eventquery_search_run(jmap_req_t *req,
     char *icalafter = NULL;
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct mailbox *mailbox = NULL;
+    const char *wantuid = json_string_value(json_object_get(filter, "uid"));
 
     if (before != caldav_eternity) {
         icaltimetype t = icaltime_from_timet_with_zone(before, 0, utc);
@@ -4097,6 +4098,9 @@ static int eventquery_search_run(jmap_req_t *req,
             if (icalafter && strcmp(cdata->dtend, icalafter) <= 0)
                 continue;
             if (icalbefore && strcmp(cdata->dtstart, icalbefore) >= 0)
+                continue;
+
+            if (wantuid && strcmp(wantuid, cdata->ical_uid))
                 continue;
 
             struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
@@ -4303,10 +4307,19 @@ static int eventquery_run(jmap_req_t *req,
     /* Attempt to fast-path trivial query */
 
     if (!have_textsearch && !expandrecur && query->position >= 0 && !query->anchor) {
-        /* Fast-path: we can offload most processing to Caldav DB. */
         struct eventquery_fastpath_rock rock = { req, query };
-        r = caldav_foreach_timerange(db, NULL, after, before, sort, nsort,
-                                     eventquery_fastpath_cb, &rock);
+        const char *wantuid = json_string_value(json_object_get(query->filter, "uid"));
+        if (wantuid) {
+            /* Super fast path!  We only want a single UID */
+            struct caldav_data *cdata = NULL;
+            r = caldav_lookup_uid(db, wantuid, &cdata);
+            if (!r) eventquery_fastpath_cb(&rock, cdata);
+        }
+        else {
+            /* Fast-path: we can offload most processing to Caldav DB. */
+            r = caldav_foreach_timerange(db, NULL, after, before, sort, nsort,
+                                         eventquery_fastpath_cb, &rock);
+        }
         goto done;
     }
 
@@ -4483,6 +4496,7 @@ static void validatefilter(jmap_req_t *req __attribute__((unused)),
                  !strcmp(field, "title") ||
                  !strcmp(field, "description") ||
                  !strcmp(field, "location") ||
+                 !strcmp(field, "uid") ||
                  !strcmp(field, "owner") ||
                  !strcmp(field, "attendee")) {
             if (!json_is_string(arg)) {
