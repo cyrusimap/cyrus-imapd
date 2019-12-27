@@ -3403,6 +3403,7 @@ done:
     free(resourcename);
     strarray_free(flags);
     freeentryatts(annots);
+    free(uid);
 
     return r;
 }
