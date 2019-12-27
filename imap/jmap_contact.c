@@ -2002,6 +2002,7 @@ typedef struct contact_filter {
     const char *online;
     const char *address;
     const char *notes;
+    const char *uid;
 } contact_filter;
 
 typedef struct contact_filter_rock {
@@ -2233,6 +2234,10 @@ static void *contact_filter_parse(json_t *arg)
     if (JNOTNULL(json_object_get(arg, "notes"))) {
         jmap_readprop(arg, "notes", 0, NULL, "s", &f->notes);
     }
+    /* uid */
+    if (JNOTNULL(json_object_get(arg, "uid"))) {
+        jmap_readprop(arg, "uid", 0, NULL, "s", &f->uid);
+    }
 
     return f;
 }
@@ -2274,6 +2279,7 @@ static void validatefilter(jmap_req_t *req __attribute__((unused)),
                  !strcmp(field, "phone") ||
                  !strcmp(field, "online") ||
                  !strcmp(field, "address") ||
+                 !strcmp(field, "uid") ||
                  !strcmp(field, "notes")) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
@@ -2433,15 +2439,24 @@ static int jmap_contact_query(struct jmap_req *req)
 
     /* Build filter */
     json_t *filter = json_object_get(req->args, "filter");
+    const char *wantuid = NULL;
     if (JNOTNULL(filter)) {
         parsed_filter = jmap_buildfilter(filter, contact_filter_parse);
+        wantuid = json_string_value(json_object_get(filter, "uid"));
     }
 
     /* Inspect every entry in this accounts addressbook mailboxes. */
     struct contactquery_rock rock = {
         req, &query, parsed_filter, NULL, db
     };
-    r = carddav_foreach(db, NULL, getcontactquery_cb, &rock);
+    if (wantuid) {
+        struct carddav_data *cdata = NULL;
+        r = carddav_lookup_uid(db, wantuid, &cdata);
+        if (!r) getcontactquery_cb(&rock, cdata);
+    }
+    else {
+        r = carddav_foreach(db, NULL, getcontactquery_cb, &rock);
+    }
     if (rock.mailbox) mailbox_close(&rock.mailbox);
     if (r) {
         err = jmap_server_error(r);
