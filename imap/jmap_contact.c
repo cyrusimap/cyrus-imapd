@@ -83,7 +83,7 @@ static int jmap_contact_copy(struct jmap_req *req);
 
 static int _contact_set_create(jmap_req_t *req, unsigned kind,
                                json_t *jcard, struct carddav_data *cdata,
-                               struct mailbox **mailbox, char **uidptr,
+                               struct mailbox **mailbox, json_t *item,
                                json_t *invalid);
 static int required_set_rights(json_t *props);
 static int _json_to_card(struct jmap_req *req,
@@ -913,10 +913,10 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
     const char *key;
     json_t *arg;
     json_object_foreach(set.create, key, arg) {
-        char *uid = NULL;
         json_t *invalid = json_pack("[]");
+        json_t *item = json_pack("{}");
         r = _contact_set_create(req, kind, arg,
-                                NULL, &mailbox, &uid, invalid);
+                                NULL, &mailbox, item, invalid);
         if (r) {
             json_t *err;
             switch (r) {
@@ -932,7 +932,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
             }
             json_object_set_new(set.not_created, key, err);
             r = 0;
-            free(uid);
+            json_decref(item);
+            json_decref(invalid);
             continue;
         }
         if (json_array_size(invalid)) {
@@ -940,17 +941,16 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                                     "type", "invalidProperties",
                                     "properties", invalid);
             json_object_set_new(set.not_created, key, err);
-            free(uid);
+            json_decref(item);
             continue;
         }
         json_decref(invalid);
 
-        /* Report calendar event as created. */
-        json_object_set_new(set.created, key, json_pack("{s:s}", "id", uid));
+        /* Report contact as created. */
+        json_object_set_new(set.created, key, item);
 
         /* Register creation id */
-        jmap_add_id(req, key, uid);
-        free(uid);
+        jmap_add_id(req, key, json_string_value(json_object_get(item, "id")));
     }
 
     /* update */
@@ -3252,7 +3252,7 @@ static int required_set_rights(json_t *props)
 
 static int _contact_set_create(jmap_req_t *req, unsigned kind,
                                json_t *jcard, struct carddav_data *cdata,
-                               struct mailbox **mailbox, char **uidptr,
+                               struct mailbox **mailbox, json_t *item,
                                json_t *invalid)
 {
     struct entryattlist *annots = NULL;
@@ -3262,14 +3262,13 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     int r = 0;
     char *resourcename = NULL;
 
-    *uidptr = NULL;
-
     if ((uid = (char *) json_string_value(json_object_get(jcard, "uid")))) {
         /* Use custom vCard UID from request object */
         uid = xstrdup(uid);
     }  else {
         /* Create a vCard UID */
         uid = xstrdup(makeuuid());
+        json_object_set_new(item, "uid", json_string(uid));
     }
 
     /* Determine mailbox and resource name of card.
@@ -3302,6 +3301,9 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     if (abookid && json_string_value(abookid)) {
         /* XXX - invalid arguments */
         addressbookId = json_string_value(abookid);
+    }
+    else {
+        json_object_set_new(item, "addressbookId", json_string(addressbookId));
     }
     char *mboxname = mboxname_abook(req->accountid, addressbookId);
     json_object_del(jcard, "addressbookId");
@@ -3377,10 +3379,10 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
         goto done;
     }
     r = 0;
-    *uidptr = uid;
+
+    json_object_set_new(item, "id", json_string(uid));
 
 done:
-    if (!*uidptr) free(uid);
     vparse_free_card(card);
     free(mboxname);
     free(resourcename);
@@ -3549,19 +3551,20 @@ static void _contact_copy(jmap_req_t *req,
 
     /* Create vcard */
     json_t *invalid = json_array();
-    char *dst_uid = NULL;
+    json_t *item = json_object();
     r = _contact_set_create(req, CARDDAV_KIND_CONTACT, dst_card,
-                           cdata, &dst_mbox, &dst_uid, invalid);
+                           cdata, &dst_mbox, item, invalid);
     if (r || json_array_size(invalid)) {
         if (!r) {
             *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
                                               "properties", invalid);
         }
+        json_decref(item);
         goto done;
     }
     json_decref(invalid);
-    *new_card = json_pack("{s:s}", "id", dst_uid);
-    free(dst_uid);
+
+    *new_card = item;
 
 done:
     if (r && *set_err == NULL) {
