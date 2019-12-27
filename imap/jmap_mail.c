@@ -461,6 +461,17 @@ struct headers {
     struct buf buf;
 };
 
+enum header_form {
+    HEADER_FORM_UNKNOWN          = 0, /* MUST be zero so we can cast to void* */
+    HEADER_FORM_RAW              = 1 << 0,
+    HEADER_FORM_TEXT             = 1 << 1,
+    HEADER_FORM_ADDRESSES        = 1 << 2,
+    HEADER_FORM_GROUPEDADDRESSES = 1 << 3,
+    HEADER_FORM_MESSAGEIDS       = 1 << 4,
+    HEADER_FORM_DATE             = 1 << 5,
+    HEADER_FORM_URLS             = 1 << 6
+};
+
 #define HEADERS_INITIALIZER \
     { json_array(), json_object(), BUF_INITIALIZER }
 
@@ -543,7 +554,7 @@ static void _headers_from_mime(const char *base, size_t len, struct headers *hea
     message_foreach_header(base, len, _headers_from_mime_cb, headers);
 }
 
-static json_t *_header_as_raw(const char *raw)
+static json_t *_header_as_raw(const char *raw, enum header_form form __attribute__((unused)))
 {
     if (!raw) return json_null();
     size_t len = strlen(raw);
@@ -551,7 +562,7 @@ static json_t *_header_as_raw(const char *raw)
     return json_stringn(raw, len);
 }
 
-static json_t *_header_as_date(const char *raw)
+static json_t *_header_as_date(const char *raw, enum header_form form __attribute__((unused)))
 {
     if (!raw) return json_null();
 
@@ -570,7 +581,7 @@ static json_t *_header_as_date(const char *raw)
     return json_string(cbuf);
 }
 
-static json_t *_header_as_text(const char *raw)
+static json_t *_header_as_text(const char *raw, enum header_form form __attribute__((unused)))
 {
     if (!raw) return json_null();
 
@@ -612,7 +623,7 @@ static void _remove_ws(char *s)
     } while ((*d++ = *s++));
 }
 
-static json_t *_header_as_messageids(const char *raw)
+static json_t *_header_as_messageids(const char *raw, enum header_form form __attribute__((unused)))
 {
     if (!raw) return json_null();
     json_t *msgids = json_array();
@@ -664,79 +675,110 @@ static json_t *_header_as_messageids(const char *raw)
     return msgids;
 }
 
-static json_t *_emailaddresses_from_addr(struct address *addr)
+static json_t *_emailaddresses_from_addr(struct address *addr, enum header_form form)
 {
     if (!addr) return json_null();
 
-    json_t *addresses = json_array();
-    struct buf buf = BUF_INITIALIZER;
+    json_t *result = json_array();
 
+    const char *groupname = NULL;
+    json_t *addresses = json_array();
+
+    struct buf buf = BUF_INITIALIZER;
     while (addr) {
         const char *domain = addr->domain;
         if (!strcmpsafe(domain, "unspecified-domain")) {
             domain = NULL;
         }
-
         if (!addr->name && addr->mailbox && !domain) {
-            /* That's a group. Ignore. */
-            addr = addr->next;
-            continue;
-        }
-
-        if (!addr->name && !addr->mailbox) {
-            addr = addr->next;
-            continue;
-        }
-
-        /* It's a legit EmailAddress */
-        json_t *jemailaddr = json_pack("{}");
-
-        /* name */
-        if (addr->name) {
-            char *tmp = _decode_mimeheader(addr->name);
-            if (tmp) json_object_set_new(jemailaddr, "name", json_string(tmp));
-            free(tmp);
-        } else {
-            json_object_set_new(jemailaddr, "name", json_null());
-        }
-        /* email */
-        if (addr->mailbox) {
-            buf_setcstr(&buf, addr->mailbox);
-            if (domain) {
-                buf_putc(&buf, '@');
-                buf_appendcstr(&buf, domain);
+            /* Start of group. */
+            if (form == HEADER_FORM_GROUPEDADDRESSES) {
+                if (form == HEADER_FORM_GROUPEDADDRESSES) {
+                    if (groupname || json_array_size(addresses)) {
+                        json_t *group = json_object();
+                        json_object_set_new(group, "name",
+                                groupname ? json_string(groupname) : json_null());
+                        json_object_set_new(group, "addresses", addresses);
+                        json_array_append_new(result, group);
+                        addresses = json_array();
+                    }
+                    groupname = NULL;
+                }
+                groupname = addr->mailbox;
             }
-            json_object_set_new(jemailaddr, "email", json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        } else {
-            json_object_set_new(jemailaddr, "email", json_null());
         }
-
-        json_array_append_new(addresses, jemailaddr);
+        else if (!addr->name && !addr->mailbox) {
+            /* End of group */
+            if (form == HEADER_FORM_GROUPEDADDRESSES) {
+                if (groupname || json_array_size(addresses)) {
+                    json_t *group = json_object();
+                    json_object_set_new(group, "name",
+                            groupname ? json_string(groupname) : json_null());
+                    json_object_set_new(group, "addresses", addresses);
+                    json_array_append_new(result, group);
+                    addresses = json_array();
+                }
+                groupname = NULL;
+            }
+        }
+        else {
+            /* Regular address */
+            json_t *jemailaddr = json_pack("{}");
+            if (addr->name) {
+                char *tmp = _decode_mimeheader(addr->name);
+                if (tmp) json_object_set_new(jemailaddr, "name", json_string(tmp));
+                free(tmp);
+            } else {
+                json_object_set_new(jemailaddr, "name", json_null());
+            }
+            if (addr->mailbox) {
+                buf_setcstr(&buf, addr->mailbox);
+                if (domain) {
+                    buf_putc(&buf, '@');
+                    buf_appendcstr(&buf, domain);
+                }
+                json_object_set_new(jemailaddr, "email", json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            } else {
+                json_object_set_new(jemailaddr, "email", json_null());
+            }
+            json_array_append_new(addresses, jemailaddr);
+        }
         addr = addr->next;
     }
-
-    if (!json_array_size(addresses)) {
-        json_decref(addresses);
-        addresses = json_null();
-    }
     buf_free(&buf);
-    return addresses;
+
+    if (form == HEADER_FORM_GROUPEDADDRESSES) {
+        if (groupname || json_array_size(addresses)) {
+            json_t *group = json_object();
+            json_object_set_new(group, "name",
+                    groupname ? json_string(groupname) : json_null());
+            json_object_set_new(group, "addresses", addresses);
+            json_array_append_new(result, group);
+        }
+        else json_decref(addresses);
+    }
+    else {
+        json_decref(result);
+        result = addresses;
+    }
+
+    return result;
 }
 
 
-static json_t *_header_as_addresses(const char *raw)
+static json_t *_header_as_addresses(const char *raw, enum header_form form)
 {
     if (!raw) return json_null();
 
     struct address *addrs = NULL;
     parseaddr_list(raw, &addrs);
-    json_t *result = _emailaddresses_from_addr(addrs);
+    json_t *result = _emailaddresses_from_addr(addrs, form);
     parseaddr_free(addrs);
     return result;
 }
 
-static json_t *_header_as_urls(const char *raw)
+static json_t *_header_as_urls(const char *raw, enum header_form form __attribute__((unused)))
 {
     if (!raw) return json_null();
 
@@ -763,21 +805,11 @@ static json_t *_header_as_urls(const char *raw)
     return urls;
 }
 
-enum _header_form {
-    HEADER_FORM_UNKNOWN = 0, /* MUST be zero so we can cast to void* */
-    HEADER_FORM_RAW,
-    HEADER_FORM_TEXT,
-    HEADER_FORM_ADDRESSES,
-    HEADER_FORM_MESSAGEIDS,
-    HEADER_FORM_DATE,
-    HEADER_FORM_URLS
-};
-
 struct header_prop {
     char *lcasename;
     char *name;
     const char *prop;
-    enum _header_form form;
+    enum header_form form;
     int all;
 };
 
@@ -798,7 +830,7 @@ static struct header_prop *_header_parseprop(const char *s)
     strarray_t *fields = strarray_split(s + 7, ":", 0);
     const char *f0, *f1, *f2;
     int is_valid = 1;
-    enum _header_form form = HEADER_FORM_RAW;
+    enum header_form form = HEADER_FORM_RAW;
     char *lcasename = NULL, *name = NULL;
 
     /* Initialize allowed header forms by lower-case header name. Any
@@ -810,33 +842,87 @@ static struct header_prop *_header_parseprop(const char *s)
     if (allowed_header_forms.size == 0) {
         /* TODO initialize with all headers in RFC5322 and RFC2369 */
         construct_hash_table(&allowed_header_forms, 32, 0);
-        hash_insert("bcc", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("cc", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("content-type", (void*) HEADER_FORM_RAW, &allowed_header_forms);
-        hash_insert("comment", (void*) HEADER_FORM_TEXT, &allowed_header_forms);
-        hash_insert("date", (void*) HEADER_FORM_DATE, &allowed_header_forms);
-        hash_insert("from", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("in-reply-to", (void*) HEADER_FORM_MESSAGEIDS, &allowed_header_forms);
-        hash_insert("list-archive", (void*) HEADER_FORM_URLS, &allowed_header_forms);
-        hash_insert("list-help", (void*) HEADER_FORM_URLS, &allowed_header_forms);
-        hash_insert("list-owner", (void*) HEADER_FORM_URLS, &allowed_header_forms);
-        hash_insert("list-post", (void*) HEADER_FORM_URLS, &allowed_header_forms);
-        hash_insert("list-subscribe", (void*) HEADER_FORM_URLS, &allowed_header_forms);
-        hash_insert("list-unsubscribe", (void*) HEADER_FORM_URLS, &allowed_header_forms);
-        hash_insert("message-id", (void*) HEADER_FORM_MESSAGEIDS, &allowed_header_forms);
-        hash_insert("references", (void*) HEADER_FORM_MESSAGEIDS, &allowed_header_forms);
-        hash_insert("reply-to", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("resent-date", (void*) HEADER_FORM_DATE, &allowed_header_forms);
-        hash_insert("resent-from", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("resent-message-id", (void*) HEADER_FORM_MESSAGEIDS, &allowed_header_forms);
-        hash_insert("resent-reply-to", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("resent-sender", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("resent-to", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("resent-cc", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("resent-bcc", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("sender", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
-        hash_insert("subject", (void*) HEADER_FORM_TEXT, &allowed_header_forms);
-        hash_insert("to", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("bcc",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("cc",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("content-type",
+                (void*) HEADER_FORM_RAW,
+                &allowed_header_forms);
+        hash_insert("comment",
+                (void*) HEADER_FORM_TEXT,
+                &allowed_header_forms);
+        hash_insert("date",
+                (void*) HEADER_FORM_DATE,
+                &allowed_header_forms);
+        hash_insert("from",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("in-reply-to",
+                (void*) HEADER_FORM_MESSAGEIDS,
+                &allowed_header_forms);
+        hash_insert("list-archive",
+                (void*) HEADER_FORM_URLS,
+                &allowed_header_forms);
+        hash_insert("list-help",
+                (void*) HEADER_FORM_URLS,
+                &allowed_header_forms);
+        hash_insert("list-owner",
+                (void*) HEADER_FORM_URLS,
+                &allowed_header_forms);
+        hash_insert("list-post",
+                (void*) HEADER_FORM_URLS,
+                &allowed_header_forms);
+        hash_insert("list-subscribe",
+                (void*) HEADER_FORM_URLS,
+                &allowed_header_forms);
+        hash_insert("list-unsubscribe",
+                (void*) HEADER_FORM_URLS,
+                &allowed_header_forms);
+        hash_insert("message-id",
+                (void*) HEADER_FORM_MESSAGEIDS,
+                &allowed_header_forms);
+        hash_insert("references",
+                (void*) HEADER_FORM_MESSAGEIDS,
+                &allowed_header_forms);
+        hash_insert("reply-to",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("resent-date",
+                (void*) HEADER_FORM_DATE,
+                &allowed_header_forms);
+        hash_insert("resent-from",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("resent-message-id",
+                (void*) HEADER_FORM_MESSAGEIDS,
+                &allowed_header_forms);
+        hash_insert("resent-reply-to",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("resent-sender",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("resent-to",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("resent-cc",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("resent-bcc",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("sender",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
+        hash_insert("subject",
+                (void*) HEADER_FORM_TEXT,
+                &allowed_header_forms);
+        hash_insert("to",
+                (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
+                &allowed_header_forms);
     }
 
     /* Parse property string into fields */
@@ -871,6 +957,8 @@ static struct header_prop *_header_parseprop(const char *s)
             form = HEADER_FORM_TEXT;
         else if (!strcmp(f1, "asAddresses"))
             form = HEADER_FORM_ADDRESSES;
+        else if (!strcmp(f1, "asGroupedAddresses"))
+            form = HEADER_FORM_GROUPEDADDRESSES;
         else if (!strcmp(f1, "asMessageIds"))
             form = HEADER_FORM_MESSAGEIDS;
         else if (!strcmp(f1, "asDate"))
@@ -883,9 +971,9 @@ static struct header_prop *_header_parseprop(const char *s)
 
     /* Validate requested header form */
     if (is_valid && form != HEADER_FORM_RAW) {
-        enum _header_form allowed_form = (enum _header_form) \
+        enum header_form allowed_form = (enum header_form) \
                                          hash_lookup(lcasename, &allowed_header_forms);
-        if (allowed_form != HEADER_FORM_UNKNOWN && form != allowed_form) {
+        if (allowed_form != HEADER_FORM_UNKNOWN && !(form & allowed_form)) {
             is_valid = 0;
         }
     }
@@ -4686,7 +4774,7 @@ static int _cyrusmsg_get_headers(struct cyrusmsg *msg,
 static json_t * _email_get_header(struct cyrusmsg *msg,
                                   const struct body *part,
                                   const char *lcasename,
-                                  enum _header_form want_form,
+                                  enum header_form want_form,
                                   int want_all)
 {
     if (!part) {
@@ -4701,31 +4789,31 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         json_t *jval = NULL;
         if (!strcmp("messageId", lcasename)) {
             jval = want_form == HEADER_FORM_MESSAGEIDS ?
-                _header_as_messageids(part->message_id) : json_null();
+                _header_as_messageids(part->message_id, want_form) : json_null();
         }
         else if (!strcmp("inReplyTo", lcasename)) {
             jval = want_form == HEADER_FORM_MESSAGEIDS ?
-                _header_as_messageids(part->in_reply_to) : json_null();
+                _header_as_messageids(part->in_reply_to, want_form) : json_null();
         }
         if (!strcmp("subject", lcasename)) {
             jval = want_form == HEADER_FORM_TEXT ?
-                _header_as_text(part->subject) : json_null();
+                _header_as_text(part->subject, want_form) : json_null();
         }
         if (!strcmp("from", lcasename)) {
-            jval = want_form == HEADER_FORM_ADDRESSES ?
-                _emailaddresses_from_addr(part->from) : json_null();
+            jval = want_form & (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES) ?
+                _emailaddresses_from_addr(part->from, want_form) : json_null();
         }
         else if (!strcmp("to", lcasename)) {
-            jval = want_form == HEADER_FORM_ADDRESSES ?
-                _emailaddresses_from_addr(part->to) : json_null();
+            jval = want_form & (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES) ?
+                _emailaddresses_from_addr(part->to, want_form) : json_null();
         }
         else if (!strcmp("cc", lcasename)) {
-            jval = want_form == HEADER_FORM_ADDRESSES ?
-                _emailaddresses_from_addr(part->cc) : json_null();
+            jval = want_form & (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES) ?
+                _emailaddresses_from_addr(part->cc, want_form) : json_null();
         }
         else if (!strcmp("bcc", lcasename)) {
-            jval = want_form == HEADER_FORM_ADDRESSES ?
-                _emailaddresses_from_addr(part->bcc) : json_null();
+            jval = want_form & (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES) ?
+                _emailaddresses_from_addr(part->bcc, want_form) : json_null();
         }
         else if (!strcmp("sentAt", lcasename)) {
             jval = json_null();
@@ -4742,7 +4830,7 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
     }
 
     /* Determine header form converter */
-    json_t* (*conv)(const char *raw);
+    json_t* (*conv)(const char *raw, enum header_form want_form);
     switch (want_form) {
         case HEADER_FORM_TEXT:
             conv = _header_as_text;
@@ -4751,6 +4839,7 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
             conv = _header_as_date;
             break;
         case HEADER_FORM_ADDRESSES:
+        case HEADER_FORM_GROUPEDADDRESSES:
             conv = _header_as_addresses;
             break;
         case HEADER_FORM_MESSAGEIDS:
@@ -4773,7 +4862,7 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         int r = message_get_field(msg->_m, lcasename, MESSAGE_RAW|MESSAGE_LAST, &buf);
         if (r) return json_null();
         json_t *jval = NULL;
-        if (buf_len(&buf)) jval = conv(buf_cstring(&buf));
+        if (buf_len(&buf)) jval = conv(buf_cstring(&buf), want_form);
         buf_free(&buf);
         if (jval) return jval;
     }
@@ -4796,14 +4885,14 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         for (i = 0; i < json_array_size(jheaders); i++) {
             json_t *jheader = json_array_get(jheaders, i);
             json_t *jheaderval = json_object_get(jheader, "value");
-            json_array_append_new(allvals, conv(json_string_value(jheaderval)));
+            json_array_append_new(allvals, conv(json_string_value(jheaderval), want_form));
         }
         return allvals;
     }
 
     json_t *jheader = json_array_get(jheaders, json_array_size(jheaders) - 1);
     json_t *jheaderval = json_object_get(jheader, "value");
-    return conv(json_string_value(jheaderval));
+    return conv(json_string_value(jheaderval), want_form);
 }
 
 static int _email_get_meta(jmap_req_t *req,
@@ -5039,37 +5128,37 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     /* messageId */
     if (jmap_wantprop(props, "messageId")) {
         json_object_set_new(email, "messageId",
-                _header_as_messageids(part->message_id));
+                _header_as_messageids(part->message_id, HEADER_FORM_MESSAGEIDS));
     }
     /* inReplyTo */
     if (jmap_wantprop(props, "inReplyTo")) {
         json_object_set_new(email, "inReplyTo",
-                _header_as_messageids(part->in_reply_to));
+                _header_as_messageids(part->in_reply_to, HEADER_FORM_MESSAGEIDS));
     }
     /* from */
     if (jmap_wantprop(props, "from")) {
         json_object_set_new(email, "from",
-                _emailaddresses_from_addr(part->from));
+                _emailaddresses_from_addr(part->from, HEADER_FORM_ADDRESSES));
     }
     /* to */
     if (jmap_wantprop(props, "to")) {
         json_object_set_new(email, "to",
-                _emailaddresses_from_addr(part->to));
+                _emailaddresses_from_addr(part->to, HEADER_FORM_ADDRESSES));
     }
     /* cc */
     if (jmap_wantprop(props, "cc")) {
         json_object_set_new(email, "cc",
-                _emailaddresses_from_addr(part->cc));
+                _emailaddresses_from_addr(part->cc, HEADER_FORM_ADDRESSES));
     }
     /* bcc */
     if (jmap_wantprop(props, "bcc")) {
         json_object_set_new(email, "bcc",
-                _emailaddresses_from_addr(part->bcc));
+                _emailaddresses_from_addr(part->bcc, HEADER_FORM_ADDRESSES));
     }
     /* subject */
     if (jmap_wantprop(props, "subject")) {
         json_object_set_new(email, "subject",
-                _header_as_text(part->subject));
+                _header_as_text(part->subject, HEADER_FORM_TEXT));
     }
     /* sentAt */
     if (jmap_wantprop(props, "sentAt")) {
@@ -6798,12 +6887,14 @@ static json_t *_header_make(const char *header_name, const char *prop_name, stru
 typedef json_t* (*header_from_t)(json_t *jval,
                                  struct jmap_parser *parser,
                                  const char *prop_name,
-                                 const char *header_name);
+                                 const char *header_name,
+                                 enum header_form form);
 
 static json_t *_header_from_raw(json_t *jraw,
                                 struct jmap_parser *parser,
                                 const char *prop_name,
-                                const char *header_name)
+                                const char *header_name,
+                                enum header_form form __attribute__((unused)))
 {
     /* Verbatim use header value in raw form */
     if (json_is_string(jraw)) {
@@ -6820,7 +6911,8 @@ static json_t *_header_from_raw(json_t *jraw,
 static json_t *_header_from_text(json_t *jtext,
                                  struct jmap_parser *parser,
                                  const char *prop_name,
-                                 const char *header_name)
+                                 const char *header_name,
+                                 enum header_form form __attribute__((unused)))
 {
     /* Parse a Text header into raw form */
     if (json_is_string(jtext)) {
@@ -6845,35 +6937,18 @@ static json_t *_header_from_text(json_t *jtext,
     }
 }
 
-static json_t *_header_from_jstrings(json_t *jstrings,
-                                     struct jmap_parser *parser,
-                                     const char *prop_name,
-                                     const char *header_name,
-                                     char sep)
+static json_t *_header_from_strings(const strarray_t *vals,
+                                    const char *prop_name,
+                                    const char *header_name)
 {
-    if (!json_array_size(jstrings)) {
-        jmap_parser_invalid(parser, prop_name);
-        return NULL;
-    }
-
-    size_t sep_len  = sep ? 1 : 0;
     size_t line_len = strlen(header_name) + 2;
-    size_t i;
-    json_t *jval;
     struct buf val = BUF_INITIALIZER;
+    int i;
 
-    json_array_foreach(jstrings, i, jval) {
-        const char *s = json_string_value(jval);
-        if (!s) {
-            jmap_parser_invalid(parser, prop_name);
-            goto fail;
-        }
+    for (i = 0; i < strarray_size(vals); i++) {
+        const char *s = strarray_nth(vals, i);
         size_t s_len = strlen(s);
-        if (i && sep) {
-            buf_putc(&val, sep);
-            line_len++;
-        }
-        if (line_len + s_len + sep_len  + 1 > MIME_MAX_HEADER_LENGTH) {
+        if (line_len + s_len + 1 > MIME_MAX_HEADER_LENGTH) {
             buf_appendcstr(&val, "\r\n ");
             line_len = 1;
         }
@@ -6886,114 +6961,169 @@ static json_t *_header_from_jstrings(json_t *jstrings,
     }
 
     return _header_make(header_name, prop_name, &val);
-
-fail:
-    buf_free(&val);
-    return NULL;
 }
 
 
 static json_t *_header_from_addresses(json_t *addrs,
                                        struct jmap_parser *parser,
                                        const char *prop_name,
-                                       const char *header_name)
+                                       const char *header_name,
+                                       enum header_form form)
 {
-    if (!json_array_size(addrs)) {
-        jmap_parser_invalid(parser, prop_name);
-        return NULL;
-    }
+    json_t *groups = form == HEADER_FORM_GROUPEDADDRESSES ?
+        addrs : json_pack("[{s:n s:O}]", "name", "addresses", addrs);
 
+    json_t *group;
     size_t i;
-    json_t *addr;
     struct buf emailbuf = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
-    json_t *jstrings = json_array();
     json_t *ret = NULL;
+    strarray_t vals = STRARRAY_INITIALIZER;
 
-    json_array_foreach(addrs, i, addr) {
-        json_t *jname = json_object_get(addr, "name");
-        if (!json_is_string(jname) && JNOTNULL(jname)) {
+    json_array_foreach(groups, i, group) {
+
+        const char *groupname = NULL;
+        json_t *jgroupname = json_object_get(group, "name");
+        if (json_is_string(jgroupname)) {
+            groupname = json_string_value(jgroupname);
+        }
+        else if (JNOTNULL(jgroupname)) {
             jmap_parser_push_index(parser, prop_name, i, NULL);
             jmap_parser_invalid(parser, "name");
             jmap_parser_pop(parser);
         }
 
-        json_t *jemail = json_object_get(addr, "email");
-        if (!json_is_string(jemail) && JNOTNULL(jemail)) {
+        if (groupname) {
+            buf_setcstr(&buf, groupname);
+            buf_putc(&buf, ':');
+            buf_putc(&buf, ' ');
+            strarray_append(&vals, buf_cstring(&buf));
+            buf_reset(&buf);
+        }
+
+        json_t *addrs = json_object_get(group, "addresses");
+        if (!json_is_array(addrs)) {
             jmap_parser_push_index(parser, prop_name, i, NULL);
-            jmap_parser_invalid(parser, "email");
+            jmap_parser_invalid(parser, "addresses");
             jmap_parser_pop(parser);
         }
-
-        if (json_array_size(parser->invalid))
+        if (json_array_size(parser->invalid)) {
             goto done;
-        if (!JNOTNULL(jname) && !JNOTNULL(jemail))
-            continue;
-
-        const char *name = json_string_value(jname);
-        const char *email = json_string_value (jemail);
-        if (!name && !email) continue;
-
-        /* Trim whitespace from email */
-        if (email) {
-            buf_setcstr(&emailbuf, email);
-            buf_trim(&emailbuf);
-            email = buf_cstring(&emailbuf);
         }
 
-        if (name && strlen(name) && email) {
-            enum name_type { ATOM, QUOTED_STRING, HIGH_BIT } name_type = ATOM;
-            const char *p;
-            for (p = name; *p; p++) {
-                char c = *p;
-                /* Check for ATOM characters */
-                if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z'))
-                    continue;
-                if ('0' <= c && c <= '9')
-                    continue;
-                if (strchr("!#$%&'*+-/=?^_`{|}~", c))
-                    continue;
-                if (c < 0) {
-                    /* Contains at least one high bit character. */
-                    name_type = HIGH_BIT;
-                    break;
+        json_t *addr;
+        size_t j;
+        json_array_foreach(addrs, j, addr) {
+            json_t *jname = json_object_get(addr, "name");
+            if (!json_is_string(jname) && JNOTNULL(jname)) {
+                if (form == HEADER_FORM_GROUPEDADDRESSES) {
+                    jmap_parser_push_index(parser, prop_name, i, NULL);
+                    jmap_parser_push_index(parser, "addresses", j, NULL);
+                    jmap_parser_invalid(parser, "name");
+                    jmap_parser_pop(parser);
+                    jmap_parser_pop(parser);
                 }
                 else {
-                    /* Requires at least a quoted string, but could
-                     * still contain a high bit at a later position. */
-                    name_type = QUOTED_STRING;
+                    jmap_parser_push_index(parser, prop_name, j, NULL);
+                    jmap_parser_invalid(parser, "name");
+                    jmap_parser_pop(parser);
                 }
             }
-            if (name_type == ATOM) {
-                buf_setcstr(&buf, name);
+
+            json_t *jemail = json_object_get(addr, "email");
+            if (!json_is_string(jemail) && JNOTNULL(jemail)) {
+                if (form == HEADER_FORM_GROUPEDADDRESSES) {
+                    jmap_parser_push_index(parser, prop_name, i, NULL);
+                    jmap_parser_push_index(parser, "addresses", j, NULL);
+                    jmap_parser_invalid(parser, "email");
+                    jmap_parser_pop(parser);
+                    jmap_parser_pop(parser);
+                }
+                else {
+                    jmap_parser_push_index(parser, prop_name, j, NULL);
+                    jmap_parser_invalid(parser, "email");
+                    jmap_parser_pop(parser);
+                }
             }
-            else if (name_type == QUOTED_STRING) {
-                buf_putc(&buf, '"');
+
+            if (json_array_size(parser->invalid))
+                goto done;
+            if (!JNOTNULL(jname) && !JNOTNULL(jemail))
+                continue;
+
+            const char *name = json_string_value(jname);
+            const char *email = json_string_value (jemail);
+            if (!name && !email) continue;
+
+            /* Trim whitespace from email */
+            if (email) {
+                buf_setcstr(&emailbuf, email);
+                buf_trim(&emailbuf);
+                email = buf_cstring(&emailbuf);
+            }
+
+            if (name && strlen(name) && email) {
+                enum name_type { ATOM, QUOTED_STRING, HIGH_BIT } name_type = ATOM;
+                const char *p;
                 for (p = name; *p; p++) {
-                    if (*p == '"' || *p == '\\' || *p == '\r') {
-                        buf_putc(&buf, '\\');
+                    char c = *p;
+                    /* Check for ATOM characters */
+                    if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z'))
+                        continue;
+                    if ('0' <= c && c <= '9')
+                        continue;
+                    if (strchr("!#$%&'*+-/=?^_`{|}~", c))
+                        continue;
+                    if (c < 0) {
+                        /* Contains at least one high bit character. */
+                        name_type = HIGH_BIT;
+                        break;
                     }
-                    buf_putc(&buf, *p);
+                    else {
+                        /* Requires at least a quoted string, but could
+                         * still contain a high bit at a later position. */
+                        name_type = QUOTED_STRING;
+                    }
                 }
-                buf_putc(&buf, '"');
+                if (name_type == ATOM) {
+                    buf_setcstr(&buf, name);
+                }
+                else if (name_type == QUOTED_STRING) {
+                    buf_putc(&buf, '"');
+                    for (p = name; *p; p++) {
+                        if (*p == '"' || *p == '\\' || *p == '\r') {
+                            buf_putc(&buf, '\\');
+                        }
+                        buf_putc(&buf, *p);
+                    }
+                    buf_putc(&buf, '"');
+                }
+                else if (name_type == HIGH_BIT) {
+                    char *xname = charset_encode_mimephrase(name);
+                    buf_appendcstr(&buf, xname);
+                    free(xname);
+                }
+                buf_printf(&buf, " <%s>", email);
+            } else if (email) {
+                buf_setcstr(&buf, email);
             }
-            else if (name_type == HIGH_BIT) {
-                char *xname = charset_encode_mimephrase(name);
-                buf_appendcstr(&buf, xname);
-                free(xname);
+            if (j < json_array_size(addrs) - 1 || i < json_array_size(groups) - 1) {
+                buf_putc(&buf, ',');
             }
-            buf_printf(&buf, " <%s>", email);
-        } else if (email) {
-            buf_setcstr(&buf, email);
+            strarray_append(&vals, buf_cstring(&buf));
+            buf_reset(&emailbuf);
+            buf_reset(&buf);
         }
-        json_array_append_new(jstrings, json_string(buf_cstring(&buf)));
-        buf_reset(&emailbuf);
-        buf_reset(&buf);
+
+        if (groupname)
+            strarray_append(&vals, ";");
     }
-    ret = _header_from_jstrings(jstrings, parser, prop_name, header_name, ',');
+
+    ret = _header_from_strings(&vals, prop_name, header_name);
 
 done:
-    json_decref(jstrings);
+    if (groups != addrs) json_decref(groups);
+    strarray_fini(&vals);
     buf_free(&emailbuf);
     buf_free(&buf);
     return ret;
@@ -7002,7 +7132,8 @@ done:
 static json_t *_header_from_messageids(json_t *jmessageids,
                                        struct jmap_parser *parser,
                                        const char *prop_name,
-                                       const char *header_name)
+                                       const char *header_name,
+                                       enum header_form form __attribute__((unused)))
 {
     if (!json_array_size(jmessageids)) {
         jmap_parser_invalid(parser, prop_name);
@@ -7013,7 +7144,7 @@ static json_t *_header_from_messageids(json_t *jmessageids,
     json_t *jval;
     struct buf val = BUF_INITIALIZER;
     struct buf msgid = BUF_INITIALIZER;
-    json_t *jstrings = json_array();
+    strarray_t vals = STRARRAY_INITIALIZER;
     json_t *ret = NULL;
 
     json_array_foreach(jmessageids, i, jval) {
@@ -7031,13 +7162,13 @@ static json_t *_header_from_messageids(json_t *jmessageids,
             jmap_parser_invalid(parser, prop_name);
             goto done;
         }
-        json_array_append_new(jstrings, json_string(buf_cstring(&val)));
+        strarray_append(&vals, buf_cstring(&val));
         buf_reset(&val);
     }
-    ret = _header_from_jstrings(jstrings, parser, prop_name, header_name, 0);
+    ret = _header_from_strings(&vals, prop_name, header_name);
 
 done:
-    json_decref(jstrings);
+    strarray_fini(&vals);
     buf_free(&msgid);
     buf_free(&val);
     return ret;
@@ -7046,7 +7177,8 @@ done:
 static json_t *_header_from_date(json_t *jdate,
                                  struct jmap_parser *parser,
                                  const char *prop_name,
-                                 const char *header_name)
+                                 const char *header_name,
+                                 enum header_form form __attribute__((unused)))
 {
     const char *s = json_string_value(jdate);
     if (!s) {
@@ -7072,7 +7204,8 @@ static json_t *_header_from_date(json_t *jdate,
 static json_t *_header_from_urls(json_t *jurls,
                                  struct jmap_parser *parser,
                                  const char *prop_name,
-                                const char *header_name)
+                                 const char *header_name,
+                                 enum header_form form __attribute__((unused)))
 {
     if (!json_array_size(jurls)) {
         jmap_parser_invalid(parser, prop_name);
@@ -7082,7 +7215,7 @@ static json_t *_header_from_urls(json_t *jurls,
     size_t i;
     json_t *jval;
     struct buf val = BUF_INITIALIZER;
-    json_t *jstrings = json_array();
+    strarray_t vals = STRARRAY_INITIALIZER;
     json_t *ret = NULL;
 
     json_array_foreach(jurls, i, jval) {
@@ -7095,13 +7228,16 @@ static json_t *_header_from_urls(json_t *jurls,
         buf_appendcstr(&val, "<");
         buf_appendcstr(&val, s);
         buf_appendcstr(&val, ">");
-        json_array_append_new(jstrings, json_string(buf_cstring(&val)));
+        if (i < json_array_size(jurls) - 1) {
+            buf_putc(&val, ',');
+        }
+        strarray_append(&vals, buf_cstring(&val));
         buf_reset(&val);
     }
-    ret = _header_from_jstrings(jstrings, parser, prop_name, header_name, ',');
+    ret = _header_from_strings(&vals, prop_name, header_name);
 
 done:
-    json_decref(jstrings);
+    strarray_fini(&vals);
     buf_free(&val);
     return ret;
 }
@@ -7137,6 +7273,7 @@ static void _headers_parseprops(json_t *jobject,
                 cb = _header_from_text;
                 break;
             case HEADER_FORM_ADDRESSES:
+            case HEADER_FORM_GROUPEDADDRESSES:
                 cb = _header_from_addresses;
                 break;
             case HEADER_FORM_MESSAGEIDS:
@@ -7162,13 +7299,13 @@ static void _headers_parseprops(json_t *jobject,
             json_t *jall = jval;
             json_array_foreach(jall, i, jval) {
                 jmap_parser_push_index(parser, field, i, NULL);
-                json_t *jheader = cb(jval, parser, field, hprop->name);
+                json_t *jheader = cb(jval, parser, field, hprop->name, hprop->form);
                 if (jheader) _headers_add_new(headers, jheader);
                 jmap_parser_pop(parser);
             }
         }
         else {
-            json_t *jheader = cb(jval, parser, field, hprop->name);
+            json_t *jheader = cb(jval, parser, field, hprop->name, hprop->form);
             if (jheader) _headers_add_new(headers, jheader);
         }
         _header_prop_free(hprop);
@@ -7311,8 +7448,27 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
     json_t *jlanguage = json_object_get(jpart, "language");
     seen_header = _headers_have(&part->headers, "Content-Language");
     if (json_is_array(jlanguage) && !seen_header) {
-        _headers_add_new(&part->headers, _header_from_jstrings(jlanguage,
-                    parser, "language", "Content-Language", ','));
+        strarray_t vals = STRARRAY_INITIALIZER;
+        size_t i;
+        json_t *jval;
+        struct buf buf = BUF_INITIALIZER;
+        json_array_foreach(jlanguage, i, jval) {
+            const char *lang = json_string_value(jval);
+            if (!lang) {
+                jmap_parser_push_index(parser, "language", i, NULL);
+                jmap_parser_invalid(parser, NULL);
+                jmap_parser_pop(parser);
+                continue;
+            }
+            buf_setcstr(&buf, lang);
+            if (i < json_array_size(jlanguage) - 1) {
+                buf_putc(&buf, ',');
+            }
+            strarray_append(&vals, buf_cstring(&buf));
+        }
+        _headers_add_new(&part->headers, _header_from_strings(&vals, "language", "Content-Language"));
+        buf_free(&buf);
+        strarray_fini(&vals);
     }
     else if (JNOTNULL(jlanguage)) {
         jmap_parser_invalid(parser, "language");
@@ -7908,7 +8064,7 @@ static void _parse_email(json_t *jemail,
     seen_header = _headers_have(&email->headers, "Message-Id");
     if (json_array_size(prop) == 1 && !seen_header) {
         _headers_add_new(&email->headers, _header_from_messageids(prop,
-                    parser, "messageId", "Message-Id"));
+                    parser, "messageId", "Message-Id", HEADER_FORM_MESSAGEIDS));
     }
     else if (JNOTNULL(prop)) {
         jmap_parser_invalid(parser, "messageId");
@@ -7918,7 +8074,7 @@ static void _parse_email(json_t *jemail,
     seen_header = _headers_have(&email->headers, "In-Reply-To");
     if (json_is_array(prop) && !seen_header) {
         _headers_add_new(&email->headers, _header_from_messageids(prop,
-                    parser, "inReplyTo", "In-Reply-To"));
+                    parser, "inReplyTo", "In-Reply-To", HEADER_FORM_MESSAGEIDS));
     }
     else if (JNOTNULL(prop)) {
         jmap_parser_invalid(parser, "inReplyTo");
@@ -7928,7 +8084,7 @@ static void _parse_email(json_t *jemail,
     seen_header = _headers_have(&email->headers, "References");
     if (json_is_array(prop) && !seen_header) {
         _headers_add_new(&email->headers, _header_from_messageids(prop,
-                    parser, "references", "References"));
+                    parser, "references", "References", HEADER_FORM_MESSAGEIDS));
     }
     else if (JNOTNULL(prop)) {
         jmap_parser_invalid(parser, "references");
@@ -7938,7 +8094,7 @@ static void _parse_email(json_t *jemail,
     seen_header = _headers_have(&email->headers, "Date");
     if (json_is_string(prop) && !seen_header) {
         _headers_add_new(&email->headers, _header_from_date(prop,
-                    parser, "sentAt", "Date"));
+                    parser, "sentAt", "Date", HEADER_FORM_DATE));
     }
     else if (JNOTNULL(prop)) {
         jmap_parser_invalid(parser, "sentAt");
@@ -7955,7 +8111,8 @@ static void _parse_email(json_t *jemail,
     prop = json_object_get(jemail, "from");
     seen_header = _headers_have(&email->headers, "From");
     if (json_is_array(prop) && !seen_header) {
-        if ((jheader = _header_from_addresses(prop, parser, "from", "From"))) {
+        if ((jheader = _header_from_addresses(prop, parser, "from",
+                        "From", HEADER_FORM_ADDRESSES))) {
             _headers_add_new(&email->headers, jheader);
         }
     }
@@ -7966,7 +8123,8 @@ static void _parse_email(json_t *jemail,
     prop = json_object_get(jemail, "replyTo");
     seen_header = _headers_have(&email->headers, "Reply-To");
     if (json_is_array(prop) && !seen_header) {
-        if ((jheader = _header_from_addresses(prop, parser, "replyTo", "Reply-To"))) {
+        if ((jheader = _header_from_addresses(prop, parser, "replyTo",
+                        "Reply-To", HEADER_FORM_ADDRESSES))) {
             _headers_add_new(&email->headers, jheader);
         }
     }
@@ -7977,7 +8135,8 @@ static void _parse_email(json_t *jemail,
     prop = json_object_get(jemail, "sender");
     seen_header = _headers_have(&email->headers, "Sender");
     if (json_is_array(prop) && !seen_header) {
-        if ((jheader = _header_from_addresses(prop, parser, "sender", "Sender"))) {
+        if ((jheader = _header_from_addresses(prop, parser, "sender",
+                        "Sender", HEADER_FORM_ADDRESSES))) {
             _headers_add_new(&email->headers, jheader);
         }
     }
@@ -7988,7 +8147,8 @@ static void _parse_email(json_t *jemail,
     prop = json_object_get(jemail, "to");
     seen_header = _headers_have(&email->headers, "To");
     if (json_is_array(prop) && !seen_header) {
-        if ((jheader = _header_from_addresses(prop, parser, "to", "To"))) {
+        if ((jheader = _header_from_addresses(prop, parser, "to",
+                        "To", HEADER_FORM_ADDRESSES))) {
             _headers_add_new(&email->headers, jheader);
         }
     }
@@ -7999,7 +8159,8 @@ static void _parse_email(json_t *jemail,
     prop = json_object_get(jemail, "cc");
     seen_header = _headers_have(&email->headers, "Cc");
     if (json_is_array(prop) && !seen_header) {
-        if ((jheader = _header_from_addresses(prop, parser, "cc", "Cc"))) {
+        if ((jheader = _header_from_addresses(prop, parser, "cc",
+                        "Cc", HEADER_FORM_ADDRESSES))) {
             _headers_add_new(&email->headers, jheader);
         }
     }
@@ -8010,7 +8171,8 @@ static void _parse_email(json_t *jemail,
     prop = json_object_get(jemail, "bcc");
     seen_header = _headers_have(&email->headers, "Bcc");
     if (json_is_array(prop) && !seen_header) {
-        if ((jheader = _header_from_addresses(prop, parser, "bcc", "Bcc"))) {
+        if ((jheader = _header_from_addresses(prop, parser, "bcc",
+                        "Bcc", HEADER_FORM_ADDRESSES))) {
             _headers_add_new(&email->headers, jheader);
         }
     }
@@ -8021,7 +8183,8 @@ static void _parse_email(json_t *jemail,
     prop = json_object_get(jemail, "subject");
     seen_header = _headers_have(&email->headers, "Subject");
     if (json_is_string(prop) && !seen_header) {
-        if ((jheader = _header_from_text(prop, parser, "subject", "Subject"))) {
+        if ((jheader = _header_from_text(prop, parser, "subject",
+                        "Subject", HEADER_FORM_TEXT))) {
             _headers_add_new(&email->headers, jheader);
         }
     }
