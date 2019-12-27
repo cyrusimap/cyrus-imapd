@@ -1410,7 +1410,7 @@ dnl
 PKG_CHECK_MODULES([JANSSON], [jansson >= 2.3],
                   [ AC_DEFINE(HAVE_JANSSON, [], [Do we have Jansson?])
                     with_jansson=yes ],
-                  with_jansson=no)
+                  AC_MSG_ERROR([libjansson is required]))
 dnl call AC_SUBST macro to support pkg-config version older than 0.24
 AC_SUBST([JANSSON_LIBS])
 AC_SUBST([JANSSON_CFLAGS])
