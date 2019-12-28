@@ -2001,6 +2001,7 @@ EXPORTED charset_t charset_lookupname(const char *name)
     }
 
     /* Still here? This means we don't know this charset name */
+    free(s->name);
     free(s);
     return CHARSET_UNKNOWN_CHARSET;
 }
