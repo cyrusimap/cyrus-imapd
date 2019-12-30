@@ -306,7 +306,7 @@ until you're able to finish your 3.0 installation.
 
 .. warning::
 
-    Versions of 3.0 prior to 3.0.11 contained a bug (:issue:`2389`) that
+    Versions of 3.0 prior to 3.0.11 contained a bug (:issue:`2839`) that
     could lead to loss of seen state/flags during `reconstruct` for some
     messages that already existed prior to Cyrus 2.3.  The :ref:`3.0.11
     release notes <relnotes-3.0.11-changes>` contain the specifics.
