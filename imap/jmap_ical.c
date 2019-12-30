@@ -650,19 +650,18 @@ static const char *tzid_from_ical(icalcomponent *comp,
 
 static struct icaltimetype dtstart_from_ical(icalcomponent *comp)
 {
-    struct icaltimetype dt;
-    const char *tzid;
+    struct icaltimetype dt = icalcomponent_get_dtstart(comp);
 
-    dt = icalcomponent_get_dtstart(comp);
-    if (dt.zone) return dt;
+    const char *tzid = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
+    /* Seen in the wild: a floating DTSTART and a DTEND with TZID */
+    if (!tzid) tzid = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
+    if (!tzid) return dt;
 
-    if ((tzid = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY))) {
-        dt.zone = tz_from_tzid(tzid);
+    icaltimezone* tz = tz_from_tzid(tzid);
+    if (tz && dt.zone && tz != dt.zone) {
+        dt = icaltime_convert_to_zone(dt, tz);
     }
-    else if ((tzid = tzid_from_ical(comp, ICAL_DTEND_PROPERTY))) {
-        /* Seen in the wild: a floating DTSTART and a DTEND with TZID */
-        dt.zone = tz_from_tzid(tzid);
-    }
+    else if (!dt.zone) dt.zone = tz;
 
     return dt;
 }
@@ -675,10 +674,12 @@ static struct icaltimetype dtend_from_ical(icalcomponent *comp)
 
     if ((prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY))) {
         dtend = icalproperty_get_dtend(prop);
-        if (!dtend.zone) {
-            const char *tzid = tzid_from_icalprop(prop, 1);
-            dtend.zone = tz_from_tzid(tzid);
+        const char *tzid = tzid_from_icalprop(prop, 1);
+        icaltimezone* tz = tzid ? tz_from_tzid(tzid) : NULL;
+        if (tz && dtend.zone && tz != dtend.zone) {
+            dtend = icaltime_convert_to_zone(dtend, tz);
         }
+        else if (!dtend.zone) dtend.zone = tz;
     }
     else dtend = icalcomponent_get_dtend(comp);
 
@@ -2144,7 +2145,11 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     if (jmap_wantprop(props, "start")) {
         struct jmapical_datetime start = JMAPICAL_DATETIME_INITIALIZER;
         if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
-            jmapical_datetime_from_icalprop(prop, &start);
+            bit64 nano = 0;
+            subseconds_from_icalprop(prop, &nano);
+            icaltimetype dtstart = dtstart_from_ical(comp);
+            jmapical_datetime_from_icaltime(dtstart, &start);
+            start.nano = nano;
         }
         jmapical_localdatetime_as_string(&start, &buf);
         json_object_set_new(event, "start", json_string(buf_cstring(&buf)));
