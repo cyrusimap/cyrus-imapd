@@ -293,7 +293,7 @@ static void test_encode_mimeheader(void)
     TESTCASE("abc\r\nxyz", "=?UTF-8?Q?abc?=\r\n =?UTF-8?Q?xyz?=");
 
     /* wrap */
-    TESTCASE("abc\r\n xyz", "=?UTF-8?Q?abc?=\r\n =?UTF-8?Q?xyz?=");
+    TESTCASE("abc\r\n xyz", "abc\r\n xyz");
 
     /* three-byte UTF-8 word barely fits line length limit */
     TESTCASE("0123456789012345678901234567890123456789012345678901234\xe2\x82\xac",

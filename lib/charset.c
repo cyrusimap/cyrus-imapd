@@ -3042,13 +3042,25 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             if (QPSAFECHAR[this] || this == '=' || this == ' ' || this == '\t') {
                 /* per RFC 5322: printable ASCII (decimal 33 - 126), SP, HTAB */
                 /* but only if the line doesn't exceed the 76 octet limit */
-                if (n - prev_lf <= 74) continue;
+                if (n - prev_lf <= 76) continue;
             }
-            else if (!isheader && this == '\r' && next == '\n') {
+            else if (this == '\r' && next == '\n') {
                 /* line break (CRLF) */
+                int is_fws = 0;
+
                 n++;
-                prev_lf = n;
-                continue;
+                if (isheader) {
+                    next = (n < len - 1) ? data[n+1] : '\0';
+                    if (next == ' ' || next == '\t') {
+                        /* folding white space */
+                        is_fws = 1;
+                    }
+                }
+
+                if (!isheader || is_fws) {
+                    prev_lf = n+1;
+                    continue;
+                }
             }
             need_quote = 1;
             break;
