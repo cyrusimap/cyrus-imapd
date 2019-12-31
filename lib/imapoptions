@@ -3078,6 +3078,16 @@ of the incoming network interface, or if no record is found, the
 .PP
    If no unit is specified, minutes is assumed. */
 
+{ "webdav_attachment_host", NULL, STRING, "3.1.9" }
+/* The default host of WebDAV managed attachment URLs.
+   If not specified, the target host of the DAV HTTP request that uploaded
+   the attachment will be used. */
+
+{ "webdav_attachment_scheme", NULL, STRING, "3.1.9" }
+/* The default scheme of WebDAV managed attachment URLs.
+   If not specified, the scheme of the DAV HTTP request that uploaded
+   the attachment will be used. */
+
 { "xbackup_enabled", 0, SWITCH, "3.0.0" }
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin
    users can use this command to provoke a replication of specified users

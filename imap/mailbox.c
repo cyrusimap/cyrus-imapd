@@ -194,7 +194,6 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
                                          unsigned char *buf);
 
 #ifdef WITH_DAV
-static struct webdav_db *mailbox_open_webdav(struct mailbox *);
 static int mailbox_commit_dav(struct mailbox *mailbox);
 static int mailbox_abort_dav(struct mailbox *mailbox);
 #endif
@@ -2393,7 +2392,7 @@ HIDDEN struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox)
     return mailbox->local_carddav;
 }
 
-static struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
+EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
 {
     if (!mailbox->local_webdav) {
         mailbox->local_webdav = webdav_open_mailbox(mailbox);
