@@ -97,4 +97,17 @@ extern int caldav_create_defaultcalendars(const char *userid,
                                           const struct auth_state *authstate,
                                           mbentry_t **mbentryp);
 
+extern void caldav_attachment_url(struct buf *buf, const char *userid,
+                                  const char *proto, const char *host,
+                                  const char *managedid);
+
+/* Update refcounts for managed attachments owned by userid.
+ * For updated events, both ical and oldical must be non-null.
+ * for deleted events, ical must be null.
+ * Returns HTTP_NOT_FOUND for any invalid managed id, or some
+ * other HTTP error on internal error. */
+extern int caldav_manage_attachments(const char *userid,
+                                     icalcomponent *ical,
+                                     icalcomponent *oldical);
+
 #endif /* CALDAV_UTIL_H */
