@@ -51,6 +51,7 @@
 #include "jmap_util.h"
 #include "json_support.h"
 #include "msgrecord.h"
+#include "jmap_ical.h"
 
 extern int jmap_email_find(jmap_req_t *req, const char *email_id,
                            const char *from_accountid,
@@ -66,5 +67,11 @@ extern void jmap_mailbox_capabilities(json_t *jcapabilities);
 
 extern int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
                                   char **mboxnameptr, char **uniqueid);
+
+/* Initialize a JMAP context for JSCalendar/iCalendar conversion
+ * Defined here so we can reuse in jmap_mail.c */
+extern void jmap_calendarcontext_init(struct jmapical_jmapcontext *ctx, jmap_req_t *req);
+
+extern void jmap_calendarcontext_fini(struct jmapical_jmapcontext *ctx);
 
 #endif /* JMAP_MAIL_H */
