@@ -7289,6 +7289,8 @@ static int _email_get_bodies(jmap_req_t *req,
     /* calendarEvents -- non-standard */
     if (jmap_wantprop(props, "calendarEvents")) {
         json_t *calendar_events = json_object();
+        struct jmapical_jmapcontext jmapctx;
+        jmap_calendarcontext_init(&jmapctx, req);
         int i;
         for (i = 0; i < bodies.attslist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.attslist, i);
@@ -7323,12 +7325,13 @@ static int _email_get_bodies(jmap_req_t *req,
             free(decbuf);
             if (!ical) continue;
             /* Parse iCalendar object to JSCalendar */
-            json_t *jsevents = jmapical_tojmap_all(ical, NULL);
+            json_t *jsevents = jmapical_tojmap_all(ical, NULL, NULL/*FIXME jmapctx*/);
             if (json_array_size(jsevents)) {
                 json_object_set_new(calendar_events, part->part_id, jsevents);
             }
             icalcomponent_free(ical);
         }
+        jmap_calendarcontext_fini(&jmapctx);
         if (!json_object_size(calendar_events)) {
             json_decref(calendar_events);
             calendar_events = json_null();

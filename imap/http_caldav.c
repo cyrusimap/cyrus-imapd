@@ -1291,10 +1291,9 @@ static int open_attachments(const char *userid, struct mailbox **attachments,
 }
 
 /* Check an iCal object to see if managed attachments are being manipulated */
-static int manage_attachments(struct transaction_t *txn,
-                              struct mailbox *mailbox,
-                              icalcomponent *ical, struct caldav_data *cdata,
-                              icalcomponent **oldical, strarray_t *schedule_addresses)
+HIDDEN int caldav_manage_attachments(const char *userid,
+                                     icalcomponent *ical,
+                                     icalcomponent *oldical)
 {
     /* Compare any managed attachments in new and existing resources */
     struct mailbox *attachments = NULL;
@@ -1335,8 +1334,7 @@ static int manage_attachments(struct transaction_t *txn,
 
                 if (!attachments) {
                     /* Open attachments collection and its DAV DB for writing */
-                    ret = open_attachments(httpd_userid,
-                                           &attachments, &webdavdb);
+                    ret = open_attachments(userid, &attachments, &webdavdb);
                     if (ret) goto done;
                 }
 
@@ -1345,8 +1343,7 @@ static int manage_attachments(struct transaction_t *txn,
                 webdav_lookup_uid(webdavdb, mid, &wdata);
 
                 if (!wdata->dav.rowid) {
-                    txn->error.precond = CALDAV_VALID_MANAGEDID;
-                    ret = HTTP_FORBIDDEN;
+                    ret = HTTP_NOT_FOUND;
                     goto done;
                 }
 
@@ -1364,6 +1361,64 @@ static int manage_attachments(struct transaction_t *txn,
     }
 
     /* Compare existing managed attachments to those in new resource */
+    comp = icalcomponent_get_first_real_component(oldical);
+    kind = icalcomponent_isa(comp);
+
+    for (; comp;
+         comp = icalcomponent_get_next_component(oldical, kind)) {
+        for (prop = icalcomponent_get_first_property(comp,
+                    ICAL_ATTACH_PROPERTY);
+                prop;
+                prop = icalcomponent_get_next_property(comp,
+                    ICAL_ATTACH_PROPERTY)) {
+
+            param = icalproperty_get_managedid_parameter(prop);
+            if (!param) continue;
+
+            mid = icalparameter_get_managedid(param);
+            op = hash_lookup(mid, &mattach_table);
+            if (!op) {
+                /* Attachment removed from ical */
+                op = xmalloc(sizeof(short));
+                *op = REFCNT_DEC;
+                hash_insert(mid, op, &mattach_table);
+            }
+            else if (*op != REFCNT_DEC) {
+                /* Attachment still in ical */
+                *op = REFCNT_HOLD;
+            }
+        }
+    }
+
+    if (hash_numrecords(&mattach_table)) {
+        if (!attachments) {
+            /* Open attachments collection and its DAV DB for writing */
+            ret = open_attachments(userid, &attachments, &webdavdb);
+            if (ret) goto done;
+        }
+
+        /* Update reference counts of attachments in hash table */
+        struct update_rock urock = { attachments, webdavdb };
+        hash_enumerate(&mattach_table,
+                       (void(*)(const char*,void*,void*)) &update_refcount,
+                       &urock);
+    }
+
+done:
+    free_hash_table(&mattach_table, free);
+    if (webdavdb) webdav_close(webdavdb);
+    mailbox_close(&attachments);
+
+    return ret;
+}
+
+static int manage_attachments(struct transaction_t *txn,
+                              struct mailbox *mailbox,
+                              icalcomponent *ical, struct caldav_data *cdata,
+                              icalcomponent **oldical, strarray_t *schedule_addresses)
+{
+    int ret = 0;
+
     if (cdata->comp_flags.mattach) {
         if (!*oldical) {
             syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
@@ -1377,56 +1432,15 @@ static int manage_attachments(struct transaction_t *txn,
                 goto done;
             }
         }
-
-        comp = icalcomponent_get_first_real_component(*oldical);
-        kind = icalcomponent_isa(comp);
-
-        for (; comp;
-             comp = icalcomponent_get_next_component(*oldical, kind)) {
-            for (prop = icalcomponent_get_first_property(comp,
-                                                         ICAL_ATTACH_PROPERTY);
-                 prop;
-                 prop = icalcomponent_get_next_property(comp,
-                                                        ICAL_ATTACH_PROPERTY)) {
-
-                param = icalproperty_get_managedid_parameter(prop);
-                if (!param) continue;
-
-                mid = icalparameter_get_managedid(param);
-                op = hash_lookup(mid, &mattach_table);
-                if (!op) {
-                    /* Attachment removed from ical */
-                    op = xmalloc(sizeof(short));
-                    *op = REFCNT_DEC;
-                    hash_insert(mid, op, &mattach_table);
-                }
-                else if (*op != REFCNT_DEC) {
-                    /* Attachment still in ical */
-                    *op = REFCNT_HOLD;
-                }
-            }
-        }
     }
 
-    if (hash_numrecords(&mattach_table)) {
-        if (!attachments) {
-            /* Open attachments collection and its DAV DB for writing */
-            ret = open_attachments(httpd_userid, &attachments, &webdavdb);
-            if (ret) goto done;
-        }
-
-        /* Update reference counts of attachments in hash table */
-        struct update_rock urock = { attachments, webdavdb };
-        hash_enumerate(&mattach_table,
-                       (void(*)(const char*,void*,void*)) &update_refcount,
-                       &urock);
+    ret = caldav_manage_attachments(httpd_userid, ical, *oldical);
+    if (ret == HTTP_NOT_FOUND) {
+        txn->error.precond = CALDAV_VALID_MANAGEDID;
+        ret = HTTP_FORBIDDEN;
     }
 
-  done:
-    free_hash_table(&mattach_table, free);
-    if (webdavdb) webdav_close(webdavdb);
-    mailbox_close(&attachments);
-
+done:
     return ret;
 }
 
@@ -2584,6 +2598,18 @@ static struct webdav_data *increment_refcount(const char *managed_id,
     return wdata;
 }
 
+HIDDEN void caldav_attachment_url(struct buf *buf,
+                                  const char *userid,
+                                  const char *proto,
+                                  const char *host,
+                                  const char *managedid)
+{
+    buf_printf(buf, "%s://%s%s/%s/%s/%s%s",
+            proto, host, namespace_calendar.prefix,
+            USER_COLLECTION_PREFIX,
+            userid, MANAGED_ATTACH, managedid);
+}
+
 /* Manage attachment */
 static int caldav_post_attach(struct transaction_t *txn, int rights)
 {
@@ -2798,16 +2824,18 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         wdata = increment_refcount(uid, webdavdb);
 
         /* Create new ATTACH property */
-        const char *proto = NULL, *host = NULL;
-        icalattach *attach;
-
+        const char *proto = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_SCHEME);
+        const char *host = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_HOST);
+        if (!proto || !host) {
+            const char *txnproto = NULL;
+            const char *txnhost = NULL;
+            http_proto_host(txn->req_hdrs, &txnproto, &txnhost);
+            if (!proto) proto = txnproto;
+            if (!host) host = txnhost;
+        }
         assert(!buf_len(&txn->buf));
-        http_proto_host(txn->req_hdrs, &proto, &host);
-        buf_printf(&txn->buf, "%s://%s%s/%s/%s/%s%s",
-                   proto, host, namespace_calendar.prefix,
-                   USER_COLLECTION_PREFIX,
-                   txn->req_tgt.userid, MANAGED_ATTACH, uid);
-        attach = icalattach_new_from_url(buf_cstring(&txn->buf));
+        caldav_attachment_url(&txn->buf, txn->req_tgt.userid, proto, host, uid);
+        icalattach *attach = icalattach_new_from_url(buf_cstring(&txn->buf));
         buf_reset(&txn->buf);
 
         aprop = icalproperty_new_attach(attach);
