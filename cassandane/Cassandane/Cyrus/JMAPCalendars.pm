@@ -8551,4 +8551,110 @@ sub test_calendarevent_set_peruser
 
 }
 
+sub test_calendarevent_set_linkblobid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Upload blob via JMAP";
+    my $res = $jmap->Upload('jmapblob', "application/octet-stream");
+    my $blobId = $res->{blobId};
+    $self->assert_not_null($blobId);
+
+    xlog "Create and assert event with a Link.blobId";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarId => 'Default',
+                    title => "event1",
+                    start => "2019-12-10T23:30:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    links => {
+                        link1 => {
+                            rel => 'enclosure',
+                            blobId => $blobId,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#1'],
+            properties => ['links', 'x-href'],
+        }, 'R2']
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+    my $event = $res->[1][1]{list}[0];
+    $self->assert_str_equals('enclosure', $event->{links}{link1}{rel});
+    $self->assert_str_equals($blobId, $event->{links}{link1}{blobId});
+    $self->assert_not_null($event->{links}{link1}{href});
+
+    xlog "download blob via CalDAV";
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $CalDAV->auth_header(),
+        },
+    };
+    $res = $CalDAV->ua->get($event->{links}{link1}{href}, $RawRequest);
+    $self->assert_str_equals('jmapblob', $res->{content});
+
+    xlog "Remove link from event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    links => undef,
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Add attachment via CalDAV";
+    $RawRequest = {
+        headers => {
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment;filename=test',
+            'Prefer' => 'return=representation',
+            'Authorization' => $CalDAV->auth_header(),
+        },
+        content => 'davattach',
+    };
+    my $URI = $CalDAV->request_url($event->{'x-href'}) . '?action=attachment-add';
+    my $RawResponse = $CalDAV->ua->post($URI, $RawRequest);
+
+    warn "CalDAV " . Dumper($RawRequest, $RawResponse);
+    $self->assert_str_equals('201', $RawResponse->{status});
+
+    xlog "Download attachment via JMAP";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$event->{id}],
+            properties => ['links', 'x-href'],
+        }, 'R1']
+    ]);
+    $event = $res->[0][1]{list}[0];
+    my $attachmentBlobId = (values %{$event->{links}})[0]{blobId};
+    $self->assert_not_null($attachmentBlobId);
+    $res = $jmap->Download('cassandane', $attachmentBlobId);
+    $self->assert_str_equals('davattach', $res->{content});
+
+    xlog "Delete event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            destroy => [
+                $eventId,
+            ],
+        }, 'R1']
+    ]);
+    $self->assert_str_equals($eventId, $res->[0][1]{destroyed}[0]);
+}
+
 1;

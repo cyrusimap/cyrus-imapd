@@ -217,10 +217,13 @@ static ptrarray_t *icalcomps_by_uid(struct icalcomps *comps, const char *uid)
 
 /* Forward declarations */
 static json_t *calendarevent_from_ical(icalcomponent *comp, hash_table *props,
-                                       int is_override, ptrarray_t *overrides);
+                                       int is_override, ptrarray_t *overrides,
+                                       struct jmapical_jmapcontext *jmapctx);
+
 static void calendarevent_to_ical(icalcomponent *comp,
                                   struct jmap_parser *parser, json_t *jsevent,
-                                  struct icalcomps *oldcomps);
+                                  struct icalcomps *oldcomps,
+                                  struct jmapical_jmapcontext *jmapctx);
 
 #define JMAPICAL_SHA1KEY_LEN (2*SHA1_DIGEST_LENGTH+1)
 
@@ -1099,7 +1102,8 @@ override_exdate_from_ical(icalproperty *prop, const char *tzid_start)
 
 static json_t*
 overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
-                    json_t *event, const char *tzid_start)
+                    json_t *event, const char *tzid_start,
+                    struct jmapical_jmapcontext *jmapctx)
 {
     icalproperty *prop;
     json_t *overrides = json_object();
@@ -1136,7 +1140,7 @@ overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
         icalcomponent *excomp = ptrarray_nth(icaloverrides, i);
 
         /* Convert VEVENT exception to JMAP */
-        json_t *ex = calendarevent_from_ical(excomp, NULL, 1, NULL);
+        json_t *ex = calendarevent_from_ical(excomp, NULL, 1, NULL, jmapctx);
         if (!ex) continue;
 
         /* Recurrence-id */
@@ -1668,7 +1672,7 @@ participants_from_ical(icalcomponent *comp)
 }
 
 static json_t*
-link_from_ical(icalproperty *prop)
+link_from_ical(icalproperty *prop, struct jmapical_jmapcontext *jmapctx)
 {
     /* href */
     const char *href = NULL;
@@ -1688,6 +1692,18 @@ link_from_ical(icalproperty *prop)
     json_t *link = json_pack("{s:s: s:s}", "@type", "Link", "href", href);
     icalparameter *param = NULL;
     const char *s;
+
+    /* blobId */
+    if (jmapctx && jmapctx->blobid_from_href) {
+        param = icalproperty_get_managedid_parameter(prop);
+        const char *mid = param ? icalparameter_get_managedid(param) : NULL;
+        struct buf blobid = BUF_INITIALIZER;
+        jmapctx->blobid_from_href(&blobid, href, mid, jmapctx->rock);
+        if (buf_len(&blobid)) {
+            json_object_set_new(link, "blobId", json_string(buf_cstring(&blobid)));
+        }
+        buf_free(&blobid);
+    }
 
     /* cid */
     if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_CID))) {
@@ -1737,7 +1753,7 @@ link_from_ical(icalproperty *prop)
 }
 
 static json_t*
-links_from_ical(icalcomponent *comp)
+links_from_ical(icalcomponent *comp, struct jmapical_jmapcontext *jmapctx)
 {
     icalproperty* prop;
     json_t *ret = json_object();
@@ -1751,7 +1767,7 @@ links_from_ical(icalcomponent *comp)
         char keybuf[JMAPICAL_SHA1KEY_LEN];
         if (!id) id = sha1key(icalproperty_get_value_as_string(prop), keybuf);
         if (!id) continue;
-        json_t *link = link_from_ical(prop);
+        json_t *link = link_from_ical(prop, jmapctx);
         if (link) json_object_set_new(ret, id, link);
     }
 
@@ -1764,7 +1780,7 @@ links_from_ical(icalcomponent *comp)
         char keybuf[JMAPICAL_SHA1KEY_LEN];
         if (!id) id = sha1key(icalproperty_get_value_as_string(prop), keybuf);
         if (!id) continue;
-        json_t *link = link_from_ical(prop);
+        json_t *link = link_from_ical(prop, jmapctx);
         if (link) json_object_set_new(ret, id, link);
     }
 
@@ -2205,7 +2221,8 @@ locale_from_ical(icalcomponent *comp)
  */
 static json_t*
 calendarevent_from_ical(icalcomponent *comp, hash_table *props,
-                        int is_override, ptrarray_t *overrides)
+                        int is_override, ptrarray_t *overrides,
+                        struct jmapical_jmapcontext *jmapctx)
 {
     icalproperty* prop = NULL;
     hash_table *wantprops = NULL;
@@ -2382,7 +2399,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
 
     /* links */
     if (jmap_wantprop(props, "links")) {
-        json_object_set_new(event, "links", links_from_ical(comp));
+        json_object_set_new(event, "links", links_from_ical(comp, jmapctx));
     }
 
     /* locale */
@@ -2496,7 +2513,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     /* recurrenceOverrides - must be last to generate patches */
     if (jmap_wantprop(props, "recurrenceOverrides") && !is_override) {
         json_object_set_new(event, "recurrenceOverrides",
-                overrides_from_ical(comp, overrides, event, tzid_start));
+                overrides_from_ical(comp, overrides, event, tzid_start, jmapctx));
     }
 
     if (wantprops) {
@@ -2509,7 +2526,8 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
 }
 
 json_t*
-jmapical_tojmap_all(icalcomponent *ical, hash_table *props)
+jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
+                    struct jmapical_jmapcontext *jmapctx)
 {
     icalcomponent* comp;
     int has_overrides = 0;
@@ -2572,7 +2590,7 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props)
             const char *uid = icalcomponent_get_uid(comp);
             overrides = hash_lookup(uid, &overrides_by_uid);
         }
-        json_t *jsevent = calendarevent_from_ical(comp, props, 0, overrides);
+        json_t *jsevent = calendarevent_from_ical(comp, props, 0, overrides, jmapctx);
         if (jsevent) json_array_append_new(events, jsevent);
     }
 
@@ -2591,9 +2609,10 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props)
 }
 
 json_t*
-jmapical_tojmap(icalcomponent *ical, hash_table *props)
+jmapical_tojmap(icalcomponent *ical, hash_table *props,
+                struct jmapical_jmapcontext *jmapctx)
 {
-    json_t *jsevents = jmapical_tojmap_all(ical, props);
+    json_t *jsevents = jmapical_tojmap_all(ical, props, jmapctx);
     json_t *ret = NULL;
     if (json_array_size(jsevents)) {
         ret = json_incref(json_array_get(jsevents, 0));
@@ -3502,10 +3521,13 @@ static icalproperty* findprop_byid(icalcomponent *comp, const char *id,
 
 static void
 links_to_ical(icalcomponent *comp, icalcomponent *oldcomp,
-              struct jmap_parser *parser, json_t *links)
+	      struct jmap_parser *parser, json_t *links,
+              struct jmapical_jmapcontext *jmapctx)
 {
     icalproperty *prop;
     struct buf buf = BUF_INITIALIZER;
+    struct buf blobhref = BUF_INITIALIZER;
+    struct buf blobmid = BUF_INITIALIZER;
 
     /* Purge existing attachments */
     remove_icalprop(comp, ICAL_ATTACH_PROPERTY);
@@ -3517,6 +3539,7 @@ links_to_ical(icalcomponent *comp, icalcomponent *oldcomp,
     json_t *link;
     json_object_foreach(links, id, link) {
         const char *href = NULL;
+        const char *blobid = NULL;
         const char *contenttype = NULL;
         const char *title = NULL;
         const char *rel = NULL;
@@ -3536,7 +3559,24 @@ links_to_ical(icalcomponent *comp, icalcomponent *oldcomp,
 
         /* href */
         href = json_string_value(json_object_get(link, "href"));
-        if (!href || !strlen(href)) {
+
+        /* blobId */
+        json_t *jblobid = json_object_get(link, "blobId");
+        if (jmapctx && jmapctx->href_from_blobid && json_is_string(jblobid)) {
+            blobid = json_string_value(json_object_get(link, "blobId"));
+            jmapctx->href_from_blobid(&blobhref, &blobmid, blobid, jmapctx->rock);
+            if (buf_len(&blobhref)) {
+                if (!href || !strcmp(href, buf_cstring(&blobhref))) {
+                    href = buf_cstring(&blobhref);
+                }
+                else jmap_parser_invalid(parser, "blobId");
+            }
+        }
+        else if (JNOTNULL(jblobid)) {
+            jmap_parser_invalid(parser, "blobId");
+        }
+
+        if (!href || *href == '\0') {
             jmap_parser_invalid(parser, "href");
             href = NULL;
         }
@@ -3644,6 +3684,11 @@ links_to_ical(icalcomponent *comp, icalcomponent *oldcomp,
                 icalattach *icalatt = icalattach_new_from_url(href);
                 prop = icalproperty_new_attach(icalatt);
                 icalattach_unref(icalatt);
+
+                if (buf_len(&blobmid)) {
+                    icalproperty_add_parameter(prop,
+                            icalparameter_new_managedid(buf_cstring(&blobmid)));
+                }
             }
 
             /* contentType */
@@ -3681,10 +3726,13 @@ links_to_ical(icalcomponent *comp, icalcomponent *oldcomp,
             /* Add ATTACH property. */
             icalcomponent_add_property(comp, prop);
         }
-        buf_free(&buf);
+        buf_reset(&buf);
     }
 
     jmap_parser_pop(parser);
+    buf_free(&blobhref);
+    buf_free(&blobmid);
+    buf_free(&buf);
 }
 
 static void
@@ -4551,7 +4599,8 @@ static void
 overrides_to_ical(icalcomponent *comp,
                   struct jmap_parser *parser,
                   json_t *overrides,
-                  struct icalcomps *oldcomps)
+                  struct icalcomps *oldcomps,
+                  struct jmapical_jmapcontext *jmapctx)
 {
     icalcomponent *excomp, *next, *ical;
 
@@ -4578,7 +4627,7 @@ overrides_to_ical(icalcomponent *comp,
         icaltimezone_get_cyrus_timezone_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
 
     /* Convert current master event to JMAP */
-    json_t *master = calendarevent_from_ical(comp, NULL, 0, NULL);
+    json_t *master = calendarevent_from_ical(comp, NULL, 0, NULL, jmapctx);
     if (!master) return;
     json_object_del(master, "recurrenceRule");
     json_object_del(master, "recurrenceOverrides");
@@ -4682,7 +4731,7 @@ overrides_to_ical(icalcomponent *comp,
             else if (jrecurrenceId) {
                 jmap_parser_invalid(parser, "recurrenceId");
             }
-            calendarevent_to_ical(excomp, parser, ex, oldcomps);
+            calendarevent_to_ical(excomp, parser, ex, oldcomps, jmapctx);
             jmap_parser_pop(parser);
 
             /* Add the exception */
@@ -4700,11 +4749,11 @@ overrides_to_ical(icalcomponent *comp,
  * properties the JMAP calendar event. This writes a *complete* jsevent and
  * does not implement patch object semantics.
  */
-static void
-calendarevent_to_ical(icalcomponent *comp,
-                      struct jmap_parser *parser,
-                      json_t *event,
-                      struct icalcomps *oldcomps)
+static void calendarevent_to_ical(icalcomponent *comp,
+                                  struct jmap_parser *parser,
+                                  json_t *event,
+                                  struct icalcomps *oldcomps,
+                                  struct jmapical_jmapcontext *jmapctx)
 {
     icalproperty *prop = NULL;
     icaltimezone *utc = icaltimezone_get_utc_timezone();
@@ -4896,7 +4945,7 @@ calendarevent_to_ical(icalcomponent *comp,
     /* links */
     jprop = json_object_get(event, "links");
     if (json_is_null(jprop) || json_object_size(jprop)) {
-        links_to_ical(comp, oldcomp, parser, jprop);
+        links_to_ical(comp, oldcomp, parser, jprop, jmapctx);
     } else if (jprop) {
         jmap_parser_invalid(parser, "links");
     }
@@ -5047,14 +5096,15 @@ calendarevent_to_ical(icalcomponent *comp,
     /* recurrenceOverrides - must be last to apply patches */
     jprop = json_object_get(event, "recurrenceOverrides");
     if (json_is_null(jprop) || json_is_object(jprop)) {
-        overrides_to_ical(comp, parser, jprop, oldcomps);
+        overrides_to_ical(comp, parser, jprop, oldcomps, jmapctx);
     } else if (jprop) {
         jmap_parser_invalid(parser, "recurrenceOverrides");
     }
 }
 
 icalcomponent*
-jmapical_toical(json_t *jsevent, icalcomponent *oldical, json_t *invalid)
+jmapical_toical(json_t *jsevent, icalcomponent *oldical, json_t *invalid,
+		struct jmapical_jmapcontext *jmapctx)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     icalcomponent *ical = NULL;
@@ -5085,7 +5135,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical, json_t *invalid)
         icalcomponent_add_component(ical, comp);
 
         /* Convert the JMAP calendar event to ical. */
-        calendarevent_to_ical(comp, &parser, jsevent, &oldcomps);
+        calendarevent_to_ical(comp, &parser, jsevent, &oldcomps, jmapctx);
         icalcomponent_add_required_timezones(ical);
     }
     else jmap_parser_invalid(&parser, "uid");
@@ -5135,7 +5185,7 @@ EXPORTED struct buf *icalcomponent_as_jevent_string(icalcomponent *ical)
 
     if (!ical) return NULL;
 
-    jcal = jmapical_tojmap(ical, NULL);
+    jcal = jmapical_tojmap(ical, NULL, NULL);
 
     flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
     buf = json_dumps(jcal, flags);
@@ -5163,7 +5213,7 @@ EXPORTED icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf)
         return NULL;
     }
 
-    ical = jmapical_toical(obj, NULL, NULL);
+    ical = jmapical_toical(obj, NULL, NULL, NULL);
 
     json_decref(obj);
 

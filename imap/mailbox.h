@@ -580,6 +580,7 @@ extern modseq_t mailbox_foldermodseq(const struct mailbox *mailbox);
 
 struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox);
 struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox);
+extern struct webdav_db *mailbox_open_webdav(struct mailbox *);
 
 /* reading bits and pieces */
 extern int mailbox_refresh_index_header(struct mailbox *mailbox);

@@ -926,7 +926,7 @@ static int process_valarms(struct mailbox *mailbox,
     /* don't process alarms in draft messages */
     if (record->system_flags & FLAG_DRAFT) {
         syslog(LOG_NOTICE, "ignoring draft message in mailbox %s uid %u",
-               mailbox->name, record->uid);
+               mailbox_name(mailbox), record->uid);
         goto done_item;
     }
 
