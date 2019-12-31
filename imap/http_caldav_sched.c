@@ -602,11 +602,11 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
 
 #ifdef WITH_JMAP
     if (sched_data->oldical) {
-        jsevent = jmapical_tojmap(sched_data->oldical, NULL);
+        jsevent = jmapical_tojmap(sched_data->oldical, NULL, NULL);
 
         if (sched_data->newical) {
             /* Updated event */
-            json_t *new_jsevent = jmapical_tojmap(sched_data->newical, NULL);
+            json_t *new_jsevent = jmapical_tojmap(sched_data->newical, NULL, NULL);
 
             patch = jmap_patchobject_create(jsevent, new_jsevent);
             json_decref(new_jsevent);
@@ -619,7 +619,7 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
     else {
         /* New event */
         jsevent = json_null();
-        patch = jmapical_tojmap(sched_data->newical, NULL);
+        patch = jmapical_tojmap(sched_data->newical, NULL, NULL);
     }
 #else
     jsevent = json_null();

@@ -83,16 +83,30 @@ extern "C" {
 #define JMAPICAL_XPARAM_COMMENT       "X-COMMENT" /*used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
 
+struct jmapical_jmapcontext {
+    void (*blobid_from_href)(struct buf *blobid,
+                             const char *href,
+                             const char *managedid,
+                             void *rock);
+    void (*href_from_blobid)(struct buf *href,
+                             struct buf *managedid,
+                             const char *blobid,
+                             void *rock);
+    void *rock;
+};
+
 
 /* Converts the iCalendar component ical to JSCalendar.
  * Returns NULL on error.
  */
-json_t* jmapical_tojmap(icalcomponent *ical, hash_table *props);
+json_t* jmapical_tojmap(icalcomponent *ical, hash_table *props,
+                        struct jmapical_jmapcontext *jmapctx);
 
 /* Converts the iCalendar component ical to an array of JSCalendar objects.
  * Returns NULL on error.
  */
-json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props);
+json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
+                            struct jmapical_jmapcontext *jmapctx);
 
 /* Convert the jsevent to iCalendar.
  * The oldical argument points to the previous VCALENDAR of the event,
@@ -100,7 +114,9 @@ json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props);
  * Returns a new ical component, or NULL on error.
  */
 icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
-                               json_t *invalid);
+			       json_t *invalid,
+                               struct jmapical_jmapcontext *jmapctx);
+
 void icalcomponent_add_required_timezones(icalcomponent *ical);
 
 /* for CalDAV content negotiation */
