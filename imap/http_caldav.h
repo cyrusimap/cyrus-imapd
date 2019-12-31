@@ -69,4 +69,17 @@ extern int caldav_is_personalized(struct mailbox *mailbox,
 
 extern char *caldav_scheddefault(const char *userid);
 
+extern void caldav_attachment_url(struct buf *buf, const char *userid,
+                                  const char *proto, const char *host,
+                                  const char *managedid);
+
+/* Update refcounts for managed attachments owned by userid.
+ * For updated events, both ical and oldical must be non-null.
+ * for deleted events, ical must be null.
+ * Returns HTTP_NOT_FOUND for any invalid managed id, or some
+ * other HTTP error on internal error. */
+extern int caldav_manage_attachments(const char *userid,
+                                     icalcomponent *ical,
+                                     icalcomponent *oldical);
+
 #endif /* HTTP_CALDAV_H */
