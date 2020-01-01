@@ -1718,7 +1718,7 @@ EOF
     my $res = $talk->fetch(1, 'rfc822');
     my $msg2 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/Subject: Auto: Message 1\r\n/, $msg2);
+    $self->assert_matches(qr/Subject: Auto:(?:\r\n)? Message 1\r\n/ms, $msg2);
     $self->assert_matches(qr/Auto-Submitted: auto-replied \(vacation\)\r\n/, $msg2);
     $self->assert_matches(qr/\r\n\r\nI am out of the office today./, $msg2);
 
