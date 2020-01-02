@@ -84,8 +84,10 @@ EXPORTED size_t json_dumpb(const json_t *json,
     if (!s) return 0;
     slen = strlen(s);
 
-    if (slen > size)
+    if (slen > size) {
+        free(s);
         return slen;
+    }
 
     /* n.b. json_dumpb() does NOT nul-terminate the buffer! */
     memcpy(buffer, s, slen);
