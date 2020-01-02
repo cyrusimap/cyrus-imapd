@@ -93,4 +93,10 @@ EXPORTED int json_is_utcdate(json_t *json);
 
 EXPORTED int json_array_find(json_t *array, const char *needle);
 
+#ifdef NEED_JANSSON_JSON_DUMPB
+/* https://jansson.readthedocs.io/en/2.11/apiref.html#c.json_dumpb */
+EXPORTED size_t json_dumpb(const json_t *json,
+                           char *buffer, size_t size, size_t flags);
+#endif
+
 #endif /* JSON_SUPPORT_H */

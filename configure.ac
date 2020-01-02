@@ -1416,6 +1416,16 @@ AC_SUBST([JANSSON_LIBS])
 AC_SUBST([JANSSON_CFLAGS])
 AM_CONDITIONAL([USE_JANSSON], [test "x$with_jansson" = xyes])
 
+save_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS $JANSSON_CFLAGS $JANSSON_LIBS"
+AC_CHECK_LIB([jansson], [json_dumpb],
+             [],
+             [ AC_DEFINE(NEED_JANSSON_JSON_DUMPB, [1],
+                         [Do we need to provide our own json_dumpb()?])
+               AC_MSG_NOTICE([jansson does not provide json_dumpb(), using ours instead])
+             ])
+CFLAGS="$save_CFLAGS"
+
 dnl
 dnl Check for zeroskip library, needed for zeroskip support
 dnl
