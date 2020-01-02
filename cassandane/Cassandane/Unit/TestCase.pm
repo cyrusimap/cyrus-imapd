@@ -276,4 +276,20 @@ sub apply_parameter_setting
     }
 }
 
+sub assert_num_gte
+{
+    my ($self, $expected, $actual) = @_;
+
+    $self->assert(($actual >= $expected),
+                  "$actual is not greater-than-or-equal-to $expected");
+}
+
+sub assert_num_lte
+{
+    my ($self, $expected, $actual) = @_;
+
+    $self->assert(($actual <= $expected),
+                  "$actual is not less-than-or-equal-to $expected");
+}
+
 1;
