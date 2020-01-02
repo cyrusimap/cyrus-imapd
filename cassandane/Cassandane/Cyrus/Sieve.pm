@@ -1726,6 +1726,72 @@ EOF
 #    warn Dumper($msg2);
 }
 
+sub test_vacation_with_long_origsubject
+    :min_version_3_1
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my $target = 'INBOX.Sent';
+
+    xlog $self, "Install a sieve script with vacation action that uses :fcc";
+    $self->{instance}->install_sieve_script(<<"EOF"
+require ["vacation", "fcc"];
+
+vacation :fcc "$target" :days 1 :addresses ["cassandane\@example.com"] text:
+I am out of the office today. I will answer your email as soon as I can.
+.
+;
+EOF
+    );
+
+    xlog $self, "Create the target folder";
+    my $talk = $self->{store}->get_client();
+    $talk->create($target, "(USE (\\Sent))");
+
+    xlog $self, "Deliver a message";
+    # should end up folding a couple of times
+    my $subject = "volutpat diam ut venenatis tellus in metus "
+                . "vulputate eu scelerisque felis imperdiet proin "
+                . "fermentum leo vel orci porta non pulvinar neque "
+                . "laoreet suspendisse interdum consectetur";
+
+    my $msg1 = $self->{gen}->generate(
+        subject => $subject,
+        to => Cassandane::Address->new(localpart => 'cassandane',
+                                       domain => 'example.com'));
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Check that a copy of the auto-reply message made it";
+    $talk->select($target);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+
+    xlog $self, "Check that the message is an auto-reply";
+    my $res = $talk->fetch(1, 'rfc822');
+    my $msg2 = $res->{1}->{rfc822};
+
+    my $subjpat = $subject =~ s/ /(?:\r\n)? /gr;
+    my $subjre = qr{Subject: Auto:\r\n $subjpat};
+
+    # subject should be the original subject plus "Auto:\r\n " and folding
+    $self->assert_matches($subjre, $msg2);
+
+    # check we folded a reasonable number of times
+    my $actual_subject;
+    if ($msg2 =~ m/^(Subject: .*?\r\n)(?!\s)/ms) {
+        $actual_subject = $1;
+    }
+    $self->assert_matches(qr/^Subject:/, $actual_subject);
+    my $fold_count = () = $actual_subject =~ m/\r\n /g;
+    xlog "fold count: $fold_count";
+    $self->assert_num_gte(2, $fold_count);
+    $self->assert_num_lte(4, $fold_count);
+
+    # check for auto-submitted header
+    $self->assert_matches(qr/Auto-Submitted: auto-replied \(vacation\)\r\n/, $msg2);
+    $self->assert_matches(qr/\r\n\r\nI am out of the office today./, $msg2);
+}
+
 sub test_github_issue_complex_variables
     :min_version_3_1
     :needs_component_sieve
