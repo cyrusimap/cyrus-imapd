@@ -2017,6 +2017,10 @@ fi
 
 CMU_LIBWRAP
 CMU_UCDSNMP
+AS_IF([test "x$with_snmp" != "xno"],
+      [ AC_MSG_WARN([SNMP support is deprecated and will be removed in the future.])
+        AC_MSG_WARN([Consider using Prometheus instead.])
+      ])
 
 # Figure out what directories we're linking against.
 # Lots of fun for the whole family.
