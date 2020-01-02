@@ -923,6 +923,13 @@ static int process_valarms(struct mailbox *mailbox,
         goto done_item;
     }
 
+    /* don't process alarms in draft messages */
+    if (record->system_flags & FLAG_DRAFT) {
+        syslog(LOG_NOTICE, "ignoring draft message in mailbox %s uid %u",
+               mailbox->name, record->uid);
+        goto done_item;
+    }
+
     struct lastalarm_data data;
     if (read_lastalarm(mailbox, record, &data))
         data.lastrun = record->internaldate;
