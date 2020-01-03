@@ -6819,12 +6819,16 @@ sub test_thread_get_shared
 
     # Create message in mailbox A
     $self->{adminstore}->set_folder('user.other.A');
-    my $msgA = $self->make_message("EmailA", store => $self->{adminstore}) or die;
+    my $msg1 = $self->make_message("EmailA", store => $self->{adminstore}) or die;
 
-    # Reply-to message in mailbox B
-    $self->{adminstore}->set_folder('user.other.B');
-    my $msgB = $self->make_message("Re: EmailA", (
-        references => [ $msgA ],
+    # move the message to mailbox B
+    $admintalk->select("user.other.A");
+    $admintalk->move("1:*", "user.other.B");
+
+    # Reply-to message in mailbox A
+    $self->{adminstore}->set_folder('user.other.A');
+    my $msg2 = $self->make_message("Re: EmailA", (
+        references => [ $msg1 ],
         store => $self->{adminstore},
     )) or die;
 
