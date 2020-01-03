@@ -4070,6 +4070,7 @@ done:
 static int _thread_is_shared_cb(const conv_guidrec_t *rec, void *rock)
 {
     if (rec->part) return 0;
+    if (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;
     jmap_req_t *req = (jmap_req_t *)rock;
     static int needrights = ACL_READ|ACL_LOOKUP;
     if (jmap_hasrights_byname(req, rec->mboxname, needrights))
