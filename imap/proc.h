@@ -59,7 +59,8 @@ typedef int procdata_t(pid_t pid,
                        const char *cmd, void *rock);
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
-extern void setproctitle(const char *fmt, ...);
+extern void setproctitle(const char *fmt, ...)
+                        __attribute__((format(printf, 1, 2)));
 
 extern int proc_register(const char *servicename, const char *clienthost,
                          const char *userid, const char *mailbox, const char *cmd);

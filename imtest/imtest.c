@@ -244,8 +244,9 @@ struct protocol_t {
 };
 
 
-static void imtest_fatal(const char *msg, ...) __attribute__((noreturn));
-static void imtest_fatal(const char *msg, ...)
+static void
+__attribute__((noreturn, format(printf, 1, 2)))
+imtest_fatal(const char *msg, ...)
 {
     struct stat sbuf;
     if (output_socket && output_socket_opened &&

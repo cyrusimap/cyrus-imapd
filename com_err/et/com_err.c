@@ -86,6 +86,7 @@ extern char * INTERFACE error_message ();
 #endif
 
 static void
+__attribute__((format(printf, 3, 0)))
 #if defined(__STDC__) || defined(_WINDOWS)
     default_com_err_proc (const char *whoami, long code, const char *fmt, va_list args)
 #else
@@ -122,14 +123,17 @@ static void
 }
 
 #if defined(__STDC__) || defined(_WINDOWS)
-typedef void (*errf) (const char *, long, const char *, va_list);
+typedef void (*errf) (const char *, long, const char *, va_list)
+                     __attribute__((format(printf, 3, 0)));
 #else
 typedef void (*errf) ();
 #endif
 
 errf com_err_hook = default_com_err_proc;
 
-void com_err_va (whoami, code, fmt, args)
+void
+__attribute__((format(printf, 3, 0)))
+com_err_va (whoami, code, fmt, args)
     const char *whoami;
     long code;
     const char *fmt;
@@ -139,9 +143,11 @@ void com_err_va (whoami, code, fmt, args)
 }
 
 #ifndef VARARGS
-EXPORTED void INTERFACE_C com_err (const char *whoami,
-              long code,
-              const char *fmt, ...)
+EXPORTED void
+__attribute__((format(printf, 3, 4)))
+INTERFACE_C com_err (const char *whoami,
+                     long code,
+                     const char *fmt, ...)
 {
 #else
 EXPORTED void INTERFACE_C com_err (va_alist)

@@ -209,6 +209,7 @@ typedef unsigned int    *pt_entry_t;
 
 /*VARARGS1*/
 HIDDEN void
+__attribute__((format(printf, 1, 2)))
 #if SPT_TYPE != SPT_NONE
 setproctitle(const char *fmt, ...)
 #else

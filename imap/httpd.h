@@ -548,7 +548,8 @@ extern char *httpdate_gen(char *buf, size_t len, time_t t);
 extern void begin_resp_headers(struct transaction_t *txn, long code);
 extern int end_resp_headers(struct transaction_t *txn, long code);
 extern void simple_hdr(struct transaction_t *txn,
-                       const char *name, const char *value, ...);
+                       const char *name, const char *value, ...)
+                      __attribute__((format(printf, 3, 4)));
 extern void content_md5_hdr(struct transaction_t *txn,
                             const unsigned char *md5);
 extern void comma_list_hdr(struct transaction_t *txn,
@@ -556,7 +557,8 @@ extern void comma_list_hdr(struct transaction_t *txn,
                            unsigned flags, ...);
 extern void response_header(long code, struct transaction_t *txn);
 extern void buf_printf_markup(struct buf *buf, unsigned level,
-                              const char *fmt, ...);
+                              const char *fmt, ...)
+                             __attribute__((format(printf, 3, 4)));
 extern void keepalive_response(struct transaction_t *txn);
 extern void error_response(long code, struct transaction_t *txn);
 extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);

@@ -86,7 +86,9 @@ static char *match_error(struct slmatch *sl, int r)
     return buf;
 }
 
-static void vlog(int prio, const char *fmt, va_list args)
+static void
+__attribute__((format(printf, 2, 0)))
+vlog(int prio, const char *fmt, va_list args)
 {
     if (nslmatches) {
         int e = errno;      /* save errno Just In Case */
@@ -144,8 +146,10 @@ static void vlog(int prio, const char *fmt, va_list args)
 #if defined(__GLIBC__)
 /* Under some but not all combinations of options, glibc
  * defines syslog() as an inline that calls this function */
-void __syslog_chk(int prio, int whatever __attribute__((unused)),
-                  const char *fmt, ...)
+void
+__attribute__((format(printf, 3, 4)))
+__syslog_chk(int prio, int whatever __attribute__((unused)),
+             const char *fmt, ...)
 {
     va_list args;
 

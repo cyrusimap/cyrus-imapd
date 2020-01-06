@@ -56,6 +56,11 @@ extern int verbose;
  * which makes it rather hard to see why an assertion failed.  So we
  * replace the macros with improved ones, keeping the same API.
  */
+/* XXX Would like to add __attribute__((format(printf, 6, 7)))
+ * XXX to this so the compiler can warn if it's misused, but it looks
+ * XXX like it currently gets very confused by the layers of macros
+ * XXX and produces bogus warnings. :(
+ */
 extern CU_BOOL CU_assertFormatImplementation(CU_BOOL bValue, unsigned int uiLine,
                                              char strFile[], char strFunction[],
                                              CU_BOOL bFatal,

@@ -1828,15 +1828,19 @@ void yyerror(sieve_script_t *sscript, const char *msg)
 }
 
 
-static void vsieveerror_f(sieve_script_t *sscript,
-                          const char *fmt, va_list args)
+static void
+__attribute__((format(printf, 2, 0)))
+vsieveerror_f(sieve_script_t *sscript,
+              const char *fmt, va_list args)
 {
     buf_reset(&sscript->sieveerr);
     buf_vprintf(&sscript->sieveerr, fmt, args);
     yyerror(sscript, buf_cstring(&sscript->sieveerr));
 }
 
-void sieveerror_f(sieve_script_t *sscript, const char *fmt, ...)
+void
+__attribute__((format(printf, 2, 3)))
+sieveerror_f(sieve_script_t *sscript, const char *fmt, ...)
 {
     va_list args;
 

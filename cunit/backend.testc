@@ -621,10 +621,9 @@ static void server_unaccept(struct server_state *state)
 /*
  * Main routine for pushing text back to the client.
  */
-static void server_printf(struct server_state *, const char *fmt, ...)
-    __attribute__((format(printf,2,3)));
-
-static void server_printf(struct server_state *state, const char *fmt, ...)
+static void
+__attribute__((format(printf, 2, 3)))
+server_printf(struct server_state *state, const char *fmt, ...)
 {
     va_list args;
     int r;

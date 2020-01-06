@@ -289,13 +289,10 @@ extern int prot_flush(struct protstream *s);
 extern int prot_write(struct protstream *s, const char *buf, unsigned len);
 extern int prot_putbuf(struct protstream *s, struct buf *buf);
 extern int prot_puts(struct protstream *s, const char *str);
-extern int prot_vprintf(struct protstream *, const char *, va_list);
+extern int prot_vprintf(struct protstream *, const char *, va_list)
+    __attribute__((format(printf, 2, 0)));
 extern int prot_printf(struct protstream *, const char *, ...)
-#ifdef __GNUC__
-    __attribute__ ((format (printf, 2, 3)));
-#else
-    ;
-#endif
+    __attribute__((format(printf, 2, 3)));
 extern int prot_printliteral(struct protstream *out, const char *s,
                              size_t size);
 extern int prot_printstring(struct protstream *out, const char *s);

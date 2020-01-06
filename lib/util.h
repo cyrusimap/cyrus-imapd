@@ -304,9 +304,10 @@ void buf_cowappendfree(struct buf *buf, char *base, unsigned int len);
 void buf_insert(struct buf *dst, unsigned int off, const struct buf *src);
 void buf_insertcstr(struct buf *buf, unsigned int off, const char *str);
 void buf_insertmap(struct buf *buf, unsigned int off, const char *base, int len);
-void buf_vprintf(struct buf *buf, const char *fmt, va_list args);
+void buf_vprintf(struct buf *buf, const char *fmt, va_list args)
+                __attribute__((format(printf, 2, 0)));
 void buf_printf(struct buf *buf, const char *fmt, ...)
-                __attribute__((format(printf,2,3)));
+                __attribute__((format(printf, 2, 3)));
 int buf_replace_all(struct buf *buf, const char *match,
                     const char *replace);
 int buf_replace_char(struct buf *buf, char match, char replace);

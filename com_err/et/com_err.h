@@ -87,7 +87,8 @@
 
 #if defined(__STDC__) || defined(_WINDOWS)
 /* ANSI C -- use prototypes etc */
-extern void INTERFACE_C com_err (const char FAR *, long, const char FAR *, ...);
+extern void INTERFACE_C com_err (const char FAR *, long, const char FAR *, ...)
+                                __attribute__((format(printf, 3, 4)));
 extern char const FAR * INTERFACE error_message (long);
 extern void (*com_err_hook) (const char *, long, const char *, va_list);
 extern void (*set_com_err_hook (void (*) (const char *, long, const char *, va_list)))
