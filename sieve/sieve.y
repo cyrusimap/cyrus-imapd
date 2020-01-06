@@ -2283,8 +2283,7 @@ static commandlist_t *build_redirect(sieve_script_t *sscript,
             if (!strcasecmp(token, "NEVER")) never = 1;
             else if (never) {
                 sieveerror_f(sscript,
-                             "DSN NOTIFY value 'NEVER' MUST be used by itself",
-                             token);
+                             "DSN NOTIFY value 'NEVER' MUST be used by itself");
                 break;
             }
             else if (strcasecmp(token, "SUCCESS") &&
