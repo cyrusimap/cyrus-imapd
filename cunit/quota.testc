@@ -462,7 +462,7 @@ static void test_update_useds(void)
     CU_ASSERT_EQUAL(r, 0); \
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) { \
         CU_ASSERT_EQUAL(q2.useds[res], expused[res]); \
-        CU_ASSERT_EQUAL(q2.limits[res], q.limits[res]) \
+        CU_ASSERT_EQUAL(q2.limits[res], q.limits[res]); \
     } \
 }
 
