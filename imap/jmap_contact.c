@@ -2020,6 +2020,11 @@ static int contact_filter_match(void *vf, void *rock)
     struct carddav_data *cdata = cfrock->cdata;
     struct carddav_db *db = cfrock->carddavdb;
 
+    /* uid */
+    if (f->uid && strcmpsafe(cdata->vcard_uid, f->uid)) {
+        return 0;
+    }
+
     /* isFlagged */
     if (JNOTNULL(f->isFlagged)) {
         json_t *isFlagged = json_object_get(contact, "isFlagged");
@@ -2242,7 +2247,7 @@ static void *contact_filter_parse(json_t *arg)
     return f;
 }
 
-static void validatefilter(jmap_req_t *req __attribute__((unused)),
+static void validate_contact_filter(jmap_req_t *req __attribute__((unused)),
                            struct jmap_parser *parser,
                            json_t *filter,
                            json_t *unsupported __attribute__((unused)),
@@ -2291,7 +2296,7 @@ static void validatefilter(jmap_req_t *req __attribute__((unused)),
     }
 }
 
-static int validatecomparator(jmap_req_t *req __attribute__((unused)),
+static int validate_contact_comparator(jmap_req_t *req __attribute__((unused)),
                               struct jmap_comparator *comp,
                               void *rock __attribute__((unused)),
                               json_t **err __attribute__((unused)))
@@ -2419,8 +2424,8 @@ static int jmap_contact_query(struct jmap_req *req)
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req, &parser, NULL, NULL,
-                     validatefilter, NULL,
-                     validatecomparator, NULL,
+                     validate_contact_filter, NULL,
+                     validate_contact_comparator, NULL,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -2450,11 +2455,13 @@ static int jmap_contact_query(struct jmap_req *req)
         req, &query, parsed_filter, NULL, db
     };
     if (wantuid) {
+        /* Fast-path single filter condition by UID */
         struct carddav_data *cdata = NULL;
         r = carddav_lookup_uid(db, wantuid, &cdata);
         if (!r) getcontactquery_cb(&rock, cdata);
     }
     else {
+        /* check carddav db for matching entries */
         r = carddav_foreach(db, NULL, getcontactquery_cb, &rock);
     }
     if (rock.mailbox) mailbox_close(&rock.mailbox);
