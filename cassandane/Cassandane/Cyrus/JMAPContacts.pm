@@ -974,6 +974,71 @@ xlog $self, "check ids";
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 }
 
+sub test_contact_query_uid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create contacts";
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact1 => {
+                    firstName => 'contact1',
+                },
+                contact2 => {
+                    firstName => 'contact2',
+                },
+                contact3 => {
+                    firstName => 'contact3',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $contactId1 = $res->[0][1]{created}{contact1}{id};
+    $self->assert_not_null($contactId1);
+    my $contactUid1 = $res->[0][1]{created}{contact1}{uid};
+    $self->assert_not_null($contactUid1);
+
+    my $contactId2 = $res->[0][1]{created}{contact2}{id};
+    $self->assert_not_null($contactId2);
+    my $contactUid2 = $res->[0][1]{created}{contact2}{uid};
+    $self->assert_not_null($contactUid2);
+
+    my $contactId3 = $res->[0][1]{created}{contact3}{id};
+    $self->assert_not_null($contactId3);
+    my $contactUid3 = $res->[0][1]{created}{contact3}{uid};
+    $self->assert_not_null($contactUid3);
+
+    xlog $self, "query by single uid";
+    $res = $jmap->CallMethods([
+        ['Contact/query', {
+            filter => {
+                uid => $contactUid2,
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$contactId2], $res->[0][1]{ids});
+
+    xlog $self, "query by multiple uids";
+    $res = $jmap->CallMethods([
+        ['Contact/query', {
+            filter => {
+                operator => 'OR',
+                conditions => [{
+                        uid => $contactUid1,
+                }, {
+                        uid => $contactUid3,
+                }],
+            },
+        }, 'R2'],
+    ]);
+    my %gotIds =  map { $_ => 1 } @{$res->[0][1]{ids}};
+    $self->assert_deep_equals({ $contactUid1 => 1, $contactUid3 => 1, }, \%gotIds);
+}
+
 sub test_contactgroup_changes
     :min_version_3_1 :needs_component_jmap
 {
