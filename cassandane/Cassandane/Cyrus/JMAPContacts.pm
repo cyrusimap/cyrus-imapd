@@ -1354,6 +1354,71 @@ sub test_contactgroup_changes_shared
     $self->assert_str_equals('R1', $res->[0][2]);
 }
 
+sub test_contactgroup_query_uid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create contact groups";
+    my $res = $jmap->CallMethods([
+        ['ContactGroup/set', {
+            create => {
+                contactGroup1 => {
+                    name => 'contactGroup1',
+                },
+                contactGroup2 => {
+                    name => 'contactGroup2',
+                },
+                contactGroup3 => {
+                    name => 'contactGroup3',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $contactGroupId1 = $res->[0][1]{created}{contactGroup1}{id};
+    $self->assert_not_null($contactGroupId1);
+    my $contactGroupUid1 = $res->[0][1]{created}{contactGroup1}{uid};
+    $self->assert_not_null($contactGroupUid1);
+
+    my $contactGroupId2 = $res->[0][1]{created}{contactGroup2}{id};
+    $self->assert_not_null($contactGroupId2);
+    my $contactGroupUid2 = $res->[0][1]{created}{contactGroup2}{uid};
+    $self->assert_not_null($contactGroupUid2);
+
+    my $contactGroupId3 = $res->[0][1]{created}{contactGroup3}{id};
+    $self->assert_not_null($contactGroupId3);
+    my $contactGroupUid3 = $res->[0][1]{created}{contactGroup3}{uid};
+    $self->assert_not_null($contactGroupUid3);
+
+    xlog $self, "query by single uid";
+    $res = $jmap->CallMethods([
+        ['ContactGroup/query', {
+            filter => {
+                uid => $contactGroupUid2,
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$contactGroupId2], $res->[0][1]{ids});
+
+    xlog $self, "query by multiple uids";
+    $res = $jmap->CallMethods([
+        ['ContactGroup/query', {
+            filter => {
+                operator => 'OR',
+                conditions => [{
+                        uid => $contactGroupUid1,
+                }, {
+                        uid => $contactGroupUid3,
+                }],
+            },
+        }, 'R2'],
+    ]);
+    my %gotIds =  map { $_ => 1 } @{$res->[0][1]{ids}};
+    $self->assert_deep_equals({ $contactGroupUid1 => 1, $contactGroupUid3 => 1, }, \%gotIds);
+}
+
 sub test_contact_set
     :min_version_3_1 :needs_component_jmap
 {
