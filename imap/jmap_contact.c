@@ -75,6 +75,7 @@
 static int jmap_contactgroup_get(struct jmap_req *req);
 static int jmap_contactgroup_changes(struct jmap_req *req);
 static int jmap_contactgroup_set(struct jmap_req *req);
+static int jmap_contactgroup_query(struct jmap_req *req);
 static int jmap_contact_get(struct jmap_req *req);
 static int jmap_contact_changes(struct jmap_req *req);
 static int jmap_contact_query(struct jmap_req *req);
@@ -124,6 +125,12 @@ jmap_method_t jmap_contact_methods_nonstandard[] = {
         JMAP_CONTACTS_EXTENSION,
         &jmap_contactgroup_set,
         /*flags*/0
+    },
+    {
+        "ContactGroup/query",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_contactgroup_query,
+        JMAP_SHARED_CSTATE
     },
     {
         "Contact/get",
@@ -1985,6 +1992,12 @@ static int jmap_contact_changes(struct jmap_req *req)
     return _contacts_changes(req, CARDDAV_KIND_CONTACT);
 }
 
+typedef struct contacts_query_filter_rock {
+    struct carddav_db *carddavdb;
+    struct carddav_data *cdata;
+    json_t *contact;
+} contacts_query_filter_rock;
+
 typedef struct contact_filter {
     hash_table *inContactGroup;
     json_t *isFlagged;
@@ -2005,17 +2018,11 @@ typedef struct contact_filter {
     const char *uid;
 } contact_filter;
 
-typedef struct contact_filter_rock {
-    struct carddav_db *carddavdb;
-    struct carddav_data *cdata;
-    json_t *contact;
-} contact_filter_rock;
-
 /* Match the contact in rock against filter. */
 static int contact_filter_match(void *vf, void *rock)
 {
     contact_filter *f = (contact_filter *) vf;
-    contact_filter_rock *cfrock = (contact_filter_rock*) rock;
+    contacts_query_filter_rock *cfrock = (contacts_query_filter_rock*) rock;
     json_t *contact = cfrock->contact;
     struct carddav_data *cdata = cfrock->cdata;
     struct carddav_db *db = cfrock->carddavdb;
@@ -2309,35 +2316,113 @@ static int validate_contact_comparator(jmap_req_t *req __attribute__((unused)),
         !strcmp(comp->property, "firstName") ||
         !strcmp(comp->property, "lastName") ||
         !strcmp(comp->property, "nickname") ||
-        !strcmp(comp->property, "company")) {
+        !strcmp(comp->property, "company") ||
+        !strcmp(comp->property, "uid")) {
         return 1;
     }
     return 0;
 }
 
-struct contactquery_rock {
+typedef struct contactgroup_filter {
+    const char *uid;
+} contactgroup_filter;
+
+/* Match the contact in rock against filter. */
+static int contactgroup_filter_match(void *vf, void *rock)
+{
+    contactgroup_filter *f = (contactgroup_filter *) vf;
+    contacts_query_filter_rock *cfrock = (contacts_query_filter_rock*) rock;
+    struct carddav_data *cdata = cfrock->cdata;
+
+    /* uid */
+    if (f->uid && strcmpsafe(cdata->vcard_uid, f->uid)) {
+        return 0;
+    }
+
+    /* All matched. */
+    return 1;
+}
+
+/* Free the memory allocated by this contact filter. */
+static void contactgroup_filter_free(void *vf)
+{
+    free(vf);
+}
+
+static void *contactgroup_filter_parse(json_t *arg)
+{
+    contactgroup_filter *f =
+        (contactgroup_filter *) xzmalloc(sizeof(struct contactgroup_filter));
+
+    /* uid */
+    if (JNOTNULL(json_object_get(arg, "uid"))) {
+        jmap_readprop(arg, "uid", 0, NULL, "s", &f->uid);
+    }
+
+    return f;
+}
+
+static void validate_contactgroup_filter(jmap_req_t *req __attribute__((unused)),
+                                         struct jmap_parser *parser,
+                                         json_t *filter,
+                                         json_t *unsupported __attribute__((unused)),
+                                         void *rock __attribute__((unused)),
+                                         json_t **err __attribute__((unused)))
+{
+    const char *field;
+    json_t *arg;
+
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "uid")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, field);
+        }
+    }
+}
+
+static int validate_contactgroup_comparator(jmap_req_t *req __attribute__((unused)),
+                              struct jmap_comparator *comp,
+                              void *rock __attribute__((unused)),
+                              json_t **err __attribute__((unused)))
+{
+    /* Reject any collation */
+    if (comp->collation) {
+        return 0;
+    }
+    if (!strcmp(comp->property, "uid")) {
+        return 1;
+    }
+    return 0;
+}
+
+struct contacts_query_rock {
     jmap_req_t *req;
     struct jmap_query *query;
     jmap_filter *filter;
 
     struct mailbox *mailbox;
     struct carddav_db *carddavdb;
+    unsigned kind;
 };
 
-static int getcontactquery_cb(void *rock, struct carddav_data *cdata)
+static int _contacts_query_cb(void *rock, struct carddav_data *cdata)
 {
-    struct contactquery_rock *crock = (struct contactquery_rock*) rock;
+    struct contacts_query_rock *crock = (struct contacts_query_rock*) rock;
     struct index_record record;
-    struct contact_filter_rock cfrock;
     json_t *contact = NULL;
+    struct contacts_query_filter_rock cfrock;
     int r = 0;
 
     if (!cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
         return 0;
     }
 
-    /* Ignore anything but contacts. */
-    if (cdata->kind != CARDDAV_KIND_CONTACT) {
+    /* Ignore anything but the requested kind. */
+    if (cdata->kind != crock->kind) {
         return 0;
     }
 
@@ -2380,12 +2465,16 @@ static int getcontactquery_cb(void *rock, struct carddav_data *cdata)
 
 gotvalue:
 
+    /* FIXME - this implementation currently ignores comparators! */
+
     /* Match the contact against the filter and update statistics. */
     cfrock.carddavdb = crock->carddavdb;
     cfrock.cdata = cdata;
     cfrock.contact = contact;
-    if (crock->filter &&
-        !jmap_filter_match(crock->filter, &contact_filter_match, &cfrock)) {
+    jmap_filtermatch_cb *matcher = crock->kind == CARDDAV_KIND_GROUP ?
+        contactgroup_filter_match : contact_filter_match;
+
+    if (crock->filter && !jmap_filter_match(crock->filter, matcher, &cfrock)) {
         goto done;
     }
     crock->query->total++;
@@ -2405,7 +2494,7 @@ done:
     return r;
 }
 
-static int jmap_contact_query(struct jmap_req *req)
+static int _contacts_query(struct jmap_req *req, unsigned kind)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -2424,8 +2513,14 @@ static int jmap_contact_query(struct jmap_req *req)
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req, &parser, NULL, NULL,
-                     validate_contact_filter, NULL,
-                     validate_contact_comparator, NULL,
+                     kind == CARDDAV_KIND_GROUP ?
+                        validate_contactgroup_filter :
+                        validate_contact_filter,
+                     NULL,
+                     kind == CARDDAV_KIND_GROUP ?
+                        validate_contactgroup_comparator :
+                        validate_contact_comparator,
+                     NULL,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -2446,23 +2541,25 @@ static int jmap_contact_query(struct jmap_req *req)
     json_t *filter = json_object_get(req->args, "filter");
     const char *wantuid = NULL;
     if (JNOTNULL(filter)) {
-        parsed_filter = jmap_buildfilter(filter, contact_filter_parse);
+        parsed_filter = jmap_buildfilter(filter,
+                kind == CARDDAV_KIND_GROUP ?
+                    contactgroup_filter_parse : contact_filter_parse);
         wantuid = json_string_value(json_object_get(filter, "uid"));
     }
 
     /* Inspect every entry in this accounts addressbook mailboxes. */
-    struct contactquery_rock rock = {
-        req, &query, parsed_filter, NULL, db
+    struct contacts_query_rock rock = {
+        req, &query, parsed_filter, NULL, db, kind
     };
     if (wantuid) {
         /* Fast-path single filter condition by UID */
         struct carddav_data *cdata = NULL;
         r = carddav_lookup_uid(db, wantuid, &cdata);
-        if (!r) getcontactquery_cb(&rock, cdata);
+        if (!r) _contacts_query_cb(&rock, cdata);
     }
     else {
         /* check carddav db for matching entries */
-        r = carddav_foreach(db, NULL, getcontactquery_cb, &rock);
+        r = carddav_foreach(db, NULL, _contacts_query_cb, &rock);
     }
     if (rock.mailbox) mailbox_close(&rock.mailbox);
     if (r) {
@@ -2482,9 +2579,22 @@ static int jmap_contact_query(struct jmap_req *req)
 done:
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
-    if (parsed_filter) jmap_filter_free(parsed_filter, contact_filter_free);
+    if (parsed_filter) {
+        jmap_filter_free(parsed_filter, kind == CARDDAV_KIND_GROUP ?
+            contactgroup_filter_free : contact_filter_free);
+    }
     if (db) carddav_close(db);
     return 0;
+}
+
+static int jmap_contact_query(struct jmap_req *req)
+{
+    return _contacts_query(req, CARDDAV_KIND_CONTACT);
+}
+
+static int jmap_contactgroup_query(struct jmap_req *req)
+{
+    return _contacts_query(req, CARDDAV_KIND_GROUP);
 }
 
 static struct vparse_entry *_card_multi(struct vparse_card *card,
