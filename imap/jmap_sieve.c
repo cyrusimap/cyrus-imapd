@@ -323,8 +323,17 @@ static char *sieve_state(const char *sievedir)
     struct buf buf = BUF_INITIALIZER;
     struct stat sbuf;
     time_t state = 0;
+    int r;
 
-    if (!stat(sievedir, &sbuf)) state = sbuf.st_mtime;
+    r = stat(sievedir, &sbuf);
+    if (r && errno == ENOENT) {
+        r = cyrus_mkdir(sievedir, 0755);
+        if (!r) {
+            r = mkdir(sievedir, 0755);
+            if (!r) r = stat(sievedir, &sbuf);
+        }
+    }
+    state = r ? 0 : sbuf.st_mtime;
 
     buf_printf(&buf, "%ld", state);
 
