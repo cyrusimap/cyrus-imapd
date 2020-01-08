@@ -154,14 +154,9 @@ static int stub_parse_error(int lineno, const char *msg,
     return SIEVE_OK;
 }
 
-/* Wrapper for sieve_script_parse using a disposable single-use interpreter.
- * Use when you only want to parse or compile, but not execute, a script. */
-EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
-                                     sieve_script_t **out_script)
+EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
 {
     sieve_interp_t *interpreter = NULL;
-    sieve_script_t *script = NULL;
-    struct buf errors = BUF_INITIALIZER;
     int res;
 
     /* build a single-use interpreter using stub callbacks*/
@@ -217,6 +212,27 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
     sieve_register_notify(interpreter, &stub_notify, NULL);
     sieve_register_parse_error(interpreter, &stub_parse_error);
 
+done:
+    if (res != SIEVE_OK) {
+        sieve_interp_free(&interpreter);
+        interpreter = NULL;
+    }
+
+    return interpreter;
+}
+
+/* Wrapper for sieve_script_parse using a disposable single-use interpreter.
+ * Use when you only want to parse or compile, but not execute, a script. */
+EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
+                                     sieve_script_t **out_script)
+{
+    sieve_interp_t *interpreter = sieve_build_nonexec_interp();
+    sieve_script_t *script = NULL;
+    struct buf errors = BUF_INITIALIZER;
+    int res;
+
+    if (!interpreter) return SIEVE_FAIL;
+
     buf_appendcstr(&errors, "script errors:\r\n");
     *out_errors = NULL;
 
@@ -235,7 +251,6 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
         *out_errors = buf_release(&errors);
     }
 
-done:
     sieve_interp_free(&interpreter);
     buf_free(&errors);
     return res;
