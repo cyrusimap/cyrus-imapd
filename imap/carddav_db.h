@@ -71,6 +71,14 @@ struct carddav_data {
     strarray_t *member_uids;
 };
 
+enum carddav_sort {
+    CARD_SORT_NONE = 0,
+    CARD_SORT_MODSEQ,
+    CARD_SORT_UID,
+    CARD_SORT_FULLNAME,
+    CARD_SORT_DESC = 0x80 /* bit-flag for descending sort */
+};
+
 typedef int carddav_cb_t(void *rock, struct carddav_data *cdata);
 
 
@@ -143,6 +151,13 @@ int carddav_get_updates(struct carddav_db *carddavdb,
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
                     carddav_cb_t *cb, void *rock);
+
+/* process each entry for 'mailbox' in 'carddavdb' with cb()
+ * The callback is called in order of sort, or by descending
+ * modseq if no sort is specified. */
+int carddav_foreach_sort(struct carddav_db *carddavdb, const char *mailbox,
+                         enum carddav_sort* sort, size_t nsort,
+                         carddav_cb_t *cb, void *rock);
 
 int carddav_write_jmapcache(struct carddav_db *carddavdb, int rowid,
                             int version, const char *data);

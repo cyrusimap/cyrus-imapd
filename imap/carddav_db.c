@@ -362,14 +362,24 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 
 
 #define CMD_SELMBOX CMD_GETFIELDS \
-    " WHERE mailbox = :mailbox AND alive = 1 ORDER BY modseq DESC;"
+    " WHERE mailbox = :mailbox AND alive = 1"
 
 #define CMD_SELALIVE CMD_GETFIELDS \
-    " WHERE alive = 1 ORDER BY modseq DESC;"
+    " WHERE alive = 1"
+
+#define CMD_DEFAULT_ORDER " ORDER BY modseq DESC;"
 
 EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
                    int (*cb)(void *rock, struct carddav_data *data),
                    void *rock)
+{
+    return carddav_foreach_sort(carddavdb, mailbox, NULL, 0, cb, rock);
+}
+
+EXPORTED int carddav_foreach_sort(struct carddav_db *carddavdb, const char *mailbox,
+                                  enum carddav_sort* sort, size_t nsort,
+                                  int (*cb)(void *rock, struct carddav_data *data),
+                                  void *rock)
 {
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
@@ -377,11 +387,45 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
     struct carddav_data cdata;
     struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
 
-    if (mailbox) {
-        return sqldb_exec(carddavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock);
-    } else {
-        return sqldb_exec(carddavdb->db, CMD_SELALIVE, bval, &read_cb, &rrock);
+    if (!nsort) {
+        if (mailbox) {
+            return sqldb_exec(carddavdb->db, CMD_SELMBOX CMD_DEFAULT_ORDER,
+                              bval, &read_cb, &rrock);
+        } else {
+            return sqldb_exec(carddavdb->db, CMD_SELALIVE CMD_DEFAULT_ORDER,
+                              bval, &read_cb, &rrock);
+        }
     }
+
+    struct buf stmt = BUF_INITIALIZER;
+    buf_setcstr(&stmt, mailbox ? CMD_SELMBOX : CMD_SELALIVE);
+    buf_appendcstr(&stmt, " ORDER BY");
+    size_t i;
+    for (i = 0; i < nsort; i++) {
+        const char *column = NULL;
+        switch (sort[i] & ~CARD_SORT_DESC) {
+            case CARD_SORT_MODSEQ:
+                column = "modseq";
+                break;
+            case CARD_SORT_UID:
+                column = "vcard_uid";
+                break;
+            case CARD_SORT_FULLNAME:
+                column = "fullname";
+                break;
+            default:
+                continue;
+        }
+        if (i) buf_putc(&stmt, ',');
+        buf_putc(&stmt, ' ');
+        buf_appendcstr(&stmt, column);
+        buf_appendcstr(&stmt, sort[i] & CARD_SORT_DESC ? " DESC" : " ASC");
+    }
+    buf_putc(&stmt, ';');
+
+    int r = sqldb_exec(carddavdb->db, buf_cstring(&stmt), bval, &read_cb, &rrock);
+    buf_free(&stmt);
+    return r;
 }
 
 #define CMD_GETUID_GROUPS \
