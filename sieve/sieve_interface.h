@@ -193,6 +193,8 @@ typedef struct sieve_duplicate_context {
 sieve_interp_t *sieve_interp_alloc(void *interp_context);
 int sieve_interp_free(sieve_interp_t **interp);
 
+sieve_interp_t *sieve_build_nonexec_interp();
+
 /* add the callbacks for actions. undefined behavior results if these
    are called after sieve_script_parse is called! */
 void sieve_register_redirect(sieve_interp_t *interp, sieve_callback *f);
@@ -266,7 +268,6 @@ int sieve_execute_bytecode(sieve_execute_t *script, sieve_interp_t *interp,
                            void *script_context, void *message_context);
 
 /* Get space separated list of extensions supported by the implementation */
-    strarray_t *extensions;
 const strarray_t *sieve_listextensions(sieve_interp_t *i);
 
 /* Create a bytecode structure given a parsed commandlist */
