@@ -96,9 +96,10 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         ext_pos = strarray_append(i->extensions, NULL);
 
         /* Build Sieve extensions string */
+        buf_setcstr(&buf, "encoded-character");
 
         /* add comparators */
-        buf_setcstr(&buf, "comparator-i;ascii-numeric");
+        buf_appendcstr(&buf, " comparator-i;ascii-numeric");
 
         /* add actions */
         if (i->fileinto &&
@@ -130,13 +131,14 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (i->addheader &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER))
             buf_appendcstr(&buf, " editheader");
-        if ((config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE))
-            buf_appendcstr(&buf, " ihave");
 #if 0  /* Don't advertise this to ManageSieve clients -
           We probably don't want end users adding this action themselves */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG)
             buf_appendcstr(&buf, " x-cyrus-log");
 #endif
+        if (i->jmapquery &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_SNOOZE))
+            buf_appendcstr(&buf, " x-cyrus-snooze");
 
         /* add tests */
         if (i->getenvelope &&
@@ -152,6 +154,8 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " imap4flags");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)
             buf_appendcstr(&buf, " date");
+        if ((config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE))
+            buf_appendcstr(&buf, " ihave");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX)
             buf_appendcstr(&buf, " mailbox");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA)
@@ -188,6 +192,15 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " index");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES)
             buf_appendcstr(&buf, " variables");
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DELIVERBY)
+            buf_appendcstr(&buf, " redirect-deliverby");
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DSN)
+            buf_appendcstr(&buf, " redirect-dsn");
+        if (i->getspecialuseexists &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SPECIAL_USE))
+            buf_appendcstr(&buf, " special-use");
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FCC)
+            buf_appendcstr(&buf, " fcc");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID)
             buf_appendcstr(&buf, " mailboxid");
 
