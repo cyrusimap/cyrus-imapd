@@ -291,8 +291,6 @@ static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text)
     return 0;
 }
 
-/* FIXME DUPLICATE END */
-
 /*****************************************************************************
  * JMAP Contacts API
  ****************************************************************************/
