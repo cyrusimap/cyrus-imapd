@@ -1993,7 +1993,7 @@ static int jmap_contact_changes(struct jmap_req *req)
 typedef struct contacts_query_filter_rock {
     struct carddav_db *carddavdb;
     struct carddav_data *cdata;
-    json_t *contact;
+    json_t *entry;
 } contacts_query_filter_rock;
 
 typedef struct contact_filter {
@@ -2021,7 +2021,7 @@ static int contact_filter_match(void *vf, void *rock)
 {
     contact_filter *f = (contact_filter *) vf;
     contacts_query_filter_rock *cfrock = (contacts_query_filter_rock*) rock;
-    json_t *contact = cfrock->contact;
+    json_t *contact = cfrock->entry;
     struct carddav_data *cdata = cfrock->cdata;
     struct carddav_db *db = cfrock->carddavdb;
 
@@ -2323,6 +2323,8 @@ static int validate_contact_comparator(jmap_req_t *req __attribute__((unused)),
 
 typedef struct contactgroup_filter {
     const char *uid;
+    const char *text;
+    const char *name;
 } contactgroup_filter;
 
 /* Match the contact in rock against filter. */
@@ -2331,9 +2333,18 @@ static int contactgroup_filter_match(void *vf, void *rock)
     contactgroup_filter *f = (contactgroup_filter *) vf;
     contacts_query_filter_rock *cfrock = (contacts_query_filter_rock*) rock;
     struct carddav_data *cdata = cfrock->cdata;
+    json_t *group = cfrock->entry;
 
     /* uid */
     if (f->uid && strcmpsafe(cdata->vcard_uid, f->uid)) {
+        return 0;
+    }
+    /* text */
+    if (f->text && !jmap_match_jsonprop(group, NULL, f->text)) {
+        return 0;
+    }
+    /*  name */
+    if (f->name && !jmap_match_jsonprop(group, "name", f->name)) {
         return 0;
     }
 
@@ -2356,6 +2367,14 @@ static void *contactgroup_filter_parse(json_t *arg)
     if (JNOTNULL(json_object_get(arg, "uid"))) {
         jmap_readprop(arg, "uid", 0, NULL, "s", &f->uid);
     }
+    /* text */
+    if (JNOTNULL(json_object_get(arg, "text"))) {
+        jmap_readprop(arg, "text", 0, NULL, "s", &f->text);
+    }
+    /* name */
+    if (JNOTNULL(json_object_get(arg, "name"))) {
+        jmap_readprop(arg, "name", 0, NULL, "s", &f->name);
+    }
 
     return f;
 }
@@ -2371,7 +2390,9 @@ static void validate_contactgroup_filter(jmap_req_t *req __attribute__((unused))
     json_t *arg;
 
     json_object_foreach(filter, field, arg) {
-        if (!strcmp(field, "uid")) {
+        if (!strcmp(field, "uid") ||
+            !strcmp(field, "text") ||
+            !strcmp(field, "name")) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
             }
@@ -2411,7 +2432,7 @@ static int _contacts_query_cb(void *rock, struct carddav_data *cdata)
 {
     struct contacts_query_rock *crock = (struct contacts_query_rock*) rock;
     struct index_record record;
-    json_t *contact = NULL;
+    json_t *entry = NULL;
     struct contacts_query_filter_rock cfrock;
     int r = 0;
 
@@ -2429,8 +2450,8 @@ static int _contacts_query_cb(void *rock, struct carddav_data *cdata)
 
     if (cdata->jmapversion == JMAPCACHE_CONTACTVERSION) {
         json_error_t jerr;
-        contact = json_loads(cdata->jmapdata, 0, &jerr);
-        if (contact) goto gotvalue;
+        entry = json_loads(cdata->jmapdata, 0, &jerr);
+        if (entry) goto gotvalue;
     }
 
     /* Open mailbox. */
@@ -2458,7 +2479,9 @@ static int _contacts_query_cb(void *rock, struct carddav_data *cdata)
     /* XXX If this conversion turns out to waste too many cycles, then first
      * initialize props with any non-NULL field in filter f or its subconditions.
      */
-    contact = jmap_contact_from_vcard(vcard->objects, crock->mailbox, &record);
+    entry = crock->kind == CARDDAV_KIND_GROUP ?
+        jmap_group_from_vcard(vcard->objects) :
+        jmap_contact_from_vcard(vcard->objects, crock->mailbox, &record);
     vparse_free_card(vcard);
 
 gotvalue:
@@ -2468,7 +2491,7 @@ gotvalue:
     /* Match the contact against the filter and update statistics. */
     cfrock.carddavdb = crock->carddavdb;
     cfrock.cdata = cdata;
-    cfrock.contact = contact;
+    cfrock.entry = entry;
     jmap_filtermatch_cb *matcher = crock->kind == CARDDAV_KIND_GROUP ?
         contactgroup_filter_match : contact_filter_match;
 
@@ -2488,7 +2511,7 @@ gotvalue:
     json_array_append_new(crock->query->ids, json_string(cdata->vcard_uid));
 
 done:
-    if (contact) json_decref(contact);
+    if (entry) json_decref(entry);
     return r;
 }
 
