@@ -669,16 +669,16 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
 
     if (!ctx) {
-        simple_hdr(txn, "Sec-WebSocket-Version", WS_VERSION);
+        simple_hdr(txn, "Sec-WebSocket-Version", "%s", WS_VERSION);
         return;
     }
 
     if (ctx->accept) {
-        simple_hdr(txn, "Sec-WebSocket-Accept", ctx->accept);
+        simple_hdr(txn, "Sec-WebSocket-Accept", "%s", ctx->accept);
     }
 
     if (ctx->protocol) {
-        simple_hdr(txn, "Sec-WebSocket-Protocol", ctx->protocol);
+        simple_hdr(txn, "Sec-WebSocket-Protocol", "%s", ctx->protocol);
     }
 
     if (ctx->ext & EXT_PMCE_DEFLATE) {

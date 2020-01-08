@@ -268,7 +268,7 @@ imtest_fatal(const char *msg, ...)
 /* libcyrus makes us define this */
 EXPORTED void fatal(const char *msg, int code __attribute__((unused)))
 {
-    imtest_fatal(msg);
+    imtest_fatal("%s", msg);
 }
 
 int mysasl_config(void *context __attribute__((unused)),

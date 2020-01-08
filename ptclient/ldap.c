@@ -926,7 +926,13 @@ static int ptsmodule_get_dn(
         if (ptsm->domain_base_dn && ptsm->domain_base_dn[0] != '\0' && (strrchr(canon_id, '@') == NULL)) {
             syslog(LOG_DEBUG, "collecting all domains from %s", ptsm->domain_base_dn);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+            /* Format string comes from imapd.conf.  Not ideal, but it's what
+             * we've got...
+             */
             snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, "*");
+#pragma GCC diagnostic pop
 
             syslog(LOG_DEBUG, "Domain filter: %s", domain_filter);
 
@@ -989,7 +995,13 @@ static int ptsmodule_get_dn(
             /* Strip the first character which is a '@' */
             domain = domain+1;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+            /* Format string comes from imapd.conf.  Not ideal, but it's what
+             * we've got...
+             */
             snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, domain);
+#pragma GCC diagnostic pop
 
             syslog(LOG_DEBUG, "Domain filter: %s", domain_filter);
 
@@ -1427,7 +1439,13 @@ static int ptsmodule_make_authstate_group(
 
         syslog(LOG_DEBUG, "(groups) Input domain would be %s", domain);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+            /* Format string comes from imapd.conf.  Not ideal, but it's what
+             * we've got...
+             */
         snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, domain);
+#pragma GCC diagnostic pop
 
         syslog(LOG_DEBUG, "(groups) Domain filter: %s", domain_filter);
 

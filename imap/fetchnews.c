@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
     time_t stamp;
     strarray_t resp = STRARRAY_INITIALIZER;
     int newnews = 1;
-    char *datefmt = "%y%m%d %H%M%S";
+    int y2k_compliant_date_format = 0;
 
     while ((opt = getopt(argc, argv, "C:s:w:f:a:p:ny")) != EOF) {
         switch (opt) {
@@ -301,7 +301,7 @@ int main(int argc, char *argv[])
             break;
 
         case 'y': /* newsserver is y2k compliant */
-            datefmt = "%Y%m%d %H%M%S";
+            y2k_compliant_date_format = 1;
             break;
 
         default:
@@ -417,7 +417,18 @@ int main(int argc, char *argv[])
         if (stamp) stamp -= 180; /* adjust back 3 minutes */
         ptime = gmtime(&stamp);
         ptime->tm_isdst = -1;
-        strftime(buf, sizeof(buf), datefmt, ptime);
+
+        if (y2k_compliant_date_format) {
+            strftime(buf, sizeof(buf), "%Y%m%d %H%M%S", ptime);
+        }
+        else {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-y2k"
+            /* We know this is not y2k compliant! */
+            strftime(buf, sizeof(buf), "%y%m%d %H%M%S", ptime);
+#pragma GCC diagnostic pop
+        }
+
         prot_printf(pout, "NEWNEWS %s %s GMT\r\n", wildmat, buf);
 
         if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("230", buf, 3)) {

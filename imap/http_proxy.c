@@ -587,7 +587,7 @@ static void write_forwarding_hdrs(struct transaction_t *txn, hdrcache_t hdrs,
     const char **fwd = spool_getheader(hdrs, "Forwarded");
 
     /* Add any existing Via headers */
-    for (; via && *via; via++) simple_hdr(txn, "Via", *via);
+    for (; via && *via; via++) simple_hdr(txn, "Via", "%s", *via);
 
     /* Create our own Via header */
     simple_hdr(txn, "Via", (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) ?
@@ -595,7 +595,7 @@ static void write_forwarding_hdrs(struct transaction_t *txn, hdrcache_t hdrs,
                version+5, config_servername, CYRUS_VERSION);
 
     /* Add any existing Forwarded headers */
-    for (; fwd && *fwd; fwd++) simple_hdr(txn, "Forwarded", *fwd);
+    for (; fwd && *fwd; fwd++) simple_hdr(txn, "Forwarded", "%s", *fwd);
 
     /* Create our own Forwarded header */
     if (proto) {
@@ -614,7 +614,7 @@ static void write_forwarding_hdrs(struct transaction_t *txn, hdrcache_t hdrs,
             buf_printf(&txn->buf, ";for=%.*s", (int)len, httpd_localip);
         }
 
-        simple_hdr(txn, "Forwarded", buf_cstring(&txn->buf));
+        simple_hdr(txn, "Forwarded", "%s", buf_cstring(&txn->buf));
         buf_reset(&txn->buf);
     }
 }
@@ -643,7 +643,7 @@ static void write_cachehdr(const char *name, const char *contents,
             simple_hdr(txn, "Max-Forwards", "%lu", max-1);
         }
         else {
-            simple_hdr(txn, name, contents);
+            simple_hdr(txn, name, "%s", contents);
         }
     }
 }
@@ -699,11 +699,11 @@ static void send_response(struct transaction_t *txn, long code,
             txn->flags.te = TE_CHUNKED;
 
             if (txn->flags.ver == VER_1_1) {
-                simple_hdr(txn, "Transfer-Encoding", hdr[0]);
+                simple_hdr(txn, "Transfer-Encoding", "%s", hdr[0]);
             }
             if ((hdr = spool_getheader(hdrs, "Trailer"))) {
                 txn->flags.trailer = TRAILER_PROXY;
-                simple_hdr(txn, "Trailer", hdr[0]);
+                simple_hdr(txn, "Trailer", "%s", hdr[0]);
             }
         }
         else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
@@ -711,7 +711,7 @@ static void send_response(struct transaction_t *txn, long code,
                 /* Prevent end of stream */
                 txn->flags.te = TE_CHUNKED;
             }
-            else simple_hdr(txn, "Content-Length", hdr[0]);
+            else simple_hdr(txn, "Content-Length", "%s", hdr[0]);
         }
 
         end_resp_headers(txn, code);

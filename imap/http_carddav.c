@@ -796,7 +796,7 @@ static int export_addressbook(struct transaction_t *txn)
             if (r++ && *sep) {
                 /* Add separator, if necessary */
                 buf_reset(buf);
-                buf_printf_markup(buf, 0, sep);
+                buf_printf_markup(buf, 0, "%s", sep);
                 write_body(0, txn, buf_cstring(buf), buf_len(buf));
             }
 

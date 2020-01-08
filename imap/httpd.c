@@ -2383,7 +2383,7 @@ EXPORTED void comma_list_hdr(struct transaction_t *txn, const char *name,
 
     va_end(args);
 
-    simple_hdr(txn, name, buf_cstring(&buf));
+    simple_hdr(txn, name, "%s", buf_cstring(&buf));
 
     buf_free(&buf);
 }
@@ -2446,7 +2446,7 @@ EXPORTED void accept_patch_hdr(struct transaction_t *txn,
         sep = ", ";
     }
 
-    simple_hdr(txn, "Accept-Patch", buf_cstring(&buf));
+    simple_hdr(txn, "Accept-Patch", "%s", buf_cstring(&buf));
 
     buf_free(&buf);
 }
@@ -2459,7 +2459,7 @@ EXPORTED void content_md5_hdr(struct transaction_t *txn,
     char base64[MD5_BASE64_LEN+1];
 
     sasl_encode64((char *) md5, MD5_DIGEST_LENGTH, base64, MD5_BASE64_LEN, NULL);
-    simple_hdr(txn, "Content-MD5", base64);
+    simple_hdr(txn, "Content-MD5", "%s", base64);
 }
 
 EXPORTED void begin_resp_headers(struct transaction_t *txn, long code)
@@ -2505,7 +2505,7 @@ static void write_cachehdr(const char *name, const char *contents,
         if (!strcasecmp(name, *hdr)) return;
     }
 
-    simple_hdr(txn, name, contents);
+    simple_hdr(txn, name, "%s", contents);
 }
 
 
@@ -2538,7 +2538,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         /* Final response */
         now = time(0);
         httpdate_gen(datestr, sizeof(datestr), now);
-        simple_hdr(txn, "Date", datestr);
+        simple_hdr(txn, "Date", "%s", datestr);
 
         /* Fall through and specify connection options and/or links */
         GCC_FALLTHROUGH
@@ -2570,7 +2570,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
     case HTTP_EARLY_HINTS:
         for (i = 0; i < strarray_size(&resp_body->links); i++) {
-            simple_hdr(txn, "Link", strarray_nth(&resp_body->links, i));
+            simple_hdr(txn, "Link", "%s", strarray_nth(&resp_body->links, i));
         }
 
         if (code >= HTTP_OK) break;
@@ -2598,7 +2598,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         simple_hdr(txn, "Strict-Transport-Security", "max-age=600");
     }
     if (txn->location) {
-        simple_hdr(txn, "Location", txn->location);
+        simple_hdr(txn, "Location", "%s", txn->location);
     }
     if (txn->flags.mime) {
         simple_hdr(txn, "MIME-Version", "1.0");
@@ -2614,12 +2614,12 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
         if (txn->flags.cc & CC_MAXAGE) {
             httpdate_gen(datestr, sizeof(datestr), now + resp_body->maxage);
-            simple_hdr(txn, "Expires", datestr);
+            simple_hdr(txn, "Expires", "%s", datestr);
         }
     }
     if (txn->flags.cors) {
         /* Construct Cross-Origin Resource Sharing headers */
-        simple_hdr(txn, "Access-Control-Allow-Origin",
+        simple_hdr(txn, "Access-Control-Allow-Origin", "%s",
                       *spool_getheader(txn->req_hdrs, "Origin"));
         simple_hdr(txn, "Access-Control-Allow-Credentials", "true");
 
@@ -2629,7 +2629,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             for (hdr = spool_getheader(txn->req_hdrs,
                                        "Access-Control-Request-Headers");
                  hdr && *hdr; hdr++) {
-                simple_hdr(txn, "Access-Control-Allow-Headers", *hdr);
+                simple_hdr(txn, "Access-Control-Allow-Headers", "%s", *hdr);
             }
             simple_hdr(txn, "Access-Control-Max-Age", "3600");
         }
@@ -2663,7 +2663,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         }
         else {
             /* Default handling of success data */
-            simple_hdr(txn, "Authentication-Info", auth_chal->param);
+            simple_hdr(txn, "Authentication-Info", "%s", auth_chal->param);
         }
     }
 
@@ -2698,7 +2698,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
         case METH_OPTIONS:
             if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-                simple_hdr(txn, "Server", buf_cstring(&serverinfo));
+                simple_hdr(txn, "Server", "%s", buf_cstring(&serverinfo));
             }
 
             if (!httpd_userid && !auth_chal->scheme) {
@@ -2780,7 +2780,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         /* Last-Modified MUST NOT be in the future */
         resp_body->lastmod = MIN(resp_body->lastmod, now);
         httpdate_gen(datestr, sizeof(datestr), resp_body->lastmod);
-        simple_hdr(txn, "Last-Modified", datestr);
+        simple_hdr(txn, "Last-Modified", "%s", datestr);
     }
 
 
@@ -2798,7 +2798,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
     }
     if (resp_body->type) {
-        simple_hdr(txn, "Content-Type", resp_body->type);
+        simple_hdr(txn, "Content-Type", "%s", resp_body->type);
         if (resp_body->dispo.fname) {
             /* Construct Content-Disposition header */
             const unsigned char *p = (const unsigned char *)resp_body->dispo.fname;
@@ -2826,10 +2826,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             comma_list_hdr(txn, "Content-Encoding", ce, txn->resp_body.enc.type);
         }
         if (resp_body->lang) {
-            simple_hdr(txn, "Content-Language", resp_body->lang);
+            simple_hdr(txn, "Content-Language", "%s", resp_body->lang);
         }
         if (resp_body->loc) {
-            simple_hdr(txn, "Content-Location", resp_body->loc);
+            simple_hdr(txn, "Content-Location", "%s", resp_body->loc);
             if (txn->flags.cors) Access_Control_Expose("Content-Location");
         }
         if (resp_body->md5) {
