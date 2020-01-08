@@ -2114,10 +2114,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 } else {
                     /* s[0] contains the original subject */
                     const char *origsubj = s[0];
-                    /* prepend subject with a folded "Auto:" */
-                    buf_printf(&buf, "Auto:\r\n %s", origsubj);
-                    /* fold any space-separated encoded-words */
-                    buf_replace_all(&buf, "?= =?", "?=\r\n =?");
+                    buf_printf(&buf, "Auto: %s", origsubj);
                 }
 
                 subject = buf_release(&buf);
