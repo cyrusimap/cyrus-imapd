@@ -109,7 +109,66 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
 HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
 {
 #ifdef USE_SIEVE
-    json_object_set_new(account_capabilities, JMAP_SIEVE_EXTENSION, json_object());
+    static json_t *sieve_capabilities = NULL;
+
+    if (!sieve_capabilities) {
+        json_t *extensions = json_object();
+        sieve_interp_t *interp = sieve_build_nonexec_interp();
+        const strarray_t *ext = NULL;
+
+        if (interp && (ext = sieve_listextensions(interp))) {
+            hash_table capa = HASH_TABLE_INITIALIZER;
+            const char *key;
+            strarray_t *sa;
+            int i;
+
+            construct_hash_table(&capa, 5, 0);
+
+            for (i = 0; i < strarray_size(ext); i += 2) {
+                key = strarray_nth(ext, i);
+                sa = strarray_split(strarray_nth(ext, i+1), " ", 0);
+
+                hash_insert(key, sa, &capa);
+            }
+
+            ext = hash_lookup("SIEVE", &capa);
+            for (i = 0; ext && i < strarray_size(ext); i++) {
+                key = strarray_nth(ext, i);
+                json_t *params = NULL;
+
+                if (!strcmp(key, "enotify")) {
+                    params = json_array();
+                    sa = hash_lookup("NOTIFY", &capa);
+                }
+                else if (!strcmp(key, "extlists")) {
+                    params = json_array();
+                    sa = hash_lookup("EXTLISTS", &capa);
+                }
+                else {
+                    params = json_null();
+                    sa = NULL;
+                }
+
+                if (json_is_array(params) && sa) {
+                    int j;
+
+                    for (j = 0; j < strarray_size(sa); j++) {
+                        json_array_append_new(params,
+                                              json_string(strarray_nth(sa, j)));
+                    }
+                }
+
+                json_object_set_new(extensions, key, params);
+            }
+
+            free_hash_table(&capa, (void (*)(void *)) &strarray_free);
+        }
+        if (interp) sieve_interp_free(&interp);
+
+        sieve_capabilities = json_pack("{s:o}", "sieveExtensions", extensions);
+    }
+
+    json_object_set(account_capabilities, JMAP_SIEVE_EXTENSION, sieve_capabilities);
 #endif /* USE_SIEVE */
 
 }
