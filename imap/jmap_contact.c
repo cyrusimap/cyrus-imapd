@@ -2556,6 +2556,7 @@ static int _contacts_query(struct jmap_req *req, unsigned kind)
         struct carddav_data *cdata = NULL;
         r = carddav_lookup_uid(db, wantuid, &cdata);
         if (!r) _contacts_query_cb(&rock, cdata);
+        if (r == CYRUSDB_NOTFOUND) r = 0;
     }
     else {
         /* check carddav db for matching entries */
