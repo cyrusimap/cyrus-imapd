@@ -511,7 +511,7 @@ EXPORTED int caldav_foreach_timerange(struct caldav_db *caldavdb,
             if (i) buf_appendcstr(&stmt, ", ");
             switch (sort[i] & ~CAL_SORT_DESC) {
                 case CAL_SORT_UID:
-                    buf_appendcstr(&stmt, "uid");
+                    buf_appendcstr(&stmt, "ical_uid");
                     break;
                 case CAL_SORT_START:
                     buf_appendcstr(&stmt, "dtstart");
