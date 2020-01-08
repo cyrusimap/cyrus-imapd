@@ -1400,7 +1400,19 @@ sub test_contactgroup_query_uid
             },
         }, 'R2'],
     ]);
+    $self->assert_str_equals("ContactGroup/query", $res->[0][0]);
     $self->assert_deep_equals([$contactGroupId2], $res->[0][1]{ids});
+
+    xlog $self, "query by invalid uid";
+    $res = $jmap->CallMethods([
+        ['ContactGroup/query', {
+            filter => {
+                uid => "notarealuid",
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals("ContactGroup/query", $res->[0][0]);
+    $self->assert_deep_equals([], $res->[0][1]{ids});
 
     xlog $self, "query by multiple uids";
     $res = $jmap->CallMethods([
@@ -1415,6 +1427,7 @@ sub test_contactgroup_query_uid
             },
         }, 'R2'],
     ]);
+    $self->assert_str_equals("ContactGroup/query", $res->[0][0]);
     my %gotIds =  map { $_ => 1 } @{$res->[0][1]{ids}};
     $self->assert_deep_equals({ $contactGroupUid1 => 1, $contactGroupUid3 => 1, }, \%gotIds);
 }
