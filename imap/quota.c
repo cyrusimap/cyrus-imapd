@@ -231,12 +231,20 @@ static void usage(void)
     exit(EX_USAGE);
 }
 
-static void errmsg(const char *fmt, const char *arg, int err)
+static void
+__attribute__((format(printf, 2, 3)))
+errmsg(int err, const char *fmt, ...)
 {
     char buf[1024];
     size_t len;
+    va_list ap;
 
-    len = snprintf(buf, sizeof(buf), fmt, arg);
+    /* XXX handling of 'len' here smells bad */
+
+    va_start(ap, fmt);
+    len = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+
     if (len < sizeof(buf))
         len += snprintf(buf+len, sizeof(buf)-len, ": %s", error_message(err));
     if ((err == IMAP_IOERROR) && (len < sizeof(buf)))
@@ -331,8 +339,8 @@ static int fixquota_addroot(struct quota *q,
     quota_init(&localq, quotaroots[quota_num].name);
     r = quota_read(&localq, &tid, 1);
     if (r) {
-        errmsg("failed reading quota record for '%s'",
-               q->root, r);
+        errmsg(r, "failed reading quota record for '%s'",
+               q->root);
         goto done;
     }
 
@@ -343,8 +351,8 @@ static int fixquota_addroot(struct quota *q,
 
         r = quota_write(&localq, 0, &tid);
         if (r) {
-            errmsg("failed writing quota record for '%s'",
-                   q->root, r);
+            errmsg(r, "failed writing quota record for '%s'",
+                   q->root);
             goto done;
         }
     }
@@ -384,7 +392,7 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
     if (!nroots) {
         r = quota_foreach(buf, fixquota_addroot, buf, NULL);
         if (r) {
-            errmsg("failed building quota list for '%s'", buf, IMAP_IOERROR);
+            errmsg(IMAP_IOERROR, "failed building quota list for '%s'", buf);
         }
     }
 
@@ -404,7 +412,7 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
         /* XXX - namespace fixes here */
         r = quota_foreach(buf, fixquota_addroot, buf, NULL);
         if (r) {
-            errmsg("failed building quota list for '%s'", buf, IMAP_IOERROR);
+            errmsg(IMAP_IOERROR, "failed building quota list for '%s'", buf);
             break;
         }
     }
@@ -476,13 +484,13 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
 
     r = findroot(mbentry->name, &thisquota);
     if (r) {
-        errmsg("failed finding quotaroot for mailbox '%s'", mbentry->name, r);
+        errmsg(r, "failed finding quotaroot for mailbox '%s'", mbentry->name);
         goto done;
     }
 
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) {
-        errmsg("failed opening header for mailbox '%s'", mbentry->name, r);
+        errmsg(r, "failed opening header for mailbox '%s'", mbentry->name);
         goto done;
     }
 
@@ -552,7 +560,7 @@ int fixquota_fixroot(struct mailbox *mailbox,
            root ? root : "(none)");
 
     r = mailbox_set_quotaroot(mailbox, root);
-    if (r) errmsg("failed writing header for mailbox '%s'", mailbox->name, r);
+    if (r) errmsg(r, "failed writing header for mailbox '%s'", mailbox->name);
 
     return r;
 }
@@ -574,7 +582,7 @@ int fixquota_finish(int thisquota)
         if (!flag_reportonly)
             r = quota_deleteroot(root, 0);
         if (r) {
-            errmsg("failed deleting quotaroot '%s'", root, r);
+            errmsg(r, "failed deleting quotaroot '%s'", root);
         }
         return r;
     }
@@ -583,7 +591,7 @@ int fixquota_finish(int thisquota)
     quota_init(&localq, root);
     r = quota_read(&localq, &tid, 1);
     if (r) {
-        errmsg("failed reading quotaroot '%s'", root, r);
+        errmsg(r, "failed reading quotaroot '%s'", root);
         goto done;
     }
 
@@ -606,7 +614,7 @@ int fixquota_finish(int thisquota)
 
     r = quota_write(&localq, 0, &tid);
     if (r) {
-        errmsg("failed writing quotaroot: '%s'", root, r);
+        errmsg(r, "failed writing quotaroot: '%s'", root);
         goto done;
     }
 
@@ -640,7 +648,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
     if (!nroots) {
         r = mboxlist_allmbox(buf, cb, buf, /*flags*/0);
         if (r) {
-            errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
+            errmsg(IMAP_IOERROR, "processing mbox list for '%s'", buf);
         }
     }
 
@@ -659,7 +667,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
             r = mboxlist_allmbox(buf, cb, buf, /*flags*/0);
         }
         if (r) {
-            errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
+            errmsg(IMAP_IOERROR, "processing mbox list for '%s'", buf);
             break;
         }
     }
