@@ -1559,8 +1559,7 @@ static int send_response(void *ac, void *ic,
     /* check that subject is sane */
     sl = strlen(src->subj);
     for (i = 0; i < sl; i++)
-        if (Uiscntrl(src->subj[i]) &&
-            src->subj[i] != '\t' && src->subj[i] != '\n' && src->subj[i] != '\r') {
+        if (Uiscntrl(src->subj[i])) {
             src->subj[i] = '\0';
             break;
         }
