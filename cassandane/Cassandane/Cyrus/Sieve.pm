@@ -2373,7 +2373,9 @@ EOF
 }
 
 sub test_snooze
-    :needs_component_sieve :needs_component_calalarmd :min_version_3_1
+    :needs_component_sieve :needs_component_calalarmd
+    :needs_component_jmap
+    :min_version_3_1
 {
     my ($self) = @_;
 
