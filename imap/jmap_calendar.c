@@ -4315,6 +4315,7 @@ static int eventquery_run(jmap_req_t *req,
             struct caldav_data *cdata = NULL;
             r = caldav_lookup_uid(db, wantuid, &cdata);
             if (!r) eventquery_fastpath_cb(&rock, cdata);
+            if (r == CYRUSDB_NOTFOUND) r = 0;
         }
         else {
             /* Fast-path: we can offload most processing to Caldav DB. */
