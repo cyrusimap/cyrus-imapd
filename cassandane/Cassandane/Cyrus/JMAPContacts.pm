@@ -871,9 +871,9 @@ sub test_contact_query_shared
     xlog $self, "get unfiltered contact list";
     $res = $jmap->CallMethods([ ['Contact/query', { accountId => 'manifold' }, "R1"] ]);
 
-xlog $self, "check total";
+    xlog $self, "check total";
     $self->assert_num_equals(4, $res->[0][1]{total});
-xlog $self, "check ids";
+    xlog $self, "check ids";
     $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "filter by firstName";
