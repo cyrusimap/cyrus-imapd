@@ -2114,28 +2114,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 } else {
                     /* s[0] contains the original subject */
                     const char *origsubj = s[0];
-                    size_t i = 0, len = strlen(origsubj);
-
                     /* prepend subject with a folded "Auto:" */
-                    buf_setcstr(&buf, "Auto:\r\n ");
-
-                    /* fold header every 75 characters (if possible) */
-                    while (len - i > 75) {
-                        size_t j, last_wsp = 0;
-
-                        for (j = i + 1; j < len; j++) {
-                            if (origsubj[j] == ' ' || origsubj[j] == '\t') {
-                                last_wsp = j;
-                            }
-                            if (last_wsp && (j - i > 75)) {
-                                buf_appendmap(&buf, origsubj + i, last_wsp - i);
-                                buf_appendcstr(&buf, "\r\n");
-                                i = last_wsp;
-                                break;
-                            }
-                        }
-                    }
-                    buf_appendcstr(&buf, origsubj + i);
+                    buf_printf(&buf, "Auto:\r\n %s", origsubj);
+                    /* fold any space-separated encoded-words */
+                    buf_replace_all(&buf, "?= =?", "?=\r\n =?");
                 }
 
                 subject = buf_release(&buf);
