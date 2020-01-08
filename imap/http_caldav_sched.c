@@ -596,6 +596,7 @@ static int imip_send(struct sched_data *sched_data,
     const char *ical_str = icalcomponent_as_ical_string(sched_data->itip);
     json_t *jsevent, *patch;
 
+#ifdef WITH_JMAP
     if (sched_data->oldical) {
         jsevent = jmapical_tojmap(sched_data->oldical, NULL);
 
@@ -616,6 +617,10 @@ static int imip_send(struct sched_data *sched_data,
         jsevent = json_null();
         patch = jmapical_tojmap(sched_data->newical, NULL);
     }
+#else
+    jsevent = json_null();
+    patch = json_null();
+#endif
 
     json_t *val = json_pack("{s:s s:s s:s s:o s:o s:b}",
                             "recipient", recipient,
