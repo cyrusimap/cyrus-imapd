@@ -1445,6 +1445,84 @@ sub test_contactgroup_query_uid
     $self->assert_deep_equals({ $contactGroupUid1 => 1, $contactGroupUid3 => 1, }, \%gotIds);
 }
 
+sub test_contactgroup_query
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create contact groups";
+    my $res = $jmap->CallMethods([
+        ['ContactGroup/set', {
+            create => {
+                contactGroup1 => {
+                    name => 'dogs and cats',
+                },
+                contactGroup2 => {
+                    name => 'cats and bats',
+                },
+                contactGroup3 => {
+                    name => 'bats and hats',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $contactGroupId1 = $res->[0][1]{created}{contactGroup1}{id};
+    $self->assert_not_null($contactGroupId1);
+    my $contactGroupUid1 = $res->[0][1]{created}{contactGroup1}{uid};
+    $self->assert_not_null($contactGroupUid1);
+
+    my $contactGroupId2 = $res->[0][1]{created}{contactGroup2}{id};
+    $self->assert_not_null($contactGroupId2);
+    my $contactGroupUid2 = $res->[0][1]{created}{contactGroup2}{uid};
+    $self->assert_not_null($contactGroupUid2);
+
+    my $contactGroupId3 = $res->[0][1]{created}{contactGroup3}{id};
+    $self->assert_not_null($contactGroupId3);
+    my $contactGroupUid3 = $res->[0][1]{created}{contactGroup3}{uid};
+    $self->assert_not_null($contactGroupUid3);
+
+    xlog $self, "query by exact name";
+    $res = $jmap->CallMethods([
+        ['ContactGroup/query', {
+            filter => {
+                name => 'dogs and cats',
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals("ContactGroup/query", $res->[0][0]);
+    $self->assert_deep_equals([$contactGroupId1], $res->[0][1]{ids});
+
+    xlog $self, "query by unknown name";
+    $res = $jmap->CallMethods([
+        ['ContactGroup/query', {
+            filter => {
+                name => 'nope',
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals("ContactGroup/query", $res->[0][0]);
+    $self->assert_deep_equals([], $res->[0][1]{ids});
+
+    xlog $self, "query substring of name";
+    $res = $jmap->CallMethods([
+        ['ContactGroup/query', {
+            filter => {
+                operator => 'OR',
+                conditions => [{
+                    name => 'bats',
+                }, {
+                    text => 'hats',
+                }],
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals("ContactGroup/query", $res->[0][0]);
+    my %gotIds =  map { $_ => 1 } @{$res->[0][1]{ids}};
+    $self->assert_deep_equals({ $contactGroupUid2 => 1, $contactGroupUid3 => 1, }, \%gotIds);
+}
+
 sub test_contact_set
     :min_version_3_1 :needs_component_jmap
 {
