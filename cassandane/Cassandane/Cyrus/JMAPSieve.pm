@@ -244,4 +244,54 @@ EOF
     $self->assert_num_equals(0, scalar @{$res->[1][1]{list}});
 }
 
+sub test_sieve_set_bad_script
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create bad script";
+    my $res = $jmap->CallMethods([
+        ['Sieve/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    content => "keepme;\r\n"
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_null($res->[0][1]{created});
+    $self->assert_str_equals('invalidScript', $res->[0][1]{notCreated}{1}{type});
+
+    xlog "update bad script";
+    $res = $jmap->CallMethods([
+        ['Sieve/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    content => "keep;\r\n"
+                }
+            },
+            update => {
+                "#1" => {
+                    content => "keepme;\r\n"
+                }
+            },
+            destroy => [ "#1" ]
+         }, "R2"]
+    ]);
+    $self->assert_not_null($res);
+
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_str_equals('invalidScript', $res->[0][1]{notUpdated}{$id}{type});
+    $self->assert_not_null($res->[0][1]{destroyed});
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+    $self->assert_null($res->[0][1]{notDestroyed});
+}
+
 1;
