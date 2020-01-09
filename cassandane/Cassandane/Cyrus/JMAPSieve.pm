@@ -294,4 +294,44 @@ sub test_sieve_set_bad_script
     $self->assert_null($res->[0][1]{notDestroyed});
 }
 
+sub test_sieve_validate
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "validating scripts";
+    my $res = $jmap->CallMethods([
+        ['Sieve/validate', {
+            content => JSON::null
+         }, "R1"],
+        ['Sieve/validate', {
+            content => "keepme;\r\n",
+            content => JSON::null
+         }, "R2"],
+        ['Sieve/validate', {
+            content => "keepme;\r\n"
+         }, "R3"],
+        ['Sieve/validate', {
+            content => "keep;\r\n"
+         }, "R4"],
+    ]);
+    $self->assert_not_null($res);
+
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
+
+    $self->assert_str_equals("error", $res->[1][0]);
+    $self->assert_str_equals("invalidArguments", $res->[1][1]{type});
+
+    $self->assert_str_equals("Sieve/validate", $res->[2][0]);
+    $self->assert_equals(JSON::false, $res->[2][1]{isValid});
+    $self->assert_not_null($res->[2][1]{errorDescription});
+
+    $self->assert_str_equals("Sieve/validate", $res->[3][0]);
+    $self->assert_equals(JSON::true, $res->[3][1]{isValid});
+    $self->assert_null($res->[3][1]{errorDescription});
+}
+
 1;
