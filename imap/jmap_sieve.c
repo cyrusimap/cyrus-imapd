@@ -640,6 +640,8 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
     json_decref(invalid);
 
     r = putscript(name, content, sievedir, &err);
+    if (err) goto done;
+
     if (!r && isactive == 1) {
         /* set as active script */
         r = script_setactive(name, isactive, sievedir);
@@ -739,6 +741,7 @@ static void set_update(const char *id, json_t *jsieve,
 
     if (content) {
         r = putscript(cur_name, content, sievedir, &err);
+        if (err) goto done;
     }
     if (!r && name && strcmp(name, cur_name)) {
         /* rename script and bytecode; move script id link */
