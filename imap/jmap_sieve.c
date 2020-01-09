@@ -66,6 +66,7 @@
 
 static int jmap_sieve_get(jmap_req_t *req);
 static int jmap_sieve_set(jmap_req_t *req);
+static int jmap_sieve_validate(jmap_req_t *req);
 
 jmap_method_t jmap_sieve_methods_standard[] = {
     { NULL, NULL, NULL, 0}
@@ -82,6 +83,12 @@ jmap_method_t jmap_sieve_methods_nonstandard[] = {
         "Sieve/set",
         JMAP_SIEVE_EXTENSION,
         &jmap_sieve_set,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Sieve/validate",
+        JMAP_SIEVE_EXTENSION,
+        &jmap_sieve_validate,
         JMAP_SHARED_CSTATE
     },
     { NULL, NULL, NULL, 0}
@@ -463,28 +470,8 @@ done:
     return 0;
 }
 
-static int putscript(const char *name, const char *content,
-                     const char *sievedir, json_t **err)
+static sieve_script_t *parsescript(FILE *f, const char *content, char **errors)
 {
-    int r, verify_only = !name;
-    char new_path[PATH_MAX];
-    FILE *f;
-
-    if (verify_only) {
-        f = tmpfile();
-    }
-    else {
-        snprintf(new_path, sizeof(new_path),
-                 "%s/%s%s.NEW", sievedir, name, SCRIPT_SUFFIX);
-
-        f = fopen(new_path, "w+");
-    }
-
-    if (f == NULL) {
-        syslog(LOG_ERR, "fopen(%s): %m", new_path);
-        return -1;
-    }
-
     size_t i, content_len = strlen(content);
     int saw_cr = 0;
 
@@ -502,25 +489,42 @@ static int putscript(const char *name, const char *content,
     }
     if (saw_cr) putc('\n', f);
 
-    rewind(f);
-
-    /* verify the script */
-    char *errors = NULL;
+    /* parse the script */
     sieve_script_t *s = NULL;
-    r = sieve_script_parse_only(f, &errors, &s);
+    (void) sieve_script_parse_only(f, errors, &s);
     fflush(f);
     fclose(f);
 
-    if (r != SIEVE_OK) {
+    return s;
+}
+
+static int putscript(const char *name, const char *content,
+                     const char *sievedir, json_t **err)
+{
+    char new_path[PATH_MAX];
+    FILE *f;
+
+    /* open a new file for the script */
+    snprintf(new_path, sizeof(new_path),
+             "%s/%s%s.NEW", sievedir, name, SCRIPT_SUFFIX);
+
+    f = fopen(new_path, "w+");
+
+    if (f == NULL) {
+        syslog(LOG_ERR, "fopen(%s): %m", new_path);
+        return -1;
+    }
+
+    /* verify the script */
+    char *errors = NULL;
+    sieve_script_t *s = parsescript(f, content, &errors);
+    if (!s) {
         *err = json_pack("{s:s, s:s}", "type", "invalidScript",
                          "description", errors);
         free(errors);
         unlink(new_path);
         return 0;
     }
-
-    if (verify_only) return 0;
-
 
     /* generate the bytecode */
     bytecode_info_t *bc = NULL;
@@ -566,7 +570,7 @@ static int putscript(const char *name, const char *content,
     /* rename */
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
-    r = rename(new_path, path);
+    int r = rename(new_path, path);
     if (!r) {
         snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
         r = rename(new_bcpath, path);
@@ -898,4 +902,73 @@ done:
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     return r;
+}
+
+static int jmap_sieve_validate(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    const char *key, *content = NULL;
+    json_t *arg, *err = NULL;
+    int is_valid = 0;
+    FILE *f = NULL;
+
+    /* Parse request */
+    json_object_foreach(req->args, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            /* already handled in jmap_api() */
+        }
+
+        else if (!content && !strcmp(key, "content")) {
+            content = json_string_value(arg);
+        }
+
+        else {
+            jmap_parser_invalid(&parser, key);
+        }
+    }
+
+    if (!content) {
+        jmap_parser_invalid(&parser, "content");
+    }
+
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                        "arguments", parser.invalid);
+    }
+    else {
+        /* open a temp file for the script */
+        f = tmpfile();
+        if (f == NULL) {
+            syslog(LOG_ERR, "tmpfile(): %m");
+            err = json_pack("{s:s, s:s}", "type", "serverFail",
+                            "description", strerror(errno));
+        }
+    }
+
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* parse the script */
+    char *errors = NULL;
+    sieve_script_t *s = parsescript(f, content, &errors);
+    if (s) {
+        sieve_script_free(&s);
+        err = json_null();
+        is_valid = 1;
+    }
+    else {
+        err = json_string(errors);
+        free(errors);
+    }
+
+    /* Build response */
+    json_t *res = json_pack("{s:b s:o}", "isValid", is_valid,
+                            "errorDescription", err);
+    jmap_ok(req, res);
+
+done:
+    jmap_parser_fini(&parser);
+    return 0;
 }
