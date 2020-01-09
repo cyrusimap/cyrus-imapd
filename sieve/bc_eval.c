@@ -2114,7 +2114,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 } else {
                     /* s[0] contains the original subject */
                     const char *origsubj = s[0];
-                    buf_printf(&buf, "Auto: %s", origsubj);
+                    char *decoded_subj =
+                        charset_parse_mimeheader(origsubj, 0 /*flags*/);
+                    buf_initm(&buf, decoded_subj, strlen(decoded_subj));
+                    buf_insertcstr(&buf, 0, "Auto: ");
                 }
 
                 subject = buf_release(&buf);
