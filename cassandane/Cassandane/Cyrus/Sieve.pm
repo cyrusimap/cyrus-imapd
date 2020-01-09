@@ -1753,8 +1753,8 @@ EOF
     # should end up folding a couple of times
     my $subject = "volutpat diam ut venenatis tellus in metus "
                 . "vulputate eu scelerisque felis imperdiet proin "
-                . "fermentum leo vel orci porta non pulvinar neque "
-                . "laoreet suspendisse interdum consectetur";
+                . "fermentum_leo_vel_orci_portad_non_pulvinar_neque_"
+                . "laoreet_suspendisse_interdum_consectetur";
 
     my $msg1 = $self->{gen}->generate(
         subject => $subject,
@@ -1771,14 +1771,14 @@ EOF
     my $msg2 = $res->{1}->{rfc822};
 
     my $subjpat = $subject =~ s/ /(?:\r\n)? /gr;
-    my $subjre = qr{Subject: Auto:\r\n $subjpat};
+    my $subjre = qr{Subject:\r\n Auto: $subjpat};
 
-    # subject should be the original subject plus "Auto:\r\n " and folding
+    # subject should be the original subject plus "\r\n Auto: " and folding
     $self->assert_matches($subjre, $msg2);
 
     # check we folded a reasonable number of times
     my $actual_subject;
-    if ($msg2 =~ m/^(Subject: .*?\r\n)(?!\s)/ms) {
+    if ($msg2 =~ m/^(Subject:.*?\r\n)(?!\s)/ms) {
         $actual_subject = $1;
     }
     $self->assert_matches(qr/^Subject:/, $actual_subject);
