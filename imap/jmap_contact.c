@@ -54,6 +54,7 @@
 
 #include "annotate.h"
 #include "carddav_db.h"
+#include "cyr_qsort_r.h"
 #include "global.h"
 #include "hash.h"
 #include "http_carddav.h"
@@ -1990,11 +1991,11 @@ static int jmap_contact_changes(struct jmap_req *req)
     return _contacts_changes(req, CARDDAV_KIND_CONTACT);
 }
 
-typedef struct contacts_query_filter_rock {
+typedef struct contactsquery_filter_rock {
     struct carddav_db *carddavdb;
     struct carddav_data *cdata;
     json_t *entry;
-} contacts_query_filter_rock;
+} contactsquery_filter_rock;
 
 typedef struct contact_filter {
     hash_table *inContactGroup;
@@ -2020,7 +2021,7 @@ typedef struct contact_filter {
 static int contact_filter_match(void *vf, void *rock)
 {
     contact_filter *f = (contact_filter *) vf;
-    contacts_query_filter_rock *cfrock = (contacts_query_filter_rock*) rock;
+    contactsquery_filter_rock *cfrock = (contactsquery_filter_rock*) rock;
     json_t *contact = cfrock->entry;
     struct carddav_data *cdata = cfrock->cdata;
     struct carddav_db *db = cfrock->carddavdb;
@@ -2331,7 +2332,7 @@ typedef struct contactgroup_filter {
 static int contactgroup_filter_match(void *vf, void *rock)
 {
     contactgroup_filter *f = (contactgroup_filter *) vf;
-    contacts_query_filter_rock *cfrock = (contacts_query_filter_rock*) rock;
+    contactsquery_filter_rock *cfrock = (contactsquery_filter_rock*) rock;
     struct carddav_data *cdata = cfrock->cdata;
     json_t *group = cfrock->entry;
 
@@ -2418,7 +2419,7 @@ static int validate_contactgroup_comparator(jmap_req_t *req __attribute__((unuse
     return 0;
 }
 
-struct contacts_query_rock {
+struct contactsquery_rock {
     jmap_req_t *req;
     struct jmap_query *query;
     jmap_filter *filter;
@@ -2426,14 +2427,16 @@ struct contacts_query_rock {
     struct mailbox *mailbox;
     struct carddav_db *carddavdb;
     unsigned kind;
+    int build_response;
+    ptrarray_t entries;
 };
 
-static int _contacts_query_cb(void *rock, struct carddav_data *cdata)
+static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
 {
-    struct contacts_query_rock *crock = (struct contacts_query_rock*) rock;
+    struct contactsquery_rock *crock = (struct contactsquery_rock*) rock;
     struct index_record record;
     json_t *entry = NULL;
-    struct contacts_query_filter_rock cfrock;
+    struct contactsquery_filter_rock cfrock;
     int r = 0;
 
     if (!cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
@@ -2486,8 +2489,6 @@ static int _contacts_query_cb(void *rock, struct carddav_data *cdata)
 
 gotvalue:
 
-    /* FIXME - this implementation currently ignores comparators! */
-
     /* Match the contact against the filter and update statistics. */
     cfrock.carddavdb = crock->carddavdb;
     cfrock.cdata = cdata;
@@ -2499,23 +2500,129 @@ gotvalue:
         goto done;
     }
     crock->query->total++;
-    if (crock->query->position > (ssize_t) crock->query->total) {
-        goto done;
-    }
-    if (crock->query->limit &&
-        crock->query->limit >= json_array_size(crock->query->ids)) {
-        goto done;
-    }
 
-    /* All done. Add the contact identifier. */
-    json_array_append_new(crock->query->ids, json_string(cdata->vcard_uid));
+    if (crock->build_response) {
+        struct jmap_query *query = crock->query;
+        /* Apply windowing and build response ids */
+        if (query->position > 0 && query->position > (ssize_t) query->total - 1) {
+            goto done;
+        }
+        if (query->limit && json_array_size(query->ids) >= query->limit) {
+            goto done;
+        }
+        if (!json_array_size(query->ids)) {
+            query->result_position = query->total - 1;
+        }
+        json_array_append_new(query->ids, json_string(cdata->vcard_uid));
+    }
+    else {
+        /* Keep matching entries for post-processing */
+        json_object_set_new(entry, "id", json_string(cdata->vcard_uid));
+        json_object_set_new(entry, "uid", json_string(cdata->vcard_uid));
+        ptrarray_append(&crock->entries, entry);
+        entry = NULL;
+    }
 
 done:
     if (entry) json_decref(entry);
     return r;
 }
 
-static int _contacts_query(struct jmap_req *req, unsigned kind)
+enum contactsquery_sort {
+    CONTACTS_SORT_NONE = 0,
+    CONTACTS_SORT_UID,
+    /* Comparators for Contact */
+    CONTACTS_SORT_ISFLAGGED,
+    CONTACTS_SORT_FIRSTNAME,
+    CONTACTS_SORT_LASTNAME,
+    CONTACTS_SORT_NICKNAME,
+    CONTACTS_SORT_COMPANY,
+    /* Comparators for ContactGroup */
+    CONTACTS_SORT_NAME,
+    /* Flag for descencding sort */
+    CONTACTS_SORT_DESC = 0x80,
+};
+
+enum contactsquery_sort *buildsort(json_t *jsort)
+{
+    enum contactsquery_sort *sort =
+        xzmalloc((json_array_size(jsort) + 1) * sizeof(enum contactsquery_sort));
+
+    size_t i;
+    json_t *jcomp;
+    json_array_foreach(jsort, i, jcomp) {
+        const char *prop = json_string_value(json_object_get(jcomp, "property"));
+        if (!strcmp(prop, "uid"))
+            sort[i] = CONTACTS_SORT_UID;
+        /* Comparators for Contact */
+        else if (!strcmp(prop, "isFlagged"))
+            sort[i] = CONTACTS_SORT_ISFLAGGED;
+        else if (!strcmp(prop, "firstName"))
+            sort[i] = CONTACTS_SORT_FIRSTNAME;
+        else if (!strcmp(prop, "lastName"))
+            sort[i] = CONTACTS_SORT_LASTNAME;
+        else if (!strcmp(prop, "nickname"))
+            sort[i] = CONTACTS_SORT_NICKNAME;
+        else if (!strcmp(prop, "company"))
+            sort[i] = CONTACTS_SORT_COMPANY;
+        /* Comparators for ContactGroup */
+        else if (!strcmp(prop, "name"))
+            sort[i] = CONTACTS_SORT_NAME;
+
+        if (json_object_get(jcomp, "isAscending") == json_false())
+            sort[i] |= CONTACTS_SORT_DESC;
+    }
+
+    return sort;
+}
+
+static int _contactsquery_cmp(const void *va, const void *vb, void *rock)
+{
+    enum contactsquery_sort *sort = rock;
+    json_t *ja = (json_t*) *(void**)va;
+    json_t *jb = (json_t*) *(void**)vb;
+
+    enum contactsquery_sort *comp;
+    for (comp = sort; *comp != CONTACTS_SORT_NONE; comp++) {
+        int ret = 0;
+        switch (*comp & ~CONTACTS_SORT_DESC) {
+            case CONTACTS_SORT_UID:
+                ret = strcmpsafe(json_string_value(json_object_get(ja, "uid")),
+                                 json_string_value(json_object_get(jb, "uid")));
+                break;
+            case CONTACTS_SORT_FIRSTNAME:
+                ret = strcmpsafe(json_string_value(json_object_get(ja, "firstName")),
+                                 json_string_value(json_object_get(jb, "firstName")));
+                break;
+            case CONTACTS_SORT_LASTNAME:
+                ret = strcmpsafe(json_string_value(json_object_get(ja, "lastName")),
+                                 json_string_value(json_object_get(jb, "lastName")));
+                break;
+            case CONTACTS_SORT_NICKNAME:
+                ret = strcmpsafe(json_string_value(json_object_get(ja, "nickname")),
+                                 json_string_value(json_object_get(jb, "nickname")));
+                break;
+            case CONTACTS_SORT_COMPANY:
+                ret = strcmpsafe(json_string_value(json_object_get(ja, "company")),
+                                 json_string_value(json_object_get(jb, "company")));
+                break;
+            case CONTACTS_SORT_NAME:
+                ret = strcmpsafe(json_string_value(json_object_get(ja, "name")),
+                                 json_string_value(json_object_get(jb, "name")));
+                break;
+            case CONTACTS_SORT_ISFLAGGED:
+                ret = json_boolean_value(json_object_get(ja, "isFlagged")) -
+                      json_boolean_value(json_object_get(jb, "isFlagged"));
+                break;
+        }
+        if (ret)
+            return (*comp & CONTACTS_SORT_DESC) ? -ret : ret;
+    }
+
+    return 0;
+}
+
+static int _contactsquery(struct jmap_req *req, unsigned kind)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -2547,10 +2654,6 @@ static int _contacts_query(struct jmap_req *req, unsigned kind)
         jmap_error(req, err);
         goto done;
     }
-    if (query.position < 0) {
-        /* we currently don't support negative positions */
-        jmap_parser_invalid(&parser, "position");
-    }
     if (json_array_size(parser.invalid)) {
         err = json_pack("{s:s}", "type", "invalidArguments");
         json_object_set(err, "arguments", parser.invalid);
@@ -2568,24 +2671,115 @@ static int _contacts_query(struct jmap_req *req, unsigned kind)
         wantuid = json_string_value(json_object_get(filter, "uid"));
     }
 
+    /* Does this query have a complex sort? */
+    int is_complexsort;
+    if (json_array_size(query.sort) == 1) {
+        json_t *jcomp = json_array_get(query.sort, 0);
+        const char *prop = json_string_value(json_object_get(jcomp, "property"));
+        is_complexsort = strcmpsafe("uid", prop);
+    }
+    else is_complexsort = json_array_size(query.sort) > 0;
+
     /* Inspect every entry in this accounts addressbook mailboxes. */
-    struct contacts_query_rock rock = {
-        req, &query, parsed_filter, NULL, db, kind
+    struct contactsquery_rock rock = {
+        req,
+        &query,
+        parsed_filter,
+        NULL /*mailbox*/,
+        db,
+        kind,
+        1 /*build_result*/,
+        PTRARRAY_INITIALIZER
     };
     if (wantuid) {
         /* Fast-path single filter condition by UID */
         struct carddav_data *cdata = NULL;
         r = carddav_lookup_uid(db, wantuid, &cdata);
-        if (!r) _contacts_query_cb(&rock, cdata);
+        if (!r) _contactsquery_cb(&rock, cdata);
         if (r == CYRUSDB_NOTFOUND) r = 0;
     }
-    else {
-        /* check carddav db for matching entries */
-        r = carddav_foreach(db, NULL, _contacts_query_cb, &rock);
+    else if (!is_complexsort && query.position >= 0 && !query.anchor) {
+        /* Fast-path simple query with carddav db */
+        enum carddav_sort sort = CARD_SORT_UID; /* ignored if nsort == 0 */
+        size_t nsort = 0;
+        if (json_array_size(query.sort)) {
+            json_t *jcomp = json_array_get(query.sort, 0);
+            if (json_object_get(jcomp, "isAscending") == json_false()) {
+                sort |= CARD_SORT_DESC;
+            }
+            nsort = 1;
+        }
+        r = carddav_foreach_sort(db, NULL, &sort, nsort, _contactsquery_cb, &rock);
     }
+    else {
+        /* Run carddav db query and apply custom sort */
+        rock.build_response = 0;
+        r = carddav_foreach(db, NULL, _contactsquery_cb, &rock);
+        if (!r) {
+            /* Sort entries */
+            enum contactsquery_sort *sort = buildsort(query.sort);
+            cyr_qsort_r(rock.entries.data, rock.entries.count, sizeof(void*),
+                        _contactsquery_cmp, sort);
+            free(sort);
+            /* Build result ids */
+            int i;
+            for (i = 0; i < ptrarray_size(&rock.entries); i++) {
+                json_t *entry = ptrarray_nth(&rock.entries, i);
+                json_array_append(query.ids, json_object_get(entry, "uid"));
+                json_decref(entry);
+            }
+            /* Determine start position of result window */
+            size_t startpos = 0;
+            if (query.anchor) {
+                /* Look for anchor in result ids */
+                size_t anchor_pos = 0;
+                for ( ; anchor_pos < json_array_size(query.ids); anchor_pos++) {
+                    json_t *jid = json_array_get(query.ids, anchor_pos);
+                    if (!strcmpsafe(query.anchor, json_string_value(jid))) break;
+                }
+                /* Determine start of windowed result ids */
+                if (anchor_pos < json_array_size(query.ids)) {
+                    if (query.anchor_offset < 0) {
+                        startpos = (size_t) -query.anchor_offset > anchor_pos ?
+                            0 : anchor_pos + query.anchor_offset;
+                    }
+                    else {
+                        startpos = anchor_pos + query.anchor_offset;
+                    }
+                }
+                else err = json_pack("{s:s}", "type", "anchorNotFound");
+            }
+            else if (query.position < 0) {
+                startpos = (size_t) -query.position > json_array_size(query.ids) ?
+                    0 : json_array_size(query.ids) + query.position;
+            }
+            else startpos = query.position;
+            /* Apply window to result list */
+            if (startpos < json_array_size(query.ids)) {
+                json_t *windowed_ids = json_array();
+                size_t j;
+                for (j = startpos; j < json_array_size(query.ids); j++) {
+                    if (!query.limit || json_array_size(windowed_ids) < query.limit) {
+                        json_array_append(windowed_ids, json_array_get(query.ids, j));
+                    }
+                    else break;
+                }
+                json_decref(query.ids);
+                query.ids = windowed_ids;
+                query.result_position = startpos;
+            }
+            else {
+                json_decref(query.ids);
+                query.ids = json_array();
+            }
+            ptrarray_fini(&rock.entries);
+        }
+    }
+    /* Clean up callback state */
     if (rock.mailbox) mailbox_close(&rock.mailbox);
-    if (r) {
-        err = jmap_server_error(r);
+    /* Handle callback errors */
+    if (r || err) {
+        if (!err) err = jmap_server_error(r);
         jmap_error(req, err);
         goto done;
     }
@@ -2611,12 +2805,12 @@ done:
 
 static int jmap_contact_query(struct jmap_req *req)
 {
-    return _contacts_query(req, CARDDAV_KIND_CONTACT);
+    return _contactsquery(req, CARDDAV_KIND_CONTACT);
 }
 
 static int jmap_contactgroup_query(struct jmap_req *req)
 {
-    return _contacts_query(req, CARDDAV_KIND_GROUP);
+    return _contactsquery(req, CARDDAV_KIND_GROUP);
 }
 
 static struct vparse_entry *_card_multi(struct vparse_card *card,
