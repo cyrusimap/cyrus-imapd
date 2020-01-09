@@ -1564,7 +1564,8 @@ static int send_response(void *ac, void *ic,
             break;
         }
     subj = charset_encode_mimeheader(src->subj, strlen(src->subj), 0);
-    buf_printf(&header, "Subject: %s\r\n", subj);
+    buf_printf(&header, "Subject:%s %s\r\n",  /* fold before long header body */
+               strlen(subj) > 69 ? "\r\n" : "", subj);
     free(subj);
     if (md->id) buf_printf(&header, "In-Reply-To: %s\r\n", md->id);
     buf_printf(&header, "Auto-Submitted: auto-replied (vacation)\r\n");
