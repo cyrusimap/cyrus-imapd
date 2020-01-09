@@ -3031,7 +3031,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
 {
     struct buf buf = BUF_INITIALIZER;
     size_t n;
-    int need_quote = 0;
+    int need_quote = 0, need_fold = 0;
 
     if (!force_quote) {
         size_t prev_lf = 0;
@@ -3043,6 +3043,11 @@ static char *qp_encode(const char *data, size_t len, int isheader,
                 /* per RFC 5322: printable ASCII (decimal 33 - 126), SP, HTAB */
                 /* but only if the line doesn't exceed the 76 octet limit */
                 if (n - prev_lf <= 74) continue;
+
+                if (isheader) {
+                    need_fold = 1;
+                    continue;
+                }
             }
             else if (!isheader && this == '\r' && next == '\n') {
                 /* line break (CRLF) */
@@ -3134,6 +3139,22 @@ static char *qp_encode(const char *data, size_t len, int isheader,
         }
 
         if (isheader) buf_appendcstr(&buf, "?=");
+    }
+    else if (need_fold) {
+        /* fold header every 78 characters (if possible) */
+        size_t i = 0, j = 0, last_wsp = 0;
+
+        while ((len - i > 78) && (j < len)) {
+            j += strcspn(data + j, " \t");
+
+            if (last_wsp && (j - i > 78)) {
+                buf_appendmap(&buf, data + i, last_wsp - i);
+                buf_appendcstr(&buf, "\r\n");
+                i = last_wsp;
+            }
+            last_wsp = j++;
+        }
+        buf_appendcstr(&buf, data + i);
     }
     else {
         buf_setmap(&buf, data, len);
