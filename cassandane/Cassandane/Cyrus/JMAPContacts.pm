@@ -1052,6 +1052,183 @@ sub test_contact_query_uid
     $self->assert_deep_equals({ $contactUid1 => 1, $contactUid3 => 1, }, \%gotIds);
 }
 
+sub test_contact_query_sort
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create contacts";
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact1 => {
+                    uid => 'XXX-UID-1',
+                    company => 'companyB',
+                    isFlagged => JSON::true,
+                },
+                contact2 => {
+                    uid => 'XXX-UID-2',
+                    company => 'companyA',
+                    isFlagged => JSON::true,
+                },
+                contact3 => {
+                    uid => 'XXX-UID-3',
+                    company => 'companyB',
+                    isFlagged => JSON::false,
+                },
+                contact4 => {
+                    uid => 'XXX-UID-4',
+                    company => 'companyC',
+                    isFlagged => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $contactId1 = $res->[0][1]{created}{contact1}{id};
+    $self->assert_not_null($contactId1);
+
+    my $contactId2 = $res->[0][1]{created}{contact2}{id};
+    $self->assert_not_null($contactId2);
+
+    my $contactId3 = $res->[0][1]{created}{contact3}{id};
+    $self->assert_not_null($contactId3);
+
+    my $contactId4 = $res->[0][1]{created}{contact4}{id};
+    $self->assert_not_null($contactId4);
+
+    xlog $self, "sort by multi-dimensional comparator";
+    $res = $jmap->CallMethods([
+        ['Contact/query', {
+            sort => [{
+                property => 'company',
+            }, {
+                property => 'uid',
+                isAscending => JSON::false,
+            }],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([
+            $contactId2,
+            $contactId3,
+            $contactId1,
+            $contactId4,
+        ], $res->[0][1]{ids}
+    );
+}
+
+sub test_contact_query_windowing
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create contacts";
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact1 => {
+                    uid => 'XXX-UID-1',
+                    company => 'companyB',
+                    isFlagged => JSON::true,
+                },
+                contact2 => {
+                    uid => 'XXX-UID-2',
+                    company => 'companyA',
+                    isFlagged => JSON::true,
+                },
+                contact3 => {
+                    uid => 'XXX-UID-3',
+                    company => 'companyB',
+                    isFlagged => JSON::false,
+                },
+                contact4 => {
+                    uid => 'XXX-UID-4',
+                    company => 'companyC',
+                    isFlagged => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $contactId1 = $res->[0][1]{created}{contact1}{id};
+    $self->assert_not_null($contactId1);
+
+    my $contactId2 = $res->[0][1]{created}{contact2}{id};
+    $self->assert_not_null($contactId2);
+
+    my $contactId3 = $res->[0][1]{created}{contact3}{id};
+    $self->assert_not_null($contactId3);
+
+    my $contactId4 = $res->[0][1]{created}{contact4}{id};
+    $self->assert_not_null($contactId4);
+
+    xlog $self, "run query with windowing";
+    $res = $jmap->CallMethods([
+        ['Contact/query', {
+            sort => [{
+                property => 'uid',
+            }],
+            limit => 2,
+        }, 'R1'],
+        ['Contact/query', {
+            sort => [{
+                property => 'uid',
+            }],
+            limit => 2,
+            position => 2,
+        }, 'R2'],
+        ['Contact/query', {
+            sort => [{
+                property => 'uid',
+            }],
+            anchor => $contactId3,
+            anchorOffset => -1,
+            limit => 2,
+        }, 'R3'],
+        ['Contact/query', {
+            sort => [{
+                property => 'uid',
+            }],
+            limit => 2,
+            position => -2,
+        }, 'R4'],
+    ]);
+    # Request 1
+    $self->assert_deep_equals([
+            $contactId1,
+            $contactId2,
+        ], $res->[0][1]{ids}
+    );
+    $self->assert_num_equals(0, $res->[0][1]{position});
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    # Request 2
+    $self->assert_deep_equals([
+            $contactId3,
+            $contactId4,
+        ], $res->[1][1]{ids}
+    );
+    $self->assert_num_equals(2, $res->[1][1]{position});
+    $self->assert_num_equals(4, $res->[1][1]{total});
+    # Request 3
+    $self->assert_deep_equals([
+            $contactId2,
+            $contactId3,
+        ], $res->[2][1]{ids}
+    );
+    $self->assert_num_equals(1, $res->[2][1]{position});
+    $self->assert_num_equals(4, $res->[2][1]{total});
+    # Request 4
+    $self->assert_deep_equals([
+            $contactId3,
+            $contactId4,
+        ], $res->[3][1]{ids}
+    );
+    $self->assert_num_equals(2, $res->[3][1]{position});
+    $self->assert_num_equals(4, $res->[3][1]{total});
+}
+
 sub test_contactgroup_changes
     :min_version_3_1 :needs_component_jmap
 {
