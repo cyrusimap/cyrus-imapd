@@ -851,27 +851,35 @@ static int jmap_sieve_set(struct jmap_req *req)
 
 
     /* create */
-    const char *creation_id, *id;
+    const char *creation_id, *script_id;
     json_t *val;
     json_object_foreach(set.create, creation_id, val) {
-        id = set_create(creation_id, val, sievedir, &set);
-        if (id) {
+        script_id = set_create(creation_id, val, sievedir, &set);
+        if (script_id) {
             /* Register creation id */
-            jmap_add_id(req, creation_id, id);
+            jmap_add_id(req, creation_id, script_id);
         }
     }
 
 
     /* update */
+    const char *id;
     json_object_foreach(set.update, id, val) {
-        set_update(id, val, sievedir, &set);
+        script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
+        if (!script_id) continue;
+
+        set_update(script_id, val, sievedir, &set);
     }
 
 
     /* destroy */
     size_t i;
     json_array_foreach(set.destroy, i, val) {
-        set_destroy(json_string_value(val), sievedir, &set);
+        id = json_string_value(val);
+        script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
+        if (!script_id) continue;
+
+        set_destroy(script_id, sievedir, &set);
     }
 
     if (json_object_size(set.created) || json_object_size(set.updated) ||
