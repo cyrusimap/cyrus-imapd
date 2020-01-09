@@ -41,6 +41,7 @@ package Cassandane::Cyrus::Sieve;
 use strict;
 use warnings;
 use IO::File;
+use version;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -1848,8 +1849,22 @@ EOF
     $self->assert_num_lte(4, $fold_count);
 
     # subject should be the original subject plus "Auto: " and CRLF
-    my $subjpat = "Subject: Auto: " . decode("MIME-Header", $subject) . "\r\n";
-    $self->assert_str_equals($subjpat, decode("MIME-Header", $actual_subject));
+    if (version->parse($Encode::MIME::Header::VERSION)
+        < version->parse("2.28")) {
+        # XXX Work around a bug in older Encode::MIME::Header
+        # XXX (https://rt.cpan.org/Public/Bug/Display.html?id=42902)
+        # XXX that loses the space between 'Subject:' and 'Auto:',
+        # XXX by allowing it to be optional
+        my $subjpat = "Auto: " . decode("MIME-Header", $subject) . "\r\n";
+        my $subjre = qr/Subject:\s?$subjpat/;
+        $self->assert_matches($subjre, decode("MIME-Header", $actual_subject));
+    }
+    else {
+        my $subjpat = "Subject: Auto: "
+                    . decode("MIME-Header", $subject) . "\r\n";
+        $self->assert_str_equals($subjpat,
+                                 decode("MIME-Header", $actual_subject));
+    }
 
     # check for auto-submitted header
     $self->assert_matches(qr/Auto-Submitted: auto-replied \(vacation\)\r\n/, $msg2);
