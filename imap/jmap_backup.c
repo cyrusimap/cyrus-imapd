@@ -334,6 +334,11 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
+    if (rrock->jrestore->cutoff < mailbox->i.changes_epoch) {
+        jmap_closembox(rrock->req, &mailbox);
+        return 0;
+    }
+
     construct_hash_table(&resources, 64, 0);
 
     message_t *msg = message_new();
@@ -1120,6 +1125,11 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
+        return 0;
+    }
+
+    if (rrock->jrestore->cutoff < mailbox->i.changes_epoch) {
+        jmap_closembox(rrock->req, &mailbox);
         return 0;
     }
 
