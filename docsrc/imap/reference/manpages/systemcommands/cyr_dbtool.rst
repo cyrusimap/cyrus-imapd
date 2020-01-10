@@ -97,7 +97,8 @@ is typically a Cyrus "flat" format database.
 database version number (currently 2), a list of "wildmat" patterns
 specifying Cyrus services to be denied, and a text message to be
 displayed to the user upon denial. The service names to be matched are
-those as used in :cyrusman:`cyrus.conf(5)`.
+those as used in :cyrusman:`cyrus.conf(5)`.  :cyrusman:`cyr_deny(8)`
+provides more convenient way to manage *user_deny.db*.
 
 .. Note::
 
