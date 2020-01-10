@@ -1024,6 +1024,10 @@ sub _start_smtpd {
     # Parent process.
     $self->{smtphost} = $host . ':' . $port;
 
+    # XXX give the child a moment to actually start up before we start
+    # XXX assuming it has
+    sleep 1;
+
     xlog "started smtpd as $smtppid";
     push @{$self->{_shutdowncallbacks}}, sub {
         my $self = shift;
