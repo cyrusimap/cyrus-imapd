@@ -1,8 +1,6 @@
-#! /bin/sh
-exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
-#!perl -w
+#!/usr/bin/perl
 #
-# Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+# Copyright (c) 1994-2020 Carnegie Mellon University.  All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -41,6 +39,9 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
+
+use strict;
+use warnings;
 
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;

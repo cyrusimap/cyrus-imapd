@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/perl
 #
 # Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
 #
@@ -39,25 +39,10 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
-#!perl -w
-
-if ($] !~ /^5\..*/) {
-  # uh-oh. this isn't perl 5.
-  foreach (split(/:/, $ENV{PATH})) { # try to find "perl5".
-    exec("$_/perl5", "-x", "-S", $0, @ARGV) if (-x "$_/perl5");
-  }
-  # we failed. bail.
-  die "Your perl is too old; I need perl 5.\n";
-}
-
-# load the real script. this is isolated in an 'eval' so perl4 won't
-# choke on the perl5-isms.
-eval join("\n", <DATA>);
-if ($@) { die "$@"; }
-
-__END__
 require 5;
+
+#use strict; # XXX does not compile with strict :(
+use warnings;
 
 sub read_conf {
     my $file = shift;
