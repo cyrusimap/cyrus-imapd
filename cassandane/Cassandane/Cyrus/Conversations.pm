@@ -56,9 +56,20 @@ sub new
 {
     my ($class, @args) = @_;
     my $config = Cassandane::Config->default()->clone();
-    $config->set(conversations => 'on');
-    $config->set(ctl_conversationsdb_conversations_max_thread => 5);
-    return $class->SUPER::new({ config => $config }, @args);
+    $config->set(caldav_realm => 'Cassandane',
+                 conversations => 'yes',
+                 conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
+                 jmapsubmission_deleteonsend => 'no',
+                 ctl_conversationsdb_conversations_max_thread => 5,
+                 httpmodules => 'carddav caldav jmap',
+                 httpallowcompress => 'no');
+
+    return $class->SUPER::new({
+        config => $config,
+        jmap => 1,
+        adminstore => 1,
+        services => [ 'imap', 'http' ]
+    }, @args);
 }
 
 sub set_up
@@ -233,6 +244,40 @@ sub test_move_200
     $self->assert_str_equals($threadid1, 'T' . $exp{A}->make_cid());
     $self->assert_str_equals($threadid2, 'T' . $exp{B}->make_cid());
 
+    my $jmap = $self->{jmap};
+    xlog $self, "create bar mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "bar",
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $bar = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->CallMethods([
+            ['Email/set', { update => {
+                 $emailid1 => { mailboxIds => { $bar => $JSON::true } },
+                 $emailid2 => { mailboxIds => { $bar => $JSON::true } },
+             }}, "R1"]
+    ]);
+
+    $self->assert_str_equals('Email/set', $res->[0][0]);
+    $self->assert_not_null($res->[0][1]{updated}{$emailid1});
+    $self->assert_not_null($res->[0][1]{updated}{$emailid2});
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    $res = $jmap->CallMethods([
+            ['Email/get', { ids => [$emailid1,$emailid2], properties => ['threadId']
+             }, "R1"]
+    ]);
+
+    $self->assert_str_equals('Email/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my %map = map { $_->{id} => $_->{threadId} } @{$res->[0][1]{list}};
+    $self->assert_str_equals($map{$emailid1}, $threadid1);
+    $self->assert_str_equals($map{$emailid2}, $threadid2);
 }
 
 #
