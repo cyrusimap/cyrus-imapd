@@ -184,6 +184,58 @@ sub test_append_reply_200
 }
 
 #
+# Test MOVE of messages after conversation split
+#
+sub test_move_200
+    :min_version_3_1
+{
+    my ($self) = @_;
+    my %exp;
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating replies";
+    for (1..99) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
+    }
+    $exp{"B"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{"B"}->set_attributes(uid => 101, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
+    for (1..99) {
+      $exp{"B$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"B$_"}->set_attributes(uid => 101+$_, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
+    }
+    $exp{"C"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{"C"}->set_attributes(uid => 201, cid => $exp{C}->make_cid(), basecid => $exp{A}->make_cid());
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.foo");
+    $talk->select("INBOX");
+    # NOTE: 110 here becomes 109 after '9' is already moved
+    $talk->fetch('9,110', '(emailid threadid)');
+    $talk->move('9', "INBOX.foo");
+    $talk->move('109', "INBOX.foo");
+    $talk->select("INBOX.foo");
+    my $res = $talk->fetch('1:2', '(emailid threadid)');
+    my $emailid1 = $res->{1}{emailid}[0];
+    my $threadid1 = $res->{1}{threadid}[0];
+    my $emailid2 = $res->{2}{emailid}[0];
+    my $threadid2 = $res->{2}{threadid}[0];
+    $self->assert_str_equals($threadid1, 'T' . $exp{A}->make_cid());
+    $self->assert_str_equals($threadid2, 'T' . $exp{B}->make_cid());
+
+}
+
+#
 # Test normalisation of Subjects containing nonascii whitespace
 #
 # At present, non-breaking space is the only nonascii whitespace
