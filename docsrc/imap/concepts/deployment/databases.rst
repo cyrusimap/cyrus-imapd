@@ -160,7 +160,7 @@ File type can be: `twoskip`_ (default), `skiplist`_, or `sql`_.
 User Access (user_deny.db)
 --------------------------
 
-This database contains a list of users that are denied access to Cyrus services. The database is indexed by userid and each data record contains the database version number (currently 2), a list of wildmat patterns specifying Cyrus services to be denied, and a text message to be displayed to the user upon denial. The service names to be matched are those as used in cyrus.conf(5). The format of each record is as follows::
+This database contains a list of users that are denied access to Cyrus services. The database is indexed by userid and each data record contains the database version number (currently 2), a list of `wildmat <https://tools.ietf.org/html/rfc3977#section-4>`_ patterns specifying Cyrus services to be denied, and a text message to be displayed to the user upon denial. The service names to be matched are those as used in :cyrusman:`cyrus.conf(5)`. The format of each record is as follows::
 
     Key: <Userid>
 
