@@ -42,6 +42,7 @@ use strict;
 use warnings;
 use IO::File;
 use version;
+use utf8;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -2501,5 +2502,88 @@ EOF
     $msg1->set_attribute(flags => [ '\\Recent', '\\Flagged', '$awakened' ]);
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
+
+sub test_sieve_utf8_subject_encoded
+    :min_version_3_0
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog $self, "Actually create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "imapflags"];
+if header :matches "Subject" "☃" {
+    setflag "\\\\Flagged";
+}
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+
+    # should go in Folder1
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    # should go in Folder2
+    my $msg2 = $self->{gen}->generate(subject => "=?UTF-8?B?4piD?=");
+    $self->{instance}->deliver($msg2);
+
+    # should fail to deliver and wind up in INBOX
+    my $msg3 = $self->{gen}->generate(subject => "Message 3");
+    $self->{instance}->deliver($msg3);
+
+    $imaptalk->unselect();
+    $imaptalk->select("INBOX");
+    $self->assert_num_equals(3, $imaptalk->get_response_code('exists'));
+
+    my @uids = $imaptalk->search('1:*', 'NOT', 'FLAGGED');
+
+    $self->assert_num_equals(2, scalar(@uids));
+}
+
+sub test_sieve_utf8_subject_raw
+    :min_version_3_0
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog $self, "Actually create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "imapflags"];
+if header :matches "Subject" "☃" {
+    setflag "\\\\Flagged";
+}
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+
+    # should go in Folder1
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    # should go in Folder2
+    my $msg2 = $self->{gen}->generate(subject => "☃");
+    $self->{instance}->deliver($msg2);
+
+    # should fail to deliver and wind up in INBOX
+    my $msg3 = $self->{gen}->generate(subject => "Message 3");
+    $self->{instance}->deliver($msg3);
+
+    $imaptalk->unselect();
+    $imaptalk->select("INBOX");
+    $self->assert_num_equals(3, $imaptalk->get_response_code('exists'));
+
+    my @uids = $imaptalk->search('1:*', 'NOT', 'FLAGGED');
+
+    $self->assert_num_equals(2, scalar(@uids));
+}
+
 
 1;
