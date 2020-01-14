@@ -71,6 +71,28 @@ END:VTIMEZONE
 END:VCALENDAR
 EOF
 
+my $NEW_YORK = <<EOF;
+BEGIN:VCALENDAR
+BEGIN:VTIMEZONE
+TZID:America/New_York
+BEGIN:DAYLIGHT
+TZNAME:EDT
+TZOFFSETFROM:-0500
+TZOFFSETTO:-0400
+DTSTART:20070311T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZNAME:EST
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0500
+DTSTART:20071104T020000
+RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+END:STANDARD
+END:VTIMEZONE
+END:VCALENDAR
+EOF
+
 sub new
 {
     my $class = shift;
@@ -1613,12 +1635,14 @@ sub test_freebusy
     $self->assert_not_null($CalendarId);
 
     $CalDAV->NewEvent($CalendarId, {
+        timeZone => 'Etc/UTC',
         start => '2015-01-01T12:00:00',
         duration => 'PT1H',
         summary => 'waterfall',
     });
 
     $CalDAV->NewEvent($CalendarId, {
+        timeZone => 'America/New_York',
         start => '2015-02-01T12:00:00',
         duration => 'PT1H',
         summary => 'waterfall2',
@@ -1626,8 +1650,8 @@ sub test_freebusy
 
     my ($data, $errors) = $CalDAV->GetFreeBusy($CalendarId);
 
-    $self->assert_equals('2015-01-01T12:00:00', $data->[0]{start});
-    $self->assert_equals('2015-02-01T12:00:00', $data->[1]{start});
+    $self->assert_str_equals('2015-01-01T12:00:00', $data->[0]{start});
+    $self->assert_str_equals('2015-02-01T17:00:00', $data->[1]{start});
     $self->assert_num_equals(2, scalar @$data);
 }
 
@@ -1655,8 +1679,30 @@ sub test_freebusy_floating
 
     my ($data, $errors) = $CalDAV->GetFreeBusy($CalendarId);
 
-    $self->assert_equals('2015-01-01T12:00:00', $data->[0]{start});
-    $self->assert_equals('2015-02-01T12:00:00', $data->[1]{start});
+    $self->assert_str_equals('2015-01-01T01:00:00', $data->[0]{start});
+    $self->assert_str_equals('2015-02-01T01:00:00', $data->[1]{start});
+    $self->assert_num_equals(2, scalar @$data);
+
+    # Change floating time zone on the calendar
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-timezone>$NEW_YORK</C:calendar-timezone>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    my $res = $CalDAV->Request('PROPPATCH',
+                               "/dav/calendars/user/cassandane/". $CalendarId,
+                               $xml, 'Content-Type' => 'text/xml');
+
+    ($data, $errors) = $CalDAV->GetFreeBusy($CalendarId);
+
+    $self->assert_str_equals('2015-01-01T17:00:00', $data->[0]{start});
+    $self->assert_str_equals('2015-02-01T17:00:00', $data->[1]{start});
     $self->assert_num_equals(2, scalar @$data);
 }
 
