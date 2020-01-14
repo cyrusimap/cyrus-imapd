@@ -139,16 +139,20 @@ extern icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
                                                           const char *name);
 
 extern struct icalperiodtype icalcomponent_get_utc_timespan(icalcomponent *comp,
-                                                            icalcomponent_kind kind);
+                                                            icalcomponent_kind kind,
+                                                            icaltimezone *floating_tz);
 
 extern struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                                                                 icalcomponent_kind kind,
+                                                                icaltimezone *floating_tz,
                                                                 unsigned *is_recurring,
                                                                 void (*comp_cb)(icalcomponent*,
                                                                                 void*),
                                                                 void *cb_rock);
 
 extern void icaltime_set_utc(struct icaltimetype *t, int set);
+extern icaltimetype icaltime_convert_to_utc(const struct icaltimetype tt,
+                                            icaltimezone *floating_zone);
 
 extern int icalcomponent_apply_vpatch(icalcomponent *ical,
                                       icalcomponent *vpatch,

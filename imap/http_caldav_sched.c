@@ -2455,14 +2455,14 @@ static int icalcomponent_is_historical(icalcomponent *comp, icaltimetype cutoff)
 
     if (icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
          /* span is just the span of the override */
-        span = icalcomponent_get_utc_timespan(comp, kind);
+        span = icalcomponent_get_utc_timespan(comp, kind, NULL);
     }
     else {
         /* span is entire span of the master */
         icalcomponent *ical = icalcomponent_new_vcalendar();
 
         icalcomponent_add_component(ical, icalcomponent_clone(comp));
-        span = icalrecurrenceset_get_utc_timespan(ical, kind, NULL, NULL, NULL);
+        span = icalrecurrenceset_get_utc_timespan(ical, kind, NULL, NULL, NULL, NULL);
         icalcomponent_free(ical);
     }
 

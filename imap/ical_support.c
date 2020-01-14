@@ -693,17 +693,51 @@ EXPORTED icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
     return prop;
 }
 
+EXPORTED icaltimetype icaltime_convert_to_utc(const struct icaltimetype tt,
+                                              icaltimezone *floating_zone)
+{
+    icaltimezone *from_zone = (icaltimezone *) tt.zone;
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    struct icaltimetype ret = tt;
+
+    /* If it's a date do nothing */
+    if (tt.is_date) {
+        return ret;
+    }
+
+    if (tt.zone == utc) {
+        return ret;
+    }
+
+    /* If it's a floating time use the passed in zone */
+    if (from_zone == NULL) {
+        from_zone = floating_zone;
+
+        if (from_zone == NULL) {
+            /* Leave the time as floating */
+            return ret;
+        }
+    }
+
+    icaltimezone_convert_time(&ret, from_zone, utc);
+    ret.zone = utc;
+
+    return ret;
+}
+
 
 /* Get time period (start/end) of a component based in RFC 4791 Sec 9.9 */
 EXPORTED struct icalperiodtype
 icalcomponent_get_utc_timespan(icalcomponent *comp,
-                               icalcomponent_kind kind)
+                               icalcomponent_kind kind,
+                               icaltimezone *floating_tz)
 {
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct icalperiodtype period;
 
-    period.start = icaltime_convert_to_zone(icalcomponent_get_dtstart(comp), utc);
-    period.end   = icaltime_convert_to_zone(icalcomponent_get_dtend(comp), utc);
+    period.start = icaltime_convert_to_utc(icalcomponent_get_dtstart(comp),
+                                           floating_tz);
+    period.end   = icaltime_convert_to_utc(icalcomponent_get_dtend(comp),
+                                           floating_tz);
     period.duration = icaldurationtype_null_duration();
 
     switch (kind) {
@@ -757,14 +791,14 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
                       icalcomponent_get_first_property(comp, ICAL_COMPLETED_PROPERTY))) {
                 /* Has COMPLETED */
                 period.start =
-                    icaltime_convert_to_zone(icalproperty_get_completed(prop), utc);
+                    icaltime_convert_to_utc(icalproperty_get_completed(prop), NULL);
                 memcpy(&period.end, &period.start, sizeof(struct icaltimetype));
 
                 if ((prop =
                      icalcomponent_get_first_property(comp, ICAL_CREATED_PROPERTY))) {
                     /* Has CREATED */
                     struct icaltimetype created =
-                        icaltime_convert_to_zone(icalproperty_get_created(prop), utc);
+                        icaltime_convert_to_utc(icalproperty_get_created(prop), NULL);
                     if (icaltime_compare(created, period.start) < 0)
                         memcpy(&period.start, &created, sizeof(struct icaltimetype));
                     if (icaltime_compare(created, period.end) > 0)
@@ -775,7 +809,7 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
                       icalcomponent_get_first_property(comp, ICAL_CREATED_PROPERTY))) {
                 /* Has CREATED */
                 period.start =
-                    icaltime_convert_to_zone(icalproperty_get_created(prop), utc);
+                    icaltime_convert_to_utc(icalproperty_get_created(prop), NULL);
                 period.end = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
             }
             else {
@@ -867,6 +901,7 @@ static void utc_timespan_cb(icalcomponent *comp, struct icaltime_span *span, voi
 EXPORTED struct icalperiodtype
 icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                                    icalcomponent_kind kind,
+                                   icaltimezone *floating_tz,
                                    unsigned *is_recurring,
                                    void (*comp_cb)(icalcomponent*, void*),
                                    void *cb_rock)
@@ -885,7 +920,7 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
         icalproperty *rrule;
 
         /* Get base dtstart and dtend */
-        period = icalcomponent_get_utc_timespan(comp, kind);
+        period = icalcomponent_get_utc_timespan(comp, kind, floating_tz);
 
         /* See if its a recurring event */
         rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
