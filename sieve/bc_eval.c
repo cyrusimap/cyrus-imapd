@@ -752,7 +752,7 @@ envelope_err:
                     count++;
                 } else {
                     decoded_header =
-                        charset_parse_mimeheader(val[y], 0 /*flags*/);
+                        charset_parse_mimeheader(val[y], CHARSET_MIME_UTF8);
 
                     res = do_comparisons(test.u.hhs.pl, decoded_header,
                                          comp, comprock, ctag,
