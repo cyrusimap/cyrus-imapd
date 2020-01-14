@@ -2503,16 +2503,15 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
-sub test_sieve_utf8_subject_encoded
+sub test_utf8_subject_encoded
     :min_version_3_0
     :needs_component_sieve
 {
     my ($self) = @_;
 
-    xlog $self, "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
-    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
+    xlog $self, "Install a sieve script flagging messages that match utf8 snowman";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "imapflags"];
 if header :matches "Subject" "☃" {
@@ -2523,15 +2522,15 @@ EOF
 
     xlog $self, "Deliver a message";
 
-    # should go in Folder1
+    # should NOT get flagged
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
-    # should go in Folder2
+    # SHOULD get flagged
     my $msg2 = $self->{gen}->generate(subject => "=?UTF-8?B?4piD?=");
     $self->{instance}->deliver($msg2);
 
-    # should fail to deliver and wind up in INBOX
+    # should NOT get flagged
     my $msg3 = $self->{gen}->generate(subject => "Message 3");
     $self->{instance}->deliver($msg3);
 
@@ -2544,16 +2543,15 @@ EOF
     $self->assert_num_equals(2, scalar(@uids));
 }
 
-sub test_sieve_utf8_subject_raw
+sub test_utf8_subject_raw
     :min_version_3_0
-    :needs_component_sieve
+    :needs_component_sieve :NoMunge8bit
 {
     my ($self) = @_;
 
-    xlog $self, "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
-    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
+    xlog $self, "Install a sieve script flagging messages that match utf8 snowman";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "imapflags"];
 if header :matches "Subject" "☃" {
@@ -2564,15 +2562,15 @@ EOF
 
     xlog $self, "Deliver a message";
 
-    # should go in Folder1
+    # should NOT get flagged
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
-    # should go in Folder2
+    # SHOULD get flagged
     my $msg2 = $self->{gen}->generate(subject => "☃");
     $self->{instance}->deliver($msg2);
 
-    # should fail to deliver and wind up in INBOX
+    # should NOT get flagged
     my $msg3 = $self->{gen}->generate(subject => "Message 3");
     $self->{instance}->deliver($msg3);
 
