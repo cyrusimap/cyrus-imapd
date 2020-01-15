@@ -156,30 +156,27 @@ HIDDEN void jmap_backup_capabilities(json_t *account_capabilities)
 #define UNDO_DESTROY  (1<<0)
 #define UNDO_UPDATE   (1<<1)
 #define UNDO_CREATE   (1<<2)
+#define UNDO_EMAIL    (1<<3)  /* exclusive value */
 
 struct jmap_restore {
     /* Request arguments */
     time_t cutoff;
-    unsigned is_email : 1;
-    unsigned undo     : 3;
+    unsigned undo : 4;
 
     /* Response fields */
     unsigned num_undone[3];
 };
 
+#define JMAP_RESTORE_INITIALIZER(undo) { 0, undo, { 0, 0, 0 } }
+
 static void jmap_restore_parse(jmap_req_t *req,
                                struct jmap_parser *parser,
-                               int is_email,
                                struct jmap_restore *restore,
                                json_t **err)
 {
     json_t *jargs = req->args;
     const char *key;
     json_t *arg;
-
-    memset(restore, 0, sizeof(struct jmap_restore));
-
-    restore->is_email = is_email;
 
     json_object_foreach(jargs, key, arg) {
         if (!strcmp(key, "accountId")) {
@@ -195,7 +192,7 @@ static void jmap_restore_parse(jmap_req_t *req,
             }
         }
 
-        else if (!is_email && json_is_boolean(arg)) {
+        else if (!(restore->undo & UNDO_EMAIL) && json_is_boolean(arg)) {
             if (!strcmp(key, "undoCreate")) {
                 if (json_is_true(arg)) restore->undo |= UNDO_CREATE;
             }
@@ -237,7 +234,7 @@ static json_t *jmap_restore_reply(struct jmap_restore *restore)
 {
     json_t *res = json_object();
 
-    if (restore->is_email) {
+    if (restore->undo & UNDO_EMAIL) {
         json_object_set_new(res, "numDraftsRestored",
                             json_integer(restore->num_undone[DRAFT_DESTROYS]));
         json_object_set_new(res, "numNonDraftsRestored",
@@ -648,11 +645,11 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
 static int jmap_backup_restore_contacts(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_restore restore;
+    struct jmap_restore restore = JMAP_RESTORE_INITIALIZER(0);
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_restore_parse(req, &parser, /*is_mail*/ 0, &restore, &err);
+    jmap_restore_parse(req, &parser, &restore, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -972,11 +969,11 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
 static int jmap_backup_restore_calendars(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_restore restore;
+    struct jmap_restore restore = JMAP_RESTORE_INITIALIZER(0);
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_restore_parse(req, &parser, /*is_mail*/ 0, &restore, &err);
+    jmap_restore_parse(req, &parser, &restore, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1049,11 +1046,11 @@ static int restore_note(message_t *recreatemsg, message_t *destroymsg,
 static int jmap_backup_restore_notes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_restore restore;
+    struct jmap_restore restore = JMAP_RESTORE_INITIALIZER(0);
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_restore_parse(req, &parser, /*is_mail*/ 0, &restore, &err);
+    jmap_restore_parse(req, &parser, &restore, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1407,11 +1404,11 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 static int jmap_backup_restore_mail(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_restore restore;
+    struct jmap_restore restore = JMAP_RESTORE_INITIALIZER(UNDO_EMAIL);
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_restore_parse(req, &parser, /*is_mail*/ 1, &restore, &err);
+    jmap_restore_parse(req, &parser, &restore, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
