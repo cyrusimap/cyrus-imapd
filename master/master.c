@@ -486,7 +486,7 @@ static struct service *service_add(const struct service *proto)
     return s;
 }
 
-static void service_create(struct service *s)
+static void service_create(struct service *s, int is_startup)
 {
     struct service service0, service;
     struct addrinfo hints, *res0, *res;
@@ -617,6 +617,14 @@ static void service_create(struct service *s)
 
         s->socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
         if (s->socket < 0) {
+            int e = errno;
+            if (is_startup && config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "unable to open %s/%s socket: %s",
+                                 s->name, s->familyname, strerror(e));
+                fatal(buf_cstring(&buf), EX_UNAVAILABLE);
+            }
+
             syslog(LOG_ERR, "unable to open %s/%s socket: %m",
                 s->name, s->familyname);
             continue;
@@ -658,6 +666,14 @@ static void service_create(struct service *s)
         r = cap_bind(s->socket, res->ai_addr, res->ai_addrlen);
         umask(oldumask);
         if (r < 0) {
+            int e = errno;
+            if (is_startup && config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "unable to bind to %s/%s socket: %s",
+                                 s->name, s->familyname, strerror(e));
+                fatal(buf_cstring(&buf), EX_UNAVAILABLE);
+            }
+
             syslog(LOG_ERR, "unable to bind to %s/%s socket: %m",
                 s->name, s->familyname);
             xclose(s->socket);
@@ -673,6 +689,14 @@ static void service_create(struct service *s)
         if ((!strcmp(s->proto, "tcp") || !strcmp(s->proto, "tcp4")
              || !strcmp(s->proto, "tcp6"))
             && listen(s->socket, listen_queue_backlog) < 0) {
+            int e = errno;
+            if (is_startup && config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "unable to listen to %s/%s socket: %s",
+                                 s->name, s->familyname, strerror(e));
+                fatal(buf_cstring(&buf), EX_UNAVAILABLE);
+            }
+
             syslog(LOG_ERR, "unable to listen to %s/%s socket: %m",
                 s->name, s->familyname);
             xclose(s->socket);
@@ -2213,7 +2237,7 @@ static void reread_conf(struct timeval now)
         else if (Services[i].exec && (Services[i].socket < 0)) {
             /* initialize new services */
 
-            service_create(&Services[i]);
+            service_create(&Services[i], 0);
             if (verbose > 2)
                 syslog(LOG_DEBUG, "init: service %s/%s socket %d pipe %d %d",
                        Services[i].name, Services[i].familyname,
@@ -2576,7 +2600,7 @@ int main(int argc, char **argv)
 
     /* initialize services */
     for (i = 0; i < nservices; i++) {
-        service_create(&Services[i]);
+        service_create(&Services[i], 1);
         if (verbose > 2)
             syslog(LOG_DEBUG, "init: service %s/%s socket %d pipe %d %d",
                    Services[i].name, Services[i].familyname,
