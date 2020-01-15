@@ -48,7 +48,6 @@
  *     calendars.
  *   - Support COPY/MOVE on collections
  *   - Add more required properties?
- *   - calendar-query REPORT (handle timezone, timezone-id)
  *   - free-busy-query REPORT (check ACL and transp on all calendars)
  *   - sync-collection REPORT - need to handle Depth infinity?
  */
@@ -4541,13 +4540,14 @@ struct comp_filter {
 struct calquery_filter {
     unsigned flags;             /* mask of flags controlling filter */
     unsigned comp_types;        /* mask of "real" component types in filter */
-    icaltimezone *tz;
+    icaltimezone *tz;           /* time zone to use for floating time */
     struct comp_filter *comp;
 };
 
 /* Bitmask of calquery flags */
 enum {
-    PARSE_ICAL = (1<<0)
+    PARSE_ICAL = (1<<0),
+    NEED_TZ    = (1<<1),
 };
 
 static int is_valid_timerange(const struct icaltimetype start,
@@ -4782,6 +4782,7 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
                 case ICAL_VAVAILABILITY_COMPONENT:
                 case ICAL_VPOLL_COMPONENT:
                     parse_timerange(node, &(*comp)->range, error);
+                    *flags |= NEED_TZ;
                     break;
 
                 default:
@@ -4810,6 +4811,10 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
                             "time-range can NOT be combined with text-match";
                         error->node = xmlCopyNode(node, 1);
                     }
+                }
+                else if (prop->other) {
+                    /* CALDAV:time-range */
+                    *flags |= NEED_TZ;
                 }
             }
         }
@@ -4889,7 +4894,8 @@ static int apply_paramfilter(struct param_filter *paramfilter,
     return pass;
 }
 
-static int apply_prop_timerange(struct icalperiodtype *range, icalproperty *prop)
+static int apply_prop_timerange(struct icalperiodtype *range,
+                                icaltimezone *floating_tz, icalproperty *prop)
 {
     icalvalue *value = icalproperty_get_value(prop);
     struct icalperiodtype period = icalperiodtype_null_period();
@@ -4938,8 +4944,8 @@ static int apply_prop_timerange(struct icalperiodtype *range, icalproperty *prop
     else if (icaltime_is_null_time(period.end)) period.end = period.start;
 
     /* Convert to UTC for comparison with range */
-    period.start = icaltime_convert_to_zone(period.start, utc_zone);
-    period.end = icaltime_convert_to_zone(period.end, utc_zone);
+    period.start = icaltime_convert_to_utc(period.start, floating_tz);
+    period.end = icaltime_convert_to_utc(period.end, floating_tz);
 
     if (icaltime_compare(period.start, range->end) >= 0 ||
         icaltime_compare(period.end, range->start) <= 0) {
@@ -4950,7 +4956,8 @@ static int apply_prop_timerange(struct icalperiodtype *range, icalproperty *prop
     return 1;
 }
 
-static int apply_propfilter(struct prop_filter *propfilter, icalcomponent *comp)
+static int apply_propfilter(struct prop_filter *propfilter,
+                            icaltimezone *floating_tz, icalcomponent *comp)
 {
     int pass = 1;
     icalproperty *prop =
@@ -4981,7 +4988,7 @@ static int apply_propfilter(struct prop_filter *propfilter, icalcomponent *comp)
         pass = propfilter->allof;
 
         if (propfilter->other) {
-            pass = apply_prop_timerange(propfilter->other, prop);
+            pass = apply_prop_timerange(propfilter->other, floating_tz, prop);
         }
         else if (propfilter->match) {
             const char *text = icalproperty_get_value_as_string(prop);
@@ -5013,6 +5020,7 @@ static void in_range(icalcomponent *comp __attribute__((unused)),
 }
 
 static int apply_comp_timerange(struct comp_filter *compfilter,
+                                icaltimezone *floating_tz,
                                 icalcomponent *comp, struct caldav_data *cdata,
                                 struct propfind_ctx *fctx)
 {
@@ -5023,8 +5031,10 @@ static int apply_comp_timerange(struct comp_filter *compfilter,
 
     if (compfilter->depth == 1) {
         /* Use period from cdata */
-        dtstart = icaltime_from_string(cdata->dtstart);
-        dtend = icaltime_from_string(cdata->dtend);
+        dtstart = icaltime_convert_to_utc(icaltime_from_string(cdata->dtstart),
+                                          floating_tz);
+        dtend = icaltime_convert_to_utc(icaltime_from_string(cdata->dtend),
+                                        floating_tz);
 
         if (icaltime_compare(dtstart, range->end) >= 0 ||
             icaltime_compare(dtend, range->start) <= 0) {
@@ -5078,7 +5088,8 @@ static int apply_comp_timerange(struct comp_filter *compfilter,
 /* See if the current resource matches the specified filter.
  * Returns 1 if match, 0 otherwise.
  */
-static int apply_compfilter(struct comp_filter *compfilter, icalcomponent *ical,
+static int apply_compfilter(struct comp_filter *compfilter,
+                            icaltimezone *floating_tz, icalcomponent *ical,
                             struct caldav_data *cdata, struct propfind_ctx *fctx)
 {
     int pass = 0;
@@ -5107,7 +5118,7 @@ static int apply_compfilter(struct comp_filter *compfilter, icalcomponent *ical,
         pass = compfilter->allof;
 
         if (compfilter->range) {
-            pass = apply_comp_timerange(compfilter, comp, cdata, fctx);
+            pass = apply_comp_timerange(compfilter, floating_tz, comp, cdata, fctx);
         }
 
         /* Apply each prop-filter, breaking if allof fails or anyof succeeds */
@@ -5115,7 +5126,7 @@ static int apply_compfilter(struct comp_filter *compfilter, icalcomponent *ical,
              propfilter && (pass == compfilter->allof);
              propfilter = propfilter->next) {
 
-            pass = apply_propfilter(propfilter, comp);
+            pass = apply_propfilter(propfilter, floating_tz, comp);
         }
 
         /* Apply each comp-filter, breaking if allof fails or anyof succeeds */
@@ -5123,7 +5134,7 @@ static int apply_compfilter(struct comp_filter *compfilter, icalcomponent *ical,
              subfilter && (pass == compfilter->allof);
              subfilter = subfilter->next) {
 
-            pass = apply_compfilter(subfilter, comp, cdata, fctx);
+            pass = apply_compfilter(subfilter, floating_tz, comp, cdata, fctx);
         }
 
     } while (!pass &&
@@ -5167,7 +5178,7 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
         if (!ical) return 0;
     }
 
-    return apply_compfilter(calfilter->comp, ical, cdata, fctx);
+    return apply_compfilter(calfilter->comp, calfilter->tz, ical, cdata, fctx);
 }
 
 
@@ -7002,6 +7013,33 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+static icaltimezone *get_calendar_tz(const char *mboxname, const char *userid);
+
+/* mboxlist_findall() callback to run calendar-query on a collection */
+static int calquery_by_collection(const mbentry_t *mbentry, void *rock)
+{
+    const char *mboxname = mbentry->name;
+    struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    struct calquery_filter *calfilter =
+        (struct calquery_filter *) fctx->filter_crit;
+    icaltimezone *cal_tz = NULL;
+
+    if (!calfilter->tz && (calfilter->flags & NEED_TZ)) {
+        /* Determine which time zone to use for floating time */
+        calfilter->tz = cal_tz = get_calendar_tz(mboxname, httpd_userid);
+    }
+
+    int r = propfind_by_collection(mbentry, rock);
+
+    if (cal_tz) {
+        icaltimezone_free(cal_tz, 1 /* free_struct */);
+        calfilter->tz = NULL;
+    }
+
+    return r;
+}
+
+
 static int report_cal_query(struct transaction_t *txn,
                             struct meth_params *rparams __attribute__((unused)),
                             xmlNodePtr inroot, struct propfind_ctx *fctx)
@@ -7032,8 +7070,6 @@ static int report_cal_query(struct transaction_t *txn,
                 xmlChar *tzdata = NULL;
                 icalcomponent *ical = NULL, *tz = NULL;
 
-                /* XXX  Need to pass this to query for floating time */
-                syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
                 tzdata = xmlNodeGetContent(node);
                 if (tzdata) {
                     ical = icalparser_parse_string((const char *) tzdata);
@@ -7088,17 +7124,17 @@ static int report_cal_query(struct transaction_t *txn,
         /* Calendar collection(s) */
         if (txn->req_tgt.collection) {
             /* Add response for target calendar collection */
-            propfind_by_collection(txn->req_tgt.mbentry, fctx);
+            calquery_by_collection(txn->req_tgt.mbentry, fctx);
         }
         else {
             /* Add responses for all contained calendar collections */
             mboxlist_mboxtree(txn->req_tgt.mbentry->name,
-                              propfind_by_collection, fctx,
+                              calquery_by_collection, fctx,
                               MBOXTREE_SKIP_ROOT);
 
             /* Add responses for all shared calendar collections */
             mboxlist_usersubs(txn->req_tgt.userid,
-                              propfind_by_collection, fctx,
+                              calquery_by_collection, fctx,
                               MBOXTREE_SKIP_PERSONAL);
         }
     }
