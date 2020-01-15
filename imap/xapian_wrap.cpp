@@ -1520,3 +1520,50 @@ const char *xapian_version_string()
 {
     return Xapian::version_string();
 }
+
+struct xapian_doc {
+    Xapian::TermGenerator *termgen;
+    Xapian::Document *doc;
+};
+
+xapian_doc_t *xapian_doc_new(void)
+{
+    xapian_doc_t *doc = (xapian_doc_t *) xzmalloc(sizeof(struct xapian_doc));
+    doc->doc = new Xapian::Document;
+    doc->termgen = new Xapian::TermGenerator;
+    doc->termgen->set_document(*doc->doc);
+    return doc;
+}
+
+void xapian_doc_index_text(xapian_doc_t *doc, const char *text, size_t len)
+{
+    doc->termgen->index_text(Xapian::Utf8Iterator(text, len));
+}
+
+size_t xapian_doc_termcount(xapian_doc_t *doc)
+{
+    return doc->doc->termlist_count();
+}
+
+int xapian_doc_foreach_term(xapian_doc_t *doc, int(*cb)(const char*, void*), void *rock)
+{
+    for (Xapian::TermIterator ti = doc->doc->termlist_begin();
+            ti != doc->doc->termlist_end(); ++ti) {
+        int r = cb((*ti).c_str(), rock);
+        if (r) return r;
+    }
+    return 0;
+}
+
+void xapian_doc_reset(xapian_doc_t *doc)
+{
+    doc->doc->clear_values();
+}
+extern void xapian_doc_close(xapian_doc_t *termgen);
+
+void xapian_doc_close(xapian_doc_t *doc)
+{
+    delete doc->termgen;
+    delete doc->doc;
+    free(doc);
+}

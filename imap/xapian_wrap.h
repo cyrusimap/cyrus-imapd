@@ -52,6 +52,7 @@ typedef struct xapian_dbw xapian_dbw_t;
 typedef struct xapian_db xapian_db_t;
 typedef struct xapian_query xapian_query_t;
 typedef struct xapian_snipgen xapian_snipgen_t;
+typedef struct xapian_doc xapian_doc_t;
 
 /* compaction interface */
 extern int xapian_compact_dbs(const char *dest, const char **sources);
@@ -101,6 +102,14 @@ extern int xapian_db_has_otherthan_v4_index(const xapian_db_t *);
 
 /* Language indexing support */
 extern int xapian_list_lang_stats(xapian_db_t*, ptrarray_t*);
+
+/* Document interface */
+extern xapian_doc_t *xapian_doc_new(void);
+extern void xapian_doc_index_text(xapian_doc_t *doc, const char *text, size_t len);
+extern size_t xapian_doc_termcount(xapian_doc_t *doc);
+extern int xapian_doc_foreach_term(xapian_doc_t *doc, int(*cb)(const char*, void*), void *rock);
+extern void xapian_doc_reset(xapian_doc_t *doc);
+extern void xapian_doc_close(xapian_doc_t *doc);
 
 extern const char *xapian_version_string();
 
