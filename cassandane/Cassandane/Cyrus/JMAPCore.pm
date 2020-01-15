@@ -181,6 +181,7 @@ sub test_get_session
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:vacationresponse'});
     $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
+    $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/sieve'});
 
     # primaryAccounts
     my $expect_primaryAccounts = {
@@ -192,8 +193,10 @@ sub test_get_session
     };
     my ($maj, $min) = Cassandane::Instance->get_version();
     if ($maj > 3 || ($maj == 3 && $min >= 3)) {
-        # jmap backup added in 3.3
+        # jmap backup and sieve added in 3.3
         $expect_primaryAccounts->{'https://cyrusimap.org/ns/jmap/backup'}
+            = 'cassandane';
+        $expect_primaryAccounts->{'https://cyrusimap.org/ns/jmap/sieve'}
             = 'cassandane';
     }
     $self->assert_deep_equals($expect_primaryAccounts,
