@@ -576,7 +576,8 @@ int deliver_mailbox(FILE *f,
     if (!r && !content->body) {
         /* parse the message body if we haven't already,
            and keep the file mmap'ed */
-        r = message_parse_file(f, &content->base, &content->len, &content->body);
+        r = message_parse_file(f, &content->base, &content->len,
+                               &content->body, NULL);
         /* If the body contains received_date, we should always use that. */
         if (content->body->received_date)
             time_from_rfc5322(content->body->received_date, &internaldate,

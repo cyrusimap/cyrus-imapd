@@ -43,20 +43,12 @@
 #ifndef INCLUDED_RETRY_H
 #define INCLUDED_RETRY_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 #include <sys/types.h>
 #include <sys/uio.h>
 
-extern ssize_t retry_read P((int fd, void *buf, size_t nbyte));
-extern ssize_t retry_write P((int fd, const void *buf, size_t nbyte));
-extern ssize_t retry_writev P((int fd, const struct iovec *iov, int iovcnt));
+extern ssize_t retry_read(int fd, void *buf, size_t nbyte);
+extern ssize_t retry_write(int fd, const void *buf, size_t nbyte);
+extern ssize_t retry_writev(int fd, const struct iovec *iov, int iovcnt);
 
 /* add a buffer 's' of length 'len' to iovec 'iov' */
 #define WRITEV_ADD_TO_IOVEC(iov, num_iov, s, len) \

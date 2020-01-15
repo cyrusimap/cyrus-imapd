@@ -4682,7 +4682,7 @@ static int _cyrusmsg_from_buf(const struct buf *buf, struct cyrusmsg **msgptr)
     if (r) goto done;
 
     /* Parse message */
-    r = message_parse_mapped(buf_base(buf), buf_len(buf), mybody);
+    r = message_parse_mapped(buf_base(buf), buf_len(buf), mybody, NULL);
     if (r || !mybody->subpart) {
         r = IMAP_MESSAGE_BADHEADER;
         goto done;

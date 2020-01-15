@@ -381,7 +381,8 @@ static int getbody(void *mc, const char **content_types,
     if (!mydata->content->body) {
         /* parse the message body if we haven't already */
         r = message_parse_file(m->f, &mydata->content->base,
-                               &mydata->content->len, &mydata->content->body);
+                               &mydata->content->len, &mydata->content->body,
+                               NULL);
     }
 
     /* XXX currently struct bodypart as defined in message.h is the same as

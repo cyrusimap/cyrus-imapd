@@ -899,7 +899,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     if (!*body) {
         FILE *file = fopen(stage->parts.data[0], "r");
         if (file) {
-            r = message_parse_file(file, NULL, NULL, body);
+            r = message_parse_file(file, NULL, NULL, body, stage->parts.data[0]);
             fclose(file);
         }
         else
@@ -1204,7 +1204,7 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     r = message_copy_strict(messagefile, destfile, size, 0);
     if (!r) {
         if (!*body || (as->nummsg - 1))
-            r = message_parse_file(destfile, NULL, NULL, body);
+            r = message_parse_file(destfile, NULL, NULL, body, fname);
         if (!r) r = msgrecord_set_bodystructure(msgrec, *body);
 
         /* messageContent may be included with MessageAppend and MessageNew */
@@ -1275,7 +1275,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         goto out;
     }
 
-    r = message_parse_file(f, NULL, NULL, &body);
+    r = message_parse_file(f, NULL, NULL, &body, fname);
     if (r) goto out;
 
     fclose(f);
