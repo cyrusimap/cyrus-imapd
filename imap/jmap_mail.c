@@ -6337,21 +6337,54 @@ static char *_mime_make_boundary()
  * See the header_from_Xxx functions for usage. */
 #define MIME_MAX_HEADER_LENGTH 78
 
+const char QSTRINGCHAR[256] = {
+/* control chars 9 (TAB), 10 (LF), 13 (CR) and space (32)
+ * are not permitted, all other control characters obsolete */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+/* All printable ASCII characters (decimal values between 33 and 126) */
+/* are safe to use in quoted string. 1=use verbatim, 2=escape */
+/* XXX 32 (space) is allowed here, as most MUAs expect that */
+    1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
+/* all high bits are unsafe */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
 static void _mime_write_xparam(struct buf *buf, const char *name, const char *value)
 {
-    int is_7bit = 1;
-    int is_fold = 0;
-    const char *p = value;
-    for (p = value; *p && (is_7bit || !is_fold); p++) {
-        if (*p & 0x80)
-            is_7bit = 0;
-        if (*p == '\n')
-            is_fold = 1;
+    /* Encode header value */
+    struct buf valbuf = BUF_INITIALIZER;
+    int is_qstring = 1;
+    const char *p;
+    for (p = value; *p && is_qstring; p++) {
+        switch (QSTRINGCHAR[(unsigned char)*p]) {
+            case 0:
+                is_qstring = 0;
+                break;
+            case 2:
+                buf_putc(&valbuf, '\\');
+                /* fall through */
+            default:
+                buf_putc(&valbuf, *p);
+        }
     }
-    char *xvalue = is_7bit ? xstrdup(value) : charset_encode_mimexvalue(value, NULL);
+    char *xvalue = is_qstring ? buf_release(&valbuf) : charset_encode_mimexvalue(value, NULL);
 
+    /* Attempt to stuff header in one line */
     if (strlen(name) + strlen(xvalue) + 1 < MIME_MAX_HEADER_LENGTH) {
-        if (is_7bit)
+        if (is_qstring)
             buf_printf(buf, ";%s=\"%s\"", name, xvalue);
         else
             buf_printf(buf, ";%s*=%s", name, xvalue);
@@ -6367,17 +6400,17 @@ static void _mime_write_xparam(struct buf *buf, const char *name, const char *va
         /* Build parameter continuation line. */
         buf_printf(&line, "%s*%d*=", name, section);
         /* Write at least one character of the value */
-        if (is_7bit)
+        if (is_qstring)
             buf_putc(&line, '"');
         int n = buf_len(&line) + 1;
         do {
             buf_putc(&line, *p);
             n++;
             p++;
-            if (!is_7bit && *p == '%' && n >= MIME_MAX_HEADER_LENGTH - 2)
+            if (!is_qstring && *p == '%' && n >= MIME_MAX_HEADER_LENGTH - 2)
                 break;
         } while (*p && n < MIME_MAX_HEADER_LENGTH);
-        if (is_7bit)
+        if (is_qstring)
             buf_putc(&line, '"');
         /* Write line */
         buf_append(buf, &line);
@@ -6389,6 +6422,7 @@ static void _mime_write_xparam(struct buf *buf, const char *name, const char *va
     buf_free(&line);
 
 done:
+    buf_free(&valbuf);
     free(xvalue);
 }
 
@@ -7549,16 +7583,40 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
                 buf_appendcstr(&buf, part->charset);
             }
             if (part->filename) {
-                int force_quote = strlen(part->filename) > MIME_MAX_HEADER_LENGTH;
-                char *tmp = charset_encode_mimeheader(part->filename, 0, force_quote);
-                if (force_quote)
-                    buf_appendcstr(&buf, ";\r\n ");
-                else
+                /* Check if filename can be encoded as quoted string */
+                struct buf valbuf = BUF_INITIALIZER;
+                int is_qstring = 1;
+                const char *p;
+                for (p = part->filename; *p && is_qstring; p++) {
+                    switch (QSTRINGCHAR[(unsigned char)*p]) {
+                        case 0:
+                            is_qstring = 0;
+                            break;
+                        case 2:
+                            buf_putc(&valbuf, '\\');
+                            /* fall through */
+                        default:
+                            buf_putc(&valbuf, *p);
+                    }
+                }
+                /* Encode and write header value */
+                char *value;
+                if (!is_qstring || buf_len(&valbuf) > MIME_MAX_HEADER_LENGTH) {
+                    value = charset_encode_mimeheader(part->filename, 0, /*qpencode*/1);
+                    if (strlen(value) > MIME_MAX_HEADER_LENGTH) {
+                        buf_appendcstr(&buf, ";\r\n ");
+                    }
+                    else buf_appendcstr(&buf, "; ");
+                }
+                else {
+                    value = buf_release(&valbuf);
                     buf_appendcstr(&buf, "; ");
+                }
                 buf_appendcstr(&buf, "name=\"");
-                buf_appendcstr(&buf, tmp);
+                buf_appendcstr(&buf, value);
                 buf_appendcstr(&buf, "\"");
-                free(tmp);
+                buf_free(&valbuf);
+                free(value);
             }
             if (part->boundary) {
                 buf_appendcstr(&buf, ";\r\n boundary=");
