@@ -67,6 +67,7 @@
 #include "times.h"
 #include "util.h"
 #include "vcard_support.h"
+#include "xapian_wrap.h"
 #include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
@@ -234,62 +235,6 @@ static void strip_spurious_deletes(struct changes_rock *urock)
             }
         }
     }
-}
-
-static int _match_text(const char *haystack, const char *needle) {
-    /* XXX This is just a very crude text matcher. */
-    return stristr(haystack, needle) != NULL;
-}
-
-/* Return true if text matches the value of arg's property named name. If 
- * name is NULL, match text to any JSON string property of arg or those of
- * its enclosed JSON objects and arrays. */
-static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text)
-{
-    if (name) {
-        json_t *val = json_object_get(arg, name);
-        if (json_typeof(val) != JSON_STRING) {
-            return 0;
-        }
-        return _match_text(json_string_value(val), text);
-    } else {
-        const char *key;
-        json_t *val;
-        int m = 0;
-        size_t i;
-        json_t *entry;
-
-        json_object_foreach(arg, key, val) {
-            switch json_typeof(val) {
-                case JSON_STRING:
-                    m = _match_text(json_string_value(val), text);
-                    break;
-                case JSON_OBJECT:
-                    m = jmap_match_jsonprop(val, NULL, text);
-                    break;
-                case JSON_ARRAY:
-                    json_array_foreach(val, i, entry) {
-                        switch json_typeof(entry) {
-                            case JSON_STRING:
-                                m = _match_text(json_string_value(entry), text);
-                                break;
-                            case JSON_OBJECT:
-                                m = jmap_match_jsonprop(entry, NULL, text);
-                                break;
-                            default:
-                                /* do nothing */
-                                ;
-                        }
-                        if (m) break;
-                    }
-                default:
-                    /* do nothing */
-                    ;
-            }
-            if (m) return m;
-        }
-    }
-    return 0;
 }
 
 /*****************************************************************************
@@ -1991,37 +1936,340 @@ static int jmap_contact_changes(struct jmap_req *req)
     return _contacts_changes(req, CARDDAV_KIND_CONTACT);
 }
 
-typedef struct contactsquery_filter_rock {
+struct contact_textfilter {
+    strarray_t terms;
+    bitvector_t matched_terms;
+    strarray_t phrases;
+    bitvector_t matched_phrases;
+    int is_any;
+};
+
+static int contact_textfilter_add_to_termset(const char *term, void *termset)
+{
+    hash_insert(term, (void*)1, (hash_table*)termset);
+    return 0;
+}
+
+static int contact_textfilter_add_to_strarray(const char *term, void *sa)
+{
+    strarray_append((strarray_t*)sa, term);
+    return 0;
+}
+
+static struct contact_textfilter *contact_textfilter_new(const char *query)
+{
+    struct contact_textfilter *f = xzmalloc(sizeof(struct contact_textfilter));
+    struct buf buf = BUF_INITIALIZER;
+    const char *p, *q;
+    int in_phrase = 0;
+    xapian_doc_t *doc = xapian_doc_new();
+
+    /* Parse query string into loose terms and phrases */
+    for (p = query, q = query; *p; p++) {
+        if (in_phrase) {
+            if (*p == '\'' || *(p+1) == '\0') {
+                // end of phrase
+                if (*p != '\'') {
+                    buf_putc(&buf, *p);
+                }
+                if (buf_len(&buf)) {
+                    strarray_append(&f->phrases, buf_cstring(&buf));
+                    buf_reset(&buf);
+                }
+                in_phrase = 0;
+            }
+            else if (*p == '\\') {
+                // escape character within phrase
+                switch (*(p+1)) {
+                    case '"':
+                    case '\'':
+                    case '\\':
+                        buf_putc(&buf, *(p+1));
+                        p++;
+                        break;
+                    default:
+                        buf_putc(&buf, *p);
+                }
+            }
+            else buf_putc(&buf, *p);
+        }
+        else {
+            if (*p == '\'' || *(p+1) == '\0') {
+                // end of loose terms
+                if (q) {
+                    const char *end = *p == '\'' ? p : p + 1;
+                    xapian_doc_index_text(doc, q, end - q);
+                }
+                if (*p == '\'') {
+                    //start of phrase
+                    in_phrase = 1;
+                }
+                q = NULL;
+            }
+            else if (!q) {
+                // start of loose terms
+                q = p;
+            }
+        }
+    }
+
+    /* Add loose terms to matcher */
+    xapian_doc_foreach_term(doc, contact_textfilter_add_to_strarray, &f->terms);
+
+    /* Initialize state */
+    bv_init(&f->matched_phrases);
+    bv_init(&f->matched_terms);
+    bv_setsize(&f->matched_phrases, (unsigned) strarray_size(&f->phrases));
+    bv_setsize(&f->matched_terms, (unsigned) strarray_size(&f->terms));
+
+    xapian_doc_close(doc);
+    buf_free(&buf);
+    return f;
+}
+
+static int contact_textfilter_match(struct contact_textfilter *f, const char *text, hash_table *termset)
+{
+    int matches = 0;
+
+    if (!f->is_any) {
+        bv_clearall(&f->matched_phrases);
+        bv_clearall(&f->matched_terms);
+    }
+
+    /* Validate phrase search */
+    int i;
+    for (i = 0; i < strarray_size(&f->phrases); i++) {
+        const char *phrase = strarray_nth(&f->phrases, i);
+        if (stristr(text, phrase)) {
+            bv_set(&f->matched_phrases, i);
+            if (f->is_any) {
+                matches = 1;
+                goto done;
+            }
+        }
+        else if (!f->is_any) goto done;
+    }
+
+    /* Validate loose term search */
+    if (!termset->size) {
+        /* Extract terms from text and store result in termset */
+        xapian_doc_t *doc = xapian_doc_new();
+        xapian_doc_index_text(doc, text, strlen(text));
+        if (!xapian_doc_termcount(doc)) {
+            xapian_doc_close(doc);
+            goto done;
+        }
+        construct_hash_table(termset, xapian_doc_termcount(doc), 0);
+        xapian_doc_foreach_term(doc, contact_textfilter_add_to_termset, termset);
+        xapian_doc_close(doc);
+    }
+    for (i = 0; i < strarray_size(&f->terms); i++) {
+        const char *term = strarray_nth(&f->terms, i);
+        if (hash_lookup(term, termset)) {
+            bv_set(&f->matched_terms, i);
+            if (f->is_any) {
+                matches = 1;
+                goto done;
+            }
+        }
+        else if (!f->is_any) goto done;
+    }
+
+    /* All loose terms and phrases matched */
+    matches = 1;
+
+done:
+    return matches;
+}
+
+static void contact_textfilter_reset(struct contact_textfilter *f)
+{
+    bv_clearall(&f->matched_phrases);
+    bv_clearall(&f->matched_terms);
+}
+
+
+static void contact_textfilter_free(struct contact_textfilter *f)
+{
+    if (f) {
+        strarray_fini(&f->terms);
+        bv_fini(&f->matched_terms);
+        strarray_fini(&f->phrases);
+        bv_fini(&f->matched_phrases);
+        free(f);
+    }
+}
+
+static int contact_textfilter_matched_all(struct contact_textfilter *f)
+{
+    return bv_count(&f->matched_terms) == (unsigned) strarray_size(&f->terms) &&
+           bv_count(&f->matched_phrases) == (unsigned) strarray_size(&f->phrases);
+}
+
+struct named_termset {
+    const char *propname;
+    hash_table termset;
+};
+
+struct contactsquery_filter_rock {
     struct carddav_db *carddavdb;
     struct carddav_data *cdata;
     json_t *entry;
-} contactsquery_filter_rock;
+    ptrarray_t cached_termsets; // list of named_termset
+};
 
-typedef struct contact_filter {
+struct contact_filter {
     hash_table *inContactGroup;
     json_t *isFlagged;
-    const char *text;
-    const char *prefix;
-    const char *firstName;
-    const char *lastName;
-    const char *suffix;
-    const char *nickname;
-    const char *company;
-    const char *department;
-    const char *jobTitle;
-    const char *email;
-    const char *phone;
-    const char *online;
-    const char *address;
-    const char *notes;
     const char *uid;
-} contact_filter;
+    struct contact_textfilter *prefix;
+    struct contact_textfilter *firstName;
+    struct contact_textfilter *lastName;
+    struct contact_textfilter *suffix;
+    struct contact_textfilter *nickname;
+    struct contact_textfilter *company;
+    struct contact_textfilter *department;
+    struct contact_textfilter *jobTitle;
+    struct contact_textfilter *email;
+    struct contact_textfilter *phone;
+    struct contact_textfilter *online;
+    struct contact_textfilter *address;
+    struct contact_textfilter *notes;
+    struct contact_textfilter *text;
+};
+
+static int contact_filter_match_textval(const char *val,
+                                        struct contact_textfilter *propfilter,
+                                        struct contact_textfilter *textfilter,
+                                        hash_table *termset)
+{
+    if (propfilter) {
+        /* Fail early if propfilter does not match */
+        if (val && !contact_textfilter_match(propfilter, val, termset)) {
+            return 0;
+        }
+    }
+    if (textfilter) {
+        /* Don't care if textfilter matches */
+        if (val && !contact_textfilter_matched_all(textfilter)) {
+            contact_textfilter_match(textfilter, val, termset);
+        }
+    }
+
+    return 1;
+}
+
+static hash_table *getorset_termset(ptrarray_t *cached_termsets, const char *propname)
+{
+    int i;
+    for (i = 0; i < ptrarray_size(cached_termsets); i++) {
+        struct named_termset *nts = ptrarray_nth(cached_termsets, i);
+        if (!strcmp(nts->propname, propname)) return &nts->termset;
+    }
+    struct named_termset *nts = xzmalloc(sizeof(struct named_termset));
+    nts->propname = propname;
+    ptrarray_append(cached_termsets, nts);
+    return &nts->termset;
+}
+
+static int contact_filter_match_textprop(json_t *jentry, const char *propname,
+                                         struct contact_textfilter *propfilter,
+                                         struct contact_textfilter *textfilter,
+                                         ptrarray_t *cached_termsets)
+{
+
+    /* Skip matching if possible */
+    if (!propfilter && (!textfilter || contact_textfilter_matched_all(textfilter)))
+        return 1;
+
+    /* Evaluate search on text value */
+    hash_table *termset = getorset_termset(cached_termsets, propname);
+    const char *val = json_string_value(json_object_get(jentry, propname));
+    return contact_filter_match_textval(val, propfilter, textfilter, termset);
+}
+
+static int contact_filter_match_contactinfo(json_t *jentry, const char *propname,
+                                            struct contact_textfilter *propfilter,
+                                            struct contact_textfilter *textfilter,
+                                            ptrarray_t *cached_termsets)
+{
+    /* Skip matching if possible */
+    if (!propfilter && (!textfilter || contact_textfilter_matched_all(textfilter)))
+        return 1;
+
+    /* Combine values into text buffer */
+    json_t *jlist = json_object_get(jentry, propname);
+    struct buf buf = BUF_INITIALIZER;
+    json_t *jinfo;
+    size_t i;
+    json_array_foreach(jlist, i, jinfo) {
+        const char *val = json_string_value(json_object_get(jinfo, "value"));
+        if (!val) continue;
+        if (i) buf_putc(&buf, ' ');
+        buf_appendcstr(&buf, val);
+    }
+    if (propfilter && !buf_len(&buf))
+        return 0;
+
+    /* Evaluate search on text buffer */
+    hash_table *termset = getorset_termset(cached_termsets, propname);
+    int ret = contact_filter_match_textval(buf_cstring(&buf), propfilter, textfilter, termset);
+    buf_free(&buf);
+    return ret;
+}
+
+static int contact_filter_match_addresses(json_t *jentry, const char *propname,
+                                          struct contact_textfilter *propfilter,
+                                          struct contact_textfilter *textfilter,
+                                          ptrarray_t *cached_termsets)
+{
+    /* Skip matching if possible */
+    if (!propfilter && (!textfilter || contact_textfilter_matched_all(textfilter)))
+        return 1;
+
+    /* Combine values into text buffer */
+    json_t *jlist = json_object_get(jentry, propname);
+    struct buf buf = BUF_INITIALIZER;
+    json_t *jaddr;
+    size_t i;
+    json_array_foreach(jlist, i, jaddr) {
+        const char *val;
+        if ((val = json_string_value(json_object_get(jaddr, "street")))) {
+            buf_putc(&buf, ' ');
+            buf_appendcstr(&buf, val);
+        }
+        if ((val = json_string_value(json_object_get(jaddr, "locality")))) {
+            buf_putc(&buf, ' ');
+            buf_appendcstr(&buf, val);
+        }
+        if ((val = json_string_value(json_object_get(jaddr, "region")))) {
+            buf_putc(&buf, ' ');
+            buf_appendcstr(&buf, val);
+        }
+        if ((val = json_string_value(json_object_get(jaddr, "postcode")))) {
+            buf_putc(&buf, ' ');
+            buf_appendcstr(&buf, val);
+        }
+        if ((val = json_string_value(json_object_get(jaddr, "country")))) {
+            buf_putc(&buf, ' ');
+            buf_appendcstr(&buf, val);
+        }
+    }
+    if (propfilter && !buf_len(&buf))
+        return 0;
+
+    /* Evaluate search on text buffer */
+    hash_table *termset = getorset_termset(cached_termsets, propname);
+    int ret = contact_filter_match_textval(buf_cstring(&buf), propfilter, textfilter, termset);
+    buf_free(&buf);
+    return ret;
+}
 
 /* Match the contact in rock against filter. */
 static int contact_filter_match(void *vf, void *rock)
 {
-    contact_filter *f = (contact_filter *) vf;
-    contactsquery_filter_rock *cfrock = (contactsquery_filter_rock*) rock;
+    struct contact_filter *f = (struct contact_filter *) vf;
+    struct contactsquery_filter_rock *cfrock = (struct contactsquery_filter_rock*) rock;
     json_t *contact = cfrock->entry;
     struct carddav_data *cdata = cfrock->cdata;
     struct carddav_db *db = cfrock->carddavdb;
@@ -2038,92 +2286,27 @@ static int contact_filter_match(void *vf, void *rock)
             return 0;
         }
     }
-    /* text */
-    if (f->text && !jmap_match_jsonprop(contact, NULL, f->text)) {
+
+    /* Match text filters */
+    if (f->text) contact_textfilter_reset(f->text);
+    if (!contact_filter_match_textprop(contact, "prefix", f->prefix, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_textprop(contact, "firstName", f->firstName, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_textprop(contact, "lastName", f->lastName, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_textprop(contact, "suffix", f->suffix, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_textprop(contact, "nickname", f->nickname, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_textprop(contact, "company", f->company, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_textprop(contact, "department", f->department, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_textprop(contact, "jobTitle", f->jobTitle, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_textprop(contact, "notes", f->notes, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_contactinfo(contact, "emails", f->email, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_contactinfo(contact, "phones", f->phone, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_contactinfo(contact, "online", f->online, f->text, &cfrock->cached_termsets) ||
+        !contact_filter_match_addresses(contact, "addresses", f->address, f->text, &cfrock->cached_termsets)) {
         return 0;
     }
-    /*  prefix */
-    if (f->prefix && !jmap_match_jsonprop(contact, "prefix", f->prefix)) {
-        return 0;
-    }
-    /* firstName */
-    if (f->firstName &&
-        !jmap_match_jsonprop(contact, "firstName", f->firstName)) {
-        return 0;
-    }
-    /* lastName */
-    if (f->lastName && !jmap_match_jsonprop(contact, "lastName", f->lastName)) {
-        return 0;
-    }
-    /*  suffix */
-    if (f->suffix && !jmap_match_jsonprop(contact, "suffix", f->suffix)) {
-        return 0;
-    }
-    /*  nickname */
-    if (f->nickname && !jmap_match_jsonprop(contact, "nickname", f->nickname)) {
-        return 0;
-    }
-    /*  company */
-    if (f->company && !jmap_match_jsonprop(contact, "company", f->company)) {
-        return 0;
-    }
-    /*  department */
-    if (f->department &&
-        !jmap_match_jsonprop(contact, "department", f->department)) {
-        return 0;
-    }
-    /*  jobTitle */
-    if (f->jobTitle && !jmap_match_jsonprop(contact, "jobTitle", f->jobTitle)) {
-        return 0;
-    }
-    /* email */
-    if (f->email && json_object_get(contact, "emails")) {
-        size_t i;
-        json_t *email;
-        int m = 0;
-        json_array_foreach(json_object_get(contact, "emails"), i, email) {
-            m = jmap_match_jsonprop(email, NULL, f->email);
-            if (m) break;
-        }
-        if (!m) return 0;
-    }
-    /*  phone */
-    if (f->phone && json_object_get(contact, "phones")) {
-        size_t i;
-        json_t *phone;
-        int m = 0;
-        json_array_foreach(json_object_get(contact, "phones"), i, phone) {
-            m = jmap_match_jsonprop(phone, NULL, f->phone);
-            if (m) break;
-        }
-        if (!m) return 0;
-    }
-    /*  online */
-    if (f->online && json_object_get(contact, "online")) {
-        size_t i;
-        json_t *online;
-        int m = 0;
-        json_array_foreach(json_object_get(contact, "online"), i, online) {
-            m = jmap_match_jsonprop(online, NULL, f->online);
-            if (m) break;
-        }
-        if (!m) return 0;
-    }
-    /* address */
-    if (f->address && json_object_get(contact, "addresses")) {
-        size_t i;
-        json_t *address;
-        int m = 0;
-        json_array_foreach(json_object_get(contact, "addresses"), i, address) {
-            m = jmap_match_jsonprop(address, NULL, f->address);
-            if (m) break;
-        }
-        if (!m) return 0;
-    }
-    /*  notes */
-    if (f->notes && !jmap_match_jsonprop(contact, "notes", f->notes)) {
-        return 0;
-    }
+
+    if (f->text && !contact_textfilter_matched_all(f->text)) return 0;
+
     /* inContactGroup */
     if (f->inContactGroup) {
         /* XXX Calling carddav_db for every contact isn't really efficient. If
@@ -2154,11 +2337,25 @@ static int contact_filter_match(void *vf, void *rock)
 /* Free the memory allocated by this contact filter. */
 static void contact_filter_free(void *vf)
 {
-    contact_filter *f = (contact_filter*) vf;
+    struct contact_filter *f = (struct contact_filter*) vf;
     if (f->inContactGroup) {
         free_hash_table(f->inContactGroup, NULL);
         free(f->inContactGroup);
     }
+    contact_textfilter_free(f->prefix);
+    contact_textfilter_free(f->firstName);
+    contact_textfilter_free(f->lastName);
+    contact_textfilter_free(f->suffix);
+    contact_textfilter_free(f->nickname);
+    contact_textfilter_free(f->company);
+    contact_textfilter_free(f->department);
+    contact_textfilter_free(f->jobTitle);
+    contact_textfilter_free(f->email);
+    contact_textfilter_free(f->phone);
+    contact_textfilter_free(f->online);
+    contact_textfilter_free(f->address);
+    contact_textfilter_free(f->notes);
+    contact_textfilter_free(f->text);
     free(f);
 }
 
@@ -2167,8 +2364,8 @@ static void contact_filter_free(void *vf)
  * Return NULL on error. */
 static void *contact_filter_parse(json_t *arg)
 {
-    contact_filter *f =
-        (contact_filter *) xzmalloc(sizeof(struct contact_filter));
+    struct contact_filter *f =
+        (struct contact_filter *) xzmalloc(sizeof(struct contact_filter));
 
     /* inContactGroup */
     json_t *inContactGroup = json_object_get(arg, "inContactGroup");
@@ -2189,61 +2386,103 @@ static void *contact_filter_parse(json_t *arg)
     /* isFlagged */
     f->isFlagged = json_object_get(arg, "isFlagged");
 
-    /* text */
-    if (JNOTNULL(json_object_get(arg, "text"))) {
-        jmap_readprop(arg, "text", 0, NULL, "s", &f->text);
-    }
     /* prefix */
     if (JNOTNULL(json_object_get(arg, "prefix"))) {
-        jmap_readprop(arg, "prefix", 0, NULL, "s", &f->prefix);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "prefix", 0, NULL, "s", &s) > 0) {
+            f->prefix = contact_textfilter_new(s);
+        }
     }
     /* firstName */
     if (JNOTNULL(json_object_get(arg, "firstName"))) {
-        jmap_readprop(arg, "firstName", 0, NULL, "s", &f->firstName);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "firstName", 0, NULL, "s", &s) > 0) {
+            f->firstName = contact_textfilter_new(s);
+        }
     }
     /* lastName */
     if (JNOTNULL(json_object_get(arg, "lastName"))) {
-        jmap_readprop(arg, "lastName", 0, NULL, "s", &f->lastName);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "lastName", 0, NULL, "s", &s) > 0) {
+            f->lastName = contact_textfilter_new(s);
+        }
     }
     /* suffix */
     if (JNOTNULL(json_object_get(arg, "suffix"))) {
-        jmap_readprop(arg, "suffix", 0, NULL, "s", &f->suffix);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "suffix", 0, NULL, "s", &s) > 0) {
+            f->suffix = contact_textfilter_new(s);
+        }
     }
     /* nickname */
     if (JNOTNULL(json_object_get(arg, "nickname"))) {
-        jmap_readprop(arg, "nickname", 0, NULL, "s", &f->nickname);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "nickname", 0, NULL, "s", &s) > 0) {
+            f->nickname = contact_textfilter_new(s);
+        }
     }
     /* company */
     if (JNOTNULL(json_object_get(arg, "company"))) {
-        jmap_readprop(arg, "company", 0, NULL, "s", &f->company);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "company", 0, NULL, "s", &s) > 0) {
+            f->company = contact_textfilter_new(s);
+        }
     }
     /* department */
     if (JNOTNULL(json_object_get(arg, "department"))) {
-        jmap_readprop(arg, "department", 0, NULL, "s", &f->department);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "department", 0, NULL, "s", &s) > 0) {
+            f->department = contact_textfilter_new(s);
+        }
     }
     /* jobTitle */
     if (JNOTNULL(json_object_get(arg, "jobTitle"))) {
-        jmap_readprop(arg, "jobTitle", 0, NULL, "s", &f->jobTitle);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "jobTitle", 0, NULL, "s", &s) > 0) {
+            f->jobTitle = contact_textfilter_new(s);
+        }
     }
     /* email */
     if (JNOTNULL(json_object_get(arg, "email"))) {
-        jmap_readprop(arg, "email", 0, NULL, "s", &f->email);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "email", 0, NULL, "s", &s) > 0) {
+            f->email = contact_textfilter_new(s);
+        }
     }
     /* phone */
     if (JNOTNULL(json_object_get(arg, "phone"))) {
-        jmap_readprop(arg, "phone", 0, NULL, "s", &f->phone);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "phone", 0, NULL, "s", &s) > 0) {
+            f->phone = contact_textfilter_new(s);
+        }
     }
     /* online */
     if (JNOTNULL(json_object_get(arg, "online"))) {
-        jmap_readprop(arg, "online", 0, NULL, "s", &f->online);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "online", 0, NULL, "s", &s) > 0) {
+            f->online = contact_textfilter_new(s);
+        }
     }
     /* address */
     if (JNOTNULL(json_object_get(arg, "address"))) {
-        jmap_readprop(arg, "address", 0, NULL, "s", &f->address);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "address", 0, NULL, "s", &s) > 0) {
+            f->address = contact_textfilter_new(s);
+        }
     }
     /* notes */
     if (JNOTNULL(json_object_get(arg, "notes"))) {
-        jmap_readprop(arg, "notes", 0, NULL, "s", &f->notes);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "notes", 0, NULL, "s", &s) > 0) {
+            f->notes = contact_textfilter_new(s);
+        }
+    }
+    /* text */
+    if (JNOTNULL(json_object_get(arg, "text"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "text", 0, NULL, "s", &s) > 0) {
+            f->text = contact_textfilter_new(s);
+        }
     }
     /* uid */
     if (JNOTNULL(json_object_get(arg, "uid"))) {
@@ -2253,12 +2492,12 @@ static void *contact_filter_parse(json_t *arg)
     return f;
 }
 
-static void validate_contact_filter(jmap_req_t *req __attribute__((unused)),
-                           struct jmap_parser *parser,
-                           json_t *filter,
-                           json_t *unsupported __attribute__((unused)),
-                           void *rock __attribute__((unused)),
-                           json_t **err __attribute__((unused)))
+static void contact_filter_validate(jmap_req_t *req __attribute__((unused)),
+                                    struct jmap_parser *parser,
+                                    json_t *filter,
+                                    json_t *unsupported __attribute__((unused)),
+                                    void *rock __attribute__((unused)),
+                                    json_t **err __attribute__((unused)))
 {
     const char *field;
     json_t *arg;
@@ -2302,7 +2541,7 @@ static void validate_contact_filter(jmap_req_t *req __attribute__((unused)),
     }
 }
 
-static int validate_contact_comparator(jmap_req_t *req __attribute__((unused)),
+static int contact_comparator_validate(jmap_req_t *req __attribute__((unused)),
                               struct jmap_comparator *comp,
                               void *rock __attribute__((unused)),
                               json_t **err __attribute__((unused)))
@@ -2322,17 +2561,17 @@ static int validate_contact_comparator(jmap_req_t *req __attribute__((unused)),
     return 0;
 }
 
-typedef struct contactgroup_filter {
+struct contactgroup_filter {
     const char *uid;
-    const char *text;
-    const char *name;
-} contactgroup_filter;
+    struct contact_textfilter *name;
+    struct contact_textfilter *text;
+};
 
 /* Match the contact in rock against filter. */
 static int contactgroup_filter_match(void *vf, void *rock)
 {
-    contactgroup_filter *f = (contactgroup_filter *) vf;
-    contactsquery_filter_rock *cfrock = (contactsquery_filter_rock*) rock;
+    struct contactgroup_filter *f = (struct contactgroup_filter *) vf;
+    struct contactsquery_filter_rock *cfrock = (struct contactsquery_filter_rock*) rock;
     struct carddav_data *cdata = cfrock->cdata;
     json_t *group = cfrock->entry;
 
@@ -2340,12 +2579,14 @@ static int contactgroup_filter_match(void *vf, void *rock)
     if (f->uid && strcmpsafe(cdata->vcard_uid, f->uid)) {
         return 0;
     }
-    /* text */
-    if (f->text && !jmap_match_jsonprop(group, NULL, f->text)) {
+    /* Match text filters */
+    if (f->text) {
+        contact_textfilter_reset(f->text);
+    }
+    if (!contact_filter_match_textprop(group, "name", f->name, f->text, &cfrock->cached_termsets)) {
         return 0;
     }
-    /*  name */
-    if (f->name && !jmap_match_jsonprop(group, "name", f->name)) {
+    if (f->text && !contact_textfilter_matched_all(f->text)) {
         return 0;
     }
 
@@ -2356,13 +2597,16 @@ static int contactgroup_filter_match(void *vf, void *rock)
 /* Free the memory allocated by this contact filter. */
 static void contactgroup_filter_free(void *vf)
 {
+    struct contactgroup_filter *f = vf;
+    contact_textfilter_free(f->name);
+    contact_textfilter_free(f->text);
     free(vf);
 }
 
 static void *contactgroup_filter_parse(json_t *arg)
 {
-    contactgroup_filter *f =
-        (contactgroup_filter *) xzmalloc(sizeof(struct contactgroup_filter));
+    struct contactgroup_filter *f =
+        (struct contactgroup_filter *) xzmalloc(sizeof(struct contactgroup_filter));
 
     /* uid */
     if (JNOTNULL(json_object_get(arg, "uid"))) {
@@ -2370,17 +2614,23 @@ static void *contactgroup_filter_parse(json_t *arg)
     }
     /* text */
     if (JNOTNULL(json_object_get(arg, "text"))) {
-        jmap_readprop(arg, "text", 0, NULL, "s", &f->text);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "text", 0, NULL, "s", &s) > 0) {
+            f->text = contact_textfilter_new(s);
+        }
     }
     /* name */
     if (JNOTNULL(json_object_get(arg, "name"))) {
-        jmap_readprop(arg, "name", 0, NULL, "s", &f->name);
+        const char *s = NULL;
+        if (jmap_readprop(arg, "name", 0, NULL, "s", &s) > 0) {
+            f->name = contact_textfilter_new(s);
+        }
     }
 
     return f;
 }
 
-static void validate_contactgroup_filter(jmap_req_t *req __attribute__((unused)),
+static void contactgroup_filter_validate(jmap_req_t *req __attribute__((unused)),
                                          struct jmap_parser *parser,
                                          json_t *filter,
                                          json_t *unsupported __attribute__((unused)),
@@ -2404,7 +2654,7 @@ static void validate_contactgroup_filter(jmap_req_t *req __attribute__((unused))
     }
 }
 
-static int validate_contactgroup_comparator(jmap_req_t *req __attribute__((unused)),
+static int contactgroup_comparator_validate(jmap_req_t *req __attribute__((unused)),
                               struct jmap_comparator *comp,
                               void *rock __attribute__((unused)),
                               json_t **err __attribute__((unused)))
@@ -2436,7 +2686,6 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
     struct contactsquery_rock *crock = (struct contactsquery_rock*) rock;
     struct index_record record;
     json_t *entry = NULL;
-    struct contactsquery_filter_rock cfrock;
     int r = 0;
 
     if (!cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
@@ -2489,16 +2738,29 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
 
 gotvalue:
 
-    /* Match the contact against the filter and update statistics. */
-    cfrock.carddavdb = crock->carddavdb;
-    cfrock.cdata = cdata;
-    cfrock.entry = entry;
-    jmap_filtermatch_cb *matcher = crock->kind == CARDDAV_KIND_GROUP ?
-        contactgroup_filter_match : contact_filter_match;
 
-    if (crock->filter && !jmap_filter_match(crock->filter, matcher, &cfrock)) {
-        goto done;
+    if (crock->filter) {
+        /* Match the contact against the filter */
+        struct contactsquery_filter_rock cfrock = {
+            crock->carddavdb, cdata, entry, PTRARRAY_INITIALIZER
+        };
+        /* Match filter */
+        jmap_filtermatch_cb *matcher = crock->kind == CARDDAV_KIND_GROUP ?
+            contactgroup_filter_match : contact_filter_match;
+        int matches = jmap_filter_match(crock->filter, matcher, &cfrock);
+        /* Free text search cached_termsets */
+        int i;
+        for (i = 0; i < ptrarray_size(&cfrock.cached_termsets); i++) {
+            struct named_termset *nts = ptrarray_nth(&cfrock.cached_termsets, i);
+            free_hash_table(&nts->termset, NULL);
+            free(nts);
+        }
+        ptrarray_fini(&cfrock.cached_termsets);
+        /* Skip non-matching entries */
+        if (!matches) goto done;
     }
+
+    /* Update statistics */
     crock->query->total++;
 
     if (crock->build_response) {
@@ -2642,12 +2904,12 @@ static int _contactsquery(struct jmap_req *req, unsigned kind)
     json_t *err = NULL;
     jmap_query_parse(req, &parser, NULL, NULL,
                      kind == CARDDAV_KIND_GROUP ?
-                        validate_contactgroup_filter :
-                        validate_contact_filter,
+                        contactgroup_filter_validate :
+                        contact_filter_validate,
                      NULL,
                      kind == CARDDAV_KIND_GROUP ?
-                        validate_contactgroup_comparator :
-                        validate_contact_comparator,
+                        contactgroup_comparator_validate :
+                        contact_comparator_validate,
                      NULL,
                      &query, &err);
     if (err) {
