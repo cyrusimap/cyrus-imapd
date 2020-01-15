@@ -35,13 +35,13 @@ Archives
 The list archives can be accessed as follows:
 
 * **cyrus-announce**
-    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-announce>`__ : `Web/HTTP <http://asg.web.cmu.edu/bb/archive.cyrus-announce>`__ or `Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-announce/>`__
+    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-announce>`__ : `Web/HTTP via Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-announce/>`__
 * **info-cyrus**
-    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.info-cyrus>`__ : `Web/HTTP <http://asg.web.cmu.edu/bb/archive.info-cyrus>`__ or `Pipermail <http://lists.andrew.cmu.edu/pipermail/info-cyrus/>`__
+    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.info-cyrus>`__ : `Web/HTTP via Pipermail <http://lists.andrew.cmu.edu/pipermail/info-cyrus/>`__
 * **cyrus-sasl**
-    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-sasl>`__: `Web/HTTP <http://asg.web.cmu.edu/bb/archive.cyrus-sasl>`__ or `Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-sasl/>`__
+    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-sasl>`__: `Web/HTTP via Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-sasl/>`__
 * **cyrus-devel**
-    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-devel>`__ : `Web/HTTP <http://asg.web.cmu.edu/bb/archive.cyrus-devel>`__ or `Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-devel/>`__
+    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-devel>`__ : `Web/HTTP via Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-devel/>`__
 
 Subscribe/Unsubscribe
 ---------------------
