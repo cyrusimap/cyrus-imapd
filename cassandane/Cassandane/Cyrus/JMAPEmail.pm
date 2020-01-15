@@ -629,6 +629,12 @@ sub test_email_get_attachment_name
     "Content-Type: application/test12; name= \r\n\t  \r\n".
     "\r\n" .
     "test12".
+
+    "\r\n--sub\r\n".
+    "Content-Type: application/test13\r\n".
+    "Content-Disposition: attachment; filename=\"q\\\".dat\"\r\n".
+    "\r\n" .
+    "test13".
     "\r\n--sub--\r\n";
 
     $exp_sub{A} = $self->make_message("foo",
@@ -696,6 +702,9 @@ sub test_email_get_attachment_name
 
     $att = $m{"application/test12"};
     $self->assert_null($att->{name});
+
+    $att = $m{"application/test13"};
+    $self->assert_str_equals('q".dat', $att->{name});
 }
 
 sub test_email_get_body_notext
@@ -10478,6 +10487,10 @@ sub test_email_set_filename
         name   => 'Incoming Email Flow.xml',
         wantCt => ' image/gif; name="Incoming Email Flow.xml"',
         wantCd => ' attachment;filename="Incoming Email Flow.xml"',
+    }, {
+        name   => 'a"b\c.txt',
+        wantCt => ' image/gif; name="a\"b\\\\c.txt"',
+        wantCd => ' attachment;filename="a\"b\\\\c.txt"',
     });
 
     foreach my $tc (@testcases) {
