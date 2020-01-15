@@ -602,7 +602,7 @@ sub test_contact_query
     my $res = $jmap->CallMethods([['Contact/set', {create => {
                         "1" =>
                         {
-                            firstName => "foo", lastName => "last1",
+                            firstName => "foo", lastName => "last",
                             emails => [{
                                     type => "personal",
                                     value => "foo\@example.com"
@@ -610,7 +610,7 @@ sub test_contact_query
                         },
                         "2" =>
                         {
-                            firstName => "bar", lastName => "last2",
+                            firstName => "bar", lastName => "last",
                             emails => [{
                                     type => "work",
                                     value => "bar\@bar.org"
@@ -632,7 +632,7 @@ sub test_contact_query
                         },
                         "3" =>
                         {
-                            firstName => "baz", lastName => "last3",
+                            firstName => "baz", lastName => "last",
                             addresses => [{
                                     type => "home",
                                     label => undef,
@@ -644,7 +644,7 @@ sub test_contact_query
                                     isDefault => JSON::false
                                 }]
                         },
-                        "4" => {firstName => "bam", lastName => "last4",
+                        "4" => {firstName => "bam", lastName => "last",
                                  isFlagged => JSON::false }
                     }}, "R1"]]);
 
@@ -798,7 +798,7 @@ sub test_contact_query_shared
                     create => {
                         "1" =>
                         {
-                            firstName => "foo", lastName => "last1",
+                            firstName => "foo", lastName => "last",
                             emails => [{
                                     type => "personal",
                                     value => "foo\@example.com"
@@ -806,7 +806,7 @@ sub test_contact_query_shared
                         },
                         "2" =>
                         {
-                            firstName => "bar", lastName => "last2",
+                            firstName => "bar", lastName => "last",
                             emails => [{
                                     type => "work",
                                     value => "bar\@bar.org"
@@ -828,7 +828,7 @@ sub test_contact_query_shared
                         },
                         "3" =>
                         {
-                            firstName => "baz", lastName => "last3",
+                            firstName => "baz", lastName => "last",
                             addresses => [{
                                     type => "home",
                                     label => undef,
@@ -840,7 +840,7 @@ sub test_contact_query_shared
                                     isDefault => JSON::false
                                 }]
                         },
-                        "4" => {firstName => "bam", lastName => "last4",
+                        "4" => {firstName => "bam", lastName => "last",
                                  isFlagged => JSON::false }
                     }}, "R1"]]);
 
@@ -1227,6 +1227,138 @@ sub test_contact_query_windowing
     );
     $self->assert_num_equals(2, $res->[3][1]{position});
     $self->assert_num_equals(4, $res->[3][1]{total});
+}
+
+sub test_contact_query_text
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create contacts";
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact1 => {
+                    notes => 'cats and dogs',
+                },
+                contact2 => {
+                    notes => 'hats and bats',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $contactId1 = $res->[0][1]{created}{contact1}{id};
+    $self->assert_not_null($contactId1);
+    my $contactId2 = $res->[0][1]{created}{contact2}{id};
+    $self->assert_not_null($contactId2);
+
+    xlog "Query with loose terms";
+    $res = $jmap->CallMethods([
+        ['Contact/query', {
+            filter => {
+                notes => "cats dogs",
+            },
+        }, 'R1'],
+        ['Contact/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    notes => 'cats dogs',
+                }],
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$contactId1], $res->[0][1]{ids});
+    $self->assert_deep_equals([$contactId2], $res->[1][1]{ids});
+
+    xlog "Query with phrase";
+    $res = $jmap->CallMethods([
+        ['Contact/query', {
+            filter => {
+                notes => "'cats and dogs'",
+            },
+        }, 'R1'],
+        ['Contact/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    notes => "'cats and dogs'",
+                }],
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([$contactId1], $res->[0][1]{ids});
+    $self->assert_deep_equals([$contactId2], $res->[1][1]{ids});
+
+    xlog "Query with both phrase and loose terms";
+    $res = $jmap->CallMethods([
+        ['Contact/query', {
+            filter => {
+                notes => "cats 'cats and dogs' dogs",
+            },
+        }, 'R1'],
+        ['Contact/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    notes => "cats 'cats and dogs' dogs",
+                }],
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$contactId1], $res->[0][1]{ids});
+    $self->assert_deep_equals([$contactId2], $res->[1][1]{ids});
+
+    xlog "Query text";
+    $res = $jmap->CallMethods([
+        ['Contact/query', {
+            filter => {
+                text => "cats dogs",
+            },
+        }, 'R1'],
+        ['Contact/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    text => "cats dogs",
+                }],
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$contactId1], $res->[0][1]{ids});
+    $self->assert_deep_equals([$contactId2], $res->[1][1]{ids});
+
+    xlog "Query text and notes";
+    $res = $jmap->CallMethods([
+        ['Contact/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    text => "cats",
+                }, {
+                    notes => "dogs",
+                }],
+            },
+        }, 'R1'],
+        ['Contact/query', {
+
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    operator => 'AND',
+                    conditions => [{
+                        text => "cats",
+                    }, {
+                        notes => "dogs",
+                    }],
+                }],
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$contactId1], $res->[0][1]{ids});
+    $self->assert_deep_equals([$contactId2], $res->[1][1]{ids});
 }
 
 sub test_contactgroup_changes
