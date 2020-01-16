@@ -1542,8 +1542,8 @@ static int _rename_check_specialuse(const char *oldname, const char *newname)
         annotatemore_lookup(oldname, "/specialuse", mbname_userid(old), &attrib);
     /* we have specialuse? */
     if (attrib.len) {
-        /* then target must be a single-depth mailbox too */
-        if (strarray_size(mbname_boxes(new)) != 1)
+        /* if annotatemore is used then target must be a single-depth mailbox too */
+        if (config_getswitch(IMAPOPT_ANNOTATION_ENABLE_LEGACY_COMMANDS) && strarray_size(mbname_boxes(new)) != 1)
             r = IMAP_MAILBOX_SPECIALUSE;
         /* and have a userid as well */
         if (!mbname_userid(new))
