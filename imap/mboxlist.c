@@ -3905,7 +3905,7 @@ EXPORTED modseq_t mboxlist_foldermodseq_dirty(struct mailbox *mailbox)
 
     ret = mbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
 
-    mboxlist_update(mbentry, 0);
+    mboxlist_update(mbentry, 1);
 
     mboxlist_entry_free(&mbentry);
 
