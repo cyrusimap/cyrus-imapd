@@ -6032,6 +6032,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 }
                 break;
             case SORT_SNOOZEDUNTIL:
+#ifdef WITH_JMAP
                 if ((record.internal_flags & FLAG_INTERNAL_SNOOZED) &&
                     !strcmpnull(mailbox->uniqueid, sortcrit[j].args.mailbox.id)) {
                     /* SAVEDATE == snoozed#until */
@@ -6051,6 +6052,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                         }
                     }
                 }
+#endif
                 if (!cur->savedate) {
                     /* If not snoozed in mailboxId, we use receivedAt */
                     cur->internaldate = record.internaldate;
