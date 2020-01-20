@@ -165,11 +165,9 @@ struct jmap_restore {
 
     /* Response fields */
     unsigned num_undone[3];
-    json_t *old_state;
-    json_t *new_state;
 };
 
-#define JMAP_RESTORE_INITIALIZER(undo) { 0, undo, { 0, 0, 0 }, NULL, NULL }
+#define JMAP_RESTORE_INITIALIZER(undo) { 0, undo, { 0, 0, 0 } }
 
 static void jmap_restore_parse(jmap_req_t *req,
                                struct jmap_parser *parser,
@@ -227,19 +225,14 @@ static void jmap_restore_parse(jmap_req_t *req,
     }
 }
 
-static void jmap_restore_fini(struct jmap_restore *restore)
+static void jmap_restore_fini(struct jmap_restore *restore __attribute__((unused)))
 {
-
-    json_decref(restore->old_state);
-    json_decref(restore->new_state);
+    return;
 }
 
 static json_t *jmap_restore_reply(struct jmap_restore *restore)
 {
     json_t *res = json_object();
-
-    json_object_set(res, "oldState", restore->old_state);
-    json_object_set(res, "newState", restore->new_state);
 
     if (restore->undo & UNDO_EMAIL) {
         json_object_set_new(res, "numDraftsRestored",
@@ -530,12 +523,9 @@ static char *dav_resource_name(message_t *msg)
 }
 
 struct contact_rock {
-    /* global */
     struct carddav_db *carddavdb;
-    struct buf buf;
-
-    /* per-addressbook */
     struct vparse_card *group_vcard;
+    struct buf buf;
 };
 
 static char *contact_resource_name(message_t *msg, void *rock)
@@ -665,12 +655,10 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         goto done;
     }
 
-    restore.old_state = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
-
     if (restore.undo) {
         char *addrhomeset = carddav_mboxname(req->accountid, NULL);
         struct contact_rock crock =
-            { carddav_open_userid(req->accountid), BUF_INITIALIZER, NULL };
+            { carddav_open_userid(req->accountid), NULL, BUF_INITIALIZER };
         struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK,
                                       &contact_resource_name, &restore_contact,
                                       &crock, NULL };
@@ -681,8 +669,6 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         carddav_close(crock.carddavdb);
         buf_free(&crock.buf);
     }
-
-    restore.new_state = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/1);
 
     /* Build response */
     jmap_ok(req, jmap_restore_reply(&restore));
@@ -993,8 +979,6 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
         goto done;
     }
 
-    restore.old_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
-
     if (restore.undo) {
         char *calhomeset = caldav_mboxname(req->accountid, NULL);
         struct calendar_rock crock =
@@ -1012,8 +996,6 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
         free(crock.outboxname);
         caldav_close(crock.caldavdb);
     }
-
-    restore.new_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1);
 
     /* Build response */
     jmap_ok(req, jmap_restore_reply(&restore));
@@ -1081,26 +1063,9 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
                                       &note_resource_name, &restore_note,
                                       NULL, NULL };
 
-        /* Open mailbox here since we need it for state
-           and it gets referenced counted anyways */
-        struct mailbox *mailbox = NULL;
-        int r = jmap_openmbox(req, notes, &mailbox, /*rw*/1);
-        if (r) {
-            json_t *err = json_pack("{s:s s:s}",
-                                    "type", "serverError",
-                                    "description", error_message(r));
-            jmap_error(req, err);
-            goto done;
-        }
-
-        restore.old_state = jmap_fmtstate(mailbox->i.highestmodseq);
-
         mboxlist_mboxtree(notes, restore_collection_cb,
                           &rrock, MBOXTREE_SKIP_CHILDREN);
         free(notes);
-
-        restore.new_state = jmap_fmtstate(mailbox->i.highestmodseq);
-        jmap_closembox(req, &mailbox);
     }
 
     /* Build response */
@@ -1449,8 +1414,6 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
         goto done;
     }
 
-    restore.old_state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-
     hash_table mailboxes = HASH_TABLE_INITIALIZER;
     hash_table messages = HASH_TABLE_INITIALIZER;
     hash_table drafts = HASH_TABLE_INITIALIZER;
@@ -1483,8 +1446,6 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     /* Restore destroyed messages by mailbox */
     hash_enumerate(&mailboxes, &restore_mailbox_cb, &rrock);
     free_hash_table(&mailboxes, NULL);
-
-    restore.new_state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
 
     /* Build response */
     jmap_ok(req, jmap_restore_reply(&restore));
