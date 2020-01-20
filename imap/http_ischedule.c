@@ -296,7 +296,6 @@ static int meth_get_isched(struct transaction_t *txn,
         meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
         xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
 
-#ifdef HAVE_VPOLL
         comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
         xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VPOLL");
         meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
@@ -307,7 +306,6 @@ static int meth_get_isched(struct transaction_t *txn,
         xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
         meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
         xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
-#endif /* HAVE_VPOLL */
 
         comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
         xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VFREEBUSY");

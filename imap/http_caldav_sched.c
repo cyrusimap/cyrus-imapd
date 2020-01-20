@@ -1102,7 +1102,6 @@ static void sched_deliver_remote(const char *sender, const char *recipient,
 }
 
 
-#ifdef HAVE_VPOLL
 /*
  * deliver_merge_reply() helper function
  *
@@ -1300,34 +1299,6 @@ static void sched_pollstatus(const char *organizer,
     icalcomponent_free(itip);
     auth_freestate(authstate);
 }
-#else  /* HAVE_VPOLL */
-static void
-deliver_merge_vpoll_reply(icalcomponent *ical __attribute__((unused)),
-                          icalcomponent *reply __attribute__((unused)))
-{
-    return;
-}
-
-static void sched_vpoll_reply(icalcomponent *poll __attribute__((unused)))
-{
-    return;
-}
-
-static int
-deliver_merge_pollstatus(icalcomponent *ical __attribute__((unused)),
-                         icalcomponent *request __attribute__((unused)))
-{
-    return 0;
-}
-
-static void sched_pollstatus(const char *organizer __attribute__((unused)),
-                             struct caldav_sched_param *sparam __attribute__((unused)),
-                             icalcomponent *ical __attribute__((unused)),
-                             const char *voter __attribute__((unused)))
-{
-    return;
-}
-#endif  /* HAVE_VPOLL */
 
 /* annoying copypaste from libical because it's not exposed */
 static struct icaltimetype _get_datetime(icalcomponent *comp, icalproperty *prop)
@@ -1883,11 +1854,9 @@ static void sched_deliver_local(const char *sender, const char *recipient,
             case ICAL_VAVAILABILITY_COMPONENT:
                 if (cdata->comp_type != CAL_COMP_VAVAILABILITY) reject = 1;
                 break;
-#ifdef HAVE_VPOLL
             case ICAL_VPOLL_COMPONENT:
                 if (cdata->comp_type != CAL_COMP_VPOLL) reject = 1;
                 break;
-#endif
             default:
                 break;
             }

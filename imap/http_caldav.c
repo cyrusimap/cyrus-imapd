@@ -314,11 +314,9 @@ static struct mime_type_t caldav_mime_types[] = {
 };
 
 static struct patch_doc_t caldav_patch_docs[] = {
-#ifdef HAVE_VPATCH
     { ICALENDAR_CONTENT_TYPE "; component=VPATCH; optinfo=\"PATCH-VERSION:1\"",
       &caldav_patch },
-#endif
-    { NULL, &caldav_patch /* silence compiler when !HAVE_VPATCH */}
+    { NULL, &caldav_patch }
 };
 
 /* Array of supported REPORTs */
@@ -598,12 +596,8 @@ struct namespace_t namespace_calendar = {
     http_allow_noauth_get, /*authschemes*/0,
     MBTYPE_CALENDAR,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
-#ifdef HAVE_VPATCH
      ALLOW_PATCH | ALLOW_USERDATA |
-#endif
-#ifdef HAVE_VAVAILABILITY
      ALLOW_CAL_AVAIL |
-#endif
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL | ALLOW_CAL ),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     &dav_premethod, /*bearer*/NULL,
@@ -674,12 +668,8 @@ static const struct cal_comp_t {
     { "VTODO",          CAL_COMP_VTODO },
     { "VJOURNAL",       CAL_COMP_VJOURNAL },
     { "VFREEBUSY",      CAL_COMP_VFREEBUSY },
-#ifdef HAVE_VAVAILABILITY
     { "VAVAILABILITY",  CAL_COMP_VAVAILABILITY },
-#endif
-#ifdef HAVE_VPOLL
     { "VPOLL",          CAL_COMP_VPOLL },
-#endif
 //    { "VTIMEZONE",    CAL_COMP_VTIMEZONE },
 //    { "VALARM",               CAL_COMP_VALARM },
     { NULL, 0 }
@@ -710,7 +700,6 @@ static void my_caldav_init(struct buf *serverinfo)
         fatal("Required 'calendarprefix' option is not set", EX_CONFIG);
     }
 
-#ifdef HAVE_IANA_PARAMS
     config_allowsched = config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING);
     if (config_allowsched) {
         namespace_calendar.allow |= ALLOW_CAL_SCHED;
@@ -722,13 +711,9 @@ static void my_caldav_init(struct buf *serverinfo)
     if (config_getswitch(IMAPOPT_CALDAV_ALLOWATTACH))
         namespace_calendar.allow |= ALLOW_CAL_ATTACH;
 
-#endif /* HAVE_IANA_PARAMS */
-
-#ifdef HAVE_TZ_BY_REF
     if (namespace_tzdist.enabled) {
         namespace_calendar.allow |= ALLOW_CAL_NOTZ;
     }
-#endif
 
     caldav_init();
     webdav_init();
@@ -837,10 +822,8 @@ unsigned long config_types_to_caldav_types(void)
         types |= CAL_COMP_VJOURNAL;
     if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VFREEBUSY)
         types |= CAL_COMP_VFREEBUSY;
-#ifdef HAVE_VAVAILABILITY
     if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VAVAILABILITY)
         types |= CAL_COMP_VAVAILABILITY;
-#endif
 #ifdef VPOLL
     if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VPOLL)
         types |= CAL_COMP_VPOLL;
@@ -1897,14 +1880,12 @@ static int export_calendar(struct transaction_t *txn)
                 mailbox_user_flag(mailbox, DFLAG_UNBIND, &unbind_flag, 1);
                 mailbox_user_flag(mailbox, DFLAG_UNCHANGED, &unchanged_flag, 1);
 
-#ifdef HAVE_TZ_BY_REF
                 if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
                     /* Add link to tzdist */
                     buf_printf(&link, "<%s>; rel=\"timezone-service\"",
                                namespace_tzdist.prefix);
                     strarray_appendm(&txn->resp_body.links, buf_release(&link));
                 }
-#endif /* HAVE_TZ_BY_REF */
             }
 
             /* Check for optional CalDAV-Timezones header */
@@ -3703,7 +3684,6 @@ static int caldav_post(struct transaction_t *txn)
 }
 
 
-#ifdef HAVE_VPATCH
 /* Perform a PATCH request
  *
  * preconditions:
@@ -4200,36 +4180,6 @@ static int personalize_resource(struct transaction_t *txn,
 
     return ret;
 }
-
-#else /* !HAVE_VPATCH */
-
-static int caldav_patch(struct transaction_t *txn __attribute__((unused)),
-                        void *obj __attribute__((unused)))
-
-{
-    fatal("caldav_patch() called, but no VPATCH", EX_SOFTWARE);
-}
-
-static int personalize_resource(struct transaction_t *txn __attribute__((unused)),
-                                struct mailbox *mailbox __attribute__((unused)),
-                                icalcomponent *ical __attribute__((unused)),
-                                struct caldav_data *cdata __attribute__((unused)),
-                                const char *userid __attribute__((unused)),
-                                icalcomponent **store_me __attribute__((unused)),
-                                icalcomponent **userdata __attribute__((unused)))
-{
-    fatal("personalize_resource() called, but no VPATCH", EX_SOFTWARE);
-}
-
-static int write_personal_data(const char *userid __attribute__((unused)),
-                               struct mailbox *mailbox __attribute__((unused)),
-                               uint32_t uid __attribute__((unused)),
-                               modseq_t modseq __attribute__((unused)),
-                               icalcomponent *vpatch __attribute__((unused)))
-{
-    fatal("write_personalize_data() called, but no VPATCH", EX_SOFTWARE);
-}
-#endif /* HAVE_VPATCH */
 
 
 /* Perform a PUT request
@@ -6791,7 +6741,6 @@ static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
 {
     assert(name && ns && fctx && propstat);
 
-#ifdef HAVE_TZ_BY_REF
     if (fctx->req_tgt->resource) return HTTP_NOT_FOUND;
 
     if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
@@ -6811,7 +6760,6 @@ static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
 
         return 0;
     }
-#endif /* HAVE_TZ_BY_REF */
 
     return HTTP_NOT_FOUND;
 }
@@ -6881,7 +6829,6 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
                           struct propstat propstat[],
                           void *rock __attribute__((unused)))
 {
-#ifdef HAVE_TZ_BY_REF
     if ((namespace_calendar.allow & ALLOW_CAL_NOTZ) &&
         pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
         xmlChar *freeme = NULL;
@@ -6939,9 +6886,6 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
 
         return 0;
     }
-#else
-    (void) set;  /* squash compiler warning */
-#endif /* HAVE_TZ_BY_REF */
 
     xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
                  &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
@@ -7257,7 +7201,6 @@ static int add_freebusy_comp(icalcomponent *comp,
         fbtype = ICAL_FBTYPE_BUSY;
         break;
 
-#ifdef HAVE_VAVAILABILITY
     case ICAL_VAVAILABILITY_COMPONENT: {
         enum icalproperty_busytype busytype = ICAL_BUSYTYPE_BUSYUNAVAILABLE;
         icalproperty *prop =
@@ -7282,7 +7225,6 @@ static int add_freebusy_comp(icalcomponent *comp,
     case ICAL_XAVAILABLE_COMPONENT:
         fbtype = ICAL_FBTYPE_FREE;
         break;
-#endif /* HAVE_VAVAILABILITY */
 
     default:
         fbtype = ICAL_FBTYPE_NONE;
@@ -8052,9 +7994,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
     case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
     case ICAL_VAVAILABILITY_COMPONENT: mykind = CAL_COMP_VAVAILABILITY; break;
-#ifdef HAVE_VPOLL
     case ICAL_VPOLL_COMPONENT: mykind = CAL_COMP_VPOLL; break;
-#endif
     default:
         txn->error.precond = CALDAV_SUPP_COMP;
         return HTTP_FORBIDDEN;

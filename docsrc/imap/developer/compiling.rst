@@ -112,18 +112,15 @@ Alternate database formats
     Configure option: ``--with-mysql``, ``--with-mysql-incdir``, ``--with-mysql-libdir``"
     `postgresql`_, postgresql-dev, postgresql-devel, "no"
 
-CalDAV and/or CardDAV
-#####################
+CalDAV, CardDAV, or JMAP
+########################
 
 .. csv-table::
     :header: "Package", "Debian", "RedHat",  "Required for ``make check``?", "Notes"
     :widths: 20,15,15,5,45
 
-    `libical`_, libical-dev, libical-devel, "no", "libical >= 0.48 required for scheduling support.
-    **Note:** Linux distributions Enterprise Linux 6 and Debian Squeeze are
-    known to ship outdated **libical** packages versions 0.43 and
-    0.44 respectively. The platforms will not support scheduling."
-    `libxml`_, libxml2-dev, libxml2-devel, "", "no"
+    `libical`_, libical-dev, libical-devel, "no", "version 3.0.0 or higher"
+    `libxml`_, libxml2-dev, libxml2-devel, "no", ""
 
 Other
 #####
@@ -229,10 +226,10 @@ via configure.
 
 Sieve is enabled by default.
 
-CalDAV and CardDAV
-##################
+CalDAV, CardDAV, JMAP
+#####################
 
-    ``./configure --enable-http --enable-calalarmd``
+    ``./configure --enable-http --enable-calalarmd --enable-jmap``
 
 Murder
 ######

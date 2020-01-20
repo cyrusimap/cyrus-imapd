@@ -1568,65 +1568,19 @@ dnl
                                 [Do we have support for xmlBufferDetach()?]))
                 ])
 
-        PKG_CHECK_MODULES([ICAL], [libical], [
+        PKG_CHECK_MODULES([ICAL], [libical >= 3.0.0], [
                 AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
                 LIBS="$LIBS ${ICAL_LIBS}"
                 with_ical=yes
                 ],
-                AC_MSG_ERROR([Need libical for http]))
+                AC_MSG_ERROR([Need libical 3.0.0 for http]))
 
-        AC_CHECK_DECLS([icalproperty_get_parent, ICAL_STATUS_DELETED,
-                        icalrecur_freq_to_string, icalrecur_weekday_to_string],
-                [], [], [[#include <libical/ical.h>]])
-
-        AC_CHECK_MEMBER(icaltimetype.is_utc,
-                AC_DEFINE(ICALTIME_HAS_IS_UTC,[],
-                        [Does icaltimetype have is_utc field?]),
-                        [], [#include <libical/ical.h>])
-
-        AC_CHECK_LIB(ical, icalproperty_new_tzuntil,
-                AC_DEFINE(HAVE_TZDIST_PROPS,[],
-                        [Do we have built-in support for TZdist props?]))
-
-        AC_CHECK_LIB(ical, icalproperty_new_acknowledged,
-                AC_DEFINE(HAVE_VALARM_EXT_PROPS,[],
-                        [Do we have built-in support for VALARM extensions props?]))
-
-        AC_CHECK_LIB(ical, icalproperty_new_name,
-                AC_DEFINE(HAVE_RFC7986_PROPS,[],
-                        [Do we have built-in support for RFC7986 props?]))
+        dnl icalproperty_new_color was overlooked, and eventually added in 3.0.5
         AC_CHECK_LIB(ical, icalproperty_new_color,
                 AC_DEFINE(HAVE_RFC7986_COLOR,[],
                         [Do we have built-in support for RFC7986 color prop?]))
 
-        AC_CHECK_LIB(ical, icalparameter_new_iana, [
-                AC_DEFINE(HAVE_IANA_PARAMS,[],
-                        [Do we have support for IANA params?])
-
-                AC_CHECK_LIB(ical, icalparameter_new_schedulestatus,
-                        AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
-                                [Do we have built-in support for scheduling params?]))
-
-                AC_CHECK_LIB(ical, icalparameter_new_managedid,
-                        AC_DEFINE(HAVE_MANAGED_ATTACH_PARAMS,[],
-                                [Do we have built-in support for managed attachment params?]))
-                ],
-                AC_MSG_NOTICE([Your version of libical can not support scheduling or managed attachments.  Consider upgrading to libical >= 0.48]))
-
-        AC_CHECK_LIB(ical, icaltimezone_set_builtin_tzdata,
-                AC_DEFINE(HAVE_TZ_BY_REF,[],
-                        [Build timezones by reference support into httpd?]),
-                AC_MSG_NOTICE([Your version of libical can not support timezones by reference.  Consider upgrading to libical >= 1.0.1]))
-
-        AC_CHECK_LIB(ical, icalcomponent_new_vavailability,
-                AC_DEFINE(HAVE_VAVAILABILITY,[],
-                        [Build VAVAILABILITY support into httpd?]),
-                AC_MSG_NOTICE([Your version of libical can not support availability.  Consider upgrading to libical >= 1.0.1]))
-
-        AC_CHECK_LIB(ical, icalcomponent_new_vvoter,
-                AC_DEFINE(HAVE_VPOLL,[], [Build VPOLL support into httpd?]),
-                AC_MSG_NOTICE([Your version of libical can not support consensus scheduling.  Consider upgrading to libical >= 2.0]))
-
+        dnl XXX should this be optional still?
         AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported, [
                 PKG_CHECK_MODULES([ICU4C], [icu-i18n], [
                         AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?])
@@ -1637,15 +1591,7 @@ dnl
                 ],
                 AC_MSG_NOTICE([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
 
-        AC_CHECK_LIB(ical, icalcomponent_new_vpatch,
-                AC_DEFINE(HAVE_VPATCH,[],
-                        [Build VPATCH support into httpd?]),
-                AC_MSG_NOTICE([Your version of libical can not support per-user alarms on shared resources.  Consider upgrading to libical >= 3.0]))
-
-        AC_CHECK_LIB(ical, icalrecur_iterator_set_start,
-                AC_DEFINE(HAVE_RECUR_ITERATOR_START,[],
-                        [Do we have support for setting start point of recurrences?]))
-
+        dnl icalcomponent_clone will be new in libical 3.1.0
         AC_CHECK_LIB(ical, icalcomponent_clone,
                 AC_DEFINE(HAVE_NEW_CLONE_API,[],
                         [Do we have support for new clone API?]))
