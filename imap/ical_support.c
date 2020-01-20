@@ -554,6 +554,9 @@ EXPORTED icalcomponent *record_to_ical(struct mailbox *mailbox,
         }
     }
 
+    /* Remove all X-LIC-ERROR properties */
+    if (ical) icalcomponent_strip_errors(ical);
+
     buf_free(&buf);
     message_unref(&m);
     return ical;
