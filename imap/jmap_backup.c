@@ -523,9 +523,12 @@ static char *dav_resource_name(message_t *msg)
 }
 
 struct contact_rock {
+    /* global */
     struct carddav_db *carddavdb;
-    struct vparse_card *group_vcard;
     struct buf buf;
+
+    /* per-addressbook */
+    struct vparse_card *group_vcard;
 };
 
 static char *contact_resource_name(message_t *msg, void *rock)
@@ -658,7 +661,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     if (restore.undo) {
         char *addrhomeset = carddav_mboxname(req->accountid, NULL);
         struct contact_rock crock =
-            { carddav_open_userid(req->accountid), NULL, BUF_INITIALIZER };
+            { carddav_open_userid(req->accountid), BUF_INITIALIZER, NULL };
         struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK,
                                       &contact_resource_name, &restore_contact,
                                       &crock, NULL };
