@@ -1170,6 +1170,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
             if (mailbox->i.options & OPT_MAILBOX_DELETED)
                 mailbox_delete_cleanup(mailbox, mailbox->part, mailbox->name, mailbox->uniqueid);
             else if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK)
+
                 mailbox_index_repack(mailbox, mailbox->i.minor_version);
             else if (mailbox->i.options & OPT_MAILBOX_NEEDS_UNLINK)
                 mailbox_index_unlink(mailbox);
@@ -4582,7 +4583,16 @@ done:
     mailbox_iter_done(&iter);
     buf_free(&buf);
     if (r) mailbox_repack_abort(&repack);
-    else r = mailbox_repack_commit(&repack);
+    else {
+        modseq_t deletedmodseq = repack->newmailbox.i.deletedmodseq;
+
+        r = mailbox_repack_commit(&repack);
+        if (!r) {
+            mboxname_setdeletedmodseq(mailbox->name,
+                                      deletedmodseq, mailbox->mbtype, 0);
+        }
+    }       
+
     return r;
 }
 
