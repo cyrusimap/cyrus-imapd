@@ -723,7 +723,8 @@ static int jmap_calendar_changes(struct jmap_req *req)
     } else if (r) goto done;
 
     /* Parse request */
-    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, req->counters.caldavfoldersdeletedmodseq,
+                       NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -3678,7 +3679,8 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
     }
 
     /* Parse request */
-    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, req->counters.caldavdeletedmodseq,
+                       NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

@@ -703,8 +703,8 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     /* Parse request */
     char *mboxname = NULL;
     const char *addressbookId = NULL;
-    jmap_changes_parse(req, &parser, &_contact_getargs_parse, &addressbookId,
-                       &changes, &err);
+    jmap_changes_parse(req, &parser, req->counters.carddavdeletedmodseq,
+                       &_contact_getargs_parse, &addressbookId, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

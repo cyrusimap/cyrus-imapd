@@ -1533,7 +1533,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     mbentry_t *mbentry = NULL;
 
     json_t *err = NULL;
-    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, 0, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         return 0;

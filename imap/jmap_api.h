@@ -343,6 +343,7 @@ struct jmap_changes {
 };
 
 extern void jmap_changes_parse(jmap_req_t *req, struct jmap_parser *parser,
+                               modseq_t minmodseq,
                                jmap_args_parse_cb args_parse, void *args_rock,
                                struct jmap_changes *changes, json_t **err);
 extern void jmap_changes_fini(struct jmap_changes *changes);

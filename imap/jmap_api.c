@@ -1992,6 +1992,7 @@ HIDDEN json_t *jmap_set_reply(struct jmap_set *set)
 
 HIDDEN void jmap_changes_parse(jmap_req_t *req,
                                struct jmap_parser *parser,
+                               modseq_t minmodseq,
                                jmap_args_parse_cb args_parse,
                                void *args_rock,
                                struct jmap_changes *changes,
@@ -2039,7 +2040,7 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
     }
-    else if (!changes->since_modseq) {
+    else if (!changes->since_modseq || changes->since_modseq < minmodseq) {
         *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
     }
 }

@@ -985,10 +985,11 @@ static int jmap_notes_changes(jmap_req_t *req)
     int userflag;
 
     json_t *err = NULL;
-    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, req->counters.notesdeletedmodseq,
+                       NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
-        return 0;
+        goto done;
     }
 
     int r = ensure_notes_collection(req->accountid, &mbentry);

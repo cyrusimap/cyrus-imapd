@@ -3542,7 +3542,8 @@ static int jmap_mailbox_changes(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, req->counters.mailfoldersdeletedmodseq,
+                       NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

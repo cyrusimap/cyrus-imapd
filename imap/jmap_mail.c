@@ -3613,7 +3613,8 @@ static int jmap_email_changes(jmap_req_t *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, req->counters.maildeletedmodseq,
+                       NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -3725,7 +3726,7 @@ static int jmap_thread_changes(jmap_req_t *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, 0, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
