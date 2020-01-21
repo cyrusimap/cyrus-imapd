@@ -285,6 +285,14 @@ struct mboxname_counters {
     modseq_t raclmodseq;
     modseq_t submissionmodseq;
     modseq_t submissionfoldersmodseq;
+    modseq_t maildeletedmodseq;
+    modseq_t caldavdeletedmodseq;
+    modseq_t carddavdeletedmodseq;
+    modseq_t notesdeletedmodseq;
+    modseq_t mailfoldersdeletedmodseq;
+    modseq_t caldavfoldersdeletedmodseq;
+    modseq_t carddavfoldersdeletedmodseq;
+    modseq_t notesfoldersdeletedmodseq;
     uint32_t uidvalidity;
 };
 
@@ -300,5 +308,7 @@ modseq_t mboxname_setquotamodseq(const char *mboxname, modseq_t val);
 modseq_t mboxname_readraclmodseq(const char *mboxname);
 modseq_t mboxname_nextraclmodseq(const char *mboxname, modseq_t last);
 modseq_t mboxname_setraclmodseq(const char *mboxname, modseq_t val);
+void mboxname_setdeletedmodseq(const char *mboxname, modseq_t val,
+                               int mbtype, int dofolder);
 
 #endif

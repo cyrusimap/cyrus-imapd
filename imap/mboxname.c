@@ -2188,7 +2188,7 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
     return fileval;
 }
 
-#define MV_VERSION 5
+#define MV_VERSION 6
 
 #define MV_OFF_GENERATION 0
 #define MV_OFF_VERSION 4
@@ -2205,13 +2205,23 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
 #define MV_OFF_RACLMODSEQ 88
 #define MV_OFF_SUBMISSIONMODSEQ 96
 #define MV_OFF_SUBMISSIONFOLDERSMODSEQ 104
-#define MV_OFF_UIDVALIDITY 112
-#define MV_OFF_CRC 116
-#define MV_LENGTH 120
+#define MV_OFF_MAILDELETEDMODSEQ 112
+#define MV_OFF_CALDAVDELETEDMODSEQ 120
+#define MV_OFF_CARDDAVDELETEDMODSEQ 128
+#define MV_OFF_NOTESDELETEDMODSEQ 136
+#define MV_OFF_MAILFOLDERSDELETEDMODSEQ 144
+#define MV_OFF_CALDAVFOLDERSDELETEDMODSEQ 152
+#define MV_OFF_CARDDAVFOLDERSDELETEDMODSEQ 160
+#define MV_OFF_NOTESFOLDERSDELETEDMODSEQ 168
+#define MV_OFF_UIDVALIDITY 176
+#define MV_OFF_CRC 180
+#define MV_LENGTH 184
 
 /* NOTE: you need a MV_LENGTH byte base here */
 static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxname_counters *vals)
 {
+    memset(vals, 0, sizeof(struct mboxname_counters));
+
     vals->generation = ntohl(*((uint32_t *)(base)));
     vals->version = ntohl(*((uint32_t *)(base+4)));
 
@@ -2224,15 +2234,6 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         if (crc32_map(base, 44) != ntohl(*((uint32_t *)(base+44))))
             return IMAP_MAILBOX_CHECKSUM;
 
-        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
-        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
-        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
-        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
-        vals->notesmodseq = 0;
-        vals->mailfoldersmodseq = 0;
-        vals->caldavfoldersmodseq = 0;
-        vals->carddavfoldersmodseq = 0;
-        vals->notesfoldersmodseq = 0;
         vals->uidvalidity = ntohl(*((uint32_t *)(base+40)));
         break;
 
@@ -2241,15 +2242,6 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         if (crc32_map(base, 52) != ntohl(*((uint32_t *)(base+52))))
             return IMAP_MAILBOX_CHECKSUM;
 
-        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
-        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
-        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
-        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
-        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
-        vals->mailfoldersmodseq = 0;
-        vals->caldavfoldersmodseq = 0;
-        vals->carddavfoldersmodseq = 0;
-        vals->notesfoldersmodseq = 0;
         vals->uidvalidity = ntohl(*((uint32_t *)(base+48)));
         break;
 
@@ -2258,15 +2250,6 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         if (crc32_map(base, 60) != ntohl(*((uint32_t *)(base+60))))
             return IMAP_MAILBOX_CHECKSUM;
 
-        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
-        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
-        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
-        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
-        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
-        vals->mailfoldersmodseq = ntohll(*((uint32_t *)(base+48)));
-        vals->caldavfoldersmodseq = 0;
-        vals->carddavfoldersmodseq = 0;
-        vals->notesfoldersmodseq = 0;
         vals->uidvalidity = ntohl(*((uint32_t *)(base+56)));
         break;
 
@@ -2275,15 +2258,6 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         if (crc32_map(base, 84) != ntohl(*((uint32_t *)(base+84))))
             return IMAP_MAILBOX_CHECKSUM;
 
-        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
-        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
-        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
-        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
-        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
-        vals->mailfoldersmodseq = ntohll(*((uint64_t *)(base+48)));
-        vals->caldavfoldersmodseq = ntohll(*((uint64_t *)(base+56)));
-        vals->carddavfoldersmodseq = ntohll(*((uint64_t *)(base+64)));
-        vals->notesfoldersmodseq = ntohll(*((uint64_t *)(base+72)));
         vals->uidvalidity = ntohl(*((uint32_t *)(base+80)));
         break;
 
@@ -2292,17 +2266,6 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         if (crc32_map(base, 100) != ntohl(*((uint32_t *)(base+100))))
             return IMAP_MAILBOX_CHECKSUM;
 
-        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
-        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
-        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
-        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
-        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
-        vals->mailfoldersmodseq = ntohll(*((uint64_t *)(base+48)));
-        vals->caldavfoldersmodseq = ntohll(*((uint64_t *)(base+56)));
-        vals->carddavfoldersmodseq = ntohll(*((uint64_t *)(base+64)));
-        vals->notesfoldersmodseq = ntohll(*((uint64_t *)(base+72)));
-        vals->quotamodseq = ntohll(*((uint64_t *)(base+80)));
-        vals->raclmodseq = ntohll(*((uint64_t *)(base+88)));
         vals->uidvalidity = ntohl(*((uint32_t *)(base+96)));
         break;
 
@@ -2311,24 +2274,69 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         if (crc32_map(base, 116) != ntohl(*((uint32_t *)(base+116))))
             return IMAP_MAILBOX_CHECKSUM;
 
-        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
-        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
-        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
-        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
-        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
-        vals->mailfoldersmodseq = ntohll(*((uint64_t *)(base+48)));
-        vals->caldavfoldersmodseq = ntohll(*((uint64_t *)(base+56)));
-        vals->carddavfoldersmodseq = ntohll(*((uint64_t *)(base+64)));
-        vals->notesfoldersmodseq = ntohll(*((uint64_t *)(base+72)));
-        vals->quotamodseq = ntohll(*((uint64_t *)(base+80)));
-        vals->raclmodseq = ntohll(*((uint64_t *)(base+88)));
-        vals->submissionmodseq = ntohll(*((uint64_t *)(base+96)));
-        vals->submissionfoldersmodseq = ntohll(*((uint64_t *)(base+104)));
         vals->uidvalidity = ntohl(*((uint32_t *)(base+112)));
+        break;
+
+    case 6:
+        if (len != 184) return IMAP_MAILBOX_CHECKSUM;
+        if (crc32_map(base, 180) != ntohl(*((uint32_t *)(base+180))))
+            return IMAP_MAILBOX_CHECKSUM;
+
+        vals->uidvalidity = ntohl(*((uint32_t *)(base+176)));
         break;
 
     default:
         return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    switch (vals->version) {
+    case 6:
+        vals->maildeletedmodseq = ntohll(*((uint64_t *)(base+112)));
+        vals->caldavdeletedmodseq = ntohll(*((uint64_t *)(base+120)));
+        vals->carddavdeletedmodseq = ntohll(*((uint64_t *)(base+128)));
+        vals->notesdeletedmodseq = ntohll(*((uint64_t *)(base+136)));
+        vals->mailfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+144)));
+        vals->caldavfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+152)));
+        vals->carddavfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+160)));
+        vals->notesfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+168)));
+
+        GCC_FALLTHROUGH
+
+    case 5:
+        vals->submissionmodseq = ntohll(*((uint64_t *)(base+96)));
+        vals->submissionfoldersmodseq = ntohll(*((uint64_t *)(base+104)));
+
+        GCC_FALLTHROUGH
+
+    case 4:
+        vals->quotamodseq = ntohll(*((uint64_t *)(base+80)));
+        vals->raclmodseq = ntohll(*((uint64_t *)(base+88)));
+
+        GCC_FALLTHROUGH
+
+    case 3:
+        vals->caldavfoldersmodseq = ntohll(*((uint64_t *)(base+56)));
+        vals->carddavfoldersmodseq = ntohll(*((uint64_t *)(base+64)));
+        vals->notesfoldersmodseq = ntohll(*((uint64_t *)(base+72)));
+
+        GCC_FALLTHROUGH
+
+    case 2:
+        vals->mailfoldersmodseq = ntohll(*((uint32_t *)(base+48)));
+
+        GCC_FALLTHROUGH
+
+    case 1:
+        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
+
+        GCC_FALLTHROUGH
+
+    case 0:
+        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
+        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
+        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
+        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
+        break;
     }
 
     return 0;
@@ -2348,11 +2356,23 @@ static void mboxname_counters_to_buf(const struct mboxname_counters *vals, char 
     align_htonll(base+MV_OFF_CALDAVFOLDERSMODSEQ, vals->caldavfoldersmodseq);
     align_htonll(base+MV_OFF_CARDDAVFOLDERSMODSEQ, vals->carddavfoldersmodseq);
     align_htonll(base+MV_OFF_NOTESFOLDERSMODSEQ, vals->notesfoldersmodseq);
-    *((uint32_t *)(base+MV_OFF_UIDVALIDITY)) = htonl(vals->uidvalidity);
     align_htonll(base+MV_OFF_QUOTAMODSEQ, vals->quotamodseq);
     align_htonll(base+MV_OFF_RACLMODSEQ, vals->raclmodseq);
     align_htonll(base+MV_OFF_SUBMISSIONMODSEQ, vals->submissionmodseq);
     align_htonll(base+MV_OFF_SUBMISSIONFOLDERSMODSEQ, vals->submissionfoldersmodseq);
+    align_htonll(base+MV_OFF_MAILDELETEDMODSEQ, vals->maildeletedmodseq);
+    align_htonll(base+MV_OFF_CALDAVDELETEDMODSEQ, vals->caldavdeletedmodseq);
+    align_htonll(base+MV_OFF_CARDDAVDELETEDMODSEQ, vals->carddavdeletedmodseq);
+    align_htonll(base+MV_OFF_NOTESDELETEDMODSEQ, vals->notesdeletedmodseq);
+    align_htonll(base+MV_OFF_MAILFOLDERSDELETEDMODSEQ,
+                 vals->mailfoldersdeletedmodseq);
+    align_htonll(base+MV_OFF_CALDAVFOLDERSDELETEDMODSEQ,
+                 vals->caldavfoldersdeletedmodseq);
+    align_htonll(base+MV_OFF_CARDDAVFOLDERSDELETEDMODSEQ,
+                 vals->carddavfoldersdeletedmodseq);
+    align_htonll(base+MV_OFF_NOTESFOLDERSDELETEDMODSEQ,
+                 vals->notesfoldersdeletedmodseq);
+    *((uint32_t *)(base+MV_OFF_UIDVALIDITY)) = htonl(vals->uidvalidity);
     *((uint32_t *)(base+MV_OFF_CRC)) = htonl(crc32_map(base, MV_OFF_CRC));
 }
 
@@ -2801,3 +2821,61 @@ done:
     mbname_free(&mbname2);
     return ancestor;
 }
+
+EXPORTED void mboxname_setdeletedmodseq(const char *mboxname, modseq_t val,
+                                        int mbtype, int dofolder)
+{
+    struct mboxname_counters counters;
+    struct mboxname_counters oldcounters;
+    modseq_t *typemodseqp = NULL;
+    modseq_t *foldersmodseqp = NULL;
+    int fd = -1;
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+        return;
+
+    /* XXX error handling */
+    if (mboxname_load_counters(mboxname, &counters, &fd))
+        return;
+
+    oldcounters = counters;
+
+    if (mboxname_isaddressbookmailbox(mboxname, mbtype)) {
+        typemodseqp = &counters.carddavdeletedmodseq;
+        foldersmodseqp = &counters.carddavfoldersdeletedmodseq;
+    }
+    else if (mboxname_iscalendarmailbox(mboxname, mbtype)) {
+        typemodseqp = &counters.caldavdeletedmodseq;
+        foldersmodseqp = &counters.caldavfoldersdeletedmodseq;
+    }
+    else if (mboxname_isnotesmailbox(mboxname, mbtype)) {
+        typemodseqp = &counters.notesdeletedmodseq;
+        foldersmodseqp = &counters.notesfoldersdeletedmodseq;
+    }
+#if 0
+    else if (mboxname_issubmissionmailbox(mboxname, mbtype)) {
+        typemodseqp = &counters.submissiondeletedmodseq;
+        foldersmodseqp = &counters.submissionfoldersdeletedmodseq;
+    }
+#endif
+    else {
+        typemodseqp = &counters.maildeletedmodseq;
+        foldersmodseqp = &counters.mailfoldersdeletedmodseq;
+    }
+
+    /* make sure all counters are at least the old value */
+    if (dofolder) {
+        if (*foldersmodseqp < val)
+            *foldersmodseqp = val;
+    }
+    else if (*typemodseqp < val)
+        *typemodseqp = val;
+
+    if (memcmp(&counters, &oldcounters, sizeof(struct mboxname_counters)))
+        mboxname_set_counters(mboxname, &counters, fd);
+    else
+        mboxname_unload_counters(fd);
+
+    return;
+}
+
