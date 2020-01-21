@@ -256,6 +256,7 @@ struct restore_rock {
     jmap_req_t *req;
     struct jmap_restore *jrestore;
     int mbtype;
+    modseq_t deletedmodseq;
     char *(*resource_name_cb)(message_t *, void *);
     int (*restore_cb)(message_t *, message_t *, jmap_req_t *, void *);
     void *rock;
@@ -398,6 +399,10 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     hash_enumerate(&resources, restore_resource_cb, rrock);
     free_hash_table(&resources, NULL);
 
+    /* Update deletedmodseq for this collection type */
+    if (mailbox->i.deletedmodseq > rrock->deletedmodseq)
+        rrock->deletedmodseq = mailbox->i.deletedmodseq;
+
     jmap_closembox(rrock->req, &mailbox);
 
     return 0;
@@ -450,7 +455,13 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
         free(body);
 
         if (r) append_abort(&as);
-        else r = append_commit(&as);
+        else {
+            r = append_commit(&as);
+            if (!r && !is_replace && record->modseq > tomailbox->i.deletedmodseq) {
+                tomailbox->i.deletedmodseq = record->modseq;
+                mailbox_index_dirty(tomailbox);
+            }
+        }
     }
     append_removestage(stage);
 
@@ -662,12 +673,14 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         char *addrhomeset = carddav_mboxname(req->accountid, NULL);
         struct contact_rock crock =
             { carddav_open_userid(req->accountid), BUF_INITIALIZER, NULL };
-        struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK,
+        struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK, 0,
                                       &contact_resource_name, &restore_contact,
                                       &crock, NULL };
 
         mboxlist_mboxtree(addrhomeset,
                           restore_addressbook_cb, &rrock, MBOXTREE_SKIP_ROOT);
+        mboxname_setdeletedmodseq(addrhomeset,
+                                  rrock.deletedmodseq, MBTYPE_ADDRESSBOOK, 0);
         free(addrhomeset);
         carddav_close(crock.carddavdb);
         buf_free(&crock.buf);
@@ -988,12 +1001,14 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
             { caldav_open_userid(req->accountid),
               caldav_mboxname(req->accountid, SCHED_INBOX),
               caldav_mboxname(req->accountid, SCHED_OUTBOX) };
-        struct restore_rock rrock = { req, &restore, MBTYPE_CALENDAR,
+        struct restore_rock rrock = { req, &restore, MBTYPE_CALENDAR, 0,
                                       &ical_resource_name, &restore_ical,
                                       &crock, NULL };
 
         mboxlist_mboxtree(calhomeset, restore_calendar_cb, &rrock,
                           MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
+        mboxname_setdeletedmodseq(calhomeset,
+                                  rrock.deletedmodseq, MBTYPE_CALENDAR, 0);
         free(calhomeset);
         free(crock.inboxname);
         free(crock.outboxname);
@@ -1062,12 +1077,13 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
     const char *subfolder = config_getstring(IMAPOPT_NOTESMAILBOX);
     if (subfolder && restore.undo) {
         char *notes = mboxname_user_mbox(req->accountid, subfolder);
-        struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL,
+        struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
                                       &note_resource_name, &restore_note,
                                       NULL, NULL };
 
         mboxlist_mboxtree(notes, restore_collection_cb,
                           &rrock, MBOXTREE_SKIP_CHILDREN);
+        mboxname_setdeletedmodseq(notes, rrock.deletedmodseq, MBTYPE_EMAIL, 0);
         free(notes);
     }
 
@@ -1397,6 +1413,10 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     }
     message_unref(&msg);
 
+    /* Update deletedmodseq for this collection type */
+    if (mailbox->i.deletedmodseq > rrock->deletedmodseq)
+        rrock->deletedmodseq = mailbox->i.deletedmodseq;
+
     jmap_closembox(req, &mailbox);
 
   done:
@@ -1425,7 +1445,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
       { construct_hash_table(&messages, 128, 0),
         construct_hash_table(&drafts, 1024, 0), // every Message-ID of non-drafts
         BUF_INITIALIZER };
-    struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL,
+    struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
                                   NULL, NULL, &mrock, NULL };
 
     /* Find all destroyed messages within our window -
@@ -1433,7 +1453,6 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     mboxlist_mboxtree(inbox, restore_message_list_cb, &rrock,
                       MBOXTREE_DELETED);
     buf_free(&mrock.buf);
-    free(inbox);
 
     /* Find the most recent removedDate for each destroyed message
        and group messages by mailbox */
@@ -1449,6 +1468,10 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     /* Restore destroyed messages by mailbox */
     hash_enumerate(&mailboxes, &restore_mailbox_cb, &rrock);
     free_hash_table(&mailboxes, NULL);
+
+    mboxname_setdeletedmodseq(inbox,
+                              rrock.deletedmodseq, MBTYPE_EMAIL, 0);
+    free(inbox);
 
     /* Build response */
     jmap_ok(req, jmap_restore_reply(&restore));
