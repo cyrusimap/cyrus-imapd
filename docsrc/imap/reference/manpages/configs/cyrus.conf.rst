@@ -257,6 +257,48 @@ is exiting.
     The command (with options) to spawn as a child process.  This
     string argument is required.
 
+.. parsed-literal::
+
+    **wait=**\ 0
+
+..
+
+    Switch: whether or not :cyrusman:`master(8)` should wait for this
+    daemon to successfully start before continuing to load.
+
+    If *wait=n* (the default), the daemon will be started asynchronously
+    along with the service processes.  The daemon process will not have
+    file descriptor 3 open, and does not need to indicate its readiness.
+
+    If *wait=y*, the daemon MUST write "ok\\r\\n" to file descriptor 3
+    to indicate its readiness; if it does not do this, and master has
+    been told to wait, master will continue to wait.... If it writes
+    anything else to this descriptor, or closes it before writing
+    "ok\\r\\n", master will exit with an error.
+
+    Daemons with *wait=y* will be started sequentially in the order
+    they are listed in cyrus.conf, waiting for each to report readiness
+    before the next is started.
+
+    Service processes, and *wait=n* daemons, are not started until after
+    the *wait=y* daemons are all started and ready.
+
+    At shutdown, *wait=y* daemons will be terminated sequentially in the
+    reverse order they were started, commencing after all other services
+    and *wait=n* daemons have finished.
+
+    If a daemon that was started with *wait=y* exits unexpectedly, such
+    that master restarts it, master will restart it asynchronously,
+    without waiting for it to report its readiness.  In this case, file
+    descriptor 3 will not be open and the daemon should not try to write
+    to it.
+
+    If master is told to reread its config with a SIGHUP, this signal
+    will be passed on to *wait=y* daemons like any other service.  If the
+    daemon exits in response to the signal, master will restart it
+    asynchronously, without waiting for it to report its readiness. In
+    this case too, file descriptor 3 will not be open and the daemon
+    should not try to write to it.
 
 Examples
 ========
