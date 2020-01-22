@@ -68,6 +68,7 @@
 #include "quota.h"
 #include "xmalloc.h"
 #include "seen.h"
+#include "strarray.h"
 #include "mboxname.h"
 #include "map.h"
 #include "imapd.h"
@@ -5884,13 +5885,19 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
                       unsigned flags)
 {
     int r = 0;
-    struct sync_folder_list *master_folders;
-    struct sync_rename_list *rename_folders;
-    struct sync_reserve_list *reserve_list;
-    struct sync_folder *mfolder, *rfolder;
-    const char *part;
+    struct sync_folder_list *master_folders = NULL;
+    struct sync_rename_list *rename_folders = NULL;
+    struct sync_reserve_list *reserve_list = NULL;
+    struct sync_folder *mfolder = NULL, *rfolder = NULL;
+    const char *part = NULL;
     uint32_t batchsize = 0;
-    struct sync_name *mbox;
+    struct sync_name *mbox = NULL;
+
+    strarray_t local_uniqueids = STRARRAY_INITIALIZER;
+    strarray_t remote_uniqueids = STRARRAY_INITIALIZER;
+
+    for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next)
+        strarray_add(&remote_uniqueids, rfolder->uniqueid);
 
     /* Look for intermediate mailboxes */
     for (mbox = mboxname_list->head; !r && mbox; mbox = mbox->next) {
@@ -5898,6 +5905,8 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
 
         if (mboxlist_lookup_allow_all(mbox->name, &mbentry, NULL))
             continue;
+
+        strarray_add(&local_uniqueids, mbentry->uniqueid);
 
         if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
             struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
@@ -5920,6 +5929,39 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
         if (r) {
             syslog(LOG_ERR, "apply intermediates: failed: %s", error_message(r));
             goto bail;
+        }
+    }
+
+    // remove any uniqueids which exist in both
+    strarray_subtract_complement(&local_uniqueids, &remote_uniqueids);
+    strarray_subtract_complement(&remote_uniqueids, &local_uniqueids);
+
+    // if they only exist locally, we need to fetch records for them from the replica
+    if (strarray_size(&local_uniqueids)) {
+        struct dlist *kl = dlist_newlist(NULL, "UNIQUEIDS");
+        int i;
+        for (i = 0; i < strarray_size(&local_uniqueids); i++) {
+            dlist_setatom(kl, "UNIQUEID", strarray_nth(&local_uniqueids, i));
+        }
+        sync_send_lookup(kl, sync_be->out);
+        dlist_free(&kl);
+        // the "UNIQUEIDS" query is just a version of MAILBOXES which does the lookup by ID,
+        // so we're still expecting a MAILBOXES response
+        r = sync_response_parse(sync_be->in, "MAILBOXES", replica_folders,
+                                NULL, NULL, NULL, NULL);
+        if (r) {
+            syslog(LOG_ERR, "update mailboxes with uniqueid: failed: %s", error_message(r));
+            goto bail;
+        }
+    }
+
+    // if they only exit on the replica, we need to look them up locally to see if they are also here
+    if (strarray_size(&remote_uniqueids)) {
+        int i;
+        for (i = 0; i < strarray_size(&remote_uniqueids); i++) {
+            char *mboxname = mboxlist_find_uniqueid(strarray_nth(&remote_uniqueids, i), NULL, NULL);
+            sync_name_list_add(mboxname_list, mboxname);
+            free(mboxname);
         }
     }
 
@@ -6034,6 +6076,8 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
     }
 
  bail:
+    strarray_fini(&local_uniqueids);
+    strarray_fini(&remote_uniqueids);
     sync_folder_list_free(&master_folders);
     sync_rename_list_free(&rename_folders);
     sync_reserve_list_free(&reserve_list);
