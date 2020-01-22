@@ -2938,19 +2938,28 @@ static int jmap_parse_condition(json_t *cond, strarray_t *path)
                 }
             } while (n);
         }
-        /* FM-specific */
+        /* JMAP Search Extension: https://cyrusimap.org/ns/jmap/search */
+        else if (!strcmp(field, "attachmentBody")) {
+            if (!json_is_string(val)) break;
+        }
+        /* JMAP Mail Extension: https://cyrusimap.org/ns/jmap/mail */
         else if (!strcmp(field, "attachmentName") ||
-                 !strcmp(field, "attachmentType") ||
-                 !strcmp(field, "attachmentBody") ||
-                 !strcmp(field, "fromContactGroupId") ||
+                 !strcmp(field, "attachmentType")) {
+            if (!json_is_string(val)) break;
+        }
+        /* JMAP Mail Extension: https://cyrusimap.org/ns/jmap/mail */
+        else if (!strcmp(field, "fromContactGroupId") ||
                  !strcmp(field, "toContactGroupId") ||
                  !strcmp(field, "ccContactGroupId") ||
-                 !strcmp(field, "bccContactGroupId") ||
-                 !strcmp(field, "fromAnyContact") ||
+                 !strcmp(field, "bccContactGroupId")) {
+            if (!json_is_string(val)) break;
+        }
+        /* JMAP Mail Extension: https://cyrusimap.org/ns/jmap/mail */
+        else if (!strcmp(field, "fromAnyContact") ||
                  !strcmp(field, "toAnyContact") ||
                  !strcmp(field, "ccAnyContact") ||
                  !strcmp(field, "bccAnyContact")) {
-            if (!json_is_string(val)) break;
+            if (!json_is_boolean(val)) break;
         }
         else break;
     }
