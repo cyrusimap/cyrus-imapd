@@ -25,10 +25,8 @@ extern "C" {
 #include "imap/imap_err.h"
 };
 
-#ifdef HAVE_ICU
 #include <unicode/unistr.h>
 #include <unicode/locid.h>
-#endif
 
 #include <xapian.h>
 
@@ -59,11 +57,6 @@ static std::map<std::string, std::unique_ptr<Xapian::Stopper>> stoppers;
 
 static const Xapian::Stopper* get_stopper(const std::string& iso)
 {
-#ifndef HAVE_ICU
-    syslog(LOG_ERR, "xapian: can't determine stopper language without libicu");
-    return NULL;
-#endif
-
     // Lookup cached entry.
     try {
         stoppers.at(iso).get();

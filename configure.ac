@@ -1427,6 +1427,19 @@ AC_CHECK_LIB([jansson], [json_dumpb],
 CFLAGS="$save_CFLAGS"
 
 dnl
+dnl Check for ICU library, needed for charset conversions and non-gregorian
+dnl rscale conversions
+dnl
+with_icu4c=no
+PKG_CHECK_MODULES([ICU], [icu-i18n icu-uc], [
+                    AC_DEFINE(HAVE_ICU, [], [Build with ICU support])
+                    with_icu4c=yes
+                  ],
+                  [AC_MSG_ERROR([Need ICU4C])])
+AC_SUBST([ICU_LIBS])
+AC_SUBST([ICU_CFLAGS])
+
+dnl
 dnl Check for zeroskip library, needed for zeroskip support
 dnl
 AC_ARG_WITH([zeroskip],
@@ -1537,7 +1550,6 @@ HTTP_CPPFLAGS=
 HTTP_LIBS=
 with_xml2=no
 with_ical=no
-with_icu4c=no
 with_shapelib=no
 with_brotli=no
 with_zstd=no
@@ -1580,16 +1592,10 @@ dnl
                 AC_DEFINE(HAVE_RFC7986_COLOR,[],
                         [Do we have built-in support for RFC7986 color prop?]))
 
-        dnl XXX should this be optional still?
-        AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported, [
-                PKG_CHECK_MODULES([ICU4C], [icu-i18n], [
-                        AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?])
-                        LIBS="$LIBS ${ICU4C_LIBS}"
-                        with_icu4c=yes
-                        ],
-                        AC_MSG_ERROR([Need ICU4C for RSCALE support in httpd]))
-                ],
-                AC_MSG_NOTICE([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
+        dnl libical may have been built without RSCALE support
+        AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
+                [AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?])],
+                [AC_MSG_NOTICE([Your version of libical can not support non-gregorian recurrences])])
 
         dnl icalcomponent_clone will be new in libical 3.1.0
         AC_CHECK_LIB(ical, icalcomponent_clone,
@@ -2424,11 +2430,6 @@ CMU_PERL_MAKEMAKER(perl/annotator)
 CMU_PERL_MAKEMAKER(perl/imap)
 CMU_PERL_MAKEMAKER(perl/sieve/managesieve)
 fi
-
-dnl check for libicu. we need this for charset conversions.
-PKG_CHECK_MODULES([ICU], [icu-uc], AC_DEFINE(HAVE_ICU, [], [Build with ICU support]), [])
-AC_SUBST([ICU_LIBS])
-AC_SUBST([ICU_CFLAGS])
 
 AC_OUTPUT
 echo "
