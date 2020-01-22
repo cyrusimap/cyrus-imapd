@@ -5888,11 +5888,11 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
         }
 
         mboxlist_entry_free(&mbentry);
-    }
 
-    if (r) {
-        syslog(LOG_ERR, "apply intermediates: failed: %s", error_message(r));
-        goto bail;
+        if (r) {
+            syslog(LOG_ERR, "apply intermediates: failed: %s", error_message(r));
+            goto bail;
+        }
     }
 
 
