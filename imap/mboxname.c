@@ -2879,12 +2879,10 @@ EXPORTED void mboxname_setdeletedmodseq(const char *mboxname, modseq_t val,
         typemodseqp = &counters.notesdeletedmodseq;
         foldersmodseqp = &counters.notesfoldersdeletedmodseq;
     }
-#if 0
     else if (mboxname_issubmissionmailbox(mboxname, mbtype)) {
         typemodseqp = &counters.submissiondeletedmodseq;
         foldersmodseqp = &counters.submissionfoldersdeletedmodseq;
     }
-#endif
     else {
         typemodseqp = &counters.maildeletedmodseq;
         foldersmodseqp = &counters.mailfoldersdeletedmodseq;
