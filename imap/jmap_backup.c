@@ -156,18 +156,20 @@ HIDDEN void jmap_backup_capabilities(json_t *account_capabilities)
 #define UNDO_DESTROY  (1<<0)
 #define UNDO_UPDATE   (1<<1)
 #define UNDO_CREATE   (1<<2)
-#define UNDO_EMAIL    (1<<3)  /* exclusive value */
+#define UNDO_EMAIL    (1<<3)  /* exclusive undo value */
+#define UNDO_MASK     (UNDO_DESTROY | UNDO_UPDATE | UNDO_CREATE)
+#define DRY_RUN       (1<<4)
 
 struct jmap_restore {
     /* Request arguments */
     time_t cutoff;
-    unsigned undo : 4;
+    unsigned flags : 5;
 
     /* Response fields */
     unsigned num_undone[3];
 };
 
-#define JMAP_RESTORE_INITIALIZER(undo) { 0, undo, { 0, 0, 0 } }
+#define JMAP_RESTORE_INITIALIZER(flags) { 0, flags, { 0, 0, 0 } }
 
 static void jmap_restore_parse(jmap_req_t *req,
                                struct jmap_parser *parser,
@@ -192,17 +194,21 @@ static void jmap_restore_parse(jmap_req_t *req,
             }
         }
 
-        else if (!(restore->undo & UNDO_EMAIL) && json_is_boolean(arg)) {
+        else if (!strcmp(key, "performDryRun") && json_is_boolean(arg)) {
+            if (json_is_true(arg)) restore->flags |= DRY_RUN;
+        }
+
+        else if (!(restore->flags & UNDO_EMAIL) && json_is_boolean(arg)) {
             if (!strcmp(key, "undoCreate")) {
-                if (json_is_true(arg)) restore->undo |= UNDO_CREATE;
+                if (json_is_true(arg)) restore->flags |= UNDO_CREATE;
             }
 
             else if (!strcmp(key, "undoUpdate")) {
-                if (json_is_true(arg)) restore->undo |= UNDO_UPDATE;
+                if (json_is_true(arg)) restore->flags |= UNDO_UPDATE;
             }
 
             else if (!strcmp(key, "undoDestroy")) {
-                if (json_is_true(arg)) restore->undo |= UNDO_DESTROY;
+                if (json_is_true(arg)) restore->flags |= UNDO_DESTROY;
             }
 
             else {
@@ -234,7 +240,11 @@ static json_t *jmap_restore_reply(struct jmap_restore *restore)
 {
     json_t *res = json_object();
 
-    if (restore->undo & UNDO_EMAIL) {
+    if (restore->flags & DRY_RUN) {
+        json_object_set_new(res, "performDryRun", json_true());
+    }
+
+    if (restore->flags & UNDO_EMAIL) {
         json_object_set_new(res, "numDraftsRestored",
                             json_integer(restore->num_undone[DRAFT_DESTROYS]));
         json_object_set_new(res, "numNonDraftsRestored",
@@ -282,15 +292,15 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
 
     switch (restore->type) {
     case UPDATES:
-        if (!(rrock->jrestore->undo & UNDO_UPDATE)) goto done;
+        if (!(rrock->jrestore->flags & UNDO_UPDATE)) goto done;
         break;
 
     case DESTROYS:
-        if (!(rrock->jrestore->undo & UNDO_DESTROY)) goto done;
+        if (!(rrock->jrestore->flags & UNDO_DESTROY)) goto done;
         break;
 
     case CREATES:
-        if (!(rrock->jrestore->undo & UNDO_CREATE)) goto done;
+        if (!(rrock->jrestore->flags & UNDO_CREATE)) goto done;
         break;
 
     default:
@@ -305,7 +315,8 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
         destroymsg = message_new_from_mailbox(mailbox, restore->msgno_todestroy);
     }
 
-    r = rrock->restore_cb(recreatemsg, destroymsg, req, rrock->rock);
+    if (!(rrock->jrestore->flags & DRY_RUN))
+        r = rrock->restore_cb(recreatemsg, destroymsg, req, rrock->rock);
 
     message_unref(&recreatemsg);
     message_unref(&destroymsg);
@@ -673,7 +684,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         goto done;
     }
 
-    if (restore.undo) {
+    if (restore.flags & UNDO_MASK) {
         char *addrhomeset = carddav_mboxname(req->accountid, NULL);
         struct contact_rock crock =
             { carddav_open_userid(req->accountid), BUF_INITIALIZER, NULL };
@@ -681,10 +692,17 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
                                       &contact_resource_name, &restore_contact,
                                       &crock, NULL };
 
-        mboxlist_mboxtree(addrhomeset,
-                          restore_addressbook_cb, &rrock, MBOXTREE_SKIP_ROOT);
-        mboxname_setdeletedmodseq(addrhomeset,
-                                  rrock.deletedmodseq, MBTYPE_ADDRESSBOOK, 0);
+        if (restore.flags & DRY_RUN) {
+            /* Treat as regular collection since we won't create group vCard */
+            mboxlist_mboxtree(addrhomeset, restore_collection_cb,
+                              &rrock, MBOXTREE_SKIP_ROOT);
+        }
+        else {
+            mboxlist_mboxtree(addrhomeset, restore_addressbook_cb,
+                              &rrock, MBOXTREE_SKIP_ROOT);
+            mboxname_setdeletedmodseq(addrhomeset,
+                                      rrock.deletedmodseq, MBTYPE_ADDRESSBOOK, 0);
+        }
         free(addrhomeset);
         carddav_close(crock.carddavdb);
         buf_free(&crock.buf);
@@ -899,25 +917,28 @@ static int recreate_calendar(const mbentry_t *mbentry,
                              struct restore_rock *rrock)
 {
     jmap_req_t *req = rrock->req;
-    char *newmboxname = caldav_mboxname(req->accountid, makeuuid());
-    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct mailbox *newmailbox = NULL, *mailbox = NULL;
-    int r;
+    int dry_run = (rrock->jrestore->flags & DRY_RUN);
+    int r = 0;
 
     /* XXX  Look for existing calendar with same name */
 
-    /* Create the calendar */
-    r = mboxlist_createmailbox(newmboxname, MBTYPE_CALENDAR,
-                               /*partition*/NULL, /*isadmin*/0,
-                               req->accountid, req->authstate,
-                               /*localonly*/0, /*forceuser*/0,
-                               /*dbonly*/0, /*notify*/0, &newmailbox);
-    mboxname_release(&namespacelock);
+    if (!dry_run) {
+        /* Create the calendar */
+        char *newmboxname = caldav_mboxname(req->accountid, makeuuid());
+        struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+        r = mboxlist_createmailbox(newmboxname, MBTYPE_CALENDAR,
+                                   /*partition*/NULL, /*isadmin*/0,
+                                   req->accountid, req->authstate,
+                                   /*localonly*/0, /*forceuser*/0,
+                                   /*dbonly*/0, /*notify*/0, &newmailbox);
+        mboxname_release(&namespacelock);
 
-    if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to create mailbox %s", newmboxname);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to create mailbox %s", newmboxname);
+        }
+        free(newmboxname);
     }
-    free(newmboxname);
 
     if (!r) {
         r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
@@ -933,20 +954,24 @@ static int recreate_calendar(const mbentry_t *mbentry,
     while ((msg = mailbox_iter_step(iter))) {
         /* XXX  Look for existing resource with same UID */
 
-        r = recreate_resource((message_t *) msg, newmailbox,
-                              req, 0/*is_update*/);
+        if (!dry_run) {
+            r = recreate_resource((message_t *) msg, newmailbox,
+                                  req, 0/*is_update*/);
+        }
         if (!r) rrock->jrestore->num_undone[DESTROYS]++;
     }
     mailbox_iter_done(&iter);
 
     jmap_closembox(req, &mailbox);
 
-    /* XXX  Do we want to do this? */
-    r = mboxlist_deletemailboxlock(mbentry->name, /*isadmin*/0,
-                                   req->accountid, req->authstate,
-                                   /*mboxevent*/NULL, /*checkacl*/0,
-                                   /*localonly*/0, /*force*/0,
-                                   /*keep_intermediaries*/0);
+    if (!dry_run) {
+        /* XXX  Do we want to do this? */
+        r = mboxlist_deletemailboxlock(mbentry->name, /*isadmin*/0,
+                                       req->accountid, req->authstate,
+                                       /*mboxevent*/NULL, /*checkacl*/0,
+                                       /*localonly*/0, /*force*/0,
+                                       /*keep_intermediaries*/0);
+    }
 
   done:
     mailbox_close(&newmailbox);
@@ -999,7 +1024,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
         goto done;
     }
 
-    if (restore.undo) {
+    if (restore.flags & UNDO_MASK) {
         char *calhomeset = caldav_mboxname(req->accountid, NULL);
         struct calendar_rock crock =
             { caldav_open_userid(req->accountid),
@@ -1011,8 +1036,10 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
 
         mboxlist_mboxtree(calhomeset, restore_calendar_cb, &rrock,
                           MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
-        mboxname_setdeletedmodseq(calhomeset,
-                                  rrock.deletedmodseq, MBTYPE_CALENDAR, 0);
+        if (!(restore.flags & DRY_RUN)) {
+            mboxname_setdeletedmodseq(calhomeset,
+                                      rrock.deletedmodseq, MBTYPE_CALENDAR, 0);
+        }
         free(calhomeset);
         free(crock.inboxname);
         free(crock.outboxname);
@@ -1079,7 +1106,7 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
     }
 
     const char *subfolder = config_getstring(IMAPOPT_NOTESMAILBOX);
-    if (subfolder && restore.undo) {
+    if (subfolder && (restore.flags & UNDO_MASK)) {
         char *notes = mboxname_user_mbox(req->accountid, subfolder);
         struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
                                       &note_resource_name, &restore_note,
@@ -1087,7 +1114,10 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
 
         mboxlist_mboxtree(notes, restore_collection_cb,
                           &rrock, MBOXTREE_SKIP_CHILDREN);
-        mboxname_setdeletedmodseq(notes, rrock.deletedmodseq, MBTYPE_EMAIL, 0);
+        if (!(restore.flags & DRY_RUN)) {
+            mboxname_setdeletedmodseq(notes,
+                                      rrock.deletedmodseq, MBTYPE_EMAIL, 0);
+        }
         free(notes);
     }
 
@@ -1350,9 +1380,10 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     jmap_req_t *req = rrock->req;
     mbname_t *mbname = mbname_from_intname(mboxname);
     struct mailbox *newmailbox = NULL, *mailbox = NULL;
+    int dry_run = (rrock->jrestore->flags & DRY_RUN);
     int i, r = 0;
 
-    if (mbname_isdeleted(mbname)) {
+    if (!dry_run && mbname_isdeleted(mbname)) {
         /* Look for existing mailbox with same (undeleted) name */
         const char *newmboxname = NULL;
         mbentry_t *mbentry = NULL;
@@ -1406,7 +1437,9 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
         uint32_t msgno = arrayu64_nth(msgnos, i);
 
         message_set_from_mailbox(mailbox, msgno, msg);
-        r = recreate_resource(msg, newmailbox, req, 0/*isreplace*/);
+        if (!dry_run) {
+            r = recreate_resource(msg, newmailbox, req, 0/*isreplace*/);
+        }
         if (!r) {
             const struct index_record *record = msg_record(msg);
             int restore_type =
@@ -1473,8 +1506,10 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     hash_enumerate(&mailboxes, &restore_mailbox_cb, &rrock);
     free_hash_table(&mailboxes, NULL);
 
-    mboxname_setdeletedmodseq(inbox,
-                              rrock.deletedmodseq, MBTYPE_EMAIL, 0);
+    if (!(restore.flags & DRY_RUN)) {
+        mboxname_setdeletedmodseq(inbox,
+                                  rrock.deletedmodseq, MBTYPE_EMAIL, 0);
+    }
     free(inbox);
 
     /* Build response */
