@@ -4415,25 +4415,6 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
     return IMAP_PROTOCOL_BAD_PARAMETERS;
 }
 
-static int user_reset(const char *userid,
-                      struct backend *sync_be, unsigned flags)
-{
-    const char *cmd = "UNUSER";
-    struct dlist *kl;
-
-    if (flags & SYNC_FLAG_VERBOSE)
-        printf("%s %s\n", cmd, userid);
-
-    if (flags & SYNC_FLAG_LOGGING)
-        syslog(LOG_INFO, "%s %s", cmd, userid);
-
-    kl = dlist_setatom(NULL, cmd, userid);
-    sync_send_apply(kl, sync_be->out);
-    dlist_free(&kl);
-
-    return sync_parse_response(cmd, sync_be->in, NULL);
-}
-
 static int folder_rename(const char *oldname, const char *newname,
                          const char *partition, unsigned uidvalidity,
                          struct backend *sync_be, unsigned flags)
@@ -6364,14 +6345,19 @@ int sync_do_user(const char *userid, const char *topart,
     if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
     if (r) goto done;
 
+    /* check that the inbox exists locally to be allowed to sync this user at all */
     char *inbox = mboxname_user_mbox(userid, NULL);
     r = mailbox_open_irl(inbox, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
     free(inbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* user has been removed, RESET server */
-        syslog(LOG_ERR, "Inbox missing on master for %s", userid);
-        r = user_reset(userid, sync_be, flags);
+        if (flags & SYNC_FLAG_VERBOSE)
+            printf("Does not exist locally %s\n", userid);
+        if (flags & SYNC_FLAG_LOGGING)
+            syslog(LOG_INFO, "Does not exist locally %s", userid);
+
+        // just skip this user.  XXX - tombstone for user -> sync_reset?
+        r = 0;
         goto done;
     }
     if (r) goto done;
