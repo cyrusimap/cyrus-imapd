@@ -256,6 +256,14 @@ EXPORTED void strarray_remove_all(strarray_t *sa, const char *s)
     }
 }
 
+EXPORTED void strarray_subtract_complement(strarray_t *sa, const strarray_t *sb)
+{
+    int i;
+    for (i = 0; i < sb->count; i++)
+        strarray_remove_all(sa, strarray_nth(sb, i));
+}
+
+
 EXPORTED void strarray_remove_all_case(strarray_t *sa, const char *s)
 {
     int i = 0;
