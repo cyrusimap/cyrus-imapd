@@ -3091,6 +3091,14 @@ out:
     return r;
 }
 
+static int sync_mailbox_byuniqueid(const char *uniqueid, void *rock)
+{
+    char *name = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
+    int r = sync_mailbox_byname(name, rock);
+    free(name);
+    return r;
+}
+
 static int mailbox_cb(const mbentry_t *mbentry, void *rock)
 {
     return sync_mailbox_byname(mbentry->name, rock);
@@ -3125,6 +3133,17 @@ int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
 
     for (ki = kin->head; ki; ki = ki->next)
         sync_mailbox_byname(ki->sval, &mrock);
+
+    return 0;
+}
+
+int sync_get_uniqueids(struct dlist *kin, struct sync_state *sstate)
+{
+    struct dlist *ki;
+    struct mbox_rock mrock = { sstate->pout, NULL };
+
+    for (ki = kin->head; ki; ki = ki->next)
+        sync_mailbox_byuniqueid(ki->sval, &mrock);
 
     return 0;
 }
@@ -6502,6 +6521,8 @@ EXPORTED const char *sync_get(struct dlist *kin, struct sync_state *state)
         r = sync_get_fullmailbox(kin, state);
     else if (!strcmp(kin->name, "MAILBOXES"))
         r = sync_get_mailboxes(kin, state);
+    else if (!strcmp(kin->name, "UNIQUEIDS"))
+        r = sync_get_uniqueids(kin, state);
     else if (!strcmp(kin->name, "META"))
         r = sync_get_meta(kin, state);
     else if (!strcmp(kin->name, "QUOTA"))
