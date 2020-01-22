@@ -2900,6 +2900,7 @@ static int jmap_parse_condition(json_t *cond, strarray_t *path)
     const char *field;
 
     json_object_foreach(cond, field, val) {
+        /* inMailbox* and *InThreadHaveKeywords properties are incompatible */
         if (!strcmp(field, "before") ||
             !strcmp(field, "after")) {
             if (!json_is_utcdate(val)) break;
@@ -2917,16 +2918,7 @@ static int jmap_parse_condition(json_t *cond, strarray_t *path)
                  !strcmp(field, "cc") ||
                  !strcmp(field, "bcc") ||
                  !strcmp(field, "subject") ||
-                 !strcmp(field, "body") ||
-                 !strcmp(field, "attachmentName") ||  /* FM-specific */
-                 !strcmp(field, "attachmentType") ||  /* FM-specific */
-                 (//jmap_is_using(req, JMAP_SEARCH_EXTENSION) &&
-                     !strcmp(field, "attachmentBody")) ||
-                 (//jmap_is_using(req, JMAP_MAIL_EXTENSION) &&
-                     (!strcmp(field, "fromContactGroupId") ||
-                      !strcmp(field, "toContactGroupId") ||
-                      !strcmp(field, "ccContactGroupId") ||
-                      !strcmp(field, "bccContactGroupId")))) {
+                 !strcmp(field, "body")) {
             if (!json_is_string(val)) break;
         }
         else if (!strcmp(field, "header")) {
@@ -2945,6 +2937,20 @@ static int jmap_parse_condition(json_t *cond, strarray_t *path)
                     return 0;
                 }
             } while (n);
+        }
+        /* FM-specific */
+        else if (!strcmp(field, "attachmentName") ||
+                 !strcmp(field, "attachmentType") ||
+                 !strcmp(field, "attachmentBody") ||
+                 !strcmp(field, "fromContactGroupId") ||
+                 !strcmp(field, "toContactGroupId") ||
+                 !strcmp(field, "ccContactGroupId") ||
+                 !strcmp(field, "bccContactGroupId") ||
+                 !strcmp(field, "fromAnyContact") ||
+                 !strcmp(field, "toAnyContact") ||
+                 !strcmp(field, "ccAnyContact") ||
+                 !strcmp(field, "bccAnyContact")) {
+            if (!json_is_string(val)) break;
         }
         else break;
     }
