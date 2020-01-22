@@ -434,6 +434,7 @@ void sync_msgid_remove(struct sync_msgid_list *l,
 void sync_msgid_list_free(struct sync_msgid_list **lp)
 {
     struct sync_msgid_list *l = *lp;
+    if (!l) return;
     struct sync_msgid *current, *next;
 
     current = l->head;
@@ -504,6 +505,7 @@ struct sync_msgid_list *sync_reserve_partlist(struct sync_reserve_list *l,
 void sync_reserve_list_free(struct sync_reserve_list **lp)
 {
     struct sync_reserve_list *l = *lp;
+    if (!l) return;
     struct sync_reserve *current, *next;
 
     current = l->head;
@@ -550,7 +552,15 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          modseq_t raclmodseq,
                                          int ispartial)
 {
-    struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
+    // no duplicates allowed by uniqueid
+    struct sync_folder *result = sync_folder_lookup(l, uniqueid);
+    if (result) return result;
+
+    // or by name
+    result = sync_folder_lookup_name(l, name);
+    if (result) return result;
+
+    result = xzmalloc(sizeof(struct sync_folder));
 
     if (l->tail)
         l->tail = l->tail->next = result;
@@ -584,7 +594,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->mark     = 0;
     result->reserve  = 0;
 
-    return(result);
+    return result;
 }
 
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
@@ -599,9 +609,22 @@ struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
     return NULL;
 }
 
+struct sync_folder *sync_folder_lookup_name(struct sync_folder_list *l,
+                                            const char *name)
+{
+    struct sync_folder *p;
+
+    for (p = l->head; p; p = p->next) {
+        if (!strcmp(p->name, name))
+            return p;
+    }
+    return NULL;
+}
+
 void sync_folder_list_free(struct sync_folder_list **lp)
 {
     struct sync_folder_list *l = *lp;
+    if (!l) return;
     struct sync_folder *current, *next;
 
     if (!l) return;
@@ -677,6 +700,7 @@ struct sync_rename *sync_rename_lookup(struct sync_rename_list *l,
 void sync_rename_list_free(struct sync_rename_list **lp)
 {
     struct sync_rename_list *l = *lp;
+    if (!l) return;
     struct sync_rename *current, *next;
 
     if (!l) return;
@@ -1156,7 +1180,10 @@ struct sync_name_list *sync_name_list_create(void)
 struct sync_name *sync_name_list_add(struct sync_name_list *l,
                                      const char *name)
 {
-    struct sync_name *item = xzmalloc(sizeof(struct sync_name));
+    struct sync_name *item = sync_name_lookup(l, name);
+    if (item) return item;
+
+    item = xzmalloc(sizeof(struct sync_name));
 
     if (l->tail)
         l->tail = l->tail->next = item;
@@ -3094,6 +3121,7 @@ out:
 static int sync_mailbox_byuniqueid(const char *uniqueid, void *rock)
 {
     char *name = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
+    if (!name) return 0;
     int r = sync_mailbox_byname(name, rock);
     free(name);
     return r;

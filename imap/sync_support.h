@@ -180,6 +180,8 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
                                        const char *uniqueid);
+struct sync_folder *sync_folder_lookup_name(struct sync_folder_list *l,
+                                       const char *name);
 
 struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
                                               const char *name);
