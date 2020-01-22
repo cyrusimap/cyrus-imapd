@@ -409,7 +409,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 }
 
 static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
-                             jmap_req_t *req, int is_replace)
+                             jmap_req_t *req, int is_update)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
@@ -446,7 +446,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
 
         /* append the message to the mailbox. */
         r = append_fromstage(&as, &body, stage, /*internaldate*/0,
-                             is_replace ? record->createdmodseq : 0,
+                             is_update ? record->createdmodseq : 0,
                              flags, /*nolink*/0, annots);
 
         freeentryatts(annots);
@@ -457,7 +457,11 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
         if (r) append_abort(&as);
         else {
             r = append_commit(&as);
-            if (!r && !is_replace && record->modseq > tomailbox->i.deletedmodseq) {
+            /* If this resource was previously destroyed
+               (not replaced by an update) we need to bump the deletedmodseq
+               since we will no longer be able to differentiate between
+               whether this resource has just been created or updated */
+            if (!r && !is_update && record->modseq > tomailbox->i.deletedmodseq) {
                 tomailbox->i.deletedmodseq = record->modseq;
                 mailbox_index_dirty(tomailbox);
             }
@@ -468,7 +472,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
     return r;
 }
 
-static int destroy_resource(message_t *msg, jmap_req_t *req, int is_replace)
+static int destroy_resource(message_t *msg, jmap_req_t *req, int is_replaced)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
@@ -478,7 +482,7 @@ static int destroy_resource(message_t *msg, jmap_req_t *req, int is_replace)
     /* copy the existing index_record */
     memcpy(&newrecord, record, sizeof(struct index_record));
 
-    if (is_replace) {
+    if (is_replaced) {
         int userflag;
         r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
         newrecord.user_flags[userflag/32] |= 1<<(userflag&31);
@@ -568,13 +572,13 @@ static char *contact_resource_name(message_t *msg, void *rock)
 static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
                            jmap_req_t *req, void *rock)
 {
-    int is_replace = recreatemsg && destroymsg;
+    int is_update = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
-        r = recreate_resource(recreatemsg, NULL, req, is_replace);
+        r = recreate_resource(recreatemsg, NULL, req, is_update);
 
-        if (!r && !is_replace) {
+        if (!r && !is_update) {
             /* Add this card to the group vCard of recreated contacts */
             struct mailbox *mailbox = msg_mailbox(recreatemsg);
             const struct index_record *record = msg_record(recreatemsg);
@@ -617,7 +621,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
     }
 
     if (!r && destroymsg) {
-        r = destroy_resource(destroymsg, req, is_replace);
+        r = destroy_resource(destroymsg, req, is_update);
     }
 
     return r;
@@ -842,11 +846,11 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
 }
 
 static int destroy_ical(message_t *destroymsg, jmap_req_t *req,
-                        int is_replace, struct caldav_db *caldavdb)
+                        int is_replaced, struct caldav_db *caldavdb)
 {
     int r = 0;
 
-    if (!is_replace) {
+    if (!is_replaced) {
         struct mailbox *mailbox = msg_mailbox(destroymsg);
         const struct index_record *record = msg_record(destroymsg);
         struct caldav_data *cdata = NULL;
@@ -868,7 +872,7 @@ static int destroy_ical(message_t *destroymsg, jmap_req_t *req,
         }
     }
 
-    if (!r) r = destroy_resource(destroymsg, req, is_replace);
+    if (!r) r = destroy_resource(destroymsg, req, is_replaced);
 
     return r;
 }
@@ -877,7 +881,7 @@ static int restore_ical(message_t *recreatemsg, message_t *destroymsg,
                         jmap_req_t *req, void *rock)
 {
     struct calendar_rock *crock = (struct calendar_rock *) rock;
-    int is_replace = recreatemsg && destroymsg;
+    int is_update = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
@@ -885,7 +889,7 @@ static int restore_ical(message_t *recreatemsg, message_t *destroymsg,
     }
 
     if (!r && destroymsg) {
-        r = destroy_ical(destroymsg, req, is_replace, crock->caldavdb);
+        r = destroy_ical(destroymsg, req, is_update, crock->caldavdb);
     }
 
     return r;
@@ -930,7 +934,7 @@ static int recreate_calendar(const mbentry_t *mbentry,
         /* XXX  Look for existing resource with same UID */
 
         r = recreate_resource((message_t *) msg, newmailbox,
-                              req, 0/*is_replace*/);
+                              req, 0/*is_update*/);
         if (!r) rrock->jrestore->num_undone[DESTROYS]++;
     }
     mailbox_iter_done(&iter);
@@ -1047,15 +1051,15 @@ static char *note_resource_name(message_t *msg,
 static int restore_note(message_t *recreatemsg, message_t *destroymsg,
                         jmap_req_t *req, void *rock __attribute__((unused)))
 {
-    int is_replace = recreatemsg && destroymsg;
+    int is_update = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
-        r = recreate_resource(recreatemsg, NULL, req, is_replace);
+        r = recreate_resource(recreatemsg, NULL, req, is_update);
     }
 
     if (!r && destroymsg) {
-        r = destroy_resource(destroymsg, req, is_replace);
+        r = destroy_resource(destroymsg, req, is_update);
     }
 
     return r;
