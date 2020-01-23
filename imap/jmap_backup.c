@@ -1438,7 +1438,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 
         message_set_from_mailbox(mailbox, msgno, msg);
         if (!dry_run) {
-            r = recreate_resource(msg, newmailbox, req, 0/*isreplace*/);
+            r = recreate_resource(msg, newmailbox, req, 0/*is_update*/);
         }
         if (!r) {
             const struct index_record *record = msg_record(msg);
