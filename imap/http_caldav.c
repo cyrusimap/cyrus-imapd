@@ -7505,7 +7505,7 @@ static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
 
     int r = propfind_by_collection(mbentry, rock);
 
-    icaltimezone_free(fbfilter->tz, 1 /* free_struct */);
+    if (fbfilter->tz) icaltimezone_free(fbfilter->tz, 1 /* free_struct */);
     fbfilter->tz = NULL;
 
     return r;
