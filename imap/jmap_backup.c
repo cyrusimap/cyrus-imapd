@@ -1432,6 +1432,9 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     }
     if (r) goto done;
 
+    /* Restore messages in msgno/UID order */
+    arrayu64_sort(msgnos, NULL/*ascending*/);
+
     message_t *msg = message_new();
     for (i = 0; i < arrayu64_size(msgnos); i++) {
         uint32_t msgno = arrayu64_nth(msgnos, i);
