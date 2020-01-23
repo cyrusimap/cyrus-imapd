@@ -7101,8 +7101,9 @@ static int report_cal_query(struct transaction_t *txn,
                 tzid = xmlNodeGetContent(node);
 
                 if (tzid) {
-                    calfilter.tz =
+                    icaltimezone *tz =
                         icaltimezone_get_builtin_timezone_from_tzid((const char *) tzid);
+                    calfilter.tz = icaltimezone_copy(tz);
                     xmlFree(tzid);
 
                     if (!calfilter.tz) {
@@ -7451,7 +7452,7 @@ static icaltimezone *get_calendar_tz(const char *mboxname, const char *userid)
     if (!r && buf_len(&attrib)) {
         tz = icaltimezone_get_builtin_timezone(buf_cstring(&attrib));
         buf_free(&attrib);
-        return tz;
+        return icaltimezone_copy(tz);
     }
 
     /*  Check for CALDAV:calendar-timezone */
