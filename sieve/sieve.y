@@ -2452,14 +2452,6 @@ static int verify_time(sieve_script_t *sscript, char *time)
     return 0;
 }
 
-static int uint64_cmp(const void *v1, const void *v2)
-{
-    uint64_t u1 = *((uint64_t *) v1);
-    uint64_t u2 = *((uint64_t *) v2);
-
-    return (u1 - u2);
-}
-
 static commandlist_t *build_snooze(sieve_script_t *sscript,
                                    commandlist_t *c, arrayu64_t *times)
 {
@@ -2475,7 +2467,7 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
     if (!c->u.sn.days) c->u.sn.days = 0x7f; /* all days */
 
     /* Sort times earliest -> latest */
-    arrayu64_sort(times, &uint64_cmp);
+    arrayu64_sort(times, NULL/*ascending*/);
     c->u.sn.times = times;
 
     return c;
