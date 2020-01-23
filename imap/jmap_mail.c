@@ -1612,7 +1612,7 @@ static void _email_search_perf_attr(const search_attr_t *attr, strarray_t *perf_
             cost = "annotations";
             break;
         case SEARCH_COST_CACHE:
-            cost = "cache";
+            cost = search_attr_is_fuzzable(attr) ? "xapian" : "cache";
             break;
         case SEARCH_COST_BODY:
             cost = search_attr_is_fuzzable(attr) ? "xapian" : "body";
