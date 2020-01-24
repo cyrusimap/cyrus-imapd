@@ -94,6 +94,9 @@ static struct db *mbdb;
 static int mboxlist_dbopen = 0;
 static int mboxlist_initialized = 0;
 
+static int have_racl = 0;
+static int have_runq = 0;
+
 static int mboxlist_opensubs(const char *userid, struct db **ret);
 static void mboxlist_closesubs(struct db *sub);
 
@@ -822,12 +825,12 @@ static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, str
 
     mboxlist_mylookup(name, &old, txn, 0); // ignore errors, it will be NULL
 
-    if (!cyrusdb_fetch(mbdb, "$RACL", 5, NULL, NULL, txn)) {
+    if (have_racl) {
         r = mboxlist_update_racl(name, old, mbentry, txn);
         if (r) goto done;
     }
 
-    if (!cyrusdb_fetch(mbdb, "$RUNQ", 5, NULL, NULL, txn)) {
+    if (have_runq) {
         r = mboxlist_update_runiqueid(name, old, mbentry, txn);
         if (r) goto done;
     }
@@ -3160,7 +3163,7 @@ EXPORTED int mboxlist_foreach_uniqueid(const char *uniqueid, mboxlist_cb *proc,
 
     init_internal();
 
-    if (!cyrusdb_fetch(mbdb, "$RUNQ", 5, NULL, NULL, NULL)) {
+    if (have_runq) {
         strarray_t matches = STRARRAY_INITIALIZER;
 
         r = mboxlist_runiqueid_matches(mbdb, uniqueid, &matches);
@@ -3242,16 +3245,16 @@ EXPORTED int mboxlist_set_racls(int enabled)
 {
     struct txn *tid = NULL;
     int r = 0;
-    int now = !cyrusdb_fetch(mbdb, "$RACL", 5, NULL, NULL, &tid);
 
     init_internal();
 
-    if (now && !enabled) {
+    if (have_racl && !enabled) {
         syslog(LOG_NOTICE, "removing reverse acl support");
         /* remove */
         r = cyrusdb_foreach(mbdb, "$RACL", 5, NULL, del_cb, &tid, &tid);
+        if (!r) have_racl = 0;
     }
-    else if (enabled && !now) {
+    else if (enabled && !have_racl) {
         /* add */
         struct allmb_rock mbrock = { NULL, racls_add_cb, &tid, 0 };
         /* we can't use mboxlist_allmbox because it doesn't do transactions */
@@ -3262,6 +3265,7 @@ EXPORTED int mboxlist_set_racls(int enabled)
         }
         mboxlist_entry_free(&mbrock.mbentry);
         if (!r) r = cyrusdb_store(mbdb, "$RACL", 5, "", 0, &tid);
+        if (!r) have_racl = 1;
     }
 
     if (r)
@@ -3282,16 +3286,16 @@ EXPORTED int mboxlist_set_runiqueid(int enabled)
 {
     struct txn *tid = NULL;
     int r = 0;
-    int now = !cyrusdb_fetch(mbdb, "$RUNQ", 5, NULL, NULL, &tid);
 
     init_internal();
 
-    if (now && !enabled) {
+    if (have_runq && !enabled) {
         syslog(LOG_NOTICE, "removing reverse unique id support");
         /* remove */
         r = cyrusdb_foreach(mbdb, "$RUNQ", 5, NULL, del_cb, &tid, &tid);
+        if (!r) have_runq = 0;
     }
-    else if (enabled && !now) {
+    else if (enabled && !have_runq) {
         /* add */
         struct allmb_rock mbrock = { NULL, runiqueid_add_cb, &tid, 0 };
         /* we can't use mboxlist_allmbox because it doesn't do transactions */
@@ -3302,6 +3306,7 @@ EXPORTED int mboxlist_set_runiqueid(int enabled)
         }
         mboxlist_entry_free(&mbrock.mbentry);
         if (!r) r = cyrusdb_store(mbdb, "$RUNQ", 5, "", 0, &tid);
+        if (!r) have_runq = 1;
     }
 
     if (r)
@@ -3463,7 +3468,7 @@ static int mboxlist_find_category(struct find_rock *rock, const char *prefix, si
 
     init_internal();
 
-    if (!rock->issubs && !rock->isadmin && !cyrusdb_fetch(rock->db, "$RACL", 5, NULL, NULL, NULL)) {
+    if (!rock->issubs && !rock->isadmin && have_racl) {
         /* we're using reverse ACLs */
         strarray_t matches = STRARRAY_INITIALIZER;
         int i;
@@ -4271,6 +4276,9 @@ EXPORTED void mboxlist_open(const char *fname)
     free(tofree);
 
     mboxlist_dbopen = 1;
+
+    have_racl = !cyrusdb_fetch(mbdb, "$RACL", 5, NULL, NULL, NULL);
+    have_runq = !cyrusdb_fetch(mbdb, "$RUNQ", 5, NULL, NULL, NULL);
 }
 
 EXPORTED void mboxlist_close(void)
