@@ -56,20 +56,33 @@ sub new
 {
     my ($class, @args) = @_;
     my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_realm => 'Cassandane',
-                 conversations => 'yes',
-                 conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
-                 jmapsubmission_deleteonsend => 'no',
-                 ctl_conversationsdb_conversations_max_thread => 5,
-                 httpmodules => 'carddav caldav jmap',
-                 httpallowcompress => 'no');
 
-    return $class->SUPER::new({
-        config => $config,
-        jmap => 1,
-        adminstore => 1,
-        services => [ 'imap', 'http' ]
-    }, @args);
+    my $buildinfo = Cassandane::BuildInfo->new();
+
+    # if we're gonna try and run jmap tests, set up config for it
+    if ($buildinfo->get('component', 'jmap')) {
+        $config->set(caldav_realm => 'Cassandane',
+                     conversations => 'yes',
+                     conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
+                     jmapsubmission_deleteonsend => 'no',
+                     ctl_conversationsdb_conversations_max_thread => 5,
+                     httpmodules => 'carddav caldav jmap',
+                     httpallowcompress => 'no');
+
+        return $class->SUPER::new({
+            config => $config,
+            jmap => 1,
+            adminstore => 1,
+            services => [ 'imap', 'http' ]
+        }, @args);
+    }
+    else {
+        $config->set(conversations => 'yes',
+                     conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
+                     ctl_conversationsdb_conversations_max_thread => 5);
+
+        return $class->SUPER::new({ config => $config }, @args);
+    }
 }
 
 sub set_up
@@ -243,6 +256,14 @@ sub test_move_200
     my $threadid2 = $res->{2}{threadid}[0];
     $self->assert_str_equals($threadid1, 'T' . $exp{A}->make_cid());
     $self->assert_str_equals($threadid2, 'T' . $exp{B}->make_cid());
+
+    # XXX probably should split the jmap stuff below into a separate
+    # XXX test, so we can just mark it :needs_component_jmap instead
+    # XXX of hacking it up like this... :)
+    my $buildinfo = Cassandane::BuildInfo->new();
+    if (not $buildinfo->get('component', 'jmap')) {
+        return;
+    }
 
     my $jmap = $self->{jmap};
     xlog $self, "create bar mailbox";
