@@ -2653,7 +2653,7 @@ static json_t *_json_has(int rights, int need)
 
 HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
 {
-    char *aclstr = xstrdup(mbentry->acl);
+    char *aclstr = xstrdupnull(mbentry->acl);
     char *owner = mboxname_to_userid(mbentry->name);
     int iscalendar = (mbentry->mbtype & MBTYPE_CALENDAR);
 
