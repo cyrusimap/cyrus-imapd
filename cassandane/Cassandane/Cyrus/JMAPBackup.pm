@@ -510,7 +510,7 @@ sub test_restore_calendars
             undoDestroy => JSON::true
          }, "R4"],
         ['CalendarEvent/get', {
-            properties => ['title', 'sequence'],
+            properties => ['title', 'sequence', 'calendarId'],
          }, "R5"]
     ]);
     $self->assert_not_null($res);
@@ -528,6 +528,16 @@ sub test_restore_calendars
     $self->assert_str_equals('bar', $got[0]{title});
     $self->assert_str_equals('foo', $got[1]{title});
     $self->assert_num_equals(2, $got[1]{sequence});
+
+    xlog "check that the restored calendar has correct name and color";
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => [$got[0]{calendarId}],
+            properties => ['name', 'color'],
+         }, "R5.5"]
+    ]);
+    $self->assert_str_equals('bar', $res->[0][1]{list}[0]{name});
+    $self->assert_str_equals('aqua', $res->[0][1]{list}[0]{color});
 
     my $data = $self->{instance}->getnotify();
     my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
