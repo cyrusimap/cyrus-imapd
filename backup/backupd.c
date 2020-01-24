@@ -1537,6 +1537,9 @@ static void cmd_get(struct dlist *dl)
     else if (strcmp(dl->name, "META") == 0) {
         r = cmd_get_meta(dl);
     }
+    else if (strcmp(dl->name, "UNIQUEIDS") == 0) {
+        r = 0; // we don't send anything back other than OK
+    }
     else {
         r = IMAP_PROTOCOL_ERROR;
     }
