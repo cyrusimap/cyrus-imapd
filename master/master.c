@@ -838,14 +838,13 @@ static int service_is_fork_limited(struct service *s)
     return 0;
 }
 
-static void spawn_service(int si)
+static void spawn_service(struct service *s, int si)
 {
     pid_t p;
     int i;
     char path[PATH_MAX];
     static char name_env[100], name_env2[100], name_env3[100];
     struct centry *c;
-    struct service *s = &Services[si];
 
     if (!s->name) {
         fatal("Serious software bug found: spawn_service() called on unnamed service!",
@@ -2587,7 +2586,7 @@ int main(int argc, char **argv)
                     }
 
                     while (j-- > 0) {
-                        spawn_service(i);
+                        spawn_service(&Services[i], i);
                     }
                 } else if (Services[i].exec
                           && Services[i].babysit
@@ -2596,7 +2595,7 @@ int main(int argc, char **argv)
                           "lost all children for service: %s/%s.  " \
                           "Applying babysitter.",
                           Services[i].name, Services[i].familyname);
-                    spawn_service(i);
+                    spawn_service(&Services[i], i);
                 } else if (!Services[i].exec /* disabled */ &&
                           Services[i].name /* not yet removed */ &&
                           Services[i].nactive == 0) {
@@ -2737,7 +2736,7 @@ int main(int argc, char **argv)
                     y >= 0 && FD_ISSET(y, &rfds))
                 {
                     /* huh, someone wants to talk to us */
-                    spawn_service(i);
+                    spawn_service(&Services[i], i);
                 }
             }
         }
