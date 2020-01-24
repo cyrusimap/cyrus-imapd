@@ -7103,7 +7103,7 @@ static int report_cal_query(struct transaction_t *txn,
                 if (tzid) {
                     icaltimezone *tz =
                         icaltimezone_get_builtin_timezone_from_tzid((const char *) tzid);
-                    calfilter.tz = icaltimezone_copy(tz);
+                    if (tz) calfilter.tz = icaltimezone_copy(tz);
                     xmlFree(tzid);
 
                     if (!calfilter.tz) {
