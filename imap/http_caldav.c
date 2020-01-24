@@ -7452,7 +7452,7 @@ static icaltimezone *get_calendar_tz(const char *mboxname, const char *userid)
     if (!r && buf_len(&attrib)) {
         tz = icaltimezone_get_builtin_timezone(buf_cstring(&attrib));
         buf_free(&attrib);
-        return icaltimezone_copy(tz);
+        if (tz) return icaltimezone_copy(tz);
     }
 
     /*  Check for CALDAV:calendar-timezone */
