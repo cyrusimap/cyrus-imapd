@@ -913,40 +913,137 @@ static int restore_ical(message_t *recreatemsg, message_t *destroymsg,
     return r;
 }
 
+struct cal_dispname_rock {
+    const char *dispname;
+    char *mboxname;
+};
+
+static int lookup_cal_by_dispname(const char *mailbox,
+                                  uint32_t uid __attribute__((unused)),
+                                  const char *entry __attribute__((unused)),
+                                  const char *userid __attribute__((unused)),
+                                  const struct buf *attrib,
+                                  const struct annotate_metadata *mdata __attribute__((unused)),
+                                  void *rock)
+{
+    struct cal_dispname_rock *crock = (struct cal_dispname_rock *) rock;
+
+    if (!strcmp(buf_cstring(attrib), crock->dispname)) {
+        crock->mboxname = xstrdup(mailbox);
+        return CYRUSDB_DONE;
+    }
+
+    return 0;
+}
+
 static int recreate_calendar(const mbentry_t *mbentry,
-                             struct restore_rock *rrock)
+                             struct restore_rock *rrock,
+                             struct mailbox **newmailbox)
 {
     jmap_req_t *req = rrock->req;
-    struct mailbox *newmailbox = NULL, *mailbox = NULL;
-    int dry_run = (rrock->jrestore->flags & DRY_RUN);
+    const char *disp_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+    struct buf annot = BUF_INITIALIZER;
     int r = 0;
 
-    /* XXX  Look for existing calendar with same name */
+    /* Lookup DAV:displayname */
+    annotatemore_lookupmask(mbentry->name, disp_annot, req->accountid, &annot);
 
-    if (!dry_run) {
+    if (buf_len(&annot)) {
+        /* Look for existing calendar with same displayname */
+        struct cal_dispname_rock crock = { buf_cstring(&annot), NULL };
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+
+        mbname_set_isdeleted(mbname, 0);
+        free(mbname_pop_boxes(mbname));
+        mbname_push_boxes(mbname, "%");
+        annotatemore_findall(mbname_intname(mbname), 0/*uid*/,
+                             disp_annot, 0/*since_modseq*/,
+                             &lookup_cal_by_dispname, &crock, 0/*flags*/);
+        mbname_free(&mbname);
+
+        if (crock.mboxname) {
+            /* Open existing calendar */
+            r = mailbox_open_iwl(crock.mboxname, newmailbox);
+
+            if (r) {
+                syslog(LOG_ERR,
+                       "IOERROR: failed to open mailbox %s", crock.mboxname);
+            }
+            free(crock.mboxname);
+        }
+    }
+
+    if (!r && !*newmailbox) {
         /* Create the calendar */
         char *newmboxname = caldav_mboxname(req->accountid, makeuuid());
         struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+
         r = mboxlist_createmailbox(newmboxname, MBTYPE_CALENDAR,
                                    /*partition*/NULL, /*isadmin*/0,
                                    req->accountid, req->authstate,
                                    /*localonly*/0, /*forceuser*/0,
-                                   /*dbonly*/0, /*notify*/0, &newmailbox);
+                                   /*dbonly*/0, /*notify*/0, newmailbox);
         mboxname_release(&namespacelock);
 
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to create mailbox %s", newmboxname);
+            syslog(LOG_ERR, "IOERROR: failed to create mailbox %s: %s",
+                   newmboxname, error_message(r));
+        }
+        else {
+            /* Set the displayname */
+            annotate_state_t *astate = NULL;
+
+            astate = annotate_state_new();
+            r = annotate_state_set_mailbox(astate, *newmailbox);
+            if (!r) {
+                r = annotate_state_writemask(astate, disp_annot,
+                                             req->accountid, &annot);
+                if (!r) {
+                    /* Lookup APPLE:color */
+                    const char *color_annot =
+                        DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
+
+                    buf_reset(&annot);
+                    annotatemore_lookupmask(mbentry->name, color_annot,
+                                            req->accountid, &annot);
+                    if (buf_len(&annot)) {
+                        r = annotate_state_writemask(astate, color_annot,
+                                                     req->accountid, &annot);
+                    }
+                }
+
+                if (!r)
+                    r = annotate_state_commit(&astate);
+                else {
+                    syslog(LOG_ERR,
+                           "IOERROR: failed to create displayname/color"
+                           " for mailbox %s: %s",
+                           newmboxname, error_message(r));
+                    annotate_state_abort(&astate);
+                }
+            }
         }
         free(newmboxname);
     }
 
-    if (!r) {
-        r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
-        }
+    buf_free(&annot);
+
+    return r;
+}
+
+static int recreate_ical_resources(const mbentry_t *mbentry,
+                                   struct restore_rock *rrock,
+                                   struct mailbox *newmailbox)
+{
+    struct mailbox *mailbox = NULL;
+    jmap_req_t *req = rrock->req;
+    int r;
+
+    r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
+        return r;
     }
-    if (r) goto done;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
     const message_t *msg;
@@ -954,7 +1051,7 @@ static int recreate_calendar(const mbentry_t *mbentry,
     while ((msg = mailbox_iter_step(iter))) {
         /* XXX  Look for existing resource with same UID */
 
-        if (!dry_run) {
+        if (!(rrock->jrestore->flags & DRY_RUN)) {
             r = recreate_resource((message_t *) msg, newmailbox,
                                   req, 0/*is_update*/);
         }
@@ -964,25 +1061,14 @@ static int recreate_calendar(const mbentry_t *mbentry,
 
     jmap_closembox(req, &mailbox);
 
-    if (!dry_run) {
-        /* XXX  Do we want to do this? */
-        r = mboxlist_deletemailboxlock(mbentry->name, /*isadmin*/0,
-                                       req->accountid, req->authstate,
-                                       /*mboxevent*/NULL, /*checkacl*/0,
-                                       /*localonly*/0, /*force*/0,
-                                       /*keep_intermediaries*/0);
-    }
-
-  done:
-    mailbox_close(&newmailbox);
-
-    return r;
+    return 0;
 }
 
 static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
 {
     struct restore_rock *rrock = (struct restore_rock *) rock;
     struct calendar_rock *crock = (struct calendar_rock *) rrock->rock;
+    jmap_req_t *req = rrock->req;
     time_t timestamp = 0;
     int r = 0;
 
@@ -996,8 +1082,28 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
 
     if (mboxname_isdeletedmailbox(mbentry->name, &timestamp)) {
         if (timestamp > rrock->jrestore->cutoff) {
-            /* Calendar was destroyed after cutoff - restore resources */
-            r = recreate_calendar(mbentry, rrock);
+            /* Calendar was destroyed after cutoff -
+               restore calendar and resources */
+            struct mailbox *newmailbox = NULL;
+            int dry_run = (rrock->jrestore->flags & DRY_RUN);
+
+            if (!dry_run) {
+                r = recreate_calendar(mbentry, rrock, &newmailbox);
+            }
+
+            if (!r) {
+                r = recreate_ical_resources(mbentry, rrock, newmailbox);
+                mailbox_close(&newmailbox);
+            }
+
+            if (!r && !dry_run) {
+                /* XXX  Do we want to do this? */
+                r = mboxlist_deletemailboxlock(mbentry->name, /*isadmin*/0,
+                                               req->accountid, req->authstate,
+                                               /*mboxevent*/NULL, /*checkacl*/0,
+                                               /*localonly*/0, /*force*/0,
+                                               /*keep_intermediaries*/0);
+            }
         }
         else {
             /* Calendar was destroyed before cutoff - not interested */
