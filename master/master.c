@@ -126,6 +126,11 @@ struct service *Services = NULL;
 static int allocservices = 0;
 int nservices = 0;
 
+static struct service *WaitDaemons = NULL;
+static int allocwaitdaemons = 0;
+static int nwaitdaemons = 0;
+static pid_t waitdaemon_pgid = -1;
+
 struct event {
     char *name;
     struct timeval mark;
@@ -153,6 +158,7 @@ struct centry {
     enum sstate service_state;  /* SERVICE_STATE_* */
     time_t janitor_deadline;    /* cleanup deadline */
     int si;                     /* Services[] index */
+    int wdi;                    /* WaitDaemons[] index */
     char *desc;                 /* human readable description for logging */
     struct timeval spawntime;   /* when the centry was allocated */
     time_t sighuptime;          /* when did we send a SIGHUP */;
@@ -289,6 +295,7 @@ static struct centry *centry_alloc(void)
 
     t = xzmalloc(sizeof(*t));
     t->si = SERVICE_NONE;
+    t->wdi = SERVICE_NONE;
     gettimeofday(&t->spawntime, NULL);
     t->sighuptime = (time_t)-1;
 
@@ -452,6 +459,31 @@ static struct service *service_add(const struct service *proto)
         memcpy(s, proto, sizeof(struct service));
     else {
         memset(s, 0, sizeof(struct service));
+        s->socket = -1;
+        s->stat[0] = -1;
+        s->stat[1] = -1;
+    }
+
+    return s;
+}
+
+static struct service *waitdaemon_add(const struct service *proto)
+{
+    struct service *s;
+
+    if (nwaitdaemons == allocwaitdaemons) {
+        if (allocwaitdaemons > SERVICE_MAX - 5)
+            fatal("out of WaitDaemon structures, please restart", EX_UNAVAILABLE);
+        WaitDaemons = xrealloc(WaitDaemons,
+                               (allocwaitdaemons+=5) * sizeof(*s));
+    }
+    s = &WaitDaemons[nwaitdaemons++];
+
+    if (proto) {
+        memcpy(s, proto, sizeof *s);
+    }
+    else {
+        memset(s, 0, sizeof(*s));
         s->socket = -1;
         s->stat[0] = -1;
         s->stat[1] = -1;
@@ -838,7 +870,7 @@ static int service_is_fork_limited(struct service *s)
     return 0;
 }
 
-static void spawn_service(struct service *s, int si)
+static void spawn_service(struct service *s, int si, int wdi)
 {
     pid_t p;
     int i;
@@ -902,6 +934,11 @@ static void spawn_service(struct service *s, int si)
             xclose(Services[i].stat[0]);
             xclose(Services[i].stat[1]);
         }
+        for (i = 0; i < nwaitdaemons; i++) {
+            xclose(WaitDaemons[i].socket);
+            xclose(WaitDaemons[i].stat[0]);
+            xclose(WaitDaemons[i].stat[1]);
+        }
 
         syslog(LOG_DEBUG, "about to exec %s", path);
 
@@ -925,6 +962,7 @@ static void spawn_service(struct service *s, int si)
         c = centry_alloc();
         centry_set_name(c, s->listen ? "SERVICE" : "DAEMON", s->name, path);
         c->si = si;
+        c->wdi = wdi;
         centry_set_state(c, SERVICE_STATE_READY);
         centry_add(c, p);
         break;
@@ -1001,6 +1039,11 @@ static void spawn_schedule(struct timeval now)
                     xclose(Services[i].stat[0]);
                     xclose(Services[i].stat[1]);
                 }
+                for (i = 0; i < nwaitdaemons; i++) {
+                    xclose(WaitDaemons[i].socket);
+                    xclose(WaitDaemons[i].stat[0]);
+                    xclose(WaitDaemons[i].stat[1]);
+                }
 
                 syslog(LOG_DEBUG, "about to exec %s", path);
                 execv(path, a->exec->data);
@@ -1064,6 +1107,7 @@ static void reap_child(void)
     pid_t pid;
     struct centry *c;
     struct service *s;
+    struct service *wd;
     int failed;
 
     while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > 0) {
@@ -1075,6 +1119,7 @@ static void reap_child(void)
 
         if (c) {
             s = ((c->si) != SERVICE_NONE) ? &Services[c->si] : NULL;
+            wd = ((c->wdi) != SERVICE_NONE) ? &WaitDaemons[c->wdi] : NULL;
 
             /* paranoia */
             switch (c->service_state) {
@@ -1151,6 +1196,34 @@ static void reap_child(void)
                     /* Shouldn't get here */
                     break;
                 }
+            } else if (wd) {
+                /* WaitDaemons do not get shut down in the same way as other
+                 * services.  If we wind up in here, it was unexpected, regardless
+                 * of the process exit code!
+                 * XXX log exit code?
+                 * XXX count nactive?
+                 * XXX above might be a lie if we propagate SIGHUPS and they
+                 * XXX exit in response to those...
+                 * XXX need to figure out how we're using service_state for these
+                 * XXX before we can really nail down how to handle them here...
+                 */
+                switch (c->service_state) {
+                case SERVICE_STATE_READY:
+                    syslog(LOG_WARNING,
+                           "daemon %s/%s pid %d in READY state: "
+                           "terminated abnormally",
+                           SERVICEPARAM(s->name),
+                           SERVICEPARAM(s->familyname), pid);
+                    /* XXX do we want to do the nreadyfails juggle? (see above) */
+                    break;
+                default:
+                    syslog(LOG_WARNING,
+                           "daemon %s/%s pid %d in unexpected state (%u): exited",
+                           SERVICEPARAM(s->name),
+                           SERVICEPARAM(s->familyname),
+                           pid, c->service_state);
+                    break;
+                }
             } else {
                 /* children from spawn_schedule (events) or
                  * children of services removed by reread_conf() */
@@ -1170,11 +1243,20 @@ static void reap_child(void)
                    pid);
             /* FIXME: is this something we should take lightly? */
         }
-        if (verbose && c && (c->si != SERVICE_NONE))
-            syslog(LOG_DEBUG, "service %s/%s now has %d ready workers",
-                    SERVICEPARAM(Services[c->si].name),
-                    SERVICEPARAM(Services[c->si].familyname),
-                    Services[c->si].ready_workers);
+        if (verbose && c) {
+            if (c->si != SERVICE_NONE) {
+                syslog(LOG_DEBUG, "service %s/%s now has %d ready workers",
+                       SERVICEPARAM(Services[c->si].name),
+                       SERVICEPARAM(Services[c->si].familyname),
+                       Services[c->si].ready_workers);
+            }
+            else if (c->wdi != SERVICE_NONE) {
+                syslog(LOG_DEBUG, "waitdaemon %s/%s now has %d ready workers",
+                       SERVICEPARAM(WaitDaemons[c->wdi].name),
+                       SERVICEPARAM(WaitDaemons[c->wdi].familyname),
+                       WaitDaemons[c->wdi].ready_workers);
+            }
+        }
     }
 }
 
@@ -1233,12 +1315,24 @@ static void child_janitor(struct timeval now)
                     /* client not yet logged out ? */
                     struct service *s = ((c->si) != SERVICE_NONE) ?
                         &Services[c->si] : NULL;
+                    struct service *wd = ((c->wdi) != SERVICE_NONE) ?
+                        &WaitDaemons[c->wdi] : NULL;
 
-                    syslog(LOG_INFO, "service %s/%s pid %d in state %d has not "
-                        "yet been recycled since SIGHUP was sent (%ds ago)",
-                        s ? SERVICEPARAM(s->name) : "unknown",
-                        s ? SERVICEPARAM(s->familyname) : "unknown",
-                        c->pid, c->service_state, (int)delay);
+                    if (wd) {
+                        syslog(LOG_INFO,
+                               "waitdaemon %s/%s pid %d in state %d has not "
+                               "yet been recycled since SIGHUP was sent (%ds ago)",
+                               wd ? SERVICEPARAM(wd->name) : "unknown",
+                               wd ? SERVICEPARAM(wd->familyname) : "unknown",
+                               c->pid, c->service_state, (int) delay);
+                    }
+                    else {
+                        syslog(LOG_INFO, "service %s/%s pid %d in state %d has not "
+                            "yet been recycled since SIGHUP was sent (%ds ago)",
+                            s ? SERVICEPARAM(s->name) : "unknown",
+                            s ? SERVICEPARAM(s->familyname) : "unknown",
+                            c->pid, c->service_state, (int)delay);
+                    }
 
                     /* no need to log it more than once */
                     c->sighuptime = (time_t)-1;
@@ -1646,14 +1740,27 @@ static void add_start(const char *name, struct entry *e,
     strarray_free(tok);
 }
 
+static void add_waitdaemon(const char *name, struct entry *e, void *rock)
+{
+    /* XXX not implemented yet... */
+    (void) name, (void) e, (void) rock;
+    fatal("waitdaemons not implemented yet", EX_SOFTWARE);
+}
+
 static void add_daemon(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = rock ? 1 : 0;
     char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
     rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 0);
     int maxforkrate = masterconf_getint(e, "maxforkrate", 0);
+    int waitdaemon = masterconf_getswitch(e, "wait", 0);
     int reconfig = 0;
     int i;
+
+    if (waitdaemon) {
+        add_waitdaemon(name, e, rock);
+        return;
+    }
 
     if (maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
 
@@ -2135,6 +2242,8 @@ static void do_prom_report(struct timeval now)
                             s->nreadyfails, last_updated);
     }
 
+    /* XXX count details for WaitDaemons */
+
     /* write it out */
     retry_write(fd, buf_cstring(&report), buf_len(&report));
     ftruncate(fd, buf_len(&report));
@@ -2146,72 +2255,81 @@ static void do_prom_report(struct timeval now)
     buf_free(&report);
 }
 
+static void send_sighup(struct service *s, int si, int wdi)
+{
+    int i;
+    /* Send SIGHUP to all children:
+     *  - for services being added, there are still no children
+     *  - for services being disabled, we need to terminate the children
+     *  - otherwise (remaining services) we want to recycle children
+     * Note that for services being disabled, it is important to first
+     * signal them before shutting down their socket.
+     */
+    for (i = 0 ; i < child_table_size ; i++ ) {
+        struct centry *c = ctable[i];
+        while (c != NULL) {
+            if ((c->si == si || c->wdi == wdi) &&
+                (c->service_state != SERVICE_STATE_DEAD)) {
+                kill(c->pid, SIGHUP);
+                c->sighuptime = time(NULL);
+            }
+            c = c->next;
+        }
+    }
+
+    if (!s->exec && (s->socket >= 0)) {
+        /* cleanup newly disabled services */
+
+        if (verbose > 2)
+            syslog(LOG_DEBUG, "disable: service %s/%s socket %d pipe %d %d",
+                   s->name, s->familyname,
+                   s->socket,
+                   s->stat[0], s->stat[1]);
+
+        /* Only free the service info on the primary */
+        if (s->associate == 0) {
+            free(s->listen);
+            free(s->proto);
+        }
+        s->listen = NULL;
+        s->proto = NULL;
+        s->desired_workers = 0;
+
+        /* close all listeners */
+        shutdown(s->socket, SHUT_RDWR);
+        xclose(s->socket);
+    }
+    else if (s->exec && (s->socket < 0)) {
+        /* initialize new services */
+
+        service_create(s, 0);
+        if (verbose > 2)
+            syslog(LOG_DEBUG, "init: service %s/%s socket %d pipe %d %d",
+                   s->name, s->familyname,
+                   s->socket,
+                   s->stat[0], s->stat[1]);
+    }
+}
+
 static void reread_conf(struct timeval now)
 {
-    int i,j;
+    int i;
     struct event *ptr;
-    struct centry *c;
 
     /* disable all services -
        they will be re-enabled if they appear in config file */
     for (i = 0; i < nservices; i++) service_forget_exec(&Services[i]);
+    for (i = 0; i < nwaitdaemons; i++) service_forget_exec(&WaitDaemons[i]);
 
     /* read services */
     masterconf_getsection("SERVICES", &add_service, (void*) 1);
     masterconf_getsection("DAEMON", &add_daemon, (void *)1);
 
     for (i = 0; i < nservices; i++) {
-        /* Send SIGHUP to all children:
-         *  - for services being added, there are still no children
-         *  - for services being disabled, we need to terminate the children
-         *  - otherwise (remaining services) we want to recycle children
-         * Note that for services being disabled, it is important to first
-         * signal them before shutting down their socket.
-         */
-        for (j = 0 ; j < child_table_size ; j++ ) {
-            c = ctable[j];
-            while (c != NULL) {
-                if ((c->si == i) &&
-                    (c->service_state != SERVICE_STATE_DEAD)) {
-                    kill(c->pid, SIGHUP);
-                    c->sighuptime = time(NULL);
-                }
-                c = c->next;
-            }
-        }
-
-        if (!Services[i].exec && (Services[i].socket >= 0)) {
-            /* cleanup newly disabled services */
-
-            if (verbose > 2)
-                syslog(LOG_DEBUG, "disable: service %s/%s socket %d pipe %d %d",
-                       Services[i].name, Services[i].familyname,
-                       Services[i].socket,
-                       Services[i].stat[0], Services[i].stat[1]);
-
-            /* Only free the service info on the primary */
-            if(Services[i].associate == 0) {
-                free(Services[i].listen);
-                free(Services[i].proto);
-            }
-            Services[i].listen = NULL;
-            Services[i].proto = NULL;
-            Services[i].desired_workers = 0;
-
-            /* close all listeners */
-            shutdown(Services[i].socket, SHUT_RDWR);
-            xclose(Services[i].socket);
-        }
-        else if (Services[i].exec && (Services[i].socket < 0)) {
-            /* initialize new services */
-
-            service_create(&Services[i], 0);
-            if (verbose > 2)
-                syslog(LOG_DEBUG, "init: service %s/%s socket %d pipe %d %d",
-                       Services[i].name, Services[i].familyname,
-                       Services[i].socket,
-                       Services[i].stat[0], Services[i].stat[1]);
-        }
+        send_sighup(&Services[i], i, SERVICE_NONE);
+    }
+    for (i = 0; i < nwaitdaemons; i++) {
+        send_sighup(&WaitDaemons[i], SERVICE_NONE, i);
     }
 
     /* remove existing events */
@@ -2233,8 +2351,11 @@ static void reread_conf(struct timeval now)
 
     /* send some feedback to admin */
     syslog(LOG_NOTICE,
-            "Services reconfigured. %d out of %d (max %d) services structures are now in use",
-            nservices, allocservices, SERVICE_MAX);
+            "Services reconfigured. %d out of %d (max %d) services structures "
+            "and %d out of %d (max %d) waitdaemon structures "
+            "are now in use",
+            nservices, allocservices, SERVICE_MAX,
+            nwaitdaemons, allocwaitdaemons, SERVICE_MAX);
 }
 
 int main(int argc, char **argv)
@@ -2545,6 +2666,12 @@ int main(int argc, char **argv)
     /* init prom report */
     init_prom_report(now);
 
+    /* XXX start up waitdaemons, sequentially in order */
+    for (i = 0; i < nwaitdaemons; i++) {
+        /* XXX do it */
+        (void) 0;
+    }
+
     /* ok, we're going to start spawning like mad now */
     syslog(LOG_DEBUG, "ready for work");
 
@@ -2586,7 +2713,7 @@ int main(int argc, char **argv)
                     }
 
                     while (j-- > 0) {
-                        spawn_service(&Services[i], i);
+                        spawn_service(&Services[i], i, SERVICE_NONE);
                     }
                 } else if (Services[i].exec
                           && Services[i].babysit
@@ -2595,7 +2722,7 @@ int main(int argc, char **argv)
                           "lost all children for service: %s/%s.  " \
                           "Applying babysitter.",
                           Services[i].name, Services[i].familyname);
-                    spawn_service(&Services[i], i);
+                    spawn_service(&Services[i], i, SERVICE_NONE);
                 } else if (!Services[i].exec /* disabled */ &&
                           Services[i].name /* not yet removed */ &&
                           Services[i].nactive == 0) {
@@ -2619,10 +2746,10 @@ int main(int argc, char **argv)
                 }
             }
         }
+        /* XXX check for undermanned waitdaemons */
 
         if (in_shutdown && total_children == 0) {
-           syslog(LOG_NOTICE, "All children have exited, closing down");
-           exit(0);
+           goto finished;
         }
 
         if (gotsighup) {
@@ -2736,7 +2863,7 @@ int main(int argc, char **argv)
                     y >= 0 && FD_ISSET(y, &rfds))
                 {
                     /* huh, someone wants to talk to us */
-                    spawn_service(&Services[i], i);
+                    spawn_service(&Services[i], i, SERVICE_NONE);
                 }
             }
         }
@@ -2746,6 +2873,13 @@ int main(int argc, char **argv)
         do_prom_report(now);
     }
 
-    /* never reached */
-    return r;
+finished:
+    /* XXX shut down wait daemons, sequentially */
+    for (i = nwaitdaemons - 1; i >= 0; i--) {
+        /* XXX do it */
+        (void) 0;
+    }
+
+    syslog(LOG_NOTICE, "All children have exited, closing down");
+    return 0;
 }
