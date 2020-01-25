@@ -1639,7 +1639,7 @@ done:
     }
 
     if (i->minor_version < 17) {
-        i->changes_epoch = i->last_repack_time;
+        i->changes_epoch = i->last_repack_time ? i->last_repack_time : time(0);
     }
 
     return 0;
