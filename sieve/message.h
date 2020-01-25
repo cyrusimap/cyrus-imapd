@@ -46,6 +46,7 @@
 
 #include "sieve_interface.h"    /* for action contexts */
 #include "tree.h"
+#include "ptrarray.h"
 
 typedef struct Action action_list_t;
 
@@ -65,6 +66,8 @@ typedef enum {
     ACTION_REMOVEFLAG,
     ACTION_MARK,
     ACTION_UNMARK,
+    ACTION_ADDHEADER,
+    ACTION_DELETEHEADER,
     ACTION_ENOTIFY,
     ACTION_NOTIFY,
     ACTION_DENOTIFY
@@ -95,6 +98,19 @@ struct Action {
         struct {
             const char *flag;
         } fla;
+        struct {
+            const char *name;
+            const char *value;
+            int index;
+        } addh;
+        struct {
+            const char *name;
+            ptrarray_t *patterns;
+            int index;
+            int comptype;
+            comparator_t *compfunc;
+            void *comprock;
+        } delh;
     } u;
     char *param;                /* freed! */
     struct Action *next;
@@ -156,5 +172,10 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
               strarray_t *addflags, strarray_t *removeflags,
               unsigned char days, arrayu64_t *times,
               strarray_t *imapflags);
+int do_addheader(action_list_t *a, const char *name, const char *value,
+                 int index);
+int do_deleteheader(action_list_t *a, const char *name, void *patterns,
+                    int index, int comptype,
+                    comparator_t *compfunc, void *comprock);
 
 #endif

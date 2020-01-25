@@ -2260,7 +2260,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 value = parse_string(value, variables);
             }
 
-            i->addheader(sc, m, name, value, index);
+            res = do_addheader(actions, name, value, index);
             break;
         }
 
@@ -2274,6 +2274,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             comparator_t *comp = NULL;
             void *comprock = NULL;
             int npat = strarray_size(cmd.u.dh.values);
+            ptrarray_t *patterns = NULL;
+            int n, cflags = 0;
 
             /* find comparator function */
             comp = lookup_comp(i, comparator, match, relation, &comprock);
@@ -2285,92 +2287,57 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             if (requires & BFE_VARIABLES) {
                 name = parse_string(name, variables);
             }
+
             if (!strcasecmp("Received", name) ||
                 !strcasecmp("Auto-Submitted", name)) {
                 /* MUST NOT delete -- ignore */
-                name = NULL;
+                break;
             }
 
-            if (!npat) {
-                if (name) i->deleteheader(sc, m, name, index);
+            if (match == B_REGEX) {
+                /* set up options needed for compiling regex */
+                cflags = regcomp_flags(comparator, requires);
             }
-            else {
-                const char **vals, *pat;
-                strarray_t decoded_vals = STRARRAY_INITIALIZER;
-                int p, v, nval = 0, first_val = 0, ctag = 0;
-                unsigned long delete_mask = 0;
-                char scount[20];
 
-                /* get the header values */
-                if (name && i->getheader(m, name, &vals) == SIEVE_OK) {
-                    for (nval = 0; vals[nval]; nval++) {
-                        if (match == B_COUNT) continue;  /* count only */
+            patterns = ptrarray_new();
 
-                        /* decode header value and add to strarray_t */
-                        strarray_appendm(&decoded_vals,
-                                         charset_parse_mimeheader(vals[nval],
-                                                                  0 /*flags*/));
-                    }
+            for (n = 0; n < npat; n++) {
+                const char *val = strarray_nth(cmd.u.dh.values, n);
 
-                    if (match == B_COUNT) {
-                        /* convert number of headers to a string.
-                           Note: use of :index restricts count to at most 1 */
-                        snprintf(scount, sizeof(scount), "%u",
-                                 index ? 1 : nval);
-                    }
-                    else if (match == B_REGEX) {
-                        /* set up options needed for compiling regex */
-                        ctag = regcomp_flags(comparator, requires);
-                    }
-
-                    if (nval && index) {
-                        /* normalize index */
-                        index += (index < 0) ? nval : -1;  /* 0-based */
-                        if (index < 0 || index >= nval) {
-                            /* index out of range */
-                            nval = 0;
-                        }
-                        else {
-                            /* target single instance */
-                            first_val = index;
-                            nval = index + 1;
-                        }
-                    }
+                if (requires & BFE_VARIABLES) {
+                    val = parse_string(val, variables);
                 }
 
-                /* get (and optionally compare) each value pattern */
-                for (p = 0; p < npat; p++) {
-                    pat = strarray_nth(cmd.u.dh.values, p);
+                if (match == B_REGEX) {
+                    char errbuf[100]; /* Basically unused,
+                                         as regex is tested at compile */
 
-                    for (v = first_val; v < nval; v++) {
-                        if (!(delete_mask & (1 << v))) {
-                            const char *val;
-
-                            if (match == B_COUNT) {
-                                val = scount;
-                            }
-                            else {
-                                val = strarray_nth(&decoded_vals, v);
-                            }
-                            if (do_comparison(pat, val, comp, comprock,
-                                              ctag, variables, NULL)) {
-                                /* flag the header for deletion */
-                                delete_mask |= (1 << v);
-                            }
+                    regex_t *reg = bc_compile_regex(val, cflags,
+                                                    errbuf, sizeof(errbuf));
+                    if (!reg) {
+                        /* Oops */
+                        while ((reg = ptrarray_pop(patterns))) {
+                            regfree(reg);
+                            free(reg);
                         }
+                        ptrarray_free(patterns);
+                        res = SIEVE_NOMEM;
+                        break;
                     }
-                }
-                strarray_fini(&decoded_vals);
 
-                /* delete flagged headers in reverse order
-                   (so indexing is consistent) */
-                for (v = nval - 1; v >= first_val; v--) {
-                    if (delete_mask & (1<<v)) {
-                        i->deleteheader(sc, m, name, v+1 /* 1-based */);
-                    }
+                    ptrarray_append(patterns, reg);
+                }
+                else {
+                    ptrarray_append(patterns, xstrdupnull(val));
                 }
             }
+
             free(strarray_takevf(cmd.u.dh.values));
+
+            if (!res) {
+                res = do_deleteheader(actions, name, patterns, index,
+                                      match, comp, comprock);
+            }
             break;
         }
 
