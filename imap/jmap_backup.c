@@ -580,6 +580,33 @@ static char *contact_resource_name(message_t *msg, void *rock)
     return resource;
 }
 
+struct group_rock {
+    const char *name;
+    unsigned num;
+};
+
+static int _group_name_cb(void *rock, struct carddav_data *cdata)
+{
+    struct group_rock *grock = (struct group_rock *) rock;
+    size_t len = strlen(grock->name);
+
+    if (!cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
+        return 0;
+    }
+
+    /* Ignore non-groups */
+    if (cdata->kind != CARDDAV_KIND_GROUP) {
+        return 0;
+    }
+
+    if (!strncmp(cdata->fullname, grock->name, len)) {
+        sscanf(cdata->fullname+len, " (%u)", &grock->num);
+        return CYRUSDB_DONE;
+    }
+
+    return 0;
+}
+
 static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
                            jmap_req_t *req, void *rock)
 {
@@ -609,6 +636,14 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
                     buf_reset(&crock->buf);
                     buf_printf(&crock->buf, "Restored %.10s", datestr);
 
+                    /* Look for existing group vCard with same date prefix */
+                    struct group_rock grock = { buf_cstring(&crock->buf), 0 };
+                    enum carddav_sort sort = CARD_SORT_FULLNAME | CARD_SORT_DESC;
+                    if (carddav_foreach_sort(crock->carddavdb, mailbox->name,
+                                             &sort, 1, _group_name_cb, &grock)) {
+                        buf_printf(&crock->buf, " (%u)", grock.num+1);
+                    }
+
                     vparse_add_entry(gcard, NULL, "PRODID", _prodid);
                     vparse_add_entry(gcard, NULL, "VERSION", "3.0");
                     vparse_add_entry(gcard, NULL, "UID", makeuuid());
@@ -619,6 +654,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
                     crock->group_vcard = gcard;
                 }
 
+                /* Add the recreated contact as a member of the group */
                 buf_reset(&crock->buf);
                 buf_printf(&crock->buf, "urn:uuid:%s",
                            vparse_stringval(vcard->objects, "uid"));
