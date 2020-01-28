@@ -9333,20 +9333,18 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
             const char *mbox_id = NULL;
             json_t *jval = NULL;
             json_object_foreach(update->mailboxids, mbox_id, jval) {
-                int j;
-
-                /* Lookup the uid record of this email in this mailbox, can be NULL. */
-                struct email_uidrec *uidrec = NULL;
-                struct email_updateplan *plan = hash_lookup(mbox_id, &bulk->plans_by_mbox_id);
-                for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
-                    struct email_uidrec *tmp = ptrarray_nth(current_uidrecs, j);
-                    if (!strcmp(mbox_id, tmp->mboxrec->mbox_id)) {
-                        uidrec = tmp;
-                        break;
-                    }
-                }
                 /* Patch the mailbox */
                 if (jval == json_true()) {
+                    /* Lookup the uid record of this email in this mailbox, can be NULL. */
+                    struct email_uidrec *uidrec = NULL;
+                    int j;
+                    for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                        struct email_uidrec *tmp = ptrarray_nth(current_uidrecs, j);
+                        if (!strcmp(mbox_id, tmp->mboxrec->mbox_id)) {
+                            uidrec = tmp;
+                            break;
+                        }
+                    }
                     if (uidrec) {
                         /* This email is patched to stay in it's mailbox. Whatever. */
                     }
@@ -9363,10 +9361,15 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                     }
                 }
                 else {
-                    if (uidrec) {
-                        /* Delete the email from this mailbox. */
-                        ptrarray_append(&plan->delete, uidrec);
-                        plan->needrights |= ACL_EXPUNGE|ACL_DELETEMSG;
+                    /* Delete all instances of this email in this mailbox. */
+                    struct email_updateplan *plan = hash_lookup(mbox_id, &bulk->plans_by_mbox_id);
+                    int j;
+                    for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                        struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
+                        if (!strcmp(mbox_id, uidrec->mboxrec->mbox_id)) {
+                            ptrarray_append(&plan->delete, uidrec);
+                            plan->needrights |= ACL_EXPUNGE|ACL_DELETEMSG;
+                        }
                     }
                 }
             }
