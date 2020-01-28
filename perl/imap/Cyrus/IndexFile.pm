@@ -419,6 +419,65 @@ SKIPPED VERSION 11 - Fastmail internal only
  16: CacheCRC              int32  4
  17: RecordCRC             int32  4
 
+ Version 17:
+ ===========
+ Header:
+  0: Generation            int32  4
+  1: Format                int32  4
+  2: MinorVersion          int32  4
+  3: StartOffset           int32  4
+  4: RecordSize            int32  4
+  5: Exists                int32  4
+  6: LastAppenddate        time_t 4
+  7: LastUid               int32  4
+  8: QuotaUsed             int64  8
+  9: Pop3LastLogin         time_t 4
+ 10: UidValidity           int32  4
+ 11: Deleted               int32  4
+ 12: Answered              int32  4
+ 13: Flagged               int32  4
+ 14: Options               bitmap 4
+ 15: LeakedCache           int32  4
+ 16: HighestModseq         int64  8
+ 17: DeletedModseq         int64  8
+ 18: Exists                int32  4
+ 19: FirstExpunged         time_t 4
+ 20: LastCleanup           time_t 4
+ 21: HeaderFileCRC         int32  4
+ 22: SyncCRC               int32  4
+ 23: RecentUid             int32  4
+ 24: RecentTime            time_t 4
+ 25: Pop3ShowAfter         int32  4
+ 26: QuotaAnnotUsed        int32  4
+ 27: SyncCRCsAnnot         int32  4
+ 28: Unseen                int32  4
+ 29: CreatedModseq         int32  4
+ 30: ChangesEpoch          int32  4
+ 31: Spare1                int32  4
+ 32: Spare2                int32  4
+ 33: Spare3                int32  4
+ 34: HeaderCRC             int32  4
+
+ Record:
+  0: Uid                   int32  4
+  1: InternalDate          time_t 4
+  2: SentDate              time_t 4
+  3: Size                  int32  4
+  4: HeaderSize            int32  4
+  5: GmTime                time_t  4
+  6: CacheOffset           int32  4
+  7: LastUpdated           time_t 4
+  8: SystemFlags           bitmap 4
+  9: UserFlags             bitmap 16
+ 10: SaveDate              time_t  4
+ 11: CacheVersion          int32  4
+ 12: MessageGuid           hex    20
+ 13: Modseq                int64  8
+ 14: CID                   hex    8
+ 15: CreatedModseq         int64  8
+ 16: CacheCRC              int32  4
+ 17: RecordCRC             int32  4
+
 =cut
 
 # Set up header and record formatting information {{{
@@ -824,6 +883,68 @@ SyncCRCsAnnot         int32  4
 Unseen                int32  4
 CreatedModseq         int64  8
 Spare0                int32  4
+Spare1                int32  4
+Spare2                int32  4
+Spare3                int32  4
+Spare4                int32  4
+HeaderCrc             int32  4
+EOF
+    RecordSize => 112, # defined in file too, check it!
+    _make_fields('Record', <<EOF),
+Uid                   int32  4
+InternalDate          time_t 4
+SentDate              time_t 4
+Size                  int32  4
+HeaderSize            int32  4
+GmTime                time_t 4
+CacheOffset           int32  4
+LastUpdated           time_t 4
+SystemFlags           bitmap 4
+UserFlags             bitmap 16
+SaveDate              time_t 4
+CacheVersion          int32  4
+MessageGuid           hex    20
+Modseq                int64  8
+CID                   hex    8
+CreatedModseq         int64  8
+CacheCrc              int32  4
+RecordCrc             int32  4
+EOF
+  },
+  17 => {
+    HeaderSize => 160,
+    _make_fields('Header',<<EOF),
+Generation            int32  4
+Format                int32  4
+MinorVersion          int32  4
+StartOffset           int32  4
+RecordSize            int32  4
+NumRecords            int32  4
+LastAppenddate        time_t 4
+LastUid               int32  4
+QuotaUsed             int64  8
+Pop3LastLogin         time_t 4
+UidValidity           int32  4
+Deleted               int32  4
+Answered              int32  4
+Flagged               int32  4
+Options               bitmap 4
+LeakedCache           int32  4
+HighestModseq         int64  8
+DeletedModseq         int64  8
+Exists                int32  4
+FirstExpunged         time_t 4
+LastCleanup           time_t 4
+HeaderFileCRC         int32  4
+SyncCRCsBasic         int32  4
+RecentUid             int32  4
+RecentTime            time_t 4
+Pop3ShowAfter         int32  4
+QuotaAnnotUsed        int32  4
+SyncCRCsAnnot         int32  4
+Unseen                int32  4
+CreatedModseq         int64  8
+ChangesEpoch          int32  4
 Spare1                int32  4
 Spare2                int32  4
 Spare3                int32  4
