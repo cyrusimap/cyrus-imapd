@@ -940,14 +940,16 @@ static int restore_add_object(const char *object_name,
     }
     else if (strchr(object_name, '.')) {
         /* has a dot, might be an mboxname */
-        mbname_t *mbname = mbname_from_intname(object_name);
+        mbname_t *mbname = mbname_from_extname(object_name,
+                                               &restore_namespace, NULL);
         mailbox = backup_get_mailbox_by_name(backup, mbname,
                                              BACKUP_MAILBOX_ALL_RECORDS);
         mbname_free(&mbname);
     }
     else {
         /* not sure what it is, guess mboxname? */
-        mbname_t *mbname = mbname_from_intname(object_name);
+        mbname_t *mbname = mbname_from_extname(object_name,
+                                               &restore_namespace, NULL);
         mailbox = backup_get_mailbox_by_name(backup, mbname,
                                              BACKUP_MAILBOX_ALL_RECORDS);
         mbname_free(&mbname);

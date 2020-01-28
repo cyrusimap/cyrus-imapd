@@ -545,7 +545,9 @@ static int cmd_show_mailboxes(struct backup *backup,
 
         /* or it could be an mboxname */
         if (!mailbox) {
-            mbname_t *mbname = mbname_from_intname(arg);
+            mbname_t *mbname = mbname_from_extname(arg,
+                                                   &cyr_backup_namespace,
+                                                   NULL);
             if (!mbname) continue;
             mailbox = backup_get_mailbox_by_name(backup, mbname,
                                                  BACKUP_MAILBOX_ALL_RECORDS);
