@@ -751,8 +751,11 @@ envelope_err:
                 if (match == B_COUNT) {
                     count++;
                 } else {
+                    /* Per RFC 5228, Section 5.7,
+                       leading and trailing whitespace are ignored */
                     decoded_header =
-                        charset_parse_mimeheader(val[y], CHARSET_MIME_UTF8);
+                        charset_parse_mimeheader(val[y],
+                                                 CHARSET_MIME_UTF8 | CHARSET_TRIMWS);
 
                     res = do_comparisons(test.u.hhs.pl, decoded_header,
                                          comp, comprock, ctag,
