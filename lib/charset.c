@@ -1558,6 +1558,13 @@ static char *buffer_cstring(struct convert_rock *rock)
     return buf_release(buf);
 }
 
+static void buffer_trim(struct convert_rock *rock)
+{
+    struct buf *buf = (struct buf *)rock->state;
+
+    buf_trim(buf);
+}
+
 static inline int search_havematch(struct convert_rock *rock)
 {
     struct search_state *s = (struct search_state *)rock->state;
@@ -2471,34 +2478,6 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
 }
 
 /*
- * Decode MIME strings (per RFC 2047) in 's'.  Returns a newly allocated
- * string, containing 's' in canonical searching form, which must be
- * free()d by the caller.
- */
-EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
-{
-    struct convert_rock *tobuffer, *input;
-    char *res;
-    charset_t utf8;
-
-    if (!s) return NULL;
-
-    utf8 = charset_lookupname("utf-8");
-    tobuffer = buffer_init(0);
-    input = convert_init(utf8, 0/*to_uni*/, tobuffer);
-    input = canon_init(flags, input);
-
-    mimeheader_cat(input, s, flags);
-
-    res = buffer_cstring(tobuffer);
-
-    convert_free(input);
-    charset_free(&utf8);
-
-    return res;
-}
-
-/*
  * Unfold len bytes of string s into a new string, which must be freed()
  * by the caller. Unfolding removes any CRLF that is immediately followed
  * by a tab or space character. If flags sets CHARSET_UNFOLD_SKIPWS, then
@@ -2541,6 +2520,9 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
     input = convert_init(utf8, 0/*to_uni*/, tobuffer);
 
     mimeheader_cat(input, s, flags);
+
+    if (flags & CHARSET_TRIMWS)
+        buffer_trim(tobuffer);
 
     res = buffer_cstring(tobuffer);
 
