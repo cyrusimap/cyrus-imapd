@@ -1306,7 +1306,7 @@ EOF
     xlog $self, "Deliver a message";
 
     # should go in Folder1
-    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    my $msg1 = $self->{gen}->generate(subject => " \r\n Message\r\n 1 ");
     $self->{instance}->deliver($msg1);
 
     # should go in Folder2
