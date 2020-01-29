@@ -1558,6 +1558,13 @@ static char *buffer_cstring(struct convert_rock *rock)
     return buf_release(buf);
 }
 
+static void buffer_trim(struct convert_rock *rock)
+{
+    struct buf *buf = (struct buf *)rock->state;
+
+    buf_trim(buf);
+}
+
 static inline int search_havematch(struct convert_rock *rock)
 {
     struct search_state *s = (struct search_state *)rock->state;
@@ -2541,6 +2548,9 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
     input = convert_init(utf8, 0/*to_uni*/, tobuffer);
 
     mimeheader_cat(input, s, flags);
+
+    if (flags & CHARSET_TRIMWS)
+        buffer_trim(tobuffer);
 
     res = buffer_cstring(tobuffer);
 
