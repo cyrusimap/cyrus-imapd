@@ -249,7 +249,7 @@ sub assert_backups_not_exist
 }
 
 sub test_aaasetup
-    :min_version_3_0
+    :min_version_3_0 :needs_component_backup
 {
     my ($self) = @_;
 
@@ -258,7 +258,7 @@ sub test_aaasetup
 }
 
 sub test_basic
-    :min_version_3_0
+    :min_version_3_0 :needs_component_backup
 {
     my ($self) = @_;
 
@@ -276,7 +276,7 @@ sub test_basic
 }
 
 sub test_messages
-    :min_version_3_0
+    :min_version_3_0 :needs_component_backup
 {
     my ($self) = @_;
 
@@ -309,7 +309,7 @@ sub test_messages
 }
 
 sub test_shared_mailbox
-    :min_version_3_0
+    :min_version_3_0 :needs_component_backup
 {
     my ($self) = @_;
 
@@ -363,7 +363,7 @@ sub test_shared_mailbox
 }
 
 sub test_deleted_mailbox
-    :min_version_3_0
+    :min_version_3_0 :needs_component_backup
 {
     my ($self) = @_;
 
@@ -415,7 +415,7 @@ sub test_deleted_mailbox
 }
 
 sub test_locks
-    :min_version_3_0
+    :min_version_3_0 :needs_component_backup
 {
     my ($self) = @_;
 
@@ -466,7 +466,7 @@ sub test_locks
 }
 
 sub test_xbackup
-    :min_version_3_0 :UnixHierarchySep :VirtDomains
+    :min_version_3_0 :UnixHierarchySep :VirtDomains :needs_component_backup
 {
     my ($self) = @_;
     my $id = 1;
@@ -560,7 +560,7 @@ sub test_xbackup
 }
 
 sub test_xbackup_shared
-    :min_version_3_0 :UnixHierarchySep :VirtDomains
+    :min_version_3_0 :UnixHierarchySep :VirtDomains :needs_component_backup
 {
     my ($self) = @_;
     my $id = 1;
