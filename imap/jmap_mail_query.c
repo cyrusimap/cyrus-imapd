@@ -225,7 +225,8 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         /* Lookup group member email addresses */
         mbentry_t *mbentry = NULL;
         strarray_t *members = NULL;
-        if (!mboxlist_lookup(cfilter->addrbook, &mbentry, NULL)) {
+        if (!cfilter->addrbook ||
+            !mboxlist_lookup(cfilter->addrbook, &mbentry, NULL)) {
             members = carddav_getgroup(cfilter->carddavdb, mbentry, groupid, othermb);
         }
         mboxlist_entry_free(&mbentry);
