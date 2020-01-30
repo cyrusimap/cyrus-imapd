@@ -91,6 +91,131 @@ sub set_up
     ]);
 }
 
+sub test_restore_contacts
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contacts";
+    my $res = $jmap->CallMethods([['Contact/set', {create => {
+                        "a" => {firstName => "a", lastName => "a"},
+                        "b" => {firstName => "b", lastName => "b"},
+                        "c" => {firstName => "c", lastName => "c"}
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $contactA = $res->[0][1]{created}{"a"}{id};
+    my $contactB = $res->[0][1]{created}{"b"}{id};
+    my $contactC = $res->[0][1]{created}{"c"}{id};
+
+    xlog "destroy contact C";
+    $res = $jmap->CallMethods([['Contact/set', {
+                    destroy => [$contactC]
+                }, "R1.5"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1.5', $res->[0][2]);
+
+    sleep 2;
+    xlog "destroy contact A, update contact B, create contact D";
+    $res = $jmap->CallMethods([['Contact/set', {
+                    destroy => [$contactA],
+                    update => {$contactB => {firstName => "B"}},
+                    create => {"d" => {firstName => "d", lastName => "d"}}
+                }, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+    my $contactD = $res->[0][1]{created}{"d"}{id};
+
+    xlog "destroy contact D, create contact E";
+    $res = $jmap->CallMethods([['Contact/set', {
+                    destroy => [$contactD],
+                    create => {
+                        "e" => {firstName => "e", lastName => "e"}
+                    }
+                }, "R4"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R4', $res->[0][2]);
+    my $contactE = $res->[0][1]{created}{"e"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog "restore contacts prior to most recent changes";
+    $res = $jmap->CallMethods([['Backup/restoreContacts', {
+                    undoPeriod => "PT2S",
+                    undoAll => JSON::false
+                }, "R5"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreContacts', $res->[0][0]);
+    $self->assert_str_equals('R5', $res->[0][2]);
+    $self->assert_num_equals(0, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
+    $self->assert_num_equals(2, $res->[0][1]{numDestroysUndone});
+
+    xlog "get restored contacts";
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            properties => ['firstName', 'lastName'],
+         }, "R6"],
+        ['ContactGroup/get', {}, "R6.1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/get', $res->[0][0]);
+    $self->assert_str_equals('R6', $res->[0][2]);
+
+    my @got = sort { $a->{firstName} cmp $b->{firstName} } @{$res->[0][1]{list}};
+    $self->assert_num_equals(4, scalar @got);
+    $self->assert_str_equals('B', $got[0]{firstName});
+    $self->assert_str_equals('a', $got[1]{firstName});
+    $self->assert_str_equals('d', $got[2]{firstName});
+    $self->assert_str_equals('e', $got[3]{firstName});
+
+    $self->assert_str_equals('ContactGroup/get', $res->[1][0]);
+    $self->assert_str_equals('R6.1', $res->[1][2]);
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{list}[0]{contactIds}});
+
+    my %contactIds = map { $_ => 1 } @{$res->[1][1]{list}[0]{contactIds}};
+    $self->assert_not_null($contactIds{$contactA});
+    $self->assert_not_null($contactIds{$contactD});
+
+    xlog "get contact updates";
+    $res = $jmap->CallMethods([
+        ['Contact/changes', {
+            sinceState => $state
+         }, "R6.5"],
+        ['ContactGroup/changes', {
+            sinceState => $state
+         }, "R6.6"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/changes', $res->[0][0]);
+    $self->assert_str_equals('R6.5', $res->[0][2]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+
+    %contactIds = map { $_ => 1 } @{$res->[0][1]{created}};
+    $self->assert_not_null($contactIds{$contactA});
+    $self->assert_not_null($contactIds{$contactD});
+
+    $self->assert_str_equals('ContactGroup/changes', $res->[1][0]);
+    $self->assert_str_equals('R6.6', $res->[1][2]);
+    $self->assert_str_equals($state, $res->[1][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[1][1]{newState});
+    $self->assert_equals(JSON::false, $res->[1][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{destroyed}});
+    $state = $res->[1][1]{newState};
+}
+
 sub test_restore_contacts_all
     :min_version_3_1 :needs_component_jmap
 {
