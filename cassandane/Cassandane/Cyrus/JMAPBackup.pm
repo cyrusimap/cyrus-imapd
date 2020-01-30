@@ -1192,6 +1192,14 @@ sub test_restore_notes
     my $noteB = $res->[0][1]{created}{"b"}{id};
     my $noteC = $res->[0][1]{created}{"c"}{id};
 
+    xlog "destroy note C";
+    $res = $jmap->CallMethods([['Notes/set', {
+                    destroy => [$noteC]
+                }, "R1.5"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('R1.5', $res->[0][2]);
+
     sleep 2;
     xlog "destroy note A, update note B, create note D";
     $res = $jmap->CallMethods([['Notes/set', {
@@ -1238,7 +1246,13 @@ sub test_restore_notes
     $self->assert_not_null($res);
     $self->assert_str_equals('Notes/get', $res->[0][0]);
     $self->assert_str_equals('R6', $res->[0][2]);
-    $self->assert_num_equals(5, scalar @{$res->[0][1]{list}});
+
+    my @got = sort { $a->{title} cmp $b->{title} } @{$res->[0][1]{list}};
+    $self->assert_num_equals(4, scalar @got);
+    $self->assert_str_equals('B', $got[0]{title});
+    $self->assert_str_equals('a', $got[1]{title});
+    $self->assert_str_equals('d', $got[2]{title});
+    $self->assert_str_equals('e', $got[3]{title});
 
     xlog "get note updates";
     $res = $jmap->CallMethods([
