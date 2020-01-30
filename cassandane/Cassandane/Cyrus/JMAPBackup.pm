@@ -91,7 +91,7 @@ sub set_up
     ]);
 }
 
-sub test_restore_contacts
+sub test_restore_contacts_all
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -155,9 +155,7 @@ sub test_restore_contacts
     xlog "restore contacts prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
                     undoPeriod => "PT1S",
-                    undoCreate => JSON::true,
-                    undoUpdate => JSON::true,
-                    undoDestroy => JSON::true
+                    undoAll => JSON::true
                 }, "R5"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Backup/restoreContacts', $res->[0][0]);
@@ -219,9 +217,7 @@ sub test_restore_contacts
     xlog "restore contacts to before initial creation";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
                     undoPeriod => "PT3S",
-                    undoCreate => JSON::true,
-                    undoUpdate => JSON::true,
-                    undoDestroy => JSON::true
+                    undoAll => JSON::true
                 }, "R7"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Backup/restoreContacts', $res->[0][0]);
@@ -276,7 +272,7 @@ sub test_restore_contacts
     $state = $res->[1][1]{newState};
 }
 
-sub test_restore_contacts_dryrun
+sub test_restore_contacts_all_dryrun
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -341,9 +337,7 @@ sub test_restore_contacts_dryrun
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
                     performDryRun => JSON::true,
                     undoPeriod => "PT1S",
-                    undoCreate => JSON::true,
-                    undoUpdate => JSON::true,
-                    undoDestroy => JSON::true
+                    undoAll => JSON::true
                 }, "R5"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Backup/restoreContacts', $res->[0][0]);
@@ -381,7 +375,7 @@ sub test_restore_contacts_dryrun
     $self->assert_num_equals(0, scalar @{$res->[1][1]{destroyed}});
 }
 
-sub test_restore_calendars
+sub test_restore_calendars_all
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -505,9 +499,7 @@ sub test_restore_calendars
     $res = $jmap->CallMethods([
         ['Backup/restoreCalendars', {
             undoPeriod => "PT1S",
-            undoCreate => JSON::true,
-            undoUpdate => JSON::true,
-            undoDestroy => JSON::true
+            undoAll => JSON::true
          }, "R4"],
         ['CalendarEvent/get', {
             properties => ['title', 'sequence', 'calendarId'],
@@ -556,9 +548,7 @@ return;
     $res = $jmap->CallMethods([
         ['Backup/restoreCalendars', {
             undoPeriod => "P1D",
-            undoCreate => JSON::true,
-            undoUpdate => JSON::true,
-            undoDestroy => JSON::true
+            undoAll => JSON::true
          }, "R6"],
         ['CalendarEvent/get', {
             properties => ['title'],
@@ -586,7 +576,7 @@ return;
     $self->assert($ical =~ "METHOD:CANCEL");
 }
 
-sub test_restore_calendars_dryrun
+sub test_restore_calendars_all_dryrun
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -711,9 +701,7 @@ sub test_restore_calendars_dryrun
         ['Backup/restoreCalendars', {
             performDryRun => JSON::true,
             undoPeriod => "PT1S",
-            undoCreate => JSON::true,
-            undoUpdate => JSON::true,
-            undoDestroy => JSON::true
+            undoAll => JSON::true
          }, "R4"],
         ['CalendarEvent/get', {
             properties => ['title', 'sequence'],
@@ -736,7 +724,7 @@ sub test_restore_calendars_dryrun
     $self->assert_null($imip);
 }
 
-sub test_restore_mail
+sub test_restore_mail_all
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -962,7 +950,7 @@ sub test_restore_mail
     $self->assert_str_equals("$draftId3", $res->[2][1]{notFound}[3]);
 }
 
-sub test_restore_mail_dryrun
+sub test_restore_mail_all_dryrun
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -1191,6 +1179,97 @@ sub test_restore_notes
          }, "R0"]
     ]);
 
+    xlog "create notes";
+    $res = $jmap->CallMethods([['Notes/set', {create => {
+                        "a" => {title => "a"},
+                        "b" => {title => "b"},
+                        "c" => {title => "c"}
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $noteA = $res->[0][1]{created}{"a"}{id};
+    my $noteB = $res->[0][1]{created}{"b"}{id};
+    my $noteC = $res->[0][1]{created}{"c"}{id};
+
+    sleep 2;
+    xlog "destroy note A, update note B, create note D";
+    $res = $jmap->CallMethods([['Notes/set', {
+                    destroy => [$noteA],
+                    update => {$noteB => {title => "B"}},
+                    create => {"d" => {title => "d"}}
+                }, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+    my $noteD = $res->[0][1]{created}{"d"}{id};
+
+    xlog "destroy note D, create note E";
+    $res = $jmap->CallMethods([['Notes/set', {
+                    destroy => [$noteD],
+                    create => {
+                        "e" => {title => "e"}
+                    }
+                }, "R4"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('R4', $res->[0][2]);
+    my $noteE = $res->[0][1]{created}{"e"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog "restore notes prior to most recent changes";
+    $res = $jmap->CallMethods([['Backup/restoreNotes', {
+                    undoPeriod => "PT2S",
+                    undoAll => JSON::false
+                }, "R5"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreNotes', $res->[0][0]);
+    $self->assert_str_equals('R5', $res->[0][2]);
+    $self->assert_num_equals(0, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
+    $self->assert_num_equals(2, $res->[0][1]{numDestroysUndone});
+
+    xlog "get restored notes";
+    $res = $jmap->CallMethods([
+        ['Notes/get', {
+            properties => ['title', 'isFlagged'],
+         }, "R6"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/get', $res->[0][0]);
+    $self->assert_str_equals('R6', $res->[0][2]);
+    $self->assert_num_equals(5, scalar @{$res->[0][1]{list}});
+
+    xlog "get note updates";
+    $res = $jmap->CallMethods([
+        ['Notes/changes', {
+            sinceState => $state
+         }, "R8.5"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/changes', $res->[0][0]);
+    $self->assert_str_equals('R8.5', $res->[0][2]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+}
+
+sub test_restore_notes_all
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # force creation of notes mailbox prior to creating notes
+    my $res = $jmap->CallMethods([
+        ['Notes/set', {
+         }, "R0"]
+    ]);
+
     sleep 2;
     xlog "create notes";
     $res = $jmap->CallMethods([['Notes/set', {create => {
@@ -1248,9 +1327,7 @@ sub test_restore_notes
     xlog "restore notes prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreNotes', {
                     undoPeriod => "PT1S",
-                    undoCreate => JSON::true,
-                    undoUpdate => JSON::true,
-                    undoDestroy => JSON::true
+                    undoAll => JSON::true
                 }, "R5"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Backup/restoreNotes', $res->[0][0]);
@@ -1295,9 +1372,7 @@ sub test_restore_notes
     xlog "restore notes to before initial creation";
     $res = $jmap->CallMethods([['Backup/restoreNotes', {
                     undoPeriod => "PT3S",
-                    undoCreate => JSON::true,
-                    undoUpdate => JSON::true,
-                    undoDestroy => JSON::true
+                    undoAll => JSON::true
                 }, "R7"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Backup/restoreNotes', $res->[0][0]);
@@ -1335,7 +1410,7 @@ sub test_restore_notes
     $state = $res->[0][1]{newState};
 }
 
-sub test_restore_notes_dryrun
+sub test_restore_notes_all_dryrun
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -1406,9 +1481,7 @@ sub test_restore_notes_dryrun
     $res = $jmap->CallMethods([['Backup/restoreNotes', {
                     performDryRun => JSON::true,
                     undoPeriod => "PT1S",
-                    undoCreate => JSON::true,
-                    undoUpdate => JSON::true,
-                    undoDestroy => JSON::true
+                    undoAll => JSON::true
                 }, "R5"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Backup/restoreNotes', $res->[0][0]);
