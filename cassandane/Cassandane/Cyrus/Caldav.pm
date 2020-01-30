@@ -4290,6 +4290,7 @@ EOF
 }
 
 sub test_header_cache_control
+    :needs_component_httpd
 {
     my ($self) = @_;
 
