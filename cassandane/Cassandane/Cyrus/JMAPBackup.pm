@@ -1394,6 +1394,10 @@ sub test_restore_notes
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+
+    my %noteIds = map { $_ => 1 } @{$res->[0][1]{created}};
+    $self->assert_not_null($noteIds{$noteA});
+    $self->assert_not_null($noteIds{$noteD});
 }
 
 sub test_restore_notes_all
