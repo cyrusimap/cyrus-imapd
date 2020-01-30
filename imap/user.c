@@ -69,6 +69,7 @@
 # endif
 #endif
 
+#include "assert.h"
 #include "global.h"
 #include "mailbox.h"
 #include "mboxkey.h"
