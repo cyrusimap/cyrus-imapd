@@ -272,10 +272,17 @@ EXPORTED int dav_attach_mailbox(sqldb_t *db, struct mailbox *mailbox)
 /*
  * mboxlist_usermboxtree() callback function to create DAV DB entries for a mailbox
  */
-static int _dav_reconstruct_mb(const mbentry_t *mbentry, void *rock)
+static int _dav_reconstruct_mb(const mbentry_t *mbentry,
+                               void *rock
+#ifndef WITH_JMAP
+                                          __attribute__((unused))
+#endif
+                              )
 {
+#ifdef WITH_JMAP
     const char *userid = (const char *) rock;
     struct buf attrib = BUF_INITIALIZER;
+#endif
     int (*addproc)(struct mailbox *) = NULL;
     int r = 0;
 

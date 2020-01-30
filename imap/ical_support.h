@@ -58,27 +58,6 @@
 #define PER_USER_CAL_DATA \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
-#ifndef HAVE_VAVAILABILITY
-/* Allow us to compile without #ifdef HAVE_VAVAILABILITY everywhere */
-#define ICAL_VAVAILABILITY_COMPONENT  ICAL_X_COMPONENT
-#define ICAL_XAVAILABLE_COMPONENT     ICAL_X_COMPONENT
-#endif
-
-#ifndef HAVE_VPOLL
-/* Allow us to compile without #ifdef HAVE_VPOLL everywhere */
-#define ICAL_VPOLL_COMPONENT          ICAL_NO_COMPONENT
-#define ICAL_VVOTER_COMPONENT         ICAL_X_COMPONENT
-#define ICAL_METHOD_POLLSTATUS        ICAL_METHOD_NONE
-#define ICAL_VOTER_PROPERTY           ICAL_NO_PROPERTY
-#define icalproperty_get_voter        icalproperty_get_attendee
-#endif
-
-#ifndef HAVE_VPATCH
-/* Allow us to compile without #ifdef HAVE_VPATCH everywhere */
-#define ICAL_VPATCH_COMPONENT         ICAL_NO_COMPONENT
-#define ICAL_XPATCH_COMPONENT         ICAL_X_COMPONENT
-#endif
-
 #ifndef HAVE_NEW_CLONE_API
 /* Allow us to compile without #ifdef HAVE_NEW_CLONE_API everywhere */
 #define icalcomponent_clone           icalcomponent_new_clone
@@ -161,71 +140,19 @@ extern int icalcomponent_apply_vpatch(icalcomponent *ical,
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory
 
-
-/* Functions not declared in in libical < v2.0 */
-
-#if !HAVE_DECL_ICAL_STATUS_DELETED
-#define ICAL_STATUS_DELETED ICAL_STATUS_CANCELLED
-#endif
-
-#if !HAVE_DECL_ICALPROPERTY_GET_PARENT
-extern icalcomponent *icalproperty_get_parent(const icalproperty *property);
-#endif
-
-#if !HAVE_DECL_ICALRECUR_FREQ_TO_STRING
-extern const char *icalrecur_freq_to_string(icalrecurrencetype_frequency kind);
-#endif
-
-#if !HAVE_DECL_ICALRECUR_WEEKDAY_TO_STRING
-extern const char *icalrecur_weekday_to_string(icalrecurrencetype_weekday kind);
-#endif
-
-
-#ifdef HAVE_TZDIST_PROPS
-
 #define icalcomponent_get_tzuntil_property(comp) \
     icalcomponent_get_first_property(comp, ICAL_TZUNTIL_PROPERTY)
-
-#else /* !HAVE_TZDIST_PROPS */
-
-/* Functions to replace those not available in libical < v2.0 */
-
-#define icalcomponent_get_tzuntil_property(comp) \
-    icalcomponent_get_x_property_by_name(comp, "TZUNTIL")
-
-extern icalproperty *icalproperty_new_tzidaliasof(const char *v);
-extern icalproperty *icalproperty_new_tzuntil(struct icaltimetype v);
-
-#endif /* HAVE_TZDIST_PROPS */
-
-
-#ifdef HAVE_VALARM_EXT_PROPS
 
 #define icalcomponent_get_acknowledged_property(comp) \
     icalcomponent_get_first_property(comp, ICAL_ACKNOWLEDGED_PROPERTY)
 
-#else /* !HAVE_VALARM_EXT_PROPS */
+#ifndef HAVE_RFC7986_COLOR
 
-/* Functions to replace those not available in libical < v1.0 */
+/* Replacement for missing function in 3.0.0 <= libical < 3.0.5 */
 
-#define icalcomponent_get_acknowledged_property(comp) \
-    icalcomponent_get_x_property_by_name(comp, "ACKNOWLEDGED")
-
-extern icalproperty *icalproperty_new_acknowledged(struct icaltimetype v);
-extern struct icaltimetype icalproperty_get_acknowledged(const icalproperty *prop);
-
-#endif /* HAVE_VALARM_EXT_PROPS */
-
-
-#ifndef HAVE_RFC7986_PROPS
-
-/* Functions to replace those not available in libical < v2.0 */
-
-extern icalproperty *icalproperty_new_name(const char *v);
 extern icalproperty *icalproperty_new_color(const char *v);
 
-#endif /* HAVE_RFC7986_PROPS */
-
+#endif /* HAVE_RFC7986_COLOR */
 
 #ifndef HAVE_RSCALE
 
@@ -236,8 +163,6 @@ extern icalproperty *icalproperty_new_color(const char *v);
 
 #endif /* HAVE_RSCALE */
 
-
-#ifdef HAVE_MANAGED_ATTACH_PARAMS
 
 /* Wrappers to fetch managed attachment parameters by kind */
 
@@ -250,69 +175,6 @@ extern icalproperty *icalproperty_new_color(const char *v);
 #define icalproperty_get_size_parameter(prop) \
     icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER)
 
-#elif defined(HAVE_IANA_PARAMS)
-
-/* Functions to replace those not available in libical < v2.0 */
-
-extern icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop,
-                                                              const char *name);
-
-extern icalparameter *icalparameter_new_filename(const char *fname);
-
-extern void icalparameter_set_filename(icalparameter *param, const char *fname);
-
-extern icalparameter *icalparameter_new_managedid(const char *id);
-
-extern const char *icalparameter_get_managedid(icalparameter *param);
-
-extern void icalparameter_set_managedid(icalparameter *param, const char *id);
-
-extern icalparameter *icalparameter_new_size(const char *sz);
-
-extern const char *icalparameter_get_size(icalparameter *param);
-
-extern void icalparameter_set_size(icalparameter *param, const char *sz);
-
-/* Wrappers to fetch managed attachment parameters by kind */
-
-#define icalproperty_get_filename_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "FILENAME")
-
-#define icalproperty_get_managedid_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "MANAGED-ID")
-
-#define icalproperty_get_size_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SIZE")
-
-#else /* !HAVE_IANA_PARAMS */
-
-/* Dummy functions to allow compilation with libical < v0.48 */
-
-#define icalparameter_new_filename(fname) NULL
-
-#define icalparameter_set_filename(param, fname) (void) param
-
-#define icalparameter_new_managedid(id) NULL
-
-#define icalparameter_get_managedid(param) ""
-
-#define icalparameter_set_managedid(param, id) (void) param
-
-#define icalparameter_new_size(sz) NULL
-
-#define icalparameter_set_size(param, sz) (void) param
-
-#define icalproperty_get_filename_parameter(prop) NULL
-
-#define icalproperty_get_managedid_parameter(prop) NULL
-
-#define icalproperty_get_size_parameter(prop) NULL
-
-#endif /* HAVE_MANAGED_ATTACH_PARAMS */
-
-
-#ifdef HAVE_SCHEDULING_PARAMS
-
 /* Wrappers to fetch scheduling parameters by kind */
 
 #define icalproperty_get_scheduleagent_parameter(prop) \
@@ -323,66 +185,6 @@ extern void icalparameter_set_size(icalparameter *param, const char *sz);
 
 #define icalproperty_get_schedulestatus_parameter(prop) \
     icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER)
-
-#else /* !HAVE_SCHEDULING_PARAMS */
-
-typedef enum {
-    ICAL_SCHEDULEAGENT_X,
-    ICAL_SCHEDULEAGENT_SERVER,
-    ICAL_SCHEDULEAGENT_CLIENT,
-    ICAL_SCHEDULEAGENT_NONE
-} icalparameter_scheduleagent;
-
-typedef enum {
-    ICAL_SCHEDULEFORCESEND_X,
-    ICAL_SCHEDULEFORCESEND_REQUEST,
-    ICAL_SCHEDULEFORCESEND_REPLY,
-    ICAL_SCHEDULEFORCESEND_NONE
-} icalparameter_scheduleforcesend;
-
-
-#ifdef HAVE_IANA_PARAMS
-
-/* Functions to replace those not available in libical < v1.0 */
-
-extern icalparameter_scheduleagent
-icalparameter_get_scheduleagent(icalparameter *param);
-
-extern icalparameter_scheduleforcesend
-icalparameter_get_scheduleforcesend(icalparameter *param);
-
-extern icalparameter *icalparameter_new_schedulestatus(const char *stat);
-
-/* Wrappers to fetch scheduling parameters by kind */
-
-#define icalproperty_get_scheduleagent_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-AGENT")
-
-#define icalproperty_get_scheduleforcesend_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-FORCE-SEND")
-
-#define icalproperty_get_schedulestatus_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-STATUS")
-
-#else /* !HAVE_IANA_PARAMS */
-
-/* Dummy functions to allow compilation with libical < v0.48 */
-
-#define icalparameter_get_scheduleagent(param) ICAL_SCHEDULEAGENT_NONE
-
-#define icalparameter_get_scheduleforcesend(param) ICAL_SCHEDULEFORCESEND_NONE
-
-#define icalparameter_new_schedulestatus(stat) ((void) stat, NULL)
-
-#define icalproperty_get_scheduleagent_parameter(prop) NULL
-
-#define icalproperty_get_scheduleforcesend_parameter(prop) NULL
-
-#define icalproperty_get_schedulestatus_parameter(prop) NULL
-
-#endif /* HAVE_IANA_PARAMS */
-
-#endif /* HAVE_SCHEDULING_PARAMS */
 
 #endif /* HAVE_ICAL */
 

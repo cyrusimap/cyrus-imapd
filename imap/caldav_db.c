@@ -722,9 +722,7 @@ EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *c
     case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
     case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
     case ICAL_VAVAILABILITY_COMPONENT: mykind = CAL_COMP_VAVAILABILITY; break;
-#ifdef HAVE_VPOLL
     case ICAL_VPOLL_COMPONENT: mykind = CAL_COMP_VPOLL; break;
-#endif
     default: break;
     }
     cdata->comp_type = mykind;

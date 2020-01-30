@@ -434,6 +434,7 @@ static void print_test(test_t *test)
         print_stringlist(" KEYS", test->u.mm.keylist);
         break;
 
+#ifdef WITH_JMAP
     case BC_JMAPQUERY: {
         json_error_t jerr;
         json_t *jquery = json_loads(test->u.jquery, 0, &jerr);
@@ -445,6 +446,7 @@ static void print_test(test_t *test)
         free(json);
         break;
     }
+#endif
     }
 
     printf("\n");

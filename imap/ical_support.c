@@ -401,11 +401,9 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
 
             if (!span_compare_range(&recur_span, &range_span)) {
                 rrule_itr = icalrecur_iterator_new(recur, dtstart);
-#ifdef HAVE_RECUR_ITERATOR_START
                 if (rrule_itr && (recur.count > 0)) {
                     icalrecur_iterator_set_start(rrule_itr, range.start);
                 }
-#endif
             }
         }
     }
@@ -759,9 +757,7 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
         }
         break;
 
-#ifdef HAVE_VPOLL
     case ICAL_VPOLL_COMPONENT:
-#endif
     case ICAL_VTODO_COMPONENT: {
         struct icaltimetype due = (kind == ICAL_VPOLL_COMPONENT) ?
             icalcomponent_get_dtend(comp) : icalcomponent_get_due(comp);
@@ -995,15 +991,10 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
 
 EXPORTED void icaltime_set_utc(struct icaltimetype *t, int set)
 {
-#ifdef ICALTIME_HAS_IS_UTC
-    t->is_utc = set;
-#else
     icaltime_set_timezone(t, set ? icaltimezone_get_utc_timezone() : NULL);
-#endif
 }
 
 
-#ifdef HAVE_VPATCH
 enum {
     ACTION_UPDATE = 1,
     ACTION_DELETE,
@@ -1829,75 +1820,10 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
     return 0;
 }
 
-#else /* !HAVE_VPATCH */
 
-EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical __attribute__((unused)),
-                                        icalcomponent *vpatch __attribute__((unused)),
-                                        int *num_changes __attribute__((unused)),
-                                        const char **errstr __attribute__((unused)))
-{
-    fatal("icalcomponent_apply_vpatch() called, but no VPATCH", EX_SOFTWARE);
-}
-#endif /* HAVE_VPATCH */
+#ifndef HAVE_RFC7986_COLOR
 
-
-#ifndef HAVE_TZDIST_PROPS
-
-/* Functions to replace those not available in libical < v2.0 */
-
-EXPORTED icalproperty *icalproperty_new_tzidaliasof(const char *v)
-{
-    icalproperty *prop = icalproperty_new_x(v);
-    icalproperty_set_x_name(prop, "TZID-ALIAS-OF");
-    return prop;
-}
-
-EXPORTED icalproperty *icalproperty_new_tzuntil(struct icaltimetype v)
-{
-    icalproperty *prop = icalproperty_new_x(icaltime_as_ical_string(v));
-    icalproperty_set_x_name(prop, "TZUNTIL");
-    return prop;
-}
-
-#endif /* HAVE_TZDIST_PROPS */
-
-
-#ifndef HAVE_VALARM_EXT_PROPS
-
-/* Functions to replace those not available in libical < v1.0 */
-
-EXPORTED icalproperty *icalproperty_new_acknowledged(struct icaltimetype v)
-{
-    icalproperty *prop = icalproperty_new_x(icaltime_as_ical_string(v));
-    icalproperty_set_x_name(prop, "ACKNOWLEDGED");
-    return prop;
-}
-
-EXPORTED void icalproperty_set_acknowledged(icalproperty *prop,
-                                            struct icaltimetype v)
-{
-    icalproperty_set_x(prop, icaltime_as_ical_string(v));
-}
-
-EXPORTED struct icaltimetype
-icalproperty_get_acknowledged(const icalproperty *prop)
-{
-    return icaltime_from_string(icalproperty_get_x(prop));
-}
-
-#endif /* HAVE_VALARM_EXT_PROPS */
-
-
-#ifndef HAVE_RFC7986_PROPS
-
-/* Functions to replace those not available in libical < v2.0 */
-
-EXPORTED icalproperty *icalproperty_new_name(const char *v)
-{
-    icalproperty *prop = icalproperty_new_x(v);
-    icalproperty_set_x_name(prop, "NAME");
-    return prop;
-}
+/* Replacement for missing function in 3.0.0 <= libical < 3.0.5 */
 
 EXPORTED icalproperty *icalproperty_new_color(const char *v)
 {
@@ -1906,128 +1832,6 @@ EXPORTED icalproperty *icalproperty_new_color(const char *v)
     return prop;
 }
 
-#endif /* HAVE_RFC7986_PROPS */
-
-
-#ifdef HAVE_IANA_PARAMS
-
-#ifndef HAVE_MANAGED_ATTACH_PARAMS
-
-EXPORTED icalparameter*
-icalproperty_get_iana_parameter_by_name(icalproperty *prop,
-                                        const char *name)
-{
-    icalparameter *param;
-
-    for (param = icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
-         param && strcmp(icalparameter_get_iana_name(param), name);
-         param = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER));
-
-    return param;
-}
-
-/* Functions to replace those not available in libical < v2.0 */
-
-EXPORTED icalparameter *icalparameter_new_filename(const char *fname)
-{
-    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
-
-    icalparameter_set_iana_name(param, "FILENAME");
-    icalparameter_set_iana_value(param, fname);
-
-    return param;
-}
-
-EXPORTED void icalparameter_set_filename(icalparameter *param, const char *fname)
-{
-    icalparameter_set_iana_value(param, fname);
-}
-
-EXPORTED icalparameter *icalparameter_new_managedid(const char *id)
-{
-    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
-
-    icalparameter_set_iana_name(param, "MANAGED-ID");
-    icalparameter_set_iana_value(param, id);
-
-    return param;
-}
-
-EXPORTED const char *icalparameter_get_managedid(icalparameter *param)
-{
-    return icalparameter_get_iana_value(param);
-}
-
-EXPORTED void icalparameter_set_managedid(icalparameter *param, const char *id)
-{
-    icalparameter_set_iana_value(param, id);
-}
-
-EXPORTED icalparameter *icalparameter_new_size(const char *sz)
-{
-    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
-
-    icalparameter_set_iana_name(param, "SIZE");
-    icalparameter_set_iana_value(param, sz);
-
-    return param;
-}
-
-EXPORTED const char *icalparameter_get_size(icalparameter *param)
-{
-    return icalparameter_get_iana_value(param);
-}
-
-EXPORTED void icalparameter_set_size(icalparameter *param, const char *sz)
-{
-    icalparameter_set_iana_value(param, sz);
-}
-
-#endif /* HAVE_MANAGED_ATTACH_PARAMS */
-
-
-#ifndef HAVE_SCHEDULING_PARAMS
-
-/* Functions to replace those not available in libical < v1.0 */
-
-EXPORTED icalparameter_scheduleagent
-icalparameter_get_scheduleagent(icalparameter *param)
-{
-    const char *agent = NULL;
-
-    if (param) agent = icalparameter_get_iana_value(param);
-
-    if (!agent) return ICAL_SCHEDULEAGENT_NONE;
-    else if (!strcmp(agent, "SERVER")) return ICAL_SCHEDULEAGENT_SERVER;
-    else if (!strcmp(agent, "CLIENT")) return ICAL_SCHEDULEAGENT_CLIENT;
-    else return ICAL_SCHEDULEAGENT_X;
-}
-
-EXPORTED icalparameter_scheduleforcesend
-icalparameter_get_scheduleforcesend(icalparameter *param)
-{
-    const char *force = NULL;
-
-    if (param) force = icalparameter_get_iana_value(param);
-
-    if (!force) return ICAL_SCHEDULEFORCESEND_NONE;
-    else if (!strcmp(force, "REQUEST")) return ICAL_SCHEDULEFORCESEND_REQUEST;
-    else if (!strcmp(force, "REPLY")) return ICAL_SCHEDULEFORCESEND_REPLY;
-    else return ICAL_SCHEDULEFORCESEND_X;
-}
-
-EXPORTED icalparameter *icalparameter_new_schedulestatus(const char *stat)
-{
-    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
-
-    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-    icalparameter_set_iana_value(param, stat);
-
-    return param;
-}
-
-#endif /* HAVE_SCHEDULING_PARAMS */
-
-#endif /* HAVE_IANA_PARAMS */
+#endif /* HAVE_RFC7986_COLOR */
 
 #endif /* HAVE_ICAL */
