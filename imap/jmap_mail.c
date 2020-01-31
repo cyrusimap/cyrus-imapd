@@ -2757,8 +2757,8 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
                 const char *email_id = cache_record.ids + i * (cache_record.id_size + 1);
                 json_array_append_new(query->ids, json_string(email_id));
             }
-            query->result_position = from;
             query->total = cache_record.ids_count;
+            query->result_position = from < query->total ? from : query->total;
             is_cached = 1;
         }
         _cached_emailquery_fini(&cache_record);
@@ -2917,7 +2917,10 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     if (savedates) hashset_free(&savedates);
 
     if (!query->anchor) {
-        query->result_position = query->position;
+        if (query->position >= 0 && (size_t) query->position < query->total) {
+            query->result_position = query->position;
+        }
+        else query->result_position = query->total;
     }
     else if (!found_anchor) {
         *err = json_pack("{s:s}", "type", "anchorNotFound");
