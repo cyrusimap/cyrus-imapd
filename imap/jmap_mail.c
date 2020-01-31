@@ -2786,8 +2786,6 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     }
 
     // TODO cache emailId -> threadId on the request context
-    // TODO support negative positions
-    assert(query->position >= 0);
 
     /* Initialize search result loop */
     size_t anchor_position = (size_t)-1;
@@ -2887,9 +2885,11 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
             continue;
         }
 
-        /* Apply limit */
-        if (query->limit && result_count && query->limit <= result_count)
+        /* Apply limit for positive positions. */
+        if (query->limit && query->position >= 0 &&
+            result_count && query->limit <= result_count) {
             continue;
+        }
 
         /* Add message to result */
         json_array_append_new(query->ids, json_string(email_id));
@@ -2917,10 +2917,34 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     if (savedates) hashset_free(&savedates);
 
     if (!query->anchor) {
-        if (query->position >= 0 && (size_t) query->position < query->total) {
-            query->result_position = query->position;
+        if (query->position >= 0) {
+            if ((size_t) query->position < query->total) {
+                query->result_position = query->position;
+            }
+            else query->result_position = query->total;
         }
-        else query->result_position = query->total;
+        else {
+            /* Slice negative position from all matching ids */
+            json_t *result = json_array();
+            if (json_array_size(query->ids)) {
+                size_t from = 0;
+                if (((size_t)-query->position) < json_array_size(query->ids)) {
+                    from = json_array_size(query->ids) - ((size_t)-query->position);
+                }
+                size_t i;
+                for (i = from; i < json_array_size(query->ids); i++) {
+                    if (!query->have_limit || query->limit > json_array_size(result)) {
+                        json_array_append(result, json_array_get(query->ids, i)); // incref
+                    }
+                    else break;
+                }
+                query->result_position = from;
+            }
+            else query->result_position = 0;
+            json_decref(query->ids);
+            query->ids = result;
+
+        }
     }
     else if (!found_anchor) {
         *err = json_pack("{s:s}", "type", "anchorNotFound");
@@ -3006,10 +3030,6 @@ static int jmap_email_query(jmap_req_t *req)
     if (err) {
         jmap_error(req, err);
         goto done;
-    }
-    if (query.position < 0) {
-        /* we currently don't support negative positions */
-        jmap_parser_invalid(&parser, "position");
     }
     if (json_array_size(parser.invalid)) {
         err = json_pack("{s:s}", "type", "invalidArguments");
