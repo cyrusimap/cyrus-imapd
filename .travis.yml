@@ -61,6 +61,7 @@ script:
 branches:
   only:
   - master
+  - cyrus-imapd-3.2
   - cyrus-imapd-3.0
 notifications:
   slack:
