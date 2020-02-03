@@ -2142,25 +2142,32 @@ static int recovery2(struct dbengine *db, int *count)
     newdb->header.generation = db->header.generation + 1;
 
     /* start with the dummy */
+    int dirty = 0;
     for (offset = DUMMY_OFFSET; offset < SIZE(db); offset += record.len) {
         // skip over blanks
         if (!memcmp(BASE(db) + offset, BLANK, 8)) {
             record.len = 8;
             continue;
         }
+        // if this record fails to read, keep looking ahead for a commit,
+        // and mark this entire transaction as dirty
         r = read_onerecord(db, offset, &record);
         if (r) {
-            syslog(LOG_ERR, "DBERROR: %s failed to read at %08llX in recovery2, truncating",
+            dirty++;
+            syslog(LOG_ERR, "DBERROR: %s failed to read at %08llX in recovery2, continuing",
                    FNAME(db), (LLU)offset);
-            break;
+            record.len = 8;
+            continue;
         }
         if (record.type == COMMIT) {
-            r = _copy_commit(db, newdb, &record);
-            if (r) {
-                syslog(LOG_ERR, "DBERROR: %s failed to apply commit at %08llX in recovery2, truncating",
-                      FNAME(db), (LLU)offset);
-                break;
+            if (!dirty) {
+                r = _copy_commit(db, newdb, &record);
+                if (r) {
+                    syslog(LOG_ERR, "DBERROR: %s failed to apply commit at %08llX in recovery2, continuing",
+                           FNAME(db), (LLU)offset);
+                }
             }
+            dirty = 0;
         }
     }
 
