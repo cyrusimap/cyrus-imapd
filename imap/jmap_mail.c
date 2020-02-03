@@ -1382,7 +1382,7 @@ static void _email_read_annot(const jmap_req_t *req, msgrecord_t *mr,
         msgrecord_annot_lookup(mr, annot+7, /*userid*/"", buf);
     }
     else if (!strncmp(annot, "/private/", 9)) {
-        msgrecord_annot_lookup(mr, annot+7, req->userid, buf);
+        msgrecord_annot_lookup(mr, annot+8, req->userid, buf);
     }
     else {
         msgrecord_annot_lookup(mr, annot, "", buf);
