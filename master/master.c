@@ -2358,6 +2358,54 @@ static void reread_conf(struct timeval now)
             nwaitdaemons, allocwaitdaemons, SERVICE_MAX);
 }
 
+static void check_undermanned(struct service *s, int si, int wdi)
+{
+    if (s->exec /* enabled */ &&
+        (s->nactive < s->max_workers) &&
+        (s->ready_workers < s->desired_workers))
+    {
+        /* bring us up to desired_workers */
+        int j = s->desired_workers - s->ready_workers;
+
+        if (verbose) {
+            syslog(LOG_DEBUG, "service %s/%s needs %d more ready workers",
+                   s->name, s->familyname, j);
+        }
+
+        while (j-- > 0) {
+            spawn_service(s, si, wdi);
+        }
+    } else if (s->exec
+                && s->babysit
+                && s->nactive == 0) {
+        syslog(LOG_ERR,
+               "lost all children for service: %s/%s.  " \
+               "Applying babysitter.",
+               s->name, s->familyname);
+        spawn_service(s, si, wdi);
+    } else if (!s->exec /* disabled */ &&
+                s->name /* not yet removed */ &&
+                s->nactive == 0) {
+        if (verbose > 2)
+            syslog(LOG_DEBUG, "remove: service %s/%s pipe %d %d",
+                   s->name, s->familyname,
+                   s->stat[0], s->stat[1]);
+
+        /* Only free the service info on the primary */
+        if (s->associate == 0) {
+            free(s->name);
+        }
+        s->name = NULL;
+        s->nforks = 0;
+        s->nactive = 0;
+        s->nconnections = 0;
+        s->associate = 0;
+
+        xclose(s->stat[0]);
+        xclose(s->stat[1]);
+    }
+}
+
 int main(int argc, char **argv)
 {
     static const char lock_suffix[] = ".lock";
@@ -2699,54 +2747,14 @@ int main(int argc, char **argv)
         /* do we have any services undermanned? */
         for (i = 0; i < nservices; i++) {
             total_children += Services[i].nactive;
-            if (!in_shutdown) {
-                if (Services[i].exec /* enabled */ &&
-                    (Services[i].nactive < Services[i].max_workers) &&
-                    (Services[i].ready_workers < Services[i].desired_workers))
-                {
-                    /* bring us up to desired_workers */
-                    int j = Services[i].desired_workers - Services[i].ready_workers;
-
-                    if (verbose) {
-                        syslog(LOG_DEBUG, "service %s/%s needs %d more ready workers",
-                            Services[i].name, Services[i].familyname, j);
-                    }
-
-                    while (j-- > 0) {
-                        spawn_service(&Services[i], i, SERVICE_NONE);
-                    }
-                } else if (Services[i].exec
-                          && Services[i].babysit
-                          && Services[i].nactive == 0) {
-                    syslog(LOG_ERR,
-                          "lost all children for service: %s/%s.  " \
-                          "Applying babysitter.",
-                          Services[i].name, Services[i].familyname);
-                    spawn_service(&Services[i], i, SERVICE_NONE);
-                } else if (!Services[i].exec /* disabled */ &&
-                          Services[i].name /* not yet removed */ &&
-                          Services[i].nactive == 0) {
-                    if (verbose > 2)
-                        syslog(LOG_DEBUG, "remove: service %s/%s pipe %d %d",
-                              Services[i].name, Services[i].familyname,
-                              Services[i].stat[0], Services[i].stat[1]);
-
-                    /* Only free the service info on the primary */
-                    if (Services[i].associate == 0) {
-                        free(Services[i].name);
-                    }
-                    Services[i].name = NULL;
-                    Services[i].nforks = 0;
-                    Services[i].nactive = 0;
-                    Services[i].nconnections = 0;
-                    Services[i].associate = 0;
-
-                    xclose(Services[i].stat[0]);
-                    xclose(Services[i].stat[1]);
-                }
-            }
+            if (!in_shutdown)
+                check_undermanned(&Services[i], i, SERVICE_NONE);
         }
-        /* XXX check for undermanned waitdaemons */
+        for (i = 0; i < nwaitdaemons; i++) {
+            /* waitdaemons are not counted towards total_children */
+            if (!in_shutdown)
+                check_undermanned(&WaitDaemons[i], SERVICE_NONE, i);
+        }
 
         if (in_shutdown && total_children == 0) {
            goto finished;
