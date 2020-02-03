@@ -421,6 +421,9 @@ enum {
 #define HEADER_SIZE 64
 #define DUMMY_OFFSET HEADER_SIZE
 #define MAXRECORDHEAD ((MAXLEVEL + 5)*8)
+// NOTE: MAXLEVEL should be chosen so that MAXRECORDHEAD always
+// fits within BLOCKSIZE so header rewrites are atomic.
+#define BLOCKSIZE 512
 
 /* mount a scratch monkey */
 static union skipwritebuf {
@@ -731,6 +734,36 @@ static int rewrite_record(struct dbengine *db, struct skiprecord *record)
     return 0;
 }
 
+/* Add BLANK padding sets of 8 bytes until the entire header will write
+ * in a single disk block for safety.
+ * This ONLY works if the header is small enough obviously (should always be)
+ * the algorithm checks if the end % BLOCKSIZE is smaller than the start % BLOCKSIZE
+ * in which case we've wrapped a block */
+static int add_padding(struct dbengine *db, size_t iolen) {
+    // if it will always span a block, there's no point padding (and besides the
+    // algorithm won't work)
+    if (iolen > BLOCKSIZE - 8) return 0;
+
+    // start with 8 byte offset, because the first 8 bytes never get rewritten
+    // and end with 8 before, because if it fits exactly that's OK too
+    // consider 480 bytes in, 32 bytes to write
+    // 480+8 == 488, 480 - 8 + 32 == 504, so no padding
+    // consider 488 bytes in:
+    // 488+8 == 496, 488 - 8 + 32 == 512 -> 0 so we pad
+    // 496+8 == 504 to 8, so we pad again
+    // 504+8 == 512 -> 0, so we don't pad any more!
+    // we write the new record from 504 onwards, with the header line before the
+    // block boundary, maximising use of space!
+
+    while (((db->end + 8) % BLOCKSIZE) > ((db->end - 8 + iolen) % BLOCKSIZE)) {
+        int n = mappedfile_pwrite(db->mf, BLANK, 8, db->end);
+        if (n < 0) return CYRUSDB_IOERROR;
+        db->end += 8;
+    }
+
+    return 0;
+}
+
 /* you can only write records at the end */
 static int write_record(struct dbengine *db, struct skiprecord *record,
                         const char *key, const char *val)
@@ -740,6 +773,7 @@ static int write_record(struct dbengine *db, struct skiprecord *record,
     size_t iolen = 0;
     struct iovec io[4];
     int n;
+    int r;
 
     assert(!record->offset);
 
@@ -765,6 +799,10 @@ static int write_record(struct dbengine *db, struct skiprecord *record,
     prepare_record(record, scratchspace.s, &iolen);
     io[0].iov_base = scratchspace.s;
     io[0].iov_len = iolen;
+
+    /* ensure that the record header be contained within a single disk block */
+    r = add_padding(db, iolen);
+    if (r) return r;
 
     /* write to the mapped file, getting the offset updated */
     n = mappedfile_pwritev(db->mf, io, 4, db->end);
