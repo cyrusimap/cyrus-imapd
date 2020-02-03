@@ -2068,7 +2068,6 @@ static int _copy_commit(struct dbengine *db, struct dbengine *newdb,
 {
     struct txn *tid = NULL;
     struct skiprecord record;
-    const char *val;
     size_t offset;
     int r = 0;
 
@@ -2081,21 +2080,25 @@ static int _copy_commit(struct dbengine *db, struct dbengine *newdb,
 
         r = read_onerecord(db, offset, &record);
         if (r) goto err;
+
         switch (record.type) {
         case DELETE:
-            val = NULL;
+            /* find the record we are deleting */
+            r = read_onerecord(db, record.nextloc[0], &record);
+            if (r) goto err;
+            /* and delete it from the new DB */
+            r = mystore(newdb, KEY(db, &record), record.keylen, NULL, 0, &tid, 1);
+            if (r) goto err;
             break;
         case RECORD:
-            val = VAL(db, &record);
+            /* store into the new DB */
+            r = mystore(newdb, KEY(db, &record), record.keylen, VAL(db, &record), record.vallen, &tid, 1);
+            if (r) goto err;
             break;
         default:
             r = CYRUSDB_IOERROR;
             goto err;
         }
-
-        /* store into the new DB */
-        r = mystore(newdb, KEY(db, &record), record.keylen, val, record.vallen, &tid, 1);
-        if (r) goto err;
     }
 
     if (tid) r = mycommit(newdb, tid);
