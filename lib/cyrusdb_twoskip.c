@@ -293,6 +293,10 @@
 #define DELETE '-'
 #define COMMIT '$'
 
+/* magic 8-byte pad - space for type, easy to read on hexdump
+ * and with both low and high bits to be unlikely in real data */
+#define BLANK " BLANK\x07\xa0"
+
 /********** DATA STRUCTURES *************/
 
 /* A single "record" in the twoskip file.  This could be a
@@ -1923,6 +1927,13 @@ static int dump(struct dbengine *db, int detail)
     while (offset < db->header.current_size) {
         printf("%08llX ", (LLU)offset);
 
+        // skip over blanks
+        if (!memcmp(BASE(db) + offset, BLANK, 8)) {
+            printf("BLANK\n");
+            offset += 8;
+            continue;
+        }
+
         r = read_onerecord(db, offset, &record);
 
         if (r) {
@@ -2070,6 +2081,12 @@ static int _copy_commit(struct dbengine *db, struct dbengine *newdb,
     int r = 0;
 
     for (offset = commit->nextloc[0]; offset < commit->offset; offset += record.len) {
+        // skip over blanks
+        if (!memcmp(BASE(db) + offset, BLANK, 8)) {
+            record.len = 8;
+            continue;
+        }
+
         r = read_onerecord(db, offset, &record);
         if (r) goto err;
         switch (record.type) {
@@ -2123,6 +2140,11 @@ static int recovery2(struct dbengine *db, int *count)
 
     /* start with the dummy */
     for (offset = DUMMY_OFFSET; offset < SIZE(db); offset += record.len) {
+        // skip over blanks
+        if (!memcmp(BASE(db) + offset, BLANK, 8)) {
+            record.len = 8;
+            continue;
+        }
         r = read_onerecord(db, offset, &record);
         if (r) {
             syslog(LOG_ERR, "DBERROR: %s failed to read at %08llX in recovery2, truncating",
