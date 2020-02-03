@@ -1496,4 +1496,46 @@ sub test_subscriptions_unixhs
     ]);
 }
 
+# this is testing a bug where DELETED namespace lookup in mboxlist_mboxtree
+# wasn't correctly looking only for children of that name, so it would try
+# to delete the wrong user's mailbox.
+sub test_userprefix
+    :DelayedDelete
+{
+    my ($self) = @_;
+    $self->{instance}->create_user("ua");
+    $self->{instance}->create_user("uab");
+
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $astore = $mastersvc->create_store(username => "ua");
+    my $atalk = $astore->get_client();
+    my $bstore = $mastersvc->create_store(username => "uab");
+    my $btalk = $bstore->get_client();
+
+    xlog "Creating some users with some deleted mailboxes";
+    $atalk->create("INBOX.hi");
+    $atalk->create("INBOX.no");
+    $atalk->delete("INBOX.hi");
+
+    $btalk->create("INBOX.boo");
+    $btalk->create("INBOX.noo");
+    $btalk->delete("INBOX.boo");
+
+    $self->run_replication(user => "ua");
+    $self->run_replication(user => "uab");
+
+    my $masterstore = $mastersvc->create_store(username => 'admin');
+    my $admintalk = $masterstore->get_client();
+
+    xlog "Deleting the user with the prefix name";
+    $admintalk->delete("user.ua");
+    $self->run_replication(user => "ua");
+    $self->run_replication(user => "uab");
+    # This would fail at the end with syslog IOERRORs before the bugfix:
+    # >1580698085>S1 SYNCAPPLY UNUSER ua
+    # <1580698085<* BYE Fatal error: Internal error: assertion failed: imap/mboxlist.c: 868: user_isnamespacelocked(userid)
+    # 0248020101/sync_client[20041]: IOERROR: UNUSER received * response: 
+    # Error from sync_do_user(ua): bailing out!
+}
+
 1;
