@@ -636,9 +636,6 @@ static int _conversations_parse(const char *data, size_t datalen,
     bit64 tval;
     bit64 version;
 
-    /* make sure we don't leak old data */
-    arrayu64_truncate(cids, 0);
-
     r = parsenum(data, &rest, datalen, &version);
     if (r) return IMAP_MAILBOX_BADFORMAT;
 
@@ -658,7 +655,7 @@ static int _conversations_parse(const char *data, size_t datalen,
     while (1) {
         r = parsehex(rest, &rest, 16, &cid);
         if (r) return IMAP_MAILBOX_BADFORMAT;
-        arrayu64_append(cids, cid);
+        if (cids) arrayu64_append(cids, cid);
         if (rest[0] == ' ') break;
         if (rest[0] != ',') return IMAP_MAILBOX_BADFORMAT;
         rest++; /* skip comma */
@@ -701,6 +698,9 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
 
     if (r == CYRUSDB_NOTFOUND)
         return 0; /* not an error, but nothing more to do */
+
+    /* make sure we don't leak old data */
+    arrayu64_truncate(cids, 0);
 
     if (!r) r = _conversations_parse(data, datalen, cids, NULL);
 
@@ -2618,7 +2618,6 @@ static int prunecb(void *rock,
                    const char *data, size_t datalen)
 {
     struct prune_rock *prock = (struct prune_rock *)rock;
-    arrayu64_t cids = ARRAYU64_INITIALIZER;
     time_t stamp;
     int r;
 
@@ -2626,7 +2625,7 @@ static int prunecb(void *rock,
     r = check_msgid(key, keylen, NULL);
     if (r) goto done;
 
-    r = _conversations_parse(data, datalen, &cids, &stamp);
+    r = _conversations_parse(data, datalen, NULL, &stamp);
     if (r) goto done;
 
     /* keep records newer than the threshold */
@@ -2641,7 +2640,6 @@ static int prunecb(void *rock,
                        /*force*/1);
 
 done:
-    arrayu64_fini(&cids);
     return r;
 }
 
