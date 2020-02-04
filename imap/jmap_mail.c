@@ -9883,7 +9883,7 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                     update->snoozed_uidrec->is_snoozed = 0;
                     ptrarray_append(&plan->snooze, update->snoozed_uidrec);
                 }
-                else {
+                else if (!json_is_null(update->snoozed)) {
                     /* Determine which mailbox to use for the snoozed email */
                     find_mbox = 1;
                 }
@@ -9906,7 +9906,7 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
         else if (json_is_object(update->snoozed)) {
             /* Setting snoozeDetails */
             if (!update->mailboxids) {
-                /* invalidArguments */
+                /* invalidProperties */
                 invalid = 1;
             }
             else {
@@ -9950,7 +9950,7 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                 }
 
                 if (!update->snooze_in_mboxid) {
-                    /* invalidArguments */
+                    /* invalidProperties */
                     invalid = 1;
                 }
             }
@@ -9959,8 +9959,8 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
         if (invalid) {
             json_object_set_new(bulk->set_errors, email_id,
                                 json_pack("{s:s s:[s,s]}",
-                                          "type", "invalidArguments",
-                                          "arguments", "mailboxIds", "snoozed"));
+                                          "type", "invalidProperties",
+                                          "properties", "mailboxIds", "snoozed"));
         }
     }
 
