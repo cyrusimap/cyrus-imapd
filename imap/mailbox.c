@@ -4623,10 +4623,6 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
     if (mboxname_isdeletedmailbox(mailbox->name, NULL))
         return 1;
 
-    /* anything already deleted */
-    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
-        return 1;
-
     /* Calendar and Addressbook are small files and need to be hot */
     if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
         return 0;
