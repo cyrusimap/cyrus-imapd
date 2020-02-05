@@ -421,7 +421,6 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
     struct body *body = NULL;
     const struct body *part = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
-    struct buf blob = BUF_INITIALIZER;
     char *decbuf = NULL;
     int res = 0;
 
@@ -460,10 +459,9 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
     }
 
     // success
-    buf_setmap(&blob, base, len);
     req->txn->resp_body.type = accept_mime ? accept_mime : "application/octet-stream";
-    req->txn->resp_body.len = buf_len(&blob);
-    write_body(HTTP_OK, req->txn, buf_base(&blob), buf_len(&blob));
+    req->txn->resp_body.len = len;
+    write_body(HTTP_OK, req->txn, base, len);
     res = HTTP_OK;
 
  done:
@@ -477,7 +475,6 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
         msgrecord_unref(&mr);
     }
     buf_free(&msg_buf);
-    buf_free(&blob);
     return res;
 }
 
