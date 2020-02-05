@@ -251,7 +251,7 @@ static int send_alarm(struct get_alarm_rock *rock,
     FILL_STRING_PARAM(event, EVENT_CALENDAR_ORGANIZER,
                       xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
 
-    const char *timezone = NULL;
+    const char *timezone;
     if (!icaltime_is_date(start) && icaltime_is_utc(start))
         timezone = "UTC";
     else if (icaltime_get_timezone(start))
@@ -362,7 +362,7 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
         if (icalvalue_isa(val) == ICAL_DURATION_VALUE) {
             icalparameter *param =
                 icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
-            icaltimetype base = icaltime_null_time();
+            icaltimetype base;
             if (param && icalparameter_get_related(param) == ICAL_RELATED_END) {
                 base = end;
             }
@@ -452,7 +452,7 @@ static int update_alarmdb(const char *mboxname,
 
     sqldb_t *alarmdb = caldav_alarm_open();
     if (!alarmdb) return -1;
-    int rc = SQLITE_OK;
+    int rc;
 
     syslog(LOG_DEBUG, "update_alarmdb(%s:%u, %ld)",
            mboxname, imap_uid, nextcheck);

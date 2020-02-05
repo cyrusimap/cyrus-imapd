@@ -142,7 +142,7 @@ EXPORTED int caldav_done(void)
 
 EXPORTED struct caldav_db *caldav_open_userid(const char *userid)
 {
-    struct caldav_db *caldavdb = NULL;
+    struct caldav_db *caldavdb;
 
     init_internal();
 
@@ -161,7 +161,7 @@ EXPORTED struct caldav_db *caldav_open_userid(const char *userid)
 /* Open DAV DB corresponding to userid */
 EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox)
 {
-    struct caldav_db *caldavdb = NULL;
+    struct caldav_db *caldavdb;
     char *userid = mboxname_to_userid(mailbox->name);
 
     init_internal();
@@ -184,7 +184,7 @@ EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox)
 /* Close DAV DB */
 EXPORTED int caldav_close(struct caldav_db *caldavdb)
 {
-    int r = 0;
+    int r;
 
     if (!caldavdb) return 0;
 
@@ -597,8 +597,7 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
     if (cdata->dav.rowid) {
         int r = sqldb_exec(caldavdb->db, CMD_DELETE_JMAPCACHE, bval, NULL, NULL);
         if (r) return r;
-        r = sqldb_exec(caldavdb->db, CMD_UPDATE, bval, NULL, NULL);
-        if (r) return r;
+        return sqldb_exec(caldavdb->db, CMD_UPDATE, bval, NULL, NULL);
     }
     else {
         int r = sqldb_exec(caldavdb->db, CMD_INSERT, bval, NULL, NULL);
@@ -617,11 +616,8 @@ EXPORTED int caldav_delete(struct caldav_db *caldavdb, unsigned rowid)
     struct sqldb_bindval bval[] = {
         { ":rowid", SQLITE_INTEGER, { .i = rowid } },
         { NULL,     SQLITE_NULL,    { .s = NULL  } } };
-    int r;
 
-    r = sqldb_exec(caldavdb->db, CMD_DELETE, bval, NULL, NULL);
-
-    return r;
+    return sqldb_exec(caldavdb->db, CMD_DELETE, bval, NULL, NULL);
 }
 
 
@@ -632,11 +628,8 @@ EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox)
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
         { NULL,       SQLITE_NULL, { .s = NULL    } } };
-    int r;
 
-    r = sqldb_exec(caldavdb->db, CMD_DELMBOX, bval, NULL, NULL);
-
-    return r;
+    return sqldb_exec(caldavdb->db, CMD_DELMBOX, bval, NULL, NULL);
 }
 
 EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
