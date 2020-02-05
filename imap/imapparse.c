@@ -95,7 +95,9 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
     int i;
     int isnowait;
     int len;
-    static int lminus = config_getswitch(IMAPOPT_LITERALMINUS);
+    static int lminus = -1;
+
+    if (lminus == -1) lminus = config_getswitch(IMAPOPT_LITERALMINUS);
 
     buf_reset(buf);
 
