@@ -637,17 +637,16 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 
     base = BASE(db) + offset;
     record->crc32_head = ntohl(*((uint32_t *)base));
+    record->crc32_tail = ntohl(*((uint32_t *)(base+4)));
+    record->keyoffset = offset + 8;
+    record->valoffset = record->keyoffset + record->keylen;
+
     if (crc32_map(BASE(db) + record->offset, (offset - record->offset))
         != record->crc32_head) {
         syslog(LOG_ERR, "DBERROR: twoskip checksum head error for %s at %08llX",
                FNAME(db), (LLU)offset);
         return CYRUSDB_IOERROR;
     }
-
-    record->crc32_tail = ntohl(*((uint32_t *)(base+4)));
-
-    record->keyoffset = offset + 8;
-    record->valoffset = record->keyoffset + record->keylen;
 
     return 0;
 
@@ -1975,8 +1974,18 @@ static int dump(struct dbengine *db, int detail)
         r = read_onerecord(db, offset, &record);
 
         if (r) {
-            printf("ERROR\n");
+            if (record.keyoffset)
+                printf("ERROR [HEADCRC %08lX %08lX]\n", record.crc32_head,
+                       crc32_map(BASE(db) + record.offset, record.keyoffset - 8));
+            else
+                printf("ERROR\n");
             break;
+        }
+
+        if (check_tailcrc(db, &record)) {
+            printf("ERROR [TAILCRC %08lX %08lX] ", record.crc32_tail,
+                   crc32_map(BASE(db) + record.keyoffset,
+                             roundup(record.keylen + record.vallen, 8)));
         }
 
         switch (record.type) {
