@@ -6183,25 +6183,10 @@ static void cmd_sort(char *tag, int usinguid)
     /* See if its ESORT */
     c = getword(imapd_in, &arg);
     if (c == EOF) goto error;
-#if 0
-    if (c == ' ') {
-        lcase(arg.s);
-        if (!strcmp(criteria.s, "return")) {   /* RFC 5267 */
-            c = get_search_return_opts(imapd_in, imapd_out, searchargs);
-            if (c == EOF) goto error;
-        }
-        else {
-            prot_printf(imapd_out,
-                        "%s BAD Unexpected argument to Sort\r\n", tag);
-            goto error;
-        }
-    }
-#else
-    if (c == ' ' && !strcasecmp(arg.s, "return")) {   /* RFC 5267 */
+    else if (c == ' ' && !strcasecmp(arg.s, "return")) {   /* RFC 5267 */
         c = get_search_return_opts(imapd_in, imapd_out, searchargs);
         if (c != ' ') goto error;
     }
-#endif
     else prot_ungetc(c, imapd_in);
 
     c = getsortcriteria(tag, &sortcrit);
