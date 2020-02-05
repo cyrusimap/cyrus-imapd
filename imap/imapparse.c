@@ -95,6 +95,7 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
     int i;
     int isnowait;
     int len;
+    static int lminus = config_getswitch(IMAPOPT_LITERALMINUS);
 
     buf_reset(buf);
 
@@ -150,6 +151,8 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
         buf_reset(buf);
         c = getint32(pin, &len);
         if (c == '+') {
+            // LITERAL- says maximum size is 4096!
+            if (lminus && len > 4096) return EOF;
             isnowait++;
             c = prot_getc(pin);
         }
