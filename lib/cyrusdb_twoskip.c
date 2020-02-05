@@ -1975,17 +1975,20 @@ static int dump(struct dbengine *db, int detail)
 
         if (r) {
             if (record.keyoffset)
-                printf("ERROR [HEADCRC %08lX %08lX]\n", record.crc32_head,
-                       crc32_map(BASE(db) + record.offset, record.keyoffset - 8));
+                printf("ERROR [HEADCRC %08lX %08lX]\n",
+                        (long unsigned) record.crc32_head,
+                        (long unsigned) crc32_map(BASE(db) + record.offset,
+                                                 record.keyoffset - 8));
             else
                 printf("ERROR\n");
             break;
         }
 
         if (check_tailcrc(db, &record)) {
-            printf("ERROR [TAILCRC %08lX %08lX] ", record.crc32_tail,
-                   crc32_map(BASE(db) + record.keyoffset,
-                             roundup(record.keylen + record.vallen, 8)));
+            printf("ERROR [TAILCRC %08lX %08lX] ",
+                    (long unsigned) record.crc32_tail,
+                    (long unsigned) crc32_map(BASE(db) + record.keyoffset,
+                        roundup(record.keylen + record.vallen, 8)));
         }
 
         switch (record.type) {
