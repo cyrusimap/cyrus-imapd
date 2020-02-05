@@ -98,20 +98,19 @@ EXPORTED void seqset_add(struct seqset *seq, unsigned num, int ismember)
     if (ismember && num == seq->prev && seq->len && seq->set[seq->len-1].high == num)
         return;
 
-    if (num <= seq->prev)
-        fatal("numbers out of order", EX_SOFTWARE);
+    if (num > seq->prev) {
+        if (!ismember) {
+            seq->prev = num;
+            return;
+        }
 
-    if (!ismember) {
-        seq->prev = num;
-        return;
+        /* as if the previous number was given to us */
+        if (seq->flags & SEQ_SPARSE)
+            seq->prev = num - 1;
     }
 
-    /* as if the previous number was given to us */
-    if (seq->flags & SEQ_SPARSE)
-        seq->prev = num - 1;
-
     /* do we need to add a new set? */
-    if (!seq->set || seq->set[seq->len-1].high < seq->prev) {
+    if (!seq->set || seq->set[seq->len-1].high < seq->prev || num <= seq->prev) {
         if (seq->len == seq->alloc) {
             seq->alloc += SETGROWSIZE;
             seq->set =

@@ -1837,6 +1837,49 @@ static int needs_modseq(const struct searchargs *searchargs,
     return 0;
 }
 
+static void begin_esearch_response(struct index_state *state,
+                                   struct searchargs *searchargs,
+                                   int usinguid, search_folder_t *folder,
+                                   int nmsg, modseq_t highestmodseq)
+
+{
+    /*
+     * Implement RFC 4731 return options.
+     */
+    prot_printf(state->out, "* ESEARCH");
+    if (searchargs->tag) {
+        prot_printf(state->out, " (TAG \"%s\")", searchargs->tag);
+    }
+    /* RFC4731: 3.1
+     * An extended UID SEARCH command MUST cause an ESEARCH response with
+     * the UID indicator present. */
+    if (usinguid) prot_printf(state->out, " UID");
+    if (searchargs->returnopts & SEARCH_RETURN_COUNT) {
+        prot_printf(state->out, " COUNT %u", nmsg);
+    }
+    if (nmsg) {
+        if (searchargs->returnopts & SEARCH_RETURN_MIN) {
+            prot_printf(state->out, " MIN %u", search_folder_get_min(folder));
+            if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MIN)
+                highestmodseq = search_folder_get_first_modseq(folder);
+        }
+        if (searchargs->returnopts & SEARCH_RETURN_MAX) {
+            prot_printf(state->out, " MAX %u", search_folder_get_max(folder));
+            if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MAX)
+                highestmodseq = search_folder_get_last_modseq(folder);
+        }
+        if (highestmodseq &&
+            searchargs->returnopts == (SEARCH_RETURN_MIN|SEARCH_RETURN_MAX)) {
+            /* special case min and max should be greatest of the two */
+            uint64_t last = search_folder_get_last_modseq(folder);
+            highestmodseq = search_folder_get_first_modseq(folder);
+            if (last > highestmodseq) highestmodseq = last;
+        }
+        if (highestmodseq)
+            prot_printf(state->out, " MODSEQ " MODSEQ_FMT, highestmodseq);
+    }
+}
+
 /*
  * Performs a SEARCH command.
  * This is a wrapper around the search_query API which simply prints the results.
@@ -1874,34 +1917,10 @@ EXPORTED int index_search(struct index_state *state,
         nmsg = 0;
 
     if (searchargs->returnopts) {
-        /*
-         * Implement RFC 4731 return options.
-         */
-        prot_printf(state->out, "* ESEARCH");
-        if (searchargs->tag) {
-            prot_printf(state->out, " (TAG \"%s\")", searchargs->tag);
-        }
-        /* RFC4731: 3.1
-         * An extended UID SEARCH command MUST cause an ESEARCH response with
-         * the UID indicator present. */
-        if (usinguid) prot_printf(state->out, " UID");
+        begin_esearch_response(state, searchargs, usinguid,
+                               folder, nmsg, highestmodseq);
+
         if (nmsg) {
-            if (searchargs->returnopts & SEARCH_RETURN_MIN) {
-                prot_printf(state->out, " MIN %u", search_folder_get_min(folder));
-                if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MIN)
-                     highestmodseq = search_folder_get_first_modseq(folder);
-            }
-            if (searchargs->returnopts & SEARCH_RETURN_MAX) {
-                prot_printf(state->out, " MAX %u", search_folder_get_max(folder));
-                if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MAX)
-                     highestmodseq = search_folder_get_last_modseq(folder);
-            }
-            if (highestmodseq && searchargs->returnopts == (SEARCH_RETURN_MIN|SEARCH_RETURN_MAX)) {
-                /* special case min and max should be greatest of the two */
-                uint64_t last = search_folder_get_last_modseq(folder);
-                highestmodseq = search_folder_get_first_modseq(folder);
-                if (last > highestmodseq) highestmodseq = last;
-            }
             if (searchargs->returnopts & SEARCH_RETURN_ALL) {
                 struct seqset *seq = search_folder_get_seqset(folder);
 
@@ -1922,11 +1941,6 @@ EXPORTED int index_search(struct index_state *state,
                 }
                 prot_printf(state->out, ")");
             }
-            if (highestmodseq)
-                prot_printf(state->out, " MODSEQ " MODSEQ_FMT, highestmodseq);
-        }
-        if (searchargs->returnopts & SEARCH_RETURN_COUNT) {
-            prot_printf(state->out, " COUNT %u", nmsg);
         }
     }
     else {
@@ -1982,19 +1996,53 @@ EXPORTED int index_sort(struct index_state *state,
         nmsg = search_folder_get_count(folder);
     }
 
-    prot_printf(state->out, "* SORT");
+    if (searchargs->returnopts) {
+        begin_esearch_response(state, searchargs, usinguid,
+                               folder, nmsg, highestmodseq);
 
-    if (nmsg) {
-        /* Output the sorted messages */
-        for (i = 0 ; i < query->merged_msgdata.count ; i++) {
-            MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
-            prot_printf(state->out, " %u",
-                        (usinguid ? md->uid : md->msgno));
+        if (nmsg) {
+            if (searchargs->returnopts & SEARCH_RETURN_ALL) {
+                struct seqset *seq = seqset_init(0, SEQ_SPARSE);
+
+                for (i = 0 ; i < query->merged_msgdata.count ; i++) {
+                    MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
+                    seqset_add(seq, usinguid ? md->uid : md->msgno, 1);
+                }
+
+                if (seq->len) {
+                    char *str = seqset_cstring(seq);
+                    prot_printf(state->out, " ALL %s", str);
+                    free(str);
+                }
+
+                seqset_free(seq);
+            }
+            if (searchargs->returnopts & SEARCH_RETURN_RELEVANCY) {
+                prot_printf(state->out, " RELEVANCY (");
+                for (i = 0; i < nmsg; i++) {
+                    if (i) prot_putc(' ', state->out);
+                    /* for now all messages have relevancy=100 */
+                    prot_printf(state->out, "%u", 100);
+                }
+                prot_printf(state->out, ")");
+            }
         }
     }
+    else {
+        prot_printf(state->out, "* SORT");
 
-    if (highestmodseq)
-        prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
+        if (nmsg) {
+            /* Output the sorted messages */
+            for (i = 0 ; i < query->merged_msgdata.count ; i++) {
+                MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
+                prot_printf(state->out, " %u",
+                            (usinguid ? md->uid : md->msgno));
+            }
+        }
+
+        if (highestmodseq)
+            prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
+    }
 
     prot_printf(state->out, "\r\n");
 

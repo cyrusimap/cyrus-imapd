@@ -576,9 +576,9 @@ static int get_search_date(struct protstream *pin, time_t *start, time_t *end)
 /*
  * Parse search return options
  */
-static int get_search_return_opts(struct protstream *pin,
-                                  struct protstream *pout,
-                                  struct searchargs *searchargs)
+EXPORTED int get_search_return_opts(struct protstream *pin,
+                                    struct protstream *pout,
+                                    struct searchargs *searchargs)
 {
     int c;
     static struct buf opt;

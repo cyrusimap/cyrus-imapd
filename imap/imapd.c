@@ -316,8 +316,9 @@ static struct capa_struct base_capabilities[] = {
     { "BINARY",                2 },
     { "CATENATE",              2 },
     { "CONDSTORE",             2 },
-    { "ESEARCH",               2 },
     { "SEARCH=FUZZY",          2 }, /* RFC 6203 */
+    { "ESEARCH",               2 },
+    { "ESORT",                 2 },
     { "SORT",                  2 },
     { "SORT=MODSEQ",           2 },
     { "SORT=DISPLAY",          2 },
@@ -6154,6 +6155,7 @@ static void cmd_search(char *tag, int usinguid)
 static void cmd_sort(char *tag, int usinguid)
 {
     int c;
+    struct buf arg = BUF_INITIALIZER;
     struct sortcrit *sortcrit = NULL;
     struct searchargs *searchargs = NULL;
     clock_t start = clock();
@@ -6172,14 +6174,24 @@ static void cmd_sort(char *tag, int usinguid)
     }
 
     /* local mailbox */
-    c = getsortcriteria(tag, &sortcrit);
-    if (c == EOF) goto error;
-
     searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
     if (imapd_id.quirks & QUIRK_SEARCHFUZZY)
         searchargs->fuzzy_depth++;
+
+    /* See if its ESORT */
+    c = getword(imapd_in, &arg);
+    if (c == EOF) goto error;
+    else if (c == ' ' && !strcasecmp(arg.s, "return")) {   /* RFC 5267 */
+        c = get_search_return_opts(imapd_in, imapd_out, searchargs);
+        if (c != ' ') goto error;
+    }
+    else prot_ungetc(c, imapd_in);
+
+    c = getsortcriteria(tag, &sortcrit);
+    if (c == EOF) goto error;
+
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) goto error;
 
@@ -6208,6 +6220,7 @@ static void cmd_sort(char *tag, int usinguid)
 
 error:
     eatline(imapd_in, (c == EOF ? ' ' : c));
+    buf_free(&arg);
     freesortcrit(sortcrit);
     freesearchargs(searchargs);
 }
