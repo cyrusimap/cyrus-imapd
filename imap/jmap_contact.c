@@ -2838,7 +2838,9 @@ enum contactsquery_sort *buildsort(json_t *jsort)
     return sort;
 }
 
-static int _contactsquery_cmp(const void *va, const void *vb, void *rock)
+static int _contactsquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                                  const void *vb,
+                                                  void *rock)
 {
     enum contactsquery_sort *sort = rock;
     json_t *ja = (json_t*) *(void**)va;

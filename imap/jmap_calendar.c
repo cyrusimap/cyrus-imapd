@@ -3897,7 +3897,9 @@ struct eventquery_cmp_rock {
     size_t nsort;
 };
 
-static int eventquery_cmp(const void *va, const void *vb, void *vrock)
+static int eventquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                              const void *vb,
+                                              void *vrock)
 {
     enum caldav_sort *sort = ((struct eventquery_cmp_rock*)vrock)->sort;
     size_t nsort = ((struct eventquery_cmp_rock*)vrock)->nsort;
