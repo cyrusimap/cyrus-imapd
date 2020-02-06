@@ -425,7 +425,7 @@ static int jmap_blob_get(jmap_req_t *req)
         struct mailbox *mbox = NULL;
 
         /* Open mailbox */
-        if (!jmap_hasrights_byname(req, mboxname, ACL_READ|ACL_LOOKUP)) {
+        if (!jmap_hasrights_byname(req, mboxname, JACL_READITEMS)) {
             continue;
         }
         int r = jmap_openmbox(req, mboxname, &mbox, 0);

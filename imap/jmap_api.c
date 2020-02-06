@@ -538,7 +538,7 @@ static int capabilities_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     int rights = _rights_for_mbentry(rock->authstate, mbentry, rock->mboxrights);
-    if (!(rights & ACL_LOOKUP)) return 0;
+    if (!(rights & JACL_LOOKUP)) return 0;
     rock->is_visible = 1;
 
     mbname_t *mbname = mbname_from_intname(mbentry->name);
@@ -581,7 +581,7 @@ static json_t *lookup_capabilities(const char *accountid,
 
     json_t *capas = json_object();
 
-    int mayCreateTopLevel = (inboxrights & ACL_CREATE) ? 1 : 0;
+    int mayCreateTopLevel = (inboxrights & JACL_CREATECHILD) ? 1 : 0;
 
     if (!strcmp(authuserid, accountid)) {
         /* Primary account has all capabilities */
@@ -912,11 +912,11 @@ static void findaccounts_add(struct findaccounts_rock *rock)
     if (!buf_len(&rock->current_accountid))
         return;
 
-    if (!(rock->current_rights & (ACL_LOOKUP|ACL_READ)))
+    if (!(rock->current_rights & JACL_READITEMS))
         return;
 
     const char *accountid = buf_cstring(&rock->current_accountid);
-    int is_rw = rock->current_rights & ACL_READ_WRITE;
+    int is_rw = rock->current_rights & JACL_WRITE;
     int is_primary = !strcmp(rock->authuserid, accountid);
 
     json_t *account = json_object();
@@ -968,7 +968,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
 
     /* Add primary accout */
     buf_setcstr(&rock.current_accountid, httpd_userid);
-    rock.current_rights = ACL_FULL;
+    rock.current_rights = JACL_ALL;
     findaccounts_add(&rock);
 
     /* Determine account capabilities */
@@ -1154,7 +1154,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
         }
         int rights = jmap_myrights(req, mbentry);
         mboxlist_entry_free(&mbentry);
-        if ((rights & (ACL_LOOKUP|ACL_READ)) != (ACL_LOOKUP|ACL_READ)) {
+        if ((rights & JACL_READITEMS) != JACL_READITEMS) {
             return 0;
         }
     }
@@ -1298,7 +1298,7 @@ static int findblob_exact_cb(const conv_guidrec_t *rec, void *rock)
         }
         int rights = jmap_myrights(req, mbentry);
         mboxlist_entry_free(&mbentry);
-        if ((rights & (ACL_LOOKUP|ACL_READ)) != (ACL_LOOKUP|ACL_READ)) {
+        if ((rights & JACL_READITEMS) != JACL_READITEMS) {
             return 0;
         }
     }
@@ -2653,9 +2653,6 @@ static json_t *_json_has(int rights, int need)
   return (((rights & need) == need) ? json_true() : json_false());
 }
 
-/* create, update, delete */
-#define WRITERIGHTS  (ACL_WRITE|ACL_INSERT|ACL_SETSEEN|ACL_DELETEMSG|ACL_EXPUNGE|ACL_ANNOTATEMSG)
-
 HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
 {
     char *aclstr = xstrdupnull(mbentry->acl);
@@ -2693,13 +2690,13 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
 
         if (iscalendar)
             json_object_set_new(obj, "mayReadFreeBusy",
-                                _json_has(rights, DACL_READFB));
+                                _json_has(rights, JACL_READFB));
         json_object_set_new(obj, "mayRead",
-                                _json_has(rights, ACL_READ|ACL_LOOKUP));
+                            _json_has(rights, JACL_READITEMS));
         json_object_set_new(obj, "mayWrite",
-                                _json_has(rights, WRITERIGHTS));
+                                _json_has(rights, JACL_WRITE));
         json_object_set_new(obj, "mayAdmin",
-                                _json_has(rights, ACL_ADMIN));
+                                _json_has(rights, JACL_ADMIN));
     }
 
     free(aclstr);
@@ -2736,15 +2733,15 @@ static unsigned access_from_acl_item(struct acl_item *item)
     unsigned access = 0;
 
     if (item->mayReadFreeBusy)
-        access |= DACL_READFB;
+        access |= JACL_READFB;
     if (item->mayRead)
-        access |= ACL_READ|ACL_LOOKUP|ACL_SETSEEN;
+        access |= JACL_READITEMS|JACL_SETSEEN;
     if (item->mayWrite)
-        access |= WRITERIGHTS;
+        access |= JACL_WRITE;
     if (item->mayPost)
-        access |= ACL_POST;
+        access |= JACL_SUBMIT;
     if (item->mayAdmin)
-        access |= ACL_ADMIN|ACL_CREATE|ACL_DELETEMBOX;
+        access |= JACL_ADMIN|JACL_RENAME;
 
     return access;
 }
@@ -2854,13 +2851,13 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
             /* Add regular user to our table */
             change = xzmalloc(sizeof(struct acl_change));
 
-            if (oldrights & DACL_READFB)
+            if (oldrights & JACL_READFB)
                 change->old.mayReadFreeBusy = 1;
-            if (oldrights & (ACL_READ|ACL_LOOKUP))
+            if (oldrights & JACL_READITEMS)
                 change->old.mayRead = 1;
-            if ((oldrights & WRITERIGHTS) == WRITERIGHTS)
+            if ((oldrights & JACL_WRITE) == JACL_WRITE)
                 change->old.mayWrite = 1;
-            if (oldrights & ACL_ADMIN)
+            if (oldrights & JACL_ADMIN)
                 change->old.mayAdmin = 1;
             if (isdav) change->old.mayPost = change->old.mayWrite;
 

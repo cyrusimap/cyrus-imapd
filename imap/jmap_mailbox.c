@@ -176,7 +176,7 @@ struct shared_mboxes {
  *                       some of its properties are anonymised.
  * - _SHAREDMBOX_SHARED: this mailbox is fully readable by the current
  *                       user, that is, its ACL provides at least
- *                       ACL_LOOKUP and ACL_READ rights
+ *                       JACL_READITEMS rights
  *
  * If the mailbox is a child of the authenticated user's INBOX,
  * it is trivially _SHAREDMBOX_SHARED, without checking ACL rights.
@@ -190,7 +190,7 @@ enum shared_mbox_type {
 static int _shared_mboxes_cb(const mbentry_t *mbentry, void *rock)
 {
     struct shared_mboxes *sm = rock;
-    int needrights = ACL_LOOKUP|ACL_READ;
+    int needrights = JACL_READITEMS;
 
     if (jmap_hasrights(sm->req, mbentry, needrights))
         strarray_append(&sm->mboxes, mbentry->name);
@@ -288,7 +288,7 @@ static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
     struct buf attrib = BUF_INITIALIZER;
     jmap_req_t *req = d->req;
 
-    if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+    if (!mbentry || !jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
         return 0;
     }
 
@@ -534,28 +534,28 @@ static json_t *_mbox_get(jmap_req_t *req,
     if (jmap_wantprop(props, "myRights")) {
         json_t *jrights = json_object();
         json_object_set_new(jrights, "mayReadItems",
-                json_boolean(rights & ACL_READ));
+                json_boolean((rights & JACL_READITEMS) == JACL_READITEMS));
         json_object_set_new(jrights, "mayAddItems",
-                json_boolean(rights & ACL_INSERT));
+                json_boolean((rights & JACL_ADDITEMS) == JACL_ADDITEMS));
         json_object_set_new(jrights, "mayRemoveItems",
-                json_boolean(rights & ACL_DELETEMSG));
+                json_boolean((rights & JACL_REMOVEITEMS) == JACL_REMOVEITEMS));
         json_object_set_new(jrights, "mayCreateChild",
-                json_boolean(rights & ACL_CREATE));
+                json_boolean((rights & JACL_CREATECHILD) == JACL_CREATECHILD));
         json_object_set_new(jrights, "mayDelete",
-                json_boolean((rights & ACL_DELETEMBOX) && !is_inbox));
+                json_boolean(!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)));
         json_object_set_new(jrights, "maySubmit",
-                json_boolean(rights & ACL_POST));
+                json_boolean((rights & JACL_SUBMIT) == JACL_SUBMIT));
         json_object_set_new(jrights, "maySetSeen",
-                json_boolean(rights & ACL_SETSEEN));
+                json_boolean((rights & JACL_SETSEEN) == JACL_SETSEEN));
         json_object_set_new(jrights, "maySetKeywords",
-                json_boolean(rights & ACL_WRITE));
+                json_boolean((rights & JACL_SETKEYWORDS) == JACL_SETKEYWORDS));
         // non-standard
         json_object_set_new(jrights, "mayAdmin",
-                json_boolean(rights & ACL_ADMIN));
+                json_boolean((rights & JACL_ADMIN) == JACL_ADMIN));
 
         int mayRename = 0;
-        if (!is_inbox && (rights & ACL_DELETEMBOX)) {
-            mayRename = jmap_hasrights(req, parent, ACL_CREATE);
+        if (!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)) {
+            mayRename = jmap_hasrights(req, parent, JACL_CREATECHILD);
         }
         json_object_set_new(jrights, "mayRename", json_boolean(mayRename));
 
@@ -1685,7 +1685,7 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
                 hash_insert(mbrec->id, (void*)1, &removed);
             }
         }
-        else if (!jmap_hasrights_byname(req, mbrec->mboxname, ACL_LOOKUP)) {
+        else if (!jmap_hasrights_byname(req, mbrec->mboxname, JACL_LOOKUP)) {
             if (mbrec->createdmodseq <= sincemodseq) {
                 hash_insert(mbrec->id, (void*)1, &removed);
             }
@@ -2125,7 +2125,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 
     /* Check parent exists and has the proper ACL. */
     const mbentry_t *mbparent = jmap_mbentry_by_uniqueid(req, parent_id);
-    if (!mbparent || !jmap_hasrights(req, mbparent, ACL_CREATE)) {
+    if (!mbparent || !jmap_hasrights(req, mbparent, JACL_CREATECHILD)) {
         jmap_parser_invalid(&parser, "parentId");
         goto done;
     }
@@ -2271,7 +2271,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
     /* Lookup current mailbox entry */
     mbentry = jmap_mbentry_by_uniqueid_copy(req, args->mbox_id);
-    if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+    if (!mbentry || !jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
         mboxlist_entry_free(&mbentry);
         result->err = json_pack("{s:s}", "type", "notFound");
         goto done;
@@ -2323,7 +2323,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         char *newparentname = NULL;
 
         mbentry_t *pmbentry = jmap_mbentry_by_uniqueid_copy(req, parent_id);
-        if (pmbentry && jmap_hasrights(req, pmbentry, ACL_LOOKUP)) {
+        if (pmbentry && jmap_hasrights(req, pmbentry, JACL_LOOKUP)) {
             newparentname = xstrdup(pmbentry->name);
         }
         int new_toplevel = args->is_toplevel;
@@ -2351,7 +2351,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         /* Is this a move to a new parent? */
         if (strcmpsafe(oldparentname, newparentname) || was_toplevel != new_toplevel) {
             /* Check ACL of mailbox */
-            if (!jmap_hasrights_byname(req, oldparentname, ACL_DELETEMBOX)) {
+            if (!jmap_hasrights_byname(req, oldparentname, JACL_DELETE)) {
                 result->err = json_pack("{s:s}", "type", "forbidden");
                 goto done;
             }
@@ -2361,7 +2361,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             jmap_mboxlist_lookup(newparentname, &mbparent, NULL);
 
             /* Check ACL of new parent - need WRITE to set displayname annot */
-            if (!jmap_hasrights(req, mbparent, ACL_CREATE|ACL_WRITE)) {
+            if (!jmap_hasrights(req, mbparent, JACL_CREATECHILD|JACL_SETKEYWORDS)) {
                 jmap_parser_invalid(&parser, "parentId");
                 goto done;
             }
@@ -2466,7 +2466,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
     /* Write annotations and isSubscribed */
     if (args->name || args->specialuse || args->sortorder >= 0) {
-        if (!jmap_hasrights(req, mbentry, ACL_WRITE)) {
+        if (!jmap_hasrights(req, mbentry, JACL_SETKEYWORDS)) {
             mboxlist_entry_free(&mbentry);
             result->err = json_pack("{s:s}", "type", "forbidden");
             goto done;
@@ -2551,7 +2551,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
         goto done;
     }
     /* Check ACL */
-    if (!jmap_hasrights(req, mbentry, ACL_DELETEMBOX)) {
+    if (!jmap_hasrights(req, mbentry, JACL_DELETE)) {
         result->err = json_pack("{s:s}", "type", "forbidden");
         goto done;
     }
@@ -2779,7 +2779,7 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
         for (i = 0; i < strarray_size(&set->destroy); i++) {
             const char *mbox_id = strarray_nth(&set->destroy, i);
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
-            if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+            if (!mbentry || !jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
                 json_object_set_new(set->super.not_destroyed, mbox_id,
                         json_pack("{s:s}", "type", "notFound"));
                 continue;
@@ -3419,7 +3419,7 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
      * in order to allow clients remove unshared and deleted mailboxes */
     json_t *dest = NULL;
 
-    if ((mbentry->mbtype & MBTYPE_DELETED) || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+    if ((mbentry->mbtype & MBTYPE_DELETED) || !jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
         if (mbentry->createdmodseq <= data->since_modseq)
             dest = data->destroyed;
     } else {

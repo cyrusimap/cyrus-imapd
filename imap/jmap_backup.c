@@ -432,7 +432,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
     qdiffs[QUOTA_MESSAGE] = 1;
     qdiffs[QUOTA_STORAGE] = msg_size(msg);
     r = append_setup_mbox(&as, tomailbox, req->accountid, req->authstate,
-                          ACL_INSERT, qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
+                          JACL_ADDITEMS, qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
     if (!r) {
         /* get existing flags and annotations */
         strarray_t *flags = mailbox_extract_flags(mailbox, record, req->accountid);

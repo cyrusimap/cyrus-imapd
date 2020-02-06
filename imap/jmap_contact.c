@@ -302,7 +302,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     char *xhref;
     int r;
 
-    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
+    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, JACL_READITEMS))
         return 0;
 
     if (cdata->jmapversion == JMAPCACHE_CONTACTVERSION) {
@@ -662,7 +662,7 @@ static int getchanges_cb(void *rock, struct carddav_data *cdata)
     struct dav_data dav = cdata->dav;
     const char *uid = cdata->vcard_uid;
 
-    if (!jmap_hasrights_byname(urock->req, dav.mailbox, DACL_READ))
+    if (!jmap_hasrights_byname(urock->req, dav.mailbox, JACL_READITEMS))
         return 0;
 
     /* Count, but don't process items that exceed the maximum record count. */
@@ -928,7 +928,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                 mboxname_abook(req->accountid, json_string_value(abookid));
             if (strcmp(mboxname, cdata->dav.mailbox)) {
                 /* move */
-                if (!jmap_hasrights_byname(req, mboxname, DACL_WRITECONT)) {
+                if (!jmap_hasrights_byname(req, mboxname, JACL_ADDITEMS)) {
                     json_t *err = json_pack("{s:s s:[s]}",
                                             "type", "invalidProperties",
                                             "properties", "addressbookId");
@@ -945,13 +945,12 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
             json_object_del(arg, "addressbookId");
         }
 
-        int needrights = do_move ?
-            (DACL_READ | DACL_RMRSRC) : required_set_rights(arg);
+        int needrights = do_move ? JACL_UPDATEITEMS : required_set_rights(arg);
 
         if (!jmap_hasrights_byname(req, cdata->dav.mailbox, needrights)) {
             int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
             json_t *err = json_pack("{s:s}", "type",
-                                    rights & ACL_READ ?
+                                    rights & JACL_READITEMS ?
                                     "accountReadOnly" : "notFound");
             json_object_set_new(set.not_updated, uid, err);
             continue;
@@ -1158,10 +1157,10 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         }
         olduid = cdata->dav.imap_uid;
 
-        if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_RMRSRC)) {
+        if (!jmap_hasrights_byname(req, cdata->dav.mailbox, JACL_REMOVEITEMS)) {
             int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
             json_t *err = json_pack("{s:s}", "type",
-                                    rights & ACL_READ ?
+                                    rights & JACL_READITEMS ?
                                     "accountReadOnly" : "notFound");
             json_object_set_new(set.not_destroyed, uid, err);
             continue;
@@ -1775,7 +1774,7 @@ static int jmap_contact_getblob(jmap_req_t *req,
         res = HTTP_NOT_FOUND;
         goto done;
     }
-    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ)) {
+    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, JACL_READITEMS)) {
         res = HTTP_NOT_FOUND;
         goto done;
     }
@@ -1865,7 +1864,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     json_t *obj = NULL;
     int r = 0;
 
-    if (!jmap_hasrights_byname(crock->req, cdata->dav.mailbox, DACL_READ))
+    if (!jmap_hasrights_byname(crock->req, cdata->dav.mailbox, JACL_READITEMS))
         return 0;
 
     if (cdata->jmapversion == JMAPCACHE_CONTACTVERSION) {
@@ -2697,7 +2696,7 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
         return 0;
     }
 
-    if (!jmap_hasrights_byname(crock->req, cdata->dav.mailbox, DACL_READ))
+    if (!jmap_hasrights_byname(crock->req, cdata->dav.mailbox, JACL_READITEMS))
         return 0;
 
     if (cdata->jmapversion == JMAPCACHE_CONTACTVERSION) {
@@ -3847,15 +3846,15 @@ static int required_set_rights(json_t *props)
         }
         else if (!strcmp(name, "importance")) {
             /* writing shared meta-data (per RFC 5257) */
-            needrights |= DACL_PROPRSRC;
+            needrights |= JACL_SETPROPERTIES;
         }
         else if (!strcmp(name, "isFlagged")) {
             /* writing private meta-data */
-            needrights |= DACL_PROPCOL;
+            needrights |= JACL_SETKEYWORDS;
         }
         else {
             /* writing vCard data */
-            needrights |= DACL_WRITECONT | DACL_RMRSRC;
+            needrights |= JACL_UPDATEITEMS;
         }
     }
 
@@ -4092,7 +4091,7 @@ static void _contact_copy(jmap_req_t *req,
         *set_err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
-    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ)) {
+    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, JACL_READITEMS)) {
         *set_err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }

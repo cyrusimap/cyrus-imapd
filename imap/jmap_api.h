@@ -82,6 +82,36 @@ enum {
     JMAP_NUM_LIMITS  /* MUST be last */
 };
 
+/* JMAP Mail (RFC 8621) privileges */
+#define JACL_READITEMS      (ACL_READ|ACL_LOOKUP)
+#define JACL_ADDITEMS       ACL_INSERT
+#define JACL_REMOVEITEMS    (ACL_DELETEMSG|ACL_EXPUNGE)
+#define JACL_SETSEEN        ACL_SETSEEN
+#define JACL_SETKEYWORDS    ACL_WRITE
+#define JACL_CREATECHILD    ACL_CREATE
+#define JACL_DELETE         ACL_DELETEMBOX
+#define JACL_RENAME         (JACL_CREATECHILD|JACL_DELETE)
+#define JACL_SUBMIT         ACL_POST
+
+/* JMAP Calendar (draft-ietf-jmap-calendars) privileges */
+#define JACL_READFB         DACL_READFB    /* Use same right as CalDAV */
+#define JACL_RSVP           DACL_REPLY     /* Use same right as CalDAV */
+#define JACL_UPDATEPRIVATE  
+#define JACL_UPDATEOWN
+#define JACL_UPDATEALL
+#define JACL_REMOVEOWN
+#define JACL_REMOVEALL
+
+/* Cyrus-specific privileges */
+#define JACL_LOOKUP         ACL_LOOKUP
+#define JACL_ADMIN          ACL_ADMIN
+#define JACL_SETPROPERTIES  ACL_ANNOTATEMSG
+#define JACL_UPDATEITEMS    (JACL_ADDITEMS|JACL_REMOVEITEMS)
+#define JACL_SETMETADATA    (JACL_SETKEYWORDS|JACL_SETPROPERTIES)
+#define JACL_WRITE          (JACL_UPDATEITEMS|JACL_SETSEEN|JACL_SETMETADATA)
+#define JACL_ALL            (JACL_READITEMS|JACL_WRITE|JACL_RENAME|JACL_SUBMIT\
+                             |JACL_ADMIN|JACL_READFB|JACL_RSVP)
+
 typedef struct jmap_req {
     const char           *method;
     const char           *userid;

@@ -276,7 +276,7 @@ static int lookup_submission_collection(const char *accountid,
         }
 
         int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_CREATE)) {
+        if ((rights & JACL_CREATECHILD) != JACL_CREATECHILD) {
             r = IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -287,7 +287,7 @@ static int lookup_submission_collection(const char *accountid,
     }
     else if (!r) {
         int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_INSERT)) {
+        if ((rights & JACL_ADDITEMS) != JACL_ADDITEMS) {
             r = IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -601,7 +601,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     }
 
     /* Check ACL */
-    if (!jmap_hasrights_byname(req, mboxname, ACL_READ)) {
+    if (!jmap_hasrights_byname(req, mboxname, JACL_READITEMS)) {
         *set_err = json_pack("{s:s}", "type", "emailNotFound");
         goto done;
     }

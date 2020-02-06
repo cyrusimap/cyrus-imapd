@@ -166,7 +166,7 @@ static int lookup_notes_collection(const char *accountid, mbentry_t **mbentry)
         }
 
         int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_CREATE)) {
+        if ((rights & JACL_CREATECHILD) != JACL_CREATECHILD) {
             r = IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -177,7 +177,7 @@ static int lookup_notes_collection(const char *accountid, mbentry_t **mbentry)
     }
     else if (!r) {
         int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_INSERT)) {
+        if ((rights & JACL_ADDITEMS) != JACL_ADDITEMS) {
             r = IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -489,7 +489,7 @@ static int jmap_notes_get(jmap_req_t *req)
         }
     }
 
-    if (rights & ACL_READ) {
+    if ((rights & JACL_READITEMS) == JACL_READITEMS) {
         struct get_rock grock = { &get, &buf };
         foreach_note(mbox, &ids, &_notes_get_cb, &grock);
     }
@@ -737,8 +737,8 @@ static void _notes_update_cb(const char *id, message_t *msg,
     json_t *err = NULL, *updated_note = NULL;
     int r;
 
-    if ((srock->rights & (ACL_INSERT|ACL_EXPUNGE)) != (ACL_INSERT|ACL_EXPUNGE)) {
-        int read_only = !(srock->rights & ACL_READ);
+    if ((srock->rights & JACL_UPDATEITEMS) != JACL_UPDATEITEMS) {
+        int read_only = !(srock->rights & JACL_READITEMS);
 
         err = json_pack("{s:s}", "type",
                             read_only ? "notFound" : "forbidden");
@@ -804,8 +804,8 @@ static void _notes_destroy_cb(const char *id, message_t *msg,
     struct jmap_set *set = srock->set;
     json_t *err = NULL;
 
-    if (!(srock->rights & ACL_EXPUNGE)) {
-        int read_only = !(srock->rights & ACL_READ);
+    if ((srock->rights & JACL_REMOVEITEMS) != JACL_REMOVEITEMS) {
+        int read_only = !(srock->rights & JACL_READITEMS);
 
         err = json_pack("{s:s}", "type",
                             read_only ? "notFound" : "forbidden");
@@ -889,7 +889,7 @@ static int jmap_notes_set(jmap_req_t *req)
     json_object_foreach(set.create, creation_id, val) {
         json_t *new_note = NULL;
 
-        if (!(rights & ACL_INSERT)) {
+        if ((rights & JACL_ADDITEMS) != JACL_ADDITEMS) {
             err = json_pack("{s:s}", "type", "forbidden");
         }
         else if (!_notes_setargs_check(NULL/*id*/, val, &err)) {
