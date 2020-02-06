@@ -547,6 +547,10 @@ static int jmap_download(struct transaction_t *txn)
     txn->resp_body.dispo.attach = fname != NULL;
     txn->resp_body.dispo.fname = fname;
 
+    /* Set Cache-Control directives */
+    txn->resp_body.maxage = 604800;  /* 7 days */
+    txn->flags.cc |= CC_MAXAGE | CC_PRIVATE | CC_IMMUTABLE;
+
     /* Call blob download handlers */
     int i;
     for (i = 0; i < ptrarray_size(&my_jmap_settings.getblob_handlers); i++) {
@@ -564,6 +568,8 @@ static int jmap_download(struct transaction_t *txn)
         if (!txn->error.desc) txn->error.desc = error_message(res);
         txn->resp_body.dispo.attach = 0;
         txn->resp_body.dispo.fname = NULL;
+        txn->resp_body.maxage = 0;
+        txn->flags.cc = 0;
     }
     else if (res == HTTP_OK) res = 0;
 

@@ -320,7 +320,7 @@ struct txn_flags_t {
     unsigned long cors     : 3;         /* Cross-Origin Resource Sharing */
     unsigned long mime     : 1;         /* MIME-conformant response */
     unsigned long te       : 3;         /* Transfer-Encoding for resp */
-    unsigned long cc       : 7;         /* Cache-Control directives for resp */
+    unsigned long cc       : 8;         /* Cache-Control directives for resp */
     unsigned long ranges   : 1;         /* Accept range requests for resource */
     unsigned long vary     : 6;         /* Headers on which response can vary */
     unsigned long trailer  : 3;         /* Headers which will be in trailer */
@@ -425,7 +425,8 @@ enum {
     CC_NOTRANSFORM =    (1<<3),
     CC_PUBLIC =         (1<<4),
     CC_PRIVATE =        (1<<5),
-    CC_MAXAGE =         (1<<6)
+    CC_MAXAGE =         (1<<6),
+    CC_IMMUTABLE =      (1<<7), /* RFC 8246 */
 };
 
 /* Vary header flags (headers used in selecting/producing representation) */

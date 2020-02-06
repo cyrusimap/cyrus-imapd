@@ -2605,7 +2605,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         /* Construct Cache-Control header */
         const char *cc_dirs[] =
             { "must-revalidate", "no-cache", "no-store", "no-transform",
-              "public", "private", "max-age=%d", NULL };
+              "public", "private", "max-age=%d", "immutable", NULL };
 
         comma_list_hdr(txn, "Cache-Control",
                        cc_dirs, txn->flags.cc, resp_body->maxage);
