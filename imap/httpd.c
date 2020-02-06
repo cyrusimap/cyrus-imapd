@@ -412,9 +412,11 @@ struct buf serverinfo = BUF_INITIALIZER;
 int ignorequota = 0;
 int apns_enabled = 0;
 
-/* List of HTTP auth schemes that we support */
+/* List of HTTP auth schemes that we support -
+   in descending order of security properties */
 struct auth_scheme_t auth_schemes[] = {
-      AUTH_SCHEME_BASIC,
+    { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO",
+      AUTH_BASE64 | AUTH_SUCCESS_WWW },
     { AUTH_SCRAM_SHA256, "SCRAM-SHA-256", "SCRAM-SHA-256",
       AUTH_NEED_PERSIST | AUTH_SERVER_FIRST | AUTH_BASE64 |
       AUTH_REALM_PARAM | AUTH_DATA_PARAM },
@@ -423,12 +425,11 @@ struct auth_scheme_t auth_schemes[] = {
       AUTH_REALM_PARAM | AUTH_DATA_PARAM },
     { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH,
       AUTH_NEED_REQUEST | AUTH_SERVER_FIRST },
-    { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO",
-      AUTH_BASE64 | AUTH_SUCCESS_WWW },
     { AUTH_NTLM, "NTLM", "NTLM",
       AUTH_NEED_PERSIST | AUTH_BASE64 },
     { AUTH_BEARER, "Bearer", NULL,
       AUTH_SERVER_FIRST | AUTH_REALM_PARAM },
+      AUTH_SCHEME_BASIC,
     { 0, NULL, NULL, 0 }
 };
 
