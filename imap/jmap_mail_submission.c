@@ -1266,7 +1266,7 @@ struct submission_set_args {
     json_t *onSuccessDestroy;
 };
 
-static int _submission_setargs_parse(jmap_req_t *req __attribute__((unused)),
+static int _submission_setargs_parse(jmap_req_t *req,
                                      struct jmap_parser *parser,
                                      const char *key,
                                      json_t *arg,
@@ -1276,6 +1276,8 @@ static int _submission_setargs_parse(jmap_req_t *req __attribute__((unused)),
     int r = 1;
 
     if (!strcmp(key, "onSuccessUpdateEmail")) {
+        // need urn:ietf:params:jmap:mail to update emails
+        if (!jmap_is_using(req, JMAP_URN_MAIL)) return 0;
         if (json_is_object(arg)) {
             json_t *jval;
             const char *emailsubmission_id;
@@ -1292,6 +1294,8 @@ static int _submission_setargs_parse(jmap_req_t *req __attribute__((unused)),
     }
 
     else if (!strcmp(key, "onSuccessDestroyEmail") && JNOTNULL(arg)) {
+        // need urn:ietf:params:jmap:mail to destroy emails
+        if (!jmap_is_using(req, JMAP_URN_MAIL)) return 0;
         jmap_parse_strings(arg, parser, "onSuccessDestroyEmail");
         set->onSuccessDestroy = arg;
     }
