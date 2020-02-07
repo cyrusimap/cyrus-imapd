@@ -92,7 +92,7 @@ sub set_up
 }
 
 sub test_restore_contacts
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -217,7 +217,7 @@ sub test_restore_contacts
 }
 
 sub test_restore_contacts_all
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -398,7 +398,7 @@ sub test_restore_contacts_all
 }
 
 sub test_restore_contacts_all_dryrun
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -501,7 +501,7 @@ sub test_restore_contacts_all_dryrun
 }
 
 sub test_restore_calendars_all
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -702,7 +702,7 @@ return;
 }
 
 sub test_restore_calendars_all_dryrun
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -850,7 +850,7 @@ sub test_restore_calendars_all_dryrun
 }
 
 sub test_restore_mail_all
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1076,7 +1076,7 @@ sub test_restore_mail_all
 }
 
 sub test_restore_mail_all_dryrun
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1292,7 +1292,7 @@ sub test_restore_mail_all_dryrun
 }
 
 sub test_restore_notes
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1401,7 +1401,7 @@ sub test_restore_notes
 }
 
 sub test_restore_notes_all
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1554,7 +1554,7 @@ sub test_restore_notes_all
 }
 
 sub test_restore_notes_all_dryrun
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
 
