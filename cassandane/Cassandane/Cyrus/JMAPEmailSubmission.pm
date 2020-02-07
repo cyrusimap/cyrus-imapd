@@ -1121,5 +1121,41 @@ sub test_emailsubmission_onsuccess_invalid_subids
     $self->assert_str_equals("R1", $res->[0][2]);
 }
 
+sub test_emailsubmission_onsuccess_not_using
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
+
+    xlog $self, "get identity id";
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog $self, "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    xlog $self, "create email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+            }
+        },
+        onSuccessDestroyEmail => [ '1' ],
+    }, "R1"]], ['urn:ietf:params:jmap:submission']);
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
+    $self->assert_str_equals("R1", $res->[0][2]);
+}
+
+
+1;
+
 
 1;
