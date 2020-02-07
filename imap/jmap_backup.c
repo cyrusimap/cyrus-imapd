@@ -427,6 +427,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
 
     f = append_newstage_full(tomailbox->name, time(0), 0, &stage, fname);
     if (!f) return IMAP_INTERNAL;
+    fclose(f);
 
     /* setup for appending the message to the mailbox. */
     qdiffs[QUOTA_MESSAGE] = 1;
