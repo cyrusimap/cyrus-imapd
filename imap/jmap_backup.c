@@ -347,10 +347,14 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             /* Tombstone - resource has been destroyed or updated */
             restore = hash_lookup(resource, &resources);
 
-            if (restore && restore->msgno_torecreate) continue;
+            if (restore && restore->msgno_torecreate) {
+                free(resource);
+                continue;
+            }
 
             if (record->internaldate > rrock->jrestore->cutoff &&
                 rrock->jrestore->mode == UNDO_ALL) {
+                free(resource);
                 continue;
             }
 
