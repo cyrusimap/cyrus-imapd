@@ -37,6 +37,16 @@ Supported Product Series
 
     3.1/index
 
+Series 3.2
+----------
+
+Documentation at :cyrus-3.2:`/`.
+
+.. toctree::
+    :maxdepth: 1
+
+    3.2/index
+
 Series 3.0
 ----------
 
