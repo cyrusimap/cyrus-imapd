@@ -42,7 +42,6 @@ Need help? We have :ref:`active mailing lists <feedback-mailing-lists>`.
 .. toctree::
     :maxdepth: 3
     :caption: Cyrus IMAP
-    :numbered:
 
     download
     quickstart
