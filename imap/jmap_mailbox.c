@@ -2011,7 +2011,7 @@ static void _mbox_setargs_parse(json_t *jargs,
     if (json_object_get(jargs, "unreadEmails") && is_create)
         jmap_parser_invalid(parser, "unreadEmails");
     if (json_object_get(jargs, "totalThreads") && is_create)
-        jmap_parser_invalid(parser, "unreadEmails");
+        jmap_parser_invalid(parser, "totalThreads");
     if (json_object_get(jargs, "unreadThreads") && is_create)
         jmap_parser_invalid(parser, "unreadThreads");
 }
