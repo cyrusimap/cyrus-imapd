@@ -3534,5 +3534,55 @@ sub test_mailbox_set_subscriptions_rename_children
     $self->assert_str_equals('INBOX.B.C', $subdata->[0][2]);
 }
 
+sub test_mailbox_set_create_serverset_props
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "can't create mailbox with server-set props";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxB => {
+                    name => 'A',
+                    role => undef,
+					# server-set properties
+                    totalEmails => 0,
+                    unreadEmails => 0,
+                    totalThreads => 0,
+                    unreadThreads => 0,
+                    myRights => {
+                        mayReadItems => JSON::true,
+                        mayAddItems =>  JSON::true,
+                        mayRemoveItems => JSON::true,
+						mayCreateChild => JSON::true,
+						mayDelete => JSON::true,
+						maySubmit => JSON::true,
+                        maySetSeen => JSON::true,
+                        maySetKeywords => JSON::true,
+                        mayAdmin => JSON::true,
+                        mayRename => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notCreated}{mboxB}{type});
+    my @wantInvalidProps = (
+        'myRights',
+        'totalEmails',
+        'unreadEmails',
+        'totalThreads',
+        'unreadThreads',
+    );
+    my @gotInvalidProps = @{$res->[0][1]{notCreated}{mboxB}{properties}};
+    @wantInvalidProps = sort @wantInvalidProps;
+    @gotInvalidProps = sort @gotInvalidProps;
+    $self->assert_deep_equals(\@wantInvalidProps, \@gotInvalidProps);
+}
+
 
 1;
