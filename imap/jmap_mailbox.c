@@ -477,6 +477,89 @@ static int _findparent(const char *mboxname, mbentry_t **mbentryp)
     return 0;
 }
 
+static int _mbox_get_readcounts(jmap_req_t *req,
+                                mbname_t *mbname,
+                                hash_table *props,
+                                json_t *obj)
+{
+    conv_status_t convstatus = CONV_STATUS_INIT;
+    int r = conversation_getstatus(req->cstate,
+                 mbname_intname(mbname), &convstatus);
+    if (r) {
+        syslog(LOG_ERR, "conversation_getstatus(%s): %s",
+                mbname_intname(mbname), error_message(r));
+        return r;
+    }
+    if (jmap_wantprop(props, "totalEmails")) {
+        json_object_set_new(obj, "totalEmails",
+                json_integer(convstatus.emailexists));
+    }
+    if (jmap_wantprop(props, "unreadEmails")) {
+        json_object_set_new(obj, "unreadEmails",
+                json_integer(convstatus.emailunseen));
+    }
+    if (jmap_wantprop(props, "totalThreads")) {
+        json_object_set_new(obj, "totalThreads",
+                json_integer(convstatus.threadexists));
+    }
+    if (jmap_wantprop(props, "unreadThreads")) {
+        json_object_set_new(obj, "unreadThreads",
+                json_integer(convstatus.threadunseen));
+    }
+    return 0;
+}
+
+static void _mbox_is_inbox(mbname_t *mbname, int *is_inbox, int *parent_is_inbox)
+{
+    if (is_inbox) {
+        *is_inbox = strarray_size(mbname_boxes(mbname)) == 0;
+    }
+    if (parent_is_inbox) {
+        *parent_is_inbox = strarray_size(mbname_boxes(mbname)) == 1;
+    }
+}
+
+static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
+{
+    int rights = jmap_myrights(req, mbentry);
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    mbentry_t *parent = NULL;
+    _findparent(mbname_intname(mbname), &parent);
+    int is_inbox = 0;
+    _mbox_is_inbox(mbname, &is_inbox, NULL);
+
+    json_t *jrights = json_object();
+    json_object_set_new(jrights, "mayReadItems",
+            json_boolean((rights & JACL_READITEMS) == JACL_READITEMS));
+    json_object_set_new(jrights, "mayAddItems",
+            json_boolean((rights & JACL_ADDITEMS) == JACL_ADDITEMS));
+    json_object_set_new(jrights, "mayRemoveItems",
+            json_boolean((rights & JACL_REMOVEITEMS) == JACL_REMOVEITEMS));
+    json_object_set_new(jrights, "mayCreateChild",
+            json_boolean((rights & JACL_CREATECHILD) == JACL_CREATECHILD));
+    json_object_set_new(jrights, "mayDelete",
+            json_boolean(!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)));
+    json_object_set_new(jrights, "maySubmit",
+            json_boolean((rights & JACL_SUBMIT) == JACL_SUBMIT));
+    json_object_set_new(jrights, "maySetSeen",
+            json_boolean((rights & JACL_SETSEEN) == JACL_SETSEEN));
+    json_object_set_new(jrights, "maySetKeywords",
+            json_boolean((rights & JACL_SETKEYWORDS) == JACL_SETKEYWORDS));
+    // non-standard
+    json_object_set_new(jrights, "mayAdmin",
+            json_boolean((rights & JACL_ADMIN) == JACL_ADMIN));
+
+    int mayRename = 0;
+    if (!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)) {
+        mayRename = jmap_hasrights(req, parent, JACL_CREATECHILD);
+    }
+    json_object_set_new(jrights, "mayRename", json_boolean(mayRename));
+
+    mboxlist_entry_free(&parent);
+    mbname_free(&mbname);
+    return jrights;
+}
+
 static json_t *_mbox_get(jmap_req_t *req,
                          const mbentry_t *mbentry,
                          hash_table *roles,
@@ -484,28 +567,13 @@ static json_t *_mbox_get(jmap_req_t *req,
                          enum shared_mbox_type share_type,
                          strarray_t *sublist)
 {
-    int is_inbox = 0, parent_is_inbox = 0;
-    int r = 0;
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     mbentry_t *parent = NULL;
-
     json_t *obj = NULL;
+    int r = 0;
 
-    /* Determine rights */
-    int rights = jmap_myrights(req, mbentry);
-
-    /* INBOX requires special treatment */
-    switch (strarray_size(mbname_boxes(mbname))) {
-    case 0:
-        is_inbox = 1;
-        break;
-    case 1:
-        parent_is_inbox = 1;
-        break;
-    default:
-        break;
-    }
-
+    int is_inbox = 0, parent_is_inbox = 0;
+    _mbox_is_inbox(mbname, &is_inbox, &parent_is_inbox);
     char *role = _mbox_get_role(req, mbname);
 
     if (jmap_wantprop(props, "myRights") || jmap_wantprop(props, "parentId")) {
@@ -530,36 +598,8 @@ static json_t *_mbox_get(jmap_req_t *req,
                 json_null() : json_string(parent->uniqueid));
     }
 
-
     if (jmap_wantprop(props, "myRights")) {
-        json_t *jrights = json_object();
-        json_object_set_new(jrights, "mayReadItems",
-                json_boolean((rights & JACL_READITEMS) == JACL_READITEMS));
-        json_object_set_new(jrights, "mayAddItems",
-                json_boolean((rights & JACL_ADDITEMS) == JACL_ADDITEMS));
-        json_object_set_new(jrights, "mayRemoveItems",
-                json_boolean((rights & JACL_REMOVEITEMS) == JACL_REMOVEITEMS));
-        json_object_set_new(jrights, "mayCreateChild",
-                json_boolean((rights & JACL_CREATECHILD) == JACL_CREATECHILD));
-        json_object_set_new(jrights, "mayDelete",
-                json_boolean(!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)));
-        json_object_set_new(jrights, "maySubmit",
-                json_boolean((rights & JACL_SUBMIT) == JACL_SUBMIT));
-        json_object_set_new(jrights, "maySetSeen",
-                json_boolean((rights & JACL_SETSEEN) == JACL_SETSEEN));
-        json_object_set_new(jrights, "maySetKeywords",
-                json_boolean((rights & JACL_SETKEYWORDS) == JACL_SETKEYWORDS));
-        // non-standard
-        json_object_set_new(jrights, "mayAdmin",
-                json_boolean((rights & JACL_ADMIN) == JACL_ADMIN));
-
-        int mayRename = 0;
-        if (!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)) {
-            mayRename = jmap_hasrights(req, parent, JACL_CREATECHILD);
-        }
-        json_object_set_new(jrights, "mayRename", json_boolean(mayRename));
-
-        json_object_set_new(obj, "myRights", jrights);
+        json_object_set_new(obj, "myRights", _mbox_get_myrights(req, mbentry));
     }
     if (jmap_wantprop(props, "role")) {
         if (role && !hash_lookup(role, roles)) {
@@ -579,26 +619,8 @@ static json_t *_mbox_get(jmap_req_t *req,
     if (share_type == _SHAREDMBOX_SHARED && !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
         if (jmap_wantprop(props, "totalThreads") || jmap_wantprop(props, "unreadThreads") ||
             jmap_wantprop(props, "totalEmails") || jmap_wantprop(props, "unreadEmails")) {
-            conv_status_t convstatus = CONV_STATUS_INIT;
-            r = conversation_getstatus(req->cstate,
-                            mbname_intname(mbname), &convstatus);
-            if (r) {
-                syslog(LOG_ERR, "conversation_getstatus(%s): %s",
-                        mbname_intname(mbname), error_message(r));
-                goto done;
-            }
-            if (jmap_wantprop(props, "totalEmails")) {
-                json_object_set_new(obj, "totalEmails", json_integer(convstatus.emailexists));
-            }
-            if (jmap_wantprop(props, "unreadEmails")) {
-                json_object_set_new(obj, "unreadEmails", json_integer(convstatus.emailunseen));
-            }
-            if (jmap_wantprop(props, "totalThreads")) {
-                json_object_set_new(obj, "totalThreads", json_integer(convstatus.threadexists));
-            }
-            if (jmap_wantprop(props, "unreadThreads")) {
-                json_object_set_new(obj, "unreadThreads", json_integer(convstatus.threadunseen));
-            }
+            r = _mbox_get_readcounts(req, mbname, props, obj);
+            if (r) goto done;
         }
         if (jmap_wantprop(props, "sortOrder")) {
             int sortOrder = _mbox_get_sortorder(req, mbname);
@@ -1804,6 +1826,7 @@ struct mboxset_args {
     int sortorder;
     json_t *shareWith; /* NULL if not set */
     int overwrite_acl;
+    json_t *jargs; // original JSON arguments
 };
 
 static void _mbox_setargs_fini(struct mboxset_args *args)
@@ -1813,6 +1836,7 @@ static void _mbox_setargs_fini(struct mboxset_args *args)
     free(args->parent_id);
     free(args->name);
     free(args->specialuse);
+    json_decref(args->jargs);
 }
 
 static char *_mbox_role_to_specialuse(const char *role)
@@ -1850,6 +1874,7 @@ static void _mbox_setargs_parse(json_t *jargs,
     memset(args, 0, sizeof(struct mboxset_args));
     args->sortorder = -1;
     args->overwrite_acl = 1;
+    args->jargs = json_incref(jargs);
 
     /* id */
     json_t *jid = json_object_get(jargs, "id");
@@ -2240,6 +2265,73 @@ done:
     jmap_parser_fini(&parser);
 }
 
+static int _mbox_update_validate_serverset(jmap_req_t *req,
+                                           struct mboxset_args *args,
+                                           struct jmap_parser *parser,
+                                           mbentry_t *mbentry)
+{
+    /* Validate read counts */
+    if (json_object_get(args->jargs, "totalEmails") ||
+        json_object_get(args->jargs, "unreadEmails") ||
+        json_object_get(args->jargs, "totalThreads") ||
+        json_object_get(args->jargs, "unreadThreads")) {
+
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        json_t *tmp = json_object();
+        int r = _mbox_get_readcounts(req, mbname, NULL, tmp);
+        if (!r) {
+            json_t *jval = json_object_get(args->jargs, "totalEmails");
+            if (jval && !json_equal(jval, json_object_get(tmp, "totalEmails"))) {
+                jmap_parser_invalid(parser, "totalEmails");
+            }
+            jval = json_object_get(args->jargs, "unreadEmails");
+            if (jval && !json_equal(jval, json_object_get(tmp, "unreadEmails"))) {
+                jmap_parser_invalid(parser, "unreadEmails");
+            }
+            jval = json_object_get(args->jargs, "totalThreads");
+            if (jval && !json_equal(jval, json_object_get(tmp, "totalThreads"))) {
+                jmap_parser_invalid(parser, "totalThreads");
+            }
+            jval = json_object_get(args->jargs, "unreadThreads");
+            if (jval && !json_equal(jval, json_object_get(tmp, "unreadThreads"))) {
+                jmap_parser_invalid(parser, "unreadThreads");
+            }
+        }
+        json_decref(tmp);
+        mbname_free(&mbname);
+        if (r) return r;
+    }
+
+    /* Validate myRights */
+    json_t *jpatch = json_copy(args->jargs);
+    const char *propname;
+    json_t *jval;
+    void *vtmp;
+    json_object_foreach_safe(jpatch, vtmp, propname, jval) {
+        if (strcmp(propname, "myRights") && strncmp(propname, "myRights/", 9)) {
+            json_object_del(jpatch, propname);
+        }
+    }
+    json_t *jcurRights = _mbox_get_myrights(req, mbentry);
+    json_t *jold = json_pack("{s:o}", "myRights", json_copy(jcurRights));
+    json_t *invalid = json_array();
+    json_t *jnew = jmap_patchobject_apply(jold, jpatch, invalid);
+    if (json_array_size(invalid) == 0) {
+        json_t *jnewRights = json_object_get(jnew, "myRights");
+        if (!json_equal(jcurRights, jnewRights)) {
+            jmap_parser_invalid(parser, "myRights");
+        }
+    }
+    else json_array_extend(parser->invalid, invalid);
+    json_decref(jnew);
+    json_decref(jold);
+    json_decref(invalid);
+    json_decref(jpatch);
+    json_decref(jcurRights);
+
+    return 0;
+}
+
 static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                          enum mboxset_runmode mode,
                          struct mboxset_result *result,
@@ -2276,6 +2368,9 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         result->err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
+
+    /* Validate server-set properties */
+    _mbox_update_validate_serverset(req, args, &parser, mbentry);
 
     /* Determine current mailbox and parent names */
     char *oldmboxname = NULL;
