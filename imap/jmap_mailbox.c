@@ -2346,6 +2346,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             pname = xstrdup(pmbentry->name);
             mboxlist_entry_free(&pmbentry);
         }
+        mboxlist_entry_free(&pmbentry);
         free(pname);
 
         /* Is this a move to a new parent? */
