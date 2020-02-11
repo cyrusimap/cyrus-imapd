@@ -3584,5 +3584,113 @@ sub test_mailbox_set_create_serverset_props
     $self->assert_deep_equals(\@wantInvalidProps, \@gotInvalidProps);
 }
 
+sub test_mailbox_set_update_serverset_props
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create mailbox";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                    role => undef,
+                },
+            },
+        }, 'R1'],
+        ['Mailbox/get', {
+            ids => ['#mboxA'],
+        }, 'R2'],
+    ]);
+    my $mboxIdA = $res->[0][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxIdA);
+    my $mboxA = $res->[1][1]{list}[0];
+    $self->assert_not_null($mboxA);
+
+    xlog "update with matching server-set properties";
+    $mboxA->{name} = 'XA';
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxIdA => $mboxA,
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxIdA});
+
+    xlog "update with matching server-set properties";
+    # Assert default values before we change them.
+    $self->assert_num_equals(0, $mboxA->{totalEmails});
+    $self->assert_num_equals(0, $mboxA->{unreadEmails});
+    $self->assert_num_equals(0, $mboxA->{totalThreads});
+    $self->assert_num_equals(0, $mboxA->{unreadThreads});
+    $self->assert_deep_equals({
+        mayReadItems => JSON::true,
+        mayAddItems =>  JSON::true,
+        mayRemoveItems => JSON::true,
+        mayCreateChild => JSON::true,
+        mayDelete => JSON::true,
+        maySubmit => JSON::true,
+        maySetSeen => JSON::true,
+        maySetKeywords => JSON::true,
+        mayAdmin => JSON::true,
+        mayRename => JSON::true,
+    }, $mboxA->{myRights});
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxIdA => {
+                    totalEmails => 1,
+                    unreadEmails => 1,
+                    totalThreads => 1,
+                    unreadThreads => 1,
+                    myRights => {
+                        mayReadItems => JSON::false,
+                        mayAddItems =>  JSON::false,
+                        mayRemoveItems => JSON::false,
+                        mayCreateChild => JSON::false,
+                        mayDelete => JSON::false,
+                        maySubmit => JSON::false,
+                        maySetSeen => JSON::false,
+                        maySetKeywords => JSON::false,
+                        mayAdmin => JSON::false,
+                        mayRename => JSON::false,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$mboxIdA}{type});
+    my @wantInvalidProps = (
+        'myRights',
+        'totalEmails',
+        'unreadEmails',
+        'totalThreads',
+        'unreadThreads',
+    );
+    my @gotInvalidProps = @{$res->[0][1]{notUpdated}{$mboxIdA}{properties}};
+    @wantInvalidProps = sort @wantInvalidProps;
+    @gotInvalidProps = sort @gotInvalidProps;
+    $self->assert_deep_equals(\@wantInvalidProps, \@gotInvalidProps);
+
+    xlog "update with unknown mailbox right";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxIdA => {
+                    'myRights/mayXxx' => JSON::false,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$mboxIdA}{type});
+    $self->assert_deep_equals(['myRights'],
+        $res->[0][1]{notUpdated}{$mboxIdA}{properties})
+}
 
 1;
