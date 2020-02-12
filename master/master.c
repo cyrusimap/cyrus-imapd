@@ -874,9 +874,11 @@ static void spawn_service(struct service *s, int si, int wdi)
 {
     pid_t p;
     int i;
-    char path[PATH_MAX];
+    char path[PATH_MAX], ignored;
     static char name_env[100], name_env2[100], name_env3[100];
     struct centry *c;
+    int wdpgid_pipe[2];
+    int r;
 
     if (!s->name) {
         fatal("Serious software bug found: spawn_service() called on unnamed service!",
@@ -887,6 +889,18 @@ static void spawn_service(struct service *s, int si, int wdi)
         return;
 
     get_executable(path, sizeof(path), s->exec);
+
+    if (wdi != SERVICE_NONE) {
+        /* In order for the parent to set the pgid of the child process, it
+         * must get in BEFORE its execve call.  So, set up a pipe thus:
+         *
+         * just before execve, the child blocks reading the pipe
+         * the parent sets the child's pgid, then closes the write end
+         * the child unblocks and can carry on, now that its pgid is set
+         */
+        r = pipe(wdpgid_pipe);
+        if (r) fatalf(EX_OSERR, "pipe failed: %m");
+    }
 
     switch (p = fork()) {
     case -1:
@@ -940,6 +954,14 @@ static void spawn_service(struct service *s, int si, int wdi)
             xclose(WaitDaemons[i].stat[1]);
         }
 
+        /* wait for parent to finish setting our pgid */
+        if (wdi != SERVICE_NONE) {
+            syslog(LOG_DEBUG, "waiting for parent to set our pgid...");
+            close(wdpgid_pipe[1]);
+            read(wdpgid_pipe[0], &ignored, sizeof ignored);
+            close(wdpgid_pipe[0]);
+        }
+
         syslog(LOG_DEBUG, "about to exec %s", path);
 
         /* add service name to environment */
@@ -958,6 +980,31 @@ static void spawn_service(struct service *s, int si, int wdi)
         s->nforks++;
         s->nactive++;
 
+        /* If it's a waitdaemon, we need to add it to the same process group
+         * as the other waitdaemons.  If this is the first one to be started,
+         * (i.e. new waitdaemon was added to config, but master was only
+         * SIGHUP'd and not fully restarted), then we also need to initialise
+         * waitdaemon_pgid in case there's more.
+         */
+        if (wdi != SERVICE_NONE) {
+            pid_t pgid = 0;
+            if (waitdaemon_pgid != -1)
+                pgid = waitdaemon_pgid;
+            close(wdpgid_pipe[0]);
+            r = setpgid(p, pgid);
+            if (r) {
+                /* not a crisis, but when cyrus shuts down it will just shut
+                 * down asynchronously like a normal service.
+                 */
+                syslog(LOG_NOTICE, "unable to set pgid for %s/%s: %m",
+                                   s->name, s->familyname);
+            }
+            else if (waitdaemon_pgid == -1) {
+                waitdaemon_pgid = p;
+            }
+            close(wdpgid_pipe[1]);
+        }
+
         /* add to child table */
         c = centry_alloc();
         centry_set_name(c, s->listen ? "SERVICE" : "DAEMON", s->name, path);
@@ -967,7 +1014,6 @@ static void spawn_service(struct service *s, int si, int wdi)
         centry_add(c, p);
         break;
     }
-
 }
 
 static void schedule_event(struct event *a)
