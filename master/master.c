@@ -3012,11 +3012,67 @@ int main(int argc, char **argv)
     }
 
 finished:
-    /* XXX shut down wait daemons, sequentially */
+    /* shut down wait daemons, sequentially, in reverse order */
     for (i = nwaitdaemons - 1; i >= 0; i--) {
-        /* XXX do it */
-        (void) 0;
+        int r, j, found = 0;
+        struct service *s = &WaitDaemons[i];
+
+        for (j = 0; j < child_table_size; j++) {
+            struct centry *c;
+
+            for (c = ctable[j]; c; c = c->next) {
+                pid_t gotpid;
+                int status;
+
+                if (c->wdi != i || c->service_state == SERVICE_STATE_DEAD)
+                    continue;
+
+                /* XXX log for paranoia rather than short-circuiting */
+                if (found++) {
+                    syslog(LOG_DEBUG,
+                           "found %d extra living children for %s/%s...",
+                           found, s->name, s->familyname);
+                }
+
+                r = kill(c->pid, SIGTERM);
+                if (r && errno != ESRCH)
+                    fatalf(EX_OSERR, "kill %ld: %m", (long) c->pid);
+
+                syslog(LOG_NOTICE, "waiting for child %ld of %s/%s to exit...",
+                        (long) c->pid, s->name, s->familyname);
+
+                gotpid = waitpid(c->pid, &status, 0);
+                if (gotpid == -1) {
+                    syslog(LOG_ERR, "waitpid %ld: %m", (long) c->pid);
+                }
+                else {
+                    const char *childexit;
+                    int detail;
+
+                    if (WIFEXITED(status)) {
+                        childexit = "exited with status";
+                        detail = WEXITSTATUS(status);
+                    }
+                    else if (WIFSIGNALED(status)) {
+                        childexit = "killed with signal";
+                        detail = WTERMSIG(status);
+                    }
+                    else {
+                        childexit = "is in unknown state";
+                        detail = status;
+                    }
+                    syslog(LOG_NOTICE,
+                           "child %ld of %s/%s %s %d",
+                           (long) c->pid, s->name, s->familyname,
+                           childexit, detail);
+                }
+
+                centry_set_state(c, SERVICE_STATE_DEAD);
+            }
+        }
     }
+
+    /* XXX paranoia: burn through child table, complain if anything there? */
 
     syslog(LOG_NOTICE, "All children have exited, closing down");
     return 0;
