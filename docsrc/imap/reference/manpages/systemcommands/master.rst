@@ -56,7 +56,7 @@ Options
 
 .. option:: -j  janitor full-sweeps per second
 
-    Sets the amount of times per second the janitor should sweep the
+    Sets the number of times per second the janitor should sweep the
     entire child table.  Leave it at the default of 1 unless you have a
     really high fork rate (and you have not increased the child hash
     table size when you compiled Cyrus from its default of 10000
