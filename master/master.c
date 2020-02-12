@@ -3047,6 +3047,7 @@ finished:
                 }
                 else {
                     const char *childexit;
+                    const char *coredumped = "";
                     int detail;
 
                     if (WIFEXITED(status)) {
@@ -3056,15 +3057,19 @@ finished:
                     else if (WIFSIGNALED(status)) {
                         childexit = "killed with signal";
                         detail = WTERMSIG(status);
+#ifdef WCOREDUMP
+                        if (WCOREDUMP(status))
+                            coredumped = " (core dumped)";
+#endif
                     }
                     else {
                         childexit = "is in unknown state";
                         detail = status;
                     }
                     syslog(LOG_NOTICE,
-                           "child %ld of %s/%s %s %d",
+                           "child %ld of %s/%s %s %d%s",
                            (long) c->pid, s->name, s->familyname,
-                           childexit, detail);
+                           childexit, detail, coredumped);
                 }
 
                 centry_set_state(c, SERVICE_STATE_DEAD);
