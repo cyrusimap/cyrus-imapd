@@ -93,6 +93,7 @@
 #include "master.h"
 #include "service.h"
 
+#include "assert.h"
 #include "cyr_lock.h"
 #include "retry.h"
 #include "util.h"
@@ -1786,11 +1787,94 @@ static void add_start(const char *name, struct entry *e,
     strarray_free(tok);
 }
 
+/* XXX potentially could be dedup'd with add_daemon below */
 static void add_waitdaemon(const char *name, struct entry *e, void *rock)
 {
-    /* XXX not implemented yet... */
-    (void) name, (void) e, (void) rock;
-    fatal("waitdaemons not implemented yet", EX_SOFTWARE);
+    int ignore_err = rock ? 1 : 0;
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
+    rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 0);
+    int waitdaemon = masterconf_getswitch(e, "wait", 0);
+    int maxforkrate = masterconf_getint(e, "maxforkrate", 0);
+    int reconfig = 0;
+    int i;
+
+    /* shouldn't've got here if it isn't one... */
+    assert(waitdaemon != 0);
+
+    if (maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
+
+    if (!strcmp(cmd, "")) {
+        char buf[256];
+        snprintf(buf, sizeof(buf),
+                 "unable to find command or port for service '%s'", name);
+
+        if (ignore_err) {
+            syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+            goto done;
+        }
+
+        fatal(buf, EX_CONFIG);
+    }
+
+    /* see if we have an existing entry that can be reused */
+    for (i = 0; i < nwaitdaemons; i++) {
+        /* skip non-primary instances */
+        if (WaitDaemons[i].associate > 0)
+            continue;
+
+        if (!strcmpsafe(WaitDaemons[i].name, name) && WaitDaemons[i].exec) {
+            /* we have duplicate service names in the config file */
+            char buf[256];
+            snprintf(buf, sizeof(buf), "multiple entries for waitdaemon '%s'", name);
+
+            if (ignore_err) {
+                syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+                goto done;
+            }
+
+            fatal(buf, EX_CONFIG);
+        }
+
+        /* must have empty/same service name, listen and proto */
+        if (!WaitDaemons[i].name || !strcmp(WaitDaemons[i].name, name))
+            break;
+    }
+
+    if (i == nwaitdaemons) {
+        /* we don't have an existing one, so create a new service */
+        struct service *s = waitdaemon_add(NULL);
+        gettimeofday(&s->last_interval_start, 0);
+    }
+    else reconfig = 1;
+
+    if (!WaitDaemons[i].name) WaitDaemons[i].name = xstrdup(name);
+
+    strarray_free(WaitDaemons[i].exec);
+    WaitDaemons[i].exec = strarray_split(cmd, NULL, 0);
+
+    /* is this daemon actually there? */
+    if (!verify_service_file(WaitDaemons[i].exec)) {
+        fatalf(EX_CONFIG,
+                 "cannot find executable for waitdaemon '%s'", name);
+        /* if it is not, we're misconfigured, die. */
+    }
+
+    WaitDaemons[i].maxforkrate = maxforkrate;
+    WaitDaemons[i].maxfds = maxfds;
+    WaitDaemons[i].babysit = 1;
+    WaitDaemons[i].max_workers = 1;
+    WaitDaemons[i].desired_workers = 1;
+    WaitDaemons[i].familyname = "daemon";
+
+    if (verbose > 2)
+        syslog(LOG_DEBUG, "%s: waitdaemon '%s' (%s, %d)",
+               reconfig ? "reconfig" : "add",
+               WaitDaemons[i].name, cmd,
+               (int) WaitDaemons[i].maxfds);
+
+done:
+    free(cmd);
+    return;
 }
 
 static void add_daemon(const char *name, struct entry *e, void *rock)
