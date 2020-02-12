@@ -118,7 +118,7 @@ Also not really a bug, **fud** requires that the anonymous user has the
 0 is not a standard IMAP ACL bit.
 
 **fud** is an experimental interface meant to provide information to
-build a finger-like service around.  Eventually it should be superceded
+build a finger-like service around.  Eventually it should be superseded
 by a more standards-based protocol.
 
 

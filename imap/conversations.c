@@ -2411,7 +2411,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     /* calculate the changes */
     if (old) {
-        /* decrease any relevent counts */
+        /* decrease any relevant counts */
         if (!(old->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
             !(old->system_flags & FLAG_DELETED)) {
             delta_exists--;
