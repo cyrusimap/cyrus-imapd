@@ -466,6 +466,11 @@ static int expire(const mbentry_t *mbentry, void *rock)
         goto done;
     }
 
+    if (!mboxlist_cleanup_deletedentries(mbentry, erock->tombstone_mark)) {
+        verbosep("Removing stale subtombstone for %s\n", mbentry->name);
+        syslog(LOG_NOTICE, "Removing stale subtombstone for %s", mbentry->name);
+    }
+
     memset(erock->userflags, 0, sizeof(erock->userflags));
 
     r = mailbox_open_iwl(mbentry->name, &mailbox);

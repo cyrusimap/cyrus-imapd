@@ -114,6 +114,8 @@ struct mboxlist_entry {
     char *uniqueid;
     /* legacy upgrade support */
     char *legacy_specialuse;
+    /* history thingy */
+    struct mboxlist_entry *deletedentry;
 };
 
 typedef struct mboxlist_entry mbentry_t;
@@ -128,6 +130,7 @@ int mboxlist_parse_entry(mbentry_t **mbentryptr,
                          const char *data, size_t datalen);
 
 mbentry_t *mboxlist_entry_copy(const mbentry_t *src);
+mbentry_t *mboxlist_entry_copy_deleted(const mbentry_t *src);
 
 void mboxlist_entry_free(mbentry_t **mbentryptr);
 
@@ -145,7 +148,6 @@ int mboxlist_lookup_allow_all(const char *name,
 char *mboxlist_find_specialuse(const char *use, const char *userid);
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
                              const struct auth_state *auth_state);
-
 
 
 /* insert/delete stub entries */
@@ -314,7 +316,6 @@ int mboxlist_findone_withp(struct namespace *namespace,
                      const char *intname, int isadmin,
                      const char *userid, const struct auth_state *auth_state,
                      findall_p *p, findall_cb *cb, void *rock);
-
 
 /* Find a mailbox's parent (if any) */
 int mboxlist_findparent(const char *mboxname,
