@@ -1840,7 +1840,7 @@ static int needs_modseq(const struct searchargs *searchargs,
 static void begin_esearch_response(struct index_state *state,
                                    struct searchargs *searchargs,
                                    int usinguid, search_folder_t *folder,
-                                   int nmsg, modseq_t highestmodseq)
+                                   int nmsg)
 
 {
     /*
@@ -1860,24 +1860,36 @@ static void begin_esearch_response(struct index_state *state,
     if (nmsg) {
         if (searchargs->returnopts & SEARCH_RETURN_MIN) {
             prot_printf(state->out, " MIN %u", search_folder_get_min(folder));
-            if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MIN)
-                highestmodseq = search_folder_get_first_modseq(folder);
         }
         if (searchargs->returnopts & SEARCH_RETURN_MAX) {
             prot_printf(state->out, " MAX %u", search_folder_get_max(folder));
-            if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MAX)
-                highestmodseq = search_folder_get_last_modseq(folder);
         }
-        if (highestmodseq &&
-            searchargs->returnopts == (SEARCH_RETURN_MIN|SEARCH_RETURN_MAX)) {
-            /* special case min and max should be greatest of the two */
-            uint64_t last = search_folder_get_last_modseq(folder);
-            highestmodseq = search_folder_get_first_modseq(folder);
-            if (last > highestmodseq) highestmodseq = last;
-        }
-        if (highestmodseq)
-            prot_printf(state->out, " MODSEQ " MODSEQ_FMT, highestmodseq);
     }
+}
+
+static void esearch_modseq_response(struct index_state *state,
+                                    struct searchargs *searchargs,
+                                    search_folder_t *folder,
+                                    modseq_t highestmodseq)
+{
+    if (!highestmodseq) return;
+
+    // restrict modseq to the returned items only
+    if (searchargs->returnopts == SEARCH_RETURN_MIN) {
+        highestmodseq = search_folder_get_first_modseq(folder);
+    }
+    if (searchargs->returnopts == SEARCH_RETURN_MAX) {
+        highestmodseq = search_folder_get_last_modseq(folder);
+    }
+    if (searchargs->returnopts == (SEARCH_RETURN_MIN|SEARCH_RETURN_MAX)) {
+        /* special case min and max should be greatest of the two */
+        uint64_t last = search_folder_get_last_modseq(folder);
+        highestmodseq = search_folder_get_first_modseq(folder);
+        if (last > highestmodseq) highestmodseq = last;
+    }
+
+    if (highestmodseq)
+        prot_printf(state->out, " MODSEQ " MODSEQ_FMT, highestmodseq);
 }
 
 /*
@@ -1917,8 +1929,7 @@ EXPORTED int index_search(struct index_state *state,
         nmsg = 0;
 
     if (searchargs->returnopts) {
-        begin_esearch_response(state, searchargs, usinguid,
-                               folder, nmsg, highestmodseq);
+        begin_esearch_response(state, searchargs, usinguid, folder, nmsg);
 
         if (nmsg) {
             if (searchargs->returnopts & SEARCH_RETURN_ALL) {
@@ -1941,6 +1952,8 @@ EXPORTED int index_search(struct index_state *state,
                 }
                 prot_printf(state->out, ")");
             }
+
+            esearch_modseq_response(state, searchargs, folder, highestmodseq);
         }
     }
     else {
@@ -1997,8 +2010,7 @@ EXPORTED int index_sort(struct index_state *state,
     }
 
     if (searchargs->returnopts) {
-        begin_esearch_response(state, searchargs, usinguid,
-                               folder, nmsg, highestmodseq);
+        begin_esearch_response(state, searchargs, usinguid, folder, nmsg);
 
         if (nmsg) {
             if (searchargs->returnopts & SEARCH_RETURN_ALL) {
@@ -2026,6 +2038,8 @@ EXPORTED int index_sort(struct index_state *state,
                 }
                 prot_printf(state->out, ")");
             }
+
+            esearch_modseq_response(state, searchargs, folder, highestmodseq);
         }
     }
     else {
