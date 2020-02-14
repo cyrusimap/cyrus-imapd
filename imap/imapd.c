@@ -5199,7 +5199,7 @@ badannotation:
         if (!(client_capa & CAPA_CONDSTORE)) {
             client_capa |= CAPA_CONDSTORE;
             if (imapd_index)
-                prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]  \r\n",
+                prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] CONDSTORE enabled by MODSEQ fetch\r\n",
                         index_highestmodseq(imapd_index));
         }
     }
@@ -6055,7 +6055,7 @@ notflagsdammit:
     if ((storeargs.unchangedsince != ULONG_MAX) &&
         !(client_capa & CAPA_CONDSTORE)) {
         client_capa |= CAPA_CONDSTORE;
-        prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]  \r\n",
+        prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] CONDSTORE enabled by UNCHANGEDSINCE\r\n",
                     index_highestmodseq(imapd_index));
     }
 
