@@ -2421,6 +2421,8 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         if (pmbentry && jmap_hasrights(req, pmbentry, ACL_LOOKUP)) {
             newparentname = xstrdup(pmbentry->name);
         }
+        mboxlist_entry_free(&pmbentry);
+
         int new_toplevel = args->is_toplevel;
         if (!newparentname) {
             jmap_parser_invalid(&parser, "parentId");
