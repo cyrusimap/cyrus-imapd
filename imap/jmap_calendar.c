@@ -622,7 +622,7 @@ static int jmap_calendar_get(struct jmap_req *req)
     }
     else {
         // XXX: replace with a function which only looks inside INBOX.#calendars
-        r = mboxlist_usermboxtree(req->accountid, req->authstate, &getcalendars_cb, &rock, MBOXTREE_INTERMEDIATES);
+        r = mboxlist_usermboxtree(req->accountid, req->authstate, &getcalendars_cb, &rock, 0);
         if (r) goto done;
     }
 
@@ -963,14 +963,12 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
         r = mboxlist_delayed_deletemailbox(mboxname,
                 httpd_userisadmin || httpd_userisproxyadmin,
                 httpd_userid, req->authstate, mboxevent,
-                1 /* checkacl */, 0 /* local_only */, 0 /* force */,
-                0 /* keep_intermediaries */);
+                1 /* checkacl */, 0 /* local_only */, 0 /* force */);
     } else {
         r = mboxlist_deletemailbox(mboxname,
                 httpd_userisadmin || httpd_userisproxyadmin,
                 httpd_userid, req->authstate, mboxevent,
-                1 /* checkacl */, 0 /* local_only */, 0 /* force */,
-                0 /* keep_intermediaries */);
+                1 /* checkacl */, 0 /* local_only */, 0 /* force */);
     }
     mboxevent_free(&mboxevent);
 

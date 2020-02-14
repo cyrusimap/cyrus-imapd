@@ -2680,8 +2680,8 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getatom(kin, "MBOXTYPE", &mboxtype);
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
-    if (mbtype & (MBTYPE_INTERMEDIATE|MBTYPE_DELETED)) {
-        // XXX - make sure what's already there is either nothing or compatible...
+    if (mbtype & MBTYPE_DELETED) {
+        // XXX: check that there's nothing there already
         mbentry_t *newmbentry = NULL;
 
         newmbentry = mboxlist_entry_create();
@@ -2758,7 +2758,7 @@ int sync_apply_mailbox(struct dlist *kin,
                                             sstate->userid, sstate->authstate,
                                             options, uidvalidity, createdmodseq,
                                             highestmodseq, acl,
-                                            uniqueid, sstate->local_only, 0, &mailbox);
+                                            uniqueid, sstate->local_only, &mailbox);
             }
             /* set a highestmodseq of 0 so ALL changes are future
              * changes and get applied */
@@ -3279,7 +3279,7 @@ int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
     /* Delete with admin privileges */
     return mboxlist_deletemailboxlock(mboxname, sstate->userisadmin,
                                   sstate->userid, sstate->authstate,
-                                  NULL, 0, sstate->local_only, 1, 0);
+                                  NULL, 0, sstate->local_only, 1);
 }
 
 int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
@@ -3320,7 +3320,6 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     if (!r) r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
                                        uidvalidity, 1, sstate->userid,
                                        sstate->authstate, NULL, sstate->local_only, 1, 1,
-                                       0/*keep_intermediaries*/,
                                        0/*move_subscription*/,
                                        1/*silent*/);
 
@@ -3589,7 +3588,7 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         const char *name = strarray_nth(list, i-1);
         r = mboxlist_deletemailbox(name, sstate->userisadmin,
                                    sstate->userid, sstate->authstate,
-                                   NULL, 0, sstate->local_only, 1, 0);
+                                   NULL, 0, sstate->local_only, 1);
         if (r) goto done;
     }
 
@@ -3842,7 +3841,7 @@ int sync_restore_mailbox(struct dlist *kin,
                                     sstate->userid, sstate->authstate,
                                     options, uidvalidity, createdmodseq,
                                     highestmodseq, acl,
-                                    uniqueid, sstate->local_only, 0, &mailbox);
+                                    uniqueid, sstate->local_only, &mailbox);
             syslog(LOG_DEBUG, "%s: mboxlist_createsync %s: %s",
                 __func__, mboxname, error_message(r));
             is_new_mailbox = 1;
@@ -5843,39 +5842,6 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
     struct sync_folder *mfolder, *rfolder;
     const char *part;
     uint32_t batchsize = 0;
-    struct sync_name *mbox;
-
-    /* Look for intermediate mailboxes */
-    for (mbox = mboxname_list->head; !r && mbox; mbox = mbox->next) {
-        mbentry_t *mbentry = NULL;
-
-        if (mboxlist_lookup_allow_all(mbox->name, &mbentry, NULL))
-            continue;
-
-        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-            struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
-
-            dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
-            dlist_setatom(kl, "MBOXNAME", mbentry->name);
-            dlist_setatom(kl, "MBOXTYPE",
-                          mboxlist_mbtype_to_string(mbentry->mbtype));
-            dlist_setnum64(kl, "HIGHESTMODSEQ", mbentry->foldermodseq);
-            dlist_setnum64(kl, "CREATEDMODSEQ", mbentry->createdmodseq);
-
-            sync_send_apply(kl, sync_be->out);
-            r = sync_parse_response("MAILBOX", sync_be->in, NULL);
-
-            dlist_free(&kl);
-        }
-
-        mboxlist_entry_free(&mbentry);
-
-        if (r) {
-            syslog(LOG_ERR, "apply intermediates: failed: %s", error_message(r));
-            goto bail;
-        }
-    }
-
 
     if (channelp) {
         batchsize = config_getint(IMAPOPT_SYNC_BATCHSIZE);
@@ -6054,13 +6020,6 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     struct mboxinfo *info = (struct mboxinfo *)rock;
     int r = 0;
-
-    /* XXX - check for deleted? */
-
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-        sync_name_list_add(info->mboxlist, mbentry->name);
-        return 0;
-    }
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);

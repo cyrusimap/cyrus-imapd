@@ -328,7 +328,7 @@ static int _mbox_find_specialuse(jmap_req_t *req, const char *use,
     }
 
     struct _mbox_find_specialuse_rock rock = { req, use, NULL, NULL };
-    int ret = mboxlist_usermboxtree(req->accountid, req->authstate, _mbox_find_specialuse_cb, &rock, MBOXTREE_INTERMEDIATES);
+    int ret = mboxlist_usermboxtree(req->accountid, req->authstate, _mbox_find_specialuse_cb, &rock, 0);
 
     if (mboxnameptr) {
         *mboxnameptr = rock.mboxname;
@@ -616,7 +616,7 @@ static json_t *_mbox_get(jmap_req_t *req,
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
-    if (share_type == _SHAREDMBOX_SHARED && !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+    if (share_type == _SHAREDMBOX_SHARED) {
         if (jmap_wantprop(props, "totalThreads") || jmap_wantprop(props, "unreadThreads") ||
             jmap_wantprop(props, "totalEmails") || jmap_wantprop(props, "unreadEmails")) {
             r = _mbox_get_readcounts(req, mbname, props, obj);
@@ -935,7 +935,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
      * all mailbox ids. XXX Optimise this codepath if the ids[] array
      * length is small */
     mboxlist_usermboxtree(req->accountid, req->authstate,
-                          jmap_mailbox_get_cb, &rock, MBOXTREE_INTERMEDIATES);
+                          jmap_mailbox_get_cb, &rock, 0);
 
     /* Report if any requested mailbox has not been found */
     if (rock.want) {
@@ -1314,7 +1314,7 @@ static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
     }
 
     /* Lookup mailboxes */
-    int flags = MBOXTREE_INTERMEDIATES;
+    int flags = 0;
     if (query->include_tombstones) flags |= MBOXTREE_TOMBSTONES|MBOXTREE_DELETED;
     int r = mboxlist_usermboxtree(query->req->accountid, query->req->authstate,
                                   _mboxquery_cb, query, flags);
@@ -1692,9 +1692,7 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
         struct mboxquerychanges_rock rock = { &removed, sincemodseq };
         int r = mboxlist_usermboxtree(req->accountid, req->authstate,
                                       _mboxquerychanges_cb, &rock,
-                                      MBOXTREE_TOMBSTONES|
-                                      MBOXTREE_DELETED|
-                                      MBOXTREE_INTERMEDIATES);
+                                      MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
         if (r) goto done;
     }
 
@@ -2207,7 +2205,6 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
             0 /* createdmodseq */,
             0 /* highestmodseq */, NULL /* acl */,
             NULL /* uniqueid */, 0 /* local_only */,
-            1, /* keep_intermediaries */
             args->shareWith ? &mailbox : NULL);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
@@ -2527,17 +2524,13 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             r = 0;
 
             /* Rename the mailbox. */
-            if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                r = mboxlist_promote_intermediary(oldmboxname);
-                if (r) goto done;
-            }
             struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
             r = mboxlist_renametree(oldmboxname, newmboxname,
                     NULL /* partition */, 0 /* uidvalidity */,
                     httpd_userisadmin, req->userid, httpd_authstate,
                     mboxevent,
                     0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */,
-                    1 /* keep_intermediaries */, 1 /* move_subscription */);
+                    1 /* move_subscription */);
             mboxevent_free(&mboxevent);
             mboxlist_entry_free(&mbentry);
             jmap_mboxlist_lookup(newmboxname, &mbentry, NULL);
@@ -2568,12 +2561,6 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             mboxlist_entry_free(&mbentry);
             result->err = json_pack("{s:s}", "type", "forbidden");
             goto done;
-        }
-        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-            r = mboxlist_promote_intermediary(mbentry->name);
-            if (r) goto done;
-            mboxlist_entry_free(&mbentry);
-            jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
         }
         if (!r) r = _mbox_set_annots(req, args, mboxname);
     }
@@ -2630,7 +2617,6 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
 {
     int r = 0;
     mbentry_t *mbinbox = NULL, *mbentry = NULL;
-    int is_intermediate = 0;
 
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
     jmap_mboxlist_lookup(inboxname, &mbinbox, NULL);
@@ -2653,7 +2639,6 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
         result->err = json_pack("{s:s}", "type", "forbidden");
         goto done;
     }
-    is_intermediate = mbentry->mbtype & MBTYPE_INTERMEDIATE;
 
     /* Check if the mailbox has any children. */
     if (_mbox_has_children(mbentry->name)) {
@@ -2666,7 +2651,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
         goto done;
     }
 
-    if (!remove_msgs && !is_intermediate) {
+    if (!remove_msgs) {
         /* Check if the mailbox has any messages */
         struct mailbox *mbox = NULL;
         struct mailbox_iter *iter = NULL;
@@ -2688,15 +2673,13 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
         r = mboxlist_delayed_deletemailbox(mbentry->name,
                 httpd_userisadmin || httpd_userisproxyadmin,
                 req->userid, req->authstate, mboxevent,
-                1 /* checkacl */, 0 /* local_only */, 0 /* force */,
-                1 /* keep_intermediaries */);
+                1 /* checkacl */, 0 /* local_only */, 0 /* force */);
     }
     else {
         r = mboxlist_deletemailbox(mbentry->name,
                 httpd_userisadmin || httpd_userisproxyadmin,
                 req->userid, req->authstate, mboxevent,
-                1 /* checkacl */, 0 /* local_only */, 0 /* force */,
-                1 /* keep_intermediaries */);
+                1 /* checkacl */, 0 /* local_only */, 0 /* force */);
     }
     mboxevent_free(&mboxevent);
 
@@ -2706,9 +2689,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
         goto done;
     }
     else if (r == IMAP_MAILBOX_NONEXISTENT) {
-        if (!is_intermediate) {
-            result->err = json_pack("{s:s}", "type", "notFound");
-        }
+        result->err = json_pack("{s:s}", "type", "notFound");
         r = 0;
         goto done;
     }
@@ -3003,7 +2984,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                 httpd_userisadmin, req->userid, httpd_authstate,
                 mboxevent,
                 0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */,
-                1 /* keep_intermediaries */, 1 /* move_subscription */);
+                1 /* move_subscription */);
         strarray_add(update_intermediaries, tmp->tmp_imapname);
         strarray_add(update_intermediaries, tmp->new_imapname);
         mboxevent_free(&mboxevent);
@@ -3055,7 +3036,7 @@ static int _mboxset_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
     struct mboxset_state *state = rock;
     // annoyingly, MBTYPE_EMAIL isn't a flag of its own, it's just the absence of other flags, so we can't
     // match that one with '&'.
-    if (mbentry->mbtype == MBTYPE_EMAIL || (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+    if (mbentry->mbtype == MBTYPE_EMAIL) {
         hash_insert(mbentry->name, xstrdup(mbentry->uniqueid), state->id_by_imapname);
     }
     return 0;
@@ -3152,8 +3133,7 @@ static int _mboxset_state_is_valid(const char *account_id, struct mboxset_ops *o
     state->siblings_by_parent_id = siblings_by_parent_id;
 
     /* Map current mailboxes by IMAP name to id */
-    mboxlist_usermboxtree(account_id, NULL, _mboxset_state_mboxlist_cb, state,
-                          MBOXTREE_INTERMEDIATES);
+    mboxlist_usermboxtree(account_id, NULL, _mboxset_state_mboxlist_cb, state, 0);
     char *inboxname = mboxname_user_mbox(account_id, NULL);
     const char *inbox_id = hash_lookup(inboxname, id_by_imapname);
     free(inboxname);
@@ -3280,18 +3260,6 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
     json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
     set->super.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
-
-    /* Prune intermediary mailbox trees without any children. Do this
-     * after we fetched the mailbox state, so clients are forced to
-     * resync their mailbox trees after the Mailbox/set. */
-    int i;
-    for (i = 0; i < strarray_size(&update_intermediaries); i++) {
-        const char *old_imapname = strarray_nth(&update_intermediaries, i);
-        /* XXX - we know these are mailboxes, so mbtype 0 is OK, but it's not an
-         * ideal interface */
-        mboxlist_update_intermediaries(old_imapname, 0, 0);
-        /* XXX error handling? */
-    }
 
     assert(ptrarray_size(ops->put) == 0);
     assert(strarray_size(ops->del) == 0);
@@ -3470,19 +3438,20 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
     jmap_req_t *req = data->req;
 
     /* Ignore anything but regular mailboxes */
-    if (mbentry->mbtype & ~(MBTYPE_DELETED | MBTYPE_INTERMEDIATE)) {
+    if (mbentry->mbtype & ~MBTYPE_DELETED) {
         return 0;
     }
 
     /* Lookup status. */
-    if (!(mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_INTERMEDIATE))) {
+    if ((mbentry->mbtype & (MBTYPE_DELETED))) {
+        mbmodseq = mbentry->foldermodseq;
+    }
+    else {
         struct statusdata sdata = STATUSDATA_INIT;
         int r = status_lookup_mbentry(mbentry, data->req->userid,
                                       STATUS_HIGHESTMODSEQ, &sdata);
         if (r) return r;
         mbmodseq = sdata.highestmodseq;
-    } else {
-        mbmodseq = mbentry->foldermodseq;
     }
 
     /* Ignore old changes */
@@ -3573,8 +3542,7 @@ static int _mbox_changes(jmap_req_t *req,
     /* Search for updates */
     r = mboxlist_usermboxtree(req->accountid, req->authstate,
                               _mbox_changes_cb, &data,
-                              MBOXTREE_TOMBSTONES|
-                              MBOXTREE_INTERMEDIATES);
+                              MBOXTREE_TOMBSTONES);
     if (r) goto done;
 
     /* Sort updates by modseq */

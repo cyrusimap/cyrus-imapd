@@ -4182,7 +4182,7 @@ static int move_collection(const mbentry_t *mbentry, void *rock)
         r = mboxlist_renamemailbox(mbentry, buf_cstring(&mrock->newname),
                                    NULL /* partition */, 0 /* uidvalidity */,
                                    1 /* admin */, httpd_userid, httpd_authstate,
-                                   NULL, 0, 0, 1 /* ignorequota */, 0, 0, 0);
+                                   NULL, 0, 0, 1 /* ignorequota */, 0, 0);
     }
 
     if (r) {
@@ -4281,16 +4281,14 @@ static int remove_collection(const mbentry_t *mbentry,
         r = mboxlist_delayed_deletemailbox(mbentry->name, 1, /* admin */
                                            httpd_userid, httpd_authstate,
                                            NULL, 1 /* checkacl */,
-                                           0 /* localonly */, 0 /* force */,
-                                           0 /* keep_intermediaries */);
+                                           0 /* localonly */, 0 /* force */);
 
     }
     else {
         r = mboxlist_deletemailbox(mbentry->name, 1, /* admin */
                                    httpd_userid, httpd_authstate,
                                    NULL, 1 /* checkacl */,
-                                   0 /* localonly */, 0 /* force */,
-                                   0 /* keep_intermediaries */);
+                                   0 /* localonly */, 0 /* force */);
     }
 
     return r;
@@ -4369,8 +4367,7 @@ static int dav_move_collection(struct transaction_t *txn,
                                                httpd_userisadmin,
                                                httpd_userid, httpd_authstate,
                                                mboxevent, 1 /* checkacl */,
-                                               0 /* localonly*/, 0 /* force */,
-                                               0 /* keep_intermediaries */);
+                                               0 /* localonly*/, 0 /* force */);
 
         }
         else {
@@ -4378,8 +4375,7 @@ static int dav_move_collection(struct transaction_t *txn,
                                        httpd_userisadmin,
                                        httpd_userid, httpd_authstate,
                                        mboxevent, 1 /* checkacl */,
-                                       0 /* localonly*/, 0 /* force */,
-                                       0 /* keep_intermediaries */);
+                                       0 /* localonly*/, 0 /* force */);
         }
 
         if (!r) mboxevent_notify(&mboxevent);
@@ -4403,7 +4399,7 @@ static int dav_move_collection(struct transaction_t *txn,
     r = mboxlist_renamemailbox(txn->req_tgt.mbentry, newmailboxname,
                                NULL /* partition */, 0 /* uidvalidity */,
                                httpd_userisadmin, httpd_userid, httpd_authstate,
-                               mboxevent, 0, 0, 1 /* ignorequota */, 0, 0, 0);
+                               mboxevent, 0, 0, 1 /* ignorequota */, 0, 0);
 
     if (!r) mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
@@ -5010,15 +5006,13 @@ int meth_delete(struct transaction_t *txn, void *params)
             r = mboxlist_delayed_deletemailbox(txn->req_tgt.mbentry->name,
                                        httpd_userisadmin || httpd_userisproxyadmin,
                                        httpd_userid, httpd_authstate, mboxevent,
-                                       /*checkack*/1, /*localonly*/0, /*force*/0,
-                                       /* keep_intermediaries */0);
+                                       /*checkack*/1, /*localonly*/0, /*force*/0);
         }
         else {
             r = mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
                                        httpd_userisadmin || httpd_userisproxyadmin,
                                        httpd_userid, httpd_authstate, mboxevent,
-                                       /*checkack*/1, /*localonly*/0, /*force*/0,
-                                       /* keep_intermediaries */0);
+                                       /*checkack*/1, /*localonly*/0, /*force*/0);
         }
         if (!r) {
             r = caldav_update_shareacls(mbname_userid(mbname));
@@ -5708,8 +5702,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
             mailbox_close(&mailbox);
             mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
                                    /*isadmin*/1, NULL, NULL, NULL,
-                                   /*checkacl*/0, /*localonly*/0, /*force*/1,
-                                   /*keep_intermediaries*/0);
+                                   /*checkacl*/0, /*localonly*/0, /*force*/1);
 
             if (!ret) {
                 /* Output the XML response */

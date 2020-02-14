@@ -7251,18 +7251,18 @@ static int delmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
         r = mboxlist_deletemailbox(mbentry->name,
                                    imapd_userisadmin || imapd_userisproxyadmin,
                                    imapd_userid, imapd_authstate, NULL,
-                                   0, 0, 0, 0);
+                                   0, 0, 0);
     } else if ((imapd_userisadmin || imapd_userisproxyadmin) &&
                mboxname_isdeletedmailbox(mbentry->name, NULL)) {
         r = mboxlist_deletemailbox(mbentry->name,
                                    imapd_userisadmin || imapd_userisproxyadmin,
                                    imapd_userid, imapd_authstate, NULL,
-                                   0, 0, 0, 0);
+                                   0, 0, 0);
     } else {
         r = mboxlist_delayed_deletemailbox(mbentry->name,
                                            imapd_userisadmin || imapd_userisproxyadmin,
                                            imapd_userid, imapd_authstate, NULL,
-                                           0, 0, 0, 0);
+                                           0, 0, 0);
     }
 
     if (r) {
@@ -7342,18 +7342,18 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
             r = mboxlist_deletemailbox(mbname_intname(mbname),
                                        imapd_userisadmin || imapd_userisproxyadmin,
                                        imapd_userid, imapd_authstate, mboxevent,
-                                       1-force, localonly, 0, 0);
+                                       1-force, localonly, 0);
         } else if ((imapd_userisadmin || imapd_userisproxyadmin) &&
                    mbname_isdeleted(mbname)) {
             r = mboxlist_deletemailbox(mbname_intname(mbname),
                                        imapd_userisadmin || imapd_userisproxyadmin,
                                        imapd_userid, imapd_authstate, mboxevent,
-                                       0 /* checkacl */, localonly, 0, 0);
+                                       0 /* checkacl */, localonly, 0);
         } else {
             r = mboxlist_delayed_deletemailbox(mbname_intname(mbname),
                                                imapd_userisadmin || imapd_userisproxyadmin,
                                                imapd_userid, imapd_authstate, mboxevent,
-                                               1-force, 0, 0, 0);
+                                               1-force, 0, 0);
         }
     }
 
@@ -7459,7 +7459,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
     r = mboxlist_renamemailbox(mbentry, text->newmailboxname,
                                text->partition, uidvalidity,
                                1, imapd_userid, imapd_authstate, NULL, 0, 0,
-                               text->rename_user, 0, 0, 0);
+                               text->rename_user, 0, 0);
 
     if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
         mboxlist_changesub(mbentry->name, imapd_userid, imapd_authstate,
@@ -7496,18 +7496,6 @@ done:
     return r;
 }
 
-/* Callback for use by cmd_rename */
-static int checkrenmacl(const mbentry_t *mbentry, void *rock)
-{
-    const struct auth_state *auth_state = (struct auth_state *) rock;
-    long myrights = cyrus_acl_myrights(auth_state, mbentry->acl);
-
-    if (myrights & ACL_DELETEMBOX) return IMAP_OK_COMPLETED;
-
-    return (myrights & ACL_LOOKUP) ?
-        IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-}
-
 /*
  * Perform a RENAME command
  */
@@ -7526,7 +7514,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     char *olduser = NULL;
     char *newuser = NULL;
     int omlen, nmlen;
-    int subcount = 0; /* number of sub-folders found */
     int recursive_rename = 1;
     int rename_user = 0;
     mbentry_t *mbentry = NULL;
@@ -7576,23 +7563,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     strcpy(newmailboxname2, newmailboxname);
 
     r = mlookup(NULL, NULL, oldmailboxname, &mbentry);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* Check if the base mailbox is an intermediate */
-        r = mboxlist_lookup_allow_all(oldmailboxname, &mbentry, 0);
-
-        if (!r) {
-            if (mbentry->mbtype & (MBTYPE_RESERVE | MBTYPE_DELETED)) {
-                r = IMAP_MAILBOX_NONEXISTENT;
-            }
-            else if (!imapd_userisadmin &&
-                     (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
-                /* Make sure we can rename the first child */
-                r = mboxlist_allmbox(oldmailboxname,
-                                     checkrenmacl, imapd_authstate, 0);
-                if (r == IMAP_OK_COMPLETED) r = 0;
-            }
-        }
-    }
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
         goto done;
@@ -7776,8 +7746,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 
         /* Check mboxnames to ensure we can write them all BEFORE we start */
         r = mboxlist_allmbox(ombn, checkmboxname, &rock, 0);
-
-        subcount = rock.found;
     }
 
     /* attempt to rename the base mailbox */
@@ -7808,17 +7776,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
                                    location ? location : mbentry->partition,
                                    0 /* uidvalidity */, imapd_userisadmin,
                                    imapd_userid, imapd_authstate, mboxevent,
-                                   0, 0, rename_user, 0, 0, 0);
-
-        /* it's OK to not exist if there are subfolders */
-        if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user &&
-           mboxname_userownsmailbox(imapd_userid, oldmailboxname) &&
-           mboxname_userownsmailbox(imapd_userid, newmailboxname)) {
-
-            mboxevent_free(&mboxevent);
-
-            goto submboxes;
-        }
+                                   0, 0, rename_user, 0, 0);
 
         /* send a MailboxRename event notification if enabled */
         if (!r)
@@ -7847,7 +7805,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
                     oldextname, newextname);
         prot_flush(imapd_out);
 
-submboxes:
         strcat(oldmailboxname, ".");
         strcat(newmailboxname, ".");
 
@@ -7863,7 +7820,7 @@ submboxes:
 
         /* add submailboxes; we pretend we're an admin since we successfully
            renamed the parent - we're using internal names here */
-        r = mboxlist_allmbox(oldmailboxname, renmbox, &rock, MBOXTREE_INTERMEDIATES);
+        r = mboxlist_allmbox(oldmailboxname, renmbox, &rock, /*flags*/0);
     }
 
     /* take care of deleting old ACLs, subscriptions, seen state and quotas */
@@ -11876,7 +11833,7 @@ static int xfer_delete(struct xfer_header *xfer)
            should repopulate the local mboxlist entry */
         r = mboxlist_deletemailboxlock(item->mbentry->name,
                                    imapd_userisadmin || imapd_userisproxyadmin,
-                                   imapd_userid, imapd_authstate, NULL, 0, 1, 0, 0);
+                                   imapd_userid, imapd_authstate, NULL, 0, 1, 0);
         if (r) {
             syslog(LOG_ERR,
                    "Could not delete local mailbox during move of %s",
@@ -12581,7 +12538,7 @@ static int getlistselopts(char *tag, struct listargs *args)
         } else if (!strcmp(buf.s, "vendor.cmu-include-deleted") && allowdeleted) {
             args->sel |= LIST_SEL_DELETED;
         } else if (!strcmp(buf.s, "vendor.fm-include-nonexistent")) {
-            args->sel |= LIST_SEL_INTERMEDIATES;
+            syslog(LOG_NOTICE, "REQUESTED LIST SELECT vendor.fm-include-nonexistent");
         } else if (!strcmp(buf.s, "remote")) {
             args->sel |= LIST_SEL_REMOTE;
         } else if (!strcmp(buf.s, "recursivematch")) {
@@ -12869,11 +12826,6 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     struct statusdata sdata = STATUSDATA_INIT;
     struct buf specialuse = BUF_INITIALIZER;
 
-    /* Intermediates don't actually exist */
-    if (mbentry && (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
-        attributes |= MBOX_ATTRIBUTE_NONEXISTENT;
-    }
-
     if ((attributes & MBOX_ATTRIBUTE_NONEXISTENT)) {
         if (!(listargs->cmd == LIST_CMD_EXTENDED)) {
             attributes |= MBOX_ATTRIBUTE_NOSELECT;
@@ -13077,8 +13029,6 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
         int mbtype = mbentry ? mbentry->mbtype : 0;
 
         if (mbtype == MBTYPE_NETNEWS) return 0;
-        if ((mbtype & MBTYPE_INTERMEDIATE) &&
-            !(rock->listargs->sel & LIST_SEL_INTERMEDIATES)) return 0;
         if (!(rock->listargs->sel & LIST_SEL_DAV)) {
             char *intname = NULL, *freeme = NULL;
             int skip = 0;
@@ -13182,42 +13132,6 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
     return 1;
 }
 
-static void add_intermediates(const char *extname, struct list_rock *lrock)
-{
-    mbname_t *mbname = mbname_from_extname(extname,
-                                           &imapd_namespace, imapd_userid);
-    strarray_t inter = STRARRAY_INITIALIZER;
-
-    /* build a list of "missing" ancestors (youngest to oldest) */
-    while (strarray_size(mbname_boxes(mbname))) {
-        free(mbname_pop_boxes(mbname));
-
-        extname = mbname_extname(mbname, &imapd_namespace, imapd_userid);
-        if (!extname) break;  /* root of hierarchy */
-
-        if (lrock->last_name &&
-            mboxname_is_prefix(lrock->last_name, extname)) break;
-
-        strarray_push(&inter, extname);
-    }
-    mbname_free(&mbname);
-
-    /* output the ancestors (oldest to youngest) */
-    char *ancestor;
-    while ((ancestor = strarray_pop(&inter))) {
-        mbentry_t *mbentry = NULL;
-
-        if (!mboxlist_lookup_allow_all(ancestor, &mbentry, NULL)) {
-            mbentry->mbtype |= MBTYPE_INTERMEDIATE;  /* force \NonExistent */
-            perform_output(ancestor, mbentry, lrock);
-        }
-
-        mboxlist_entry_free(&mbentry);
-        free(ancestor);
-    }
-    strarray_fini(&inter);
-}
-
 /* callback for mboxlist_findall
  * used when the SUBSCRIBED selection option is NOT given */
 static int list_cb(struct findall_data *data, void *rockp)
@@ -13255,15 +13169,6 @@ static int list_cb(struct findall_data *data, void *rockp)
 
     else if (!(rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN))
         rock->last_attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
-
-    /* do we need to add "missing" intermediates? */
-    if ((rock->listargs->sel & LIST_SEL_INTERMEDIATES) &&
-        ((rock->listargs->sel & LIST_SEL_DAV) ||
-         !(data->mbentry->mbtype & MBTYPES_DAV)) &&
-        !mboxname_contains_parent(data->extname, rock->last_name)) {
-
-        add_intermediates(data->extname, rock);
-    }
 
     if (!perform_output(data->extname, data->mbentry, rock))
         return 0;

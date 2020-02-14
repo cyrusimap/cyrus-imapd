@@ -85,7 +85,7 @@
 #define MBTYPE_CALENDAR     (1<<5) /* CalDAV Calendar Mailbox */
 #define MBTYPE_ADDRESSBOOK  (1<<6) /* CardDAV Addressbook Mailbox */
 #define MBTYPE_COLLECTION   (1<<7) /* WebDAV Collection Mailbox */
-#define MBTYPE_INTERMEDIATE (1<<8) /* Place holder
+#define MBTYPE_LEGACYINTERMEDIATE (1<<8) /* Place holder
                                       for non-existent ancestor mailboxes */
 #define MBTYPE_SUBMISSION   (1<<9) /* JMAP Mail Submission Mailbox */
 #define MBTYPE_PUSHSUBSCRIPTION   (1<<10) /* JMAP Push Subscriptions */
@@ -212,7 +212,6 @@ int mboxlist_createsync(const char *name, int mbtype, const char *partition,
                         modseq_t createdmodseq,
                         modseq_t highestmodseq, const char *acl,
                         const char *uniqueid, int local_only,
-                        int keep_intermediaries,
                         struct mailbox **mboxptr);
 
 /* delated delete */
@@ -223,7 +222,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin, const char *userid
                                const struct auth_state *auth_state,
                                struct mboxevent *mboxevent,
                                int checkacl,
-                               int localonly, int force, int keep_intermediaries);
+                               int localonly, int force);
 /* Delete a mailbox. */
 /* setting local_only disables any communication with the mupdate server
  * and deletes the mailbox from the filesystem regardless of if it is
@@ -235,13 +234,13 @@ int mboxlist_deletemailbox(const char *name, int isadmin, const char *userid,
                            const struct auth_state *auth_state,
                            struct mboxevent *mboxevent,
                            int checkacl,
-                           int local_only, int force, int keep_intermediaries);
+                           int local_only, int force);
 /* same but wrap with a namespacelock */
 int mboxlist_deletemailboxlock(const char *name, int isadmin, const char *userid,
                            const struct auth_state *auth_state,
                            struct mboxevent *mboxevent,
                            int checkacl,
-                           int local_only, int force, int keep_intermediaries);
+                           int local_only, int force);
 
 /* rename a tree of mailboxes - renames mailbox plus any children */
 int mboxlist_renametree(const char *oldname, const char *newname,
@@ -250,7 +249,7 @@ int mboxlist_renametree(const char *oldname, const char *newname,
                         const struct auth_state *auth_state,
                         struct mboxevent *mboxevent,
                         int local_only, int forceuser, int ignorequota,
-                        int keep_intermediaries, int move_subscription);
+                        int move_subscription);
 /* Rename/move a mailbox (hierarchical) */
 /* prepare MailboxRename notification if mboxevent is not NULL */
 int mboxlist_renamemailbox(const mbentry_t *mbentry, const char *newname,
@@ -259,8 +258,7 @@ int mboxlist_renamemailbox(const mbentry_t *mbentry, const char *newname,
                            const struct auth_state *auth_state,
                            struct mboxevent *mboxevent,
                            int local_only, int forceuser, int ignorequota,
-                           int keep_intermediaries, int move_subscription,
-                           int silent);
+                           int move_subscription, int silent);
 
 /* change ACL */
 int mboxlist_setacl(const struct namespace *namespace, const char *name,
@@ -321,6 +319,8 @@ int mboxlist_findparent(const char *mboxname,
 int mboxlist_findparent_allow_all(const char *mboxname,
                                   mbentry_t **mbentryp);
 
+
+
 /* direct access to subs DB */
 typedef int user_cb(const char *userid, void *rock);
 int mboxlist_alluser(user_cb *proc, void *rock);
@@ -333,7 +333,7 @@ typedef int mboxlist_cb(const mbentry_t *mbentry, void *rock);
 #define MBOXTREE_SKIP_CHILDREN (1<<3)
 #define MBOXTREE_SKIP_PERSONAL (1<<4)
 #define MBOXTREE_PLUS_RACL (1<<5)
-#define MBOXTREE_INTERMEDIATES (1<<6)
+#define MBOXTREE_LEGACYINTERMEDIATES (1<<6)
 int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_usermboxtree(const char *userid, const struct auth_state *auth_state,
@@ -386,7 +386,6 @@ int mboxlist_setquotas(const char *root,
 int mboxlist_unsetquota(const char *root);
 
 /* handle interemediates */
-int mboxlist_update_intermediaries(const char *mboxname, int mbtype, modseq_t modseq);
 int mboxlist_haschildren(const char *mboxname);
 
 /* open the mailboxes db */
@@ -408,7 +407,7 @@ int mboxlist_abort(struct txn *tid);
 
 int mboxlist_delayed_delete_isenabled(void);
 
-/* Promote an intermediary mailbox to a real mailbox. */
-int mboxlist_promote_intermediary(const char *mboxname);
+/* legacy fixup */
+int mboxlist_promote_legacyintermediary(const mbentry_t *mbentry);
 
 #endif

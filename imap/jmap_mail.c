@@ -6624,12 +6624,6 @@ static void _email_append(jmap_req_t *req,
             goto done;
         }
 
-        /* Convert intermediary mailbox to real mailbox */
-        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-            r = mboxlist_promote_intermediary(mbentry->name);
-            if (r) goto done;
-        }
-
         if (json_is_string(val)) {
             /* We flagged this mailboxId as the $snoozed mailbox */
             if (mboxname) free(mboxname);
@@ -10118,12 +10112,7 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
             struct mailbox *mbox = NULL;
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxrec->mbox_id);
             int r = 0;
-            if (mbentry && mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                r = mboxlist_promote_intermediary(mbentry->name);
-            }
-            else if (!mbentry) {
-                r = IMAP_MAILBOX_NONEXISTENT;
-            }
+            if (!mbentry) r = IMAP_MAILBOX_NONEXISTENT;
             if (!r) r = jmap_openmbox(req, mboxrec->mboxname, &mbox, /*rw*/1);
             if (r) {
                 int j;
@@ -10191,13 +10180,10 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
         json_object_foreach_safe(update->mailboxids, tmp, mbox_id, jval) {
             struct mailbox *mbox = NULL;
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
-            if (mbentry) {
-                int r = 0;
-                if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                    r = mboxlist_promote_intermediary(mbentry->name);
-                }
-                if (!r) jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
-            }
+
+            if (mbentry)
+                jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
+
             if (mbox) {
                 if (!hash_lookup(mbox->uniqueid, &bulk->plans_by_mbox_id)) {
                     struct email_mboxrec *mboxrec = xzmalloc(sizeof(struct email_mboxrec));
@@ -10931,7 +10917,7 @@ static void _email_import(jmap_req_t *req,
     /* Check mailboxes for ACL */
     if (strcmp(req->userid, req->accountid)) {
         struct msgimport_checkacl_rock rock = { req, jmailbox_ids };
-        int r = mboxlist_usermboxtree(req->accountid, req->authstate, msgimport_checkacl_cb, &rock, MBOXTREE_INTERMEDIATES);
+        int r = mboxlist_usermboxtree(req->accountid, req->authstate, msgimport_checkacl_cb, &rock, 0);
         if (r) {
             *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
                     "properties", "mailboxIds");
@@ -11193,8 +11179,8 @@ static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
 {
     struct _email_copy_checkmbox_rock *rock = _rock;
 
-    /* Ignore anything but regular and intermediate mailboxes */
-    if (!mbentry || (mbentry->mbtype & ~MBTYPE_INTERMEDIATE)) {
+    /* Ignore anything but regular mailboxes */
+    if (!mbentry || mbentry->mbtype) {
         return 0;
     }
     if (!json_object_get(rock->dst_mboxids, mbentry->uniqueid)) {
@@ -11547,8 +11533,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
         req, jmailboxids, &dst_mboxnames
     };
     r = mboxlist_usermboxtree(req->accountid, httpd_authstate,
-                              _email_copy_checkmbox_cb, &checkmbox_rock,
-                              MBOXTREE_INTERMEDIATES);
+                              _email_copy_checkmbox_cb, &checkmbox_rock, 0);
     if (r != IMAP_OK_COMPLETED) {
         if (r == 0 || r == IMAP_PERMISSION_DENIED) {
             *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
@@ -11563,9 +11548,6 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     while ((dst_mboxname = strarray_pop(&dst_mboxnames))) {
         mbentry_t *mbentry = NULL;
         r = jmap_mboxlist_lookup(dst_mboxname, &mbentry, NULL);
-        if (!r && (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
-            r = mboxlist_promote_intermediary(dst_mboxname);
-        }
         if (!r) {
             struct mailbox *dst_mbox = NULL;
             r = jmap_openmbox(req, dst_mboxname, &dst_mbox, /*rw*/1);
