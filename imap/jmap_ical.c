@@ -626,7 +626,7 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess) {
             icaltimetype dt = icalvalue_get_datetime(val);
             tzid = dt.zone ? icaltimezone_get_location((icaltimezone*) dt.zone) : NULL;
             tzid = tzid && tz_from_tzid(tzid) ? tzid : NULL;
-        } else if (tz) return icaltimezone_get_tzid(tz);
+        } else if (tz) return icaltimezone_get_location(tz);
     } else {
         icalvalue *val = icalproperty_get_value(prop);
         icaltimetype dt = icalvalue_get_datetime(val);
