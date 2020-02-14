@@ -489,20 +489,10 @@ static int _rights_for_mbentry(struct auth_state *authstate,
     int *rightsptr = hash_lookup(mbentry->name, mboxrights);
     if (rightsptr) return *rightsptr;
 
-    int rights = 0;
 
     /* Lookup ACL */
     mbname_t *mbname = mbname_from_intname(mbentry->name);
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-        // if it's an intermediate mailbox, we get rights from the parent
-        mbentry_t *parententry = NULL;
-        if (mboxlist_findparent(mbentry->name, &parententry))
-            rights = 0;
-        else
-            rights = httpd_myrights(authstate, parententry);
-        mboxlist_entry_free(&parententry);
-    }
-    else rights = httpd_myrights(authstate, mbentry);
+    int rights = httpd_myrights(authstate, mbentry);
 
     /* Cache rights */
     rightsptr = xmalloc(sizeof(int));
@@ -600,7 +590,7 @@ static json_t *lookup_capabilities(const char *accountid,
             authuserid, mboxrights, httpd_authstate, 0, 0, 0, 0
         };
         mboxlist_usermboxtree(accountid, authstate, capabilities_cb,
-                              &rock, MBOXTREE_INTERMEDIATES);
+                              &rock, /*flags*/0);
         if (rock.is_visible) {
             jmap_core_capabilities(capas);
             if (rock.has_mail) {
@@ -3086,8 +3076,7 @@ EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *
         req->mbentry_byid = xzmalloc(sizeof(struct hash_table));
         construct_hash_table(req->mbentry_byid, 1024, 0);
         mboxlist_usermboxtree(req->accountid, req->authstate,
-                              _mbentry_by_uniqueid_cb, req->mbentry_byid,
-                              MBOXTREE_INTERMEDIATES);
+                              _mbentry_by_uniqueid_cb, req->mbentry_byid, /*flags*/0);
     }
 
     return (const mbentry_t *)hash_lookup(id, req->mbentry_byid);

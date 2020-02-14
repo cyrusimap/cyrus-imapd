@@ -206,7 +206,7 @@ static int should_index(const char *name)
     }
 
     // skip remote or not-real mailboxes
-    if (mbentry->mbtype & (MBTYPE_REMOTE|MBTYPE_DELETED|MBTYPE_INTERMEDIATE)) {
+    if (mbentry->mbtype & (MBTYPE_REMOTE|MBTYPE_DELETED)) {
         mboxlist_entry_free(&mbentry);
         return 0;
     }

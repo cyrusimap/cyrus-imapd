@@ -129,11 +129,11 @@ static void usage(void)
 static int fixmbox(const mbentry_t *mbentry,
                    void *rock __attribute__((unused)))
 {
-    int r;
+    int r = 0;
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if (mbentry->mbtype & MBTYPE_RESERVE) {
-        r = mboxlist_deletemailboxlock(mbentry->name, 1, NULL, NULL, NULL, 0, 0, 1, 0);
+        r = mboxlist_deletemailboxlock(mbentry->name, 1, NULL, NULL, NULL, 0, 0, 1);
         if (r) {
             /* log the error */
             syslog(LOG_ERR,
@@ -144,7 +144,22 @@ static int fixmbox(const mbentry_t *mbentry,
                    "removed reserved mailbox '%s'",
                    mbentry->name);
         }
-        return 0;
+    }
+
+    if (mbentry->mbtype & MBTYPE_LEGACYINTERMEDIATE) {
+        struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
+        r = mboxlist_promote_legacyintermediary(mbentry);
+        if (r) {
+            /* log the error */
+            syslog(LOG_ERR,
+                   "could not create intermediate mailbox '%s': %s",
+                   mbentry->name, error_message(r));
+        } else {
+            syslog(LOG_NOTICE,
+                   "created intermediate mailbox '%s'",
+                   mbentry->name);
+        }
+        mboxname_release(&namespacelock);
     }
 
     /* clean out any legacy specialuse */
@@ -163,13 +178,9 @@ static int fixmbox(const mbentry_t *mbentry,
         copy->legacy_specialuse = NULL;
         mboxlist_update(copy, /*localonly*/1);
         mboxlist_entry_free(&copy);
-    }
-
-    r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype, /*modseq*/0);
-    if (r) {
-        syslog(LOG_ERR,
-               "failed to update intermediaries to mailboxes list for %s: %s",
-               mbentry->name, cyrusdb_strerror(r));
+        syslog(LOG_NOTICE,
+               "migrated legacy specialuse mailbox '%s' %s",
+                mbentry->name, mbentry->legacy_specialuse);
     }
 
     return 0;
@@ -178,7 +189,7 @@ static int fixmbox(const mbentry_t *mbentry,
 static void process_mboxlist(void)
 {
     /* build a list of mailboxes - we're using internal names here */
-    mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_INTERMEDIATES);
+    mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_LEGACYINTERMEDIATES);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
