@@ -129,6 +129,7 @@ void sync_reserve_list_free(struct sync_reserve_list **list);
 
 struct sync_folder {
     struct sync_folder *next;
+    struct sync_folder *others;
     struct mailbox *mailbox;
     char *uniqueid;
     char *name;
@@ -136,6 +137,7 @@ struct sync_folder {
     char *part;
     char *acl;
     uint32_t last_uid;
+    modseq_t createdmodseq;
     modseq_t highestmodseq;
     uint32_t options;
     uint32_t uidvalidity;
@@ -153,6 +155,8 @@ struct sync_folder {
     int   reserve;  /* Folder has been processed by reserve operation */
 };
 
+#define FOLDER_ALIVE(f) (!((f)->mbtype & MBTYPE_DELETED))
+
 struct sync_folder_list {
     struct sync_folder *head, *tail;
     unsigned long count;
@@ -167,6 +171,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          uint32_t options,
                                          uint32_t uidvalidity,
                                          uint32_t last_uid,
+                                         modseq_t createdmodseq,
                                          modseq_t highestmodseq,
                                          struct synccrcs synccrcs,
                                          uint32_t recentuid,
@@ -480,8 +485,7 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_VERBOSE   (1<<0)
 #define SYNC_FLAG_LOGGING   (1<<1)
 #define SYNC_FLAG_LOCALONLY (1<<2)
-#define SYNC_FLAG_DELETE_REMOTE (1<<3)
-#define SYNC_FLAG_NO_COPYBACK (1<<4)
+#define SYNC_FLAG_NO_COPYBACK (1<<3)
 
 int sync_do_seen(const char *userid, char *uniqueid, struct backend *sync_be,
                  unsigned flags);

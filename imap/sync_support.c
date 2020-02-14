@@ -68,6 +68,7 @@
 #include "quota.h"
 #include "xmalloc.h"
 #include "seen.h"
+#include "strarray.h"
 #include "mboxname.h"
 #include "map.h"
 #include "imapd.h"
@@ -434,6 +435,7 @@ void sync_msgid_remove(struct sync_msgid_list *l,
 void sync_msgid_list_free(struct sync_msgid_list **lp)
 {
     struct sync_msgid_list *l = *lp;
+    if (!l) return;
     struct sync_msgid *current, *next;
 
     current = l->head;
@@ -504,6 +506,7 @@ struct sync_msgid_list *sync_reserve_partlist(struct sync_reserve_list *l,
 void sync_reserve_list_free(struct sync_reserve_list **lp)
 {
     struct sync_reserve_list *l = *lp;
+    if (!l) return;
     struct sync_reserve *current, *next;
 
     current = l->head;
@@ -532,6 +535,43 @@ struct sync_folder_list *sync_folder_list_create(void)
     return(l);
 }
 
+struct sync_folder *_folder_remove(struct sync_folder_list *l,
+                                   const char *uniqueid)
+{
+    struct sync_folder *p;
+    struct sync_folder *last = NULL;
+
+    for (p = l->head; p; p = p->next) {
+        if (!strcmp(p->uniqueid, uniqueid)) {
+            // advance head if it was first
+            if (p == l->head) l->head = p->next;
+            // reverse tail if it was last
+            if (p == l->tail) l->tail = last;
+            // stitch across unless it was first
+            if (last) last->next = p->next;
+            // and remove from the list!
+            p->next = NULL;
+            // obviously count has gone down
+            l->count--;
+            return p;
+        }
+        last = p;
+    }
+    return NULL;
+}
+
+static struct sync_folder *_folder_exact(struct sync_folder_list *l,
+                                         const char *name, const char *uniqueid)
+{
+    struct sync_folder *p;
+
+    for (p = l->head; p; p = p->next) {
+        if (!strcmp(p->name, name) && !strcmp(p->uniqueid, uniqueid))
+            return p;
+    }
+    return NULL;
+}
+
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          const char *uniqueid, const char *name,
                                          uint32_t mbtype,
@@ -539,6 +579,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          uint32_t options,
                                          uint32_t uidvalidity,
                                          uint32_t last_uid,
+                                         modseq_t createdmodseq,
                                          modseq_t highestmodseq,
                                          struct synccrcs synccrcs,
                                          uint32_t recentuid,
@@ -550,14 +591,11 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          modseq_t raclmodseq,
                                          int ispartial)
 {
-    struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
+    // no exact duplicates allowed
+    struct sync_folder *result = _folder_exact(l, name, uniqueid);
+    if (result) return result;
 
-    if (l->tail)
-        l->tail = l->tail->next = result;
-    else
-        l->head = l->tail = result;
-
-    l->count++;
+    result = xzmalloc(sizeof(struct sync_folder));
 
     result->next = NULL;
     result->mailbox = NULL;
@@ -569,6 +607,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->acl = xstrdupnull(acl);
     result->uidvalidity = uidvalidity;
     result->last_uid = last_uid;
+    result->createdmodseq = createdmodseq;
     result->highestmodseq = highestmodseq;
     result->options = options;
     result->synccrcs = synccrcs;
@@ -584,7 +623,25 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->mark     = 0;
     result->reserve  = 0;
 
-    return(result);
+    // if we found another by uniqueid, maybe we keep this one, maybe the other one!
+    struct sync_folder *other = sync_folder_lookup(l, uniqueid);
+
+    if (!other || (other->mbtype & MBTYPE_DELETED)) {
+        // keep this one, other goes on the pile
+        result->others = _folder_remove(l, uniqueid);
+        if (l->tail)
+            l->tail = l->tail->next = result;
+        else
+            l->head = l->tail = result;
+        l->count++;
+    }
+    else {
+        // keep the other one, this goes on the others pile
+        result->others = other->others;
+        other->others = result;
+    }
+
+    return result;
 }
 
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
@@ -599,23 +656,48 @@ struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
     return NULL;
 }
 
+struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
+                                              const char *name)
+{
+    struct sync_folder *p;
+
+    for (p = l->head; p; p = p->next) {
+        if (!strcmp(p->name, name))
+            return p;
+    }
+    return NULL;
+}
+
+static void _item_free(struct sync_folder *item)
+{
+    free(item->uniqueid);
+    free(item->name);
+    free(item->part);
+    free(item->acl);
+    sync_annot_list_free(&item->annots);
+    free(item);
+}
+
 void sync_folder_list_free(struct sync_folder_list **lp)
 {
     struct sync_folder_list *l = *lp;
-    struct sync_folder *current, *next;
+    if (!l) return;
+    struct sync_folder *current, *next, *other;
 
     if (!l) return;
 
-    current = l->head;
-    while (current) {
-        next = current->next;
-        free(current->uniqueid);
-        free(current->name);
-        free(current->part);
-        free(current->acl);
-        sync_annot_list_free(&current->annots);
-        free(current);
+    next = l->head;
+    while (next) {
         current = next;
+        next = current->next;
+        other = current->others;
+        _item_free(current);
+        while (other) {
+            current = other;
+            assert(!current->next);
+            other = current->others;
+            _item_free(current);
+        }
     }
     free(l);
     *lp = NULL;
@@ -677,6 +759,7 @@ struct sync_rename *sync_rename_lookup(struct sync_rename_list *l,
 void sync_rename_list_free(struct sync_rename_list **lp)
 {
     struct sync_rename_list *l = *lp;
+    if (!l) return;
     struct sync_rename *current, *next;
 
     if (!l) return;
@@ -1156,7 +1239,10 @@ struct sync_name_list *sync_name_list_create(void)
 struct sync_name *sync_name_list_add(struct sync_name_list *l,
                                      const char *name)
 {
-    struct sync_name *item = xzmalloc(sizeof(struct sync_name));
+    struct sync_name *item = sync_name_lookup(l, name);
+    if (item) return item;
+
+    item = xzmalloc(sizeof(struct sync_name));
 
     if (l->tail)
         l->tail = l->tail->next = item;
@@ -2681,22 +2767,26 @@ int sync_apply_mailbox(struct dlist *kin,
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
     if (mbtype & (MBTYPE_INTERMEDIATE|MBTYPE_DELETED)) {
-        // XXX - make sure what's already there is either nothing or compatible...
-        mbentry_t *newmbentry = NULL;
+        if (sstate->syncversion == 2) {
+            // XXX - make sure what's already there is either nothing or compatible...
+            mbentry_t *newmbentry = NULL;
 
-        newmbentry = mboxlist_entry_create();
-        newmbentry->name = xstrdupnull(mboxname);
-        newmbentry->mbtype = mbtype;
-        newmbentry->uniqueid = xstrdupnull(uniqueid);
-        newmbentry->foldermodseq = highestmodseq;
-        newmbentry->createdmodseq = createdmodseq;
+            newmbentry = mboxlist_entry_create();
+            newmbentry->name = xstrdupnull(mboxname);
+            newmbentry->mbtype = mbtype;
+            newmbentry->uniqueid = xstrdupnull(uniqueid);
+            newmbentry->foldermodseq = highestmodseq;
+            newmbentry->createdmodseq = createdmodseq;
 
-        r = mboxlist_update(newmbentry, /*localonly*/1);
-        mboxlist_entry_free(&newmbentry);
+            r = mboxlist_update(newmbentry, /*localonly*/1);
+            mboxlist_entry_free(&newmbentry);
 
-        return r;
+            return r;
+        }
+
+        // otherwise we don't expect them on the wire, but we'll just ignore them if we see them
+        return 0;
     }
-
 
     if (!dlist_getatom(kin, "PARTITION", &partition))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -3046,18 +3136,44 @@ int sync_get_quota(struct dlist *kin, struct sync_state *sstate)
 struct mbox_rock {
     struct protstream *pout;
     struct sync_name_list *qrl;
+    struct sync_state *sstate;
 };
 
-static int sync_mailbox_byname(const char *name, void *rock)
+static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
 {
     struct mbox_rock *mrock = (struct mbox_rock *) rock;
     struct sync_name_list *qrl = mrock->qrl;
     struct mailbox *mailbox = NULL;
     struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
     annotate_state_t *astate = NULL;
-    int r;
+    int r = 0;
 
-    r = mailbox_open_irl(name, &mailbox);
+    if (mbentry->mbtype & (MBTYPE_DELETED|MBTYPE_INTERMEDIATE)) {
+        // intermediates and deleted aren't supported before v2
+        if (mrock->sstate->syncversion < 2) goto out;
+
+        dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
+        dlist_setatom(kl, "MBOXNAME", mbentry->name);
+        dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mbentry->mbtype));
+        dlist_setnum32(kl, "UIDVALIDITY", mbentry->uidvalidity);
+        // this nonsense we probably don't need, but sync_client might barf without it
+        dlist_setatom(kl, "PARTITION", mbentry->partition);
+        dlist_setatom(kl, "ACL", mbentry->acl);
+        dlist_setnum32(kl, "SYNC_CRC", 0);
+        dlist_setnum32(kl, "LAST_UID", 0);
+        dlist_setnum64(kl, "HIGHESTMODSEQ", 0);
+        dlist_setnum32(kl, "RECENTUID", 0);
+        dlist_setdate(kl, "RECENTTIME", 0);
+        dlist_setdate(kl, "LAST_APPENDDATE", 0);
+        dlist_setdate(kl, "POP3_LAST_LOGIN", 0);
+        dlist_setdate(kl, "POP3_SHOW_AFTER", 0);
+        dlist_setatom(kl, "OPTIONS", "");
+
+        sync_send_response(kl, mrock->pout);
+        goto out;
+    }
+
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT ||
@@ -3091,17 +3207,22 @@ out:
     return r;
 }
 
-static int sync_mailbox_byuniqueid(const char *uniqueid, void *rock)
+static int sync_mailbox_byname(const char *name, void *rock)
 {
-    char *name = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
-    int r = sync_mailbox_byname(name, rock);
-    free(name);
+    mbentry_t *mbentry = NULL;
+    int r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT ||
+        r == IMAP_MAILBOX_RESERVED) {
+        return 0;
+    }
+    r = sync_mailbox_byentry(mbentry, rock);
+    mboxlist_entry_free(&mbentry);
     return r;
 }
 
-static int mailbox_cb(const mbentry_t *mbentry, void *rock)
+static int sync_mailbox_byuniqueid(const char *uniqueid, void *rock)
 {
-    return sync_mailbox_byname(mbentry->name, rock);
+    return mboxlist_foreach_uniqueid(uniqueid, sync_mailbox_byentry, rock, /*flags*/0);
 }
 
 int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
@@ -3129,7 +3250,7 @@ out:
 int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
 {
     struct dlist *ki;
-    struct mbox_rock mrock = { sstate->pout, NULL };
+    struct mbox_rock mrock = { sstate->pout, NULL, sstate };
 
     for (ki = kin->head; ki; ki = ki->next)
         sync_mailbox_byname(ki->sval, &mrock);
@@ -3140,7 +3261,7 @@ int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
 int sync_get_uniqueids(struct dlist *kin, struct sync_state *sstate)
 {
     struct dlist *ki;
-    struct mbox_rock mrock = { sstate->pout, NULL };
+    struct mbox_rock mrock = { sstate->pout, NULL, sstate };
 
     for (ki = kin->head; ki; ki = ki->next)
         sync_mailbox_byuniqueid(ki->sval, &mrock);
@@ -3247,12 +3368,17 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     struct sync_name *qr;
     const char *userid = kin->sval;
     struct mbox_rock mrock;
+    int flags = 0;
+
+    // v2+ can replicate tombstones and deleted items
+    if (sstate->syncversion >= 2)
+        flags |= MBOXTREE_DELETED|MBOXTREE_TOMBSTONES;
 
     quotaroots = sync_name_list_create();
     mrock.qrl = quotaroots;
     mrock.pout = sstate->pout;
 
-    r = mboxlist_usermboxtree(userid, NULL, mailbox_cb, &mrock, MBOXTREE_DELETED);
+    r = mboxlist_usermboxtree(userid, NULL, sync_mailbox_byentry, &mrock, flags);
     if (r) goto bail;
 
     for (qr = quotaroots->head; qr; qr = qr->next) {
@@ -4094,10 +4220,32 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
     struct sync_folder *rfolder;
     struct sync_msgid_list *part_list;
     struct mailbox *mailbox = NULL;
+    mbentry_t *mbentry = NULL;
     int r = 0;
 
     /* Find messages we want to upload that are available on server */
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
+        mboxlist_entry_free(&mbentry);
+        r = mboxlist_lookup_allow_all(mbox->name, &mbentry, NULL);
+        /* Quietly skip over folders which have been deleted since we
+           started working (but record fact in case caller cares) */
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            r = 0;
+            continue;
+        }
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: Failed to lookup %s: %s",
+                   mbox->name, error_message(r));
+            goto bail;
+        }
+        if (mbentry->mbtype & (MBTYPE_INTERMEDIATE|MBTYPE_DELETED)) {
+            struct synccrcs synccrcs = { 0, 0 };
+            sync_folder_list_add(master_folders, mbentry->uniqueid, mbentry->name,
+                                 mbentry->mbtype, mbentry->partition, mbentry->acl, 0,
+                                 mbentry->uidvalidity, 0, mbentry->createdmodseq, 0,
+                                 synccrcs, 0, 0, 0, 0, NULL, 0, 0, 0);
+            continue;
+        }
         r = mailbox_open_irl(mbox->name, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
 
@@ -4149,7 +4297,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
         sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name,
                              mailbox->mbtype,
                              mailbox->part, mailbox->acl, mailbox->i.options,
-                             mailbox->i.uidvalidity, touid,
+                             mailbox->i.uidvalidity, touid, mailbox->i.createdmodseq,
                              tomodseq, mailbox->i.synccrcs,
                              mailbox->i.recentuid, mailbox->i.recenttime,
                              mailbox->i.pop3_last_login,
@@ -4163,6 +4311,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
     }
 
 bail:
+    mboxlist_entry_free(&mbentry);
     mailbox_close(&mailbox);
     return r;
 }
@@ -4365,6 +4514,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
             const char *part = NULL;
             const char *acl = NULL;
             const char *options = NULL;
+            modseq_t createdmodseq = 0;
             modseq_t highestmodseq = 0;
             uint32_t uidvalidity = 0;
             uint32_t last_uid = 0;
@@ -4395,6 +4545,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
             dlist_getatom(kl, "MBOXTYPE", &mboxtype);
             dlist_getnum32(kl, "SYNC_CRC", &synccrcs.basic);
             dlist_getnum32(kl, "SYNC_CRC_ANNOT", &synccrcs.annot);
+            dlist_getnum64(kl, "CREATEDMODSEQ", &createdmodseq);
             dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
             dlist_getnum64(kl, "RACLMODSEQ", &raclmodseq);
 
@@ -4406,7 +4557,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
                                  mboxlist_string_to_mbtype(mboxtype),
                                  part, acl,
                                  sync_parse_options(options),
-                                 uidvalidity, last_uid,
+                                 uidvalidity, last_uid, createdmodseq,
                                  highestmodseq, synccrcs,
                                  recentuid, recenttime,
                                  pop3_last_login,
@@ -5611,6 +5762,65 @@ done:
     return r;
 }
 
+static int sync_copyback_mailbox(struct sync_folder *remote,
+                                 const char *topart,
+                                 struct sync_reserve_list *reserve_list,
+                                 struct backend *sync_be,
+                                 unsigned flags)
+{
+    int local_only = (flags & SYNC_FLAG_LOCALONLY);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(remote->name);
+
+    // first we just create a mailbox with all the right values
+    int r = mboxlist_createsync(remote->name, remote->mbtype, remote->part,
+                                /*userid*/NULL, /*authstate*/NULL,
+                                remote->options | MAILBOX_OPTIONS_MASK,
+                                remote->uidvalidity, remote->createdmodseq,
+                                remote->highestmodseq, remote->acl,
+                                remote->uniqueid, local_only, 0, NULL);
+
+    mboxname_release(&namespacelock);
+
+    if (r) {
+        syslog(LOG_ERR, "Failed to create mailbox %s copyback: %s",
+               remote->name, error_message(r));
+        return r;
+    }
+
+    struct mailbox *mailbox = NULL;
+    r = mailbox_open_iwl(remote->name, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "Failed to reopen mailbox %s after copyback: %s",
+               remote->name, error_message(r));
+        return r;
+    }
+
+    mailbox_index_dirty(mailbox);
+    mailbox->i.recentuid = remote->recentuid;
+    mailbox->i.recenttime = remote->recenttime;
+    mailbox->i.pop3_last_login = remote->pop3_last_login;
+    mailbox->i.pop3_show_after = remote->pop3_show_after;
+    struct sync_annot_list *annots = NULL;
+    r = read_annotations(mailbox, NULL, &annots, 0, 0);
+    if (!r) r = apply_annotations(mailbox, NULL, annots, remote->annots, 0);
+    sync_annot_list_free(&annots);
+    mailbox_close(&mailbox);
+
+    if (r) {
+        syslog(LOG_ERR, "Failed to update mailbox %s after copyback: %s",
+               remote->name, error_message(r));
+        return r;
+    }
+
+    // then we show that it's empty so we can copy all the emails back
+    // NB: we're just duplicating pointers here without xstrdup, so don't clean them up!
+    struct sync_folder local = *remote;
+    local.highestmodseq = 0;
+    local.last_uid = 0;
+
+    return sync_update_mailbox(&local, remote, topart, reserve_list, sync_be, flags);
+}
+
 int sync_update_mailbox(struct sync_folder *local,
                         struct sync_folder *remote,
                         const char *topart,
@@ -5844,6 +6054,13 @@ bail:
 
 /* ====================================================================== */
 
+static int _addname(const mbentry_t *mbentry, void *rock)
+{
+    struct sync_name_list *mboxname_list = rock;
+    sync_name_list_add(mboxname_list, mbentry->name);
+    return 0;
+}
+
 static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
                       struct sync_folder_list *replica_folders,
                       struct backend *sync_be,
@@ -5851,45 +6068,63 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
                       unsigned flags)
 {
     int r = 0;
-    struct sync_folder_list *master_folders;
-    struct sync_rename_list *rename_folders;
-    struct sync_reserve_list *reserve_list;
-    struct sync_folder *mfolder, *rfolder;
-    const char *part;
+    struct sync_folder_list *master_folders = NULL;
+    struct sync_rename_list *rename_folders = NULL;
+    struct sync_reserve_list *reserve_list = NULL;
+    struct sync_folder *mfolder = NULL, *rfolder = NULL;
+    const char *part = NULL;
     uint32_t batchsize = 0;
-    struct sync_name *mbox;
+    struct sync_name *mbox = NULL;
 
-    /* Look for intermediate mailboxes */
+    strarray_t local_uniqueids = STRARRAY_INITIALIZER;
+    strarray_t remote_uniqueids = STRARRAY_INITIALIZER;
+
+    for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next)
+        strarray_add(&remote_uniqueids, rfolder->uniqueid);
+
+    /* check local uniqueids */
     for (mbox = mboxname_list->head; !r && mbox; mbox = mbox->next) {
         mbentry_t *mbentry = NULL;
 
         if (mboxlist_lookup_allow_all(mbox->name, &mbentry, NULL))
             continue;
 
-        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-            struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
-
-            dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
-            dlist_setatom(kl, "MBOXNAME", mbentry->name);
-            dlist_setatom(kl, "MBOXTYPE",
-                          mboxlist_mbtype_to_string(mbentry->mbtype));
-            dlist_setnum64(kl, "HIGHESTMODSEQ", mbentry->foldermodseq);
-            dlist_setnum64(kl, "CREATEDMODSEQ", mbentry->createdmodseq);
-
-            sync_send_apply(kl, sync_be->out);
-            r = sync_parse_response("MAILBOX", sync_be->in, NULL);
-
-            dlist_free(&kl);
-        }
+        strarray_add(&local_uniqueids, mbentry->uniqueid);
 
         mboxlist_entry_free(&mbentry);
+    }
 
+    // remove any uniqueids which exist in both
+    strarray_subtract_complement(&local_uniqueids, &remote_uniqueids);
+    strarray_subtract_complement(&remote_uniqueids, &local_uniqueids);
+
+    // if they only exist locally, we need to fetch records for them from the replica
+    if (strarray_size(&local_uniqueids)) {
+        struct dlist *kl = dlist_newlist(NULL, "UNIQUEIDS");
+        int i;
+        for (i = 0; i < strarray_size(&local_uniqueids); i++) {
+            dlist_setatom(kl, "UNIQUEID", strarray_nth(&local_uniqueids, i));
+        }
+        sync_send_lookup(kl, sync_be->out);
+        dlist_free(&kl);
+        // the "UNIQUEIDS" query is just a version of MAILBOXES which does the lookup by ID,
+        // so we're still expecting a MAILBOXES response
+        r = sync_response_parse(sync_be->in, "MAILBOXES", replica_folders,
+                                NULL, NULL, NULL, NULL);
         if (r) {
-            syslog(LOG_ERR, "apply intermediates: failed: %s", error_message(r));
+            syslog(LOG_ERR, "update mailboxes with uniqueid: failed: %s", error_message(r));
             goto bail;
         }
     }
 
+    // if they only exit on the replica, we need to look them up locally to see if they are also here
+    if (strarray_size(&remote_uniqueids)) {
+        int i;
+        for (i = 0; i < strarray_size(&remote_uniqueids); i++) {
+            mboxlist_foreach_uniqueid(strarray_nth(&remote_uniqueids, i), _addname, mboxname_list,
+                                      MBOXTREE_TOMBSTONES|MBOXTREE_INTERMEDIATES);
+        }
+    }
 
     if (channelp) {
         batchsize = config_getint(IMAPOPT_SYNC_BATCHSIZE);
@@ -5906,8 +6141,8 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
         goto bail;
     }
 
-    /* Tag folders on server which still exist on the client. Anything
-     * on the server which remains untagged can be deleted immediately */
+    /* Tag folders on replica which have an entry on the master. Anything
+     * on the replica which remains untagged will have to be copied back! */
     for (mfolder = master_folders->head; mfolder; mfolder = mfolder->next) {
         if (mfolder->mark) continue;
         rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
@@ -5915,27 +6150,53 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
         if (rfolder->mark) continue;
         rfolder->mark = 1;
 
-        /* does it need a rename? partition change is a rename too */
-        part = topart ? topart : mfolder->part;
-        if (strcmp(mfolder->name, rfolder->name) || strcmp(part, rfolder->part)) {
-            sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
-                                 mfolder->name, part, mfolder->uidvalidity);
-        }
-    }
-
-    /* XXX - sync_log_channel_user on any issue here rather than trying to solve,
-     * and remove all entries related to that user from both lists */
-
-    /* Delete folders on server which no longer exist on client */
-    if (flags & SYNC_FLAG_DELETE_REMOTE) {
-        for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
-            if (rfolder->mark) continue;
+        /* does it no longer exist on the master?  Remove it from the replica */
+        if (!FOLDER_ALIVE(mfolder)) {
+            /* if it's tombstones at both ends, nothing to do! */
+            if (!FOLDER_ALIVE(rfolder)) continue;
             r = sync_folder_delete(rfolder->name, sync_be, flags);
             if (r) {
                 syslog(LOG_ERR, "sync_folder_delete(): failed: %s '%s'",
                        rfolder->name, error_message(r));
                 goto bail;
             }
+            continue;
+        }
+
+        /* was it destroyed replica?  Remove it from the master! */
+        if (!FOLDER_ALIVE(rfolder)) {
+            r = mboxlist_deletemailboxlock(mfolder->name, 1, NULL, NULL,
+                                           NULL, 0, 0, 1, 0);
+            if (r) {
+                syslog(LOG_ERR, "local_folder_delete(): failed: %s '%s'",
+                       rfolder->name, error_message(r));
+                goto bail;
+            }
+            continue;
+        }
+
+        /* does it need a rename? partition change is a rename too */
+        part = topart ? topart : mfolder->part;
+        if (strcmp(mfolder->name, rfolder->name) || strcmp(part, rfolder->part)) {
+            // XXX - we should be able to detect which way the rename should happen
+            // by reading through rfolder->others and mfolder->others looking for
+            // matches
+            sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
+                                 mfolder->name, part, mfolder->uidvalidity);
+        }
+    }
+
+    /* NOTE: this can fail if there's something else with the same name that
+     * that the replica has, but with a different UNIQUEID on the master.  The
+     * only fix for that kind of split brain is to manually rename at one end! */
+    for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
+        if (rfolder->mark) continue;
+        r = sync_copyback_mailbox(rfolder, topart, reserve_list,
+                                  sync_be, flags);
+        if (r) {
+            syslog(LOG_ERR, "sync_folder_reversecreate(): failed: %s '%s'",
+                   rfolder->name, error_message(r));
+            goto bail;
         }
     }
 
@@ -5971,6 +6232,43 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
             rename_success = 1;
         }
 
+        // fallback algorithm - look for a name in the master history which
+        // has also been used for this mailbox!
+        if (!rename_success) {
+            for (item = rename_folders->head; item; item = item->next) {
+                if (item->done) continue;
+
+                mfolder = sync_folder_lookup(master_folders, item->uniqueid);
+                if (!mfolder) continue;
+
+                struct sync_folder *other;
+                for (other = mfolder->others; other; other = other->others) {
+                    rfolder = sync_folder_lookup_byname(replica_folders, other->name);
+                    if (rfolder) continue; // name exists on the replica
+                    // otherwise, we've found a temporary name to rename to!
+                    syslog(LOG_NOTICE, "do_folders(): loop resolution - renaming %s to %s on the way to %s",
+                           item->oldname, other->name, item->newname);
+                    r = folder_rename(item->uniqueid, item->oldname, other->name, item->part,
+                                      item->uidvalidity, sync_be, flags);
+                    if (r) {
+                        syslog(LOG_ERR, "do_folders(): failed to rename: %s -> %s ",
+                               item->oldname, other->name);
+                        goto bail;
+                    }
+
+                    // and we've still got another rename to do on this mailbox later
+                    sync_rename_list_add(rename_folders, item->uniqueid, other->name,
+                                         item->newname, item->part, item->uidvalidity);
+
+                    rename_folders->done++;
+                    item->done = 1;
+                    rename_success = 1;
+                    break;
+                }
+                if (rename_success) break; // just fix one, maybe the rest can use the regular algorithm
+            }
+        }
+
         if (!rename_success) {
             /* Scanned entire list without a match */
             const char *name = "unknown";
@@ -6001,6 +6299,8 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
     }
 
  bail:
+    strarray_fini(&local_uniqueids);
+    strarray_fini(&remote_uniqueids);
     sync_folder_list_free(&master_folders);
     sync_rename_list_free(&rename_folders);
     sync_reserve_list_free(&reserve_list);
@@ -6041,15 +6341,8 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
     r = sync_response_parse(sync_be->in, "MAILBOXES", replica_folders,
                             NULL, NULL, NULL, NULL);
 
-    /* we don't want to delete remote folders which weren't found locally,
-     * because we may be racing with a rename, and we don't want to lose
-     * the remote files.  A real delete will always have inserted a
-     * UNMAILBOX anyway */
-    if (!r) {
-        flags &= ~SYNC_FLAG_DELETE_REMOTE;
-        r = do_folders(mboxname_list, topart,
-                       replica_folders, sync_be, channelp, flags);
-    }
+    if (!r) r = do_folders(mboxname_list, topart, replica_folders,
+                           sync_be, channelp, flags);
 
     sync_folder_list_free(&replica_folders);
 
@@ -6144,12 +6437,8 @@ static int do_user_main(const char *user, const char *topart,
     info.mboxlist = sync_name_list_create();
     info.quotalist = sync_name_list_create();
 
-    r = mboxlist_usermboxtree(user, NULL, do_mailbox_info, &info, MBOXTREE_DELETED);
+    r = mboxlist_usermboxtree(user, NULL, do_mailbox_info, &info, MBOXTREE_DELETED|MBOXTREE_TOMBSTONES);
 
-    /* we know all the folders present on the master, so it's safe to delete
-     * anything not mentioned here on the replica - at least until we get
-     * real tombstones */
-    flags |= SYNC_FLAG_DELETE_REMOTE;
     if (!r) r = do_folders(info.mboxlist, topart,
                            replica_folders, sync_be, channelp, flags);
     if (!r) r = sync_do_user_quota(info.quotalist, replica_quota,

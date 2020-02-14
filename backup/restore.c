@@ -667,7 +667,7 @@ static struct sync_folder_list *restore_make_reserve_folder_list(
 
             /* we only care about mboxname here */
             sync_folder_list_add(folder_list, NULL, iter->mboxname,
-                                0, NULL, NULL, 0, 0, 0, 0, synccrcs,
+                                0, NULL, NULL, 0, 0, 0, 0, 0, synccrcs,
                                 0, 0, 0, 0, NULL, 0, 0, 0);
         }
 
@@ -816,7 +816,7 @@ static int restore_add_mailbox(const struct backup_mailbox *mailbox,
     if (options->override_mboxname) {
         const struct synccrcs synccrcs = {0, 0};
         sync_folder_list_add(reserve_folder_list, NULL, clone->mboxname,
-                             0, NULL, NULL, 0, 0, 0, 0, synccrcs,
+                             0, NULL, NULL, 0, 0, 0, 0, 0, synccrcs,
                              0, 0, 0, 0, NULL, 0, 0, 0);
     }
 
@@ -860,7 +860,7 @@ static int restore_add_message(const struct backup_message *message,
         /* add to reserve folder list */
         const struct synccrcs synccrcs = {0, 0};
         sync_folder_list_add(reserve_folder_list, NULL, mailbox->mboxname,
-                             0, NULL, NULL, 0, 0, 0, 0, synccrcs,
+                             0, NULL, NULL, 0, 0, 0, 0, 0, synccrcs,
                              0, 0, 0, 0, NULL, 0, 0, 0);
 
         /* add to mailbox list */
