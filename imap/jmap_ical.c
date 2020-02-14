@@ -2530,7 +2530,8 @@ static icalproperty *insert_icaltimeprop(icalcomponent *comp,
                                          icaltimetype dt,
                                          bit64 nano,
                                          int remove_existing,
-                                         enum icalproperty_kind kind) {
+                                         enum icalproperty_kind kind)
+{
     icalproperty *prop;
 
     /* Purge existing property. */
