@@ -953,7 +953,7 @@ sub test_restore_mail_all
                     from => [{ email => q{foo1@bar} }],
                     to => [{ email => q{bar1@foo} }],
                     subject => "draft1",
-                    keywords => { '$Draft' => JSON::true },
+                    keywords => { '$draft' => JSON::true },
                     messageId => ['fake.123456789@local'],
                 },
                 draft2 => {
@@ -963,7 +963,7 @@ sub test_restore_mail_all
                     from => [{ email => q{foo2@bar} }],
                     to => [{ email => q{bar2@foo} }],
                     subject => "draft2 (biggest)",
-                    keywords => { '$Draft' => JSON::true },
+                    keywords => { '$draft' => JSON::true },
                     messageId => ['fake.123456789@local'],
                 },
                 draft3 => {
@@ -973,7 +973,7 @@ sub test_restore_mail_all
                     from => [{ email => q{foo3@bar} }],
                     to => [{ email => q{bar3@foo} }],
                     subject => "draft3 (bigger)",
-                    keywords => { '$Draft' => JSON::true },
+                    keywords => { '$draft' => JSON::true },
                     messageId => ['fake.123456789@local'],
                 },
             },
@@ -1179,7 +1179,7 @@ sub test_restore_mail_all_dryrun
                     from => [{ email => q{foo1@bar} }],
                     to => [{ email => q{bar1@foo} }],
                     subject => "draft1",
-                    keywords => { '$Draft' => JSON::true },
+                    keywords => { '$draft' => JSON::true },
                     messageId => ['fake.123456789@local'],
                 },
                 draft2 => {
@@ -1189,7 +1189,7 @@ sub test_restore_mail_all_dryrun
                     from => [{ email => q{foo2@bar} }],
                     to => [{ email => q{bar2@foo} }],
                     subject => "draft2 (biggest)",
-                    keywords => { '$Draft' => JSON::true },
+                    keywords => { '$draft' => JSON::true },
                     messageId => ['fake.123456789@local'],
                 },
                 draft3 => {
@@ -1199,7 +1199,7 @@ sub test_restore_mail_all_dryrun
                     from => [{ email => q{foo3@bar} }],
                     to => [{ email => q{bar3@foo} }],
                     subject => "draft3 (bigger)",
-                    keywords => { '$Draft' => JSON::true },
+                    keywords => { '$draft' => JSON::true },
                     messageId => ['fake.123456789@local'],
                 },
             },

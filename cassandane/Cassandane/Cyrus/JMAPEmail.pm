@@ -1149,7 +1149,7 @@ sub test_email_set_draft
             '1' => { value => "I'm givin' ya one last chance ta surrenda!" },
             '2' => { value => "Oh!!! I <em>hate</em> that Rabbit." },
         },
-        keywords => { '$Draft' => JSON::true },
+        keywords => { '$draft' => JSON::true },
     };
 
     xlog $self, "Create a draft";
@@ -1437,7 +1437,7 @@ sub test_email_set_shared
     xlog $self, "toggle Seen flag on email";
     $res = $jmap->CallMethods([['Email/set', {
         accountId => 'foo',
-        update => { $id => { keywords => { '$Seen' => JSON::true } } },
+        update => { $id => { keywords => { '$seen' => JSON::true } } },
     }, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
@@ -1505,7 +1505,7 @@ sub test_email_set_userkeywords
             }
         },
         keywords => {
-            '$Draft' => JSON::true,
+            '$draft' => JSON::true,
             'foo' => JSON::true
         },
     };
@@ -1527,7 +1527,7 @@ sub test_email_set_userkeywords
         update => {
             $id => {
                 "keywords" => {
-                    '$Draft' => JSON::true,
+                    '$draft' => JSON::true,
                     'foo' => JSON::true,
                     'bar' => JSON::true
                 }
@@ -1660,7 +1660,7 @@ sub test_misc_upload_zero
             blobId => $data->{blobId},
             name => "emptyfile.txt",
         }],
-        keywords => { '$Draft' => JSON::true },
+        keywords => { '$draft' => JSON::true },
       } } }, 'R2'],
     ]);
 
@@ -1713,7 +1713,7 @@ sub test_misc_upload
             blobId => $data->{blobId},
             name => "test.txt",
         }],
-        keywords => { '$Draft' => JSON::true },
+        keywords => { '$draft' => JSON::true },
       } } }, 'R2'],
     ]);
 
@@ -1783,7 +1783,7 @@ sub test_misc_upload_bin
             blobId => $data->{blobId},
             name => "logo.gif",
         }],
-        keywords => { '$Draft' => JSON::true },
+        keywords => { '$draft' => JSON::true },
       } } }, 'R2'],
     ]);
 
@@ -2174,7 +2174,7 @@ sub test_email_set_attachments
             type => "application/test2",
             name => "simple",
         }],
-        keywords => { '$Draft' => JSON::true },
+        keywords => { '$draft' => JSON::true },
     };
 
     my $wantBodyStructure = {
@@ -2257,7 +2257,7 @@ sub test_email_set_flagged
 
     my $draft =  {
         mailboxIds =>  { $drafts => JSON::true },
-        keywords => { '$Draft' => JSON::true, '$Flagged' => JSON::true },
+        keywords => { '$draft' => JSON::true, '$Flagged' => JSON::true },
         textBody => [{ partId => '1' }],
         bodyValues => { '1' => { value => "a flagged draft" }},
     };
@@ -2297,7 +2297,7 @@ sub test_email_set_mailboxids
         subject => "Memo",
         textBody => [{ partId => '1' }],
         bodyValues => { '1' => { value => "I'm givin' ya one last chance ta surrenda!" }},
-        keywords => { '$Draft' => JSON::true },
+        keywords => { '$draft' => JSON::true },
     };
 
     # Not OK: at least one mailbox must be specified
@@ -2731,7 +2731,7 @@ sub test_email_set_create_snooze
             '1' => { value => "I'm givin' ya one last chance ta surrenda!" },
             '2' => { value => "Oh!!! I <em>hate</em> that Rabbit." },
         },
-        keywords => { '$Draft' => JSON::true },
+        keywords => { '$draft' => JSON::true },
         snoozed => { "until" => "$datestr", "moveToMailboxId" => "$draftsId" },
     };
 
@@ -3756,7 +3756,7 @@ sub test_email_set_update
         htmlBody => [ {partId => '1'} ],
         bodyValues => { 1 => { value => "Oh!!! I <em>hate</em> that Rabbit." }},
         keywords => {
-            '$Draft' => JSON::true,
+            '$draft' => JSON::true,
         }
     };
 
@@ -3871,7 +3871,7 @@ sub test_email_set_destroy
         subject    => "created",
         textBody   => [{ partId => '1' }],
         bodyValues => { '1' => { value => "Oh!!! I *hate* that Rabbit." }},
-        keywords => { '$Draft' => JSON::true },
+        keywords => { '$draft' => JSON::true },
     };
     $res = $jmap->CallMethods(
         [ [ 'Email/set', { create => { "1" => $draft } }, "R1" ] ],
@@ -4703,44 +4703,44 @@ sub test_email_query_keywords
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $fooid = $res->[0][1]->{ids}[0];
 
-    xlog $self, "fetch emails with \$Seen flag";
+    xlog $self, "fetch emails with \$seen flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            hasKeyword => '$Seen',
+            hasKeyword => '$seen',
         }
     }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
-    xlog $self, "fetch emails without \$Seen flag";
+    xlog $self, "fetch emails without \$seen flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            notKeyword => '$Seen',
+            notKeyword => '$seen',
         }
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
-    xlog $self, 'set $Seen flag on email';
+    xlog $self, 'set $seen flag on email';
     $res = $jmap->CallMethods([['Email/set', {
         update => {
             $fooid => {
-                keywords => { '$Seen' => JSON::true },
+                keywords => { '$seen' => JSON::true },
             },
         }
     }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$fooid});
 
-    xlog $self, "fetch emails with \$Seen flag";
+    xlog $self, "fetch emails with \$seen flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            hasKeyword => '$Seen',
+            hasKeyword => '$seen',
         }
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
-    xlog $self, "fetch emails without \$Seen flag";
+    xlog $self, "fetch emails without \$seen flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            notKeyword => '$Seen',
+            notKeyword => '$seen',
         }
     }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
@@ -4748,27 +4748,27 @@ sub test_email_query_keywords
     xlog $self, "create email";
     $res = $self->make_message("bar") || die;
 
-    xlog $self, "fetch emails without \$Seen flag";
+    xlog $self, "fetch emails without \$seen flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            notKeyword => '$Seen',
+            notKeyword => '$seen',
         }
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $barid = $res->[0][1]->{ids}[0];
     $self->assert_str_not_equals($fooid, $barid);
 
-    xlog $self, "fetch emails sorted ascending by \$Seen flag";
+    xlog $self, "fetch emails sorted ascending by \$seen flag";
     $res = $jmap->CallMethods([['Email/query', {
-        sort => [{ property => 'hasKeyword', keyword => '$Seen' }],
+        sort => [{ property => 'hasKeyword', keyword => '$seen' }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[1]);
 
-    xlog $self, "fetch emails sorted descending by \$Seen flag";
+    xlog $self, "fetch emails sorted descending by \$seen flag";
     $res = $jmap->CallMethods([['Email/query', {
-        sort => [{ property => 'hasKeyword', keyword => '$Seen', isAscending => JSON::false }],
+        sort => [{ property => 'hasKeyword', keyword => '$seen', isAscending => JSON::false }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[0]);
@@ -6433,7 +6433,7 @@ sub test_email_query_attachments
                               blobId => $data->{blobId},
                               name => "logo.gif",
                       }],
-                      keywords => { '$Draft' => JSON::true },
+                      keywords => { '$draft' => JSON::true },
                   },
                   "2" => {
                       mailboxIds => {$draftsmbox =>  JSON::true},
@@ -6448,7 +6448,7 @@ sub test_email_query_attachments
                               blobId => $data->{blobId},
                               name => "somethingelse.gif",
                       }],
-                      keywords => { '$Draft' => JSON::true },
+                      keywords => { '$draft' => JSON::true },
                   },
   } }, 'R2'],
     ]);
@@ -6543,7 +6543,7 @@ sub test_email_query_attachmentname
                               blobId => $data->{blobId},
                               name => "R\N{LATIN SMALL LETTER U WITH DIAERESIS}bezahl.txt",
                       }],
-                      keywords => { '$Draft' => JSON::true },
+                      keywords => { '$draft' => JSON::true },
                   },
               }}, 'R2'],
     ]);
@@ -6784,7 +6784,7 @@ sub test_thread_get
             subject              => "Re: Email A",
             textBody             => [{ partId => '1' }],
             bodyValues           => { 1 => { value => "I'm givin' ya one last chance ta surrenda!" }},
-            keywords             => { '$Draft' => JSON::true },
+            keywords             => { '$draft' => JSON::true },
         }}}, "R1" ]]);
     my $draftid = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($draftid);
@@ -7412,7 +7412,7 @@ sub test_email_changes
 
     xlog $self, "update email $ida";
     $res = $jmap->CallMethods([['Email/set', {
-        update => { $ida => { keywords => { '$Seen' => JSON::true }}}
+        update => { $ida => { keywords => { '$seen' => JSON::true }}}
     }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$ida});
 
@@ -7460,7 +7460,7 @@ sub test_email_changes
             subject              => "Email B",
             textBody             => [{ partId => '1' }],
             bodyValues           => { '1' => { value => "I'm givin' ya one last chance ta surrenda!" }},
-            keywords             => { '$Draft' => JSON::true },
+            keywords             => { '$draft' => JSON::true },
         }}}, "R1" ]]);
     my $idb = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($idb);
@@ -7474,7 +7474,7 @@ sub test_email_changes
             subject              => "Email C",
             textBody             => [{ partId => '1' }],
             bodyValues           => { '1' => { value => "I *hate* that rabbit!" } },
-            keywords             => { '$Draft' => JSON::true },
+            keywords             => { '$draft' => JSON::true },
         }}}, "R1" ]]);
     my $idc = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($idc);
@@ -8246,7 +8246,7 @@ sub test_email_querychanges_implementation
         xlog $self, "update email B";
         $res = $jmap->CallMethods([['Email/set', {
                 update => { $msgidB => {
-                        'keywords/$Seen' => JSON::true }
+                        'keywords/$seen' => JSON::true }
                 },
         }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$msgidB});
@@ -8764,7 +8764,7 @@ EOF
                     blobId => $blobid,
                     mailboxIds => {$draftsmbox =>  JSON::true},
                     keywords => {
-                        '$Draft' => JSON::true,
+                        '$draft' => JSON::true,
                     },
                 },
             },
@@ -8812,7 +8812,7 @@ EOF
                     blobId => $blobid,
                     mailboxIds => {$draftsmbox =>  JSON::true},
                     keywords => {
-                        '$Draft' => JSON::true,
+                        '$draft' => JSON::true,
                     },
                 },
             },
@@ -8860,7 +8860,7 @@ EOF
                     blobId => $blobid,
                     mailboxIds => {$draftsmbox =>  JSON::true},
                     keywords => {
-                        '$Draft' => JSON::true,
+                        '$draft' => JSON::true,
                     },
                 },
             },
@@ -8926,7 +8926,7 @@ EOF
                     blobId => $blobid,
                     mailboxIds => {$draftsmbox =>  JSON::true},
                     keywords => {
-                        '$Draft' => JSON::true,
+                        '$draft' => JSON::true,
                     },
                     receivedAt => $receivedAt,
                 },
@@ -8987,7 +8987,7 @@ EOF
                         '$drafts'=>  JSON::true
                     },
                     keywords => {
-                        '$Draft' => JSON::true,
+                        '$draft' => JSON::true,
                     },
                 },
             },
@@ -9085,7 +9085,7 @@ EOF
                 blobId => $blobid,
                 mailboxIds => {$draftsmbox =>  JSON::true},
                 keywords => {
-                    '$Draft' => JSON::true,
+                    '$draft' => JSON::true,
                 },
             },
         },
@@ -9534,7 +9534,7 @@ sub test_email_import
             "1" => {
                 blobId => $blobid,
                 mailboxIds => {$drafts =>  JSON::true},
-                keywords => { '$Draft' => JSON::true },
+                keywords => { '$draft' => JSON::true },
             },
         },
     }, "R1"], ["Email/get", { ids => ["#1"] }, "R2" ]]);
@@ -9557,7 +9557,7 @@ sub test_email_import
             "1" => {
                 blobId => $blobid,
                 mailboxIds => {$drafts =>  JSON::true, $inbox => JSON::true},
-                keywords => { '$Draft' => JSON::true },
+                keywords => { '$draft' => JSON::true },
             },
         },
     }, "R1"]]);
@@ -9847,7 +9847,7 @@ sub test_email_set_patch
         subject => "Memo",
         textBody => [{ partId => '1' }],
         bodyValues => { '1' => { value => "Whoa!" }},
-        keywords => { '$Draft' => JSON::true, foo => JSON::true },
+        keywords => { '$draft' => JSON::true, foo => JSON::true },
     };
 
     xlog $self, "Create draft email";
@@ -9937,7 +9937,7 @@ sub test_misc_set_oldstate
         subject => "foo",
         textBody => [{partId => '1' }],
         bodyValues => { 1 => { value => "bar" }},
-        keywords => { '$Draft' => JSON::true },
+        keywords => { '$draft' => JSON::true },
     };
 
     xlog $self, "create a draft";

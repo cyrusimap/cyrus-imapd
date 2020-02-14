@@ -2661,7 +2661,7 @@ sub test_mailbox_changes_counts
         textBody => [{partId=>'1'}],
         bodyValues => { 1 => { value => "foo" }},
         keywords => {
-            '$Draft' => JSON::true,
+            '$draft' => JSON::true,
         },
     };
 
@@ -2677,8 +2677,8 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Email/set', {
             update => { $msgid => {
                     keywords => {
-                        '$Draft' => JSON::true,
-                        '$Seen' => JSON::true
+                        '$draft' => JSON::true,
+                        '$seen' => JSON::true
                     }
                 }
             }
@@ -2839,7 +2839,7 @@ sub test_mailbox_changes_shared
         textBody => [{partId=>'1'}],
         bodyValues => { 1 => { value => "foo" }},
         keywords => {
-            '$Draft' => JSON::true,
+            '$draft' => JSON::true,
         },
     };
     $res = $jmap->CallMethods([['Email/set', {
