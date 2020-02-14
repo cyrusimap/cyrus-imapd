@@ -71,6 +71,9 @@ EXPORTED void ical_support_init(void)
         icaltimezone_set_tzid_prefix("");
         icaltimezone_set_builtin_tzdata(1);
     }
+    else {
+        icaltimezone_set_builtin_tzdata(0);
+    }
 }
 
 EXPORTED int cyrus_icalrestriction_check(icalcomponent *ical)
