@@ -3575,7 +3575,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
                 if (r) goto out;
                 /* [IRIS-1576] if X-ME-Message-ID says the messages are
                 * linked, ignore any difference in Subject: header fields. */
-                if (!conv || i == 3 || !strcmpsafe(conv->subject, msubj))
+                if (!conv || i == 3 || !conv->subject || !strcmpsafe(conv->subject, msubj))
                     arrayu64_add(&matchlist, cid);
             }
 
@@ -3666,8 +3666,8 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         if (r) goto out;
     }
 
-    /* Create the subject header if not already set */
-    if (!conv->subject)
+    /* Create the subject header if not already set and this isn't a Draft */
+    if (!conv->subject && !(record->system_flags & FLAG_DRAFT))
         conv->subject = xstrdupnull(msubj);
 
     /*
