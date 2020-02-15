@@ -2602,5 +2602,44 @@ EOF
     $self->assert_num_equals(2, scalar(@uids));
 }
 
+sub test_error_flag
+    :needs_component_sieve :min_version_3_3
+{
+    my ($self) = @_;
+
+    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
+    $self->{instance}->install_sieve_script(<<EOF);
+require ["ihave"];
+
+if header :contains "Subject" "fail" {
+    error "this test fails";
+}
+EOF
+    xlog $self, "Deliver three messages";
+
+    # should NOT get flagged
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    # SHOULD get flagged
+    my $msg2 = $self->{gen}->generate(subject => "this will fail with an error");
+    $self->{instance}->deliver($msg2);
+
+    # should NOT get flagged
+    my $msg3 = $self->{gen}->generate(subject => "Message 3");
+    $self->{instance}->deliver($msg3);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->select("INBOX");
+    $self->assert_num_equals(3, $imaptalk->get_response_code('exists'));
+
+    my $res = $imaptalk->fetch('1:*', 'flags');
+
+    $self->assert_null(grep { $_ eq '$SieveFailed' } @{$res->{1}{flags}});
+    $self->assert_not_null(grep { $_ eq '$SieveFailed' } @{$res->{2}{flags}});
+    $self->assert_null(grep { $_ eq '$SieveFailed' } @{$res->{3}{flags}});
+}
+
 
 1;
