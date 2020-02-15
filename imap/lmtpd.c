@@ -838,6 +838,9 @@ int deliver(message_data_t *msgdata, char *authuser,
             status[n] = nosieve;
         }
         else {
+            strarray_t flags = STRARRAY_INITIALIZER;
+            struct imap4flags imap4flags = { &flags, authstate };
+
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
@@ -846,6 +849,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 
             sieve_srs_init();
             r = run_sieve(mbname, interp, &mydata);
+            // set a flag if sieve failed
+            if (r < 0) strarray_append(&flags, "$SieveFailed");
 #ifdef WITH_DAV
             if (ctx.carddavdb) carddav_close(ctx.carddavdb);
 #endif
@@ -856,10 +861,10 @@ int deliver(message_data_t *msgdata, char *authuser,
 #else
             r = 1;      /* normal delivery */
 #endif
-
             if (r) {
-                r = deliver_local(&mydata, NULL, mbname);
+                r = deliver_local(&mydata, &imap4flags, mbname);
             }
+            strarray_fini(&flags);
         }
 
         telemetry_rusage(mbname_userid(mbname));
