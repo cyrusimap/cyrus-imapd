@@ -285,7 +285,7 @@ static void get_statsock(int filedes[2])
         fatalf(1, "unable to set close-on-exec: %m");
 }
 
-static int cap_bind(int socket, struct sockaddr *addr, socklen_t length)
+static int cyrus_cap_bind(int socket, struct sockaddr *addr, socklen_t length)
 {
     int r;
 
@@ -643,7 +643,7 @@ static void service_create(struct service *s)
 #endif
 
         oldumask = umask((mode_t) 0); /* for linux */
-        r = cap_bind(s->socket, res->ai_addr, res->ai_addrlen);
+        r = cyrus_cap_bind(s->socket, res->ai_addr, res->ai_addrlen);
         umask(oldumask);
         if (r < 0) {
             syslog(LOG_ERR, "unable to bind to %s/%s socket: %m",
