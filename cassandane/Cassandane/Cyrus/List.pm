@@ -1242,8 +1242,6 @@ sub test_virtdomains_return_subscribed_altns
         'Trash'         => [qw( \\HasNoChildren \\Subscribed )],
         'Other Users/bar/shared-folder'
                         => [qw( \\HasNoChildren \\Subscribed )],
-        'Shared Folders/another-namespace'
-                        => [qw( \\HasChildren )],
         'Shared Folders/another-namespace/folder'
                         => [qw( \\HasNoChildren \\Subscribed )],
     });
@@ -1312,7 +1310,6 @@ sub test_virtdomains_return_subscribed_noaltns
         'INBOX/Sent'    => [qw( \\HasNoChildren \\Subscribed )],
         'INBOX/Trash'   => [qw( \\HasNoChildren \\Subscribed )],
         'user/bar/shared-folder' => [qw( \\HasNoChildren \\Subscribed )],
-        'another-namespace' => [qw( \\HasChildren ) ],
         'another-namespace/folder' => [qw( \\HasNoChildren \\Subscribed )],
     });
 }
