@@ -666,7 +666,7 @@ EXPORTED int set_caps(int stage __attribute__((unused)),
 }
 #endif
 
-static int cap_setuid(int uid, int is_master)
+static int cyrus_cap_setuid(int uid, int is_master)
 {
     int r;
 
@@ -686,7 +686,7 @@ EXPORTED int become_cyrus(int is_master)
     int result;
     static uid_t uid = 0;
 
-    if (uid) return cap_setuid(uid, is_master);
+    if (uid) return cyrus_cap_setuid(uid, is_master);
 
     const char *cyrus = cyrus_user();
     const char *mail = cyrus_group();
@@ -732,7 +732,7 @@ EXPORTED int become_cyrus(int is_master)
         return -1;
     }
 
-    result = cap_setuid(newuid, is_master);
+    result = cyrus_cap_setuid(newuid, is_master);
 
     /* Only set static uid if successful, else future calls won't reset gid */
     if (result == 0)
