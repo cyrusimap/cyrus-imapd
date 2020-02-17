@@ -756,6 +756,10 @@ static void replica_connect(const char *channel)
     else if (do_compress) fatal("Backend does not support compression, aborting", EX_SOFTWARE);
 #endif
 
+    if (CAPA(sync_backend, CAPA_CYRUSREPL2)) {
+        // XXX - send the ENABLE CYRUSREPL2 command
+    }
+
     /* links to sockets */
     sync_in = sync_backend->in;
     sync_out = sync_backend->out;
