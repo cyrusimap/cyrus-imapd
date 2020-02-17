@@ -3288,6 +3288,7 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     const char *newmboxname;
     const char *partition;
     uint32_t uidvalidity = 0;
+    const char *uniqueid = NULL;
     mbentry_t *mbentry = NULL;
     int r;
 
@@ -3300,6 +3301,8 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
 
     /* optional */
     dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity);
+
+    dlist_getatom(kin, "UNIQUEID", &uniqueid);
 
     struct mboxlock *oldlock = NULL;
     struct mboxlock *newlock = NULL;
@@ -3316,14 +3319,23 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     }
 
     r = mboxlist_lookup(oldmboxname, &mbentry, 0);
+    if (r) goto done;
 
-    if (!r) r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
-                                       uidvalidity, 1, sstate->userid,
-                                       sstate->authstate, NULL, sstate->local_only, 1, 1,
-                                       0/*keep_intermediaries*/,
-                                       0/*move_subscription*/,
-                                       1/*silent*/);
+    if (uniqueid && strcmpsafe(uniqueid, mbentry->uniqueid)) {
+        syslog(LOG_ERR, "SYNCERROR: tried to rename %s to %s with incorrect uniqueid %s (should be %s)",
+               oldmboxname, newmboxname, uniqueid, mbentry->uniqueid);
+        r = IMAP_MAILBOX_MOVED;
+        goto done;
+    }
 
+    r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
+                               uidvalidity, 1, sstate->userid,
+                               sstate->authstate, NULL, sstate->local_only, 1, 1,
+                               0/*keep_intermediaries*/,
+                               0/*move_subscription*/,
+                               1/*silent*/);
+
+done:
     mboxlist_entry_free(&mbentry);
     mboxname_release(&oldlock);
     mboxname_release(&newlock);
@@ -4415,7 +4427,8 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
     return IMAP_PROTOCOL_BAD_PARAMETERS;
 }
 
-static int folder_rename(const char *oldname, const char *newname,
+static int folder_rename(const char *uniqueid,
+                         const char *oldname, const char *newname,
                          const char *partition, unsigned uidvalidity,
                          struct backend *sync_be, unsigned flags)
 {
@@ -4429,6 +4442,7 @@ static int folder_rename(const char *oldname, const char *newname,
         syslog(LOG_INFO, "%s %s -> %s (%s)", cmd, oldname, newname, partition);
 
     kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "UNIQUEID", uniqueid);
     dlist_setatom(kl, "OLDMBOXNAME", oldname);
     dlist_setatom(kl, "NEWMBOXNAME", newname);
     dlist_setatom(kl, "PARTITION", partition);
@@ -5944,7 +5958,7 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
             }
 
             /* Found unprocessed item which should rename cleanly */
-            r = folder_rename(item->oldname, item->newname, item->part,
+            r = folder_rename(item->uniqueid, item->oldname, item->newname, item->part,
                               item->uidvalidity, sync_be, flags);
             if (r) {
                 syslog(LOG_ERR, "do_folders(): failed to rename: %s -> %s ",
