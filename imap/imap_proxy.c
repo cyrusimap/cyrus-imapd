@@ -100,6 +100,7 @@ struct protocol_t imap_protocol =
           { "LIST-EXTENDED", CAPA_LISTEXTENDED },
           { "SASL-IR", CAPA_SASL_IR },
           { "X-REPLICATION", CAPA_REPLICATION },
+          { "X-CYRUSREPL2", CAPA_CYRUSREPL2 },
           { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
