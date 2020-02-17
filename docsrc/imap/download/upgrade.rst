@@ -212,8 +212,9 @@ you have provided overrides for in your config files::
     cyr_info conf-all -C <path to imapd.conf> -M <path to cyrus.conf>
 
 **Important config** options: ``unixhierarchysep:`` and ``altnamespace:``
-defaults have changed in :cyrusman:`imapd.conf(5)`. Implications are
-outlined in the Note in :ref:`imap-admin-namespaces-mode` and
+defaults in :cyrusman:`imapd.conf(5)` changed in 3.0, which will affect you
+if you are upgrading to 3.2 from something earlier than 3.0. Implications
+are outlined in the Note in :ref:`imap-admin-namespaces-mode` and
 :ref:`imap-switching-alt-namespace-mode`.  Please also see "Sieve Scripts,"
 below.
 
@@ -258,7 +259,7 @@ DAEMON section.
 
 .. warning::
 
-    **Berkeley db format no longer supported**
+    **Berkeley db format no longer supported since 3.0**
 
     If you have any databases using Berkeley db, they'll need to be
     converted to skiplist or flat *in your existing installation*. And
@@ -335,6 +336,23 @@ If you've been using CalDAV/CardDAV/all of the DAV from earlier releases, then t
 databases need to be reconstructed due to format changes.::
 
     dav_reconstruct -a
+
+If you are upgrading from 3.0, and have the `reverseacls` feature enabled
+in :cyrusman:`imapd.conf(5)`, you may need to regenerate the data it uses
+(which is stored in `mailboxes.db`).  This is automatically regenerated at
+startup by `ctl_cyrusdb -r` if the `reverseacls` setting has changed. So,
+to force a regeneration:
+
+    1. Shut down Cyrus
+    2. Change `reverseacls` to `0` in :cyrusman:`imapd.conf(5)`
+    3. Run :cyrusman:`ctl_cyrusdb(8)` with the `-r` switch (or just start
+       Cyrus, assuming your :cyrusman:`cyrus.conf(5)` contains a
+       `ctl_cyrusdb -r` entry in the START section).  The old RACL entries
+       will be removed
+    4. (If you started Cyrus, shut it down again)
+    5. Change `reverseacls` back to `1`
+    6. Start up Cyrus (or run `ctl_cyrusdb -r`).  The RACL entries will
+       be rebuilt
 
 9. Do you want any new features?
 --------------------------------
