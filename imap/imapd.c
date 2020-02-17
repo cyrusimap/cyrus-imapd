@@ -344,6 +344,7 @@ static struct capa_struct base_capabilities[] = {
     { "CREATE-SPECIAL-USE",    2 }, /* RFC 6154 */
     { "DIGEST=SHA1",           2 }, /* Cyrus custom */
     { "X-REPLICATION",         2 }, /* Cyrus custom */
+    { "X-CYRUSREPL2",          2 }, /* Cyrus custom */
     { "STATUS=SIZE",           2 }, /* RFC 8438 */
     { "OBJECTID",              2 }, /* draft-ietf-extra-imap-objectid */
     { "SAVEDATE",              2 }, /* draft-ietf-extra-imap-savedate */
