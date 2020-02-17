@@ -3239,7 +3239,7 @@ EXPORTED int mboxlist_set_racls(int enabled)
         r = cyrusdb_foreach(mbdb, "$RACL", 5, NULL, del_cb, &tid, &tid);
         if (!r) have_racl = 0;
     }
-    else if (enabled && !have_racl) {
+    if (enabled && !have_racl) {
         /* add */
         struct allmb_rock mbrock = { NULL, racls_add_cb, &tid, 0 };
         struct buf vbuf = BUF_INITIALIZER;
@@ -3283,7 +3283,7 @@ EXPORTED int mboxlist_set_runiqueid(int enabled)
         r = cyrusdb_foreach(mbdb, "$RUNQ", 5, NULL, del_cb, &tid, &tid);
         if (!r) have_runq = 0;
     }
-    else if (enabled && !have_runq) {
+    if (enabled && !have_runq) {
         /* add */
         struct allmb_rock mbrock = { NULL, runiqueid_add_cb, &tid, 0 };
         struct buf vbuf = BUF_INITIALIZER;
