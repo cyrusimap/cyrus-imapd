@@ -696,11 +696,13 @@ static void mboxlist_racl_key(int isuser, const char *keyuser, const char *mbnam
     }
 }
 
-static int user_is_in(const strarray_t *aclbits, const char *user)
+static int user_can_read(const strarray_t *aclbits, const char *user)
 {
     int i;
     if (!aclbits) return 0;
     for (i = 0; i+1 < strarray_size(aclbits); i+=2) {
+        // skip ACLs without read bit
+        if (!strchr(strarray_nth(aclbits, i+1), 'r')) continue;
         if (!strcmp(strarray_nth(aclbits, i), user)) return 1;
     }
     return 0;
@@ -740,9 +742,10 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
     if (oldusers) {
         for (i = 0; i+1 < strarray_size(oldusers); i+=2) {
             const char *acluser = strarray_nth(oldusers, i);
+            if (!strchr(strarray_nth(oldusers, i+1), 'r')) continue;
             if (!strcmpsafe(userid, acluser)) continue;
             if (strarray_find(admins, acluser, 0) >= 0) continue;
-            if (user_is_in(newusers, acluser)) continue;
+            if (user_can_read(newusers, acluser)) continue;
             mboxlist_racl_key(!!userid, acluser, name, &buf);
             r = cyrusdb_delete(mbdb, buf.s, buf.len, txn, /*force*/1);
             if (r) goto done;
@@ -753,9 +756,10 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
     if (newusers) {
         for (i = 0; i+1 < strarray_size(newusers); i+=2) {
             const char *acluser = strarray_nth(newusers, i);
+            if (!strchr(strarray_nth(newusers, i+1), 'r')) continue;
             if (!strcmpsafe(userid, acluser)) continue;
             if (strarray_find(admins, acluser, 0) >= 0) continue;
-            if (user_is_in(oldusers, acluser)) continue;
+            if (user_can_read(oldusers, acluser)) continue;
             mboxlist_racl_key(!!userid, acluser, name, &buf);
             r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);
             if (r) goto done;
