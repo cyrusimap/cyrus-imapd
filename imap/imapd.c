@@ -192,6 +192,7 @@ static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
 static int imapd_compress_done = 0; /* have we done a successful compress? */
 static const char *plaintextloginalert = NULL;
 static int ignorequota = 0;
+static int syncversion = 1;
 
 #define QUIRK_SEARCHFUZZY (1<<0)
 static struct id_data {
@@ -14342,6 +14343,7 @@ static void cmd_enable(char *tag)
     static struct buf arg;
     int c;
     unsigned new_capa = 0;
+    int have_repl2 = 0;
 
     /* RFC5161 says that enable while selected is actually bogus,
      * but it's no skin off our nose to support it, so don't
@@ -14360,6 +14362,8 @@ static void cmd_enable(char *tag)
             new_capa |= CAPA_CONDSTORE;
         else if (!strcasecmp(arg.s, "qresync"))
             new_capa |= CAPA_QRESYNC | CAPA_CONDSTORE;
+        else if (!strcasecmp(arg.s, "CYRUSREPL2"))
+            have_repl2 = 1;
     } while (c == ' ');
 
     /* check for CRLF */
@@ -14383,6 +14387,12 @@ static void cmd_enable(char *tag)
         if (!started) prot_printf(imapd_out, "* ENABLED");
         started = 1;
         prot_printf(imapd_out, " QRESYNC");
+    }
+    if (have_repl2 && syncversion < 2) {
+        syncversion = 2;
+        if (!started) prot_printf(imapd_out, "* ENABLED");
+        started = 1;
+        prot_printf(imapd_out, " CYRUSREPL2");
     }
     if (started) prot_printf(imapd_out, "\r\n");
 
@@ -14446,7 +14456,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
         imapd_authstate,
         &imapd_namespace,
         imapd_out,
-        1, /* syncversion */
+        syncversion,
         0 /* local_only */
     };
 
@@ -14472,7 +14482,7 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
         imapd_authstate,
         &imapd_namespace,
         imapd_out,
-        1, /* syncversion */
+        syncversion,
         0 /* local_only */
     };
 
@@ -14581,7 +14591,7 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
         imapd_authstate,
         &imapd_namespace,
         imapd_out,
-        1, /* syncversion */
+        syncversion,
         0 /* local_only */
     };
 

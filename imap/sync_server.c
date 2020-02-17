@@ -132,6 +132,7 @@ static struct protstream *sync_in = NULL;
 static int sync_logfd = -1;
 static int sync_starttls_done = 0;
 static int sync_compress_done = 0;
+static int syncversion = 1;
 
 static int opt_force = 0;
 
@@ -290,6 +291,8 @@ static void dobanner(void)
         }
 #endif
     }
+
+    prot_printf(sync_out, "* CYRUSREPL2\r\n");
 
     prot_printf(sync_out,
                 "* OK %s Cyrus sync server %s\r\n",
@@ -472,6 +475,17 @@ static int reset_saslconn(sasl_conn_t **conn)
     return SASL_OK;
 }
 
+static void cmd_enable(const char *item) {
+    if (!strcasecmp(item, "CYRUSREPL2")) {
+        syncversion = 2;
+        prot_printf(sync_out, "OK ENABLED CYRUSREPL2\r\n");
+        return;
+    }
+
+    prot_printf(sync_out, "BAD Invalid ENABLE command\r\n");
+    return;
+}
+
 static void cmdloop(void)
 {
     struct sync_reserve_list *reserve_list;
@@ -559,6 +573,24 @@ static void cmdloop(void)
             }
             break;
 
+        case 'E':
+            if (!strcmp(cmd.s, "Enable")) {
+                if (c != ' ') goto missingargs;
+                c = getword(sync_in, &arg1);
+                if (c == '\r') c = prot_getc(sync_in);
+                if (c != '\n') goto extraargs;
+                cmd_enable(arg1.s);
+                continue;
+            }
+            else if (!strcmp(cmd.s, "Exit")) {
+                if (c == '\r') c = prot_getc(sync_in);
+                if (c != '\n') goto extraargs;
+                prot_printf(sync_out, "OK Finished\r\n");
+                prot_flush(sync_out);
+                goto exit;
+            }
+            break;
+
         case 'G':
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
@@ -572,16 +604,6 @@ static void cmdloop(void)
                     prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse GET line\r\n");
                 }
                 continue;
-            }
-            break;
-
-        case 'E':
-            if (!strcmp(cmd.s, "Exit")) {
-                if (c == '\r') c = prot_getc(sync_in);
-                if (c != '\n') goto extraargs;
-                prot_printf(sync_out, "OK Finished\r\n");
-                prot_flush(sync_out);
-                goto exit;
             }
             break;
 
@@ -956,7 +978,7 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        1, /* syncversion */
+        syncversion,
         0 /* local_only */
     };
 
@@ -972,7 +994,7 @@ static void cmd_get(struct dlist *kin)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        1, /* syncversion */
+        syncversion,
         0 /* local_only */
     };
 
@@ -988,7 +1010,7 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
         sync_authstate,
         &sync_namespace,
         sync_out,
-        1, /* syncversion */
+        syncversion,
         0 /* local_only */
     };
 
