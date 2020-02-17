@@ -3405,6 +3405,15 @@ static int mboxlist_racl_matches(struct db *db,
         strarray_free(groups);
     }
 
+    // can "anyone" access this?
+    mboxlist_racl_key(isuser, "anyone", NULL, &raclprefix);
+    raclrock.prefixlen = buf_len(&raclprefix);
+    if (len) buf_appendmap(&raclprefix, mboxprefix, len);
+    cyrusdb_foreach(db,
+                    buf_cstring(&raclprefix),
+                    buf_len(&raclprefix),
+                    NULL, racl_cb, &raclrock, NULL);
+
     strarray_sort(matches, cmpstringp_mbox);
     strarray_uniq(matches);
 
