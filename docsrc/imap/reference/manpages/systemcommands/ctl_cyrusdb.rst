@@ -47,6 +47,12 @@ Options
     matches the configured database type in imapd.conf.  If not, the
     file is automatically converted using the same logic as cvt_cyrusdb.
 
+    If the ``reverseacls`` option in :cyrusman:`imapd.conf(5)` is enabled,
+    and the RACL entries do not exist in the database, they will be
+    generated.  Conversely, if RACL entries do exist in the database,
+    but the ``reverseacls`` option is disabled, then the entries will be
+    cleaned up.
+
 .. option:: -x
 
     Used with ``-r`` to only recover the database, and prevent any
