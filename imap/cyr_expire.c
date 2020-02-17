@@ -121,6 +121,7 @@ struct expire_rock {
     struct hash_table table;
     time_t expire_mark;
     time_t expunge_mark;
+    time_t tombstone_mark;
     unsigned long mailboxes_seen;
     unsigned long messages_seen;
     unsigned long messages_expired;
@@ -457,7 +458,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
 
     /* clean up deleted entries after 7 days */
     if (mbentry->mbtype & MBTYPE_DELETED) {
-        if (time(0) - mbentry->mtime > SECS_IN_A_DAY*7) {
+        if (mbentry->mtime < erock->tombstone_mark) {
             verbosep("Removing stale tombstone for %s\n", mbentry->name);
             syslog(LOG_NOTICE, "Removing stale tombstone for %s", mbentry->name);
             mboxlist_delete(mbentry->name);
@@ -659,6 +660,9 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
             verbosep("Expunging deleted messages in mailboxes older than %0.2f days\n",
                            ((double)ctx->args.expunge_seconds/SECS_IN_A_DAY));
         }
+
+        /* XXX _ a control for this too? */
+        ctx->erock.tombstone_mark = time(0) - SECS_IN_A_DAY*7;
 
         if (ctx->args.userid)
             mboxlist_usermboxtree(ctx->args.userid, NULL, expire,
