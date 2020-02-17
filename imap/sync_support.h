@@ -432,6 +432,7 @@ struct sync_state {
     struct auth_state *authstate;
     struct namespace *namespace;
     struct protstream *pout;
+    int syncversion;
     int local_only;
 };
 

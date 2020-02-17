@@ -956,6 +956,7 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
         sync_authstate,
         &sync_namespace,
         sync_out,
+        1, /* syncversion */
         0 /* local_only */
     };
 
@@ -971,6 +972,7 @@ static void cmd_get(struct dlist *kin)
         sync_authstate,
         &sync_namespace,
         sync_out,
+        1, /* syncversion */
         0 /* local_only */
     };
 
@@ -986,6 +988,7 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
         sync_authstate,
         &sync_namespace,
         sync_out,
+        1, /* syncversion */
         0 /* local_only */
     };
 

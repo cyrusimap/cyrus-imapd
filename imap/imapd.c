@@ -14446,6 +14446,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
         imapd_authstate,
         &imapd_namespace,
         imapd_out,
+        1, /* syncversion */
         0 /* local_only */
     };
 
@@ -14471,6 +14472,7 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
         imapd_authstate,
         &imapd_namespace,
         imapd_out,
+        1, /* syncversion */
         0 /* local_only */
     };
 
@@ -14579,6 +14581,7 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
         imapd_authstate,
         &imapd_namespace,
         imapd_out,
+        1, /* syncversion */
         0 /* local_only */
     };
 
