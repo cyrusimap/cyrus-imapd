@@ -2205,7 +2205,8 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
             req->userid, req->authstate,
             options, 0 /* uidvalidity */,
             0 /* createdmodseq */,
-            0 /* highestmodseq */, NULL /* acl */,
+            0 /* highestmodseq */,
+            0 /* foldermodseq */, NULL /* acl */,
             NULL /* uniqueid */, 0 /* local_only */,
             1, /* keep_intermediaries */
             args->shareWith ? &mailbox : NULL);

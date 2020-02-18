@@ -832,14 +832,12 @@ static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, str
 
         if (!r && config_auditlog) {
             /* XXX is there a difference between "" and NULL? */
-            if (old && strcmpsafe(old->acl, mbentry->acl)) {
-                syslog(LOG_NOTICE, "auditlog: acl sessionid=<%s> "
-                                   "mailbox=<%s> uniqueid=<%s> "
-                                   "oldacl=<%s> acl=<%s>",
-                       session_id(),
-                       name, mbentry->uniqueid,
-                       old->acl, mbentry->acl);
-            }
+            syslog(LOG_NOTICE, "auditlog: acl sessionid=<%s> "
+                               "mailbox=<%s> uniqueid=<%s> mbtype=<%s> "
+                               "oldacl=<%s> acl=<%s> foldermodseq=<%llu>",
+                   session_id(),
+                   name, mbentry->uniqueid, mboxlist_mbtype_to_string(mbentry->mbtype),
+                   old ? old->acl : "NONE", mbentry->acl, mbentry->foldermodseq);
         }
     }
     else {
@@ -1338,6 +1336,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
                                 int options, unsigned uidvalidity,
                                 modseq_t createdmodseq,
                                 modseq_t highestmodseq,
+                                modseq_t foldermodseq,
                                 const char *copyacl, const char *uniqueid,
                                 int localonly, int forceuser, int dbonly,
                                 int keep_intermediaries,
@@ -1385,7 +1384,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
-        newmbentry->foldermodseq = newmailbox->i.highestmodseq;
+        newmbentry->foldermodseq = foldermodseq ? foldermodseq : newmailbox->i.highestmodseq;
     }
     r = mboxlist_update_entry(mboxname, newmbentry, NULL);
 
@@ -1512,7 +1511,7 @@ EXPORTED int mboxlist_createmailbox_opts(const char *name, int mbtype,
 
     r = mboxlist_createmailbox_full(name, mbtype, partition,
                                     isadmin, userid, auth_state,
-                                    options, uidvalidity, createdmodseq, 0, NULL,
+                                    options, uidvalidity, createdmodseq, 0, 0, NULL,
                                     uniqueid, localonly,
                                     forceuser, dbonly, 0, &mailbox);
 
@@ -1540,6 +1539,7 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
                         int options, unsigned uidvalidity,
                         modseq_t createdmodseq,
                         modseq_t highestmodseq,
+                        modseq_t foldermodseq,
                         const char *acl, const char *uniqueid,
                         int local_only, int keep_intermediaries,
                         struct mailbox **mboxptr)
@@ -1547,8 +1547,8 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
     return mboxlist_createmailbox_full(name, mbtype, partition,
                                        1, userid, auth_state,
                                        options, uidvalidity,
-                                       createdmodseq,
-                                       highestmodseq, acl, uniqueid,
+                                       createdmodseq, highestmodseq,
+                                       foldermodseq, acl, uniqueid,
                                        local_only, 1, 0,
                                        keep_intermediaries, mboxptr);
 }
