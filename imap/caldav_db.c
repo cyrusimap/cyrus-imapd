@@ -553,7 +553,7 @@ EXPORTED int caldav_foreach_timerange(struct caldav_db *caldavdb,
     "  creationdate = :creationdate,"   \
     "  imap_uid     = :imap_uid,"       \
     "  modseq       = :modseq,"         \
-    "  createdmodseq = :createdmoseq,"  \
+    "  createdmodseq = :createdmodseq,"  \
     "  lock_token   = :lock_token,"     \
     "  lock_owner   = :lock_owner,"     \
     "  lock_ownerid = :lock_ownerid,"   \
