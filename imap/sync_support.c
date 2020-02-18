@@ -2643,6 +2643,7 @@ int sync_apply_mailbox(struct dlist *kin,
     time_t pop3_last_login;
     time_t pop3_show_after = 0; /* optional */
     uint32_t uidvalidity;
+    modseq_t foldermodseq = 0;
     const char *acl;
     const char *options_str;
     struct synccrcs synccrcs = { 0, 0 };
@@ -2724,6 +2725,7 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getdate(kin, "POP3_SHOW_AFTER", &pop3_show_after);
     dlist_getnum64(kin, "XCONVMODSEQ", &xconvmodseq);
     dlist_getnum64(kin, "RACLMODSEQ", &raclmodseq);
+    dlist_getnum64(kin, "FOLDERMODSEQ", &foldermodseq);
 
     /* Get the CRCs */
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
@@ -2907,11 +2909,9 @@ int sync_apply_mailbox(struct dlist *kin,
     mailbox->silentchanges = 1;
 
     /* always take the ACL from the master, it's not versioned */
-    if (strcmpsafe(mailbox->acl, acl)) {
-        r = mboxlist_sync_setacls(mboxname, acl, highestmodseq);
-        if (!r) r = mailbox_set_acl(mailbox, acl);
-        if (r) goto done;
-    }
+    r = mboxlist_sync_setacls(mboxname, acl, foldermodseq ? foldermodseq : highestmodseq);
+    if (!r) r = mailbox_set_acl(mailbox, acl);
+    if (r) goto done;
 
     /* take all mailbox (not message) annotations - aka metadata,
      * they're not versioned either */
