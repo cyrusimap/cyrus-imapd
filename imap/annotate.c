@@ -3213,8 +3213,9 @@ static int annotation_set_mailboxopt(annotate_state_t *state,
     if (mailbox->i.options != newopts) {
         if (!maywrite) return IMAP_PERMISSION_DENIED;
         mailbox_index_dirty(mailbox);
+        mailbox_modseq_dirty(mailbox);
         mailbox->i.options = newopts;
-        mboxlist_foldermodseq_dirty(mailbox);
+        mboxlist_update_foldermodseq(mailbox->name, mailbox->i.highestmodseq);
     }
 
     return 0;
@@ -3242,8 +3243,10 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
 
     if (date != mailbox->i.pop3_show_after) {
         if (!maywrite) return IMAP_PERMISSION_DENIED;
-        mailbox->i.pop3_show_after = date;
         mailbox_index_dirty(mailbox);
+        mailbox_modseq_dirty(mailbox);
+        mailbox->i.pop3_show_after = date;
+        mboxlist_update_foldermodseq(mailbox->name, mailbox->i.highestmodseq);
     }
 
     return 0;

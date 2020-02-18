@@ -267,11 +267,13 @@ int mboxlist_setacl(const struct namespace *namespace, const char *name,
                     const char *userid, const struct auth_state *auth_state);
 
 /* Change all ACLs on mailbox */
-int mboxlist_sync_setacls(const char *name, const char *acl);
+int mboxlist_updateacl_raw(const char *name, const char *acl);
+int mboxlist_sync_setacls(const char *name, const char *acl, modseq_t foldermodseq);
+int mboxlist_update_foldermodseq(const char *name, modseq_t foldermodseq);
 
 int mboxlist_set_racls(int enabled);
 
-modseq_t mboxlist_foldermodseq_dirty(struct mailbox *mailbox);
+int mboxlist_cleanup_deletedentries(const mbentry_t *mbentry, time_t mark);
 
 struct findall_data {
     const char *extname;

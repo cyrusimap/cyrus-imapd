@@ -1330,18 +1330,13 @@ done:
 }
 
 /* set a new ACL - only dirty if changed */
-EXPORTED int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
-                    int dirty_modseq)
+EXPORTED int mailbox_set_acl(struct mailbox *mailbox, const char *acl)
 {
-    if (mailbox->acl) {
-        if (!strcmp(mailbox->acl, acl))
-            return 0; /* no change */
-        free(mailbox->acl);
-    }
+    if (!strcmpsafe(mailbox->acl, acl))
+        return 0; /* no change */
+    free(mailbox->acl);
     mailbox->acl = xstrdup(acl);
     mailbox->header_dirty = 1;
-    if (dirty_modseq)
-        mailbox_modseq_dirty(mailbox);
     return 0;
 }
 
@@ -3001,9 +2996,10 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
     }
 
     if (!silent) {
-        /* we are dirtying index and modseq */
-        mailbox_index_dirty(mailbox);
-        mboxlist_foldermodseq_dirty(mailbox);
+        /* we are dirtying modseq for any annotation change */
+        mailbox_modseq_dirty(mailbox);
+        /* and we're dirtying foldermodseq if it's a mailbox level annotation */
+        if (!uid) mboxlist_update_foldermodseq(mailbox->name, mailbox->i.highestmodseq);
     }
     /* we always dirty the quota */
     mailbox_quota_dirty(mailbox);
@@ -6175,7 +6171,7 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
             r = mboxlist_lookup(mailbox->name, &mbentry, NULL);
             if (!r) {
                 if ((flags & RECONSTRUCT_PREFER_MBOXLIST) && mbentry->acl) {
-                    mailbox_set_acl(mailbox, mbentry->acl, /*dirty_modseq*/0);
+                    mailbox_set_acl(mailbox, mbentry->acl);
                 }
                 else {
                     free(mbentry->acl);

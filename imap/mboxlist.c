@@ -2627,6 +2627,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
         /* ok, change the database */
         free(mbentry->acl);
         mbentry->acl = xstrdupnull(newacl);
+        mbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
 
         r = mboxlist_update_entry(name, mbentry, &tid);
 
@@ -2650,7 +2651,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     /* 4. Change backup copy (cyrus.header) */
     /* we already have it locked from above */
     if (!r && !(mbentry->mbtype & MBTYPE_REMOTE)) {
-        mailbox_set_acl(mailbox, newacl, 1);
+        mailbox_set_acl(mailbox, newacl);
         /* want to commit immediately to ensure ordering */
         r = mailbox_commit(mailbox);
     }
@@ -2707,6 +2708,18 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     return r;
 }
 
+/* change the ACL for mailbox 'name' when we have nothing but the name and the new value */
+EXPORTED int mboxlist_updateacl_raw(const char *name, const char *newacl)
+{
+    struct mailbox *mailbox = NULL;
+    int r = mailbox_open_iwl(name, &mailbox);
+    if (!r) r = mboxlist_sync_setacls(name, newacl, mailbox_modseq_dirty(mailbox));
+    if (!r) r = mailbox_set_acl(mailbox, newacl);
+    if (!r) r = mailbox_commit(mailbox);
+    mailbox_close(&mailbox);
+    return r;
+}
+
 /*
  * Change the ACL for mailbox 'name'.  We already have it locked
  * and have written the backup copy to the header, so there's
@@ -2719,7 +2732,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
  *
  */
 EXPORTED int
-mboxlist_sync_setacls(const char *name, const char *newacl)
+mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodseq)
 {
     mbentry_t *mbentry = NULL;
     int r;
@@ -2743,6 +2756,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
         /* ok, change the database */
         free(mbentry->acl);
         mbentry->acl = xstrdupnull(newacl);
+        mbentry->foldermodseq = foldermodseq;
 
         r = mboxlist_update_entry(name, mbentry, &tid);
 
@@ -3893,23 +3907,23 @@ EXPORTED int mboxlist_unsetquota(const char *root)
     return r;
 }
 
-EXPORTED modseq_t mboxlist_foldermodseq_dirty(struct mailbox *mailbox)
+EXPORTED int mboxlist_update_foldermodseq(const char *name, modseq_t foldermodseq)
 {
     mbentry_t *mbentry = NULL;
-    modseq_t ret = 0;
 
     init_internal();
 
-    if (mboxlist_mylookup(mailbox->name, &mbentry, NULL, 0))
-        return 0;
+    int r = mboxlist_mylookup(name, &mbentry, NULL, 0);
+    if (r) return r;
 
-    ret = mbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
-
-    mboxlist_update(mbentry, 0);
+    if (mbentry->foldermodseq < foldermodseq) {
+        mbentry->foldermodseq = foldermodseq;
+        r = mboxlist_update(mbentry, 0);
+    }
 
     mboxlist_entry_free(&mbentry);
 
-    return ret;
+    return r;
 }
 
 /*

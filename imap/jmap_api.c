@@ -2926,14 +2926,14 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     hash_enumerate_sorted(&user_access, add_useracls, &newacl, cmpstringp_raw);
 
     /* ok, change the mailboxes database */
-    r = mboxlist_sync_setacls(mbox->name, newacl);
+    r = mboxlist_sync_setacls(mbox->name, newacl, mailbox_modseq_dirty(mbox));
     if (r) {
         syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
                mbox->name, error_message(r));
     }
     else {
         /* ok, change the backup in cyrus.header */
-        r = mailbox_set_acl(mbox, newacl, 1 /*dirty_modseq*/);
+        r = mailbox_set_acl(mbox, newacl);
         if (r) {
             syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
                    mbox->name, error_message(r));

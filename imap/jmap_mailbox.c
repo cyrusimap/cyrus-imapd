@@ -2600,8 +2600,9 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             /* only mark dirty if there's been a change */
             if (mbox->i.options != newopts) {
                 mailbox_index_dirty(mbox);
+                mailbox_modseq_dirty(mbox);
                 mbox->i.options = newopts;
-                mboxlist_foldermodseq_dirty(mbox);
+                mboxlist_update_foldermodseq(mbox->name, mbox->i.highestmodseq);
             }
         }
         jmap_closembox(req, &mbox);
