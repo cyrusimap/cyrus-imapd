@@ -1296,7 +1296,7 @@ EXPORTED int undump_mailbox(const char *mbname,
             }
 
             if (changed) {
-                r = quota_update_useds(mailbox->quotaroot, quota_usage, NULL);
+                r = quota_update_useds(mailbox->quotaroot, quota_usage, NULL, 0);
                 if (r) goto done2;
             }
         }

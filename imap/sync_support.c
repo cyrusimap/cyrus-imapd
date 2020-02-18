@@ -3276,10 +3276,17 @@ int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
 
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
+
     /* Delete with admin privileges */
-    return mboxlist_deletemailboxlock(mboxname, sstate->userisadmin,
-                                  sstate->userid, sstate->authstate,
-                                  NULL, 0, sstate->local_only, 1, 0);
+    int r = mboxlist_deletemailbox_full(mboxname, sstate->userisadmin,
+                                        sstate->userid, sstate->authstate,
+                                        NULL, 0, sstate->local_only, 1, 0,
+                                        /*silent*/1);
+
+    mboxname_release(&namespacelock);
+
+    return r;
 }
 
 int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)

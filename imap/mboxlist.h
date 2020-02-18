@@ -236,6 +236,13 @@ int mboxlist_deletemailbox(const char *name, int isadmin, const char *userid,
                            struct mboxevent *mboxevent,
                            int checkacl,
                            int local_only, int force, int keep_intermediaries);
+/* same but with silent */
+int mboxlist_deletemailbox_full(const char *name, int isadmin, const char *userid,
+                           const struct auth_state *auth_state,
+                           struct mboxevent *mboxevent,
+                           int checkacl,
+                           int local_only, int force,
+                           int keep_intermediaries, int silent);
 /* same but wrap with a namespacelock */
 int mboxlist_deletemailboxlock(const char *name, int isadmin, const char *userid,
                            const struct auth_state *auth_state,
