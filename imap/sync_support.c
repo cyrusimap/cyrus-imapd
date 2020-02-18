@@ -2762,7 +2762,7 @@ int sync_apply_mailbox(struct dlist *kin,
                 r = mboxlist_createsync(mboxname, mbtype, partition,
                                             sstate->userid, sstate->authstate,
                                             options, uidvalidity, createdmodseq,
-                                            highestmodseq, acl,
+                                            highestmodseq, foldermodseq, acl,
                                             uniqueid, sstate->local_only, 0, &mailbox);
             }
             /* set a highestmodseq of 0 so ALL changes are future
@@ -3776,6 +3776,7 @@ int sync_restore_mailbox(struct dlist *kin,
     struct dlist *ka = NULL;
     modseq_t xconvmodseq = 0;
     modseq_t createdmodseq = 0;
+    modseq_t foldermodseq = 0;
 
     /* derived fields */
     uint32_t options = 0;
@@ -3835,6 +3836,7 @@ int sync_restore_mailbox(struct dlist *kin,
         dlist_getnum64(kin, "HIGHESTMODSEQ", &highestmodseq);
         dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity);
         dlist_getnum64(kin, "CREATEDMODSEQ", &createdmodseq);
+        dlist_getnum64(kin, "FOLDERMODSEQ", &foldermodseq);
 
         /* if any of these three weren't set, disregard the others too */
         if (!uniqueid || !highestmodseq || !uidvalidity) {
@@ -3851,7 +3853,7 @@ int sync_restore_mailbox(struct dlist *kin,
             r = mboxlist_createsync(mboxname, mbtype, partition,
                                     sstate->userid, sstate->authstate,
                                     options, uidvalidity, createdmodseq,
-                                    highestmodseq, acl,
+                                    highestmodseq, foldermodseq, acl,
                                     uniqueid, sstate->local_only, 0, &mailbox);
             syslog(LOG_DEBUG, "%s: mboxlist_createsync %s: %s",
                 __func__, mboxname, error_message(r));
