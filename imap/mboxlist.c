@@ -2809,41 +2809,45 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
     do {
         r = mboxlist_mylookup(name, &mbentry, &tid, 1);
     } while(r == IMAP_AGAIN);
+    if (r) goto done;
+
+    // nothing to change, great
+    if (!strcmpsafe(mbentry->acl, newacl) && mbentry->foldermodseq >= foldermodseq)
+        goto done;
 
     /* Can't do this to an in-transit or reserved mailbox */
-    if (!r && mbentry->mbtype & (MBTYPE_MOVING | MBTYPE_RESERVE | MBTYPE_DELETED)) {
+    if (mbentry->mbtype & (MBTYPE_MOVING | MBTYPE_RESERVE | MBTYPE_DELETED)) {
         r = IMAP_MAILBOX_NOTSUPPORTED;
+        goto done;
     }
 
     /* 2. Set DB Entry */
-    if (!r) {
-        /* ok, change the database */
-        free(mbentry->acl);
-        mbentry->acl = xstrdupnull(newacl);
+    free(mbentry->acl);
+    mbentry->acl = xstrdupnull(newacl);
+    if (mbentry->foldermodseq < foldermodseq)
         mbentry->foldermodseq = foldermodseq;
 
-        r = mboxlist_update_entry(name, mbentry, &tid);
+    r = mboxlist_update_entry(name, mbentry, &tid);
 
-        if (r) {
-            syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
-                   name, cyrusdb_strerror(r));
-            r = IMAP_IOERROR;
-        }
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
+               name, cyrusdb_strerror(r));
+        r = IMAP_IOERROR;
+        goto done;
     }
 
     /* 3. Commit transaction */
-    if (!r) {
-        r = cyrusdb_commit(mbdb, tid);
-        if (r) {
-            syslog(LOG_ERR, "DBERROR: failed on commit %s: %s",
-                   name, cyrusdb_strerror(r));
-            r = IMAP_IOERROR;
-        }
-        tid = NULL;
+    r = cyrusdb_commit(mbdb, tid);
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: failed on commit %s: %s",
+               name, cyrusdb_strerror(r));
+        r = IMAP_IOERROR;
+        goto done;
     }
+    tid = NULL;
 
     /* 4. Change mupdate entry  */
-    if (!r && config_mupdate_server) {
+    if (config_mupdate_server) {
         mupdate_handle *mupdate_h = NULL;
         /* commit the update to MUPDATE */
         char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
@@ -2856,7 +2860,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
                    name);
         } else {
             r = mupdate_activate(mupdate_h, name, buf, newacl);
-            if(r) {
+            if (r) {
                 syslog(LOG_ERR,
                        "MUPDATE: can't update mailbox entry for '%s'",
                        name);
@@ -2865,7 +2869,9 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
         mupdate_disconnect(&mupdate_h);
     }
 
-    if (r && tid) {
+done:
+
+    if (tid) {
         /* if we are mid-transaction, abort it! */
         int r2 = cyrusdb_abort(mbdb, tid);
         if (r2) {
