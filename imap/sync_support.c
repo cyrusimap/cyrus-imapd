@@ -2907,9 +2907,9 @@ int sync_apply_mailbox(struct dlist *kin,
     mailbox->silentchanges = 1;
 
     /* always take the ACL from the master, it's not versioned */
-    if (strcmp(mailbox->acl, acl)) {
-        mailbox_set_acl(mailbox, acl, 0);
-        r = mboxlist_sync_setacls(mboxname, acl);
+    if (strcmpsafe(mailbox->acl, acl)) {
+        r = mboxlist_sync_setacls(mboxname, acl, highestmodseq);
+        if (!r) r = mailbox_set_acl(mailbox, acl);
         if (r) goto done;
     }
 

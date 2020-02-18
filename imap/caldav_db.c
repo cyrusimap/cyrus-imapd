@@ -995,12 +995,12 @@ EXPORTED int caldav_update_shareacls(const char *userid)
     hash_enumerate(&rock.user_access, _update_acls, &rock);
 
     if (strcmp(rock.principalacl, rock.newprincipalacl)) {
-        r = mboxlist_sync_setacls(rock.principalname, rock.newprincipalacl);
+        r = mboxlist_updateacl_raw(rock.principalname, rock.newprincipalacl);
         if (r) goto done;
     }
 
     if (strcmp(rock.outboxacl, rock.newoutboxacl)) {
-        r = mboxlist_sync_setacls(rock.outboxname, rock.newoutboxacl);
+        r = mboxlist_updateacl_raw(rock.outboxname, rock.newoutboxacl);
         if (r) goto done;
     }
 
