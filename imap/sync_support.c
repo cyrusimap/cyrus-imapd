@@ -1993,6 +1993,9 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     if (mailbox->i.createdmodseq)
         dlist_setnum64(kl, "CREATEDMODSEQ", mailbox->i.createdmodseq);
 
+    if (mailbox->foldermodseq)
+        dlist_setnum64(kl, "FOLDERMODSEQ", mailbox->foldermodseq);
+
     /* always send mailbox annotations */
     r = read_annotations(mailbox, NULL, &annots, 0, 0);
     if (r) goto done;
