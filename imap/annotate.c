@@ -1759,6 +1759,21 @@ static void annotation_get_synccrcs(annotate_state_t *state,
     buf_free(&value);
 }
 
+static void annotation_get_foldermodseq(annotate_state_t *state,
+                                        struct annotate_entry_list *entry)
+{
+    struct buf value = BUF_INITIALIZER;
+
+    assert(state);
+    annotate_state_need_mbentry(state);
+    assert(state->mbentry);
+
+    buf_printf(&value, "%llu", state->mbentry->foldermodseq);
+    output_entryatt(state, entry->name, "", &value);
+
+    buf_free(&value);
+}
+
 static void annotation_get_usermodseq(annotate_state_t *state,
                                       struct annotate_entry_list *entry)
 {
@@ -2118,6 +2133,15 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         annotation_get_mailboxopt,
         /*set*/NULL,
         (void *)OPT_IMAP_HAS_ALARMS
+    },{
+        IMAP_ANNOT_NS "foldermodseq",
+        ATTRIB_TYPE_UINT,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_foldermodseq,
+        /*set*/NULL,
+        NULL
     },{
         IMAP_ANNOT_NS "lastupdate",
         ATTRIB_TYPE_STRING,
