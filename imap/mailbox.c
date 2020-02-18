@@ -2584,7 +2584,8 @@ HIDDEN int mailbox_commit_quota(struct mailbox *mailbox)
 
     assert(mailbox_index_islocked(mailbox, 1));
 
-    quota_update_useds(mailbox->quotaroot, quota_usage, mailbox->name);
+    quota_update_useds(mailbox->quotaroot, quota_usage,
+                       mailbox->name, mailbox->silentchanges);
     /* XXX - fail upon issue?  It's tempting */
 
     return 0;
@@ -5027,6 +5028,8 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->acl = xstrdup(acl);
     mailbox->mbtype = mbtype;
     mailbox->uniqueid = xstrdup(uniqueid);
+    // if we've been given a highestmodseq, we don't update it
+    if (highestmodseq) mailbox->silentchanges = 1;
 
     hasquota = quota_findroot(quotaroot, sizeof(quotaroot), name);
 

@@ -480,7 +480,8 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
 
 EXPORTED int quota_update_useds(const char *quotaroot,
                        const quota_t diff[QUOTA_NUMRESOURCES],
-                       const char *mboxname)
+                       const char *mboxname,
+                       int silent)
 {
     struct quota q;
     struct txn *tid = NULL;
@@ -515,7 +516,7 @@ EXPORTED int quota_update_useds(const char *quotaroot,
                 mboxevent_extract_quota(mboxevent, &q, res);
             }
         }
-        r = quota_write(&q, 0/*force*/, &tid);
+        r = quota_write(&q, silent, &tid);
     }
 
     if (r) {

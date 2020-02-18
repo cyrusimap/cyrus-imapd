@@ -1735,13 +1735,13 @@ done:
  * 7. delete from mupdate
  *
  */
-EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
-                                    const char *userid,
-                                    const struct auth_state *auth_state,
-                                    struct mboxevent *mboxevent,
-                                    int checkacl,
-                                    int local_only, int force,
-                                    int keep_intermediaries)
+EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
+                                         const char *userid,
+                                         const struct auth_state *auth_state,
+                                         struct mboxevent *mboxevent,
+                                         int checkacl,
+                                         int local_only, int force,
+                                         int keep_intermediaries, int silent)
 {
     mbentry_t *mbentry = NULL;
     int r = 0;
@@ -1815,6 +1815,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     /* Lock the mailbox if it isn't a remote mailbox */
     if (!isremote) {
         r = mailbox_open_iwl(name, &mailbox);
+        if (!r) mailbox->silentchanges = silent;
     }
     if (r && !force) goto done;
 
@@ -1892,6 +1893,19 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     mbname_free(&mbname);
 
     return r;
+}
+
+EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
+                                    const char *userid,
+                                    const struct auth_state *auth_state,
+                                    struct mboxevent *mboxevent,
+                                    int checkacl,
+                                    int local_only, int force,
+                                    int keep_intermediaries)
+{
+    return mboxlist_deletemailbox_full(name, isadmin, userid, auth_state,
+                                       mboxevent, checkacl, local_only, force,
+                                       keep_intermediaries, /*silent*/0);
 }
 
 EXPORTED int mboxlist_deletemailboxlock(const char *name, int isadmin,
@@ -2100,8 +2114,10 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry = mboxlist_entry_copy(mbentry);
         free(newmbentry->name);
         newmbentry->name = xstrdupnull(newname);
-        newmbentry->foldermodseq = mboxname_nextmodseq(newname, newmbentry->foldermodseq,
-                                                       newmbentry->mbtype, 1);
+        if (!silent) {
+            newmbentry->foldermodseq = mboxname_nextmodseq(newname, newmbentry->foldermodseq,
+                                                           newmbentry->mbtype, 1);
+        }
 
         /* skip ahead to the database update */
         goto dbupdate;
@@ -2121,6 +2137,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     /* 1. open mailbox */
     r = mailbox_open_iwl(oldname, &oldmailbox);
     if (r) return r;
+
+    oldmailbox->silentchanges = silent;
 
     /* 2. verify valid move */
     /* XXX - handle remote mailbox */
@@ -3716,6 +3734,11 @@ static int exists_cb(const mbentry_t *mbentry __attribute__((unused)), void *roc
     return CYRUSDB_DONE; /* one is enough */
 }
 
+struct changequota_rock {
+    const char *root;
+    int silent;
+};
+
 /*
  * Set all the resource quotas on, or create a quota root.
  */
@@ -3730,6 +3753,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
     struct mboxevent *mboxevents = NULL;
     struct mboxevent *quotachange_event = NULL;
     struct mboxevent *quotawithin_event = NULL;
+    int silent = quotamodseq ? 1 : 0;
 
     init_internal();
 
@@ -3780,7 +3804,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
         if (changed) {
             if (quotamodseq)
                 q.modseq = quotamodseq;
-            r = quota_write(&q, force, &tid);
+            r = quota_write(&q, silent, &tid);
 
             if (quotachange_event == NULL) {
                 quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE, &mboxevents);
@@ -3833,7 +3857,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
     memcpy(q.limits, newquotas, sizeof(q.limits));
     if (quotamodseq)
         q.modseq = quotamodseq;
-    r = quota_write(&q, force, &tid);
+    r = quota_write(&q, silent, &tid);
     if (r) goto done;
 
     /* prepare a QuotaChange event notification */
@@ -3848,7 +3872,8 @@ EXPORTED int mboxlist_setquotas(const char *root,
 
     /* recurse through mailboxes, setting the quota and finding
      * out the usage */
-    mboxlist_mboxtree(root, mboxlist_changequota, (void *)root, 0);
+    struct changequota_rock crock = { root, silent };
+    mboxlist_mboxtree(root, mboxlist_changequota, &crock, 0);
 
     quota_changelockrelease();
 
@@ -3981,11 +4006,11 @@ static int mboxlist_changequota(const mbentry_t *mbentry, void *rock)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
-    const char *root = (const char *) rock;
+    struct changequota_rock *crock = rock;
     int res;
     quota_t quota_usage[QUOTA_NUMRESOURCES];
 
-    assert(root);
+    assert(crock->root);
 
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) goto done;
@@ -3995,7 +4020,7 @@ static int mboxlist_changequota(const mbentry_t *mbentry, void *rock)
     if (mailbox->quotaroot) {
         quota_t quota_diff[QUOTA_NUMRESOURCES];
 
-        if (strlen(mailbox->quotaroot) >= strlen(root)) {
+        if (strlen(mailbox->quotaroot) >= strlen(crock->root)) {
             /* Part of a child quota root - skip */
             goto done;
         }
@@ -4005,22 +4030,22 @@ static int mboxlist_changequota(const mbentry_t *mbentry, void *rock)
             quota_diff[res] = -quota_usage[res];
         }
         r = quota_update_useds(mailbox->quotaroot, quota_diff,
-                               mailbox->name);
+                               mailbox->name, crock->silent);
     }
 
     /* update (or set) the quotaroot */
-    r = mailbox_set_quotaroot(mailbox, root);
+    r = mailbox_set_quotaroot(mailbox, crock->root);
     if (r) goto done;
 
     /* update the new quota root */
-    r = quota_update_useds(root, quota_usage, mailbox->name);
+    r = quota_update_useds(crock->root, quota_usage, mailbox->name, crock->silent);
 
  done:
     mailbox_close(&mailbox);
 
     if (r) {
         syslog(LOG_ERR, "LOSTQUOTA: unable to change quota root for %s to %s: %s",
-               mbentry->name, root, error_message(r));
+               mbentry->name, crock->root, error_message(r));
     }
 
     /* Note, we're a callback, and it's not a huge tragedy if we

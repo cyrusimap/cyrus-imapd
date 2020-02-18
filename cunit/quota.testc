@@ -432,13 +432,13 @@ static void test_update_useds(void)
     quota_diff[QUOTA_STORAGE] = 10*1024;
     quota_diff[QUOTA_MESSAGE] = 2;
     quota_diff[QUOTA_ANNOTSTORAGE] = 1*1024;
-    r = quota_update_useds(NULL, quota_diff, NULL);
+    r = quota_update_useds(NULL, quota_diff, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_update_useds("", quota_diff, NULL);
+    r = quota_update_useds("", quota_diff, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_update_useds(QUOTAROOT_NONEXISTENT, quota_diff, NULL);
+    r = quota_update_useds(QUOTAROOT_NONEXISTENT, quota_diff, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
     /* set limits */
@@ -454,7 +454,7 @@ static void test_update_useds(void)
 #define TESTCASE(d0, d1, d2, e0, e1, e2) { \
     static const quota_t diff[QUOTA_NUMRESOURCES] = { d0, d1, d2 }; \
     static const quota_t expused[QUOTA_NUMRESOURCES] = { e0, e1, e2 }; \
-    r = quota_update_useds(QUOTAROOT, diff, NULL); \
+    r = quota_update_useds(QUOTAROOT, diff, NULL, 0); \
     CU_ASSERT_EQUAL(r, 0); \
     memset(&q2, 0, sizeof(q2)); \
     q2.root = QUOTAROOT; \
