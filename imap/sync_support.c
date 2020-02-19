@@ -5231,6 +5231,7 @@ static int mailbox_full_update(struct sync_folder *local,
     struct dlist *kaction = NULL;
     struct dlist *kexpunge = NULL;
     modseq_t highestmodseq;
+    modseq_t foldermodseq = 0;
     uint32_t uidvalidity;
     uint32_t last_uid;
     struct sync_annot_list *mannots = NULL;
@@ -5290,6 +5291,7 @@ static int mailbox_full_update(struct sync_folder *local,
 
     /* optional */
     dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
+    dlist_getnum64(kl, "FOLDERMODSEQ", &foldermodseq);
 
     /* we'll be updating it! */
     if (local->mailbox) {
@@ -5345,6 +5347,13 @@ static int mailbox_full_update(struct sync_folder *local,
      * inside update_xconvmodseq */
     if (mailbox_has_conversations(mailbox)) {
         r = mailbox_update_xconvmodseq(mailbox, xconvmodseq, /* force */0);
+        if (r) goto done;
+    }
+
+    if (foldermodseq) {
+        // by writing the same ACL with the updated foldermodseq, this will bounce it
+        // if needed
+        r = mboxlist_sync_setacls(mailbox->name, mailbox->acl, foldermodseq);
         if (r) goto done;
     }
 
@@ -5442,6 +5451,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->pop3_last_login != mailbox->i.pop3_last_login) return 0;
     if (remote->pop3_show_after != mailbox->i.pop3_show_after) return 0;
     if (remote->options != options) return 0;
+    if (remote->foldermodseq && remote->foldermodseq != mailbox->foldermodseq) return 0;
     if (strcmp(remote->acl, mailbox->acl)) return 0;
 
     if (config_getswitch(IMAPOPT_REVERSEACLS)) {
@@ -5562,6 +5572,12 @@ static int update_mailbox_once(struct sync_folder *local,
     /* bump the raclmodseq if it's higher on the replica */
     if (remote && remote->raclmodseq) {
         mboxname_setraclmodseq(mailbox->name, remote->raclmodseq);
+    }
+
+    /* bump the foldermodseq if it's higher on the replica */
+    if (remote && remote->foldermodseq > mailbox->foldermodseq) {
+        mboxname_sync_setacls(mailbox->name, mailbox->acl, remote->foldermodseq);
+        mailbox->foldermodseq = remote->foldermodseq;
     }
 
     /* nothing changed - nothing to send */
