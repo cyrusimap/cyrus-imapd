@@ -60,11 +60,6 @@ EXPORTED void ical_support_init(void)
 {
     /* Initialize timezones path */
     const char *tzpath = config_getstring(IMAPOPT_ZONEINFO_DIR);
-#ifdef CYRUS_TIMEZONES_ZONEINFO_DIR
-    if (!tzpath) {
-        tzpath = CYRUS_TIMEZONES_ZONEINFO_DIR;
-    }
-#endif
 
     if (tzpath) {
         icaltimezone_set_zone_directory((char *) tzpath);
