@@ -1875,6 +1875,7 @@ struct getcalendarevents_rock {
     ptrarray_t *want_eventids;
     int check_acl;
     hash_table utctimes_fallbacktz_by_mboxuniqueid;
+    ptrarray_t malloced_fallbacktzs;
 };
 
 struct recurid_instanceof_rock {
@@ -2176,21 +2177,46 @@ static const char *find_participant_by_addr(json_t *participants, const char *ad
 }
 
 static icaltimezone *calendarevent_get_utctimes_fallbacktz(const mbentry_t *mbentry,
-                                                           const char *userid)
+                                                           const char *userid,
+                                                           int *is_malloced)
 {
-    struct buf attrib = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+    icaltimezone *tz = NULL;
+    *is_malloced = 0;
+
     static const char *tzid_annot =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
-    icaltimezone *tz = NULL;
-    annotatemore_lookupmask_mbe(mbentry, tzid_annot, userid, &attrib);
-    if (buf_len(&attrib)) {
-        tz = icaltimezone_lookup_tzid(buf_cstring(&attrib));
-        buf_reset(&attrib);
+    static const char *tz_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+
+    annotatemore_lookupmask_mbe(mbentry, tzid_annot, userid, &buf);
+
+    if (buf_len(&buf)) {
+        tz = icaltimezone_lookup_tzid(buf_cstring(&buf));
+        buf_reset(&buf);
     }
-    buf_free(&attrib);
+    if (!tz) {
+        annotatemore_lookupmask_mbe(mbentry, tz_annot, userid, &buf);
+        if (buf_len(&buf)) {
+            icalcomponent *ical = icalparser_parse_string(buf_cstring(&buf));
+            if (ical && icalcomponent_isa(ical) == ICAL_VCALENDAR_COMPONENT) {
+                icalcomponent *comp =
+                    icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+                if (comp) {
+                    tz = icaltimezone_new();
+                    *is_malloced = 1;
+                    icaltimezone_set_component(tz, icalcomponent_clone(comp));
+                }
+            }
+            if (ical) icalcomponent_free(ical);
+            buf_reset(&buf);
+        }
+    }
     /* XXX - read from DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone" ? */
     /* XXX - how to convert VTIMEZONE to icaltimezone* ? */
     if (!tz) tz = icaltimezone_get_utc_timezone();
+
+    buf_free(&buf);
     return tz;
 }
 
@@ -2536,10 +2562,14 @@ gotevent:
         utctimes_fallbacktz = hash_lookup(rock->mbentry->uniqueid,
                 &rock->utctimes_fallbacktz_by_mboxuniqueid);
         if (!utctimes_fallbacktz) {
+            int is_malloced = 0;
             utctimes_fallbacktz =
-                calendarevent_get_utctimes_fallbacktz(rock->mbentry, req->userid);
+                calendarevent_get_utctimes_fallbacktz(rock->mbentry,
+                        req->userid, &is_malloced);
             hash_insert(rock->mbentry->uniqueid, utctimes_fallbacktz,
-                         &rock->utctimes_fallbacktz_by_mboxuniqueid);
+                    &rock->utctimes_fallbacktz_by_mboxuniqueid);
+            if (is_malloced)
+                ptrarray_append(&rock->malloced_fallbacktzs, utctimes_fallbacktz);
         }
         getcalendarevents_get_utctimes(jsevent, utctimes_fallbacktz);
     }
@@ -2850,7 +2880,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            HASHU64_TABLE_INITIALIZER, /* cache */
                                            NULL, /* want_eventids */
                                            checkacl,
-                                           HASH_TABLE_INITIALIZER /* utctimes_fallbacktz */
+                                           HASH_TABLE_INITIALIZER, /* utctimes_fallbacktz */
+                                           PTRARRAY_INITIALIZER    /* malloced_fallbacktzs */
     };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
@@ -2953,6 +2984,13 @@ done:
     if (rock.mbentry) mboxlist_entry_free(&rock.mbentry);
     free_hashu64_table(&rock.jmapcache, free);
     free_hash_table(&rock.utctimes_fallbacktz_by_mboxuniqueid, NULL); /* values owned by libical */
+    if (ptrarray_size(&rock.malloced_fallbacktzs)) {
+        icaltimezone *tz;
+        while ((tz = ptrarray_pop(&rock.malloced_fallbacktzs))) {
+            icaltimezone_free(tz, 1);
+        }
+        ptrarray_fini(&rock.malloced_fallbacktzs);
+    }
     return r;
 }
 
@@ -3081,6 +3119,7 @@ static const char *validate_participant_id(json_t *event,
 }
 
 static void setcalendarevents_set_utctimes(json_t *event,
+                                           icaltimezone *fallbacktz,
                                            json_t *invalid)
 {
     struct jmapical_datetime startdt = JMAPICAL_DATETIME_INITIALIZER;
@@ -3124,7 +3163,7 @@ static void setcalendarevents_set_utctimes(json_t *event,
         if (!tz) goto done; /* bogus timeZone */
     }
     else if (!jtimeZone || json_is_null(jtimeZone)) {
-        tz = icaltimezone_get_utc_timezone();
+        tz = fallbacktz ? fallbacktz : icaltimezone_get_utc_timezone();
     }
 
     /* Convert UTC start to local start */
@@ -3162,7 +3201,7 @@ static void setcalendarevents_set_utctimes(json_t *event,
     }
 
     /* Set timeZone */
-    if (!jtimeZone || json_is_null(jtimeZone)) {
+    if (!fallbacktz && (!jtimeZone || json_is_null(jtimeZone))) {
         json_object_set_new(event, "timeZone", json_string("Etc/UTC"));
     }
 
@@ -3314,8 +3353,9 @@ static int setcalendarevents_create(jmap_req_t *req,
     /* Check utcStart and utcEnd */
     if (JNOTNULL(json_object_get(event, "utcStart")) ||
         JNOTNULL(json_object_get(event, "utcEnd"))) {
-
-        setcalendarevents_set_utctimes(event, parser.invalid);
+        /* Ignore calendar timezone - if event does not define its
+         * timezone then fall back to Etc/UTC for utcStart/utcEnd */
+        setcalendarevents_set_utctimes(event, NULL, parser.invalid);
     }
 
     /* Convert JSEvent to iCalendar */
@@ -3608,7 +3648,7 @@ static int setcalendarevents_apply_patch(jmap_req_t *req,
             if (json_object_get(event_patch, "utcEnd") && !json_object_get(event_patch, "duration")) {
                 json_object_del(new_instance, "duration");
             }
-            setcalendarevents_set_utctimes(new_instance, invalid);
+            setcalendarevents_set_utctimes(new_instance, utctimes_fallbacktz, invalid);
         }
 
         json_object_del(new_instance, "recurrenceRule");
@@ -3826,7 +3866,7 @@ static int setcalendarevents_apply_patch(jmap_req_t *req,
                 if (json_object_get(event_patch, "utcEnd") && !json_object_get(event_patch, "duration")) {
                     json_object_del(new_event, "duration");
                 }
-                setcalendarevents_set_utctimes(new_event, invalid);
+                setcalendarevents_set_utctimes(new_event, utctimes_fallbacktz, invalid);
             }
         }
     }
@@ -3981,13 +4021,17 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
 
     /* Read UTC times fallback timezone from source mailbox */
+    int tz_is_malloced = 0;
     icaltimezone *utctimes_fallbacktz =
-        calendarevent_get_utctimes_fallbacktz(mbentry, req->userid);
+        calendarevent_get_utctimes_fallbacktz(mbentry, req->userid, &tz_is_malloced);
 
     /* Apply patch */
     r = setcalendarevents_apply_patch(req, event_patch, oldical, eid->recurid,
                                       invalid, &schedule_addresses, &ical,
                                       utctimes_fallbacktz, update, err);
+    if (tz_is_malloced)
+        icaltimezone_free(utctimes_fallbacktz, 1);
+
     if (json_array_size(invalid)) {
         r = 0;
         goto done;
