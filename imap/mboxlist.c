@@ -2352,7 +2352,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         r = mailbox_commit(newmailbox);
 
     if (!keep_intermediaries) {
-        if (!r) r = mboxlist_update_intermediaries(oldname, oldmailbox->mbtype, newmbentry->foldermodseq);
+        if (!r) r = mboxlist_update_intermediaries(oldname, newmbentry->mbtype, newmbentry->foldermodseq);
         if (!r) r = mboxlist_update_intermediaries(newname, newmbentry->mbtype, newmbentry->foldermodseq);
     }
 
