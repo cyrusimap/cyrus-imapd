@@ -5700,12 +5700,14 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     if (!uidvalidity)
         uidvalidity = mboxname_nextuidvalidity(newname, oldmailbox->i.uidvalidity);
 
+    modseq_t highestmodseq = silent ? oldmailbox->i.highestmodseq : 0;
+
     /* Create new mailbox */
     r = mailbox_create(newname, oldmailbox->mbtype, newpartition,
                        oldmailbox->acl, (userid ? NULL : oldmailbox->uniqueid),
                        oldmailbox->i.options, uidvalidity,
                        oldmailbox->i.createdmodseq,
-                       oldmailbox->i.highestmodseq, &newmailbox);
+                       highestmodseq, &newmailbox);
 
     if (r) return r;
 

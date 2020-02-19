@@ -1752,14 +1752,6 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                keep_intermediaries,
                                0 /* move_subscription */, 0 /* silent */);
 
-    if (!r && !keep_intermediaries) {
-        /* in theory this should take the modseq from the renamed mailbox, but we don't
-         * have a quick way to lift that, so just pass 0 to get another modseq for the
-         * each intermediate.  This codepath is only called on replication masters, so
-         * that's OK */
-        r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype, 0);
-    }
-
 done:
     strarray_fini(&existing);
     mboxlist_entry_free(&mbentry);
@@ -2236,7 +2228,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
-        newmbentry->foldermodseq = oldmailbox->i.highestmodseq; /* bump regardless, it's rare */
+        newmbentry->foldermodseq = silent ? oldmailbox->foldermodseq
+                                          : mboxname_nextmodseq(newname, oldmailbox->foldermodseq,
+                                                                oldmailbox->mbtype, 1);
 
         r = mboxlist_update_entry(newname, newmbentry, &tid);
         if (r) goto done;
@@ -2321,8 +2315,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             oldmbentry->uidvalidity = mbentry->uidvalidity;
             oldmbentry->uniqueid = xstrdupnull(mbentry->uniqueid);
             oldmbentry->createdmodseq = mbentry->createdmodseq;
-            oldmbentry->foldermodseq = oldmailbox ?
-                mailbox_modseq_dirty(oldmailbox) : mbentry->foldermodseq + 1;
+            oldmbentry->foldermodseq = newmbentry->foldermodseq;
 
             r = mboxlist_update_entry(oldname, oldmbentry, &tid);
 
@@ -2405,12 +2398,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         r = mailbox_commit(newmailbox);
 
     if (!keep_intermediaries) {
-        if (!r) {
-            r = mboxlist_update_intermediaries(newmbentry->name, newmbentry->mbtype, newmbentry->foldermodseq);
-        }
-        if (!r) {
-            r = mboxlist_update_intermediaries(oldname, newmbentry->mbtype, newmbentry->foldermodseq);
-        }
+        if (!r) r = mboxlist_update_intermediaries(oldname, oldmailbox->mbtype, newmbentry->foldermodseq);
+        if (!r) r = mboxlist_update_intermediaries(newname, newmbentry->mbtype, newmbentry->foldermodseq);
     }
 
     if (r) {
