@@ -382,6 +382,10 @@ sub test_shared
             '0 12345678';
         $specific_entries{'/shared/vendor/cmu/cyrus-imapd/hasalarms'} = 'false';
     }
+    # foldermodsseq was added in 3.2.0
+    if ($maj > 3 or ($maj == 3 and ($min > 1))) {
+        $specific_entries{'/shared/vendor/cmu/cyrus-imapd/foldermodseq'} = 4;
+    }
     $self->assert_deep_equals(\%specific_entries, $r);
 
     # individual item fetch:
