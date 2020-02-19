@@ -109,7 +109,7 @@ sub tear_down
 }
 
 sub test_sieve_get
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -126,11 +126,11 @@ EOF
 
     xlog "get all scripts";
     my $res = $jmap->CallMethods([
-        ['Sieve/get', {
+        ['SieveScript/get', {
             properties => ['name', 'isActive'],
          }, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Sieve/get', $res->[0][0]);
+    $self->assert_str_equals('SieveScript/get', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
     $self->assert_str_equals('test1', $res->[0][1]{list}[0]{name});
@@ -140,11 +140,11 @@ EOF
 
     xlog "get script by id";
     $res = $jmap->CallMethods([
-        ['Sieve/get', {
+        ['SieveScript/get', {
             ids => [$id],
          }, "R2"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Sieve/get', $res->[0][0]);
+    $self->assert_str_equals('SieveScript/get', $res->[0][0]);
     $self->assert_str_equals('R2', $res->[0][2]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
     $self->assert_str_equals('test1', $res->[0][1]{list}[0]{name});
@@ -153,7 +153,7 @@ EOF
 }
 
 sub test_sieve_set
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -165,7 +165,7 @@ EOF
 
     xlog "create script";
     my $res = $jmap->CallMethods([
-        ['Sieve/set', {
+        ['SieveScript/set', {
             create => {
                 "1" => {
                     name => "foo",
@@ -173,7 +173,7 @@ EOF
                 }
             }
          }, "R1"],
-        ['Sieve/get', {
+        ['SieveScript/get', {
             'ids' => [ '#1' ]
          }, "R2"]
     ]);
@@ -188,7 +188,7 @@ EOF
 
     xlog "rename script";
     $res = $jmap->CallMethods([
-        ['Sieve/set', {
+        ['SieveScript/set', {
             update => {
                 $id => {
                     name => "bar"
@@ -206,7 +206,7 @@ EOF
 
     xlog "rewrite and activate script";
     $res = $jmap->CallMethods([
-        ['Sieve/set', {
+        ['SieveScript/set', {
             update => {
                 $id => {
                     content => "$script",
@@ -214,7 +214,7 @@ EOF
                 }
             }
          }, "R4"],
-        ['Sieve/get', {
+        ['SieveScript/get', {
          }, "R5"]
     ]);
     $self->assert_not_null($res->[0][1]{updated});
@@ -226,7 +226,7 @@ EOF
 
     xlog "deactivate script and delete script";
     $res = $jmap->CallMethods([
-        ['Sieve/set', {
+        ['SieveScript/set', {
             update => {
                 $id => {
                     isActive => JSON::false
@@ -234,7 +234,7 @@ EOF
             },
             destroy => [ $id ]
          }, "R6"],
-        ['Sieve/get', {
+        ['SieveScript/get', {
          }, "R7"]
     ]);
     $self->assert_not_null($res->[0][1]{updated});
@@ -245,7 +245,7 @@ EOF
 }
 
 sub test_sieve_set_bad_script
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -253,7 +253,7 @@ sub test_sieve_set_bad_script
 
     xlog "create bad script";
     my $res = $jmap->CallMethods([
-        ['Sieve/set', {
+        ['SieveScript/set', {
             create => {
                 "1" => {
                     name => "foo",
@@ -268,7 +268,7 @@ sub test_sieve_set_bad_script
 
     xlog "update bad script";
     $res = $jmap->CallMethods([
-        ['Sieve/set', {
+        ['SieveScript/set', {
             create => {
                 "1" => {
                     name => "foo",
@@ -295,7 +295,7 @@ sub test_sieve_set_bad_script
 }
 
 sub test_sieve_validate
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -303,17 +303,17 @@ sub test_sieve_validate
 
     xlog "validating scripts";
     my $res = $jmap->CallMethods([
-        ['Sieve/validate', {
+        ['SieveScript/validate', {
             content => JSON::null
          }, "R1"],
-        ['Sieve/validate', {
+        ['SieveScript/validate', {
             content => "keepme;\r\n",
             content => JSON::null
          }, "R2"],
-        ['Sieve/validate', {
+        ['SieveScript/validate', {
             content => "keepme;\r\n"
          }, "R3"],
-        ['Sieve/validate', {
+        ['SieveScript/validate', {
             content => "keep;\r\n"
          }, "R4"],
     ]);
@@ -325,11 +325,11 @@ sub test_sieve_validate
     $self->assert_str_equals("error", $res->[1][0]);
     $self->assert_str_equals("invalidArguments", $res->[1][1]{type});
 
-    $self->assert_str_equals("Sieve/validate", $res->[2][0]);
+    $self->assert_str_equals("SieveScript/validate", $res->[2][0]);
     $self->assert_equals(JSON::false, $res->[2][1]{isValid});
     $self->assert_not_null($res->[2][1]{errorDescription});
 
-    $self->assert_str_equals("Sieve/validate", $res->[3][0]);
+    $self->assert_str_equals("SieveScript/validate", $res->[3][0]);
     $self->assert_equals(JSON::true, $res->[3][1]{isValid});
     $self->assert_null($res->[3][1]{errorDescription});
 }
