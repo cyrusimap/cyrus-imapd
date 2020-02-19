@@ -74,19 +74,19 @@ jmap_method_t jmap_sieve_methods_standard[] = {
 
 jmap_method_t jmap_sieve_methods_nonstandard[] = {
     {
-        "Sieve/get",
+        "SieveScript/get",
         JMAP_SIEVE_EXTENSION,
         &jmap_sieve_get,
         JMAP_SHARED_CSTATE
     },
     {
-        "Sieve/set",
+        "SieveScript/set",
         JMAP_SIEVE_EXTENSION,
         &jmap_sieve_set,
         JMAP_SHARED_CSTATE
     },
     {
-        "Sieve/validate",
+        "SieveScript/validate",
         JMAP_SIEVE_EXTENSION,
         &jmap_sieve_validate,
         JMAP_SHARED_CSTATE
