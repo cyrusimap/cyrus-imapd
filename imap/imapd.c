@@ -11605,6 +11605,7 @@ static int sync_mailbox(struct mailbox *mailbox,
                          annots,
                          xconvmodseq,
                          raclmodseq,
+                         mailbox->foldermodseq,
                          /* ispartial */0);
     annots = NULL; /* list took ownership */
 

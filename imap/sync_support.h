@@ -147,6 +147,7 @@ struct sync_folder {
     struct sync_annot_list *annots;
     modseq_t xconvmodseq;
     modseq_t raclmodseq;
+    modseq_t foldermodseq;
     int ispartial;
     struct quota quota;
     int   mark;
@@ -176,6 +177,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          struct sync_annot_list *annot,
                                          modseq_t xconvmodseq,
                                          modseq_t raclmodseq,
+                                         modseq_t foldermodseq,
                                          int ispartial);
 
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
