@@ -548,6 +548,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          struct sync_annot_list *annots,
                                          modseq_t xconvmodseq,
                                          modseq_t raclmodseq,
+                                         modseq_t foldermodseq,
                                          int ispartial)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
@@ -579,6 +580,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->annots = annots; /* NOTE: not a copy! */
     result->xconvmodseq = xconvmodseq;
     result->raclmodseq = raclmodseq;
+    result->foldermodseq = foldermodseq;
     result->ispartial = ispartial;
 
     result->mark     = 0;
@@ -4154,7 +4156,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                              mailbox->i.recentuid, mailbox->i.recenttime,
                              mailbox->i.pop3_last_login,
                              mailbox->i.pop3_show_after, NULL, xconvmodseq,
-                             raclmodseq, ispartial);
+                             raclmodseq, mailbox->foldermodseq, ispartial);
 
 
         part_list = sync_reserve_partlist(reserve_list, topart ? topart : mailbox->part);
@@ -4377,6 +4379,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
             struct sync_annot_list *annots = NULL;
             modseq_t xconvmodseq = 0;
             modseq_t raclmodseq = 0;
+            modseq_t foldermodseq = 0;
 
             if (!folder_list) goto parse_err;
             if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) goto parse_err;
@@ -4397,6 +4400,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
             dlist_getnum32(kl, "SYNC_CRC_ANNOT", &synccrcs.annot);
             dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
             dlist_getnum64(kl, "RACLMODSEQ", &raclmodseq);
+            dlist_getnum64(kl, "FOLDERMODSEQ", &foldermodseq);
 
             if (dlist_getlist(kl, "ANNOTATIONS", &al))
                 decode_annotations(al, &annots, NULL, NULL);
@@ -4411,7 +4415,8 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
                                  recentuid, recenttime,
                                  pop3_last_login,
                                  pop3_show_after, annots,
-                                 xconvmodseq, raclmodseq, /*ispartial*/0);
+                                 xconvmodseq, raclmodseq,
+                                 foldermodseq, /*ispartial*/0);
         }
         else
             goto parse_err;
@@ -5576,7 +5581,7 @@ static int update_mailbox_once(struct sync_folder *local,
 
     /* bump the foldermodseq if it's higher on the replica */
     if (remote && remote->foldermodseq > mailbox->foldermodseq) {
-        mboxname_sync_setacls(mailbox->name, mailbox->acl, remote->foldermodseq);
+        mboxlist_sync_setacls(mailbox->name, mailbox->acl, remote->foldermodseq);
         mailbox->foldermodseq = remote->foldermodseq;
     }
 
@@ -5889,6 +5894,7 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
                           mboxlist_mbtype_to_string(mbentry->mbtype));
             dlist_setnum64(kl, "HIGHESTMODSEQ", mbentry->foldermodseq);
             dlist_setnum64(kl, "CREATEDMODSEQ", mbentry->createdmodseq);
+            dlist_setnum64(kl, "FOLDERMODSEQ", mbentry->foldermodseq);
 
             sync_send_apply(kl, sync_be->out);
             r = sync_parse_response("MAILBOX", sync_be->in, NULL);
