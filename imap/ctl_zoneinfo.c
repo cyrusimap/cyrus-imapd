@@ -88,7 +88,7 @@ int main(int argc, char **argv)
 {
     int opt, r = 0;
     char *alt_config = NULL, *pub = NULL, *ver = NULL, *winfile = NULL;
-    char prefix[2048];
+    const char *zoneinfo_dir = NULL;
     enum { REBUILD, WINZONES, NONE } op = NONE;
 
     while ((opt = getopt(argc, argv, "C:r:vw:")) != EOF) {
@@ -130,7 +130,12 @@ int main(int argc, char **argv)
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
-    snprintf(prefix, sizeof(prefix), "%s%s", config_dir, FNAME_ZONEINFODIR);
+    zoneinfo_dir = config_getstring(IMAPOPT_ZONEINFO_DIR);
+    if (!zoneinfo_dir) {
+        fprintf(stderr, "zoneinfo_dir must be set for tzdist service\n");
+        cyrus_done();
+        return EX_CONFIG;
+    }
 
     switch (op) {
     case REBUILD: {
@@ -150,7 +155,7 @@ int main(int argc, char **argv)
         hash_insert(INFO_TZID, info, &tzentries);
 
         /* Add LEAP record (last updated and hash) */
-        snprintf(buf, sizeof(buf), "%s%s", prefix, FNAME_LEAPSECFILE);
+        snprintf(buf, sizeof(buf), "%s%s", zoneinfo_dir, FNAME_LEAPSECFILE);
         if (verbose) printf("Processing leap seconds file %s\n", buf);
         if (!(fp = fopen(buf, "r"))) {
             fprintf(stderr, "Could not open leap seconds file %s\n", buf);
@@ -187,7 +192,7 @@ int main(int argc, char **argv)
         }
 
         /* Add ZONE/LINK records */
-        do_zonedir(prefix, &tzentries, info);
+        do_zonedir(zoneinfo_dir, &tzentries, info);
 
         zoneinfo_open(NULL);
 
@@ -243,8 +248,8 @@ int main(int argc, char **argv)
             goto done;
         }
 
-        if (chdir(prefix)) {
-            fprintf(stderr, "chdir(%s) failed\n", prefix);
+        if (chdir(zoneinfo_dir)) {
+            fprintf(stderr, "chdir(%s) failed\n", zoneinfo_dir);
             goto done;
         }
 
@@ -371,7 +376,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
 
             /* Isolate alias in path */
             path[plen-4] = '\0';  /* Trim ".ics" */
-            alias = path + strlen(config_dir) + strlen("zoneinfo") + 2;
+            alias = path + strlen(dir) + 1;
 
             if (verbose) printf("\tLINK: %s -> %s\n", alias, tzid);
 
