@@ -60,6 +60,7 @@
 #include "sieve/sieve_interface.h"
 #include "sieve/bc_parse.h"
 #include "sync_log.h"
+#include "tok.h"
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -67,6 +68,9 @@
 static int jmap_sieve_get(jmap_req_t *req);
 static int jmap_sieve_set(jmap_req_t *req);
 static int jmap_sieve_validate(jmap_req_t *req);
+
+static int maxscripts = 0;
+static json_int_t maxscriptsize = 0;
 
 jmap_method_t jmap_sieve_methods_standard[] = {
     { NULL, NULL, NULL, 0}
@@ -110,6 +114,9 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
             hash_insert(mp->name, mp, &settings->methods);
         }
     }
+
+    maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
+    maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE) * 1024;
 #endif /* USE_SIEVE */
 }
 
@@ -119,60 +126,39 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
     static json_t *sieve_capabilities = NULL;
 
     if (!sieve_capabilities) {
-        json_t *extensions = json_object();
         sieve_interp_t *interp = sieve_build_nonexec_interp();
         const strarray_t *ext = NULL;
 
+        sieve_capabilities = json_pack("{s:n s:i s:I}",
+                                       "maxRedirects",
+                                       "maxNumberScripts", maxscripts,
+                                       "maxSizeScript", maxscriptsize);
+
         if (interp && (ext = sieve_listextensions(interp))) {
-            hash_table capa = HASH_TABLE_INITIALIZER;
-            const char *key;
-            strarray_t *sa;
             int i;
 
-            construct_hash_table(&capa, 5, 0);
-
             for (i = 0; i < strarray_size(ext); i += 2) {
-                key = strarray_nth(ext, i);
-                sa = strarray_split(strarray_nth(ext, i+1), " ", 0);
+                const char *key = strarray_nth(ext, i), *val;
 
-                hash_insert(key, sa, &capa);
+                if (!strcmp(key, "SIEVE")) key = "sieveExtensions";
+                else if (!strcmp(key, "NOTIFY")) key = "notificationMethods";
+                else if (!strcmp(key, "EXTLISTS")) key = "externalLists";
+                else continue;
+
+                tok_t tok = TOK_INITIALIZER(strarray_nth(ext, i+1),
+                                            " ", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+                json_t *vals = json_array();
+                const char *val;
+
+                while ((val = tok_next(&tok))) {
+                    json_array_append_new(vals, json_string(val));
+                }
+                tok_fini(&tok);
+
+                json_object_set_new(sieve_capabilities, key, vals);
             }
-
-            ext = hash_lookup("SIEVE", &capa);
-            for (i = 0; ext && i < strarray_size(ext); i++) {
-                key = strarray_nth(ext, i);
-                json_t *params = NULL;
-
-                if (!strcmp(key, "enotify")) {
-                    params = json_array();
-                    sa = hash_lookup("NOTIFY", &capa);
-                }
-                else if (!strcmp(key, "extlists")) {
-                    params = json_array();
-                    sa = hash_lookup("EXTLISTS", &capa);
-                }
-                else {
-                    params = json_null();
-                    sa = NULL;
-                }
-
-                if (json_is_array(params) && sa) {
-                    int j;
-
-                    for (j = 0; j < strarray_size(sa); j++) {
-                        json_array_append_new(params,
-                                              json_string(strarray_nth(sa, j)));
-                    }
-                }
-
-                json_object_set_new(extensions, key, params);
-            }
-
-            free_hash_table(&capa, (void (*)(void *)) &strarray_free);
         }
         if (interp) sieve_interp_free(&interp);
-
-        sieve_capabilities = json_pack("{s:o}", "sieveExtensions", extensions);
     }
 
     json_object_set(account_capabilities, JMAP_SIEVE_EXTENSION, sieve_capabilities);
