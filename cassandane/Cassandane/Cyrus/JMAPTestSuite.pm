@@ -50,7 +50,6 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
-use File::Temp qw(tempdir);
 
 my $basedir;
 my $binary;
@@ -103,9 +102,6 @@ sub new
     $config->set(search_batchsize => 8192);
     $config->set(defaultpartition => 'default');
     $config->set(defaultsearchtier => 't1');
-
-    $config->set('partition-default' => tempdir(CLEANUP => 1));
-    $config->set('t1searchpartition-default' => tempdir(CLEANUP => 1));
 
     $config->set('sync_log' => 'on');
     $config->set('sync_log_channels' => 'squatter');
