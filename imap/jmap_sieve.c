@@ -138,7 +138,7 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
             int i;
 
             for (i = 0; i < strarray_size(ext); i += 2) {
-                const char *key = strarray_nth(ext, i), *val;
+                const char *key = strarray_nth(ext, i);
 
                 if (!strcmp(key, "SIEVE")) key = "sieveExtensions";
                 else if (!strcmp(key, "NOTIFY")) key = "notificationMethods";
