@@ -2650,6 +2650,74 @@ HIDDEN json_t *jmap_querychanges_reply(struct jmap_querychanges *query)
     return res;
 }
 
+
+/* Foo/parse */
+
+HIDDEN void jmap_parse_parse(jmap_req_t *req,
+                             struct jmap_parser *parser,
+                             jmap_args_parse_cb args_parse,
+                             void *args_rock,
+                             struct jmap_parse *parse,
+                             json_t **err)
+{
+    json_t *jargs = req->args;
+    const char *key;
+    json_t *arg;
+
+    memset(parse, 0, sizeof(struct jmap_parse));
+
+    parse->parsed = json_object();
+    parse->not_parsable = json_array();
+    parse->not_found = json_array();
+
+    json_object_foreach(jargs, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            /* already handled in jmap_api() */
+        }
+
+        else if (!strcmp(key, "blobIds")) {
+            jmap_parse_strings(arg, parser, "blobIds");
+            parse->blob_ids = arg;
+        }
+
+        else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
+            jmap_parser_invalid(parser, key);
+        }
+    }
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser->invalid);
+    }
+}
+
+HIDDEN void jmap_parse_fini(struct jmap_parse *parse)
+{
+    json_decref(parse->parsed);
+    json_decref(parse->not_parsable);
+    json_decref(parse->not_found);
+}
+
+HIDDEN json_t *jmap_parse_reply(struct jmap_parse *parse)
+{
+    json_t *res = json_object();
+
+    if (json_object_size(parse->parsed))
+        json_object_set(res, "parsed", parse->parsed);
+    else
+        json_object_set_new(res, "parsed", json_null());
+    if (json_array_size(parse->not_parsable))
+        json_object_set(res, "notParsable", parse->not_parsable);
+    else
+        json_object_set_new(res, "notParsable", json_null());
+    if (json_array_size(parse->not_found))
+        json_object_set(res, "notFound", parse->not_found);
+    else
+        json_object_set_new(res, "notFound", json_null());
+    return res;
+}
+
+
 static json_t *_json_has(int rights, int need)
 {
   return (((rights & need) == need) ? json_true() : json_false());

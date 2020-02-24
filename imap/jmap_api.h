@@ -512,6 +512,29 @@ extern void jmap_querychanges_fini(struct jmap_querychanges *query);
 
 extern json_t *jmap_querychanges_reply(struct jmap_querychanges *query);
 
+
+/* Foo/parse */
+
+struct jmap_parse {
+    /* Request arguments */
+    const json_t *blob_ids;
+
+    /* Response fields */
+    json_t *parsed;
+    json_t *not_parsable;
+    json_t *not_found;
+};
+
+extern void jmap_parse_parse(jmap_req_t *req, struct jmap_parser *parser,
+                                 jmap_args_parse_cb args_parse, void *args_rock,
+                                 struct jmap_parse *parse,
+                                 json_t **err);
+
+extern void jmap_parse_fini(struct jmap_parse *parse);
+
+extern json_t *jmap_parse_reply(struct jmap_parse *parse);
+
+
 extern json_t *jmap_get_sharewith(const mbentry_t *mbentry);
 extern int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite);

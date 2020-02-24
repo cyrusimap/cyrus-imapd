@@ -6194,56 +6194,60 @@ done:
     return 0;
 }
 
+struct email_parseargs {
+    /* Email/parse arguments */
+    hash_table *props;
+    struct email_getargs *getargs;
+};
+
+static int _email_parseargs_parse(jmap_req_t *req,
+                                  struct jmap_parser *parser,
+                                  const char *key,
+                                  json_t *arg,
+                                  void *rock)
+{
+    struct email_parseargs *args = (struct email_parseargs *) rock;
+
+    if (!strcmp(key, "properties")) {
+        if (json_is_array(arg)) {
+            size_t i;
+            json_t *val;
+            hash_table *props = xzmalloc(sizeof(hash_table));
+            construct_hash_table(props, json_array_size(arg) + 1, 0);
+            json_array_foreach(arg, i, val) {
+                const char *s = json_string_value(val);
+                if (!s) {
+                    jmap_parser_push_index(parser, "properties", i, s);
+                    jmap_parser_invalid(parser, NULL);
+                    jmap_parser_pop(parser);
+                    continue;
+                }
+                hash_insert(s, (void*)1, props);
+            }
+            args->getargs->props = args->props = props;
+        }
+        else if (JNOTNULL(arg)) {
+            return 0;
+        }
+
+        return 1;
+    }
+
+    return _email_getargs_parse(req, parser, key, arg, args->getargs);
+}
+
 static int jmap_email_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_parse parse;
     struct email_getargs getargs = _EMAIL_GET_ARGS_INITIALIZER;
-    const char *key;
-    json_t *arg, *jblobIds = NULL;
-    hash_table *props = NULL;
+    struct email_parseargs parseargs = { NULL, &getargs };
+    json_t *err = NULL;
 
     /* Parse request */
-    json_object_foreach(req->args, key, arg) {
-        if (!strcmp(key, "accountId")) {
-            /* already handled in jmap_api() */
-        }
-
-        else if (!strcmp(key, "blobIds")) {
-            jblobIds = arg;
-            jmap_parse_strings(jblobIds, &parser, "blobIds");
-        }
-
-        else if (!strcmp(key, "properties")) {
-            if (json_is_array(arg)) {
-                size_t i;
-                json_t *val;
-                props = xzmalloc(sizeof(hash_table));
-                construct_hash_table(props, json_array_size(arg) + 1, 0);
-                json_array_foreach(arg, i, val) {
-                    const char *s = json_string_value(val);
-                    if (!s) {
-                        jmap_parser_push_index(&parser, "properties", i, s);
-                        jmap_parser_invalid(&parser, NULL);
-                        jmap_parser_pop(&parser);
-                        continue;
-                    }
-                    hash_insert(s, (void*)1, props);
-                }
-                getargs.props = props;
-            }
-            else if (JNOTNULL(arg)) {
-                jmap_parser_invalid(&parser, "properties");
-            }
-        }
-
-        else if (!_email_getargs_parse(req, &parser, key, arg, &getargs)) {
-            jmap_parser_invalid(&parser, key);
-        }
-    }
-
-    if (json_array_size(parser.invalid)) {
-        json_t *err = json_pack("{s:s s:O}", "type", "invalidArguments",
-                                "arguments", parser.invalid);
+    jmap_parse_parse(req, &parser,
+                     &_email_parseargs_parse, &parseargs, &parse, &err);
+    if (err) {
         jmap_error(req, err);
         goto done;
     }
@@ -6267,12 +6271,9 @@ static int jmap_email_parse(jmap_req_t *req)
     }
 
     /* Process request */
-    json_t *parsed = json_object();
-    json_t *notParsable = json_array();
-    json_t *notFound = json_array();
     json_t *jval;
     size_t i;
-    json_array_foreach(jblobIds, i, jval) {
+    json_array_foreach(parse.blob_ids, i, jval) {
         const char *blobid = json_string_value(jval);
         struct mailbox *mbox = NULL;
         msgrecord_t *mr = NULL;
@@ -6282,7 +6283,7 @@ static int jmap_email_parse(jmap_req_t *req)
         int r = jmap_findblob(req, NULL/*accountid*/, blobid,
                               &mbox, &mr, &body, &part, NULL);
         if (r) {
-            json_array_append_new(notFound, json_string(blobid));
+            json_array_append_new(parse.not_found, json_string(blobid));
             continue;
         }
 
@@ -6307,10 +6308,10 @@ static int jmap_email_parse(jmap_req_t *req)
         }
 
         if (email) {
-            json_object_set_new(parsed, blobid, email);
+            json_object_set_new(parse.parsed, blobid, email);
         }
         else {
-            json_array_append_new(notParsable, json_string(blobid));
+            json_array_append_new(parse.not_parsable, json_string(blobid));
         }
         msgrecord_unref(&mr);
         jmap_closembox(req, &mbox);
@@ -6319,29 +6320,14 @@ static int jmap_email_parse(jmap_req_t *req)
     }
 
     /* Build response */
-    json_t *res = json_object();
-    if (!json_object_size(parsed)) {
-        json_decref(parsed);
-        parsed = json_null();
-    }
-    if (!json_array_size(notParsable)) {
-        json_decref(notParsable);
-        notParsable = json_null();
-    }
-    if (!json_array_size(notFound)) {
-        json_decref(notFound);
-        notFound = json_null();
-    }
-    json_object_set_new(res, "parsed", parsed);
-    json_object_set_new(res, "notParsable", notParsable);
-    json_object_set_new(res, "notFound", notFound);
-    jmap_ok(req, res);
+    jmap_ok(req, jmap_parse_reply(&parse));
 
 done:
-	_email_getargs_fini(&getargs);
+    _email_getargs_fini(&getargs);
     jmap_parser_fini(&parser);
-    free_hash_table(props, NULL);
-    free(props);
+    jmap_parse_fini(&parse);
+    free_hash_table(parseargs.props, NULL);
+    free(parseargs.props);
     return 0;
 }
 
