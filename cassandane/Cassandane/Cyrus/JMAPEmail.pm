@@ -5282,7 +5282,7 @@ sub test_email_query_issue2905
 }
 
 sub test_email_query_inmailboxid_conjunction
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5381,6 +5381,16 @@ sub test_email_query_inmailboxid_conjunction
     xlog $self, "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
     xlog $self, "query emails in mailboxes A AND B";
     $res = $jmap->CallMethods([
         ['Email/query', {
@@ -5392,8 +5402,9 @@ sub test_email_query_inmailboxid_conjunction
                     inMailbox => $mboxIdB,
                 }],
             },
+            disableGuidSearch => JSON::true,
         }, 'R1'],
-    ]);
+    ], $using);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($emailIdAB, $res->[0][1]->{ids}[0]);
 
@@ -5410,14 +5421,15 @@ sub test_email_query_inmailboxid_conjunction
                     text => "test",
                 }],
             },
+            disableGuidSearch => JSON::true,
         }, 'R1'],
-    ]);
+    ], $using);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($emailIdAB, $res->[0][1]->{ids}[0]);
 }
 
 sub test_email_query_inmailboxotherthan
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5454,6 +5466,16 @@ sub test_email_query_inmailboxotherthan
     xlog $self, "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
     xlog $self, "fetch emails without filter";
     $res = $jmap->CallMethods([
         ['Email/query', { }, 'R1'],
@@ -5464,7 +5486,7 @@ sub test_email_query_inmailboxotherthan
                 path => '/ids'
             }
         }, 'R2'],
-    ]);
+    ], $using);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(2, scalar @{$res->[1][1]->{list}});
 
@@ -5479,7 +5501,8 @@ sub test_email_query_inmailboxotherthan
             inMailboxOtherThan => [$mboxIdB],
         },
         sort => [{ property => 'subject' }],
-    }, "R1"]]);
+        disableGuidSearch => JSON::true,
+    }, "R1"]], $using);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
 
@@ -5488,7 +5511,8 @@ sub test_email_query_inmailboxotherthan
             inMailboxOtherThan => [$mboxIdA],
         },
         sort => [{ property => 'subject' }],
-    }, "R1"]]);
+        disableGuidSearch => JSON::true,
+    }, "R1"]], $using);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
     $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[1]);
@@ -5498,7 +5522,8 @@ sub test_email_query_inmailboxotherthan
             inMailboxOtherThan => [$mboxIdA, $mboxIdC],
         },
         sort => [{ property => 'subject' }],
-    }, "R1"]]);
+        disableGuidSearch => JSON::true,
+    }, "R1"]], $using);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
     $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[1]);
@@ -5511,7 +5536,8 @@ sub test_email_query_inmailboxotherthan
             }],
         },
         sort => [{ property => 'subject' }],
-    }, "R1"]]);
+        disableGuidSearch => JSON::true,
+    }, "R1"]], $using);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[0]);
 }
@@ -5906,10 +5932,23 @@ sub test_misc_collapsethreads_issue2024
 
 sub email_query_window_internal
 {
-    my ($self) = @_;
+    my ($self, $wantGuidSearch, $filter) = @_;
     my %exp;
     my $jmap = $self->{jmap};
     my $res;
+
+    $wantGuidSearch ||= JSON::false;
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
 
     my $imaptalk = $self->{store}->get_client();
 
@@ -5932,6 +5971,9 @@ sub email_query_window_internal
     $exp{D} = $self->make_message("Email D");
     $exp{D}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
 
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
     xlog $self, "list all emails";
     $res = $jmap->CallMethods([['Email/query', { }, "R1"]]);
     $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
@@ -5941,52 +5983,93 @@ sub email_query_window_internal
     my @subids;
 
     xlog $self, "list emails from position 1";
-    $res = $jmap->CallMethods([['Email/query', { position => 1 }, "R1"]]);
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            position => 1,
+            filter => $filter,
+        }, "R1"]
+    ], $using);
+    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
 
     xlog $self, "list emails from position 4";
-    $res = $jmap->CallMethods([['Email/query', { position => 4 }, "R1"]]);
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            position => 4,
+            filter => $filter,
+        }, "R1"]
+    ], $using);
+    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(4, $res->[0][1]->{total});
 
     xlog $self, "limit emails from position 1 to one email";
-    $res = $jmap->CallMethods([['Email/query', { position => 1, limit => 1 }, "R1"]]);
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            position => 1,
+            limit => 1,
+            filter => $filter,
+        }, "R1"]
+    ], $using);
+    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..1];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
 
     xlog $self, "anchor at 2nd email";
-    $res = $jmap->CallMethods([['Email/query', { anchor => @{$ids}[1] }, "R1"]]);
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            anchor => @{$ids}[1],
+            filter => $filter,
+        }, "R1"]
+    ], $using);
+    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
 
     xlog $self, "anchor at 2nd email and offset 1";
-    $res = $jmap->CallMethods([['Email/query', {
-        anchor => @{$ids}[1], anchorOffset => 1,
-    }, "R1"]]);
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            anchor => @{$ids}[1],
+            anchorOffset => 1,
+            filter => $filter,
+        }, "R1"]
+    ], $using);
+    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[2..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(2, $res->[0][1]->{position});
 
     xlog $self, "anchor at 3rd email and offset -1";
-    $res = $jmap->CallMethods([['Email/query', {
-        anchor => @{$ids}[2], anchorOffset => -1,
-    }, "R1"]]);
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            anchor => @{$ids}[2],
+            anchorOffset => -1,
+            filter => $filter,
+        }, "R1"]
+    ], $using);
+    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
 
     xlog $self, "anchor at 1st email offset 1 and limit 2";
-    $res = $jmap->CallMethods([['Email/query', {
-        anchor => @{$ids}[0], anchorOffset => 1, limit => 2
-    }, "R1"]]);
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            anchor => @{$ids}[0],
+            anchorOffset => 1,
+            limit => 2,
+            filter => $filter,
+        }, "R1"]
+    ], $using);
+    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..2];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
@@ -5994,17 +6077,24 @@ sub email_query_window_internal
 }
 
 sub test_email_query_window
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     $self->email_query_window_internal();
 }
 
 sub test_email_query_window_cached
-    :min_version_3_1 :needs_component_jmap :JMAPSearchDB
+    :min_version_3_1 :needs_component_jmap :JMAPSearchDB :JMAPExtensions
 {
     my ($self) = @_;
     $self->email_query_window_internal();
+}
+
+sub test_email_query_window_guidsearch
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    $self->email_query_window_internal(JSON::true, { subject => 'Email' });
 }
 
 sub test_email_query_long
@@ -13838,7 +13928,8 @@ sub test_searchsnippet_get_attachment
     my $filter = { attachmentBody => "cat" };
     my $res = $jmap->CallMethods([
         ['Email/query', {
-            filter => $filter
+            filter => $filter,
+            wantPartIds => JSON::true,
         }, "R1"],
     ], $using);
     my $emailIds = $res->[0][1]{ids};
@@ -13886,7 +13977,8 @@ sub test_searchsnippet_get_attachment
     };
     $res = $jmap->CallMethods([
         ['Email/query', {
-            filter => $filter
+            filter => $filter,
+            wantPartIds => JSON::true,
         }, "R1"],
     ], $using);
     $emailIds = $res->[0][1]{ids};
@@ -13901,7 +13993,8 @@ sub test_searchsnippet_get_attachment
     $filter = { text => "cat" };
     $res = $jmap->CallMethods([
         ['Email/query', {
-            filter => $filter
+            filter => $filter,
+            wantPartIds => JSON::true,
         }, "R1"],
     ], $using);
     $emailIds = $res->[0][1]{ids};
@@ -14219,7 +14312,10 @@ sub test_search_sharedpart
     ];
 
     my $res = $jmap->CallMethods([
-        ['Email/query', { filter => {text => "foobar"}}, "R1"],
+        ['Email/query', {
+            filter => {text => "foobar"},
+            wantPartIds => JSON::true,
+        },"R1"],
     ], $using);
     my $emailIds = $res->[0][1]{ids};
     my $partIds = $res->[0][1]{partIds};
@@ -14232,7 +14328,10 @@ sub test_search_sharedpart
     $self->assert_str_equals("1", $partIds->{$fooId}[0]);
 
     $res = $jmap->CallMethods([
-        ['Email/query', { filter => {text => "lady"}}, "R1"],
+        ['Email/query', {
+            filter => {text => "lady"},
+            wantPartIds => JSON::true,
+        }, "R1"],
     ], $using);
     $emailIds = $res->[0][1]{ids};
     $partIds = $res->[0][1]{partIds};
@@ -15160,6 +15259,8 @@ sub test_email_query_position
 
     my $using = [
         'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/search',
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
     ];
@@ -15171,21 +15272,38 @@ sub test_email_query_position
             sort => [{ property => 'id' }],
             position => 1,
             limit => 2,
+            disableGuidSearch => JSON::true,
         }, 'R1'],
         ['Email/query', {
             filter => { subject => 'test' },
             sort => [{ property => 'id' }],
             position => 1,
             limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => 1,
+            limit => 2,
+            disableGuidSearch => JSON::false,
         }, 'R3'],
     ], $using);
     my @wantIds = @emailIds[1..2];
-    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+    # Check UID search
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
     $self->assert_num_equals(1, $res->[0][1]{position});
     $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
-    $self->assert_equals(JSON::true, $res->[1][1]->{performance}{details}{isCached});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
     $self->assert_num_equals(1, $res->[1][1]{position});
     $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    # Check GUID search
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isCached});
+    $self->assert_num_equals(1, $res->[2][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
 
     xlog "Create dummy message to invalidate query cache";
     $self->make_message("dummy") || die;
@@ -15197,24 +15315,70 @@ sub test_email_query_position
             sort => [{ property => 'id' }],
             position => 100,
             limit => 2,
+            disableGuidSearch => JSON::true,
         }, 'R1'],
         ['Email/query', {
             filter => { subject => 'test' },
             sort => [{ property => 'id' }],
             position => 100,
             limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => 100,
+            limit => 2,
+            disableGuidSearch => JSON::false,
         }, 'R3'],
     ], $using);
     @wantIds = ();
-    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+    # Check UID search
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
     $self->assert_num_equals(9, $res->[0][1]{position});
     $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
-    $self->assert_equals(JSON::true, $res->[1][1]->{performance}{details}{isCached});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
     $self->assert_num_equals(9, $res->[1][1]{position});
     $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    # Check GUID search
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isCached});
+    $self->assert_num_equals(9, $res->[2][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+}
 
-    xlog "Create dummy message to invalidate query cache";
-    $self->make_message("dummy") || die;
+sub test_email_query_negative_position
+    :min_version_3_1 :needs_component_jmap :JMAPSearchDB :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Creating emails";
+    foreach my $i (1..9) {
+        $self->make_message("test") || die;
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Query emails";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{ property => 'id' }],
+        }, 'R1'],
+    ]);
+    my @emailIds = @{$res->[0][1]{ids}};
+    $self->assert_num_equals(9, scalar @emailIds);
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/search',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
 
     xlog "Query with negative position (in range)";
     $res = $jmap->CallMethods([
@@ -15223,21 +15387,37 @@ sub test_email_query_position
             sort => [{ property => 'id' }],
             position => -3,
             limit => 2,
+            disableGuidSearch => JSON::true,
         }, 'R1'],
         ['Email/query', {
             filter => { subject => 'test' },
             sort => [{ property => 'id' }],
             position => -3,
             limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => -3,
+            limit => 2,
+            disableGuidSearch => JSON::false,
         }, 'R3'],
     ], $using);
-    @wantIds = @emailIds[6..7];
-    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+    my @wantIds = @emailIds[6..7];
+    # Check UID search
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
     $self->assert_num_equals(6, $res->[0][1]{position});
     $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
-    $self->assert_equals(JSON::true, $res->[1][1]->{performance}{details}{isCached});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
     $self->assert_num_equals(6, $res->[1][1]{position});
     $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    # Check GUID search
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    $self->assert_num_equals(6, $res->[2][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
 
     xlog "Create dummy message to invalidate query cache";
     $self->make_message("dummy") || die;
@@ -15249,21 +15429,1112 @@ sub test_email_query_position
             sort => [{ property => 'id' }],
             position => -100,
             limit => 2,
+            disableGuidSearch => JSON::true,
         }, 'R1'],
         ['Email/query', {
             filter => { subject => 'test' },
             sort => [{ property => 'id' }],
             position => -100,
             limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => -100,
+            limit => 2,
+            disableGuidSearch => JSON::false,
         }, 'R3'],
     ], $using);
     @wantIds = @emailIds[0..1];
-    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+    # Check UID search
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
     $self->assert_num_equals(0, $res->[0][1]{position});
     $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
-    $self->assert_equals(JSON::true, $res->[1][1]->{performance}{details}{isCached});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
     $self->assert_num_equals(0, $res->[1][1]{position});
     $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    # Check GUID search
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    $self->assert_num_equals(0, $res->[2][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+}
+
+sub test_email_query_guidsearch
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    for (my $i = 0; $i < 10; $i++) {
+        $self->make_message("msg$i", to => Cassandane::Address->new(
+            localpart => "recipient$i",
+            domain => 'example.com'
+        )) || die;
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    xlog "Running query with guidsearch";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+        }, 'R1']
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    my $guidSearchIds = $res->[0][1]{ids};
+    $self->assert_num_equals(10, scalar @{$guidSearchIds});
+
+    xlog "Running query without guidsearch";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+            disableGuidSearch => JSON::true,
+        }, 'R1']
+    ], $using);
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    my $uidSearchIds = $res->[0][1]{ids};
+    $self->assert_num_equals(10, scalar @{$uidSearchIds});
+
+    xlog "Comparing results";
+    $self->assert_deep_equals($guidSearchIds, $uidSearchIds);
+}
+
+sub test_email_query_guidsearch_sort
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    my $emailCount = 10;
+
+    xlog "Creating $emailCount emails (every 5th has same internaldate)";
+    my %createEmails;
+    for (my $i = 0; $i < $emailCount; $i++) {
+        my $receivedAt = '2019-01-0' . (($i % 5) + 1) . 'T00:00:00Z';
+        $createEmails{$i} = {
+            mailboxIds => {
+                '$inbox' => JSON::true
+            },
+            from => [{ email => "foo$i\@bar" }],
+            to => [{ email => "bar$i\@example.com" }],
+            receivedAt => $receivedAt,
+            subject => "email$i",
+            bodyStructure => {
+                partId => '1',
+            },
+            bodyValues => {
+                "1" => {
+                    value => "email$i body",
+                },
+            },
+        }
+    }
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => \%createEmails,
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals($emailCount, scalar keys %{$res->[0][1]{created}});
+
+    my @emails;
+    for (my $i = 0; $i < $emailCount; $i++) {
+        $emails[$i] = {
+            id => $res->[0][1]{created}{$i}{id},
+            receivedAt => $createEmails{$i}{receivedAt}
+        };
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Sort by id (ascending and descending)";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }]
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::false,
+            }]
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+            disableGuidSearch => JSON::true,
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::false,
+            }],
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+    ], $using);
+
+    my $guidSearchIds;
+    my @wantIds;
+
+    # Check GUID search results
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = map { $_->{id} } sort { $a->{id} cmp $b->{id} } @emails;
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isGuidSearch});
+    @wantIds = map { $_->{id} } sort { $b->{id} cmp $a->{id} } @emails;
+    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+
+    # Check UID search result
+    $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isGuidSearch});
+    @wantIds = map { $_->{id} } sort { $a->{id} cmp $b->{id} } @emails;
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+
+    $self->assert_equals(JSON::false, $res->[3][1]{performance}{details}{isGuidSearch});
+    @wantIds = map { $_->{id} } sort { $b->{id} cmp $a->{id} } @emails;
+    $self->assert_deep_equals(\@wantIds, $res->[3][1]{ids});
+
+    xlog "Sort by internaldate (break ties by id) (ascending and descending)";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::true,
+            }]
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::false,
+            }]
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::true,
+            }],
+            disableGuidSearch => JSON::true,
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::false,
+            }],
+            disableGuidSearch => JSON::true,
+        }, 'R4'],
+    ], $using);
+
+    # Check GUID search results
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = map { $_->{id} } sort {
+        $a->{receivedAt} cmp $b->{receivedAt} or $a->{id} cmp $b->{id}
+    } @emails;
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isGuidSearch});
+    @wantIds = map { $_->{id} } sort {
+        $b->{receivedAt} cmp $a->{receivedAt} or $b->{id} cmp $a->{id}
+    } @emails;
+    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+
+    # Check UID search result
+    $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isGuidSearch});
+    @wantIds = map { $_->{id} } sort {
+        $a->{receivedAt} cmp $b->{receivedAt} or $a->{id} cmp $b->{id}
+    } @emails;
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+
+    $self->assert_equals(JSON::false, $res->[3][1]{performance}{details}{isGuidSearch});
+    @wantIds = map { $_->{id} } sort {
+        $b->{receivedAt} cmp $a->{receivedAt} or $b->{id} cmp $a->{id}
+    } @emails;
+    $self->assert_deep_equals(\@wantIds, $res->[3][1]{ids});
+}
+
+sub test_email_query_guidsearch_inmailbox
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    xlog $self, "create mailboxes";
+    $imap->create("INBOX.A") or die;
+    $imap->create("INBOX.B") or die;
+    $imap->create("INBOX.C") or die;
+    $imap->create("INBOX.D") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ], $using);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdA = $mboxByName{'A'}->{id};
+    my $mboxIdB = $mboxByName{'B'}->{id};
+    my $mboxIdC = $mboxByName{'C'}->{id};
+    my $mboxIdD = $mboxByName{'D'}->{id};
+
+    xlog $self, "create emails";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'mA' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'A',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mB' => {
+                    mailboxIds => {
+                        $mboxIdB => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'B',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mC' => {
+                    mailboxIds => {
+                        $mboxIdC => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'C',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mD' => {
+                    mailboxIds => {
+                        $mboxIdD => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'D',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mAB' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                        $mboxIdB => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'AB',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mCD' => {
+                    mailboxIds => {
+                        $mboxIdC => JSON::true,
+                        $mboxIdD => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'CD',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mABCD' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                        $mboxIdB => JSON::true,
+                        $mboxIdC => JSON::true,
+                        $mboxIdD => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'ABCD',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $emailIdA = $res->[0][1]->{created}{mA}{id};
+    $self->assert_not_null($emailIdA);
+    my $emailIdB = $res->[0][1]->{created}{mB}{id};
+    $self->assert_not_null($emailIdB);
+    my $emailIdC = $res->[0][1]->{created}{mC}{id};
+    $self->assert_not_null($emailIdC);
+    my $emailIdD = $res->[0][1]->{created}{mD}{id};
+    $self->assert_not_null($emailIdD);
+    my $emailIdAB = $res->[0][1]->{created}{mAB}{id};
+    $self->assert_not_null($emailIdAB);
+    my $emailIdCD = $res->[0][1]->{created}{mCD}{id};
+    $self->assert_not_null($emailIdCD);
+    my $emailIdABCD = $res->[0][1]->{created}{mABCD}{id};
+    $self->assert_not_null($emailIdABCD);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @wantIds;
+
+    xlog $self, "query emails in mailbox A";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                from => 'foo@local',
+                inMailbox => $mboxIdA,
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdA, $emailIdAB, $emailIdABCD);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+
+    xlog $self, "query emails in mailbox A and B";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    from => 'foo@local',
+                    inMailbox => $mboxIdA,
+                }, {
+                    from => 'foo@local',
+                    inMailbox => $mboxIdB,
+                }],
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdAB, $emailIdABCD);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+
+    xlog $self, "query emails in mailboxes other than A,B";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                from => 'foo@local',
+                inMailboxOtherThan => [$mboxIdA, $mboxIdB],
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdC, $emailIdD, $emailIdCD, $emailIdABCD);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+
+    xlog $self, "query emails in mailboxes other than A,B and not in D";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    from => 'foo@local',
+                }, {
+                    inMailboxOtherThan => [$mboxIdA, $mboxIdB],
+                }, {
+                    operator => 'NOT',
+                    conditions => [{
+                        inMailbox => $mboxIdD,
+                    }],
+                }],
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdC);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+}
+
+sub test_email_query_guidsearch_keywords
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    xlog $self, "create emails";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'mA' => {
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    subject => 'Answered',
+                    keywords => {
+                        '$Answered' => JSON::true,
+                    },
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mD' => {
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    subject => 'Draft',
+                    keywords => {
+                        '$Draft' => JSON::true,
+                    },
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mF' => {
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    subject => 'Flagged',
+                    keywords => {
+                        '$Flagged' => JSON::true,
+                    },
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $emailIdA = $res->[0][1]->{created}{mA}{id};
+    $self->assert_not_null($emailIdA);
+    my $emailIdD = $res->[0][1]->{created}{mD}{id};
+    $self->assert_not_null($emailIdD);
+    my $emailIdF = $res->[0][1]->{created}{mF}{id};
+    $self->assert_not_null($emailIdF);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @wantIds;
+
+    xlog $self, "query draft emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                from => 'foo@local',
+                hasKeyword => '$draft',
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdD);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+
+    xlog $self, "query anything but draft emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                from => 'foo@local',
+                notKeyword => '$draft',
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdA, $emailIdF);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+}
+
+sub test_email_set_guidsearch_updated_internaldate
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    xlog $self, "create emails";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'mA' => {
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    receivedAt => '2020-02-01T00:00:00Z',
+                    subject => 'test',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mB' => {
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    receivedAt => '2020-02-02T00:00:00Z',
+                    subject => 'test',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $emailIdA = $res->[0][1]->{created}{mA}{id};
+    $self->assert_not_null($emailIdA);
+    my $emailBlobIdA = $res->[0][1]->{created}{mA}{blobId};
+    $self->assert_not_null($emailBlobIdA);
+    my $emailIdB = $res->[0][1]->{created}{mB}{id};
+    $self->assert_not_null($emailIdB);
+
+    xlog "Download blob of message A";
+    $res = $jmap->Download('cassandane', $emailBlobIdA);
+    my $emailBlobA = $res->{content};
+    $self->assert_not_null($emailBlobA);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Query sorted by internaldate, then destroy message A";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                subject => 'test',
+            },
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::true,
+            }]
+        }, 'R1'],
+        ['Email/set', {
+            destroy => [$emailIdA],
+        }, 'R2'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals([$emailIdA, $emailIdB], $res->[0][1]{ids});
+    $self->assert_str_equals($emailIdA, $res->[1][1]{destroyed}[0]);
+
+    xlog $self, "Compact search tier t1 to t2";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-z', 't2', '-t', 't1');
+
+    xlog "Sleep one second";
+    sleep(1);
+
+    xlog "Create dummy message";
+    $self->make_message("dummy") || die;
+
+    xlog "Append blob of message A via IMAP";
+    $imap->append('INBOX', $emailBlobA) || die $@;
+
+    xlog $self, "run incremental squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "Query sorted by internaldate";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                subject => 'test',
+            },
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::true,
+            }]
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals([$emailIdB, $emailIdA], $res->[0][1]{ids});
+}
+
+sub test_email_query_guidsearch_mixedfilter
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    xlog $self, "create mailboxes";
+    $imap->create("INBOX.A") or die;
+    $imap->create("INBOX.B") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ], $using);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdA = $mboxByName{'A'}->{id};
+    my $mboxIdB = $mboxByName{'B'}->{id};
+
+    xlog $self, "create emails";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'mAfoo' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'from@local'
+                    }],
+                    to => [{
+                        name => '', email => 'to@local'
+                    }],
+                    subject => 'foo',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mAbar' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'from@local'
+                    }],
+                    to => [{
+                        name => '', email => 'to@local'
+                    }],
+                    subject => 'bar',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mBfoo' => {
+                    mailboxIds => {
+                        $mboxIdB => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'from@local'
+                    }],
+                    to => [{
+                        name => '', email => 'to@local'
+                    }],
+                    subject => 'foo',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mBbar' => {
+                    mailboxIds => {
+                        $mboxIdB => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'from@local'
+                    }],
+                    to => [{
+                        name => '', email => 'to@local'
+                    }],
+                    subject => 'bar',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $emailIdAfoo = $res->[0][1]->{created}{mAfoo}{id};
+    $self->assert_not_null($emailIdAfoo);
+    my $emailIdAbar = $res->[0][1]->{created}{mAbar}{id};
+    $self->assert_not_null($emailIdAbar);
+    my $emailIdBfoo = $res->[0][1]->{created}{mBfoo}{id};
+    $self->assert_not_null($emailIdBfoo);
+    my $emailIdBbar = $res->[0][1]->{created}{mBbar}{id};
+    $self->assert_not_null($emailIdBbar);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @wantIds;
+
+    xlog $self, "query emails with disjunction of mixed criteria";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'OR',
+                conditions => [{
+                    subject => 'foo',
+                    inMailbox => $mboxIdA,
+                }, {
+                    subject => 'bar',
+                    inMailbox => $mboxIdB,
+                }],
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+
+    # Current Cyrus implementation of GUID search does not support
+    # disjunctions of conjuncted Xapian and non-Xapian filters. If
+    # the following assert breaks, it might mean that this support
+    # got added to the codebase, in which case: great!
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+
+    @wantIds = sort ($emailIdAfoo, $emailIdBbar);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+}
+
+sub test_email_query_guidsearch_only_email_mailboxes
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/contacts',
+    ];
+
+    xlog $self, "create email, calendar event and contact";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                '1' => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'from@local'
+                    }],
+                    to => [{
+                        name => '', email => 'to@local'
+                    }],
+                    subject => 'test',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                '2' => {
+                    calendarId => 'Default',
+                    start => '2020-02-25T11:00:00',
+                    timeZone => 'Australia/Melbourne',
+                    title => 'test',
+                }
+            }
+        }, 'R2'],
+        ['Contact/set', {
+            create => {
+                "3" => {
+                    lastName => "test",
+                }
+            }
+        }, 'R3'],
+    ], $using);
+    my $emailId = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($emailId);
+    my $eventId = $res->[1][1]->{created}{2}{id};
+    $self->assert_not_null($eventId);
+    my $contactId = $res->[2][1]->{created}{3}{id};
+    $self->assert_not_null($contactId);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Query emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                text => 'test',
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
 }
 
 sub test_email_draft_subject_keeps_thrid

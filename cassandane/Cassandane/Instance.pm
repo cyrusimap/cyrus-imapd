@@ -659,6 +659,7 @@ sub _generate_imapd_conf
             search_batchsize => '8192',
             defaultsearchtier => 't1',
             't1searchpartition-default' => "$self->{basedir}/search",
+            't2searchpartition-default' => "$self->{basedir}/search2",
         );
         while (my ($k, $v) = each %xapian_defaults) {
             if (not defined $self->{config}->get($k)) {
