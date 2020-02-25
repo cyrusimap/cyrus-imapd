@@ -119,6 +119,7 @@ struct conv_folder {
 #define CONV_GUIDREC_VERSION 0x1 // (must be <= 127)
 
 struct conv_guidrec {
+    const char      *guidrep; // [MESSAGE_GUID_SIZE*2], hex-encoded
     const char      *mboxname;
     uint32_t        foldernum;
     uint32_t        uid;

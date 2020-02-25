@@ -2478,7 +2478,7 @@ HIDDEN json_t *jmap_query_reply(struct jmap_query *query)
     json_object_set_new(res, "position", json_integer(query->result_position));
     json_object_set_new(res, "total", json_integer(query->total));
     /* Special case total */
-    if (query->position > 0 && query->total < SSIZE_MAX) {
+    if (query->position > 0 && query->total && query->total < SSIZE_MAX) {
         if (query->position > (ssize_t) query->total) {
             json_decref(query->ids);
             query->ids = json_array();
@@ -2487,6 +2487,10 @@ HIDDEN json_t *jmap_query_reply(struct jmap_query *query)
     /* Special case limit 0 */
     if (query->have_limit && query->limit == 0) {
         json_array_clear(query->ids);
+    }
+    /* Special case clamped limit */
+    if (query->server_limit) {
+        json_object_set_new(res, "limit", json_integer(query->server_limit));
     }
 
     json_object_set(res, "ids", query->ids);

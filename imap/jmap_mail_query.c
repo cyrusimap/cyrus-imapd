@@ -607,7 +607,7 @@ static int _matchmime_tr_index_charset_flags(int base_flags)
     return base_flags | CHARSET_KEEPCASE;
 }
 
-static int _email_matchmime_evaluate_xcb(const void *data __attribute__((unused)),
+static int _email_matchmime_evaluate_xcb(void *data __attribute__((unused)),
                                          size_t n, void *rock)
 {
     int *matches = rock;

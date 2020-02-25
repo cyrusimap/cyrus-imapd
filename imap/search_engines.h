@@ -49,11 +49,17 @@
 #include "strarray.h"
 #include "bitvector.h"
 
+#include "search_expr.h"
 #include "search_part.h"
+#include "search_sort.h"
 
 typedef int (*search_hit_cb_t)(const char *mboxname, uint32_t uidvalidity,
                                uint32_t uid, const strarray_t *partids,
                                void *rock);
+
+typedef int (*search_hitguid_cb_t)(const conv_guidrec_t *rec, size_t nguids,
+                                   void *rock);
+
 typedef int (*search_snippet_cb_t)(struct mailbox *, uint32_t uid,
                                    /* SEARCH_PART_* constants */int part,
                                    const char *snippet, void *rock);
@@ -66,12 +72,16 @@ struct search_builder {
 #define SEARCH_OP_AND       101
 #define SEARCH_OP_OR        102
 #define SEARCH_OP_NOT       103
+#define SEARCH_OP_TRUE      104
+#define SEARCH_OP_FALSE     105
     void (*begin_boolean)(search_builder_t *, int op);
     void (*end_boolean)(search_builder_t *, int op);
     void (*match)(search_builder_t *, int part, const char *str);
     void (*matchlist)(search_builder_t *, int part, const strarray_t *items);
     void *(*get_internalised)(search_builder_t *);
     int (*run)(search_builder_t *, search_hit_cb_t proc, void *rock);
+    /* XXX - guidsearch is a hack for speeding up JMAP email queries */
+    int (*run_guidsearch)(search_builder_t *, search_hitguid_cb_t proc, void *rock);
 };
 
 typedef struct search_snippet_markup {
@@ -123,7 +133,8 @@ struct search_lang_stats {
     double weight; // of total indexed docs
 };
 
-#define SEARCH_FLAG_CAN_BATCH   (1<<0)
+#define SEARCH_FLAG_CAN_BATCH      (1<<0)
+#define SEARCH_FLAG_CAN_GUIDSEARCH (1<<1)
 struct search_engine {
     const char *name;
     unsigned int flags;
@@ -213,5 +224,7 @@ int search_check_config(char **errstr);
 
 /* for debugging */
 extern const char *search_op_as_string(int op);
+
+
 
 #endif

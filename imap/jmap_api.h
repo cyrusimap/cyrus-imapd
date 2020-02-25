@@ -382,6 +382,7 @@ struct jmap_query {
     char *query_state;
     int can_calculate_changes;
     size_t result_position;
+    size_t server_limit;
     size_t total;
     json_t *ids;
 };
@@ -451,7 +452,6 @@ struct jmap_querychanges {
     size_t max_changes;
     const char *up_to_id;
     int calculate_total;
-    int sort_savedate;
 
     /* Response fields */
     char *new_querystate;
