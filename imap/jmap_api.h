@@ -44,10 +44,10 @@
 #ifndef JMAP_API_H
 #define JMAP_API_H
 
+#include "acl.h"
 #include "auth.h"
 #include "conversations.h"
 #include "hash.h"
-#include "http_dav.h"       // for DACL_* rights
 #include "jmap_util.h"
 #include "json_support.h"
 #include "mailbox.h"
@@ -96,8 +96,8 @@ enum {
 #define JACL_SUBMIT         ACL_POST
 
 /* JMAP Calendar (draft-ietf-jmap-calendars) privileges */
-#define JACL_READFB         DACL_READFB    /* Use same right as CalDAV */
-#define JACL_RSVP           DACL_REPLY     /* Use same right as CalDAV */
+#define JACL_READFB         ACL_USER9      /* Keep sync'd with DACL_READFB */
+#define JACL_RSVP           ACL_USER7      /* Keep sync'd with DACL_REPLY */
 #define JACL_UPDATEPRIVATE  
 #define JACL_UPDATEOWN
 #define JACL_UPDATEALL
