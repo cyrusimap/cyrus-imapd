@@ -262,6 +262,9 @@ ec IMAP_SEARCH_SLOW,
 ec IMAP_SEARCH_MUTABLE,
     "Search is mutable"
 
+ec IMAP_SEARCH_NOT_SUPPORTED,
+    "Search is not supported"
+
 # Following used for internationalization of untagged BYE response
 
 ec IMAP_BYE_LOGOUT,

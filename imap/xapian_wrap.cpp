@@ -1098,6 +1098,11 @@ xapian_query_t *xapian_query_new_not(const xapian_db_t *db __attribute__((unused
     }
 }
 
+xapian_query_t *xapian_query_new_matchall(const xapian_db_t *db __attribute__((unused)))
+{
+    return (xapian_query_t *) new Xapian::Query(Xapian::Query::MatchAll);
+}
+
 xapian_query_t *xapian_query_new_has_doctype(const xapian_db_t *db __attribute__((unused)),
                                              char doctype, xapian_query_t *child)
 {
@@ -1129,13 +1134,8 @@ void xapian_query_free(xapian_query_t *qq)
     }
 }
 
-int bincmp21(const void *a, const void *b)
-{
-    return memcmp(a, b, 21);
-}
-
 int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_legacy,
-                     int (*cb)(const void *data, size_t n, void *rock), void *rock)
+                     int (*cb)(void *data, size_t n, void *rock), void *rock)
 {
     const Xapian::Query *query = (const Xapian::Query *)qq;
     void *data = NULL;
@@ -1147,12 +1147,13 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
         Xapian::Database *database = is_legacy ? db->legacydbv4 : db->database;
         Xapian::Enquire enquire(*database);
         enquire.set_query(*query);
+        enquire.set_sort_by_value(0, false); // sort by cyrusid ascending
         Xapian::MSet matches = enquire.get_mset(0, database->get_doccount());
         size_t size = matches.size();
-        if (size) data = xzmalloc(size * 21);
+        if (size) data = xzmalloc(size * 41);
         for (Xapian::MSetIterator i = matches.begin() ; i != matches.end() ; ++i) {
             const Xapian::Document& d = i.get_document();
-            const std::string cyrusid = d.get_value(SLOT_CYRUSID);
+            const std::string& cyrusid = d.get_value(SLOT_CYRUSID);
 
             /* ignore documents with no cyrusid.  Shouldn't happen, but has been seen */
             if (cyrusid.length() != 43) {
@@ -1167,10 +1168,10 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
                 continue;
             }
             if (n >= size) throw Xapian::DatabaseError("Too many records in MSet");
-            char *entry = (char *) data + (21*n);
-            hex_to_bin(cstr+3, 40, (uint8_t *)entry);
-            entry[20] = cstr[1];
-            n++;
+            char *entry = (char *) data + (41*n);
+            memcpy(entry, cstr+3, 40);
+            entry[40] = '\0';
+            ++n;
         }
     }
     catch (const Xapian::Error &err) {
@@ -1184,9 +1185,6 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
         free(data);
         return 0;
     }
-
-    // sort the response by GUID for more efficient later handling
-    qsort(data, n, 21, bincmp21);
 
     int r = cb(data, n, rock);
     free(data);

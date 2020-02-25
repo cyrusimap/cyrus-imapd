@@ -2647,7 +2647,7 @@ EXPORTED int index_convupdates(struct index_state *state,
     ptrarray_t changed = PTRARRAY_INITIALIZER;
     int total = 0;
     struct conversations_state *cstate = NULL;
-    int is_mutable = search_is_mutable(sortcrit, searchargs);
+    int is_mutable = search_is_mutable(sortcrit, searchargs->root);
     int r = 0;
 
     assert(windowargs);

@@ -1095,6 +1095,7 @@ struct xapian_builder {
     struct opnode *root;
     ptrarray_t stack;       /* points to opnode* */
     int (*proc)(const char *, uint32_t, uint32_t, const strarray_t *, void *);
+    int (*proc_guidsearch)(const conv_guidrec_t*,size_t,void*);
     void *rock;
 };
 
@@ -1179,6 +1180,10 @@ static const char *opnode_serialise(struct buf *buf, const struct opnode *on)
         buf_appendcstr(buf, "OR");
     else if (on->op == SEARCH_OP_NOT)
         buf_appendcstr(buf, "NOT");
+    else if (on->op == SEARCH_OP_TRUE)
+        buf_appendcstr(buf, "TRUE");
+    else if (on->op == SEARCH_OP_FALSE)
+        buf_appendcstr(buf, "FALSE");
     else if (on->op == XAPIAN_SEARCH_OP_DOCTYPE)
         buf_appendcstr(buf, "DOCTYPE");
     else
@@ -1250,7 +1255,15 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
     int i, j;
     ptrarray_t childqueries = PTRARRAY_INITIALIZER;
 
+    if (!on) return xapian_query_new_matchall(db);
+
     switch (on->op) {
+    case SEARCH_OP_TRUE:
+        qq = xapian_query_new_matchall(db);
+        break;
+    case SEARCH_OP_FALSE:
+        qq = xapian_query_new_not(db, xapian_query_new_matchall(db));
+        break;
     case SEARCH_OP_NOT:
         if (on->children)
             qq = xapian_query_new_not(db, opnode_to_query(db, on->children, opts));
@@ -1317,6 +1330,10 @@ static int is_dnfclause(const struct opnode *on)
         return 1;
     }
 
+    if (on->op == SEARCH_OP_TRUE || on->op == SEARCH_OP_FALSE) {
+        return 1;
+    }
+
     if (on->op == SEARCH_OP_NOT) {
         const struct opnode *child;
         for (child = on->children; child; child = child->next) {
@@ -1329,8 +1346,11 @@ static int is_dnfclause(const struct opnode *on)
     if (on->op == SEARCH_OP_AND) {
         const struct opnode *child;
         for (child = on->children; child; child = child->next) {
-            if (child->op < SEARCH_NUM_PARTS)
+            if (child->op < SEARCH_NUM_PARTS ||
+                child->op == SEARCH_OP_TRUE ||
+                child->op == SEARCH_OP_FALSE) {
                 continue;
+            }
             else if (child->op == SEARCH_OP_NOT) {
                 const struct opnode *gchild;
                 for (gchild = child->children; gchild; gchild = gchild->next) {
@@ -1577,7 +1597,13 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
     return 0;
 }
 
-static int xapian_run_cb(const void *data, size_t n, void *rock)
+
+static int memcmp40(const void *a, const void *b)
+{
+    return memcmp(a, b, 40);
+}
+
+static int xapian_run_cb(void *data, size_t nmemb, void *rock)
 {
     struct xapian_run_rock *xrock = rock;
     xapian_builder_t *bb = xrock->bb;
@@ -1588,7 +1614,38 @@ static int xapian_run_cb(const void *data, size_t n, void *rock)
     struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
     if (!cstate) return IMAP_NOTFOUND;
 
-    return conversations_iterate_searchset(cstate, data, n, xapian_run_guid_cb, xrock);
+    qsort(data, nmemb, 41, memcmp40); // byte 41 is always zero
+
+    return conversations_iterate_searchset(cstate, data, nmemb, xapian_run_guid_cb, xrock);
+}
+
+struct xapian_run_guidsearch_rock {
+    xapian_builder_t *bb;
+    size_t total;
+};
+
+static int xapian_run_guidsearch_guid_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct xapian_run_guidsearch_rock *xrock = rock;
+    xapian_builder_t *bb = xrock->bb;
+    return bb->proc_guidsearch(rec, xrock->total, bb->rock);
+}
+
+static int xapian_run_guidsearch_cb(void *data, size_t nmemb, void *rock)
+{
+    xapian_builder_t *bb = rock;
+
+    int r = cmd_cancelled(/*insearch*/1);
+    if (r) return r;
+
+    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    if (!cstate) return IMAP_NOTFOUND;
+
+    qsort(data, nmemb, 41, memcmp40); // byte 41 is always zero
+
+    struct xapian_run_guidsearch_rock xrock = { bb, nmemb };
+    return conversations_iterate_searchset(cstate, data, nmemb,
+                                    xapian_run_guidsearch_guid_cb, &xrock);
 }
 
 static int run_legacy_v4_query(xapian_builder_t *bb)
@@ -1629,7 +1686,9 @@ static int run_legacy_v4_query(xapian_builder_t *bb)
 
         struct xapian_run_rock xrock = { bb, matches };
         xapian_query_t *xq = ptrarray_nth(&clauses, i);
-        r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/1, xapian_run_cb, &xrock);
+        // sort the response by GUID for more efficient later handling
+        r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/1,
+                             xapian_run_cb, &xrock);
         if (r) {
             uint32_t j;
             for (j = 0; j < num_folders; j++) {
@@ -1733,9 +1792,21 @@ out:
 static int run_query(xapian_builder_t *bb)
 {
     struct opnode *root = NULL;
+    xapian_query_t *xq = NULL;
     int r = 0;
 
-    if (is_dnfclause(bb->root)) {
+    if (bb->proc_guidsearch) {
+        xq = opnode_to_query(bb->lock.db, bb->root, bb->opts);
+        if (!xq) goto out;
+
+        r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0,
+                             xapian_run_guidsearch_cb, bb);
+        goto out;
+    }
+
+    /* Fallback to UID search */
+
+    if (bb->root && is_dnfclause(bb->root)) {
         struct opnode *norm = NULL;
         r = normalise_dnfclause(bb->root, &norm);
         if (r) return r;
@@ -1771,20 +1842,20 @@ static int run_query(xapian_builder_t *bb)
         }
         opnode_delete(norm);
     }
-    else if (is_orclause(bb->root)) {
+    else if (bb->root && is_orclause(bb->root)) {
         root = bb->root;
     }
-    else {
+    else if (bb->root) {
         struct buf buf = BUF_INITIALIZER;
         opnode_serialise(&buf, bb->root);
         syslog(LOG_ERR, "search_xapian: expected DNF or OR clause, got %s",
-                         buf_cstring(&buf));
+                buf_cstring(&buf));
         buf_free(&buf);
         r = IMAP_INTERNAL;
         goto out;
     }
 
-    xapian_query_t *xq = opnode_to_query(bb->lock.db, root, bb->opts);
+    xq = opnode_to_query(bb->lock.db, root, bb->opts);
     if (!xq) goto out;
 
     struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
@@ -1797,7 +1868,9 @@ static int run_query(xapian_builder_t *bb)
     uint32_t num_folders = conversations_num_folders(cstate);
     struct xapian_match *result = xzmalloc(sizeof(struct xapian_match) * num_folders);
     struct xapian_run_rock xrock = { bb, result };
-    r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0, xapian_run_cb, &xrock);
+    // sort the response by GUID for more efficient later handling
+    r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0,
+                         xapian_run_cb, &xrock);
 
     if (result) {
         r = 0;
@@ -1822,27 +1895,26 @@ static int run_query(xapian_builder_t *bb)
     }
 
     free(result);
-    xapian_query_free(xq);
 out:
-    if (root != bb->root) opnode_delete(root);
+    if (root && root != bb->root) opnode_delete(root);
+    xapian_query_free(xq);
     return r;
 }
 
-static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
+static int run_internal(xapian_builder_t *bb)
 {
-    xapian_builder_t *bb = (xapian_builder_t *)bx;
     int r = 0;
 
-    if (!bb->lock.db) goto out; // no index for this user
+    /* Sanity check builder */
+    assert((bb->proc == NULL) != (bb->proc_guidsearch == NULL));
 
-    bb->proc = proc;
-    bb->rock = rock;
+    if (!bb->lock.db) goto out; // no index for this user
 
     /* Validate config */
     r = check_config(NULL);
     if (r) return r;
 
-    optimise_nodes(NULL, bb->root);
+    if (bb->root) optimise_nodes(NULL, bb->root);
 
     /* A database can contain sub-databases of multiple versions */
     if (xapian_db_has_otherthan_v4_index(bb->lock.db)) {
@@ -1858,6 +1930,22 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 
 out:
     return r;
+}
+
+static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
+{
+    xapian_builder_t *bb = (xapian_builder_t *)bx;
+    bb->proc = proc;
+    bb->rock = rock;
+    return run_internal(bb);
+}
+
+static int run_guidsearch(search_builder_t *bx, search_hitguid_cb_t proc, void *rock)
+{
+    xapian_builder_t *bb = (xapian_builder_t *)bx;
+    bb->proc_guidsearch = proc;
+    bb->rock = rock;
+    return run_internal(bb);
 }
 
 static void begin_boolean(search_builder_t *bx, int op)
@@ -1943,6 +2031,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->super.matchlist = matchlist;
     bb->super.get_internalised = get_internalised;
     bb->super.run = run;
+    bb->super.run_guidsearch = run_guidsearch;
 
     bb->mailbox = mailbox;
     bb->opts = opts;
@@ -1953,6 +2042,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 
     /* read the list of all indexed messages to allow (optional) false positives
      * for unindexed messages */
+    // TODO also handle for guidsearch
     bb->indexed = seqset_init(0, SEQ_MERGE);
     r = read_indexed(bb->lock.activedirs, bb->lock.activetiers, mailbox->name,
                      mailbox->i.uidvalidity, bb->indexed, /*do_cache*/0, /*verbose*/0);
@@ -1967,7 +2057,7 @@ static void end_search(search_builder_t *bx)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
 
-    seqset_free(bb->indexed);
+    if (bb->indexed) seqset_free(bb->indexed);
     ptrarray_fini(&bb->stack);
     if (bb->root) opnode_delete(bb->root);
 
@@ -1987,6 +2077,7 @@ struct xapian_receiver
     struct mailbox *mailbox;
     struct message_guid guid;
     uint32_t uid;
+    time_t internaldate;
     int part;
     const struct message_guid *part_guid;
     unsigned int parts_total;
@@ -2236,13 +2327,13 @@ static void free_segments(xapian_receiver_t *tr)
 static int begin_message(search_text_receiver_t *rx, message_t *msg)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-
-    uint32_t uid = 0;
     const struct message_guid *guid = NULL;
-    message_get_uid(msg, &uid);
-    message_get_guid(msg, &guid);
 
-    tr->super.uid = uid;
+    int r = message_get_uid(msg, &tr->super.uid);
+    if (!r) r = message_get_guid(msg, &guid);
+    if (!r) r = message_get_internaldate(msg, &tr->super.internaldate);
+    if (r) return r;
+
     message_guid_copy(&tr->super.guid, guid);
     free_segments((xapian_receiver_t *)tr);
     tr->super.parts_total = 0;
@@ -2389,6 +2480,7 @@ static int end_message_update(search_text_receiver_t *rx)
                 }
 
                 last_guid = &seg->guid;
+                // TODO which internaldate, if any?
                 r = xapian_dbw_begin_doc(tr->dbw, &seg->guid, seg->doctype);
                 if (r) goto out;
             }
@@ -2405,6 +2497,7 @@ static int end_message_update(search_text_receiver_t *rx)
 out:
     tr->super.uid = 0;
     message_guid_set_null(&tr->super.guid);
+    tr->super.internaldate = 0;
     return r;
 }
 
@@ -2777,6 +2870,11 @@ static void generate_snippet_terms(xapian_snipgen_t *snipgen,
     int i;
 
     switch (on->op) {
+
+    case SEARCH_OP_TRUE:
+    case SEARCH_OP_FALSE:
+        // ignore
+        break;
 
     case SEARCH_OP_NOT:
     case SEARCH_OP_OR:
@@ -3855,7 +3953,7 @@ out:
 
 const struct search_engine xapian_search_engine = {
     "Xapian",
-    SEARCH_FLAG_CAN_BATCH,
+    SEARCH_FLAG_CAN_BATCH | SEARCH_FLAG_CAN_GUIDSEARCH,
     begin_search,
     end_search,
     begin_update,

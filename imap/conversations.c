@@ -1893,6 +1893,7 @@ struct guid_foreach_rock {
 };
 
 static int _guid_one(struct guid_foreach_rock *frock,
+                     const char *key,
                      conversation_id_t cid,
                      uint32_t system_flags,
                      uint32_t internal_flags,
@@ -1904,6 +1905,7 @@ static int _guid_one(struct guid_foreach_rock *frock,
     uint32_t res;
 
     /* Set G record values */
+    rec.guidrep = key+1;
     rec.cid = cid;
     rec.system_flags = system_flags;
     rec.internal_flags = internal_flags;
@@ -1957,11 +1959,8 @@ static int _guid_filter_p(void *rock,
 
     struct guid_foreach_rock *frock = (struct guid_foreach_rock *)rock;
 
-    uint8_t val[20];
-    hex_to_bin(key+1, 40, val);
-
     for (; frock->filterpos < frock->filternum; frock->filterpos++) {
-        int cmp = memcmp(frock->filterdata + (21 * frock->filterpos), val, 20);
+        int cmp = memcmp(frock->filterdata + (41 * frock->filterpos), key, 40);
         if (cmp > 0) break; // definitely not a match
         if (cmp == 0) return 1; // match.
         /* We don't also increment for a match because multiple rows
@@ -1989,7 +1988,7 @@ static int _guid_cb(void *rock,
         int i;
         for (i = 0; i < recs->count; i++) {
             buf_setcstr(&frock->partbuf, strarray_nth(recs, i));
-            r = _guid_one(frock, /*cid*/0,
+            r = _guid_one(frock, key, /*cid*/0,
                           /*system_flags*/0, /*internal_flags*/0,
                           /*internaldate*/0, /*version*/0);
             if (r) break;
@@ -2036,7 +2035,7 @@ static int _guid_cb(void *rock,
     }
 
     buf_setmap(&frock->partbuf, key+42, keylen-42);
-    r = _guid_one(frock, cid, system_flags, internal_flags,
+    r = _guid_one(frock, key, cid, system_flags, internal_flags,
                   internaldate, version);
 
     return r;
@@ -2049,7 +2048,9 @@ static int _guid_foreach_helper(struct conversations_state *state,
                                 const void *data,
                                 size_t num)
 {
-    struct guid_foreach_rock rock = { state, cb, cbrock, data, num, 0, BUF_INITIALIZER };
+    struct guid_foreach_rock rock = {
+        state, cb, cbrock, data, num, 0, BUF_INITIALIZER
+    };
 
     foreach_p *filter = data ? _guid_filter_p : NULL;
 
@@ -2093,13 +2094,10 @@ EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
         syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using indexed mode for %d records",
                state->path, (int)n);
     }
-    char guid[41];
-    guid[40] = '\0';
     size_t i;
     for (i = 0; i < n; i++) {
-        const char *entry = data + (i*21);
-        bin_to_lchex(entry, 20, guid);
-        int r = conversations_guid_foreach(state, guid, cb, cbrock);
+        const char *guidrep = data + (i*41);
+        int r = conversations_guid_foreach(state, guidrep, cb, cbrock);
         if (r) return r;
     }
     return 0;

@@ -1077,11 +1077,10 @@ static int is_mutable_sort(struct sortcrit *sortcrit)
  * i.e. the user can/can't take actions which will change the order
  * in which the results are returned.  For example, the base
  * case of UID sort and all messages is NOT mutable */
-EXPORTED int search_is_mutable(struct sortcrit *sortcrit,
-                               struct searchargs *searchargs)
+EXPORTED int search_is_mutable(struct sortcrit *sortcrit, search_expr_t *expr)
 {
     int res = 0;
-    if (search_expr_is_mutable(searchargs->root))
+    if (search_expr_is_mutable(expr))
         res |= 2;
     if (is_mutable_sort(sortcrit))
         res |= 1;
