@@ -47,6 +47,7 @@
 #include "auth.h"
 #include "conversations.h"
 #include "hash.h"
+#include "http_dav.h"       // for DACL_* rights
 #include "jmap_util.h"
 #include "json_support.h"
 #include "mailbox.h"
