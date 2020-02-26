@@ -110,7 +110,6 @@ static int mboxlist_dbopen = 0;
 static int mboxlist_initialized = 0;
 
 static int have_racl = 0;
-static int have_runq = 0;
 
 static int mboxlist_opensubs(const char *userid, struct db **ret);
 static void mboxlist_closesubs(struct db *sub);
@@ -4648,7 +4647,6 @@ EXPORTED void mboxlist_open(const char *fname)
     mboxlist_dbopen = 1;
 
     have_racl = !cyrusdb_fetch(mbdb, "$RACL", 5, NULL, NULL, NULL);
-    have_runq = !cyrusdb_fetch(mbdb, "$RUNQ", 5, NULL, NULL, NULL);
 }
 
 EXPORTED void mboxlist_close(void)
