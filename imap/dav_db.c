@@ -83,6 +83,7 @@
     " comp_flags INTEGER,"                                              \
     " sched_tag TEXT,"                                                  \
     " alive INTEGER,"                                                   \
+    " UNIQUE( mailbox, imap_uid ),"                                     \
     " UNIQUE( mailbox, resource ) );"                                   \
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
 
@@ -106,6 +107,7 @@
     " name TEXT,"                                                       \
     " nickname TEXT,"                                                   \
     " alive INTEGER,"                                                   \
+    " UNIQUE( mailbox, imap_uid ),"                                     \
     " UNIQUE( mailbox, resource ) );"                                   \
     "CREATE INDEX IF NOT EXISTS idx_vcard_fn ON vcard_objs ( fullname );" \
     "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );"
@@ -149,8 +151,8 @@
     " res_uid TEXT,"                                                    \
     " ref_count INTEGER,"                                               \
     " alive INTEGER,"                                                   \
+    " UNIQUE( mailbox, imap_uid ),"                                     \
     " UNIQUE( mailbox, resource ) );"                                   \
-    "CREATE INDEX IF NOT EXISTS idx_res_uid ON dav_objs ( res_uid );"
 
 #define CMD_CREATE_CALCACHE                                             \
     "CREATE TABLE IF NOT EXISTS ical_jmapcache ("                       \
@@ -209,6 +211,10 @@
 
 #define CMD_DBUPGRADEv9 CMD_CREATE_CALCACHE CMD_CREATE_CARDCACHE
 
+#define CMD_DBUPGRADEv10                                        \
+    "CREATE UNIQUE INDEX ON ical_objs ( mailbox, imap_uid );" \
+    "CREATE UNIQUE INDEX ON vcard_objs ( mailbox, imap_uid );" \
+    "CREATE UNIQUE INDEX ON dav_objs ( mailbox, imap_uid );"
 
 struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
@@ -219,10 +225,11 @@ struct sqldb_upgrade davdb_upgrade[] = {
   { 7, CMD_DBUPGRADEv7, NULL },
   { 8, CMD_DBUPGRADEv8, NULL },
   { 9, CMD_DBUPGRADEv9, NULL },
+  { 10, CMD_DBUPGRADEv10, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 9
+#define DB_VERSION 10
 
 static int in_reconstruct = 0;
 
