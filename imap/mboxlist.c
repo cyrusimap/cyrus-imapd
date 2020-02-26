@@ -4641,7 +4641,10 @@ EXPORTED void mboxlist_open(const char *fname)
 
     mboxlist_dbopen = 1;
 
-    have_racl = !cyrusdb_fetch(mbdb, "$RACL", 5, NULL, NULL, NULL);
+    struct buf key = BUF_INITIALIZER;
+    mboxlist_racl_key(0, NULL, NULL, &key);
+    have_racl = !cyrusdb_fetch(mbdb, buf_base(&key), buf_len(&key), NULL, NULL, NULL);
+    buf_free(&key);
 }
 
 EXPORTED void mboxlist_close(void)
