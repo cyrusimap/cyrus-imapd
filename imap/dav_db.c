@@ -212,9 +212,9 @@
 #define CMD_DBUPGRADEv9 CMD_CREATE_CALCACHE CMD_CREATE_CARDCACHE
 
 #define CMD_DBUPGRADEv10                                        \
-    "CREATE UNIQUE INDEX ON ical_objs ( mailbox, imap_uid );" \
-    "CREATE UNIQUE INDEX ON vcard_objs ( mailbox, imap_uid );" \
-    "CREATE UNIQUE INDEX ON dav_objs ( mailbox, imap_uid );"
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_ical_imapuid ON ical_objs ( mailbox, imap_uid );" \
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_vcard_imapuid ON vcard_objs ( mailbox, imap_uid );" \
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_object_imapuid ON dav_objs ( mailbox, imap_uid );"
 
 struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
