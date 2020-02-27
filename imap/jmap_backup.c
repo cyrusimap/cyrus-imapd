@@ -963,10 +963,13 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
 
         if (!r) {
             /* Rewrite updated resource */
+            const mbentry_t mbentry = { .name = mailbox->name,
+                                        .uniqueid = mailbox->uniqueid };
             struct transaction_t txn;
 
             memset(&txn, 0, sizeof(struct transaction_t));
             txn.req_hdrs = spool_new_hdrcache();
+            txn.req_tgt.mbentry = (mbentry_t *) &mbentry;
 
             r = caldav_store_resource(&txn, ical, mailbox,
                                       cdata->dav.resource, record->createdmodseq,
