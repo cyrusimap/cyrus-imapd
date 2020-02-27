@@ -531,7 +531,6 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
  *  C  _c_reatedmodseq
  *  F: _f_oldermodseq
  *  I: unique_i_d
- *  L: _l_egacydir
  *  M: _m_time
  *  N: _n_ame
  *  P: _p_artition
