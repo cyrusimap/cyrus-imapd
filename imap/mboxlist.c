@@ -89,7 +89,7 @@
 
 #define KEY_TYPE_NAME 'N'
 #define KEY_TYPE_ID   'I'
-#define KEY_TYPE_RACL 'R'
+#define KEY_TYPE_ACL  'A'
 
 #define DB_DOMAINSEP_STR    "\x1D"  /* group separator (GS) */
 #define DB_DOMAINSEP_CHAR   DB_DOMAINSEP_STR[0]
@@ -881,7 +881,7 @@ static void mboxlist_racl_key(int isuser, const char *keyuser,
                               const char *dbname, struct buf *buf)
 {
     buf_reset(buf);
-    buf_putc(buf, KEY_TYPE_RACL);
+    buf_putc(buf, KEY_TYPE_ACL);
     if (keyuser || dbname) {
         buf_putc(buf, isuser ? 'U' : 'S');
         buf_putc(buf, '$');
