@@ -61,6 +61,7 @@
 #define JMAP_URN_SUBMISSION "urn:ietf:params:jmap:submission"
 #define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
+#define JMAP_URN_MDN        "urn:ietf:params:jmap:mdn"
 
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
 #define JMAP_CALENDARS_EXTENSION     "https://cyrusimap.org/ns/jmap/calendars"
@@ -192,6 +193,7 @@ extern int jmap_is_using(jmap_req_t *req, const char *capa);
 /* Protocol implementations */
 extern void jmap_core_init(jmap_settings_t *settings);
 extern void jmap_mail_init(jmap_settings_t *settings);
+extern void jmap_mdn_init(jmap_settings_t *settings);
 extern void jmap_contact_init(jmap_settings_t *settings);
 extern void jmap_calendar_init(jmap_settings_t *settings);
 extern void jmap_vacation_init(jmap_settings_t *settings);
@@ -202,6 +204,7 @@ extern void jmap_sieve_init(jmap_settings_t *settings);
 extern void jmap_core_capabilities(json_t *account_capabilities);
 extern void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTopLevel);
 extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
+extern void jmap_mdn_capabilities(json_t *account_capabilities);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_contact_capabilities(json_t *account_capabilities);
 extern void jmap_calendar_capabilities(json_t *account_capabilities);

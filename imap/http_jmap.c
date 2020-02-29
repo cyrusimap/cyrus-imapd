@@ -173,6 +173,7 @@ static void jmap_init(struct buf *serverinfo)
 
     jmap_core_init(&my_jmap_settings);
     jmap_mail_init(&my_jmap_settings);
+    jmap_mdn_init(&my_jmap_settings);
     jmap_contact_init(&my_jmap_settings);
     jmap_calendar_init(&my_jmap_settings);
     jmap_backup_init(&my_jmap_settings);
