@@ -112,6 +112,9 @@ sub test_get_session
 {
     my ($self) = @_;
 
+    # need to version-gate jmap features that aren't in 3.2...
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
@@ -181,7 +184,10 @@ sub test_get_session
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:vacationresponse'});
     $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
-    $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/sieve'});
+    if ($maj > 3 || ($maj == 3 && $min >= 3)) {
+        # jmap sieve added in 3.3
+        $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/sieve'});
+    }
 
     # primaryAccounts
     my $expect_primaryAccounts = {
@@ -191,7 +197,6 @@ sub test_get_session
         'https://cyrusimap.org/ns/jmap/contacts' => 'cassandane',
         'https://cyrusimap.org/ns/jmap/calendars' => 'cassandane',
     };
-    my ($maj, $min) = Cassandane::Instance->get_version();
     if ($maj > 3 || ($maj == 3 && $min >= 3)) {
         # jmap backup and sieve added in 3.3
         $expect_primaryAccounts->{'https://cyrusimap.org/ns/jmap/backup'}
