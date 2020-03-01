@@ -1602,14 +1602,6 @@ dnl
                 AC_DEFINE(HAVE_NEW_CLONE_API,[],
                         [Do we have support for new clone API?]))
 
-        PKG_CHECK_VAR(CYRUS_TIMEZONES_ZONEINFO_DIR, cyrus-timezones, zoneinfo_dir, [
-                 AC_SUBST(CYRUS_TIMEZONES_ZONEINFO_DIR)
-                 with_cyrus_timezones=yes
-                 CYRUS_TIMEZONES_CFLAGS=-DCYRUS_TIMEZONES_ZONEINFO_DIR="\\\"$CYRUS_TIMEZONES_ZONEINFO_DIR\\\""
-                 ],
-                AC_MSG_NOTICE([Cyrus timezones could not be found. Consider installing the cyrus-timezones package for httpd]))
-
-
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
 dnl                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
@@ -2496,7 +2488,6 @@ Documentation dependencies:
 Installation directories:
    prefix:             $prefix
    sysconfdir:         $sysconfdir
-   zoneinfo_dir:       $CYRUS_TIMEZONES_ZONEINFO_DIR
 
 Build info:
    shared:             $enable_shared

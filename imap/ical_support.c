@@ -45,8 +45,10 @@
 
 #include <string.h>
 #include <sysexits.h>
+#include <syslog.h>
 
 
+#include "assert.h"
 #include "caldav_db.h"
 #include "global.h"
 #include "ical_support.h"
@@ -60,16 +62,43 @@ EXPORTED void ical_support_init(void)
 {
     /* Initialize timezones path */
     const char *tzpath = config_getstring(IMAPOPT_ZONEINFO_DIR);
-#ifdef CYRUS_TIMEZONES_ZONEINFO_DIR
-    if (!tzpath) {
-        tzpath = CYRUS_TIMEZONES_ZONEINFO_DIR;
-    }
-#endif
+    icalarray *timezones;
 
     if (tzpath) {
+        syslog(LOG_NOTICE, "using timezone data from zoneinfo_dir=%s", tzpath);
         icaltimezone_set_zone_directory((char *) tzpath);
         icaltimezone_set_tzid_prefix("");
         icaltimezone_set_builtin_tzdata(1);
+    }
+    else {
+        syslog(LOG_NOTICE, "zoneinfo_dir is unset, libical will find "
+                           "its own timezone data");
+    }
+
+    /* make sure libical actually finds some timezone data! */
+    assert(icalerrno == 0);
+    timezones = icaltimezone_get_builtin_timezones();
+    if (icalerrno != 0) {
+        syslog(LOG_ERR, "libical error while loading timezones: %s",
+                        icalerror_strerror(icalerrno));
+    }
+
+    if (timezones->num_elements == 0) {
+        fatal("No timezones found! Please check/set zoneinfo_dir in imapd.conf",
+              EX_CONFIG);
+    }
+
+    if (config_debug) {
+        size_t i;
+
+        syslog(LOG_DEBUG, "%s: found " SIZE_T_FMT " timezones",
+                          __func__, timezones->num_elements);
+        for (i = 0; i < timezones->num_elements; i++) {
+            icaltimezone *tz = icalarray_element_at(timezones, i);
+            syslog(LOG_DEBUG, "%s: [" SIZE_T_FMT "] tzid=%s location=%s",
+                              __func__, i, icaltimezone_get_tzid(tz),
+                              icaltimezone_get_location(tz));
+        }
     }
 }
 
