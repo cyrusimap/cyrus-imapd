@@ -506,6 +506,86 @@ EOF
     $self->assert_matches(qr/valid-calendar-object-resource/, $Err);
 }
 
+sub test_put_changes_etag
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $href = "$CalendarId/uid1.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+DTEND:20160831T183000Z
+TRANSP:OPAQUE
+UID:uid1
+SUMMARY:HasUID1
+DTSTART:20160831T153000Z
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    # annoyingly there's no "Request" that tells you the headers, so:
+  my %Headers = (
+    'Content-Type' => 'text/calendar',
+    'Authorization' => $CalDAV->auth_header(),
+  );
+
+  my $Response = $CalDAV->ua->request('PUT', $CalDAV->request_url($href), {
+    content => $card,
+    headers => \%Headers,
+  });
+
+  $self->assert_num_equals(201, $Response->{status});
+  my $etag = $Response->{headers}{etag};
+  $self->assert_not_null($etag);
+
+  $Response = $CalDAV->ua->request('HEAD', $CalDAV->request_url($href), {
+    headers => \%Headers,
+  });
+
+  # the etag shouldn't have changed
+  $self->assert_num_equals(200, $Response->{status});
+  my $etag2 = $Response->{headers}{etag};
+  $self->assert_not_null($etag2);
+  $self->assert_str_equals($etag2, $etag);
+
+  $card =~ s/HasUID1/HasUID2/s;
+
+  $Response = $CalDAV->ua->request('PUT', $CalDAV->request_url($href), {
+    content => $card,
+    headers => \%Headers,
+  });
+
+  # no content, we're replacing a thing
+  $self->assert_num_equals(204, $Response->{status});
+  my $etag3 = $Response->{headers}{etag};
+  $self->assert_not_null($etag2);
+
+  # the content has changed, so the etag MUST change
+  $self->assert_str_not_equals($etag, $etag3);
+
+  $Response = $CalDAV->ua->request('HEAD', $CalDAV->request_url($href), {
+    headers => \%Headers,
+  });
+
+  # the etag shouldn't have changed again
+  $self->assert_num_equals(200, $Response->{status});
+  my $etag4 = $Response->{headers}{etag};
+  $self->assert_not_null($etag4);
+  $self->assert_str_equals($etag4, $etag3);
+}
+
 sub test_apple_location_notz
     :needs_component_httpd
 {
