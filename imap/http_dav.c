@@ -8559,11 +8559,16 @@ int dav_store_resource(struct transaction_t *txn,
                     /* Read index record for new message (always the last one) */
                     struct index_record newrecord;
                     struct dav_data ddata;
+                    static char etagbuf[256];
+                    const char *etag;
 
                     ddata.alive = 1;
                     ddata.imap_uid = mailbox->i.last_uid;
                     dav_get_validators(mailbox, &ddata, httpd_userid, &newrecord,
-                                       &txn->resp_body.etag, &txn->resp_body.lastmod);
+                                       &etag, &txn->resp_body.lastmod);
+                    strncpy(etagbuf, etag, 255);
+                    etagbuf[255] = 0;
+                    txn->resp_body.etag = etagbuf;
                 }
             }
         }
