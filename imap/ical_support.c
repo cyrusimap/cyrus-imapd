@@ -95,9 +95,12 @@ EXPORTED void ical_support_init(void)
                           __func__, timezones->num_elements);
         for (i = 0; i < timezones->num_elements; i++) {
             icaltimezone *tz = icalarray_element_at(timezones, i);
+            char *tzid = xstrdupsafe(icaltimezone_get_tzid(tz));
+            char *location = xstrdupsafe(icaltimezone_get_location(tz));
             syslog(LOG_DEBUG, "%s: [" SIZE_T_FMT "] tzid=%s location=%s",
-                              __func__, i, icaltimezone_get_tzid(tz),
-                              icaltimezone_get_location(tz));
+                              __func__, i, tzid, location);
+            free(location);
+            free(tzid);
         }
     }
 }
