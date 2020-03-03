@@ -3071,7 +3071,8 @@ static int jmap_email_query(jmap_req_t *req)
                     free(lstat->iso_lang);
                     free(lstat);
                 }
-                json_object_set_new(res, "languageStats", jstats);
+                json_object_set_new(res, "debug",
+                        json_pack("{s:o}", "languageStats", jstats));
             }
             ptrarray_fini(&lstats);
         }
@@ -10843,7 +10844,8 @@ static int jmap_email_set(jmap_req_t *req)
 
     json_t *reply = jmap_set_reply(&set);
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
-        json_object_set_new(reply, "debugBulkUpdate", debug_bulkupdate); // takes ownership
+        json_object_set_new(reply, "debug",
+                json_pack("{s:o}", "bulkUpdate", debug_bulkupdate));
     }
     jmap_ok(req, reply);
 
