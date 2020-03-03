@@ -1706,6 +1706,11 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
 /*
  * Read an index record from a mapped index file
  */
+#ifdef HAVE_DECLARE_OPTIMIZE
+static int mailbox_buf_to_index_record(const char *buf, int version,
+                                       struct index_record *record, int dirty)
+    __attribute__((optimize("-O3")));
+#endif
 static int mailbox_buf_to_index_record(const char *buf, int version,
                                        struct index_record *record, int dirty)
 {
