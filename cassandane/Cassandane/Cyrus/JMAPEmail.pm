@@ -14105,9 +14105,9 @@ sub test_email_query_language_stats
     my $res = $jmap->CallMethods([
         ['Email/query', { }, 'R1' ]
     ], $using);
-    $self->assert_not_null($res->[0][1]{languageStats}{de}{weight});
-    $self->assert_not_null($res->[0][1]{languageStats}{fr}{weight});
-    $self->assert_not_null($res->[0][1]{languageStats}{en}{weight});
+    $self->assert_not_null($res->[0][1]{debug}{languageStats}{de}{weight});
+    $self->assert_not_null($res->[0][1]{debug}{languageStats}{fr}{weight});
+    $self->assert_not_null($res->[0][1]{debug}{languageStats}{en}{weight});
 }
 sub test_email_set_received_at
     :min_version_3_1 :needs_component_jmap
