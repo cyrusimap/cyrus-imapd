@@ -429,6 +429,49 @@ static int _mbox_get_roleorder(jmap_req_t *req, const mbname_t *mbname)
     return role_order;
 }
 
+static char *_mbox_get_color(jmap_req_t *req, const mbname_t *mbname)
+{
+    struct buf buf = BUF_INITIALIZER;
+    const char *annot = IMAP_ANNOT_NS "color";
+    char *color = NULL;
+
+    /* Does this mailbox have a defined color */
+    // XXX: should we align with calendars and addressbooks?
+    annotatemore_lookupmask(mbname_intname(mbname), annot, req->userid, &buf);
+    if (buf.len) {
+        color = buf_release(&buf);
+    }
+
+    buf_free(&buf);
+
+    return color;
+}
+
+static int _mbox_get_showaslabel(jmap_req_t *req, const mbname_t *mbname)
+{
+    int show_as_label = -1;
+    struct buf attrib = BUF_INITIALIZER;
+    const char *annot = IMAP_ANNOT_NS "showaslabel";
+    int r = annotatemore_lookupmask(mbname_intname(mbname), annot, httpd_userid, &attrib);
+    if (!r && attrib.len) {
+        /* We got a mailbox with an annotation. Use it. */
+        show_as_label = atoi(buf_cstring(&attrib));
+    }
+    buf_free(&attrib);
+
+    // fallback: mailboxes with role other than 'inbox' get false, rest get true
+    if (show_as_label == -1) {
+        char *role = _mbox_get_role(req, mbname);
+        if (!role || !strcmp(role, "inbox"))
+            show_as_label = 1;
+        else
+            show_as_label = 0;
+        free(role);
+    }
+
+    return show_as_label;
+}
+
 static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
 {
     struct buf attrib = BUF_INITIALIZER;
@@ -643,6 +686,15 @@ static json_t *_mbox_get(jmap_req_t *req,
                 json_object_set_new(obj, "storageUsed", json_integer(sdata.size));
             }
         }
+        if (jmap_wantprop(props, "color")) {
+            char *color = _mbox_get_color(req, mbname);
+            json_object_set_new(obj, "color", json_string(color));
+            free(color);
+        }
+        if (jmap_wantprop(props, "showAsLabel")) {
+            int showAsLabel = _mbox_get_showaslabel(req, mbname);
+            json_object_set_new(obj, "showAsLabel", showAsLabel ? json_true() : json_false());
+        }
     }
     else {
         if (jmap_wantprop(props, "totalEmails")) {
@@ -665,6 +717,12 @@ static json_t *_mbox_get(jmap_req_t *req,
         }
         if (jmap_wantprop(props, "storageUsed")) {
             json_object_set_new(obj, "storageUsed", json_integer(0));
+        }
+        if (jmap_wantprop(props, "color")) {
+            json_object_set_new(obj, "color", json_null());
+        }
+        if (jmap_wantprop(props, "showAsLabel")) {
+            json_object_set_new(obj, "showAsLabel", json_false());
         }
     }
 
@@ -884,6 +942,16 @@ static const jmap_property_t mailbox_props[] = {
         "storageUsed",
         JMAP_MAIL_EXTENSION,
         JMAP_PROP_SERVER_SET
+    },
+    {
+        "color",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "showAsLabel",
+        JMAP_MAIL_EXTENSION,
+        0
     },
     { NULL, NULL, 0 }
 };
@@ -1826,6 +1894,8 @@ struct mboxset_args {
     int sortorder;
     json_t *shareWith; /* NULL if not set */
     int overwrite_acl;
+    char *color;
+    int show_as_label;
     json_t *jargs; // original JSON arguments
 };
 
@@ -2039,6 +2109,27 @@ static void _mbox_setargs_parse(json_t *jargs,
         jmap_parser_invalid(parser, "totalThreads");
     if (json_object_get(jargs, "unreadThreads") && is_create)
         jmap_parser_invalid(parser, "unreadThreads");
+
+    /* color */
+    json_t *jcolor = json_object_get(jargs, "color");
+    if (json_is_string(jcolor) || jcolor == json_null()) {
+        args->color = (jcolor == json_null()) ? xstrdup("") : xstrdup(json_string_value(jcolor));
+    }
+    else if (JNOTNULL(jcolor)) {
+        jmap_parser_invalid(parser, "color");
+    }
+
+    /* showAsLabel */
+    json_t *jshowAsLabel = json_object_get(jargs, "showAsLabel");
+    if (json_is_boolean(jshowAsLabel)) {
+        args->show_as_label = json_boolean_value(jshowAsLabel);
+    }
+    else if (jshowAsLabel) {
+        jmap_parser_invalid(parser, "showAsLabel");
+    }
+    else {
+        args->show_as_label = -1;
+    }
 }
 
 static int _mbox_set_annots(jmap_req_t *req,
@@ -2080,6 +2171,33 @@ static int _mbox_set_annots(jmap_req_t *req,
          * for the authenticated user */
         buf_printf(&buf, "%d", args->sortorder);
         static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
+        r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &buf);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    sortorder_annot, error_message(r));
+            goto done;
+        }
+    }
+
+    if (args->color) {
+        /* Set color annotation on mailbox.  This is a masked private annotation
+         * for the authenticated user */
+        buf_setcstr(&buf, args->color);
+        static const char *annot = IMAP_ANNOT_NS "color";
+        r = annotatemore_write(mboxname, annot, req->accountid, &buf);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    annot, error_message(r));
+            goto done;
+        }
+        buf_reset(&buf);
+    }
+
+    if (args->show_as_label >= 0) {
+        /* Set showAsLabel annotation on mailbox.  This is a masked private annotation
+         * for the authenticated user */
+        buf_printf(&buf, "%d", args->show_as_label);
+        static const char *sortorder_annot = IMAP_ANNOT_NS "showaslabel";
         r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &buf);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
@@ -2250,6 +2368,9 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
         mbname_t *mbname = mbname_from_intname(mboxname);
         json_object_set_new(*mbox, "sortOrder", json_integer(_mbox_get_sortorder(req, mbname)));
         mbname_free(&mbname);
+    }
+    if (args->show_as_label < 0) {
+        json_object_set_new(*mbox, "showAsLabel", args->specialuse ? json_false() : json_true());
     }
 
 done:
