@@ -573,6 +573,11 @@ static int check_tailcrc(struct dbengine *db, struct skiprecord *record)
 }
 
 /* read a single skiprecord at the given offset */
+#ifdef HAVE_DECLARE_OPTIMIZE
+static int read_onerecord(struct dbengine *db, size_t offset,
+           struct skiprecord *record)
+    __attribute__((optimize("-O3")));
+#endif
 static int read_onerecord(struct dbengine *db, size_t offset,
                           struct skiprecord *record)
 {
@@ -842,6 +847,11 @@ static int append_record(struct dbengine *db, struct skiprecord *record,
 
 /* find the next record at a given level, encapsulating the
  * level 0 magic */
+#ifdef HAVE_DECLARE_OPTIMIZE
+static size_t _getloc(struct dbengine *db, struct skiprecord *record,
+                      uint8_t level)
+    __attribute__((optimize("-O3")));
+#endif
 static size_t _getloc(struct dbengine *db, struct skiprecord *record,
                       uint8_t level)
 {
@@ -863,6 +873,11 @@ static size_t _getloc(struct dbengine *db, struct skiprecord *record,
 
 /* set the next record at a given level, encapsulating the
  * level 0 magic */
+#ifdef HAVE_DECLARE_OPTIMIZE
+static void _setloc(struct dbengine *db, struct skiprecord *record,
+                    uint8_t level, size_t offset)
+    __attribute__((optimize("-O3")));
+#endif
 static void _setloc(struct dbengine *db, struct skiprecord *record,
                     uint8_t level, size_t offset)
 {
@@ -886,6 +901,10 @@ static void _setloc(struct dbengine *db, struct skiprecord *record,
 
 /* finds a record, either an exact match or the record
  * immediately before */
+#ifdef HAVE_DECLARE_OPTIMIZE
+static int relocate(struct dbengine *db)
+    __attribute__((optimize("-O3")));
+#endif
 static int relocate(struct dbengine *db)
 {
     struct skiploc *loc = &db->loc;
