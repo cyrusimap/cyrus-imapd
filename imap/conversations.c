@@ -1960,7 +1960,7 @@ static int _guid_filter_p(void *rock,
     struct guid_foreach_rock *frock = (struct guid_foreach_rock *)rock;
 
     for (; frock->filterpos < frock->filternum; frock->filterpos++) {
-        int cmp = memcmp(frock->filterdata + (41 * frock->filterpos), key, 40);
+        int cmp = memcmp(frock->filterdata + (41 * frock->filterpos), key+1, 40);
         if (cmp > 0) break; // definitely not a match
         if (cmp == 0) return 1; // match.
         /* We don't also increment for a match because multiple rows
