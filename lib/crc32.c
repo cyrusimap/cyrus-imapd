@@ -613,6 +613,10 @@ static const uint32_t crc32_lookup[16][256] =
 
 #if BYTE_ORDER != LITTLE_ENDIAN
 /* swap endianness */
+#ifdef HAVE_DECLARE_OPTIMIZE
+static uint32_t swap(uint32_t x)
+    __attribute__((pure, always_inline, optimize("-O3")));
+#endif
 static uint32_t swap(uint32_t x)
 {
 #if defined(__builtin_bswap32)
@@ -627,6 +631,10 @@ static uint32_t swap(uint32_t x)
 #endif
 
 /* compute CRC32 (Slicing-by-8 algorithm) */
+#ifdef HAVE_DECLARE_OPTIMIZE
+static uint32_t crc32_slice8(uint32_t prev, const void *data, size_t length)
+    __attribute__((pure, optimize("-O3")));
+#endif
 static uint32_t crc32_slice8(uint32_t prev, const void *data, size_t length)
 {
     uint32_t crc = ~prev;
@@ -670,6 +678,10 @@ static uint32_t crc32_slice8(uint32_t prev, const void *data, size_t length)
 }
 
 /* compute CRC32 (Slicing-by-16 algorithm) */
+#ifdef HAVE_DECLARE_OPTIMIZE
+static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
+    __attribute__((pure, optimize("-O3")));
+#endif
 static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
 {
     uint32_t crc = ~prev;
