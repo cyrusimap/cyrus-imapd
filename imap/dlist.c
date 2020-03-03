@@ -829,6 +829,15 @@ struct dlistsax_state {
     struct buf gbuf;
 };
 
+#ifdef HAVE_DECLARE_OPTIMIZE
+static int _parseqstring(struct dlistsax_state *s, struct buf *buf)
+    __attribute__((optimize("-O3")));
+static int _parseliteral(struct dlistsax_state *s, struct buf *buf)
+    __attribute__((optimize("-O3")));
+static int _parseitem(struct dlistsax_state *s, struct buf *buf)
+    __attribute__((optimize("-O3")));
+#endif
+
 static int _parseqstring(struct dlistsax_state *s, struct buf *buf)
 {
     buf->len = 0;
