@@ -289,6 +289,9 @@ magic(SearchLanguage => sub {
 magic(SieveUTF8Fileinto => sub {
     shift->config_set('sieve_utf8fileinto' => 'yes');
 });
+magic(SearchSetForceScanMode => sub {
+    shift->config_set(search_queryscan => '1');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
