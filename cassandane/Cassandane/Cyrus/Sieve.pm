@@ -2641,5 +2641,46 @@ EOF
     $self->assert_null(grep { $_ eq '$SieveFailed' } @{$res->{3}{flags}});
 }
 
+sub test_double_require
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my $target = "INBOX.target";
+
+    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto"];
+require ["imapflags"];
+addflag "\\\\Flagged";
+fileinto "$target";
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Actually create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create($target)
+         or die "Cannot create $target: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog $self, "Deliver another message";
+    my $msg2 = $self->{gen}->generate(subject => "Message 2");
+    $self->{instance}->deliver($msg2);
+    $msg2->set_attribute(uid => 1);
+
+    xlog $self, "Check that only the 1st message made it to INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog $self, "Check that only the 2nd message made it to the target";
+    $self->{store}->set_folder($target);
+    $self->check_messages({ 1 => $msg2 }, check_guid => 0);
+}
+
 
 1;
