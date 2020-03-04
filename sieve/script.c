@@ -166,9 +166,9 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
     sieve_register_discard(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_reject(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_fileinto(interpreter, (sieve_callback *) &stub_generic);
-    sieve_register_snooze(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_keep(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_imapflags(interpreter, NULL);
+    sieve_register_notify(interpreter, &stub_notify, NULL);
     sieve_register_size(interpreter, (sieve_get_size *) &stub_generic);
     sieve_register_mailboxexists(interpreter,
                                  (sieve_get_mailboxexists *) &stub_generic);
@@ -181,21 +181,13 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
     sieve_register_addheader(interpreter, (sieve_add_header *) &stub_generic);
     sieve_register_deleteheader(interpreter,
                                 (sieve_delete_header *) &stub_generic);
+    sieve_register_fname(interpreter, (sieve_get_fname *) &stub_generic);
     sieve_register_envelope(interpreter, (sieve_get_envelope *) &stub_generic);
     sieve_register_environment(interpreter,
                                (sieve_get_environment *) &stub_generic);
     sieve_register_body(interpreter, (sieve_get_body *) &stub_generic);
     sieve_register_include(interpreter, (sieve_get_include *) &stub_generic);
-
-#ifdef WITH_DAV
-    sieve_register_extlists(interpreter,
-                            (sieve_list_validator *) &stub_generic,
-                            (sieve_list_comparator *) &stub_generic);
-#endif
-
-#ifdef WITH_JMAP
-    sieve_register_jmapquery(interpreter, (sieve_jmapquery *) &stub_generic);
-#endif
+    sieve_register_logger(interpreter, (sieve_logger *) &stub_generic);
 
     res = sieve_register_vacation(interpreter, &stub_vacation);
     if (res != SIEVE_OK) {
@@ -209,7 +201,18 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
         goto done;
     }
 
-    sieve_register_notify(interpreter, &stub_notify, NULL);
+#ifdef WITH_DAV
+    sieve_register_extlists(interpreter,
+                            (sieve_list_validator *) &stub_generic,
+                            (sieve_list_comparator *) &stub_generic);
+#endif
+#ifdef WITH_JMAP
+    sieve_register_jmapquery(interpreter, (sieve_jmapquery *) &stub_generic);
+#endif
+#ifdef HAVE_JANSSON
+    sieve_register_snooze(interpreter, (sieve_callback *) &stub_generic);
+#endif
+
     sieve_register_parse_error(interpreter, &stub_parse_error);
 
 done:
