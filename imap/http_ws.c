@@ -444,7 +444,8 @@ static void parse_extensions(struct transaction_t *txn)
             while (extp->name && strcmp(token, extp->name)) extp++;
 
             /* Check if client wants per-message compression */
-            if (extp->flag == EXT_PMCE_DEFLATE) {
+            if (extp->flag == EXT_PMCE_DEFLATE &&
+                config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
                 unsigned client_max_wbits = MAX_WBITS;
 
                 ctx->pmce.deflate.max_wbits = MAX_WBITS;
@@ -478,7 +479,7 @@ static void parse_extensions(struct transaction_t *txn)
 #ifdef HAVE_ZLIB
                 /* Reconfigure compression context for raw deflate */
                 if (txn->zstrm) deflateEnd(txn->zstrm);
-                else txn->zstrm = xmalloc(sizeof(z_stream));
+                else txn->zstrm = xzmalloc(sizeof(z_stream));
 
                 if (deflateInit2(txn->zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
                                  -ctx->pmce.deflate.max_wbits,
@@ -488,7 +489,7 @@ static void parse_extensions(struct transaction_t *txn)
                 }
                 if (txn->zstrm) {
                     /* Configure decompression context for raw deflate */
-                    ctx->pmce.deflate.zstrm = xmalloc(sizeof(z_stream));
+                    ctx->pmce.deflate.zstrm = xzmalloc(sizeof(z_stream));
                     if (inflateInit2(ctx->pmce.deflate.zstrm,
                                      -client_max_wbits) != Z_OK) {
                         free(ctx->pmce.deflate.zstrm);
