@@ -1945,6 +1945,9 @@ static int run_guidsearch(search_builder_t *bx, search_hitguid_cb_t proc, void *
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     bb->proc_guidsearch = proc;
     bb->rock = rock;
+    // we can't do GUIDSEARCH on v4 databases
+    if (xapian_db_has_legacy_v4_index(bb->lock.db))
+        return IMAP_SEARCH_NOT_SUPPORTED;
     return run_internal(bb);
 }
 
