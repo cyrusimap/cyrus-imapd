@@ -2412,8 +2412,8 @@ sub test_mailbox_set_issubscribed
     $self->assert_equals(JSON::false, $res->[0][1]{list}[1]{isSubscribed});
 }
 
-sub test_mailbox_set_isseenshared
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+sub test_mailbox_set_extendedprops
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2433,34 +2433,47 @@ sub test_mailbox_set_isseenshared
                 "B" => {
                     name => "B",
                     isSeenShared => JSON::true,
+                    color => '#ABCDEF',
+                    showAsLabel => JSON::false,
                 }
             }
         }, "R1"]
     ]);
     $self->assert_equals(JSON::false, $res->[0][1]{created}{A}{isSeenShared});
     $self->assert(not exists $res->[0][1]{created}{B}{isSeenShared});
+    $self->assert_null($res->[0][1]{created}{A}{color});
+    $self->assert(not exists $res->[0][1]{created}{B}{color});
+    $self->assert_equals(JSON::true, $res->[0][1]{created}{A}{showAsLabel});
+    $self->assert(not exists $res->[0][1]{created}{B}{showAsLabel});
     my $mboxIdA = $res->[0][1]{created}{A}{id};
     my $mboxIdB = $res->[0][1]{created}{B}{id};
 
     $res = $jmap->CallMethods([
         ['Mailbox/get', {
             ids => [$mboxIdA, $mboxIdB],
-            properties => ['isSeenShared'],
+            properties => ['isSeenShared', 'color', 'showAsLabel'],
         }, 'R1']
     ]);
     $self->assert_equals($mboxIdA, $res->[0][1]{list}[0]{id});
     $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{isSeenShared});
+    $self->assert_null($res->[0][1]{list}[0]{color});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{showAsLabel});
     $self->assert_equals($mboxIdB, $res->[0][1]{list}[1]{id});
     $self->assert_equals(JSON::true, $res->[0][1]{list}[1]{isSeenShared});
+    $self->assert_str_equals('#ABCDEF', $res->[0][1]{list}[1]{color});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[1]{showAsLabel});
 
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
             update => {
                 $mboxIdA => {
                     isSeenShared => JSON::true,
+                    color => '#123456',
+                    showAsLabel => JSON::false,
                 },
                 $mboxIdB => {
                     isSeenShared => JSON::false,
+                    showAsLabel => JSON::false,
                 },
             }
         }, "R1"]
@@ -2468,13 +2481,17 @@ sub test_mailbox_set_isseenshared
     $res = $jmap->CallMethods([
         ['Mailbox/get', {
             ids => [$mboxIdA, $mboxIdB],
-            properties => ['isSeenShared'],
+            properties => ['isSeenShared', 'color', 'showAsLabel'],
         }, 'R1']
     ]);
     $self->assert_equals($mboxIdA, $res->[0][1]{list}[0]{id});
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isSeenShared});
+    $self->assert_str_equals('#123456', $res->[0][1]{list}[0]{color});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{showAsLabel});
     $self->assert_equals($mboxIdB, $res->[0][1]{list}[1]{id});
     $self->assert_equals(JSON::false, $res->[0][1]{list}[1]{isSeenShared});
+    $self->assert_str_equals('#ABCDEF', $res->[0][1]{list}[1]{color});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[1]{showAsLabel});
 }
 
 sub test_mailbox_changes
