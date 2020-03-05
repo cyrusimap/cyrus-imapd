@@ -73,6 +73,14 @@ typedef struct {
 /* The empty SMTP envelope */
 #define SMTP_ENVELOPE_INITIALIZER { { NULL, PTRARRAY_INITIALIZER, 0 }, PTRARRAY_INITIALIZER }
 
+/* Return non-zero if val is a valid esmtp-keyword
+ * as defined in RFC 5321, section 4.1.2. */
+extern int smtp_is_valid_esmtp_keyword(const char *val);
+
+/* Return non-zero if val is a valid esmtp-value
+ * as defined in RFC 5321, section 4.1.2. */
+extern int smtp_is_valid_esmtp_value(const char *val);
+
 /* Set the MAIL FROM address in env and return the new value.
  * Any existing address is deallocated. */
 extern smtp_addr_t *smtp_envelope_set_from(smtp_envelope_t *env, const char *addr);
