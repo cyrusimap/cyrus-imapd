@@ -211,11 +211,14 @@ static int _emailsubmission_address_parse(json_t *addr,
     json_t *parameters = json_object_get(addr, "parameters");
     jmap_parser_push(parser, "parameters");
     json_object_foreach(parameters, key, val) {
-        /* TODO validate allowed esmtp characters */
-        if (JNOTNULL(val) && !json_is_string(val)) {
+        if (!smtp_is_valid_esmtp_keyword(key)) {
             jmap_parser_invalid(parser, key);
         }
-        else if (holduntil) {
+        else if (JNOTNULL(val) && !json_is_string(val)) {
+            /* We'll xtext-encode any non-esmtp values later */
+            jmap_parser_invalid(parser, key);
+        }
+        if (holduntil) {
             if (!strcasecmp(key, "HOLDFOR")) {
                 const char *nptr = json_string_value(val);
                 char *endptr = NULL;

@@ -446,10 +446,18 @@ static int write_addr(smtpclient_t *sm,
     buf_printf(&sm->buf, "%s:<%s>", cmd, addr->addr);
     for (i = 0; i < addr->params.count; i++) {
         smtp_param_t *param = ptrarray_nth(&addr->params, i);
+        if (!smtp_is_valid_esmtp_keyword(param->key)) {
+            syslog(LOG_ERR, "smtpclient: invalid estmp keyword: \"%s\"", param->key);
+            return IMAP_PROTOCOL_ERROR;
+        }
         buf_appendcstr(&sm->buf, " ");
         buf_appendcstr(&sm->buf, param->key);
         if (!param->val) {
             continue;
+        }
+        if (!smtp_is_valid_esmtp_value(param->val)) {
+            syslog(LOG_ERR, "smtpclient: invalid estmp value: \"%s\"", param->val);
+            return IMAP_PROTOCOL_ERROR;
         }
         buf_appendcstr(&sm->buf, "=");
         buf_appendcstr(&sm->buf, param->val);
@@ -808,6 +816,30 @@ EXPORTED int smtpclient_open_host(const char *addr, smtpclient_t **smp)
 done:
     free(myaddr);
     return r;
+}
+
+EXPORTED int smtp_is_valid_esmtp_keyword(const char *val)
+{
+    if (!isascii(*val) || !isalnum(*val)) {
+        return 0;
+    }
+    for (val = val + 1; *val; val++) {
+        if (!isascii(*val) || (*val != '-' && !isalnum(*val))) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+EXPORTED int smtp_is_valid_esmtp_value(const char *val)
+{
+    if (*val == '\0') return 0;
+    for ( ; *val; val++) {
+        if (*val == '=' || *val < '!' || *val > '~') {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 

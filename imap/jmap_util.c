@@ -278,6 +278,7 @@ static void address_to_smtp(smtp_addr_t *smtpaddr, json_t *addr)
 
     const char *key;
     json_t *val;
+    struct buf xtext = BUF_INITIALIZER;
     json_object_foreach(json_object_get(addr, "parameters"), key, val) {
         /* We never take AUTH at face value */
         if (!strcasecmp(key, "AUTH")) {
@@ -287,11 +288,24 @@ static void address_to_smtp(smtp_addr_t *smtpaddr, json_t *addr)
         else if (!strcasecmp(key, "HOLDFOR") || !strcasecmp(key, "HOLDUNTIL")) {
             continue;
         }
+        /* Encode xtext value */
+        if (json_is_string(val)) {
+            const char *p;
+            for (p = json_string_value(val); *p; p++) {
+                if (('!' <= *p && *p <= '~') && *p != '=' && *p != '+') {
+                    buf_putc(&xtext, *p);
+                }
+                else buf_printf(&xtext, "+%02X", *p);
+            }
+        }
+        /* Build parameter */
         smtp_param_t *param = xzmalloc(sizeof(smtp_param_t));
         param->key = xstrdup(key);
-        param->val = xstrdup(json_string_value(val));
+        param->val = buf_len(&xtext) ? xstrdup(buf_cstring(&xtext)) : NULL;
         ptrarray_append(&smtpaddr->params, param);
+        buf_reset(&xtext);
     }
+    buf_free(&xtext);
 }
 
 EXPORTED void jmap_emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv,
