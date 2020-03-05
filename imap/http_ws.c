@@ -217,11 +217,53 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
     return n;
 }
 
+
+#ifdef HAVE_ZLIB
+#include <zlib.h>
+
+static void ws_zlib_init(struct transaction_t *txn, unsigned client_max_wbits)
+{
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+
+    /* (Re)configure compression context for raw deflate */
+    if (txn->zstrm) deflateEnd(txn->zstrm);
+    else txn->zstrm = xzmalloc(sizeof(z_stream));
+
+    if (deflateInit2(txn->zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+                     -ctx->pmce.deflate.max_wbits,
+                     MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) != Z_OK) {
+        free(txn->zstrm);
+        txn->zstrm = NULL;
+    }
+
+    if (txn->zstrm) {
+        /* Configure decompression context for raw deflate */
+        ctx->pmce.deflate.zstrm = xzmalloc(sizeof(z_stream));
+        if (inflateInit2(ctx->pmce.deflate.zstrm, -client_max_wbits) != Z_OK) {
+            free(ctx->pmce.deflate.zstrm);
+            ctx->pmce.deflate.zstrm = NULL;
+        }
+    }
+}
+
+static void ws_zlib_done(struct ws_context *ctx)
+{
+    if (ctx->pmce.deflate.zstrm) {
+        inflateEnd(ctx->pmce.deflate.zstrm);
+        free(ctx->pmce.deflate.zstrm);
+    }
+}
+
 static int zlib_decompress(struct transaction_t *txn,
                            const char *buf, unsigned len)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
     z_stream *zstrm = ctx->pmce.deflate.zstrm;
+
+    if (!zstrm) {
+        syslog(LOG_ERR, "zlib_decompress(): no z_stream");
+        return -1;
+    }
 
     zstrm->next_in = (Bytef *) buf;
     zstrm->avail_in = len;
@@ -249,6 +291,24 @@ static int zlib_decompress(struct transaction_t *txn,
 
     return 0;
 }
+#else /* !HAVE_ZLIB */
+
+#define MAX_WBITS 0
+
+static void ws_zlib_init(struct transaction_t *txn __attribute__((unused)),
+                         unsigned client_max_wbits __attribute__((unused))) { }
+
+static void ws_zlib_done(struct ws_context *ctx __attribute__((unused))) { }
+
+static int zlib_decompress(struct transaction_t *txn __attribute__((unused)),
+                           const char *buf __attribute__((unused)),
+                           unsigned len __attribute__((unused)))
+{
+    fatal("zlib_decompress() called, but no Zlib", EX_SOFTWARE);
+}
+
+#endif /* HAVE_ZLIB */
+
 
 #define COMP_FAILED_ERR    "Compressing message failed"
 #define DECOMP_FAILED_ERR  "Decompressing message failed"
@@ -476,27 +536,9 @@ static void parse_extensions(struct transaction_t *txn)
                         }
                     }
                 }
-#ifdef HAVE_ZLIB
-                /* Reconfigure compression context for raw deflate */
-                if (txn->zstrm) deflateEnd(txn->zstrm);
-                else txn->zstrm = xzmalloc(sizeof(z_stream));
 
-                if (deflateInit2(txn->zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
-                                 -ctx->pmce.deflate.max_wbits,
-                                 MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) != Z_OK) {
-                    free(txn->zstrm);
-                    txn->zstrm = NULL;
-                }
-                if (txn->zstrm) {
-                    /* Configure decompression context for raw deflate */
-                    ctx->pmce.deflate.zstrm = xzmalloc(sizeof(z_stream));
-                    if (inflateInit2(ctx->pmce.deflate.zstrm,
-                                     -client_max_wbits) != Z_OK) {
-                        free(ctx->pmce.deflate.zstrm);
-                        ctx->pmce.deflate.zstrm = NULL;
-                    }
-                }
-#endif /* HAVE_ZLIB */
+                ws_zlib_init(txn, client_max_wbits);
+
                 if (ctx->pmce.deflate.zstrm) {
                     /* Compression has been enabled */
                     wslay_event_config_set_allowed_rsv_bits(ctx->event,
@@ -504,7 +546,6 @@ static void parse_extensions(struct transaction_t *txn)
                     ctx->ext = extp->flag;
                 }
             }
-
             tok_fini(&param);
         }
 
@@ -703,10 +744,7 @@ HIDDEN void ws_end_channel(void *ws_ctx)
 
     if (ctx->cb_rock) ctx->data_cb(NULL, NULL, NULL, &ctx->cb_rock);
 
-    if (ctx->pmce.deflate.zstrm) {
-        inflateEnd(ctx->pmce.deflate.zstrm);
-        free(ctx->pmce.deflate.zstrm);
-    }
+    ws_zlib_done(ctx);
 
     free(ctx);
 }
