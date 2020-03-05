@@ -688,7 +688,7 @@ static json_t *_mbox_get(jmap_req_t *req,
         }
         if (jmap_wantprop(props, "color")) {
             char *color = _mbox_get_color(req, mbname);
-            json_object_set_new(obj, "color", json_string(color));
+            json_object_set_new(obj, "color", color ? json_string(color) : json_null());
             free(color);
         }
         if (jmap_wantprop(props, "showAsLabel")) {
@@ -2184,7 +2184,7 @@ static int _mbox_set_annots(jmap_req_t *req,
          * for the authenticated user */
         buf_setcstr(&buf, args->color);
         static const char *annot = IMAP_ANNOT_NS "color";
-        r = annotatemore_write(mboxname, annot, req->accountid, &buf);
+        r = annotatemore_writemask(mboxname, annot, httpd_userid, &buf);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     annot, error_message(r));
@@ -2197,11 +2197,11 @@ static int _mbox_set_annots(jmap_req_t *req,
         /* Set showAsLabel annotation on mailbox.  This is a masked private annotation
          * for the authenticated user */
         buf_printf(&buf, "%d", args->show_as_label);
-        static const char *sortorder_annot = IMAP_ANNOT_NS "showaslabel";
-        r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &buf);
+        static const char *annot = IMAP_ANNOT_NS "showaslabel";
+        r = annotatemore_writemask(mboxname, annot, httpd_userid, &buf);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    sortorder_annot, error_message(r));
+                    annot, error_message(r));
             goto done;
         }
     }
@@ -2685,12 +2685,27 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     }
 
     /* Write annotations and isSubscribed */
-    if (args->name || args->specialuse || args->sortorder >= 0) {
+
+    int set_annots = 0;
+    if (args->name || args->specialuse) {
+        // these set for everyone
         if (!jmap_hasrights(req, mbentry, JACL_SETKEYWORDS)) {
             mboxlist_entry_free(&mbentry);
             result->err = json_pack("{s:s}", "type", "forbidden");
             goto done;
         }
+        set_annots = 1;
+    }
+    if (args->sortorder >= 0 || args->color || args->show_as_label >= 0) {
+        // these are per-user, so you just need READ access
+        if (!jmap_hasrights(req, mbentry, ACL_READ)) {
+            mboxlist_entry_free(&mbentry);
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+        set_annots = 1;
+    }
+    if (set_annots) {
         if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
             r = mboxlist_promote_intermediary(mbentry->name);
             if (r) goto done;
@@ -2699,6 +2714,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         }
         if (!r) r = _mbox_set_annots(req, args, mboxname);
     }
+
     if (!r && args->is_subscribed >= 0) {
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
                                args->is_subscribed, 0, 0);
