@@ -541,7 +541,7 @@ EOF
     'Authorization' => $CalDAV->auth_header(),
   );
 
-  my $Response = $CalDAV->ua->request('PUT', $CalDAV->request_url($href), {
+  my $Response = $CalDAV->{ua}->request('PUT', $CalDAV->request_url($href), {
     content => $card,
     headers => \%Headers,
   });
@@ -550,7 +550,7 @@ EOF
   my $etag = $Response->{headers}{etag};
   $self->assert_not_null($etag);
 
-  $Response = $CalDAV->ua->request('HEAD', $CalDAV->request_url($href), {
+  $Response = $CalDAV->{ua}->request('HEAD', $CalDAV->request_url($href), {
     headers => \%Headers,
   });
 
@@ -562,7 +562,7 @@ EOF
 
   $card =~ s/HasUID1/HasUID2/s;
 
-  $Response = $CalDAV->ua->request('PUT', $CalDAV->request_url($href), {
+  $Response = $CalDAV->{ua}->request('PUT', $CalDAV->request_url($href), {
     content => $card,
     headers => \%Headers,
   });
@@ -575,7 +575,7 @@ EOF
   # the content has changed, so the etag MUST change
   $self->assert_str_not_equals($etag, $etag3);
 
-  $Response = $CalDAV->ua->request('HEAD', $CalDAV->request_url($href), {
+  $Response = $CalDAV->{ua}->request('HEAD', $CalDAV->request_url($href), {
     headers => \%Headers,
   });
 
