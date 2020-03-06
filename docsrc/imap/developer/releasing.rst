@@ -25,13 +25,26 @@ manual like she did. :)
 Once you have a GPG key, it's helpful to upload your public key to
 `the MIT key-server <http://pgp.mit.edu>`_
 
-You also need a shell account on www.cyrusimap.org and ftp.cyrusimap.org,
-with SSH key authentication.  You need to be in the "admin" group on each,
-and also the "cyrupload" group on the latter.
-
 And you need permission to send to the cyrus-announce mailing list.
 
 .. endblob releaseprereqs
+
+Order of operations
+===================
+
+Sometimes you're releasing several new versions all at once(ish), for example
+maybe there's been a security fix that affected 2.4, 2.5 and 3.0.
+
+Github's release page will put a "Latest Release" graphic on the release with
+the newest tag (by timestamp, I think).  This means that, if you're doing new
+releases for several different versions, you want to do the oldest one first,
+and only do the release for the current-stable branch last.
+
+If you start at the current stable branch and then work your way backwards
+through the older ones, you'll get Github saying "2.5.15 is the Latest
+Release" even though 3.0.13 was also just released... so, even though
+releasing the current-stable fix feels more urgent, suck it up and get the
+older-branch ones out first.
 
 
 Release notes
@@ -59,7 +72,7 @@ Pre-release testing
    need any other options at this stage).
 4. Run ``make distcheck``.  This will generate a distribution tarball, and
    test it in various ways.  It takes about 10-15 mins to run, depending on
-   your hardware.  If this command fails, you are not ready to release --
+   your hardware.  If this command fails*, you are not ready to release --
    fix the problems, get them tested and committed, then restart the
    pre-release testing.
 5. ``make distcheck`` can only test so much (it doesn't know about cunit or
@@ -77,6 +90,21 @@ Pre-release testing
    viii. Then run Cassandane normally -- it should pass.
    ix.   If any of this fails, fix it, commit it, then restart the pre-release
          testing.
+
+.. Note::
+    ``make distcheck`` doesn't work on the 2.5 branch.  For 2.5, just use
+    ``make dist`` instead.
+
+.. Note::
+    Realistically, there's usually some set of expected Cassandane failures
+    from each Cyrus branch, especially for 2.5.  If you're doing releases
+    regularly, you've probably got a good gut feel for which failures are a
+    problem and which ones are just "that old thing".  If you don't do
+    releases regularly, try to pull in someone who does for guidance about
+    which failures are ignorable, and which should be a source of stress.
+
+    If in doubt, try building and testing the previous release from the same
+    series, and compare the test results.
 
 
 Linking up release notes
@@ -98,9 +126,9 @@ website updating before the downloads are available.
 Version tagging
 ===============
 
-Note: it is absolutely critical that your local commits have been pushed
-upstream at this point.  If they are not, and if anybody else pushes in the
-meantime, you will end up with a mess.
+Note: it is absolutely critical that your repository is clean and your local
+commits have been pushed upstream at this point.  If they are not, and if
+anybody else pushes in the meantime, you will end up with a mess.
 
 1. Ensure your repository is clean again: ``git clean -xfd``
 2. Create a signed, annotated tag for the new version: ``git tag -s cyrus-imapd-<version>``
@@ -126,15 +154,60 @@ meantime, you will end up with a mess.
 11. Push the tag upstream: ``git push ci cyrus-imapd-<version>`` (assuming your
     remote is named "ci").
 
-Releasing
+
+Inter-version website consistency
+=================================
+
+The website is built from an amalgamation of documentation from:
+
+* The current stable cyrus-imapd branch (top level)
+* The current master cyrus-imapd branch (``/dev`` hierarchy)
+* Each of the following cyrus-imapd branches (``/x.y`` hierarchies)
+
+    - cyrus-imapd-2.5
+    - cyrus-imapd-3.0
+    - cyrus-imapd-3.2
+
+* The current master cyrus-sasl branch (``/sasl`` hierarchy)
+
+When making a cyrus-imapd release, you need to add the new release notes
+file to each relevant cyrus-imapd branch.  You also need to check and
+update the contents of ``docsrc/conf.py`` on each branch AND the cyrus-sasl
+repository.
+
+Sometimes you can just cherry-pick the commits around, but note that the
+2.5 website stores release notes files in a different path, so if you
+bother to copy release notes back to this branch, a naive cherry-pick will
+not put them in the right place!
+
+This step often gets forgotten, so if you actually follow it, and notice
+some missing versions, just go ahead and add them while you're there.
+
+Uploading
 =========
 
-1. Upload the tarball and signature to www: ``scp cyrus-imapd-*.tar.gz cyrus-imapd-*.tar.gz.sig
-   www.cyrusimap.org:/var/www/html/releases/``
-2. Upload them to ftp too: ``scp cyrus-imapd-*.tar.gz cyrus-imapd-*.tar.gz.sig
-   ftp.cyrusimap.org:/srv/ftp/cyrus-imapd/``
-3. SSH into both www and ftp, and move older releases to the old versions
-   directory.  You want only the two most recent tarball+sig pairs for each
-   major series.
-4. Update the topic in the #cyrus IRC channel.
-5. Send an announcement to the info-cyrus and cyrus-announce lists.
+.. Note::
+    This section does NOT apply to releases from the master branch.  We
+    do not publish release tarballs for those.  People running master code
+    are expected to use a git checkout.
+
+Time to upload the release tarball and signature file!
+
+1. Navigate to https://github.com/cyrusimap/cyrus-imapd/releases
+2. The tag you pushed earlier will now be available as a release, but it will
+   have very little information about it
+3. Click on the tag name
+4. Click "Edit tag" on the right
+5. *Leave every field on the page as it is (probably blank!), except*:
+6. Use the "Attach binaries by dropping them here or selecting them" widget
+   to upload the tarball and signature files
+7. If this is an alpha/beta/rc release, click the "This is a pre-release"
+   checkbox
+8. Click "Save".  The commit message from the tag annotation will be used
+   as the release description.
+
+Tell the world
+==============
+
+1. Update the topic in the #cyrus IRC channel.
+2. Send an announcement to the info-cyrus and cyrus-announce lists.
