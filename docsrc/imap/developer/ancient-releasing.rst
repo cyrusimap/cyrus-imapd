@@ -55,6 +55,11 @@ Pre-release testing
    vi.   Compile it: ``make`` -- it should build correctly.
    vii.  Run the unit tests if there are any: ``make check`` -- they should pass.
 
+.. Note::
+    We don't bother to run ``make distcheck`` on the old branches, because it
+    almost certainly won't work.  We also don't bother to run Cassandane, for
+    much the same reason.  If it builds, that's about as much as we can do.
+
 Cross-pollination of release notes
 ==================================
 
@@ -63,7 +68,7 @@ release notes for these versions appear on the cyrusimap.org website, they need 
 be added to current branches as well.
 
 1. Change to the current stable branch (at time of writing, this is ``cyrus-imapd-3.0``).
-2. Create a new release notes at the appropriate location under
+2. Create a new release notes document at the appropriate location under
    ``docsrc/imap/download/release-notes/``.
 3. Add the release notes you wrote earlier, this time using RST format rather
    than simple HTML.
@@ -96,19 +101,7 @@ Building the release
 11. Push the tag upstream: ``git push ci cyrus-imapd-<version>`` (assuming your
     remote is named "ci").
 
-Releasing
-=========
+Finishing up
+============
 
-1. Upload the tarball and signature to www: ``scp cyrus-imapd-*.tar.gz cyrus-imapd-*.tar.gz.sig
-   www.cyrusimap.org:/var/www/html/releases/``
-2. Upload them to ftp too: ``scp cyrus-imapd-*.tar.gz cyrus-imapd-*.tar.gz.sig
-   ftp.cyrusimap.org:/srv/ftp/cyrus-imapd/``
-3. SSH into both www and ftp, and move older releases to the old versions
-   directory.  You want only the two most recent tarball+sig pairs for each
-   major series.
-4. While SSH'd into www, build the legacy documentation for this release:
-
-   i.  Copy the release tarball to /var/tmp
-   ii. Run the script to publish the tarball documentation to the web:
-       ``/usr/local/bin/PublishCyrusDocs.pl -f /var/tmp/cyrus-imapd-<version>.tar.gz``
-5. Send an announcement to the info-cyrus and cyrus-announce lists.
+Now follow the remaining steps from :ref:`imap-developer-releasing`
