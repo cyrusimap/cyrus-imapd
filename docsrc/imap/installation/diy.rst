@@ -48,7 +48,7 @@ Extract the tarball:
 
     $ :command:`tar xzvf cyrus-imapd-x.y.z.tar.gz`
 
-.. _latest stable tarball: ftp://ftp.cyrusimap.org/cyrus-imapd/
+.. _latest stable tarball: https://github.com/cyrusimap/cyrus-imapd/releases
 
 Continue with :ref:`imap-installation-diy-build-dependencies`.
 

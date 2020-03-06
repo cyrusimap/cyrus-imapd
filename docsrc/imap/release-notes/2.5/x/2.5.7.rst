@@ -16,11 +16,6 @@ Download via HTTP:
     *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.7.tar.gz
     *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.7.tar.gz.sig
 
-Download via FTP:
-
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.7.tar.gz
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.7.tar.gz.sig
-
 .. _relnotes-2.5.7-changes:
 
 Changes Since 2.5.6
