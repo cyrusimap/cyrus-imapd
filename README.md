@@ -45,7 +45,7 @@ How to get Cyrus
 
 Cyrus comes in three flavours: 
 
-1. Our release source tarballs from ftp://ftp.cyrusimap.org/cyrus-imapd/
+1. Our release source tarballs from https://github.com/cyrusimap/cyrus-imapd/releases
     * Recommended for most users.
     * These are packaged by the Cyrus team.
     * The docs are pre-built for you in doc/html.
