@@ -293,6 +293,7 @@ extern int message_get_field(message_t *m, const char *name,
                              int format, struct buf *buf);
 extern int message_get_cachebody(message_t *m, const struct body **bodyp);
 extern int message_get_body(message_t *m, struct buf *buf);
+extern int message_get_headers(message_t *m, struct buf *buf);
 extern int message_get_type(message_t *m, const char **strp);
 extern int message_get_subtype(message_t *m, const char **strp);
 extern int message_get_charset_id(message_t *m, const char **strp);

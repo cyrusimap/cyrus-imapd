@@ -5027,6 +5027,13 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     int hasname = 1;
     int isutf8 = 0;
 
+    if (!strcasecmp(hdr, "rawheaders")) {
+        int r = message_need(m, M_MAP|M_RECORD);
+        if (r) return r;
+        buf_setmap(buf, m->map.s, m->record.header_size);
+        return 0;
+    }
+
     if (!strcasecmp(hdr, "rawbody")) {
         int r = message_need(m, M_MAP|M_RECORD);
         if (r) return r;
@@ -5245,4 +5252,9 @@ EXPORTED int message_get_cachebody(message_t *m, const struct body **bodyp)
 EXPORTED int message_get_body(message_t *m, struct buf *buf)
 {
     return message_get_field(m, "rawbody", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_headers(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "rawheaders", MESSAGE_RAW, buf);
 }
