@@ -3944,6 +3944,8 @@ EXPORTED int mboxlist_setquotas(const char *root,
         return IMAP_MAILBOX_BADNAME;
     }
 
+    mbname_t *mbname = mbname_from_intname(root);
+
     quota_init(&q, root);
     r = quota_read(&q, &tid, 1);
 
@@ -4042,6 +4044,17 @@ EXPORTED int mboxlist_setquotas(const char *root,
     r = quota_write(&q, silent, &tid);
     if (r) goto done;
 
+    // update the conversations limit
+    if (config_getswitch(IMAPOPT_CONVERSATIONS) && mbname_userid(mbname)) {
+        struct conversations_state *cstate = NULL;
+        r = conversations_open_user(mbname_userid(mbname), /*shared*/0, &cstate);
+        if (r) goto done;
+        r = conversations_set_quotalimit(cstate, newquotas[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE]);
+        if (r) conversations_abort(&cstate);
+        else r = conversations_commit(&cstate);
+        if (r) goto done;
+    }
+
     /* prepare a QuotaChange event notification */
     if (quotachange_event == NULL)
         quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE, &mboxevents);
@@ -4060,6 +4073,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
     quota_changelockrelease();
 
 done:
+    mbname_free(&mbname);
     quota_free(&q);
     if (r && tid) quota_abort(&tid);
     if (!r) {
