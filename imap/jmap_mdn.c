@@ -56,7 +56,13 @@
 #include "jmap_api.h"
 #include "jmap_mail.h"
 #include "json_support.h"
+#include "parseaddr.h"
+#include "times.h"
 #include "util.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 static int jmap_mdn_send(jmap_req_t *req);
 static int jmap_mdn_parse(jmap_req_t *req);
@@ -117,12 +123,23 @@ struct mdn_t {
     } dispo;
 
     /* server-set */
+    strarray_t notify_to;
     char *gateway;
     char *orig_msgid;
     char *orig_rcpt;
     char *final_rcpt;
     char *error;
 };
+
+static void free_mdn(struct mdn_t *mdn)
+{
+    strarray_fini(&mdn->notify_to);
+    free(mdn->gateway);
+    free(mdn->orig_msgid);
+    free(mdn->orig_rcpt);
+    free(mdn->final_rcpt);
+    free(mdn->error);
+}
 
 static json_t *parse_mdn_props(json_t *jmdn, struct mdn_t *mdn)
 {
@@ -156,7 +173,7 @@ static json_t *parse_mdn_props(json_t *jmdn, struct mdn_t *mdn)
     if (json_is_boolean(arg)) {
         mdn->inc_msg = json_boolean_value(arg);
     }
-    else {
+    else if (JNOTNULL(arg)) {
         jmap_parser_invalid(&parser, "includeOriginalMessage");
     }
 
@@ -175,31 +192,36 @@ static json_t *parse_mdn_props(json_t *jmdn, struct mdn_t *mdn)
 
         jmap_parser_push(&parser, "disposition");
         json_object_foreach(arg, key, val) {
-            const char *s;
-
-            mdn->dispo.action = s =
-                json_string_value(json_object_get(val, "actionMode"));
-            if (!s || (strcmp(s, "manual-action") &&
-                       strcmp(s, "automatic-action"))) {
-                jmap_parser_invalid(&parser, "actionMode");
-            }
-
-            mdn->dispo.sending = s =
-                json_string_value(json_object_get(val, "sendingMode"));
-            if (!s || (strcmp(s, "MDN-sent-manually") &&
-                       strcmp(s, "MDN-sent-automatically"))) {
-                jmap_parser_invalid(&parser, "sendingMode");
-            }
-
-            mdn->dispo.type = s =
-                json_string_value(json_object_get(val, "type"));
-            if (!s || (strcmp(s, "deleted") &&
-                       strcmp(s, "dispatched") &&
-                       strcmp(s, "displayed") &&
-                       strcmp(s, "processed"))) {
-                jmap_parser_invalid(&parser, "type");
-            }
+            if (!strcmp(key, "actionMode"))
+                mdn->dispo.action = json_string_value(val);
+            else if (!strcmp(key, "sendingMode"))
+                mdn->dispo.sending = json_string_value(val);
+            else if (!strcmp(key, "type"))
+                mdn->dispo.type = json_string_value(val);
+            else
+                jmap_parser_invalid(&parser, key);
         }
+
+        const char *s = mdn->dispo.action;
+        if (!s || (strcmp(s, "manual-action") &&
+                   strcmp(s, "automatic-action"))) {
+            jmap_parser_invalid(&parser, "actionMode");
+        }
+
+        s = mdn->dispo.sending;
+        if (!s || (strcmp(s, "MDN-sent-manually") &&
+                   strcmp(s, "MDN-sent-automatically"))) {
+            jmap_parser_invalid(&parser, "sendingMode");
+        }
+
+        s = mdn->dispo.type;
+        if (!s || (strcmp(s, "deleted") &&
+                   strcmp(s, "dispatched") &&
+                   strcmp(s, "displayed") &&
+                   strcmp(s, "processed"))) {
+            jmap_parser_invalid(&parser, "type");
+        }
+
         jmap_parser_pop(&parser);
     }
     else {
@@ -212,6 +234,238 @@ static json_t *parse_mdn_props(json_t *jmdn, struct mdn_t *mdn)
     }
 
     jmap_parser_fini(&parser);
+
+    return err;
+}
+
+static json_t *generate_mdn(struct jmap_req *req,
+                            struct mdn_t *mdn, struct buf *msgbuf)
+{
+    char datestr[RFC5322_DATETIME_MAX+1];
+    const char *uuid = makeuuid(), *from;
+    char *mboxname = NULL;
+    struct mailbox *mbox = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    msgrecord_t *mr = NULL;
+    message_t *msg;
+    uint32_t uid;
+    json_t *err = NULL;
+    int r = 0;
+
+    buf_reset(msgbuf);
+
+    /* Lookup the message */
+    r = jmap_email_find(req, mdn->emailid, &mboxname, &uid);
+    if (r) {
+        if (r == IMAP_NOTFOUND) {
+            err = json_pack("{s:s}", "type", "emailNotFound");
+        }
+        goto done;
+    }
+
+    /* Check ACL */
+    int rights = jmap_myrights_byname(req, mboxname);
+    if ((rights & JACL_READITEMS) != JACL_READITEMS) {
+        err = json_pack("{s:s}", "type", "emailNotFound");
+        goto done;
+    }
+    if ((rights & JACL_SETKEYWORDS) != JACL_SETKEYWORDS) {
+        err = json_pack("{s:s}", "type", "forbidden");
+        goto done;
+    }
+
+    /* Open the mailbox */
+    r = jmap_openmbox(req, mboxname, &mbox, 1);
+    if (r) goto done;
+
+    /* Load the message */
+    mr = msgrecord_from_uid(mbox, uid);
+    if (!mr) {
+        /* That's a never-should-happen error */
+        syslog(LOG_ERR, "Unexpected null msgrecord at %s:%d",
+               __FILE__, __LINE__);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Have we already sent an MDN? */
+    int mdnsent;
+    r = msgrecord_hasflag(mr, "$MDNSent", &mdnsent);
+    if (r) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    if (mdnsent) {
+        err = json_pack("{s:s}", "type", "mdnAlreadySent");
+        goto done;
+    }
+
+    /* Get recipients of the MDN */
+    r = msgrecord_get_message(mr, &msg);
+    if (r) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    r = message_get_field(msg, "disposition-notification-to", MESSAGE_RAW, &buf);
+    if (r) {
+        err = json_pack("{s:s}", "type", "noRecipients");
+        goto done;
+    }
+
+    struct address *a, *al = NULL;
+    parseaddr_list(buf_cstring(&buf), &al);
+    for (a = al; a; a = a->next) {
+        if (!a->invalid) {
+            strarray_appendm(&mdn->notify_to, address_get_all(a, 1/*canon*/));
+        }
+    }
+    parseaddr_free(al);
+
+    if (!strarray_size(&mdn->notify_to)) {
+        err = json_pack("{s:s}", "type", "noRecipients");
+        goto done;
+    }
+    
+
+    /* Build message */
+    time_to_rfc5322(time(NULL), datestr, sizeof(datestr));
+
+    /* XXX  Is this the best/only way to determine the Final-Recipient? */
+    buf_setcstr(&buf, "rfc822; ");
+    buf_appendcstr(&buf, req->userid);
+    if (!strchr(req->userid, '@')) buf_printf(&buf, "@%s", config_servername);
+    mdn->final_rcpt = buf_release(&buf);
+    from = mdn->final_rcpt + 8; /* skip "rfc822; " */
+
+    buf_printf(msgbuf, "Date: %s\r\n", datestr);
+    buf_printf(msgbuf, "From: <%s>\r\n", from);
+
+    int i;
+    for (i = 0; i < strarray_size(&mdn->notify_to); i++) {
+        buf_printf(msgbuf, "To: <%s>\r\n", strarray_nth(&mdn->notify_to, i));
+    }
+
+    buf_printf(msgbuf, "Message-ID: <%s@%s>\r\n", uuid, config_servername);
+
+    if (mdn->subj) {
+        char *subj = charset_encode_mimeheader(mdn->subj, 0, 0);
+        buf_printf(msgbuf, "Subject: %s\r\n", subj);
+        free(subj);
+    }
+    else {
+        buf_printf(msgbuf, "Subject: Return Receipt (%s)", mdn->dispo.type);
+        r = message_get_subject(msg, &buf);
+        if (!r && buf_len(&buf)) {
+            buf_printf(msgbuf, " for\r\n\t%s", buf_cstring(&buf));
+        }
+        buf_appendcstr(msgbuf, "\r\n");
+    }
+
+    buf_printf(msgbuf, "Content-Type: "
+               "multipart/report; report-type=disposition-notification;"
+               "\r\n\tboundary=\"%s\"\r\n", uuid);
+    buf_appendcstr(msgbuf, "MIME-Version: 1.0\r\n"
+                   "\r\nThis is a MIME-encapsulated message\r\n\r\n");
+
+    /* This is the human readable status report */
+    buf_printf(msgbuf, "--%s\r\n", uuid);
+    buf_appendcstr(msgbuf, "Content-Type: text/plain; charset=utf-8\r\n");
+    buf_appendcstr(msgbuf, "Content-Disposition: inline\r\n");
+    buf_appendcstr(msgbuf, "Content-Transfer-Encoding: 8bit\r\n\r\n");
+
+    if (mdn->body) buf_appendcstr(msgbuf, mdn->body);
+    else {
+        buf_printf(msgbuf,
+                   "This is a Return Receipt for the mail that you sent to %s.",
+                   from);
+    }
+    buf_appendcstr(msgbuf, "\r\n\r\n");
+
+    /* This is the MDN status report */
+    buf_printf(msgbuf, "--%s\r\n", uuid);
+    buf_appendcstr(msgbuf,
+                   "Content-Type: message/disposition-notification\r\n\r\n");
+    if (mdn->mua) buf_printf(msgbuf, "Reporting-UA: %s\r\n", mdn->mua);
+
+    r = message_get_field(msg, "original-recipient", MESSAGE_RAW, &buf);
+    if (!r && buf_len(&buf)) {
+        mdn->orig_rcpt = xstrdup(buf_cstring(&buf));
+        buf_printf(msgbuf, "Original-Recipient: rfc822; %s\r\n", mdn->orig_rcpt);
+    }
+    buf_printf(msgbuf, "Final-Recipient: %s\r\n", mdn->final_rcpt);
+
+    r = message_get_messageid(msg, &buf);
+    if (!r && buf_len(&buf)) {
+        mdn->orig_msgid = xstrdup(buf_cstring(&buf));
+        buf_printf(msgbuf, "Original-Message-ID: %s\r\n", mdn->orig_msgid);
+    }
+    buf_printf(msgbuf, "Disposition: %s/%s; %s\r\n",
+               mdn->dispo.action, mdn->dispo.sending, mdn->dispo.type);
+    buf_appendcstr(msgbuf, "\r\n");
+
+    if (mdn->inc_msg) {
+        r = message_get_headers(msg, &buf);
+        if (!r) {
+            /* This is the original message */
+            buf_printf(msgbuf, "--%s\r\n", uuid);
+            buf_appendcstr(msgbuf, "Content-Type: text/rfc822-headers\r\n");
+            buf_appendcstr(msgbuf, "Content-Disposition: inline\r\n\r\n");
+            buf_appendcstr(msgbuf, buf_cstring(&buf));
+        }
+    }
+
+    buf_printf(msgbuf, "--%s--\r\n", uuid);
+
+  done:
+    if (r && err == NULL) err = jmap_server_error(r);
+    if (mr) msgrecord_unref(&mr);
+    if (mbox) jmap_closembox(req, &mbox);
+    free(mboxname);
+    buf_free(&buf);
+
+    return err;
+}
+
+static json_t *send_mdn(struct jmap_req *req, struct mdn_t *mdn,
+                        struct buf *msgbuf, smtpclient_t **sm)
+{
+    json_t *err = NULL;
+    int r;
+
+    if (!*sm) {
+        /* Open the SMTP connection */
+        r = smtpclient_open(sm);
+        if (r) goto done;
+    }
+
+    smtpclient_set_auth(*sm, req->userid);
+
+    /* Prepare envelope */
+    smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
+    smtp_envelope_set_from(&smtpenv, "<>");
+
+    int i;
+    for (i = 0; i < strarray_size(&mdn->notify_to); i++) {
+        smtp_envelope_add_rcpt(&smtpenv, strarray_nth(&mdn->notify_to, i));
+    }
+
+    r = smtpclient_send(*sm, &smtpenv, msgbuf);
+    if (r) {
+        const char *desc = smtpclient_get_resp_text(*sm);
+
+        syslog(LOG_ERR, "MDN/send failed: %s", desc ? desc : error_message(r));
+
+        if (desc) {
+            err = json_pack("{s:s, s:s}", "type", "serverFail",
+                            "description", desc);
+        }
+    }
+
+    smtp_envelope_fini(&smtpenv);
+
+  done:
+    if (r && err == NULL) err = jmap_server_error(r);
 
     return err;
 }
@@ -263,9 +517,9 @@ static int jmap_mdn_send(struct jmap_req *req)
 
 
     /* Process request */
-    json_t *sent = NULL;
-    json_t *not_sent = NULL;
+    json_t *sent = NULL, *not_sent = NULL, *update = NULL;
     smtpclient_t *sm = NULL;
+    struct buf msgbuf = BUF_INITIALIZER;
 
     json_object_foreach(send, id, val) {
         /* Parse MDN props */
@@ -274,24 +528,60 @@ static int jmap_mdn_send(struct jmap_req *req)
         err = parse_mdn_props(val, &mdn);
         if (!err) {
             /* Generate MDN */
+            err = generate_mdn(req, &mdn, &msgbuf);
         }
 
         if (!err) {
             /* Send MDN */
-            json_t *new_mdn = NULL;
+            err = send_mdn(req, &mdn, &msgbuf, &sm);
 
             if (!err) {
-                if (!sent) not_sent = json_object();
-                json_object_set_new(sent, id, new_mdn);
+                /* XXX  With Jansson 2.11 we can use json_pack() and s*
+                   which will skip NULL values */
+                json_t *jmdn = json_object();
+
+                if (mdn.gateway) {
+                    json_object_set_new(jmdn, "mdnGateway",
+                                        json_string(mdn.gateway));
+                }
+                if (mdn.orig_rcpt) {
+                    json_object_set_new(jmdn, "originalRecipient",
+                                        json_string(mdn.orig_rcpt));
+                }
+                if (mdn.final_rcpt) {
+                    json_object_set_new(jmdn, "finalRecipient",
+                                        json_string(mdn.final_rcpt));
+                }
+                if (mdn.orig_msgid) {
+                    json_object_set_new(jmdn, "originalMessageId",
+                                        json_string(mdn.orig_msgid));
+                }
+                if (mdn.error) {
+                    json_object_set_new(jmdn, "error", json_string(mdn.error));
+                }
+
+                /* Add this id to the sent list */
+                if (!sent) sent = json_object();
+                json_object_set_new(sent, id, jmdn);
+
+                /* Add this emailid to the list to be updated */
+                if (!update) update = json_object();
+                json_object_set_new(update, mdn.emailid,
+                                    json_pack("{s:b}", "keywords/$MDNSent", 1));
             }
         }
 
         if (err) {
+            /* Add this id to the not_sent list */
             if (!not_sent) not_sent = json_object();
             json_object_set_new(not_sent, id, err);
         }
+
+        free_mdn(&mdn);
     }
+
     if (sm) smtpclient_close(&sm);
+    buf_free(&msgbuf);
 
 
     /* Reply */
@@ -299,6 +589,12 @@ static int jmap_mdn_send(struct jmap_req *req)
                            "accountId", req->accountid,
                            "sent", sent ? sent : json_null(),
                            "notSent", not_sent ? not_sent : json_null()));
+
+    /* Implicitly set the $MDNSent keyword for successful MDNs */
+    if (update) {
+        jmap_add_subreq(req, "Email/set",
+                        json_pack("{s:o}", "update", update), NULL);
+    }
 
 done:
     jmap_parser_fini(&parser);
