@@ -170,16 +170,30 @@ struct conversation {
 
 #define CONVERSATION_INIT { 0, 0, 0, 0, 0, 0, 0, 0, {0}, NULL, NULL, NULL, NULL, 0, CONV_ISDIRTY }
 
+struct emailcountitems {
+    size_t folderexists;
+    size_t folderunseen;
+    size_t exists;
+    size_t numrecords;
+};
+
 struct emailcounts {
     const char *mboxname;
     int ispost;
-    int pre_emailexists;
-    int pre_emailunseen;
-    int post_emailexists;
-    int post_emailunseen;
+    struct emailcountitems pre;
+    struct emailcountitems post;
+    ssize_t quotadiff;
 };
 
-#define EMAILCOUNTS_INIT { NULL, 0, 0, 0, 0, 0 }
+#define EMAILCOUNTITEMS_INIT { 0, 0, 0, 0 }
+#define EMAILCOUNTS_INIT { NULL, 0, EMAILCOUNTITEMS_INIT, EMAILCOUNTITEMS_INIT, 0 }
+
+struct conv_quota {
+    size_t used;
+    size_t limit;
+};
+
+#define CONV_QUOTA_INIT { 0, 0 }
 
 #include "mailbox.h"
 
@@ -323,5 +337,8 @@ extern int conversations_rename_folder(struct conversations_state *state,
                                        const char *to_name);
 
 extern int conversations_check_msgid(const char *msgid, size_t len);
+
+extern int conversations_read_quota(struct conversations_state *state, struct conv_quota *q);
+extern int conversations_set_quotalimit(struct conversations_state *state, size_t quotalimit);
 
 #endif /* __CYRUS_CONVERSATIONS_H_ */

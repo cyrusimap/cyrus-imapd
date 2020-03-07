@@ -951,6 +951,62 @@ static void _apply_delta(uint32_t *valp, int delta)
     }
 }
 
+EXPORTED int conversations_read_quota(struct conversations_state *state, struct conv_quota *q)
+{
+    const char *data = NULL;
+    size_t datalen = 0;
+    bit64 val = 0;
+    int r = cyrusdb_fetch(state->db, "Q", 1, &data, &datalen, &state->txn);
+    if (r) return r;
+    if (datalen) {
+        const char *rest;
+        r = parsenum(data, &rest, datalen, &val);
+        if (r) return r;
+        q->used = val;
+        if (*rest != ' ') return IMAP_INTERNAL;
+        datalen -= (rest + 1 - data);
+        data = rest+1;
+        r = parsenum(data, &rest, datalen, &val);
+        if (r) return r;
+        q->limit = val;
+        return 0;
+    }
+    return CYRUSDB_NOTFOUND;
+}
+
+static int _write_quotas(struct conversations_state *state, struct conv_quota *q)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%llu %llu", (long long unsigned)q->used, (long long unsigned)q->limit);
+    int r = cyrusdb_store(state->db, "Q", 1, buf.s, buf.len, &state->txn);
+    buf_free(&buf);
+    return r;
+}
+
+static int _update_quotaused(struct conversations_state *state, ssize_t quotadiff)
+{
+    struct conv_quota q = CONV_QUOTA_INIT;
+    int r = conversations_read_quota(state, &q);
+    if (r == CYRUSDB_NOTFOUND) r = 0; // it's OK not to have a value
+    else if (r) return r;
+
+    q.used += quotadiff;
+
+    return _write_quotas(state, &q);
+}
+
+EXPORTED int conversations_set_quotalimit(struct conversations_state *state, size_t quotalimit)
+{
+    struct conv_quota q = CONV_QUOTA_INIT;
+    int r = conversations_read_quota(state, &q);
+    if (r == CYRUSDB_NOTFOUND) r = 0; // it's OK not to have a value
+    else if (r) return r;
+
+    q.limit = quotalimit;
+
+    return _write_quotas(state, &q);
+}
+
 static int _conversation_save(struct conversations_state *state,
                               const char *key, int keylen,
                               conversation_t *conv,
@@ -964,8 +1020,8 @@ static int _conversation_save(struct conversations_state *state,
         const char *mboxname = strarray_nth(state->folder_names, folder->number);
         int exists_diff = 0;
         int unseen_diff = 0;
-        int emailexists_diff = 0;
-        int emailunseen_diff = 0;
+        int folderexists_diff = 0;
+        int folderunseen_diff = 0;
         conv_status_t status = CONV_STATUS_INIT;
         int unseen = conv->unseen;
         int prev_unseen = conv->prev_unseen;
@@ -1000,8 +1056,8 @@ static int _conversation_save(struct conversations_state *state,
 
         if (ecounts && !strcmp(ecounts->mboxname, mboxname)) {
             // do we have email diffs?
-            emailexists_diff = !!ecounts->post_emailexists - !!ecounts->pre_emailexists;
-            emailunseen_diff = !!ecounts->post_emailunseen - !!ecounts->pre_emailunseen;
+            folderexists_diff = !!ecounts->post.folderexists - !!ecounts->pre.folderexists;
+            folderunseen_diff = !!ecounts->post.folderunseen - !!ecounts->pre.folderunseen;
         }
 
         /* XXX - it's super inefficient to be doing this for
@@ -1011,17 +1067,22 @@ static int _conversation_save(struct conversations_state *state,
         r = conversation_getstatus(state, mboxname, &status);
         if (r) goto done;
         if (exists_diff || unseen_diff
-         || emailexists_diff || emailunseen_diff
+         || folderexists_diff || folderunseen_diff
          || status.threadmodseq < conv->modseq) {
             if (status.threadmodseq < conv->modseq)
                 status.threadmodseq = conv->modseq;
             _apply_delta(&status.threadexists, exists_diff);
             _apply_delta(&status.threadunseen, unseen_diff);
-            _apply_delta(&status.emailexists, emailexists_diff);
-            _apply_delta(&status.emailunseen, emailunseen_diff);
+            _apply_delta(&status.emailexists, folderexists_diff);
+            _apply_delta(&status.emailunseen, folderunseen_diff);
             r = conversation_setstatus(state, mboxname, &status);
             if (r) goto done;
         }
+    }
+
+    if (ecounts && ecounts->quotadiff) {
+        r = _update_quotaused(state, ecounts->quotadiff);
+        if (r) goto done;
     }
 
     if (conv->num_records) {
@@ -2289,26 +2350,28 @@ static int _read_emailcounts_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct emailcounts *ecounts = (struct emailcounts *)rock;
     if (rec->part) return 0;
-    if (strcmp(ecounts->mboxname, rec->mboxname)) return 0;
-    // ok, we're in the same folder - are we expunged?
+
+    struct emailcountitems *i = ecounts->ispost ? &ecounts->post : &ecounts->pre;
+
+    i->numrecords++;
+
+    // the rest only counts non-deleted records
     if (rec->version > 0 &&
          (rec->system_flags & FLAG_DELETED ||
           rec->internal_flags & FLAG_INTERNAL_EXPUNGED))
         return 0;
-    if (ecounts->ispost) {
-        // not expunged or unsure, count it as exists
-        ecounts->post_emailexists++;
-        // not seen or unsure, count it as unseen
-        if (rec->version == 0 || !(rec->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
-            ecounts->post_emailunseen++;
-    }
-    else {
-        // not expunged or unsure, count it as exists
-        ecounts->pre_emailexists++;
-        // not seen or unsure, count it as unseen
-        if (rec->version == 0 || !(rec->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
-            ecounts->pre_emailunseen++;
-    }
+
+    i->exists++;
+
+    // the rest is same folder only
+    if (strcmp(ecounts->mboxname, rec->mboxname)) return 0;
+
+    i->folderexists++;
+
+    // not seen or unsure, count it as unseen
+    if (rec->version == 0 || !(rec->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
+        i->folderunseen++;
+
     return 0;
 }
 
@@ -2457,6 +2520,10 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
                                    _read_emailcounts_cb, &ecounts);
     if (r) return r;
+
+    // set up for quota usage diff
+    if (ecounts.pre.exists) ecounts.quotadiff -= record->size;
+    if (ecounts.post.exists) ecounts.quotadiff += record->size;
 
     /* XXX - combine this with the earlier cache parsing */
     if (!mailbox_cacherecord(mailbox, record)) {
