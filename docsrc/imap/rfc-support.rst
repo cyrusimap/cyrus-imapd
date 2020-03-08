@@ -468,10 +468,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     The IMAP METADATA Extension
 
-:rfc:`5465`
-
-    The IMAP NOTIFY Extension
-
 :rfc:`5524`
 
     Extended URLFETCH for Binary and Converted Parts
