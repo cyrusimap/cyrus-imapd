@@ -7684,7 +7684,17 @@ static void _email_append(jmap_req_t *req,
 
     /* Append the message to the mailbox. */
     qdiffs[QUOTA_MESSAGE] = 1;
-    qdiffs[QUOTA_STORAGE] = len;
+    if (config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS)) {
+        // we'll only be charged for one copy
+        qdiffs[QUOTA_STORAGE] = len;
+    }
+    else {
+        // count how many mailboxes we're adding it to
+        qdiffs[QUOTA_STORAGE] = 0;
+        json_object_foreach(mailboxes, id, val) {
+            qdiffs[QUOTA_STORAGE] += len;
+        }
+    }
     r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
             0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
@@ -7736,38 +7746,6 @@ static void _email_append(jmap_req_t *req,
         stage = NULL;
     }
     json_object_del(mailboxes, mbox->uniqueid);
-
-    /* Make sure there is enough quota for all mailboxes */
-    qdiffs[QUOTA_STORAGE] = len;
-    if (json_object_size(mailboxes)) {
-        char foundroot[MAX_MAILBOX_BUFFER];
-        json_t *deltas = json_pack("{}");
-        const char *mbname;
-
-        /* Count message delta for each quota root */
-        json_object_foreach(mailboxes, id, val) {
-            mbname = json_string_value(val);
-            if (quota_findroot(foundroot, sizeof(foundroot), mbname)) {
-                json_t *delta = json_object_get(deltas, mbname);
-                delta = json_integer(json_integer_value(delta) + 1);
-                json_object_set_new(deltas, mbname, delta);
-            }
-        }
-
-        /* Check quota for each quota root. */
-        json_object_foreach(deltas, mbname, val) {
-            struct quota quota;
-            quota_t delta = json_integer_value(val);
-
-            quota_init(&quota, mbname);
-            r = quota_check(&quota, QUOTA_STORAGE, delta * qdiffs[QUOTA_STORAGE]);
-            if (!r) r = quota_check(&quota, QUOTA_MESSAGE, delta);
-            quota_free(&quota);
-            if (r) break;
-        }
-        json_decref(deltas);
-        if (r) goto done;
-    }
 
     /* Copy the message to all remaining mailboxes */
     json_object_foreach(mailboxes, id, val) {
