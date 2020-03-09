@@ -11,7 +11,8 @@ If the user_deny.db file doesn't exist in %configdirectory% (often /var/lib/imap
     # /usr/lib/cyrus-imapd/cvt_cyrusdb /tmp/user_deny.flat flat /var/lib/imap/user_deny.db skiplist
     # chown cyrus:cyrus /var/lib/imap/user_deny.db
 
-The database specification can be found at http://cyrusimap.org/docs/cyrus-imapd/2.4.17/internal/database-formats.php
+The database specification can be found in the file 'doc/internal/database-formats.html'
+in the source distribution.
 
 **Key:** <Userid>
 
