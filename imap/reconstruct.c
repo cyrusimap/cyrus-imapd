@@ -443,6 +443,10 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     char outpath[MAX_MAILBOX_PATH];
     const char *name = NULL;
 
+    /* ignore intermediates */
+    if ((data->mbentry->mbtype & MBTYPE_INTERMEDIATE))
+        return 0;
+
     /* ignore partial matches */
     if (!data->is_exactmatch) return 0;
 
