@@ -877,6 +877,8 @@ HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     return 0;
 }
 
+#define ACL_RECORDSEP_CHAR      '\x1E'  /* record separator (RS) */
+
 static void mboxlist_racl_key(int isuser, const char *keyuser,
                               const char *dbname, struct buf *buf)
 {
@@ -884,11 +886,10 @@ static void mboxlist_racl_key(int isuser, const char *keyuser,
     buf_putc(buf, KEY_TYPE_ACL);
     if (keyuser || dbname) {
         buf_putc(buf, isuser ? 'U' : 'S');
-        buf_putc(buf, '$');
-
+        buf_putc(buf, ACL_RECORDSEP_CHAR);
         if (keyuser) {
             buf_appendcstr(buf, keyuser);
-            buf_putc(buf, '$');
+            buf_putc(buf, ACL_RECORDSEP_CHAR);
         }
         if (dbname) {
             buf_appendcstr(buf, dbname);
