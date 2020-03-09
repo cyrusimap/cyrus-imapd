@@ -19,7 +19,9 @@ Cyrus annotations are based on a draft
   corresponding mailbox. (Draft RFC)
 
 * **/comment** - Sets a comment or description associated with the mailbox.
-  (cyradm(8)) /motd - Sets a "message of the day". The message gets displayed
+  (cyradm(8))
+
+* **/motd** - Sets a "message of the day". The message gets displayed
   as an ALERT after authentication.
 
 * **/sort** - Defines the default sort criteria [I-D.ietf-imapext-sort] to use
