@@ -449,8 +449,6 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
 
     std::set<int> db_versions;
     try {
-        /* Determine the sterm version of an existing database, or create a
-         * new one with the latest one. Never implicitly upgrade. */
         try {
             dbw->database = new Xapian::WritableDatabase{thispath, Xapian::DB_OPEN};
             db_versions = get_db_versions(*dbw->database);
@@ -458,6 +456,18 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
             /* It's OK not to atomically create or open, since we can assume
              * the xapianactive file items to be locked. */
             dbw->database = new Xapian::WritableDatabase{thispath, Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS};
+        }
+
+        /* Check if this is the first time we write language counts. */
+        if (db_versions.lower_bound(5) == db_versions.end()) {
+            // Remove any unexpectedly already set language counts.
+            for (Xapian::TermIterator it = dbw->database->metadata_keys_begin(XAPIAN_LANG_COUNT_KEYPREFIX);
+                    it != dbw->database->metadata_keys_end(XAPIAN_LANG_COUNT_KEYPREFIX); ++it) {
+                dbw->database->set_metadata(*it, "");
+            }
+            // Initialize default language count with current doccount.
+            std::string key = make_lang_count_key(SEARCH_PART_NONE, "en");
+            dbw->database->set_metadata(key, std::to_string(dbw->database->get_doccount()));
         }
 
         if (db_versions.find(XAPIAN_DB_CURRENT_VERSION) == db_versions.end()) {
@@ -767,7 +777,7 @@ static int xapian_db_init(xapian_db_t *db, bool is_inmemory)
             // search part in the database, we can make weights more clever
             // later, if necessary.
             // XXX Xapian in-memory db does not support metadata iterators
-            if (db->db_versions->lower_bound(4) != db->db_versions->end() && !is_inmemory) {
+            if (db->db_versions->lower_bound(5) != db->db_versions->end() && !is_inmemory) {
                 if (!db->stem_language_weights)
                     db->stem_language_weights = new std::map<std::string, double>;
 
