@@ -441,6 +441,15 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     .. versionadded:: 2.5.0
 
+:rfc:`5267`
+
+    Contexts for IMAP4
+
+    .. NOTE::
+
+        The ESORT capability is implemented.  The CONTEXT=SEARCH and
+        CONTEXT=SORT capabilities are not implemented.
+
 :rfc:`5293`
 
     Sieve Email Filtering: Editheader Extension
@@ -543,7 +552,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     .. NOTE::
 
-        SSLv3 is considered inscure as it is vulnerable to POODLE.
+        SSLv3 is considered insecure as it is vulnerable to POODLE.
 
         Support for SSLv3 is being deprecated and removed.
 
@@ -572,6 +581,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     CardDAV: vCard Extensions to Web Distributed Authoring and
     Versioning (WebDAV)
+
+    .. NOTE::
+
+       Does not advertise over CARDDAV:supported-address-data vCard 4.0
+       support, announces only vCard 3.0.
 
 :rfc:`6376`
 
@@ -746,6 +760,10 @@ RFC Wishlist
 
     Sieve Notification Mechanism: Extensible Messaging and Presence
     Protocol (XMPP)
+
+:rfc:`5465`
+
+    The IMAP NOTIFY Extension
 
 :rfc:`5703`
 
