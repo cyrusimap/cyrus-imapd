@@ -119,8 +119,10 @@ CalDAV, CardDAV, or JMAP
     :header: "Package", "Debian", "RedHat",  "Required for ``make check``?", "Notes"
     :widths: 20,15,15,5,45
 
+    `libchardet`_, libchardet-dev, libchardet-devel, "no", ""
     `libical`_, libical-dev, libical-devel, "no", "version 3.0.0 or higher"
     `libxml`_, libxml2-dev, libxml2-devel, "no", ""
+    `shapelib`_, shapelib, "", "no", "version 1.3.0 or higher"
 
 Other
 #####
@@ -155,6 +157,7 @@ Other
 .. _sasl binaries: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
 .. _Kerberos: http://web.mit.edu/kerberos/www/
 .. _libbrotli: https://github.com/google/brotli
+.. _libchardet: https://github.com/Joungkyun/libchardet
 .. _libical: https://github.com/libical/libical/
 .. _libxml: http://xmlsoft.org/
 .. _mysql: http://www.mysql.com
@@ -170,6 +173,7 @@ Other
 .. _postgresql: http://www.postgresql.org/
 .. _python(GitPython): https://github.com/gitpython-developers/GitPython
 .. _python(Sphinx): https://www.sphinx-doc.org/
+.. _shapelib: http://shapelib.maptools.org
 .. _libsrs2: https://www.libsrs2.org/
 .. _tcp_wrappers: ftp://ftp.porcupine.org/pub/security/index.html
 .. _transfig: http://www.xfig.org/
