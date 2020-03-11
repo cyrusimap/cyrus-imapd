@@ -382,22 +382,30 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
             sync_action_list_add(meta_list, NULL, args[1]);
         else if ((!strcmp(args[0], "APPEND")) /* just a mailbox event */
                  || (!strcmp(args[0], "MAILBOX"))) {
-            char *userid = mboxname_to_userid(args[1]);
-            if (!userid) userid = ""; /* treat non-user mboxes as a single cohort */
+            char *freeme = NULL;
+            const char *userid;
             struct sync_action_list *mailbox_list;
+
+            userid = freeme = mboxname_to_userid(args[1]);
+            if (!userid) userid = ""; /* treat non-user mboxes as a single cohort */
+
             mailbox_list = hash_lookup(userid, &user_mailboxes);
             if (!mailbox_list) {
                 mailbox_list = sync_action_list_create();
                 hash_insert(userid, mailbox_list, &user_mailboxes);
             }
             sync_action_list_add(mailbox_list, args[1], NULL);
+            free(freeme);
         }
         else if (!strcmp(args[0], "RENAME")) {
-            char *userid1 = mboxname_to_userid(args[1]);
-            if (!userid1) userid1 = "";
-            char *userid2 = mboxname_to_userid(args[2]);
-            if (!userid2) userid2 = "";
+            char *freeme1 = NULL, *freeme2 = NULL;
+            const char *userid1, *userid2;
             struct sync_action_list *mailbox_list;
+
+            userid1 = freeme1 = mboxname_to_userid(args[1]);
+            if (!userid1) userid1 = "";
+            userid2 = freeme2 = mboxname_to_userid(args[2]);
+            if (!userid2) userid2 = "";
 
             /* add both mboxnames to the list for the first one's user */
             mailbox_list = hash_lookup(userid1, &user_mailboxes);
@@ -418,6 +426,9 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
                 sync_action_list_add(mailbox_list, args[1], NULL);
                 sync_action_list_add(mailbox_list, args[2], NULL);
             }
+
+            free(freeme1);
+            free(freeme2);
         }
         else if (!strcmp(args[0], "UNMAILBOX"))
             sync_action_list_add(unmailbox_list, args[1], NULL);
