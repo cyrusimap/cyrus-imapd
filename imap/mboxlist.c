@@ -989,10 +989,9 @@ static int mboxlist_update_entry(const char *name,
 
     mboxlist_mylookup(dbname, &old, txn, 0, 1); // ignore errors, it will be NULL
 
-    mboxlist_racl_key(0, NULL, NULL, &key);
-    if (!cyrusdb_fetch(mbdb, buf_base(&key), buf_len(&key), NULL, NULL, txn)) {
+    if (have_racl) {
         r = mboxlist_update_racl(dbname, old, mbentry, txn);
-        /* XXX return value here is discarded? */
+        if (r) goto done;
     }
 
     mboxlist_dbname_to_key(dbname, strlen(name), &key);
@@ -1055,14 +1054,12 @@ static int mboxlist_update_entry(const char *name,
 
         if (!r && config_auditlog) {
             /* XXX is there a difference between "" and NULL? */
-            if (old && strcmpsafe(old->acl, mbentry->acl)) {
-                syslog(LOG_NOTICE, "auditlog: acl sessionid=<%s> "
-                                   "mailbox=<%s> uniqueid=<%s> "
-                                   "oldacl=<%s> acl=<%s>",
-                       session_id(),
-                       name, mbentry->uniqueid,
-                       old->acl, mbentry->acl);
-            }
+            syslog(LOG_NOTICE, "auditlog: acl sessionid=<%s> "
+                               "mailbox=<%s> uniqueid=<%s> mbtype=<%s> "
+                               "oldacl=<%s> acl=<%s> foldermodseq=<%llu>",
+                   session_id(),
+                   name, mbentry->uniqueid, mboxlist_mbtype_to_string(mbentry->mbtype),
+                   old ? old->acl : "NONE", mbentry->acl, mbentry->foldermodseq);
         }
     }
     else {
@@ -1074,12 +1071,12 @@ static int mboxlist_update_entry(const char *name,
         }
     }
 
+ done:
     mboxlist_entry_free(&old);
     buf_free(&key);
     free(dbname);
     return r;
 }
-
 
 EXPORTED int mboxlist_delete(const char *name)
 {
@@ -3719,9 +3716,7 @@ static int mboxlist_find_category(struct find_rock *rock, const char *prefix, si
 
     init_internal();
 
-    mboxlist_racl_key(0, NULL, NULL, &key);
-    if (!rock->issubs && !rock->isadmin && have_racl &&
-        !cyrusdb_fetch(rock->db, buf_base(&key), buf_len(&key), NULL, NULL, NULL)) {
+    if (!rock->issubs && !rock->isadmin && have_racl) {
         /* we're using reverse ACLs */
         strarray_t matches = STRARRAY_INITIALIZER;
         int i;
