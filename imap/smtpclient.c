@@ -446,18 +446,10 @@ static int write_addr(smtpclient_t *sm,
     buf_printf(&sm->buf, "%s:<%s>", cmd, addr->addr);
     for (i = 0; i < addr->params.count; i++) {
         smtp_param_t *param = ptrarray_nth(&addr->params, i);
-        if (!smtp_is_valid_esmtp_keyword(param->key)) {
-            syslog(LOG_ERR, "smtpclient: invalid estmp keyword: \"%s\"", param->key);
-            return IMAP_PROTOCOL_ERROR;
-        }
         buf_appendcstr(&sm->buf, " ");
         buf_appendcstr(&sm->buf, param->key);
         if (!param->val) {
             continue;
-        }
-        if (!smtp_is_valid_esmtp_value(param->val)) {
-            syslog(LOG_ERR, "smtpclient: invalid estmp value: \"%s\"", param->val);
-            return IMAP_PROTOCOL_ERROR;
         }
         buf_appendcstr(&sm->buf, "=");
         buf_appendcstr(&sm->buf, param->val);
@@ -628,14 +620,41 @@ done:
     return r;
 }
 
+static int validate_envelope_params(ptrarray_t *params)
+{
+    if (!params) return 0;
+
+    int i;
+    for (i = 0; i < ptrarray_size(params); i++) {
+        smtp_param_t *param = ptrarray_nth(params, i);
+        if (!smtp_is_valid_esmtp_keyword(param->key)) {
+            syslog(LOG_ERR, "smtpclient: invalid estmp keyword: \"%s\"", param->key);
+            return IMAP_PROTOCOL_ERROR;
+        }
+        if (!strcasecmp(param->key, "AUTH")) {
+            syslog(LOG_ERR, "smptclient: rejecting AUTH parameter in envelope");
+            return IMAP_PERMISSION_DENIED;
+        }
+        if (param->val && !smtp_is_valid_esmtp_value(param->val)) {
+            syslog(LOG_ERR, "smtpclient: invalid estmp value: \"%s\"", param->val);
+            return IMAP_PROTOCOL_ERROR;
+        }
+    }
+
+    return 0;
+}
+
 static int validate_envelope(smtp_envelope_t *env)
 {
-    int i;
+    int i, r;
 
     if (!env->from.addr) {
         syslog(LOG_ERR, "smtpclient: envelope missing sender");
         return IMAP_PROTOCOL_ERROR;
     }
+    r = validate_envelope_params(&env->from.params);
+    if (r) return r;
+
     if (!env->rcpts.count) {
         syslog(LOG_ERR, "smtpclient: envelope missing recipients");
         return IMAP_PROTOCOL_ERROR;
@@ -646,6 +665,8 @@ static int validate_envelope(smtp_envelope_t *env)
             syslog(LOG_ERR, "smtpclient: invalid recipient at position %d", i);
             return IMAP_PROTOCOL_ERROR;
         }
+        r = validate_envelope_params(&addr->params);
+        if (r) return r;
     }
 
     return 0;
