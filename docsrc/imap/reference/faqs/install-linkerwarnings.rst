@@ -27,15 +27,3 @@ from the linker like the following:
 
 In this case, ClamAV is still linked against OpenSSL 1.0, while Cyrus is
 building with OpenSSL 1.1.
-
-.. _libical-warnings:
-
-Libical v1.0.1 or v2.0
-----------------------
-
-You may see warnings regarding libical v2.0 being recommended to support certain
-functionality. Currently libical v1.0.1 is sufficient, unless you need/want
-RSCALE (non-gregorian recurrences), VPOLL (consensus scheduling), or
-VAVAILABILITY (specifying availability over time) functionality. If v2 is
-required, it will need to be installed from `github
-<https://github.com/libical/libical>`_.
