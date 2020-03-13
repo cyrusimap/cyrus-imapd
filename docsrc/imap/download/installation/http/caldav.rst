@@ -350,10 +350,18 @@ Configuration
        :start-after: startblob zoneinfo_db
        :end-before: endblob zoneinfo_db
 
-This module stores time zone data in the ``zoneinfo/`` subdirectory of the Cyrus
-configuration directory (as specified by the ``configdirectory`` option). The data is
-indexed by a database whose location is specified by the ``zoneinfo_db_path``
-option, using the format specified by the ``zoneinfo_db`` option.
+   |
+
+   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+       :start-after: startblob zoneinfo_dir
+       :end-before: endblob zoneinfo_dir
+
+This module requires the ``zoneinfo_dir`` setting in :cyrusman:`imapd.conf(5)`
+to be set to the directory where your time zone data is stored.
+
+The data is indexed by a database whose location is specified by the
+``zoneinfo_db_path`` option, using the format specified by the ``zoneinfo_db``
+option.
 
 Administration
 --------------
@@ -361,14 +369,14 @@ Administration
 This module is designed to use the IANA Time Zone Database data (a.k.a. Olson
 Database) converted to the iCalendar format.
 
-Cyrus uses a modified `vzic <https://github.com/libical/vzic>`_ to convert IANA
-formatted data into iCalendar format. There is more information on Cyrus vzic in
-``tools/vzic/README``.
+We provide a modified `vzic <https://github.com/libical/vzic>`_ to convert IANA
+formatted data into iCalendar format, in the `cyrus-timezones package
+<https://github.com/cyrusimap/cyrus-timezones>`_ to make the following steps
+easier.
 
-The steps to populate the Cyrus ``zoneinfo/`` directory are:
+The steps to populate the ``zoneinfo_dir`` directory are:
 
-1. Build the local "vzic" utility located in the ``tools/vzic/`` subdirectory
-   of the Cyrus source code. Run make in the tools/vzic/ subdirectory to build.
+1. Acquire and build your choice of ``vzic`` tool.
 
 2. Download the latest version of the
    `Time Zone Database data from IANA <http://www.iana.org/time-zones>`_. Note
@@ -376,14 +384,15 @@ The steps to populate the Cyrus ``zoneinfo/`` directory are:
 
 3. Expand the downloaded time zone data into a temporary directory of your choice.
 
-4. Populate ``<configdirectory>/zoneinfo/`` with iCalendar data:
+4. Populate ``zoneinfo_dir`` with iCalendar data:
 
    *Initial Install Only*
 
    a. Convert the raw data into iCalendar format by running vzic as follows:
-      ``vzic --pure --olson-dir <location-of-raw-data> --output-dir <configdirectory>/zoneinfo``
+      ``vzic --pure --olson-dir <location-of-raw-data> --output-dir <zoneinfo_dir>``
 
-      This will create and install iCalendar data directly into the ``<configdirectory>/zoneinfo/`` directory.
+      This will create and install iCalendar data directly into the
+      ``<zoneinfo_dir>`` directory.
 
    *Updating Data Only*
 
@@ -391,9 +400,8 @@ The steps to populate the Cyrus ``zoneinfo/`` directory are:
       ``vzic --pure --olson-dir <location-of-raw-data>``
 
       This will create a zoneinfo/ subdirectory in your current location
-      (which should be `tools/vzic/`).
 
-   c. Merge new/updated iCalendar data into the ``<configdirectory>/zoneinfo/`` directory
+   c. Merge new/updated iCalendar data into the ``<zoneinfo_dir>`` directory
       by running vzic-merge.pl in your current location:
       ``vzic-merge.pl``
 
