@@ -696,12 +696,19 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
     json_t *err = NULL;
-    struct carddav_db *db = carddav_open_userid(req->accountid);
-    if (!db) return -1;
-    int r = -1;
+    struct carddav_db *db;
+    char *mboxname = NULL;
+    int r = 0;
+
+    db = carddav_open_userid(req->accountid);
+    if (!db) {
+        syslog(LOG_ERR,
+               "carddav_open_userid failed for user %s", req->accountid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
 
     /* Parse request */
-    char *mboxname = NULL;
     const char *addressbookId = NULL;
     jmap_changes_parse(req, &parser, req->counters.carddavdeletedmodseq,
                        &_contact_getargs_parse, &addressbookId, &changes, &err);
@@ -732,12 +739,13 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     jmap_ok(req, jmap_changes_reply(&changes));
 
   done:
+    if (r) jmap_error(req, jmap_server_error(r));
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     carddav_close(db);
     free(mboxname);
 
-    return r;
+    return 0;
 }
 
 static int jmap_contactgroup_changes(struct jmap_req *req)
