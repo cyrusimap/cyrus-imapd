@@ -320,7 +320,7 @@ Time Zone Distribution Service (TZDist)
 What is TZDist
 --------------
 
-The Time Zone module allows Cyrus to function as a Time Zone Distribution
+The TZDist module allows Cyrus to function as a Time Zone Distribution
 Service (:rfc:`7808` and :rfc:`7809`), providing time zone data for CalDAV
 and calendaring clients, without having to wait for their client vendor and/or
 OS vendor to update the timezone information. The responsibility for keeping
@@ -356,7 +356,7 @@ Configuration
        :start-after: startblob zoneinfo_dir
        :end-before: endblob zoneinfo_dir
 
-This module requires the ``zoneinfo_dir`` setting in :cyrusman:`imapd.conf(5)`
+The TZDist module requires the ``zoneinfo_dir`` setting in :cyrusman:`imapd.conf(5)`
 to be set to the directory where your time zone data is stored.
 
 The data is indexed by a database whose location is specified by the
@@ -366,8 +366,8 @@ option.
 Administration
 --------------
 
-This module is designed to use the IANA Time Zone Database data (a.k.a. Olson
-Database) converted to the iCalendar format.
+The TZDist module is designed to use the IANA Time Zone Database data (a.k.a.
+Olson Database) converted to the iCalendar format.
 
 We provide a modified `vzic <https://github.com/libical/vzic>`_ to convert IANA
 formatted data into iCalendar format, in the `cyrus-timezones package
