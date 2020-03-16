@@ -871,6 +871,157 @@ static int service_is_fork_limited(struct service *s)
     return 0;
 }
 
+static void spawn_waitdaemon(struct service *s, int wdi)
+{
+    static char env_isdaemon[100], env_service[100], env_id[100];
+    char path[PATH_MAX], childready_buf[4], ignored;
+    pid_t p, pgid;
+    int pgid_pipe[2], childready_pipe[2];
+    int i, r;
+    struct centry *c;
+
+    if (!s->name) {
+        fatal("Serious software bug found: spawn_waitdaemon() called on unnamed service!",
+              EX_SOFTWARE);
+    }
+    assert(wdi != SERVICE_NONE);
+
+    get_executable(path, sizeof(path), s->exec);
+
+    /* In order for the parent to set the pgid of the child process, it
+     * must get in BEFORE its execve call.  So, set up a pipe thus:
+     *
+     * just before execve, the child blocks reading the pipe
+     * the parent sets the child's pgid, then closes the write end
+     * the child unblocks and can carry on, now that its pgid is set
+     */
+    r = pipe(pgid_pipe);
+    if (r) fatalf(EX_OSERR, "pipe failed: %m");
+
+    r = pipe(childready_pipe);
+    if (r) fatalf(EX_OSERR, "pipe failed: %m");
+
+    p = fork();
+    if (p == 0) {
+        /* child process */
+        if (verbose > 2) {
+            syslog(LOG_DEBUG, "forked process to run service %s/%s",
+                              s->name, s->familyname);
+        }
+
+        /* Child - Release our pidfile lock. */
+        xclose(pidfd);
+
+        set_caps(AFTER_FORK, /*is_master*/1);
+
+        child_sighandler_setup();
+
+        /* daemon will start with STATUS_FD(3) open for writing */
+        close(childready_pipe[0]);
+        r = dup2(childready_pipe[1], STATUS_FD);
+        if (r < 0) {
+            syslog(LOG_ERR, "can't duplicate child ready fd: %m");
+            exit(1);
+        }
+        /* close the original write end, if it's not the same as the dup2'd one */
+        if (r != childready_pipe[1])
+            close(childready_pipe[1]);
+
+        fcntl_unset(STATUS_FD, FD_CLOEXEC);
+
+#ifdef HAVE_SETRLIMIT
+        if (s->maxfds) limit_fds(s->maxfds);
+#endif
+
+        /* close all listeners */
+        for (i = 0; i < nservices; i++) {
+            xclose(Services[i].socket);
+            xclose(Services[i].stat[0]);
+            xclose(Services[i].stat[1]);
+        }
+        for (i = 0; i < nwaitdaemons; i++) {
+            xclose(WaitDaemons[i].socket);
+            xclose(WaitDaemons[i].stat[0]);
+            xclose(WaitDaemons[i].stat[1]);
+        }
+
+        /* wait for parent to finish setting our pgid */
+        syslog(LOG_DEBUG, "waiting for parent to set our pgid...");
+        close(pgid_pipe[1]);
+        read(pgid_pipe[0], &ignored, sizeof ignored);
+        close(pgid_pipe[0]);
+
+        /* set up environment */
+        snprintf(env_isdaemon, sizeof(env_isdaemon), "CYRUS_ISDAEMON=1");
+        putenv(env_isdaemon);
+        snprintf(env_service, sizeof(env_service), "CYRUS_SERVICE=%s", s->name);
+        putenv(env_service);
+        snprintf(env_id, sizeof(env_id), "CYRUS_ID=%d", s->associate);
+        putenv(env_id);
+
+        /* execute the daemon */
+        syslog(LOG_DEBUG, "about to exec %s", path);
+        execv(path, s->exec->data);
+        syslog(LOG_ERR, "couldn't exec %s: %m", path);
+        exit(EX_OSERR);
+    }
+    else if (p > 0) {
+        /* parent process */
+        ssize_t nread;
+
+        s->ready_workers++;
+        s->interval_forks++;
+        s->nforks++;
+        s->nactive++;
+
+        /* We need to add the waitdaemon to the same process group as the other
+         * waitdaemons.  The first one to be started gets added to a new process
+         * group named after its pid, and subsequent ones use the same process
+         * group.
+         */
+        pgid = 0;
+        if (waitdaemon_pgid != -1)
+            pgid = waitdaemon_pgid;
+        close(pgid_pipe[0]);
+        r = setpgid(p, pgid);
+        if (r) {
+            /* not a crisis, but when cyrus shuts down it will just shut
+             * this one down asynchronously like a normal service.
+             */
+            syslog(LOG_NOTICE, "unable to set pgid for %s/%s: %m",
+                                s->name, s->familyname);
+        }
+        else if (waitdaemon_pgid == -1) {
+            waitdaemon_pgid = p;
+        }
+        close(pgid_pipe[1]);
+
+        /* block here waiting for child to indicate readiness */
+        close(childready_pipe[1]);
+        nread = retry_read(childready_pipe[0],
+                           &childready_buf, sizeof childready_buf);
+        if (nread < 0 || (size_t) nread != sizeof childready_buf
+            || strncmp(childready_buf, "ok\r\n", nread))
+        {
+            fatalf(EX_CONFIG, "wait daemon %s did not write \"%s\" to fd %i: %m",
+                              s->name, "ok\\r\\n", STATUS_FD);
+        }
+        close(childready_pipe[0]);
+
+        /* add to child table */
+        c = centry_alloc();
+        centry_set_name(c, "DAEMON", s->name, path);
+        c->si = SERVICE_NONE;
+        c->wdi = wdi;
+        centry_set_state(c, SERVICE_STATE_READY);
+        centry_add(c, p);
+    }
+    else {
+        /* fork failed */
+        fatalf(EX_OSERR, "fork failed: %m");
+    }
+}
+
 static void spawn_service(struct service *s, int si, int wdi)
 {
     pid_t p;
@@ -2844,10 +2995,9 @@ int main(int argc, char **argv)
     /* init prom report */
     init_prom_report(now);
 
-    /* XXX start up waitdaemons, sequentially in order */
+    /* start up waitdaemons, sequentially in order */
     for (i = 0; i < nwaitdaemons; i++) {
-        /* XXX do it */
-        (void) 0;
+        spawn_waitdaemon(&WaitDaemons[i], i);
     }
 
     /* ok, we're going to start spawning like mad now */
