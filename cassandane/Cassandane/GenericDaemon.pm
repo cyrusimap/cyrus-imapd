@@ -37,7 +37,7 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Daemon;
+package Cassandane::GenericDaemon;
 use strict;
 use warnings;
 

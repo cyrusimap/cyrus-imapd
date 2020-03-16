@@ -792,7 +792,7 @@ sub post_tear_down
     my ($self) = @_;
 
     die "Found some stray processes"
-        if (Cassandane::Daemon::kill_processes_on_ports(
+        if (Cassandane::GenericDaemon::kill_processes_on_ports(
                     Cassandane::PortManager::free_all()));
 }
 

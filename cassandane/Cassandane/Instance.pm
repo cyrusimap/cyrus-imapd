@@ -68,7 +68,7 @@ use Cassandane::Mboxname;
 use Cassandane::Config;
 use Cassandane::Service;
 use Cassandane::ServiceFactory;
-use Cassandane::Daemon;
+use Cassandane::GenericDaemon;
 use Cassandane::MasterStart;
 use Cassandane::MasterEvent;
 use Cassandane::Cassini;
@@ -99,7 +99,7 @@ sub new
         starts => [],
         services => {},
         events => [],
-        daemons => {},
+        generic_daemons => {},
         re_use_dir => 0,
         setup_mailbox => 1,
         persistent => 0,
@@ -431,23 +431,23 @@ sub add_event
     push(@{$self->{events}}, Cassandane::MasterEvent->new(%params));
 }
 
-sub add_daemon
+sub add_generic_daemon
 {
     my ($self, %params) = @_;
 
     my $name = delete $params{name};
     die "Missing parameter 'name'"
         unless defined $name;
-    die "Already have a daemon named \"$name\""
-        if defined $self->{daemons}->{$name};
+    die "Already have a generic daemon named \"$name\""
+        if defined $self->{generic_daemons}->{$name};
 
-    my $daemon = Cassandane::Daemon->new(
+    my $daemon = Cassandane::GenericDaemon->new(
             name => $name,
             config => $self->{config},
             %params
     );
 
-    $self->{daemons}->{$name} = $daemon;
+    $self->{generic_daemons}->{$name} = $daemon;
     return $daemon;
 }
 
@@ -456,7 +456,8 @@ sub set_config
     my ($self, $conf) = @_;
 
     $self->{config} = $conf;
-    map { $_->set_config($conf); } (values %{$self->{services}}, values %{$self->{daemons}});
+    map { $_->set_config($conf); } (values %{$self->{services}},
+                                    values %{$self->{generic_daemons}});
 }
 
 sub _find_binary
@@ -730,7 +731,7 @@ sub _generate_master_conf
         print MASTER "}\n";
     }
 
-    # $self->{daemons} is daemons *not* managed by master
+    # $self->{generic_daemons} is daemons *not* managed by master
 
     close MASTER;
 }
@@ -781,7 +782,7 @@ sub _add_services_from_cyrus_conf
 
             if ($k eq 'listen')
             {
-                my $aa = Cassandane::Daemon::parse_address($v);
+                my $aa = Cassandane::GenericDaemon::parse_address($v);
                 $params{host} = $aa->{host};
                 $params{port} = $aa->{port};
             }
@@ -851,7 +852,8 @@ sub _start_master
     # earlier.  Or it might indicate that someone is trying to run
     # a second set of Cassandane tests on this machine, which is
     # also going to fail miserably.  In any case we want to know.
-    foreach my $srv (values %{$self->{services}}, values %{$self->{daemons}})
+    foreach my $srv (values %{$self->{services}},
+                     values %{$self->{generic_daemons}})
     {
         die "Some process is already listening on " . $srv->address()
             if $srv->is_listening();
@@ -885,7 +887,7 @@ sub _start_master
     xlog "_start_master: PID file present and correct";
 
     # Start any other defined daemons
-    foreach my $daemon (values %{$self->{daemons}})
+    foreach my $daemon (values %{$self->{generic_daemons}})
     {
         $self->run_command({ cyrus => 0 }, $daemon->get_argv());
     }
@@ -895,7 +897,8 @@ sub _start_master
     # a client will be able to connect(), although the first response
     # might be a bit slow.
     xlog "_start_master: PID waiting for services";
-    foreach my $srv (values %{$self->{services}}, values %{$self->{daemons}})
+    foreach my $srv (values %{$self->{services}},
+                     values %{$self->{generic_daemons}})
     {
         timed_wait(sub
                 {
@@ -1837,8 +1840,8 @@ sub describe
         printf "        ";
         $srv->describe();
     }
-    printf "    daemons:\n";
-    foreach my $daemon (values %{$self->{daemons}})
+    printf "    generic daemons:\n";
+    foreach my $daemon (values %{$self->{generic_daemons}})
     {
         printf "        ";
         $daemon->describe();

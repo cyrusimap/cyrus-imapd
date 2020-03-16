@@ -77,7 +77,7 @@ sub start_my_instances
 {
     my ($self) = @_;
 
-    $self->{instance}->add_daemon(
+    $self->{instance}->add_generic_daemon(
         name => 'annotator',
         port => $self->{instance}->{config}->get('annotation_callout'),
         argv => sub {

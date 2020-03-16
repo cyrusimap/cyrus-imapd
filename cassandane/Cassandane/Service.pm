@@ -43,7 +43,7 @@ use warnings;
 
 use lib '.';
 use base qw(Cassandane::MasterEntry);
-use Cassandane::Daemon;
+use Cassandane::GenericDaemon;
 use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Util::Socket;
@@ -60,9 +60,9 @@ sub new
 
     my $self = $class->SUPER::new(%params);
 
-    $self->{_daemon} = Cassandane::Daemon->new(name => $params{name},
-                                               host => $host,
-                                               port => $port);
+    $self->{_daemon} = Cassandane::GenericDaemon->new(name => $params{name},
+                                                      host => $host,
+                                                      port => $port);
     $self->{type} = $type;
 
     return $self;
