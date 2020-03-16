@@ -1395,30 +1395,40 @@ static void reap_child(void)
                     break;
                 }
             } else if (wd) {
-                /* WaitDaemons do not get shut down in the same way as other
-                 * services.  If we wind up in here, it was unexpected, regardless
-                 * of the process exit code!
-                 * XXX log exit code?
-                 * XXX count nactive?
-                 * XXX above might be a lie if we propagate SIGHUPS and they
-                 * XXX exit in response to those...
-                 * XXX need to figure out how we're using service_state for these
-                 * XXX before we can really nail down how to handle them here...
+                /* WaitDaemons are only ever in READY state, there's only one
+                 * child per service, and it only exits due to SIGHUP or failure
                  */
+                wd->nactive = 0;
+                wd->ready_workers = 0;
+
                 switch (c->service_state) {
                 case SERVICE_STATE_READY:
-                    syslog(LOG_WARNING,
-                           "daemon %s/%s pid %d in READY state: "
-                           "terminated abnormally",
-                           SERVICEPARAM(s->name),
-                           SERVICEPARAM(s->familyname), pid);
-                    /* XXX do we want to do the nreadyfails juggle? (see above) */
+                    if (!in_shutdown && failed) {
+                        time_t now = time(NULL);
+
+                        syslog(LOG_WARNING,
+                            "daemon %s/%s pid %d in READY state: "
+                            "terminated abnormally",
+                            SERVICEPARAM(wd->name),
+                            SERVICEPARAM(wd->familyname), pid);
+
+                        /* if this is repeatedly failing, YELL LOUDLY */
+                        if (now - wd->lastreadyfail > MAX_READY_FAIL_INTERVAL) {
+                            wd->nreadyfails = 0;
+                        }
+                        wd->lastreadyfail = now;
+                        if (++wd->nreadyfails >= MAX_READY_FAILS && wd->exec) {
+                            syslog(LOG_ERR, "daemon %s/%s is repeatedly failing",
+                                   SERVICEPARAM(wd->name),
+                                   SERVICEPARAM(wd->familyname));
+                        }
+                    }
                     break;
                 default:
                     syslog(LOG_WARNING,
                            "daemon %s/%s pid %d in unexpected state (%u): exited",
-                           SERVICEPARAM(s->name),
-                           SERVICEPARAM(s->familyname),
+                           SERVICEPARAM(wd->name),
+                           SERVICEPARAM(wd->familyname),
                            pid, c->service_state);
                     break;
                 }
