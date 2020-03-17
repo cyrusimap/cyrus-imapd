@@ -2677,6 +2677,24 @@ static int setcalendarevents_create(jmap_req_t *req,
     json_object_set_new(create, "x-href", json_string(xhref));
     free(xhref);
 
+    if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+        struct caldav_data *cdata = NULL;
+        r = caldav_lookup_uid(db, uid, &cdata);
+        if (!r) {
+            struct buf blobid = BUF_INITIALIZER;
+            if (_encode_calendarevent_blobid(cdata, req->userid, &blobid)) {
+                json_object_set_new(create, "blobId",
+                        json_string(buf_cstring(&blobid)));
+            }
+            buf_reset(&blobid);
+            if (_encode_calendarevent_blobid(cdata, NULL, &blobid)) {
+                json_object_set_new(create, "debugBlobId",
+                        json_string(buf_cstring(&blobid)));
+            }
+            buf_free(&blobid);
+        }
+    }
+
 done:
     if (mbox) jmap_closembox(req, &mbox);
     if (ical) icalcomponent_free(ical);
