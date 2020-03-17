@@ -3288,6 +3288,82 @@ sub test_calendarevent_set_alerts
     $self->assert_normalized_event_equals($ret, $event);
 }
 
+sub test_calendarevent_set_alerts_description
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 =>  {
+                    calendarId => 'Default',
+                    title => 'title',
+                    description => 'description',
+                    start => '2015-11-07T09:00:00',
+                    alerts =>  {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT5M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                },
+                2 =>  {
+                    calendarId => 'Default',
+                    description => 'description',
+                    start => '2016-11-07T09:00:00',
+                    alerts =>  {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT5M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                },
+                3 =>  {
+                    calendarId => 'Default',
+                    start => '2017-11-07T09:00:00',
+                    alerts =>  {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT5M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $blobId1 = $res->[0][1]{created}{1}{'blobId'};
+    $self->assert_not_null($blobId1);
+
+    my $blobId2 = $res->[0][1]{created}{2}{'blobId'};
+    $self->assert_not_null($blobId2);
+
+    my $blobId3 = $res->[0][1]{created}{3}{'blobId'};
+    $self->assert_not_null($blobId3);
+
+    $res = $jmap->Download('cassandane', $blobId1);
+    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:title[\s\S]+END:VALARM/g);
+
+    $res = $jmap->Download('cassandane', $blobId2);
+    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:description[\s\S]+END:VALARM/g);
+
+    $res = $jmap->Download('cassandane', $blobId3);
+    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:reminder[\s\S]+END:VALARM/g);
+}
+
 sub test_calendarevent_set_participantid
     :min_version_3_1 :needs_component_jmap
 {
