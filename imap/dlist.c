@@ -581,49 +581,49 @@ static struct dlist *dlist_updatechild(struct dlist *parent, const char *name)
     return dl;
 }
 
-struct dlist *dlist_updateatom(struct dlist *parent, const char *name, const char *val)
+EXPORTED struct dlist *dlist_updateatom(struct dlist *parent, const char *name, const char *val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makeatom(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updateflag(struct dlist *parent, const char *name, const char *val)
+EXPORTED struct dlist *dlist_updateflag(struct dlist *parent, const char *name, const char *val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makeflag(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updatenum64(struct dlist *parent, const char *name, bit64 val)
+EXPORTED struct dlist *dlist_updatenum64(struct dlist *parent, const char *name, bit64 val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makenum64(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updatenum32(struct dlist *parent, const char *name, uint32_t val)
+EXPORTED struct dlist *dlist_updatenum32(struct dlist *parent, const char *name, uint32_t val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makenum32(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updatedate(struct dlist *parent, const char *name, time_t val)
+EXPORTED struct dlist *dlist_updatedate(struct dlist *parent, const char *name, time_t val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makedate(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updatehex64(struct dlist *parent, const char *name, bit64 val)
+EXPORTED struct dlist *dlist_updatehex64(struct dlist *parent, const char *name, bit64 val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makehex64(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
+EXPORTED struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
                            const char *val, size_t len)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
@@ -631,7 +631,7 @@ struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
     return dl;
 }
 
-struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
+EXPORTED struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
                                const struct message_guid *guid)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
@@ -639,7 +639,7 @@ struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
     return dl;
 }
 
-struct dlist *dlist_updatefile(struct dlist *parent, const char *name,
+EXPORTED struct dlist *dlist_updatefile(struct dlist *parent, const char *name,
                                const char *part, const struct message_guid *guid,
                                size_t size, const char *fname)
 {
