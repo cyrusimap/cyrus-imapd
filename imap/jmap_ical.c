@@ -3739,9 +3739,10 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
         }
 
         /* DESCRIPTION is required for both email and display */
-        const char *description = icalcomponent_get_description(comp);
-        if (!description) description = "";
-        icalcomponent_add_property(alarm, icalproperty_new_description(description));
+        const char *desc = icalcomponent_get_summary(comp);
+        if (!desc || *desc == '\0') desc = icalcomponent_get_description(comp);
+        if (!desc || *desc == '\0') desc = "reminder";
+        icalcomponent_add_property(alarm, icalproperty_new_description(desc));
 
         icalcomponent_add_component(comp, alarm);
         jmap_parser_pop(parser);
