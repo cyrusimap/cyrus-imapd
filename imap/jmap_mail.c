@@ -3413,6 +3413,7 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
         _query_guidsearch_postprocess_match(&rock);
     }
     guidsearch_msg_fini(&rock.msg);
+    guidsearch_expr_free(rock.msgexpr);
     bv_fini(&rock.readable_folders);
     if (r == IMAP_SEARCH_NOT_SUPPORTED) {
         free(rock.result);
