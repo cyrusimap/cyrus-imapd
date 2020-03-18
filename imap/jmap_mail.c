@@ -2278,9 +2278,7 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
         /* Note: add any new sort criteria also to is_supported_email_sort */
 
         if (!strcmp(prop, "receivedAt")) {
-            sortcrit[j++].key = SORT_ARRIVAL;
-            sortcrit[j].flags = sortcrit[j-1].flags;
-            sortcrit[j].key = SORT_GUID;
+            sortcrit[j].key = SORT_ARRIVAL;
         }
         else if (!strcmp(prop, "sentAt")) {
             sortcrit[j].key = SORT_DATE;
@@ -2338,7 +2336,13 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
         j++;
     }
 
-    sortcrit[j].key = SORT_SEQUENCE;
+    sortcrit[j].key = SORT_GUID;
+    if (j && sortcrit[j-1].key == SORT_ARRIVAL) {
+        /* Reuse receivedAt sort order for breaking ties by guid */
+        sortcrit[j].flags |= (sortcrit[j-1].flags & SORT_REVERSE);
+    }
+    sortcrit[j+1].key = SORT_SEQUENCE;
+    sortcrit[j+1].flags = SORT_REVERSE;
 
     return sortcrit;
 }
@@ -2456,12 +2460,12 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
     else {
         struct sortcrit *sort = search->sort;
         sort = xzmalloc(3 * sizeof(struct sortcrit));
-        sort[0].flags |= SORT_REVERSE;
         sort[0].key = SORT_ARRIVAL;
-        sort[1].flags |= SORT_REVERSE;
+        sort[0].flags |= SORT_REVERSE;
         sort[1].key = SORT_GUID;
-        sort[2].flags |= SORT_REVERSE;
+        sort[1].flags |= SORT_REVERSE;
         sort[2].key = SORT_SEQUENCE;
+        sort[2].flags |= SORT_REVERSE;
         search->sort = sort;
     }
 
@@ -2757,11 +2761,11 @@ struct guidsearch_msg {
     bitvector_t folders;
     uint32_t system_flags;
     uint32_t internaldate;
-    arrayu64_t cids; // XXX - can same GUID even have multiple cids?
+    conversation_id_t cid;
 };
 
 #define GUIDSEARCH_MSG_INTIIALIZER { \
-    BV_INITIALIZER, 0, 0, ARRAYU64_INITIALIZER \
+    BV_INITIALIZER, 0, 0, 0 \
 }
 
 static void guidsearch_msg_init(struct guidsearch_msg *msg,
@@ -2770,7 +2774,7 @@ static void guidsearch_msg_init(struct guidsearch_msg *msg,
     bv_init(&msg->folders);
     bv_setsize(&msg->folders, numfolders);
     msg->system_flags = 0;
-    arrayu64_init(&msg->cids);
+    msg->cid = 0;
 }
 
 static void guidsearch_msg_reset(struct guidsearch_msg *msg)
@@ -2778,13 +2782,12 @@ static void guidsearch_msg_reset(struct guidsearch_msg *msg)
     bv_clearall(&msg->folders);
     msg->system_flags = 0;
     msg->internaldate = 0;
-    arrayu64_truncate(&msg->cids, 0);
+    msg->cid = 0;
 }
 
 static void guidsearch_msg_fini(struct guidsearch_msg *msg)
 {
     bv_fini(&msg->folders);
-    arrayu64_fini(&msg->cids);
 }
 
 static void guidsearch_expr_free(struct guidsearch_expr *e)
@@ -3194,12 +3197,12 @@ static int is_guidsearch_sort(struct sortcrit *sort)
 struct guidsearch_match {
     char guidrep[MESSAGE_GUID_SIZE*2+1];
     uint32_t internaldate;
+    conversation_id_t cid;
 };
 
 struct guidsearch_rock {
     jmap_req_t *req;
     bitvector_t readable_folders;
-    struct hashset *seen_threads;
     int want_expunged;
     char prevguid[MESSAGE_GUID_SIZE*2+1];
     struct guidsearch_msg msg;
@@ -3222,16 +3225,8 @@ static void _query_guidsearch_postprocess_match(struct guidsearch_rock *rock)
     memcpy(match->guidrep, rock->prevguid, MESSAGE_GUID_SIZE*2);
     match->guidrep[MESSAGE_GUID_SIZE*2] = '\0';
     match->internaldate = rock->msg.internaldate;
+    match->cid = rock->msg.cid;
     rock->total++;
-
-    /* Update seen threads */
-    if (rock->seen_threads) {
-        int i;
-        for (i = 0; i < arrayu64_size(&rock->msg.cids); i++) {
-            conversation_id_t cid = arrayu64_nth(&rock->msg.cids, i);
-            hashset_add(rock->seen_threads, &cid);
-        }
-    }
 }
 
 static int _query_guidsearch_cb(const conv_guidrec_t *rec,
@@ -3259,11 +3254,6 @@ static int _query_guidsearch_cb(const conv_guidrec_t *rec,
             return 0;
     }
 
-    /* Collapse threads, if requested */
-    if (rock->seen_threads && hashset_exists(rock->seen_threads, &rec->cid)) {
-        return 0;
-    }
-
     if (rock->result == NULL) {
         /* First time we see any match candidate */
         rock->result = xmalloc(nguids * sizeof(struct guidsearch_match));
@@ -3281,7 +3271,7 @@ static int _query_guidsearch_cb(const conv_guidrec_t *rec,
         bv_set(&rock->msg.folders, rec->foldernum);
         rock->msg.system_flags = rec->system_flags;
         rock->msg.internaldate = rec->internaldate;
-        arrayu64_add(&rock->msg.cids, rec->cid);
+        rock->msg.cid = rec->cid;
     }
     else {
         /* Update message state for same guid */
@@ -3290,7 +3280,6 @@ static int _query_guidsearch_cb(const conv_guidrec_t *rec,
         if (rec->internaldate < rock->msg.internaldate) {
             rock->msg.internaldate = rec->internaldate;
         }
-        arrayu64_add(&rock->msg.cids, rec->cid);
     }
 
     return 0;
@@ -3364,7 +3353,6 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
     struct guidsearch_rock rock = {
         req,
         BV_INITIALIZER,
-        q->collapse_threads ? hashset_new(8) : NULL,
         search->want_expunged,
         { 0 },
         GUIDSEARCH_MSG_INTIIALIZER,
@@ -3426,9 +3414,6 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
     }
     guidsearch_msg_fini(&rock.msg);
     bv_fini(&rock.readable_folders);
-    if (rock.seen_threads) {
-        hashset_free(&rock.seen_threads);
-    }
     if (r == IMAP_SEARCH_NOT_SUPPORTED) {
         free(rock.result);
         goto done;
@@ -3443,6 +3428,21 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
     if (rock.total) {
         cyr_qsort_r(rock.result, rock.total, sizeof(struct guidsearch_match),
                     _guidsearch_match_cmp, search->sort);
+        if (q->collapse_threads) {
+            struct hashset *seen_threads = hashset_new(sizeof(conversation_id_t));
+            size_t i, j;
+            for (i = 0, j = 0; i < rock.total; i++) {
+                struct guidsearch_match *match = rock.result + i;
+                if (hashset_add(seen_threads, &match->cid)) {
+                    if (i != j) {
+                        memcpy(rock.result + j, match, sizeof(struct guidsearch_match));
+                    }
+                    j++;
+                }
+            }
+            hashset_free(&seen_threads);
+            rock.total = j;
+        }
     }
     char email_id[JMAP_EMAILID_SIZE];
     struct message_guid guid;
