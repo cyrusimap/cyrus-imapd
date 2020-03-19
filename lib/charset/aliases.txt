@@ -11,31 +11,37 @@ ANSI_X3.4-1968      us-ascii
 usascii             us-ascii
 
 # Yes, the world does contain a lot of rubbish
-# ways of saying iso-8859-1
-ISO_8859_1          iso-8859-1
-ISO_8859-1          iso-8859-1
-ISO_8859            iso-8859-1
-ISO-8859            iso-8859-1
-8859_1              iso-8859-1
-iso--8859-1         iso-8859-1
-so-8859-1           iso-8859-1
-x-mac-roman         iso-8859-1
-macintosh           iso-8859-1
-mac                 iso-8859-1
-en_GB               iso-8859-1
-auto                iso-8859-1
-unknown             iso-8859-1
-unknown-8bit        iso-8859-1
-x-unknown           iso-8859-1
-x-user-defined      iso-8859-1
-x-europa            iso-8859-1
-none                iso-8859-1
-latin1              iso-8859-1
-ISO8859-1           iso-8859-1
-8859-1              iso-8859-1
-es-iso-8859-1       iso-8859-1
-DISPLAY             iso-8859-1
-Any                 iso-8859-1
+# ways of saying iso-8859-1.
+# And according to WHATWG Encoding they mean
+# windows-1252 for websites and emails:
+# https://encoding.spec.whatwg.org/#names-and-labels
+iso-8859-1          windows-1252
+ISO_8859_1          windows-1252
+ISO_8859-1          windows-1252
+ISO_8859            windows-1252
+ISO-8859            windows-1252
+8859_1              windows-1252
+iso--8859-1         windows-1252
+so-8859-1           windows-1252
+en_GB               windows-1252
+auto                windows-1252
+unknown             windows-1252
+unknown-8bit        windows-1252
+x-unknown           windows-1252
+x-user-defined      windows-1252
+x-europa            windows-1252
+none                windows-1252
+latin1              windows-1252
+ISO8859-1           windows-1252
+8859-1              windows-1252
+es-windows-1252     windows-1252
+DISPLAY             windows-1252
+Any                 windows-1252
+
+x-mac-roman         macintosh
+mac                 macintosh
+csmacintosh         macintosh
+
 
 # sort-of - see Filter::Trigraph
 646                 iso-8859-1
