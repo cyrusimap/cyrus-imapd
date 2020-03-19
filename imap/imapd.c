@@ -7284,6 +7284,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     mbentry_t *mbentry = NULL;
     struct mboxevent *mboxevent = NULL;
     mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
+    int delete_user = 0;
 
     r = mlookup(NULL, NULL, mbname_intname(mbname), &mbentry);
 
@@ -7340,22 +7341,32 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
     /* local mailbox */
     if (!r) {
-        if (localonly || !mboxlist_delayed_delete_isenabled()) {
+        int isadmin = imapd_userisadmin || imapd_userisproxyadmin;
+
+        if (mbname_isdeleted(mbname)) {
             r = mboxlist_deletemailbox(mbname_intname(mbname),
-                                       imapd_userisadmin || imapd_userisproxyadmin,
-                                       imapd_userid, imapd_authstate, mboxevent,
-                                       1-force, localonly, 0, 0);
-        } else if ((imapd_userisadmin || imapd_userisproxyadmin) &&
-                   mbname_isdeleted(mbname)) {
-            r = mboxlist_deletemailbox(mbname_intname(mbname),
-                                       imapd_userisadmin || imapd_userisproxyadmin,
-                                       imapd_userid, imapd_authstate, mboxevent,
+                                       isadmin, imapd_userid,
+                                       imapd_authstate, mboxevent,
                                        0 /* checkacl */, localonly, 0, 0);
-        } else {
-            r = mboxlist_delayed_deletemailbox(mbname_intname(mbname),
-                                               imapd_userisadmin || imapd_userisproxyadmin,
-                                               imapd_userid, imapd_authstate, mboxevent,
-                                               1-force, 0, 0, 0);
+        }
+        else {
+            delete_user = mboxname_isusermailbox(mbname_intname(mbname), 1);
+
+            if (!delete_user && mboxlist_haschildren(mbname_intname(mbname))) {
+                r = IMAP_MAILBOX_HASCHILDREN;
+            }
+            else if (localonly || !mboxlist_delayed_delete_isenabled()) {
+                r = mboxlist_deletemailbox(mbname_intname(mbname),
+                                           isadmin, imapd_userid,
+                                           imapd_authstate, mboxevent,
+                                           1-force, localonly, 0, 0);
+            }
+            else {
+                r = mboxlist_delayed_deletemailbox(mbname_intname(mbname),
+                                                   isadmin, imapd_userid,
+                                                   imapd_authstate, mboxevent,
+                                                   1-force, 0, 0, 0);
+            }
         }
     }
 
@@ -7366,7 +7377,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
     /* was it a top-level user mailbox? */
     /* localonly deletes are only per-mailbox */
-    if (!r && !localonly && mboxname_isusermailbox(mbname_intname(mbname), 1)) {
+    if (!r && !localonly && delete_user) {
         const char *userid = mbname_userid(mbname);
         if (userid) {
             r = mboxlist_usermboxtree(userid, NULL, delmbox, NULL, 0);

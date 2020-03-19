@@ -116,6 +116,9 @@ ec IMAP_MAILBOX_DISABLED,
 ec IMAP_MAILBOX_SPECIALUSE,
    "SPECIAL-USE flag conflict"
 
+ec IMAP_MAILBOX_HASCHILDREN,
+   "[HASCHILDREN] Mailbox has inferior hierarchical names"
+
 ec IMAP_PARTITION_UNKNOWN,
    "Unknown/invalid partition"
 
