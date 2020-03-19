@@ -157,7 +157,7 @@ static int list_cb(struct findall_data *data, void *rock)
     int r = 0;
 
     /* don't want partial matches */
-    if (!data || !data->mbname) return 0;
+    if (!data || !data->is_exactmatch) return 0;
 
     if (lrock->opts->longlist) {
         const char *path;
