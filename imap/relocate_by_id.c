@@ -292,6 +292,20 @@ int main(int argc, char **argv)
                 }
                 if (namelock) mboxname_release(&namelock);
             }
+            else if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                if (!quiet) printf("\tPromoting intermediary: %s\n", extname);
+
+                if (!nochanges) {
+                    r = mboxlist_promote_intermediary(mbentry->name);
+                    if (namelock) mboxname_release(&namelock);
+
+                    if (r) {
+                        fprintf(stderr,
+                                "\tFailed to promote intermediary %s: %s\n",
+                                extname, error_message(r));
+                    }
+                }
+            }
             else if (!nochanges) {
                 /* Rewrite mbentry */
                 mbentry->mbtype &= ~MBTYPE_LEGACY_DIRS;
@@ -303,7 +317,7 @@ int main(int argc, char **argv)
                             "Failed to rewrite mailboxes.db entry for %s: %s\n",
                             extname, error_message(r));
                 }
-                else if (!(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+                else {
                     /* Rewrite mailbox header */
                     struct mailbox *mailbox = NULL;
 
