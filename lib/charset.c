@@ -1979,13 +1979,22 @@ EXPORTED charset_t charset_lookupname(const char *name)
         return s;
     }
 
-    /* translate to canonical name */
+    /* translate alias to canonical name */
     for (i = 0; charset_aliases[i].name; i++) {
-        if (!strcasecmp(name, charset_aliases[i].name) ||
-            !strcasecmp(name, charset_aliases[i].canon_name)) {
+        if (!strcasecmp(name, charset_aliases[i].name)) {
             name = charset_aliases[i].canon_name;
             s->name = xstrdup(name);
             break;
+        }
+    }
+    if (!s->name) {
+        /* otherwise use canonical name, if defined */
+        for (i = 0; charset_aliases[i].name; i++) {
+            if (!strcasecmp(name, charset_aliases[i].canon_name)) {
+                name = charset_aliases[i].canon_name;
+                s->name = xstrdup(name);
+                break;
+            }
         }
     }
 
