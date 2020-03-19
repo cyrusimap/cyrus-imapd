@@ -1326,7 +1326,7 @@ sub test_delete_nounsubscribe
         [ 'subscribe' => 'INBOX' ],
         [ 'create' => [qw( deltest deltest/sub1 deltest/sub2 )] ],
         [ 'subscribe' => [qw( deltest deltest/sub2 )] ],
-        [ 'delete' => 'deltest' ],
+        [ 'delete' => 'deltest/sub2' ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -1335,19 +1335,7 @@ sub test_delete_nounsubscribe
 
     $self->_assert_list_data($subdata, '/', {
         'INBOX'         => '\\Subscribed',
-        'deltest'       => [qw( \\NonExistent \\Subscribed )],
-        'deltest/sub2'  => [qw( \\Subscribed )],
-    });
-
-    $self->_install_test_data([
-        [ 'delete' => 'deltest/sub2' ],
-    ]);
-
-    $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
-
-    $self->_assert_list_data($subdata, '/', {
-        'INBOX'         => '\\Subscribed',
-        'deltest'       => [qw( \\NonExistent \\Subscribed )],
+        'deltest'       => [qw( \\Subscribed )],
         'deltest/sub2'  => [qw( \\NonExistent \\Subscribed )],
     });
 }
@@ -1364,7 +1352,7 @@ sub test_delete_unsubscribe
         [ 'subscribe' => 'INBOX' ],
         [ 'create' => [qw( deltest deltest/sub1 deltest/sub2 )] ],
         [ 'subscribe' => [qw( deltest deltest/sub2 )] ],
-        [ 'delete' => 'deltest' ],
+        [ 'delete' => 'deltest/sub2' ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -1373,17 +1361,7 @@ sub test_delete_unsubscribe
 
     $self->_assert_list_data($subdata, '/', {
         'INBOX'        => '\\Subscribed',
-        'deltest/sub2' => '\\Subscribed',
-    });
-
-    $self->_install_test_data([
-        [ 'delete' => 'deltest/sub2' ],
-    ]);
-
-    $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
-
-    $self->_assert_list_data($subdata, '/', {
-        'INBOX' => '\\Subscribed',
+        'deltest'      => '\\Subscribed',
     });
 }
 

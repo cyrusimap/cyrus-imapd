@@ -158,21 +158,17 @@ sub test_lsub_delete
           ],
     ], "LSUB deltest setup mismatch: " . Dumper($subdata));
 
-    $imaptalk->delete("INBOX.deltest");
+    $imaptalk->delete("INBOX.deltest.sub2");
     my $onedata = $imaptalk->lsub("INBOX.deltest", "*");
     $self->assert_deep_equals($onedata, [
           [
-            [],
+            [
+              '\\HasChildren'
+            ],
             '.',
-            'INBOX.deltest.sub2'
+            'INBOX.deltest'
           ],
-    ], "LSUB deltest setup mismatch: " . Dumper($onedata));
-
-    $imaptalk->delete("INBOX.deltest.sub2");
-    my $nodata = $imaptalk->lsub("INBOX.deltest", "*");
-    $nodata = [] unless ref($nodata); # dammit Completed return
-    $self->assert_deep_equals($nodata, [
-    ], "LSUB deltest after delete mismatch: " . Dumper($nodata));
+    ], "LSUB deltest.sub2 after delete mismatch: " . Dumper($onedata));
 }
 
 sub test_lsub_extrachild
