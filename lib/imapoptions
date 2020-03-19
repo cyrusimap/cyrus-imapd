@@ -700,7 +700,19 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "conversations_max_thread", 100, INT, "3.1.1" }
 /* maximum size for a single thread.  Threads will split if they have this many
- * messages in them and another message arrives */
+   messages in them and another message arrives */
+
+{ "conversations_max_guidrecords", 5000, INT, "3.3.0" }
+/* maximum records with the same guid.  This is just a sanity check to stop the same
+   email being added and removed over and over, so the default is 5000 */
+
+{ "conversations_max_guidexists", 100, INT, "3.3.0" }
+/* maximum records with the same guid.  This maps to "labels", so with the default
+   of 100, you can only have 100 labels on an email in JMAP */
+
+{ "conversations_max_guidinfolder", 10, INT, "3.3.0" }
+/* maximum records with the same guid in the same folder. You can't do this via JMAP,
+   but could via IMAP.  The default of 10 should be heaps normally! */
 
 { "crossdomains", 0, SWITCH, "3.0.0" }
 /* Enable cross domain sharing.  This works best with alt namespace and

@@ -2525,6 +2525,16 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     if (ecounts.pre.exists) ecounts.quotadiff -= record->size;
     if (ecounts.post.exists) ecounts.quotadiff += record->size;
 
+    // check sanity limits
+    if (ecounts.post.numrecords > ecounts.pre.numrecords) {
+        if (ecounts.post.numrecords > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDRECORDS))
+            return IMAP_CONVERSATION_GUIDLIMIT;
+        if (ecounts.post.exists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS))
+            return IMAP_CONVERSATION_GUIDLIMIT;
+        if (ecounts.post.folderexists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDINFOLDER))
+            return IMAP_CONVERSATION_GUIDLIMIT;
+    }
+
     /* XXX - combine this with the earlier cache parsing */
     if (!mailbox_cacherecord(mailbox, record)) {
         char *env = NULL;
