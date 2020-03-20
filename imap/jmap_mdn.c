@@ -264,7 +264,7 @@ static json_t *generate_mdn(struct jmap_req *req,
     }
 
     /* Check ACL */
-    int rights = jmap_myrights_byname(req, mboxname);
+    int rights = jmap_myrights(req, mboxname);
     if ((rights & JACL_READITEMS) != JACL_READITEMS) {
         err = json_pack("{s:s}", "type", "emailNotFound");
         goto done;

@@ -1164,7 +1164,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
             syslog(LOG_ERR, "jmap_findblob: no mbentry for %s", rec->mboxname);
             return r;
         }
-        int rights = jmap_myrights(req, mbentry);
+        int rights = jmap_myrights_mbentry(req, mbentry);
         mboxlist_entry_free(&mbentry);
         if ((rights & JACL_READITEMS) != JACL_READITEMS) {
             return 0;
@@ -1308,7 +1308,7 @@ static int findblob_exact_cb(const conv_guidrec_t *rec, void *rock)
             syslog(LOG_ERR, "jmap_findblob: no mbentry for %s", rec->mboxname);
             return r;
         }
-        int rights = jmap_myrights(req, mbentry);
+        int rights = jmap_myrights_mbentry(req, mbentry);
         mboxlist_entry_free(&mbentry);
         if ((rights & JACL_READITEMS) != JACL_READITEMS) {
             return 0;
@@ -1510,7 +1510,7 @@ HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
     return buf_release(&buf);
 }
 
-HIDDEN int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
+HIDDEN int jmap_myrights_mbentry(jmap_req_t *req, const mbentry_t *mbentry)
 {
     return _rights_for_mbentry(req->authstate, mbentry, req->mbstates);
 }
@@ -1535,14 +1535,14 @@ HIDDEN int jmap_mbtype(jmap_req_t *req, const char *mboxname)
 }
 
 // gotta have them all
-HIDDEN int jmap_hasrights(jmap_req_t *req, const mbentry_t *mbentry, int rights)
+HIDDEN int jmap_hasrights_mbentry(jmap_req_t *req, const mbentry_t *mbentry, int rights)
 {
-    int myrights = jmap_myrights(req, mbentry);
+    int myrights = jmap_myrights_mbentry(req, mbentry);
     if ((myrights & rights) == rights) return 1;
     return 0;
 }
 
-HIDDEN int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
+HIDDEN int jmap_myrights(jmap_req_t *req, const char *mboxname)
 {
     struct mbstate *mbstate = hash_lookup(mboxname, req->mbstates);
     if (mbstate) return mbstate->rights;
@@ -1560,10 +1560,10 @@ HIDDEN int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
 }
 
 // gotta have them all
-HIDDEN int jmap_hasrights_byname(jmap_req_t *req, const char *mboxname,
+HIDDEN int jmap_hasrights(jmap_req_t *req, const char *mboxname,
                                  int rights)
 {
-    int myrights = jmap_myrights_byname(req, mboxname);
+    int myrights = jmap_myrights(req, mboxname);
     if ((myrights & rights) == rights) return 1;
     return 0;
 }

@@ -604,7 +604,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     }
 
     /* Check ACL */
-    if (!jmap_hasrights_byname(req, mboxname, JACL_READITEMS)) {
+    if (!jmap_hasrights(req, mboxname, JACL_READITEMS)) {
         *set_err = json_pack("{s:s}", "type", "emailNotFound");
         goto done;
     }

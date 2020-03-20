@@ -1064,7 +1064,7 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
     if (rec->part) return 0;
 
     static int needrights = JACL_READITEMS;
-    if (!jmap_hasrights_byname(req, rec->mboxname, needrights))
+    if (!jmap_hasrights(req, rec->mboxname, needrights))
         return 0;
 
     r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
@@ -1431,7 +1431,7 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
     if (rec->part) return 0;
 
     /* Make sure we are allowed to read this mailbox */
-    if (!jmap_hasrights_byname(req, rec->mboxname, JACL_READITEMS))
+    if (!jmap_hasrights(req, rec->mboxname, JACL_READITEMS))
         return 0;
 
     int r = 0;
@@ -1537,7 +1537,7 @@ static int _email_get_cid_cb(const conv_guidrec_t *rec, void *rock)
     if (jmap_mbtype(d->req, rec->mboxname) != MBTYPE_EMAIL) {
         return 0;
     }
-    if (d->checkacl && !jmap_hasrights_byname(d->req, rec->mboxname, JACL_READITEMS)) {
+    if (d->checkacl && !jmap_hasrights(d->req, rec->mboxname, JACL_READITEMS)) {
         return 0;
     }
 
@@ -2068,7 +2068,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             const char *mboxid = json_string_value(val);
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
             if (mbentry && mbentry->mbtype == MBTYPE_EMAIL &&
-                    jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
+                    jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                 strarray_append(folders, mbentry->name);
             }
             if (strarray_size(folders)) {
@@ -2086,7 +2086,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
                 const char *mboxid = json_string_value(jmboxid);
                 const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
                 if (mbentry && mbentry->mbtype == MBTYPE_EMAIL &&
-                        jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
+                        jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                     strarray_append(folders, mbentry->name);
                 }
             }
@@ -2246,7 +2246,7 @@ static void _email_parse_filter_cb(jmap_req_t *req,
         if (!strcmp(field, "inMailbox")) {
             if (json_is_string(arg)) {
                 const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, json_string_value(arg));
-                if (!mbentry || !jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
+                if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                     jmap_parser_invalid(parser, field);
                 }
             }
@@ -2260,7 +2260,7 @@ static void _email_parse_filter_cb(jmap_req_t *req,
                     int is_valid = 0;
                     if (s) {
                         const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, s);
-                        is_valid = mbentry && jmap_hasrights(req, mbentry, JACL_LOOKUP);
+                        is_valid = mbentry && jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP);
                     }
                     if (!is_valid) {
                         jmap_parser_push_index(parser, field, i, s);
@@ -2450,7 +2450,7 @@ static int _jmap_checkfolder(const char *mboxname, void *rock)
     jmap_req_t *req = (jmap_req_t *)rock;
 
     // we only want to look in folders that the user is allowed to read
-    if (jmap_hasrights_byname(req, mboxname, JACL_READITEMS))
+    if (jmap_hasrights(req, mboxname, JACL_READITEMS))
         return 1;
 
     return 0;
@@ -3382,7 +3382,7 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
         uint32_t num;
         for (num = 0; num < numfolders; num++) {
             const char *mboxname = conversations_folder_name(cstate, num);
-            if (jmap_hasrights_byname(req, mboxname, ACL_READ|ACL_LOOKUP)) {
+            if (jmap_hasrights(req, mboxname, ACL_READ|ACL_LOOKUP)) {
                 bv_set(&rock.readable_folders, num);
             }
         }
@@ -3882,7 +3882,7 @@ static int _email_queryargs_parse(jmap_req_t *req,
         mbentry_t *mbentry = NULL;
         int is_valid = 0;
         if (!mboxlist_lookup(addrbookname, &mbentry, NULL)) {
-            is_valid = jmap_hasrights(req, mbentry, JACL_LOOKUP) &&
+            is_valid = jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP) &&
                        mbentry->mbtype == MBTYPE_ADDRESSBOOK;
         }
         mboxlist_entry_free(&mbentry);
@@ -5006,7 +5006,7 @@ static int _thread_get_cb(const conv_guidrec_t *rec, void *vrock)
     if (jmap_mbtype(rock->req, rec->mboxname) != MBTYPE_EMAIL) {
         return 0;
     }
-    if (!rock->is_own_account &&!jmap_hasrights_byname(rock->req, rec->mboxname, needrights)) {
+    if (!rock->is_own_account &&!jmap_hasrights(rock->req, rec->mboxname, needrights)) {
         return 0;
     }
     rock->is_visible = 1;
@@ -5329,7 +5329,7 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *vrock)
 
     if (rec->part) return 0;
 
-    if (!jmap_hasrights_byname(req, rec->mboxname, JACL_READITEMS)) return 0;
+    if (!jmap_hasrights(req, rec->mboxname, JACL_READITEMS)) return 0;
 
     /* Fetch system flags */
     int r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
@@ -5385,7 +5385,7 @@ static int _email_get_snoozed_cb(const conv_guidrec_t *rec, void *vrock)
     if (jmap_mbtype(rock->req, rec->mboxname) != MBTYPE_EMAIL) {
         return 0;
     }
-    if (!jmap_hasrights_byname(rock->req, rec->mboxname, JACL_READITEMS)) {
+    if (!jmap_hasrights(rock->req, rec->mboxname, JACL_READITEMS)) {
         return 0;
     }
 
@@ -7557,7 +7557,7 @@ static void _email_append(jmap_req_t *req,
         }
         if (!mboxid) continue;
         const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
-        if (!mbentry || !jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
+        if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
             r = IMAP_MAILBOX_NONEXISTENT;
             goto done;
         }
@@ -9543,7 +9543,7 @@ static void _append_validate_mboxids(jmap_req_t *req,
             char *uniqueid = NULL;
             char *mboxname = NULL;
             if (snoozed_uniqueid && !strcmp(role, "snoozed") &&
-                jmap_hasrights_byname(req, snoozed_mboxname, need_rights)) {
+                jmap_hasrights(req, snoozed_mboxname, need_rights)) {
                 /* Flag this mailboxId as being $snoozed */
                 json_object_del(jmailboxids, mbox_id);
                 json_object_set_new(jmailboxids,
@@ -9551,7 +9551,7 @@ static void _append_validate_mboxids(jmap_req_t *req,
                 *have_snoozed_mboxid = 1;
             }
             else if (!jmap_mailbox_find_role(req, role, &mboxname, &uniqueid) &&
-                jmap_hasrights_byname(req, mboxname, need_rights)) {
+                jmap_hasrights(req, mboxname, need_rights)) {
                 json_object_del(jmailboxids, mbox_id);
                 json_object_set_new(jmailboxids, uniqueid, json_true());
             }
@@ -9571,7 +9571,7 @@ static void _append_validate_mboxids(jmap_req_t *req,
             if (mbox_id) {
                 mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
             }
-            if (!mbentry || !jmap_hasrights(req, mbentry, need_rights)) {
+            if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, need_rights)) {
                 jmap_parser_invalid(parser, NULL);
                 is_valid = 0;
             }
@@ -9739,7 +9739,7 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
             mboxlist_entry_free(&mbentry);
             return 0;
         }
-        if (!jmap_hasrights(rock->req, mbentry, JACL_READITEMS)) {
+        if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)) {
             mboxlist_entry_free(&mbentry);
             return 0;
         }
@@ -10629,7 +10629,7 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
             struct email_mboxrec *mboxrec = uidrec->mboxrec;
             struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
 
-            if (!jmap_hasrights_byname(bulk->req, plan->mboxname, JACL_READITEMS)) {
+            if (!jmap_hasrights(bulk->req, plan->mboxname, JACL_READITEMS)) {
                 continue;
             }
             if (!update->mailboxids) {
@@ -10934,7 +10934,7 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
     hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
     while (hash_iter_next(iter)) {
         struct email_updateplan *plan = hash_iter_val(iter);
-        if (!jmap_hasrights_byname(bulk->req, plan->mboxname, plan->needrights)) {
+        if (!jmap_hasrights(bulk->req, plan->mboxname, plan->needrights)) {
             _email_updateplan_error(plan, IMAP_PERMISSION_DENIED, bulk->set_errors);
             strarray_append(&erroneous_plans, plan->mbox_id);
         }
@@ -11673,7 +11673,7 @@ static void _email_destroy_bulk(jmap_req_t *req,
     if (strcmp(req->accountid, req->userid)) {
         for (i = 0; i < ptrarray_size(mboxrecs); i++) {
             struct email_mboxrec *mboxrec = ptrarray_nth(mboxrecs, i);
-            if (!jmap_hasrights_byname(req, mboxrec->mboxname, JACL_REMOVEITEMS)) {
+            if (!jmap_hasrights(req, mboxrec->mboxname, JACL_REMOVEITEMS)) {
                 /* Mark all messages of this mailbox as failed */
                 int j;
                 for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
@@ -11828,7 +11828,7 @@ static int msgimport_checkacl_cb(const mbentry_t *mbentry, void *xrock)
         return 0;
 
     int needrights = JACL_ADDITEMS|JACL_SETKEYWORDS;
-    if (!jmap_hasrights(req, mbentry, needrights))
+    if (!jmap_hasrights_mbentry(req, mbentry, needrights))
         return IMAP_PERMISSION_DENIED;
 
     return 0;
@@ -12144,7 +12144,7 @@ static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
 
     /* Check read-write ACL rights */
     int needrights = JACL_READITEMS|JACL_ADDITEMS|ACL_SETSEEN|JACL_SETMETADATA;
-    if (!jmap_hasrights(rock->req, mbentry, needrights))
+    if (!jmap_hasrights_mbentry(rock->req, mbentry, needrights))
         return IMAP_PERMISSION_DENIED;
 
     /* Mark this mailbox as found */
@@ -12346,7 +12346,7 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
     if (jmap_mbtype(req, rec->mboxname) != MBTYPE_EMAIL) {
         goto done;
     }
-    if (!jmap_hasrights_byname(req, rec->mboxname, JACL_READITEMS)) {
+    if (!jmap_hasrights(req, rec->mboxname, JACL_READITEMS)) {
         goto done;
     }
 

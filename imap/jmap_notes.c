@@ -472,7 +472,7 @@ static int jmap_notes_get(jmap_req_t *req)
         goto done;
     }
 
-    rights = jmap_myrights(req, mbentry);
+    rights = jmap_myrights_mbentry(req, mbentry);
 
     r = jmap_openmbox(req, mbentry->name, &mbox, 0);
     mboxlist_entry_free(&mbentry);
@@ -867,7 +867,7 @@ static int jmap_notes_set(jmap_req_t *req)
         goto done;
     }
 
-    rights = jmap_myrights(req, mbentry);
+    rights = jmap_myrights_mbentry(req, mbentry);
 
     r = jmap_openmbox(req, mbentry->name, &mbox, 1);
     assert(mbox);
