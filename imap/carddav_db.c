@@ -1141,10 +1141,11 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 
     fprintf(f, "Date: %s\r\n", datestr);
 
-    if (strchr(uid, '@'))
-        fprintf(f, "Message-ID: <%s>\r\n", uid);
-    else
-        fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
+    /* Use SHA1(uid)@servername as Message-ID */
+    struct message_guid uuid;
+    message_guid_generate(&uuid, uid, strlen(uid));
+    fprintf(f, "Message-ID: <%s@%s>\r\n",
+            message_guid_encode(&uuid), config_servername);
 
     fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
 

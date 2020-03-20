@@ -8044,13 +8044,11 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     buf_reset(&txn->buf);
 
-    /* XXX - validate uid for mime safety? */
-    if (strchr(uid, '@')) {
-        buf_printf(&txn->buf, "<%s>", uid);
-    }
-    else {
-        buf_printf(&txn->buf, "<%s@%s>", uid, config_servername);
-    }
+    /* Use SHA1(uid)@servername as Message-ID */
+    struct message_guid uuid;
+    message_guid_generate(&uuid, uid, strlen(uid));
+    buf_printf(&txn->buf, "<%s@%s>",
+               message_guid_encode(&uuid), config_servername);
     spool_replace_header(xstrdup("Message-ID"),
                          buf_release(&txn->buf), txn->req_hdrs);
 

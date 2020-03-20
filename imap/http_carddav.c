@@ -655,17 +655,14 @@ static int store_resource(struct transaction_t *txn,
     mimehdr = charset_encode_mimeheader(fullname, 0, 0);
     spool_replace_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
 
-    /* XXX - validate uid for mime safety? */
-    if (strchr(uid, '@')) {
-        spool_replace_header(xstrdup("Message-ID"),
-                             xstrdup(uid), txn->req_hdrs);
-    }
-    else {
-        assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "<%s@%s>", uid, config_servername);
-        spool_replace_header(xstrdup("Message-ID"),
-                             buf_release(&txn->buf), txn->req_hdrs);
-    }
+    /* Use SHA1(uid)@servername as Message-ID */
+    struct message_guid uuid;
+    message_guid_generate(&uuid, uid, strlen(uid));
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "<%s@%s>",
+               message_guid_encode(&uuid), config_servername);
+    spool_replace_header(xstrdup("Message-ID"),
+                         buf_release(&txn->buf), txn->req_hdrs);
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "text/vcard; version=%s; charset=utf-8", version);
