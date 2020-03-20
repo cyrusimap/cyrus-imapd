@@ -2538,7 +2538,7 @@ static void message_write_charset(struct buf *buf, const struct body *body)
     if (charset != CHARSET_UNKNOWN_CHARSET) {
         size_t itemsize;
 
-        name = charset_name(charset);
+        name = charset_canon_name(charset);
         len = strlen(name);
 
         /* charset name length is a multiple of cache item size,

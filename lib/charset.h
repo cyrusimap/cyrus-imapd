@@ -70,7 +70,7 @@ typedef int comp_pat;
  *
  * Caveats:
  * * Two instances for the same character encoding are not pointer-equal.
- *   Use string comparison of the charset_name to test for equality.
+ *   Use string comparison of the charset_canon_name to test for equality.
  * * Instances are not safe to use for two simultaneous conversions. It is safe
  *   (and recommended) to reuse an instance for consecutive conversions.
  */
@@ -100,7 +100,13 @@ extern charset_t charset_lookupname(const char *name);
 extern charset_t charset_lookupnumid(int id);
 extern void charset_free(charset_t *charset);
 
-extern const char *charset_name(charset_t);
+/* Return the canonical charset name. */
+extern const char *charset_canon_name(charset_t);
+
+/* Returns the name as provided in lookupname, if any.
+ * Falls back to returning the canonical name. */
+extern const char *charset_alias_name(charset_t);
+
 extern comp_pat *charset_compilepat(const char *s);
 extern void charset_freepat(comp_pat *pat);
 extern int charset_searchstring(const char *substr, comp_pat *pat,

@@ -164,8 +164,12 @@ struct charset_converter {
     /* An open ICU converter for ICU backed converters. Or NULL.  */
     UConverter *conv;
 
-    /* The charset name for this converter. Might differ from ICU name. */
-    char *name;
+    /* Cyrus-canonical charset name for this converter.
+     * Might differ from ICU name.*/
+    char *canon_name;
+
+    /* Alias name of as provided by caller in charset_lookupname */
+    char *alias_name;
 
     /* The numeric charset identifier for table converters. Or -1 */
     int num;
@@ -1868,7 +1872,7 @@ static char* convert_to_name(const char *to, charset_t charset,
     size_t n;
 
     /* determine the name of the source encoding */
-    from = charset_name(charset);
+    from = charset_canon_name(charset);
 
     /* allocate the target buffer */
     /* we preflight to compromise between memory and runtime efficiency */
@@ -1932,27 +1936,32 @@ char QPMIMEPHRASESAFECHAR[256] = {
 
 /* API */
 
+EXPORTED const char *charset_alias_name(charset_t cs) {
+    if (cs && cs->alias_name) {
+        return cs->alias_name;
+    }
+    return charset_canon_name(cs);
+}
+
 /*
  * Return the name of the given character set number, or "unknown" if
  * not known.
  */
-EXPORTED const char *charset_name(charset_t charset)
+EXPORTED const char *charset_canon_name(charset_t cs)
 {
-    const char *name;
-
-    if (!charset)
+    if (!cs)
             goto done;
 
-    if (charset->name)
-        return charset->name;
+    if (cs->canon_name)
+        return cs->canon_name;
 
-    if (charset->conv) {
+    if (cs->conv) {
         UErrorCode err = U_ZERO_ERROR;
-        name = ucnv_getName(charset->conv, &err);
+        const char *name = ucnv_getName(cs->conv, &err);
         if (U_SUCCESS(err))
             return name;
-    } else if (charset->num >= 0 && charset->num < chartables_num_charsets) {
-        return chartables_charset_table[charset->num].name;
+    } else if (cs->num >= 0 && cs->num < chartables_num_charsets) {
+        return chartables_charset_table[cs->num].name;
     }
 
 done:
@@ -1966,59 +1975,61 @@ done:
 EXPORTED charset_t charset_lookupname(const char *name)
 {
     int i;
-    struct charset_converter *s;
+    struct charset_converter *cs;
     UErrorCode err;
     UConverter *conv;
 
     /* create the converter */
-    s = xzmalloc(sizeof(struct charset_converter));
-    s->num = -1;
+    cs = xzmalloc(sizeof(struct charset_converter));
+    cs->num = -1;
 
     if (!name) {
-        s->num = 0; // us-ascii
-        return s;
+        cs->num = 0; // us-ascii
+        return cs;
     }
+    cs->alias_name = xstrdup(name);
 
     /* translate alias to canonical name */
     for (i = 0; charset_aliases[i].name; i++) {
         if (!strcasecmp(name, charset_aliases[i].name)) {
-            name = charset_aliases[i].canon_name;
-            s->name = xstrdup(name);
+            cs->canon_name = xstrdup(charset_aliases[i].canon_name);
             break;
         }
     }
-    if (!s->name) {
+    if (!cs->canon_name) {
         /* otherwise use canonical name, if defined */
         for (i = 0; charset_aliases[i].name; i++) {
             if (!strcasecmp(name, charset_aliases[i].canon_name)) {
-                name = charset_aliases[i].canon_name;
-                s->name = xstrdup(name);
+                cs->canon_name = xstrdup(charset_aliases[i].canon_name);
                 break;
             }
         }
     }
 
     /* Is it a table based lookup, or UTF-8? */
-    for (i = 0; i < chartables_num_charsets; i++) {
-        if (!strcasecmp(name, chartables_charset_table[i].name)) {
-            if ((chartables_charset_table[i].table) || !strcmp(name, "utf-8")) {
-                s->num = i;
-                return s;
+    if (cs->canon_name) {
+        for (i = 0; i < chartables_num_charsets; i++) {
+            if (!strcasecmp(cs->canon_name, chartables_charset_table[i].name)) {
+                if ((chartables_charset_table[i].table) || !strcmp(cs->canon_name, "utf-8")) {
+                    cs->num = i;
+                    return cs;
+                }
             }
         }
     }
 
     /* Otherwise, let's see if we can fallback to ICU */
     err = U_ZERO_ERROR;
-    conv = ucnv_open(name, &err);
+    conv = ucnv_open(cs->canon_name ? cs->canon_name : name, &err);
     if (U_SUCCESS(err)) {
-        s->conv = conv;
-        return s;
+        cs->conv = conv;
+        return cs;
     }
 
     /* Still here? This means we don't know this charset name */
-    free(s->name);
-    free(s);
+    free(cs->alias_name);
+    free(cs->canon_name);
+    free(cs);
     return CHARSET_UNKNOWN_CHARSET;
 }
 
@@ -2030,7 +2041,8 @@ EXPORTED void charset_free(charset_t *charsetp)
         if (s->conv) ucnv_close(s->conv);
         /* Free up memory. */
         if (s->buf) free(s->buf);
-        if (s->name) free(s->name);
+        free(s->alias_name);
+        free(s->canon_name);
         /* Release the converter */
         free(s);
         *charsetp = CHARSET_UNKNOWN_CHARSET;
@@ -2439,7 +2451,8 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
             basic_free(extract);
             extract = NULL;
         }
-        else if (!strcmp(charset_name(cs), charset_name(lastcs)) && enc == lastenc && enc) {
+        else if (!strcmp(charset_canon_name(cs), charset_canon_name(lastcs)) &&
+                  enc == lastenc && enc) {
             /* Reuse the previous decoder */
             charset_free(&cs);
             p = encoding+3;

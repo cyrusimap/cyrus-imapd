@@ -370,7 +370,7 @@ static char *_decode_to_utf8(const char *charset,
     struct char_counts counts = charset_count_validutf8(text, textlen);
     *is_encoding_problem = counts.invalid || counts.replacement;
 
-    const char *charset_id = charset_name(cs);
+    const char *charset_id = charset_canon_name(cs);
     if (!strncasecmp(charset_id, "UTF-32", 6)) {
         /* Special-handle UTF-32. Some clients announce the wrong endianess. */
         if (counts.invalid || counts.replacement) {
