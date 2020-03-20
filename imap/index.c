@@ -5055,7 +5055,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
 
     /* Parse the message into an iCalendar object */
     const struct buf *icalbuf = NULL;
-    if (encoding || strcasecmp(charset_name(charset), "utf-8")) {
+    if (encoding || strcasecmp(charset_canon_name(charset), "utf-8")) {
         char *tmp = charset_to_utf8(buf_cstring(raw), buf_len(raw), charset, encoding);
         if (!tmp) return 0; /* could be a bogus header - ignore */
         buf_initm(&buf, tmp, strlen(tmp));
@@ -5196,7 +5196,7 @@ static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
 
     /* Parse the message into a vcard object */
     const struct buf *vcardbuf = NULL;
-    if (encoding || strcasecmp(charset_name(charset), "utf-8")) {
+    if (encoding || strcasecmp(charset_canon_name(charset), "utf-8")) {
         char *tmp = charset_to_utf8(buf_cstring(raw), buf_len(raw), charset, encoding);
         if (!tmp) return 0; /* could be a bogus header - ignore */
         buf_initm(&buf, tmp, strlen(tmp));

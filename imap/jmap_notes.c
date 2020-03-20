@@ -315,7 +315,7 @@ static int _note_get(message_t *msg, json_t *note, hash_table *props,
         if (r) return r;
 
         charset = charset_lookupname(charset_id);
-        if (encoding || strcasecmp(charset_name(charset), "utf-8")) {
+        if (encoding || strcasecmp(charset_canon_name(charset), "utf-8")) {
             char *dec = charset_to_utf8(buf_cstring(buf), buf_len(buf),
                                         charset, encoding);
             buf_setcstr(buf, dec);

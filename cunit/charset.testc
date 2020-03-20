@@ -12,22 +12,18 @@ extern int charset_debug;
 
 static void test_lookupname(void)
 {
-    charset_t cs, cs2;
+    charset_t cs;
 
     /* us-ascii must exist */
     cs = charset_lookupname("us-ascii");
     CU_ASSERT_PTR_NOT_NULL(cs);
+    charset_free(&cs);
 
     /* names are case-insensitive */
-    cs2 = charset_lookupname("US-ASCII");
-    CU_ASSERT_PTR_NOT_NULL(cs2);
-    CU_ASSERT_STRING_EQUAL(charset_name(cs), charset_name(cs2));
-    charset_free(&cs2);
-
-    cs2 = charset_lookupname("Us-AsCiI");
-    CU_ASSERT_PTR_NOT_NULL(cs2);
-    CU_ASSERT_STRING_EQUAL(charset_name(cs), charset_name(cs2));
-    charset_free(&cs2);
+    cs = charset_lookupname("US-ASCII");
+    CU_ASSERT_PTR_NOT_NULL(cs);
+    CU_ASSERT_STRING_EQUAL("us-ascii", charset_canon_name(cs));
+    CU_ASSERT_STRING_EQUAL("US-ASCII", charset_alias_name(cs));
     charset_free(&cs);
 
     /* some others must also exist */
@@ -41,6 +37,8 @@ static void test_lookupname(void)
 
     cs = charset_lookupname("iso-8859-1");
     CU_ASSERT_PTR_NOT_NULL(cs);
+    CU_ASSERT_STRING_EQUAL("windows-1252", charset_canon_name(cs));
+    CU_ASSERT_STRING_EQUAL("iso-8859-1", charset_alias_name(cs));
     charset_free(&cs);
 
     /*
@@ -49,20 +47,22 @@ static void test_lookupname(void)
      */
     cs = charset_lookupname("windows-1252");
     CU_ASSERT_PTR_NOT_NULL(cs);
-    CU_ASSERT_STRING_EQUAL(charset_name(cs), "windows-1252");
+    CU_ASSERT_STRING_EQUAL("windows-1252", charset_canon_name(cs));
+    CU_ASSERT_STRING_EQUAL("windows-1252", charset_alias_name(cs));
     charset_free(&cs);
 
     cs = charset_lookupname("1252");
     CU_ASSERT_PTR_NOT_NULL(cs);
-    CU_ASSERT_STRING_EQUAL(charset_name(cs), "windows-1252");
+    CU_ASSERT_STRING_EQUAL("windows-1252", charset_canon_name(cs));
+    CU_ASSERT_STRING_EQUAL("1252", charset_alias_name(cs));
     charset_free(&cs);
 
-    /* But still use the ICU name if there's no good alias for it */
+    /* But still use the ICU name if there's no Cyrus canon name */
     cs = charset_lookupname("ebcdic-ar");
     CU_ASSERT_PTR_NOT_NULL(cs);
-    CU_ASSERT_STRING_EQUAL(charset_name(cs), "ibm-16804_X110-1999");
+    CU_ASSERT_STRING_EQUAL("ibm-16804_X110-1999", charset_canon_name(cs));
+    CU_ASSERT_STRING_EQUAL("ebcdic-ar", charset_alias_name(cs));
     charset_free(&cs);
-
 }
 
 static void test_to_utf8(void)

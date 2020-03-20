@@ -122,7 +122,7 @@ static int dump_one_section(int partno, charset_t charset, int encoding,
 {
 #define MAX_TEXT    512
     printf("SECTION partno=%d length=%llu subtype=%s charset=%s encoding=%s\n",
-            partno, (unsigned long long)data->len, subtype, charset_name(charset), encoding_name(encoding));
+            partno, (unsigned long long)data->len, subtype, charset_canon_name(charset), encoding_name(encoding));
     dump_buf(stdout, data);
     return 0;
 #undef MAX_TEXT
