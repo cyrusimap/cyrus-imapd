@@ -1436,9 +1436,6 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
 
     int r = 0;
     struct mailbox *mbox = NULL;
-    msgrecord_t *mr = NULL;
-    uint32_t system_flags;
-    uint32_t internal_flags;
 
     r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) {
@@ -1451,14 +1448,20 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
         goto done;
     }
 
-    r = msgrecord_find(mbox, rec->uid, &mr);
-    if (!r) r = msgrecord_get_systemflags(mr, &system_flags);
-    if (!r) r = msgrecord_get_internalflags(mr, &internal_flags);
-    if (r) {
-        // we want to keep looking and see if we can find a message we can read
-        syslog(LOG_ERR, "IOERROR: email_find_cb failed to find message %u in mailbox %s: %s",
-               rec->uid, rec->mboxname, error_message(r));
-        goto done;
+    uint32_t system_flags = 0;
+    uint32_t internal_flags = 0;
+
+    if (rec->version < 1) {
+        msgrecord_t *mr = NULL;
+        r = msgrecord_find(mbox, rec->uid, &mr);
+        if (!r) r = msgrecord_get_systemflags(mr, &system_flags);
+        if (!r) r = msgrecord_get_internalflags(mr, &internal_flags);
+        msgrecord_unref(&mr);
+        if (r) goto done;
+    }
+    else {
+        system_flags = rec->system_flags;
+        internal_flags = rec->internal_flags;
     }
 
     // if it's deleted, skip
@@ -1470,7 +1473,6 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
 
 done:
     jmap_closembox(req, &mbox);
-    msgrecord_unref(&mr);
     return d->mboxname ? IMAP_OK_COMPLETED : 0;
 }
 
@@ -12308,15 +12310,17 @@ static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
     if (jmap_mbtype(req, rec->mboxname) != MBTYPE_EMAIL) {
         goto done;
     }
+    if (rec->version < 1) {
+        r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
+        if (r) goto done;
 
-    r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
-    if (r) return r;
+        r = msgrecord_find(mbox, rec->uid, &mr);
+        if (r) goto done;
 
-    r = msgrecord_find(mbox, rec->uid, &mr);
-    if (r) goto done;
-
-    r = msgrecord_get_internalflags(mr, &internal_flags);
-    if (r) goto done;
+        r = msgrecord_get_internalflags(mr, &internal_flags);
+        if (r) goto done;
+    }
+    else internal_flags = rec->internal_flags;
 
     if (!(internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         data->exists = 1;
@@ -12362,11 +12366,16 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
     /* Check if this record is expunged */
     uint32_t system_flags;
     uint32_t internal_flags;
-    r = msgrecord_get_systemflags(mr, &system_flags);
-    if (!r) msgrecord_get_internalflags(mr, &internal_flags);
+    if (rec->version < 1) {
+        r = msgrecord_get_systemflags(mr, &system_flags);
+        if (!r) msgrecord_get_internalflags(mr, &internal_flags);
+        if (r) goto done;
+    }
+    else {
+        system_flags = rec->system_flags;
+        internal_flags = rec->internal_flags;
+    }
     if (r || system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        msgrecord_unref(&mr);
-        jmap_closembox(req, &mbox);
         goto done;
     }
 
@@ -12386,6 +12395,10 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
     }
 
 done:
+    if (r) {
+        msgrecord_unref(&mr);
+        jmap_closembox(req, &mbox);
+    }
     return r;
 }
 
