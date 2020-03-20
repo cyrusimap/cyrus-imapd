@@ -146,7 +146,7 @@ typedef struct jmap_req {
 
     /* Internal state */
     ptrarray_t *mboxes;
-    hash_table *mboxrights;
+    hash_table *mbstates;
     hash_table *created_ids;
     hash_table *mbentry_byid;
     ptrarray_t *method_calls;

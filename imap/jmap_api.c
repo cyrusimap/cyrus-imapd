@@ -477,19 +477,20 @@ static jmap_method_t *find_methodproc(const char *name, hash_table *jmap_methods
     return hash_lookup(name, jmap_methods);
 }
 
-/* Return the ACL for mbentry for the authstate of userid.
- * Lookup and store ACL rights in the mboxrights cache. */
-static int _rights_for_mbentry(struct auth_state *authstate,
-                               const mbentry_t *mbentry,
-                               hash_table *mboxrights)
+struct mbstate {
+    int mbtype;
+    int rights; // ACL for current user
+};
+
+static struct mbstate *_mbstates_getoradd(struct auth_state *authstate,
+                                          const mbentry_t *mbentry,
+                                          hash_table *mbstates)
 {
-    if (!mbentry) return 0;
+    struct mbstate *mbstate = hash_lookup(mbentry->name, mbstates);
+    if (mbstate) return mbstate;
 
-    /* Lookup cached rights */
-    int *rightsptr = hash_lookup(mbentry->name, mboxrights);
-    if (rightsptr) return *rightsptr;
-
-    int rights = 0;
+    mbstate = xmalloc(sizeof(struct mbstate));
+    mbstate->mbtype = mbentry->mbtype;
 
     /* Lookup ACL */
     mbname_t *mbname = mbname_from_intname(mbentry->name);
@@ -497,20 +498,28 @@ static int _rights_for_mbentry(struct auth_state *authstate,
         // if it's an intermediate mailbox, we get rights from the parent
         mbentry_t *parententry = NULL;
         if (mboxlist_findparent(mbentry->name, &parententry))
-            rights = 0;
+            mbstate->rights = 0;
         else
-            rights = httpd_myrights(authstate, parententry);
+            mbstate->rights = httpd_myrights(authstate, parententry);
         mboxlist_entry_free(&parententry);
     }
-    else rights = httpd_myrights(authstate, mbentry);
-
-    /* Cache rights */
-    rightsptr = xmalloc(sizeof(int));
-    *rightsptr = rights;
-    hash_insert(mbentry->name, rightsptr, mboxrights);
-
+    else mbstate->rights = httpd_myrights(authstate, mbentry);
     mbname_free(&mbname);
-    return rights;
+
+    hash_insert(mbentry->name, mbstate, mbstates);
+    return mbstate;
+}
+
+
+/* Return the ACL for mbentry for the authstate of userid.
+ * Lookup and store ACL rights in the cached mailbox state. */
+static int _rights_for_mbentry(struct auth_state *authstate,
+                               const mbentry_t *mbentry,
+                               hash_table *mbstates)
+{
+    if (!mbentry) return 0;
+    struct mbstate *mbstate =_mbstates_getoradd(authstate, mbentry, mbstates);
+    return mbstate->rights;
 }
 
 struct capabilities_rock {
@@ -643,7 +652,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     int return_created_ids = 0;
     hash_table created_ids = HASH_TABLE_INITIALIZER;
     hash_table capabilities_by_accountid = HASH_TABLE_INITIALIZER;
-    hash_table mboxrights = HASH_TABLE_INITIALIZER;
+    hash_table mbstates = HASH_TABLE_INITIALIZER;
     strarray_t methods = STRARRAY_INITIALIZER;
     ptrarray_t method_calls = PTRARRAY_INITIALIZER;
     ptrarray_t processed_methods = PTRARRAY_INITIALIZER;
@@ -668,7 +677,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
 
     /* Set up request-internal state */
     construct_hash_table(&capabilities_by_accountid, 8, 0);
-    construct_hash_table(&mboxrights, 64, 0);
+    construct_hash_table(&mbstates, 64, 0);
     construct_hash_table(&created_ids, 1024, 0);
 
     /* Parse client-supplied creation ids */
@@ -757,7 +766,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         json_t *account_capas = hash_lookup(accountid, &capabilities_by_accountid);
         if (!account_capas) {
             account_capas = lookup_capabilities(accountid, httpd_userid,
-                                                httpd_authstate, &mboxrights);
+                                                httpd_authstate, &mbstates);
             hash_insert(accountid, account_capas, &capabilities_by_accountid);
         }
         if (json_is_null(account_capas)) {
@@ -805,7 +814,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         req.tag = tag;
         req.created_ids = &created_ids;
         req.txn = txn;
-        req.mboxrights = &mboxrights;
+        req.mbstates = &mbstates;
         req.method_calls = &method_calls;
         req.using_capabilities = &using_capabilities;
 
@@ -892,7 +901,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     }
     free_hash_table(&created_ids, free);
     free_hash_table(&capabilities_by_accountid, _free_json);
-    free_hash_table(&mboxrights, free);
+    free_hash_table(&mbstates, free);
     free(account_inboxname);
     json_decref(jreq);
     json_decref(resp);
@@ -1503,7 +1512,7 @@ HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
 
 HIDDEN int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 {
-    return _rights_for_mbentry(req->authstate, mbentry, req->mboxrights);
+    return _rights_for_mbentry(req->authstate, mbentry, req->mbstates);
 }
 
 // gotta have them all
@@ -1516,15 +1525,15 @@ HIDDEN int jmap_hasrights(jmap_req_t *req, const mbentry_t *mbentry, int rights)
 
 HIDDEN int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
 {
-    int *rightsptr = hash_lookup(mboxname, req->mboxrights);
-    if (rightsptr) return *rightsptr;
+    struct mbstate *mbstate = hash_lookup(mboxname, req->mbstates);
+    if (mbstate) return mbstate->rights;
 
     // if unable to read, that means no rights
     int rights = 0;
 
     mbentry_t *mbentry = NULL;
     if (!jmap_mboxlist_lookup(mboxname, &mbentry, NULL)) {
-        rights = _rights_for_mbentry(req->authstate, mbentry, req->mboxrights);
+        rights = _rights_for_mbentry(req->authstate, mbentry, req->mbstates);
     }
     mboxlist_entry_free(&mbentry);
 
@@ -1542,8 +1551,8 @@ HIDDEN int jmap_hasrights_byname(jmap_req_t *req, const char *mboxname,
 
 HIDDEN void jmap_myrights_delete(jmap_req_t *req, const char *mboxname)
 {
-    int *rightsptr = hash_del(mboxname, req->mboxrights);
-    free(rightsptr);
+    struct mbstate *mbstate = hash_del(mboxname, req->mbstates);
+    free(mbstate);
 }
 
 /* Add performance stats to method response */

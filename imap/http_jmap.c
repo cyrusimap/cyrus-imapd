@@ -529,9 +529,9 @@ static int jmap_download(struct transaction_t *txn)
     req.txn = txn;
 
     /* Initialize ACL mailbox cache for findblob */
-    hash_table mboxrights = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&mboxrights, 64, 0);
-    req.mboxrights = &mboxrights;
+    hash_table mbstates = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&mbstates, 64, 0);
+    req.mbstates = &mbstates;
 
     blobid = xstrndup(blobbase, bloblen);
 
@@ -576,7 +576,7 @@ static int jmap_download(struct transaction_t *txn)
     else if (res == HTTP_OK) res = 0;
 
     buf_free(&blob);
-    free_hash_table(&mboxrights, free);
+    free_hash_table(&mbstates, free);
     conversations_commit(&cstate);
     free(accept_mime);
     free(accountid);
