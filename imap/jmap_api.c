@@ -482,9 +482,9 @@ struct mbstate {
     int rights; // ACL for current user
 };
 
-static struct mbstate *_mbstates_getoradd(struct auth_state *authstate,
-                                          const mbentry_t *mbentry,
-                                          hash_table *mbstates)
+static struct mbstate *_mbstate_getoradd(struct auth_state *authstate,
+                                         const mbentry_t *mbentry,
+                                         hash_table *mbstates)
 {
     struct mbstate *mbstate = hash_lookup(mbentry->name, mbstates);
     if (mbstate) return mbstate;
@@ -518,7 +518,7 @@ static int _rights_for_mbentry(struct auth_state *authstate,
                                hash_table *mbstates)
 {
     if (!mbentry) return 0;
-    struct mbstate *mbstate =_mbstates_getoradd(authstate, mbentry, mbstates);
+    struct mbstate *mbstate =_mbstate_getoradd(authstate, mbentry, mbstates);
     return mbstate->rights;
 }
 
@@ -1513,6 +1513,25 @@ HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
 HIDDEN int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 {
     return _rights_for_mbentry(req->authstate, mbentry, req->mbstates);
+}
+
+HIDDEN int jmap_mbtype(jmap_req_t *req, const char *mboxname)
+{
+    struct mbstate *mbstate = hash_lookup(mboxname, req->mbstates);
+    int mbtype;
+
+    if (!mbstate) {
+        mbentry_t *mbentry = NULL;
+        if (!jmap_mboxlist_lookup(mboxname, &mbentry, NULL)) {
+            mbstate = _mbstate_getoradd(req->authstate, mbentry, req->mbstates);
+            mbtype = mbstate->mbtype;
+        }
+        else mbtype = MBTYPE_UNKNOWN;
+        mboxlist_entry_free(&mbentry);
+    }
+    else mbtype = mbstate->mbtype;
+
+    return mbtype;
 }
 
 // gotta have them all

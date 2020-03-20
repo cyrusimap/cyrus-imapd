@@ -248,6 +248,7 @@ extern int  jmap_myrights_byname(jmap_req_t *req, const char *mboxname);
 extern int  jmap_hasrights_byname(jmap_req_t *req, const char *mboxname,
                                   int rights);
 extern void jmap_myrights_delete(jmap_req_t *req, const char *mboxname);
+extern int  jmap_mbtype(jmap_req_t *req, const char *mboxname);
 
 /* Blob services */
 extern int jmap_findblob(jmap_req_t *req, const char *accountid,

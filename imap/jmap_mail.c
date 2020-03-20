@@ -1447,6 +1447,9 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
                rec->mboxname, error_message(r));
         goto done;
     }
+    if (mbox->mbtype != MBTYPE_EMAIL) {
+        goto done;
+    }
 
     r = msgrecord_find(mbox, rec->uid, &mr);
     if (!r) r = msgrecord_get_systemflags(mr, &system_flags);
@@ -1526,12 +1529,18 @@ struct email_getcid_rock {
 
 static int _email_get_cid_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct email_getcid_rock *d = (struct email_getcid_rock *)rock;
     if (rec->part) return 0;
     if (!rec->cid) return 0;
-    /* Make sure we are allowed to read this mailbox */
-    if (d->checkacl && !jmap_hasrights_byname(d->req, rec->mboxname, JACL_READITEMS))
-            return 0;
+
+    struct email_getcid_rock *d = (struct email_getcid_rock *)rock;
+
+    if (jmap_mbtype(d->req, rec->mboxname) != MBTYPE_EMAIL) {
+        return 0;
+    }
+    if (d->checkacl && !jmap_hasrights_byname(d->req, rec->mboxname, JACL_READITEMS)) {
+        return 0;
+    }
+
     d->cid = rec->cid;
     return IMAP_OK_COMPLETED;
 }
@@ -1577,21 +1586,23 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     r = jmap_openmbox(check->req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
-    r = msgrecord_find(mbox, rec->uid, &mr);
-    if (!r) {
-        uint32_t internal_flags;
-        modseq_t createdmodseq;
-        r = msgrecord_get_systemflags(mr, &flags);
-        if (!r) msgrecord_get_internalflags(mr, &internal_flags);
-        if (!r) msgrecord_get_createdmodseq(mr, &createdmodseq);
+    if (mbox->mbtype == MBTYPE_EMAIL) {
+        r = msgrecord_find(mbox, rec->uid, &mr);
         if (!r) {
-            /* OK, this is a legit record, let's check it out */
-            if (createdmodseq <= check->since_modseq)
-                check->status |= 1;  /* contains old messages */
-            if (!((flags & FLAG_DELETED) || (internal_flags & FLAG_INTERNAL_EXPUNGED)))
-                check->status |= 2;  /* contains alive messages */
+            uint32_t internal_flags;
+            modseq_t createdmodseq;
+            r = msgrecord_get_systemflags(mr, &flags);
+            if (!r) msgrecord_get_internalflags(mr, &internal_flags);
+            if (!r) msgrecord_get_createdmodseq(mr, &createdmodseq);
+            if (!r) {
+                /* OK, this is a legit record, let's check it out */
+                if (createdmodseq <= check->since_modseq)
+                    check->status |= 1;  /* contains old messages */
+                if (!((flags & FLAG_DELETED) || (internal_flags & FLAG_INTERNAL_EXPUNGED)))
+                    check->status |= 2;  /* contains alive messages */
+            }
+            msgrecord_unref(&mr);
         }
-        msgrecord_unref(&mr);
     }
 
     jmap_closembox(check->req, &mbox);
@@ -2056,7 +2067,8 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             strarray_t *folders = strarray_new();
             const char *mboxid = json_string_value(val);
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
-            if (mbentry && jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
+            if (mbentry && mbentry->mbtype == MBTYPE_EMAIL &&
+                    jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
                 strarray_append(folders, mbentry->name);
             }
             if (strarray_size(folders)) {
@@ -2073,7 +2085,8 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             json_array_foreach(val, i, jmboxid) {
                 const char *mboxid = json_string_value(jmboxid);
                 const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
-                if (mbentry && jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
+                if (mbentry && mbentry->mbtype == MBTYPE_EMAIL &&
+                        jmap_hasrights(req, mbentry, JACL_LOOKUP)) {
                     strarray_append(folders, mbentry->name);
                 }
             }
@@ -4976,15 +4989,28 @@ done:
     return r;
 }
 
-static int _thread_is_shared_cb(const conv_guidrec_t *rec, void *rock)
+struct thread_get_rock {
+    jmap_req_t *req;
+    int is_own_account; /* input argument */
+    int is_visible;     /* output argument */
+};
+
+static int _thread_get_cb(const conv_guidrec_t *rec, void *vrock)
 {
     if (rec->part) return 0;
     if (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;
-    jmap_req_t *req = (jmap_req_t *)rock;
+
+    struct thread_get_rock *rock = vrock;
     static int needrights = JACL_READITEMS;
-    if (jmap_hasrights_byname(req, rec->mboxname, needrights))
-        return IMAP_OK_COMPLETED;
-    return 0;
+
+    if (jmap_mbtype(rock->req, rec->mboxname) != MBTYPE_EMAIL) {
+        return 0;
+    }
+    if (!rock->is_own_account &&!jmap_hasrights_byname(rock->req, rec->mboxname, needrights)) {
+        return 0;
+    }
+    rock->is_visible = 1;
+    return IMAP_OK_COMPLETED;
 }
 
 static int _thread_get(jmap_req_t *req, json_t *ids,
@@ -5012,17 +5038,12 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
         int is_own_account = !strcmp(req->userid, req->accountid);
         json_t *ids = json_pack("[]");
         for (thread = conv.thread; thread; thread = thread->next) {
-            if (!is_own_account) {
-                const char *guidrep = message_guid_encode(&thread->guid);
-                int r = conversations_guid_foreach(req->cstate, guidrep,
-                                                   _thread_is_shared_cb, req);
-                if (r != IMAP_OK_COMPLETED) {
-                    if (r) {
-                        syslog(LOG_ERR, "jmap: _thread_is_shared_cb(%s): %s",
-                                guidrep, error_message(r));
-                    }
-                    continue;
-                }
+            struct thread_get_rock rock = { req, is_own_account, 0 };
+            const char *guidrep = message_guid_encode(&thread->guid);
+            int r = conversations_guid_foreach(req->cstate, guidrep,
+                                              _thread_get_cb, &rock);
+            if ((r && r != IMAP_OK_COMPLETED) || !rock.is_visible) {
+                continue;
             }
             jmap_set_emailid(&thread->guid, email_id);
             json_array_append_new(ids, json_string(email_id));
@@ -5314,6 +5335,8 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *vrock)
     int r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
+    if (mbox->mbtype != MBTYPE_EMAIL) goto done;
+
     r = msgrecord_find(mbox, rec->uid, &mr);
     if (r) goto done;
 
@@ -5359,8 +5382,12 @@ static int _email_get_snoozed_cb(const conv_guidrec_t *rec, void *vrock)
 
     if (rec->part) return 0;
 
-    if (!jmap_hasrights_byname(rock->req, rec->mboxname, JACL_READITEMS))
+    if (jmap_mbtype(rock->req, rec->mboxname) != MBTYPE_EMAIL) {
         return 0;
+    }
+    if (!jmap_hasrights_byname(rock->req, rec->mboxname, JACL_READITEMS)) {
+        return 0;
+    }
 
     if (FLAG_INTERNAL_SNOOZED ==
         (rec->internal_flags & (FLAG_INTERNAL_SNOOZED|FLAG_INTERNAL_EXPUNGED))) {
@@ -6809,7 +6836,10 @@ static int _warmup_mboxcache_cb(const conv_guidrec_t *rec, void* vrock)
     struct mailbox *mbox = NULL;
     int r = jmap_openmbox(rock->req, rec->mboxname, &mbox, /*rw*/0);
     if (!r) {
-        ptrarray_append(&rock->mboxes, mbox);
+        if (mbox->mbtype == MBTYPE_EMAIL) {
+            ptrarray_append(&rock->mboxes, mbox);
+        }
+        else jmap_closembox(rock->req, &mbox);
     }
     return r;
 }
@@ -9689,8 +9719,6 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
     /* don't process emails that have this email attached! */
     if (rec->part) return 0;
 
-    if (!jmap_hasrights_byname(rock->req, rec->mboxname, JACL_READITEMS)) return 0;
-
     /* Check if there's already a mboxrec for this mailbox. */
     int i;
     struct email_mboxrec *mboxrec = NULL;
@@ -9708,6 +9736,10 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
 
         // we only want regular mailboxes!
         if (mbentry->mbtype & MBTYPES_NONIMAP) {
+            mboxlist_entry_free(&mbentry);
+            return 0;
+        }
+        if (!jmap_hasrights(rock->req, mbentry, JACL_READITEMS)) {
             mboxlist_entry_free(&mbentry);
             return 0;
         }
@@ -12150,6 +12182,9 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
 
     /* Overwrite message record */
     int r = jmap_openmbox(rock->req, rec->mboxname, &mbox, /*rw*/1);
+    if (r || mbox->mbtype != MBTYPE_EMAIL) {
+        goto done;
+    }
     if (!r) r = msgrecord_find(mbox, rec->uid, &mr);
     if (!r && rock->received_at) {
         time_t internal_date;
@@ -12270,6 +12305,10 @@ static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
     uint32_t internal_flags;
     int r = 0;
 
+    if (jmap_mbtype(req, rec->mboxname) != MBTYPE_EMAIL) {
+        goto done;
+    }
+
     r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
@@ -12302,24 +12341,30 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
 {
     struct emailcopy_pickrecord_rock *rock = vrock;
     jmap_req_t *req = rock->req;
+    int r = 0;
 
-    /* Make sure we are allowed to read this mailbox */
-    if (!jmap_hasrights_byname(req, rec->mboxname, JACL_READITEMS)) return 0;
+    if (jmap_mbtype(req, rec->mboxname) != MBTYPE_EMAIL) {
+        goto done;
+    }
+    if (!jmap_hasrights_byname(req, rec->mboxname, JACL_READITEMS)) {
+        goto done;
+    }
 
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
 
-    /* Check if this record is expunged */
-    int r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
+    /* Lookup record */
+    r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) goto done;
-
     r = msgrecord_find(mbox, rec->uid, &mr);
     if (r) goto done;
+
+    /* Check if this record is expunged */
     uint32_t system_flags;
     uint32_t internal_flags;
     r = msgrecord_get_systemflags(mr, &system_flags);
     if (!r) msgrecord_get_internalflags(mr, &internal_flags);
-    if (system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED) {
+    if (r || system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED) {
         msgrecord_unref(&mr);
         jmap_closembox(req, &mbox);
         goto done;
