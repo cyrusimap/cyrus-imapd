@@ -6218,36 +6218,49 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     /* charset */
     if (jmap_wantprop(bodyprops, "charset")) {
         json_t *jcharset = json_null();
-        json_t *jrawheader = _email_get_header(msg, part, "content-type",
-                                               HEADER_FORM_RAW, /*all*/0);
-        if (JNOTNULL(jrawheader)) {
-            const char *hdr = json_string_value(jrawheader);
-            char *type = NULL;
-            char *subtype = NULL;
-            struct param *param = NULL;
-            message_parse_type(hdr, &type, &subtype, &param);
 
-            struct param *p;
-            for (p = param; p; p = p->next) {
-                if (!strcasecmpsafe("charset", p->attribute)) {
-                    if (p->value) {
-                        struct buf buf = BUF_INITIALIZER;
-                        buf_setcstr(&buf, p->value);
-                        buf_trim(&buf);
-                        if (buf_len(&buf)) {
-                            jcharset = json_string(buf_cstring(&buf));
-                        }
-                        buf_free(&buf);
-                    }
+        if (msg->mr) {
+            int cache_version = 0;
+            msgrecord_get_cache_version(msg->mr, &cache_version);
+            if (cache_version >= 10) {
+                /* Read charset from bodystructure */
+                if (part->charset_id) {
+                    jcharset = json_string(part->charset_id);
                 }
             }
-
-            json_decref(jrawheader);
-            param_free(&param);
-            free(type);
-            free(subtype);
+        }
+        if (json_is_null(jcharset)) {
+            /* Read charset from header */
+            json_t *jrawheader = _email_get_header(msg, part, "content-type",
+                                                   HEADER_FORM_RAW, /*all*/0);
+            if (JNOTNULL(jrawheader)) {
+                const char *hdr = json_string_value(jrawheader);
+                char *type = NULL;
+                char *subtype = NULL;
+                struct param *param = NULL;
+                message_parse_type(hdr, &type, &subtype, &param);
+                struct param *p;
+                for (p = param; p; p = p->next) {
+                    if (!strcasecmpsafe("charset", p->attribute)) {
+                        if (p->value) {
+                            struct buf buf = BUF_INITIALIZER;
+                            buf_setcstr(&buf, p->value);
+                            buf_trim(&buf);
+                            if (buf_len(&buf)) {
+                                jcharset = json_string(buf_cstring(&buf));
+                            }
+                            buf_free(&buf);
+                        }
+                    }
+                }
+                json_decref(jrawheader);
+                param_free(&param);
+                free(type);
+                free(subtype);
+            }
         }
         if (json_is_null(jcharset) && !strcasecmp(part->type, "TEXT")) {
+            /* Use default text charset */
             jcharset = json_string("us-ascii");
         }
         json_object_set_new(jbodypart, "charset", jcharset);

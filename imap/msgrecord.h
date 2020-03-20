@@ -84,6 +84,7 @@ extern int msgrecord_get_index_record(msgrecord_t *mr, struct index_record *reco
 extern int msgrecord_get_index_record_rw(msgrecord_t *mr, struct index_record **record);
 extern int msgrecord_get_userflags(msgrecord_t *mr, uint32_t user_flags[MAX_USER_FLAGS/32]);
 extern int msgrecord_get_fname(msgrecord_t *mr, const char **fname);
+extern int msgrecord_get_cache_version(msgrecord_t *mr, int *cache_version);
 extern int msgrecord_get_cache_env(msgrecord_t *mr, int token, char **tok);
 extern int msgrecord_get_cache_item(msgrecord_t *mr, int field, char **item);
 extern int msgrecord_get_mailbox(msgrecord_t *mr, struct mailbox **mailboxptr);

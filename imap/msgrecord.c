@@ -394,6 +394,16 @@ EXPORTED int msgrecord_load_cache(msgrecord_t *mr)
     return msgrecord_need(mr, M_CACHE);
 }
 
+EXPORTED int msgrecord_get_cache_version(msgrecord_t *mr, int *cache_version)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *cache_version = mr->record.cache_version;
+    return 0;
+}
+
 EXPORTED int msgrecord_get_cache_env(msgrecord_t *mr, int token, char **tok)
 {
     if (!mr->isappend) {
