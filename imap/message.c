@@ -604,7 +604,7 @@ static void message_find_part(struct body *body, const char *section,
             message_parse_charset(body, &encoding, &charset);
             if (charset == CHARSET_UNKNOWN_CHARSET)
                 /* try ASCII */
-                charset = charset_lookupname("US-ASCII");
+                charset = charset_lookupname("us-ascii");
             body->decoded_body = charset_to_utf8(
                 msg_base + body->content_offset, body->content_size,
                 charset, encoding); /* returns a cstring */
@@ -1038,7 +1038,7 @@ static void message_parse_charset(const struct body *body,
 {
 
     int encoding = ENCODING_NONE;
-    charset_t charset = charset_lookupname("US-ASCII");
+    charset_t charset = charset_lookupname("us-ascii");
     struct param *param;
 
 
@@ -2538,7 +2538,7 @@ static void message_write_charset(struct buf *buf, const struct body *body)
     if (charset != CHARSET_UNKNOWN_CHARSET) {
         size_t itemsize;
 
-        name = charset_canon_name(charset);
+        name = charset_alias_name(charset);
         len = strlen(name);
 
         /* charset name length is a multiple of cache item size,
