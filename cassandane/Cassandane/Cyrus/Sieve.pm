@@ -2481,17 +2481,6 @@ sub test_snooze
     my $snoozed = "INBOX.snoozed";
     my $awakened = "INBOX.awakened";
 
-    xlog $self, "Create the snoozed folder";
-    my $imaptalk = $self->{store}->get_client();
-
-    $imaptalk->create($snoozed, "(USE (\\Snoozed))");
-    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
-
-    xlog $self, "Create the awakened folder";
-    $imaptalk->create($awakened)
-         or die "Cannot create $awakened: $@";
-    $self->{store}->set_fetch_attributes(qw(uid flags));
-
     my $localtz = DateTime::TimeZone->new( name => 'local' );
     my $maildate = DateTime->now(time_zone => $localtz);
     $maildate->add(DateTime::Duration->new(minutes => 1));
@@ -2504,8 +2493,26 @@ snooze :mailbox "$awakened" :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr"
 EOF
     );
 
-    xlog $self, "Deliver a message";
+    xlog $self, "Create the awakened folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create($awakened)
+         or die "Cannot create $awakened: $@";
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Deliver a message without having a snoozed folder";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Check that the message was delivered to INBOX";
+    $self->{store}->set_folder("INBOX");
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog $self, "Create the snoozed folder";
+    $imaptalk->create($snoozed, "(USE (\\Snoozed))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Deliver a message";
     $self->{instance}->deliver($msg1);
 
     xlog $self, "Check that the message made it to the snoozed folder";
