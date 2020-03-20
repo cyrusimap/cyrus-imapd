@@ -14226,6 +14226,8 @@ sub test_email_set_email_duplicates_mailbox_counts
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
+    my $inboxid = $self->getinbox()->{id};
+
     # This is the opposite of a tooManyMailboxes error. It makes
     # sure that duplicate emails within a mailbox do not count
     # as multiple mailbox instances.
@@ -14235,14 +14237,15 @@ sub test_email_set_email_duplicates_mailbox_counts
 
     $self->assert($maxMailboxesPerEmail > 0);
 
-    $imap->create('INBOX.M1') || die;
-    $imap->create('INBOX.M2') || die;
+    my $todo = $maxMailboxesPerEmail - 2;
 
     open(my $F, 'data/mime/simple.eml') || die $!;
-    for (1..$maxMailboxesPerEmail) {
-        $imap->append('INBOX.M1', $F) || die $@;
+    for (1..$todo) {
+      $imap->create("INBOX.M$_") || die;
+
+      # two copies in each folder
+      $imap->append("INBOX.M$_", $F) || die $@;
     }
-    $imap->append('INBOX.M2', $F) || die $@;
     close($F);
 
     my $res = $jmap->CallMethods([
@@ -14257,16 +14260,15 @@ sub test_email_set_email_duplicates_mailbox_counts
         }, 'R2'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-    $self->assert_num_equals(2, scalar keys %{$res->[1][1]{list}[0]{mailboxIds}});
+    $self->assert_num_equals($todo, scalar keys %{$res->[1][1]{list}[0]{mailboxIds}});
 
     my $emailId = $res->[0][1]{ids}[0];
     $res = $jmap->CallMethods([
         ['Email/set', {
             update => {
                 $emailId => {
-                    keywords => {
-                        foo => JSON::true
-                    }
+                    'keywords/foo' => JSON::true,
+                    "mailboxIds/$inboxid" => JSON::true,
                 },
             }
         }, 'R1'],
