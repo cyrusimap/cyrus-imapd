@@ -1206,10 +1206,7 @@ static int sieve_snooze(void *ac,
     }
 
     char *intname = mboxlist_find_specialuse("\\Snoozed", userid);
-    ret = mboxlist_lookup(intname, NULL, NULL);
-
-    // didn't resolve a name, this will always fail
-    if (ret) goto done;
+    if (!intname) goto done;
 
     /* Determine until time */
     time_t now = time(NULL), until;
