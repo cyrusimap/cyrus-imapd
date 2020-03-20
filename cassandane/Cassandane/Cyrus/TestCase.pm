@@ -292,6 +292,13 @@ magic(SieveUTF8Fileinto => sub {
 magic(SearchSetForceScanMode => sub {
     shift->config_set(search_queryscan => '1');
 });
+magic(LowEmailLimits => sub {
+    shift->config_set(
+        conversations_max_guidrecords => 10,
+        conversations_max_guidexists => 5,
+        conversations_max_guidinfolder => 2,
+    );
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
