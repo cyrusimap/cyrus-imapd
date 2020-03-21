@@ -2460,6 +2460,32 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
+    /* we've made any set_guid, so count the state again! */
+    ecounts.ispost = 1;
+    r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
+                                   _read_emailcounts_cb, &ecounts);
+    if (r) return r;
+
+    // set up for quota usage diff and conversation delta size
+    if (ecounts.pre.exists) {
+        ecounts.quotadiff -= record->size;
+        delta_size -= record->size;
+    }
+    if (ecounts.post.exists) {
+        ecounts.quotadiff += record->size;
+        delta_size += record->size;
+    }
+
+    // check sanity limits
+    if (ecounts.post.numrecords > ecounts.pre.numrecords) {
+        if (ecounts.post.numrecords > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDRECORDS))
+            return IMAP_CONVERSATION_GUIDLIMIT;
+        if (ecounts.post.exists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS))
+            return IMAP_CONVERSATION_GUIDLIMIT;
+        if (ecounts.post.folderexists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDINFOLDER))
+            return IMAP_CONVERSATION_GUIDLIMIT;
+    }
+
     // the rest is bookkeeping purely for CIDed messages
     if (!record->cid) return 0;
 
@@ -2476,7 +2502,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         if (!(old->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
             !(old->system_flags & FLAG_DELETED)) {
             delta_exists--;
-            delta_size -= old->size;
             /* drafts don't update the 'unseen' counter so that
              * they never turn a conversation "unread" */
             if (!(old->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
@@ -2498,7 +2523,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         if (!(new->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
             !(new->system_flags & FLAG_DELETED)) {
             delta_exists++;
-            delta_size += new->size;
             /* drafts don't update the 'unseen' counter so that
              * they never turn a conversation "unread" */
             if (!(new->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
@@ -2513,26 +2537,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
         delta_num_records++;
         modseq = MAX(modseq, new->modseq);
-    }
-
-    /* we've made any set_guid, so count the state again! */
-    ecounts.ispost = 1;
-    r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
-                                   _read_emailcounts_cb, &ecounts);
-    if (r) return r;
-
-    // set up for quota usage diff
-    if (ecounts.pre.exists) ecounts.quotadiff -= record->size;
-    if (ecounts.post.exists) ecounts.quotadiff += record->size;
-
-    // check sanity limits
-    if (ecounts.post.numrecords > ecounts.pre.numrecords) {
-        if (ecounts.post.numrecords > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDRECORDS))
-            return IMAP_CONVERSATION_GUIDLIMIT;
-        if (ecounts.post.exists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS))
-            return IMAP_CONVERSATION_GUIDLIMIT;
-        if (ecounts.post.folderexists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDINFOLDER))
-            return IMAP_CONVERSATION_GUIDLIMIT;
     }
 
     /* XXX - combine this with the earlier cache parsing */
