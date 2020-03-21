@@ -2417,20 +2417,20 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     if (new && !old && allowrenumber) {
         /* add the conversation */
         r = mailbox_cacherecord(mailbox, new); /* make sure it's loaded */
-        if (r) return r;
+        if (r) goto done;
         r = message_update_conversations(cstate, mailbox, new, &conv);
-        if (r) return r;
+        if (r) goto done;
     }
     else if (record->cid) {
         r = conversation_load(cstate, record->cid, &conv);
-        if (r) return r;
+        if (r) goto done;
         if (!conv) {
             if (!new) {
                 /* We're trying to delete a conversation that's already
                  * gone...don't try to hard */
                 syslog(LOG_NOTICE, "conversation "CONV_FMT" already "
                                    "deleted, ignoring", record->cid);
-                return 0;
+                goto done;
             }
             conv = conversation_new();
         }
@@ -2441,7 +2441,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     ecounts.mboxname = mailbox->name;
     r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
                                    _read_emailcounts_cb, &ecounts);
-    if (r) return r;
+    if (r) goto done;
 
     // always update the GUID information first, as it's used for search
     // even if conversations have not been set on this email
@@ -2450,13 +2450,13 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                     old->internal_flags != new->internal_flags ||
                     old->internaldate != new->internaldate) {
             r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
-            if (r) return r;
+            if (r) goto done;
         }
     }
     else {
         if (old) {
             r = conversations_set_guid(cstate, mailbox, old, /*add*/0);
-            if (r) return r;
+            if (r) goto done;
         }
     }
 
@@ -2464,7 +2464,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     ecounts.ispost = 1;
     r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
                                    _read_emailcounts_cb, &ecounts);
-    if (r) return r;
+    if (r) goto done;
 
     // set up for quota usage diff and conversation delta size
     if (ecounts.pre.exists) {
@@ -2479,15 +2479,16 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     // check sanity limits
     if (ecounts.post.numrecords > ecounts.pre.numrecords) {
         if (ecounts.post.numrecords > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDRECORDS))
-            return IMAP_CONVERSATION_GUIDLIMIT;
+            r = IMAP_CONVERSATION_GUIDLIMIT;
         if (ecounts.post.exists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS))
-            return IMAP_CONVERSATION_GUIDLIMIT;
+            r = IMAP_CONVERSATION_GUIDLIMIT;
         if (ecounts.post.folderexists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDINFOLDER))
-            return IMAP_CONVERSATION_GUIDLIMIT;
+            r = IMAP_CONVERSATION_GUIDLIMIT;
+        if (r) goto done;
     }
 
     // the rest is bookkeeping purely for CIDed messages
-    if (!record->cid) return 0;
+    if (!record->cid) goto done;
 
     /* IRIS-2534: check if it's the trash folder - XXX - should be separate
      * conversation root or similar more useful method in future */
@@ -2578,6 +2579,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     r = conversation_save(cstate, record->cid, conv, &ecounts);
 
+done:
     conversation_free(conv);
     free(delta_counts);
     return r;
