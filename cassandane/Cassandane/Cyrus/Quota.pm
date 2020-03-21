@@ -2898,4 +2898,44 @@ sub test_num_folders_delete_delayed
     $self->_check_usages(storage => 0, 'x-num-folders' => 2);
 }
 
+sub test_storage_convquota
+    :Conversations :ConversationsQuota
+{
+    my ($self) = @_;
+
+    xlog $self, "test increasing usage of the STORAGE quota resource as messages are added";
+    $self->_set_quotaroot('user.cassandane');
+    xlog $self, "set ourselves a basic limit";
+    $self->_set_limits(storage => 100000);
+    $self->_check_usages(storage => 0);
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.sub") || die "Failed to create subfolder";
+
+    # append some messages
+    my $expected = 0;
+    $self->{store}->set_folder("INBOX");
+    my $msg = $self->make_message("Message 1",
+                                  extra_lines => 10 + rand(5000));
+    $self->{store}->set_folder("INBOX.sub");
+    $expected += length($msg->as_string());
+    my $firstexpected = $expected;
+    my $msg2 = $self->make_message("Message 2",
+                                  extra_lines => 10 + rand(5000));
+    $expected += length($msg2->as_string());
+
+    $self->_check_usages(storage => int($expected/1024));
+
+    $talk->select("INBOX");
+    $talk->copy("1", "INBOX.sub");
+
+    # quota usage hasn't changed, because we don't get double-charged
+    $self->_check_usages(storage => int($expected/1024));
+
+    $talk->delete("INBOX.sub");
+
+    # we just lost one message
+    $self->_check_usages(storage => int($firstexpected/1024));
+}
+
 1;

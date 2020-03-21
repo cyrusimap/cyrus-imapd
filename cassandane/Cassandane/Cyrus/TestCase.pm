@@ -222,6 +222,9 @@ magic(CrossDomains => sub {
 magic(Conversations => sub {
     shift->config_set(conversations => 'yes');
 });
+magic(ConversationsQuota => sub {
+    shift->config_set(quota_use_conversations => 'yes');
+});
 magic(Admin => sub {
     shift->want('adminstore');
 });
