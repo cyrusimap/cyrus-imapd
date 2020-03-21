@@ -279,6 +279,21 @@ EXPORTED int quota_read(struct quota *quota, struct txn **tid, int wrlock)
         return IMAP_IOERROR;
     }
 
+    if (config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS)) {
+        struct conversations_state *local_cstate = NULL;
+        struct conversations_state *cstate = conversations_get_mbox(quota->root);
+        if (!cstate) {
+            conversations_open_mbox(quota->root, /*shared*/1, &local_cstate);
+            cstate = local_cstate;
+        }
+        if (cstate) {
+            struct conv_quota q = CONV_QUOTA_INIT;
+            conversations_read_quota(cstate, &q);
+            if (q.used) quota->useds[QUOTA_STORAGE] = q.used;
+        }
+        if (local_cstate) conversations_commit(&local_cstate);
+    }
+
     return 0;
 }
 
