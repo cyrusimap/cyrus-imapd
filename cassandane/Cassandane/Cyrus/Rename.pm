@@ -73,26 +73,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub check_conversations
-{
-    my ($self) = @_;
-    my $filename = $self->{instance}{basedir} . "/ctl_conversationsdb.out";
-    $self->{instance}->run_command({
-        cyrus => 1,
-        redirects => {stdout => $filename},
-    }, 'ctl_conversationsdb', '-A', '-r', '-v');
-
-    local $/;
-    open FH, '<', $filename
-        or die "Cannot open $filename for reading: $!";
-    my $str = <FH>;
-    close(FH);
-
-    xlog $self, "RESULT: $str";
-    $self->assert_matches(qr/is OK/, $str);
-    $self->assert_does_not_match(qr/is BROKEN/, $str);
-}
-
 #
 # Test LSUB behaviour
 #
