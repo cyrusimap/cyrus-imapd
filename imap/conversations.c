@@ -2920,6 +2920,11 @@ EXPORTED int conversations_zero_counts(struct conversations_state *state)
                         state, &state->txn);
     if (r) return r;
 
+    /* wipe quota (it's actually just one key) */
+    r = cyrusdb_foreach(state->db, "Q", 1, NULL, zero_g_cb,
+                        state, &state->txn);
+    if (r) return r;
+
     /* re-init the counted flags */
     r = _init_counted(state, NULL, 0);
     if (r) return r;
