@@ -1108,7 +1108,7 @@ out:
     freeentryatts(system_annots);
     if (r) {
         append_abort(as);
-        if (msgrec) msgrecord_unref(&msgrec);
+        msgrecord_unref(&msgrec);
         return r;
     }
 
@@ -1120,7 +1120,7 @@ out:
     mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
 
-    if (msgrec) msgrecord_unref(&msgrec);
+    msgrecord_unref(&msgrec);
     return r;
 }
 
@@ -1531,12 +1531,11 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 out:
     free(srcfname);
     free(destfname);
+    msgrecord_unref(&dst_msgrec);
+
     if (r) {
         append_abort(as);
         return r;
-    }
-    if (dst_msgrec) {
-        msgrecord_unref(&dst_msgrec);
     }
 
     mboxevent_extract_mailbox(mboxevent, as->mailbox);
