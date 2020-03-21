@@ -908,4 +908,115 @@ sub test_replication_trashseen
     $self->check_replication('cassandane');
 }
 
+#
+# Test limits on GUID duplicates
+#
+sub test_guid_duplicate_same_folder
+    :min_version_3_3 :LowEmailLimits
+{
+    my ($self) = @_;
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.dest");
+
+    $talk->select("INBOX");
+    my $r1 = $talk->copy("1", "INBOX.dest");
+    my $r2 = $talk->copy("1", "INBOX.dest");
+    my $r3 = $talk->copy("1", "INBOX.dest");
+    $self->assert_not_null($r1);
+    $self->assert_not_null($r2);
+    $self->assert_null($r3);
+    $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
+
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+
+    $talk->select("INBOX.dest");
+    my $data = $talk->fetch("1:*", "(emailid threadid uid)");
+    $self->assert_not_null($data->{1});
+    $self->assert_not_null($data->{2});
+    $self->assert_null($data->{3});
+}
+
+sub test_guid_duplicate_total_count
+    :min_version_3_3 :LowEmailLimits
+{
+    my ($self) = @_;
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.M1");
+    $talk->create("INBOX.M2");
+    $talk->create("INBOX.M3");
+    $talk->create("INBOX.M4");
+    $talk->create("INBOX.M5");
+
+    $talk->select("INBOX");
+
+    my $r1 = $talk->copy("1", "INBOX.M1");
+    my $r2 = $talk->copy("1", "INBOX.M2");
+    my $r3 = $talk->copy("1", "INBOX.M3");
+    my $r4 = $talk->copy("1", "INBOX.M4");
+    my $r5 = $talk->copy("1", "INBOX.M5");
+
+    $self->assert_not_null($r1);
+    $self->assert_not_null($r2);
+    $self->assert_not_null($r3);
+    $self->assert_not_null($r4);
+    $self->assert_null($r5);
+    $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
+
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+}
+
+#
+# Test limits on GUID duplicates
+#
+sub test_guid_duplicate_expunges
+    :min_version_3_3 :LowEmailLimits :DelayedExpunge
+{
+    my ($self) = @_;
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.dest");
+
+    for (1..9) {
+        $talk->select("INBOX");
+        my $r = $talk->copy("1", "INBOX.dest");
+        $self->assert_not_null($r);
+        $talk->select("INBOX.dest");
+        $talk->store('1:*', '+flags', '(\\Deleted)');
+        $talk->expunge();
+    }
+
+    $talk->select("INBOX");
+    my $r = $talk->copy("1", "INBOX.dest");
+    $self->assert_null($r);
+    $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
+
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+}
+
 1;
