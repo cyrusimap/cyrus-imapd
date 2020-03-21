@@ -2630,6 +2630,9 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
 
     annotate_state_abort(&mailbox->annot_state);
 
+    if (mailbox->local_cstate)
+        conversations_abort(&mailbox->local_cstate);
+
     if (!mailbox->i.dirty)
         return 0;
 
