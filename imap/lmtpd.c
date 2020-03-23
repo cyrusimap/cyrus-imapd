@@ -523,7 +523,7 @@ int deliver_mailbox(FILE *f,
     struct mailbox *mailbox = NULL;
     char *uuid = NULL;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     time_t internaldate = 0;
 
     if (!savedate) {
@@ -538,18 +538,15 @@ int deliver_mailbox(FILE *f,
     r = mailbox_open_iwl(mailboxname, &mailbox);
     if (r) return r;
 
-    if (quotaoverride)
-        qdiffs[QUOTA_STORAGE] = -1;
-    else if (config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA))
-        qdiffs[QUOTA_STORAGE] = size;
-    if (quotaoverride)
-        qdiffs[QUOTA_MESSAGE] = -1;
-    else if (config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA))
-        qdiffs[QUOTA_MESSAGE] = 1;
-    if (quotaoverride)
-        qdiffs[QUOTA_ANNOTSTORAGE] = -1;
-    else if (config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA))
+    if (!quotaoverride) {
         qdiffs[QUOTA_ANNOTSTORAGE] = 0;
+        qdiffs[QUOTA_STORAGE] = 0;
+        qdiffs[QUOTA_MESSAGE] = 0;
+        if (config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA)) {
+            qdiffs[QUOTA_STORAGE] = size;
+            qdiffs[QUOTA_MESSAGE] = 1;
+        }
+    }
 
     r = append_setup_mbox(&as, mailbox,
                           authuser, authstate, acloverride ? 0 : ACL_POST,

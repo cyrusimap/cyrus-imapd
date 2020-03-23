@@ -2910,7 +2910,7 @@ index_copy(struct index_state *state,
 {
     struct copyargs copyargs;
     int i;
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     quota_t *qptr = NULL;
     int r;
     struct appendstate appendstate;

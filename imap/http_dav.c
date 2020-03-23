@@ -6530,7 +6530,7 @@ static int dav_post_import(struct transaction_t *txn,
     const char **hdr;
     struct mime_type_t *mime = NULL;
     struct mailbox *mailbox = NULL;
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     void *davdb = NULL, *obj = NULL;
     xmlDocPtr outdoc = NULL;
     xmlNodePtr root;
@@ -6584,6 +6584,7 @@ static int dav_post_import(struct transaction_t *txn,
 
     /* Check if we can append a new message to mailbox */
     qdiffs[QUOTA_STORAGE] = buf_len(&txn->req_body.payload);
+    qdiffs[QUOTA_MESSAGE] = 1;
     if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
                           ACL_INSERT, ignorequota ? NULL : qdiffs))) {
         syslog(LOG_ERR, "append_check(%s) failed: %s",
@@ -6996,7 +6997,7 @@ int meth_put(struct transaction_t *txn, void *params)
     struct mailbox *mailbox = NULL;
     struct dav_data *ddata;
     struct index_record oldrecord;
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     time_t lastmod;
     unsigned flags = 0;
     void *davdb = NULL, *obj = NULL;
@@ -7083,6 +7084,7 @@ int meth_put(struct transaction_t *txn, void *params)
     if (rights & DACL_WRITECONT) {
         /* Check if we can append a new message to mailbox */
         qdiffs[QUOTA_STORAGE] = buf_len(&txn->req_body.payload);
+        qdiffs[QUOTA_MESSAGE] = 1;
         if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
                               ACL_INSERT, ignorequota ? NULL : qdiffs))) {
             syslog(LOG_ERR, "append_check(%s) failed: %s",

@@ -3875,7 +3875,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
     int c;
     static struct buf arg;
     time_t now = time(NULL);
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     unsigned size;
     int sync_seen = 0;
     int r;
@@ -3950,6 +3950,8 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
 
     /* local mailbox */
     if (!r) {
+        qdiffs[QUOTA_ANNOTSTORAGE] = 0;
+        qdiffs[QUOTA_STORAGE] = 0;
         qdiffs[QUOTA_MESSAGE] = 1;
         r = append_check(intname, imapd_authstate, ACL_INSERT, ignorequota ? NULL : qdiffs);
     }

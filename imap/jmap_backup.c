@@ -416,7 +416,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     struct stagemsg *stage = NULL;
     struct appendstate as;
     const char *fname;
