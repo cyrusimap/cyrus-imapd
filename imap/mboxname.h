@@ -195,6 +195,15 @@ int mboxname_issubmissionmailbox(const char *name, int mbtype);
  */
 int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype);
 
+#define mboxname_isnonimapmailbox(name, mbtype)            \
+    (mboxname_iscalendarmailbox(name, mbtype)              \
+     || mboxname_isaddressbookmailbox(name, mbtype)        \
+     || mboxname_isdavdrivemailbox(name, mbtype)           \
+     || mboxname_isdavnotificationsmailbox(name, mbtype)   \
+     || mboxname_isnotesmailbox(name, mbtype)              \
+     || mboxname_issubmissionmailbox(name, mbtype)         \
+     || mboxname_ispushsubscriptionmailbox(name, mbtype))
+
 /* check if one mboxname is a parent or same as the other */
 int mboxname_is_prefix(const char *longstr, const char *shortstr);
 /* check if one mboxname contains the parent of the other mboxname */
