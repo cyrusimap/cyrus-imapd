@@ -65,13 +65,13 @@ EXPORTED void ical_support_init(void)
     icalarray *timezones;
 
     if (tzpath) {
-        syslog(LOG_NOTICE, "using timezone data from zoneinfo_dir=%s", tzpath);
+        syslog(LOG_DEBUG, "using timezone data from zoneinfo_dir=%s", tzpath);
         icaltimezone_set_zone_directory((char *) tzpath);
         icaltimezone_set_tzid_prefix("");
         icaltimezone_set_builtin_tzdata(1);
     }
     else {
-        syslog(LOG_NOTICE, "zoneinfo_dir is unset, libical will find "
+        syslog(LOG_DEBUG, "zoneinfo_dir is unset, libical will find "
                            "its own timezone data");
     }
 
@@ -88,21 +88,8 @@ EXPORTED void ical_support_init(void)
               EX_CONFIG);
     }
 
-    if (config_debug) {
-        size_t i;
-
-        syslog(LOG_DEBUG, "%s: found " SIZE_T_FMT " timezones",
-                          __func__, timezones->num_elements);
-        for (i = 0; i < timezones->num_elements; i++) {
-            icaltimezone *tz = icalarray_element_at(timezones, i);
-            char *tzid = xstrdupsafe(icaltimezone_get_tzid(tz));
-            char *location = xstrdupsafe(icaltimezone_get_location(tz));
-            syslog(LOG_DEBUG, "%s: [" SIZE_T_FMT "] tzid=%s location=%s",
-                              __func__, i, tzid, location);
-            free(location);
-            free(tzid);
-        }
-    }
+    syslog(LOG_DEBUG, "%s: found " SIZE_T_FMT " timezones",
+                       __func__, timezones->num_elements);
 }
 
 EXPORTED int cyrus_icalrestriction_check(icalcomponent *ical)
