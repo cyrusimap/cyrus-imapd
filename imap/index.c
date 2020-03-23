@@ -2964,8 +2964,11 @@ index_copy(struct index_state *state,
     r = insert_into_mailbox_allowed(destmailbox);
     if (r) goto done;
 
+    /* if using conversations, a COPY is the same email, so there's no extra usage */
+    int checkquota = !ismove && !config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS);
+
     /* not moving or different quota root - need to check quota */
-    if (!ismove || strcmpsafe(srcmailbox->quotaroot, destmailbox->quotaroot)) {
+    if (checkquota || strcmpsafe(srcmailbox->quotaroot, destmailbox->quotaroot)) {
         for (i = 0; i < copyargs.nummsg; i++)
             qdiffs[QUOTA_STORAGE] += copyargs.records[i].size;
         qdiffs[QUOTA_MESSAGE] = copyargs.nummsg;
