@@ -2491,6 +2491,25 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
+    // check sanity limits
+    if (ecounts.post.numrecords > ecounts.pre.numrecords) {
+        if (ecounts.post.numrecords > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDRECORDS))
+            r = IMAP_CONVERSATION_GUIDLIMIT;
+        if (ecounts.post.exists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS))
+            r = IMAP_CONVERSATION_GUIDLIMIT;
+        if (ecounts.post.folderexists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDINFOLDER))
+            r = IMAP_CONVERSATION_GUIDLIMIT;
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: conversations GUID limit for %s/%u/%s (%llu %llu %llu)",
+                   mailbox->name, record->uid,
+                   message_guid_encode(&record->guid),
+                   (long long unsigned)ecounts.post.numrecords,
+                   (long long unsigned)ecounts.post.exists,
+                   (long long unsigned)ecounts.post.folderexists);
+            goto done;
+        }
+    }
+
     // the rest is bookkeeping purely for CIDed messages
     if (!record->cid) goto done;
 

@@ -248,6 +248,9 @@ ec IMAP_CONVERSATIONS_ALREADY_OPEN,
 ec IMAP_CONVERSATIONS_NOT_OPEN,
    "Conversation DB is not opened"
 
+ec IMAP_CONVERSATION_GUIDLIMIT,
+   "Too many identical emails"
+
 ec IMAP_ANCHOR_NOT_FOUND,
    "Anchor not found"
 
