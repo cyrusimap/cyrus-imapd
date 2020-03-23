@@ -170,16 +170,25 @@ struct conversation {
 
 #define CONVERSATION_INIT { 0, 0, 0, 0, 0, 0, 0, 0, {0}, NULL, NULL, NULL, NULL, 0, CONV_ISDIRTY }
 
+struct emailcountitems {
+    size_t folderexists;
+    size_t folderunseen;
+    size_t exists;
+    size_t unseen;
+    size_t numrecords;
+};
+
+#define EMAILCOUNTITEMS_INIT { 0, 0, 0, 0, 0 }
+
 struct emailcounts {
     const char *mboxname;
     int ispost;
-    int pre_emailexists;
-    int pre_emailunseen;
-    int post_emailexists;
-    int post_emailunseen;
+    struct emailcountitems pre;
+    struct emailcountitems post;
+    ssize_t quotadiff;
 };
 
-#define EMAILCOUNTS_INIT { NULL, 0, 0, 0, 0, 0 }
+#define EMAILCOUNTS_INIT { NULL, 0, EMAILCOUNTITEMS_INIT, EMAILCOUNTITEMS_INIT, 0 }
 
 #include "mailbox.h"
 
