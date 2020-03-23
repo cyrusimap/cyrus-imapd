@@ -2923,7 +2923,7 @@ EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
 
         fctx->quota.root = strcpy(prevroot, qr);
 
-        quota_read(&fctx->quota, NULL, 0);
+        quota_read_withconversations(&fctx->quota);
     }
 
     buf_reset(&fctx->buf);

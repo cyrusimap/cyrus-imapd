@@ -4239,7 +4239,7 @@ static void warn_about_quota(const char *quotaroot)
     nextalert = now + 600;
 
     quota_init(&q, quotaroot);
-    r = quota_read(&q, NULL, 0);
+    r = quota_read_withconversations(&q);
     if (r)
         goto out;           /* failed to read */
 
@@ -8720,7 +8720,7 @@ static void cmd_getquota(const char *tag, const char *name)
 
     /* local mailbox */
 
-    r = quota_read(&q, NULL, 0);
+    r = quota_read_withconversations(&q);
     if (r) goto done;
 
     prot_printf(imapd_out, "* QUOTA ");
@@ -8808,7 +8808,7 @@ static void cmd_getquotaroot(const char *tag, const char *name)
             prot_printf(imapd_out, " ");
             prot_printastring(imapd_out, extname);
             quota_init(&q, mailbox->quotaroot);
-            r = quota_read(&q, NULL, 0);
+            r = quota_read_withconversations(&q);
             if (!r) {
                 prot_printf(imapd_out, "\r\n* QUOTA ");
                 prot_printastring(imapd_out, extname);

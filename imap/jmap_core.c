@@ -582,7 +582,7 @@ static int jmap_quota_get(jmap_req_t *req)
     if (want_mail_quota) {
         struct quota quota;
         quota_init(&quota, inboxname);
-        int r = quota_read(&quota, NULL, 0);
+        int r = quota_read_withconversations(&quota);
         if (!r) {
             quota_t total = quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
             quota_t used = quota.useds[QUOTA_STORAGE];
