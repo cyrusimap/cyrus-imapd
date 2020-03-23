@@ -2337,6 +2337,18 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
+    xlog $self, "Delete the test folder";
+    $talk->delete($testfolder);
+
+    xlog $self, "Deliver a message now that the folder doesn't exist";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg3");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg3"} = $msg;
+    }
+
     xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
@@ -2404,6 +2416,22 @@ EOF
         $self->{store}->set_folder($folder);
         $self->check_messages($exp{$folder}, check_guid => 0);
     }
+
+    xlog $self, "Delete the target folder";
+    $talk->delete($hitfolder);
+
+    xlog $self, "Deliver a message now that the folder doesn't exist";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg3");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg3"} = $msg;
+    }
+
+    xlog $self, "Check that the message made it to miss folder";
+    $self->{store}->set_folder($missfolder);
+    $self->check_messages($exp{$missfolder}, check_guid => 0);
 }
 
 sub test_encoded_char_variable_in_mboxname
