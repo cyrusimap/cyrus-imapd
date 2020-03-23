@@ -2397,6 +2397,12 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
+    /* we've made any set_guid, so count the state again! */
+    ecounts.ispost = 1;
+    r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
+                                   _read_emailcounts_cb, &ecounts);
+    if (r) return r;
+
     // the rest is bookkeeping purely for CIDed messages
     if (!record->cid) return 0;
 
@@ -2451,12 +2457,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         delta_num_records++;
         modseq = MAX(modseq, new->modseq);
     }
-
-    /* we've made any set_guid, so count the state again! */
-    ecounts.ispost = 1;
-    r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
-                                   _read_emailcounts_cb, &ecounts);
-    if (r) return r;
 
     /* XXX - combine this with the earlier cache parsing */
     if (!mailbox_cacherecord(mailbox, record)) {
