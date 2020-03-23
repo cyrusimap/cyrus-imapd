@@ -951,6 +951,65 @@ static void _apply_delta(uint32_t *valp, int delta)
     }
 }
 
+EXPORTED int conversations_read_quota(struct conversations_state *state, struct conv_quota *q)
+{
+    const char *data = NULL;
+    size_t datalen = 0;
+    bit64 val = 0;
+    int r = cyrusdb_fetch(state->db, "Q", 1, &data, &datalen, &state->txn);
+    if (r) return r;
+    if (datalen) {
+        const char *rest;
+        if (datalen < 12) return IMAP_MAILBOX_BADFORMAT;
+        if (memcmp(data, "1 %(E ", 6)) return IMAP_MAILBOX_BADFORMAT;
+        r = parsenum(data+6, &rest, datalen-6, &val);
+        if (r) return r;
+
+        q->emails = val;
+
+        datalen -= (rest - data);
+        data = rest;
+        if (datalen < 5) return IMAP_MAILBOX_BADFORMAT;
+        if (memcmp(data, " S ", 3)) return IMAP_MAILBOX_BADFORMAT;
+        r = parsenum(data+3, &rest, datalen-3, &val);
+        if (r) return r;
+
+        q->storage = val;
+
+        datalen -= (rest - data);
+        if (datalen != 1) return IMAP_MAILBOX_BADFORMAT;
+        if (*rest != ')') return IMAP_MAILBOX_BADFORMAT;
+        return 0;
+    }
+    return CYRUSDB_NOTFOUND;
+}
+
+static int _write_quota(struct conversations_state *state, struct conv_quota *q)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "1 %%(E %llu S %llu)", (long long unsigned)q->emails, (long long unsigned)q->storage);
+    int r = cyrusdb_store(state->db, "Q", 1, buf.s, buf.len, &state->txn);
+    buf_free(&buf);
+    return r;
+}
+
+static int _update_quotaused(struct conversations_state *state, struct emailcounts *ecounts)
+{
+    if (!ecounts) return 0;
+    int existsdiff = !!ecounts->post.exists - !!ecounts->pre.exists;
+    if (!existsdiff && !ecounts->quotadiff) return 0;
+
+    struct conv_quota q = CONV_QUOTA_INIT;
+    int r = conversations_read_quota(state, &q);
+    if (r == CYRUSDB_NOTFOUND) r = 0; // it's OK not to have a value
+    else if (r) return r;
+
+    q.emails += existsdiff;
+    q.storage += ecounts->quotadiff;
+
+    return _write_quota(state, &q);
+}
+
 static int _conversation_save(struct conversations_state *state,
                               const char *key, int keylen,
                               conversation_t *conv,
@@ -1023,6 +1082,9 @@ static int _conversation_save(struct conversations_state *state,
             if (r) goto done;
         }
     }
+
+    r = _update_quotaused(state, ecounts);
+    if (r) goto done;
 
     if (conv->num_records) {
         r = conversation_store(state, key, keylen, conv);
@@ -2409,6 +2471,15 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                    _read_emailcounts_cb, &ecounts);
     if (r) goto done;
 
+    // set up for quota usage diff and conversation delta size
+    if (ecounts.pre.exists) {
+        ecounts.quotadiff -= record->size;
+    }
+    if (ecounts.post.exists) {
+        ecounts.quotadiff += record->size;
+        }
+    }
+
     // the rest is bookkeeping purely for CIDed messages
     if (!record->cid) goto done;
 
@@ -2841,6 +2912,11 @@ EXPORTED int conversations_zero_counts(struct conversations_state *state)
 
     /* wipe G keys (there's no modseq kept, so we can just wipe them) */
     r = cyrusdb_foreach(state->db, "G", 1, NULL, zero_g_cb,
+                        state, &state->txn);
+    if (r) return r;
+
+    /* wipe quota (it's actually just one key) */
+    r = cyrusdb_foreach(state->db, "Q", 1, NULL, zero_g_cb,
                         state, &state->txn);
     if (r) return r;
 

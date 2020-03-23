@@ -190,6 +190,13 @@ struct emailcounts {
 
 #define EMAILCOUNTS_INIT { NULL, 0, EMAILCOUNTITEMS_INIT, EMAILCOUNTITEMS_INIT, 0 }
 
+struct conv_quota {
+    ssize_t emails;
+    ssize_t storage;
+};
+
+#define CONV_QUOTA_INIT { 0, 0 }
+
 #include "mailbox.h"
 
 /* Sets the suffix used for conversations db filenames.  Only needed
@@ -332,5 +339,7 @@ extern int conversations_rename_folder(struct conversations_state *state,
                                        const char *to_name);
 
 extern int conversations_check_msgid(const char *msgid, size_t len);
+
+extern int conversations_read_quota(struct conversations_state *state, struct conv_quota *q);
 
 #endif /* __CYRUS_CONVERSATIONS_H_ */
