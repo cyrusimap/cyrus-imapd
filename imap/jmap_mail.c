@@ -10921,13 +10921,14 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
             strarray_append(&erroneous_plans, plan->mbox_id);
         }
     }
-    hash_iter_reset(iter);
-    if (!config_getswitch(IMAPOPT_SINGLEINSTANCESTORE)) {
-        /* Check quota */
+    if (!ignorequota && !config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS)) {
+        /* Check quota - NOTE, we are only checking message counts here as we
+         * don't have the size handy */
+        hash_iter_reset(iter);
         while (hash_iter_next(iter)) {
             struct email_updateplan *plan = hash_iter_val(iter);
             quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
-            qdiffs[QUOTA_NUMRESOURCES] = 0;
+            qdiffs[QUOTA_MESSAGE] = 0;
             int i;
             for (i = 0; i < ptrarray_size(&plan->copy); i++) {
                 qdiffs[QUOTA_MESSAGE] += ptrarray_size(ptrarray_nth(&plan->copy, i));
