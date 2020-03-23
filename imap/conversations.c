@@ -489,6 +489,7 @@ EXPORTED int conversations_abort(struct conversations_state **statep)
     return 0;
 }
 
+static int _write_quota(struct conversations_state *state);
 EXPORTED int conversations_commit(struct conversations_state **statep)
 {
     struct conversations_state *state = *statep;
@@ -500,6 +501,9 @@ EXPORTED int conversations_commit(struct conversations_state **statep)
 
     /* commit cache, writes to to DB */
     conversations_commitcache(state);
+
+    r = _write_quota(state);
+    if (r) return r;
 
     /* finally it's safe to commit the DB itself */
     if (state->db) {
@@ -951,7 +955,7 @@ static void _apply_delta(uint32_t *valp, int delta)
     }
 }
 
-EXPORTED int conversations_read_quota(struct conversations_state *state, struct conv_quota *q)
+static int _read_quota(struct conversations_state *state)
 {
     const char *data = NULL;
     size_t datalen = 0;
@@ -965,7 +969,7 @@ EXPORTED int conversations_read_quota(struct conversations_state *state, struct 
         r = parsenum(data+6, &rest, datalen-6, &val);
         if (r) return r;
 
-        q->emails = val;
+        state->quota.emails = val;
 
         datalen -= (rest - data);
         data = rest;
@@ -974,7 +978,7 @@ EXPORTED int conversations_read_quota(struct conversations_state *state, struct 
         r = parsenum(data+3, &rest, datalen-3, &val);
         if (r) return r;
 
-        q->storage = val;
+        state->quota.storage = val;
 
         datalen -= (rest - data);
         if (datalen != 1) return IMAP_MAILBOX_BADFORMAT;
@@ -984,13 +988,30 @@ EXPORTED int conversations_read_quota(struct conversations_state *state, struct 
     return CYRUSDB_NOTFOUND;
 }
 
-static int _write_quota(struct conversations_state *state, struct conv_quota *q)
+static int _write_quota(struct conversations_state *state)
 {
+    if (!state->quota_dirty) return 0;
+
     struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "1 %%(E %llu S %llu)", (long long unsigned)q->emails, (long long unsigned)q->storage);
+    buf_printf(&buf, "1 %%(E %llu S %llu)",
+              (long long unsigned)state->quota.emails,
+              (long long unsigned)state->quota.storage);
     int r = cyrusdb_store(state->db, "Q", 1, buf.s, buf.len, &state->txn);
     buf_free(&buf);
+
     return r;
+}
+
+EXPORTED int conversations_read_quota(struct conversations_state *state, struct conv_quota *q)
+{
+    if (!state->quota_loaded) {
+        memset(&state->quota, 0, sizeof(struct conv_quota));
+        int r = _read_quota(state);
+        if (r && r != CYRUSDB_NOTFOUND) return r;
+        state->quota_loaded = 1;
+    }
+    if (q) *q = state->quota;
+    return 0;
 }
 
 static int _update_quotaused(struct conversations_state *state, int existsdiff, ssize_t quotadiff)
@@ -998,15 +1019,14 @@ static int _update_quotaused(struct conversations_state *state, int existsdiff, 
     // no change?  No worries
     if (!existsdiff && !quotadiff) return 0;
 
-    struct conv_quota q = CONV_QUOTA_INIT;
-    int r = conversations_read_quota(state, &q);
-    if (r == CYRUSDB_NOTFOUND) r = 0; // it's OK not to have a value
-    else if (r) return r;
+    int r = conversations_read_quota(state, NULL);
+    if (r) return r;
 
-    q.emails += existsdiff;
-    q.storage += quotadiff;
+    state->quota.emails += existsdiff;
+    state->quota.storage += quotadiff;
+    state->quota_dirty = 1; // write on commit
 
-    return _write_quota(state, &q);
+    return 0;
 }
 
 static int _conversation_save(struct conversations_state *state,

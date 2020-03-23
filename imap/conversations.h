@@ -72,6 +72,13 @@ struct mailbox;
 #define CONV_WITHALL CONV_WITHFOLDERS|CONV_WITHSENDERS|\
                      CONV_WITHSUBJECT|CONV_WITHTHREAD
 
+struct conv_quota {
+    ssize_t emails;
+    ssize_t storage;
+};
+
+#define CONV_QUOTA_INIT { 0, 0 }
+
 struct conversations_state {
     struct db *db;
     struct txn *txn;
@@ -79,10 +86,13 @@ struct conversations_state {
     strarray_t *counted_flags;
     strarray_t *folder_names;
     hash_table folderstatus;
+    struct conv_quota quota;
     int trashfolder;
     char *trashmboxname;
-    int is_shared;
     char *path;
+    unsigned quota_loaded:1;
+    unsigned quota_dirty:1;
+    unsigned is_shared:1;
 };
 
 struct conversations_open {
@@ -189,13 +199,6 @@ struct emailcounts {
 };
 
 #define EMAILCOUNTS_INIT { -1, 0, EMAILCOUNTITEMS_INIT, EMAILCOUNTITEMS_INIT }
-
-struct conv_quota {
-    ssize_t emails;
-    ssize_t storage;
-};
-
-#define CONV_QUOTA_INIT { 0, 0 }
 
 #include "mailbox.h"
 
