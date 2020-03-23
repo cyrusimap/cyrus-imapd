@@ -2471,12 +2471,23 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                    _read_emailcounts_cb, &ecounts);
     if (r) goto done;
 
-    // set up for quota usage diff and conversation delta size
-    if (ecounts.pre.exists) {
-        ecounts.quotadiff -= record->size;
+    // set up deltas
+    if (ecounts.pre.numrecords) {
+        delta_num_records--;
+        if (ecounts.pre.exists) {
+            ecounts.quotadiff -= record->size;
+            delta_size -= record->size;
+            delta_exists--;
+            if (ecounts.pre.unseen) delta_unseen--;
+        }
     }
-    if (ecounts.post.exists) {
-        ecounts.quotadiff += record->size;
+    if (ecounts.post.numrecords) {
+        delta_num_records++;
+        if (ecounts.post.exists) {
+            ecounts.quotadiff += record->size;
+            delta_size += record->size;
+            delta_exists++;
+            if (ecounts.post.unseen) delta_unseen++;
         }
     }
 
@@ -2495,12 +2506,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         /* decrease any relevant counts */
         if (!(old->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
             !(old->system_flags & FLAG_DELETED)) {
-            delta_exists--;
-            delta_size -= old->size;
-            /* drafts don't update the 'unseen' counter so that
-             * they never turn a conversation "unread" */
-            if (!(old->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
-                delta_unseen--;
             if (cstate->counted_flags) {
                 for (i = 0; i < cstate->counted_flags->count; i++) {
                     const char *flag = strarray_nth(cstate->counted_flags, i);
@@ -2509,7 +2514,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                 }
             }
         }
-        delta_num_records--;
         modseq = MAX(modseq, old->modseq);
     }
 
@@ -2517,12 +2521,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         /* add any counts */
         if (!(new->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
             !(new->system_flags & FLAG_DELETED)) {
-            delta_exists++;
-            delta_size += new->size;
-            /* drafts don't update the 'unseen' counter so that
-             * they never turn a conversation "unread" */
-            if (!(new->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
-                delta_unseen++;
             if (cstate->counted_flags) {
                 for (i = 0; i < cstate->counted_flags->count; i++) {
                     const char *flag = strarray_nth(cstate->counted_flags, i);
@@ -2531,7 +2529,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                 }
             }
         }
-        delta_num_records++;
         modseq = MAX(modseq, new->modseq);
     }
 
