@@ -992,19 +992,19 @@ static int _write_quota(struct conversations_state *state)
 {
     if (!state->quota_dirty) return 0;
 
-    int emails = state->quota.emails;
-    int storage = state->quota.storage;
+    ssize_t emails = state->quota.emails;
+    ssize_t storage = state->quota.storage;
 
     // can't go negative (could happen before a rebuild)
     if (emails < 0 || storage < 0) {
-        syslog(LOG_ERR, "IOERROR: conversations_audit on quota store: %s (%d %d)",
-               state->path, emails, storage);
+        syslog(LOG_ERR, "IOERROR: conversations_audit on quota store: %s (%lld %lld)",
+               state->path, (long long)emails, (long long)storage);
         emails = 0;
         storage = 0;
     }
 
     struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "1 %%(E %d S %d)", emails, storage);
+    buf_printf(&buf, "1 %%(E %lld S %lld)", (long long)emails, (long long)storage);
     int r = cyrusdb_store(state->db, "Q", 1, buf.s, buf.len, &state->txn);
     buf_free(&buf);
 
