@@ -64,6 +64,7 @@
 
 #include "acl.h"
 #include "append.h"
+#include "caldav_alarm.h"
 #include "caldav_db.h"
 #include "charset.h"
 #include "css3_color.h"
@@ -273,6 +274,13 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop, xmlNodePtr resp,
                                  struct propstat propstat[], void *rock);
+static int propfind_defaultalarm(const xmlChar *name, xmlNsPtr ns,
+                                 struct propfind_ctx *fctx,
+                                 xmlNodePtr prop, xmlNodePtr resp,
+                                 struct propstat propstat[], void *rock);
+static int proppatch_defaultalarm(xmlNodePtr prop, unsigned set,
+                                  struct proppatch_ctx *pctx,
+                                  struct propstat propstat[], void *rock);
 
 static void strip_vtimezones(icalcomponent *ical);
 
@@ -558,6 +566,15 @@ static const struct prop_entry caldav_props[] = {
     { "pushkey", NS_CS,
       PROP_COLLECTION,
       propfind_pushkey, NULL, NULL },
+
+
+    /* Apple Default Alarm properties */
+    { "default-alarm-vevent-datetime", NS_CALDAV,
+      PROP_COLLECTION | PROP_PERUSER,
+      propfind_defaultalarm, proppatch_defaultalarm, NULL },
+    { "default-alarm-vevent-date", NS_CALDAV,
+      PROP_COLLECTION | PROP_PERUSER,
+      propfind_defaultalarm, proppatch_defaultalarm, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
@@ -1068,7 +1085,7 @@ static int caldav_parse_path(const char *path, struct request_target_t *tgt,
  * user overwrites them in their copy of the resource.
  */
 #define STRIP_OWNER_CAL_DATA              \
-    "CALDATA %(VPATCH {287+}\r\n"         \
+    "CALDATA %(VPATCH {285+}\r\n"         \
     "BEGIN:VPATCH\r\n"                    \
     "VERSION:1\r\n"                       \
     "DTSTAMP:19760401T005545Z\r\n"        \
@@ -1079,7 +1096,7 @@ static int caldav_parse_path(const char *path, struct request_target_t *tgt,
     "PATCH-DELETE:#TRANSP\r\n"            \
     "PATCH-DELETE:#X-MOZ-LASTACK\r\n"     \
     "PATCH-DELETE:#X-MOZ-SNOOZE-TIME\r\n" \
-    "PATCH-DELETE:#X-JMAP-USEDEFAULTALERTS\r\n" \
+    "PATCH-DELETE:#X-APPLE-DEFAULT-ALARM\r\n" \
     "END:PATCH\r\n"                       \
     "END:VPATCH\r\n)"
 
@@ -1119,6 +1136,167 @@ HIDDEN int caldav_is_personalized(struct mailbox *mailbox,
     return 0;
 }
 
+static void add_personal_data_from_dl(icalcomponent *ical, struct dlist *dl)
+{
+    const char *icalstr;
+    icalcomponent *vpatch;
+
+    /* Parse the value and fetch the patch */
+    dlist_getatom(dl, "VPATCH", &icalstr);
+    vpatch = icalparser_parse_string(icalstr);
+
+    /* Apply the patch to the "base" resource */
+    icalcomponent_apply_vpatch(ical, vpatch, NULL, NULL);
+
+    icalcomponent_free(vpatch);
+}
+
+static void add_personal_data(icalcomponent *ical, struct buf *userdata)
+{
+    struct dlist *dl;
+    dlist_parsemap(&dl, 1, 0, buf_base(userdata), buf_len(userdata));
+    add_personal_data_from_dl(ical, dl);
+    dlist_free(&dl);
+}
+
+static int read_usedefaultalerts(struct dlist *dl,
+                                 struct mailbox *mailbox,
+                                 const struct index_record *record,
+                                 icalcomponent **icalp)
+{
+    /* Read from annotation */
+    if (dl) {
+        const char *val = NULL;
+        if (dlist_getatom(dl, "USEDEFAULTALERTS", &val)) {
+            return !strcasecmp(val, "YES");
+        }
+        if (dlist_getatom(dl, "VPATCH", &val)) {
+            icalcomponent *vpatch = icalparser_parse_string(val);
+            if (vpatch) {
+                int ret = icalcomponent_read_usedefaultalerts(vpatch);
+                icalcomponent_free(vpatch);
+                if (ret >= 0) return ret;
+            }
+        }
+    }
+
+    /* Read from client-supplied iCalendar data */
+    if (icalp && *icalp) {
+        int ret = icalcomponent_read_usedefaultalerts(*icalp);
+        if (ret >= 0) return ret;
+    }
+
+    /* Read from record */
+    if (!mailbox || !record) return 0;
+
+    icalcomponent *myical = record_to_ical(mailbox, record, NULL);
+    int ret = 0;
+
+    if (dl) add_personal_data_from_dl(myical, dl);
+    ret = icalcomponent_read_usedefaultalerts(myical);
+    if (icalp) {
+        *icalp = myical;
+    }
+    else icalcomponent_free(myical);
+
+    return ret >= 0 ? ret : 0;
+}
+
+HIDDEN int caldav_read_defaultalarms(const char *mboxname,
+                                     const char *userid,
+                                     const char *annot,
+                                     struct buf *buf)
+{
+    struct buf mybuf = BUF_INITIALIZER;
+    annotatemore_lookupmask(mboxname, annot, userid, &mybuf);
+    if (buf_len(&mybuf)) {
+        struct dlist *dl = NULL;
+        if (dlist_parsemap(&dl, 1, 0, buf_base(&mybuf), buf_len(&mybuf)) == 0) {
+            const char *content = NULL;
+            if (dlist_getatom(dl, "CONTENT", &content)) {
+                buf_setcstr(buf, content);
+            }
+        }
+        if (!buf_len(buf)) {
+            buf_copy(buf, &mybuf);
+        }
+        dlist_free(&dl);
+    }
+    buf_free(&mybuf);
+    return 0;
+}
+
+HIDDEN icalcomponent *caldav_read_calendar_icalalarms(const char *mboxname,
+                                                      const char *userid,
+                                                      const char *annot)
+{
+    icalcomponent *ical = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    caldav_read_defaultalarms(mboxname, userid, annot, &buf);
+    if (buf_len(&buf)) {
+        ical = icalparser_parse_string(buf_cstring(&buf));
+        if (ical) {
+            if (icalcomponent_isa(ical) == ICAL_VALARM_COMPONENT) {
+                /* libical wraps multiple VALARMs in a XROOT component,
+                 * so also wrap a single VALARM for consistency */
+                icalcomponent *root = icalcomponent_new(ICAL_XROOT_COMPONENT);
+                icalcomponent_add_component(root, ical);
+                ical = root;
+            }
+        }
+    }
+    buf_free(&buf);
+    return ical;
+}
+
+static void caldav_read_defaultalarms_guid(const char *mboxname,
+                                           const char *userid,
+                                           const char *annot,
+                                           struct message_guid *guid)
+{
+    struct buf buf = BUF_INITIALIZER;
+    message_guid_set_null(guid);
+    struct dlist *dl = NULL;
+
+    annotatemore_lookupmask(mboxname, annot, userid, &buf);
+    if (buf_len(&buf)) {
+        /* Attempt to read guid from dlist */
+        if (dlist_parsemap(&dl, 1, 0, buf.s, buf.len) == 0) {
+            const char *guidrep = NULL;
+            dlist_getatom(dl, "GUID", &guidrep);
+            if (guidrep) {
+                message_guid_decode(guid, guidrep);
+                goto done;
+            }
+        }
+        /* Fallback to generating guid from iCalendar data */
+        message_guid_generate(guid, buf.s, buf.len);
+    }
+
+done:
+    dlist_free(&dl);
+    buf_free(&buf);
+}
+
+static void add_defaultalarm_guid(const char *mboxname, const char *userid,
+                                  char *buf, size_t *buflen)
+{
+    struct message_guid withtime_guid;
+    caldav_read_defaultalarms_guid(mboxname, userid,
+            CALDAV_DEFAULTALARMS_ANNOT_WITHTIME, &withtime_guid);
+    if (!message_guid_isnull(&withtime_guid)) {
+        message_guid_export(&withtime_guid, buf + (*buflen));
+        *buflen += MESSAGE_GUID_SIZE;
+    }
+
+    struct message_guid withdate_guid;
+    caldav_read_defaultalarms_guid(mboxname, userid,
+            CALDAV_DEFAULTALARMS_ANNOT_WITHTIME, &withdate_guid);
+    if (!message_guid_isnull(&withdate_guid)) {
+        message_guid_export(&withdate_guid, buf + (*buflen));
+        *buflen += MESSAGE_GUID_SIZE;
+    }
+}
 
 static int caldav_get_validators(struct mailbox *mailbox, void *data,
                                  const char *userid, struct index_record *record,
@@ -1140,7 +1318,8 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
         dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
 
         if (etag) {
-            char buf[2*MESSAGE_GUID_SIZE];
+            char buf[4*MESSAGE_GUID_SIZE];
+            size_t buf_len = 2*MESSAGE_GUID_SIZE;
             struct message_guid *user_guid;
 
             dlist_getguid(dl, "GUID", &user_guid);
@@ -1148,7 +1327,17 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
             /* Per-user ETag is GUID of concatenated GUIDs */
             message_guid_export(&record->guid, buf);
             message_guid_export(user_guid, buf+MESSAGE_GUID_SIZE);
-            message_guid_generate(user_guid, buf, sizeof(buf));
+
+            /* Read default alarm GUID from per-user data */
+            icalcomponent *ical = NULL;
+            int defaultalerts = read_usedefaultalerts(dl, mailbox, record, &ical);
+            if (defaultalerts) {
+                add_defaultalarm_guid(mailbox->name, userid, buf, &buf_len);
+            }
+            icalcomponent_free(ical);
+
+            /* Generate ETag */
+            message_guid_generate(user_guid, buf, buf_len);
             *etag = message_guid_encode(user_guid);
         }
         if (lastmod) {
@@ -1162,6 +1351,17 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
 
         dlist_free(&dl);
         buf_free(&userdata);
+    }
+    else if (cdata->comp_flags.defaultalerts) {
+        char buf[4*MESSAGE_GUID_SIZE];
+        size_t buf_len = MESSAGE_GUID_SIZE;
+
+        message_guid_export(&record->guid, buf);
+        add_defaultalarm_guid(mailbox->name, userid, buf, &buf_len);
+
+        struct message_guid guid;
+        message_guid_generate(&guid, buf, buf_len);
+        *etag = message_guid_encode(&guid);
     }
 
     return 0;
@@ -2654,26 +2854,6 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
     return icaltime_null_time();
 }
 
-
-static void add_personal_data(icalcomponent *ical, struct buf *userdata)
-{
-    struct dlist *dl;
-    const char *icalstr;
-    icalcomponent *vpatch;
-
-    /* Parse the value and fetch the patch */
-    dlist_parsemap(&dl, 1, 0, buf_base(userdata), buf_len(userdata));
-    dlist_getatom(dl, "VPATCH", &icalstr);
-    vpatch = icalparser_parse_string(icalstr);
-    dlist_free(&dl);
-
-    /* Apply the patch to the "base" resource */
-    icalcomponent_apply_vpatch(ical, vpatch, NULL, NULL);
-
-    icalcomponent_free(vpatch);
-}
-
-
 EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
                                               const struct caldav_data *cdata,
                                               const char *userid,
@@ -2791,6 +2971,9 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             caldav_close(caldavdb);
         }
 
+        int has_defaultalerts = 0;
+        struct dlist *dl = NULL;
+
         /* Personalize resource, if necessary */
         if (namespace_calendar.allow & ALLOW_USERDATA) {
             struct buf userdata = BUF_INITIALIZER;
@@ -2798,10 +2981,36 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             if (caldav_is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
                 if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
 
-                add_personal_data(ical, &userdata);
+                dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+                add_personal_data_from_dl(ical, dl);
                 buf_free(&userdata);
+
+                has_defaultalerts = read_usedefaultalerts(dl, mailbox, record, &ical);
             }
         }
+        if (!has_defaultalerts) {
+            has_defaultalerts = cdata->comp_flags.defaultalerts;
+        }
+
+        /* Inject default alarms, if necessary */
+        if (has_defaultalerts) {
+            if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
+
+            /* Read default alarms */
+            icalcomponent *withtime =
+                caldav_read_calendar_icalalarms(mailbox->name, httpd_userid,
+                        CALDAV_DEFAULTALARMS_ANNOT_WITHTIME);
+            icalcomponent *withdate =
+                caldav_read_calendar_icalalarms(mailbox->name, httpd_userid,
+                        CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
+
+            /* Add default alarms */
+            icalcomponent_add_defaultalerts(ical, withtime, withdate);
+
+            if (withdate) icalcomponent_free(withdate);
+            if (withtime) icalcomponent_free(withtime);
+        }
+        dlist_free(&dl);
 
         /* iCalendar data in response should not be transformed */
         txn->flags.cc |= CC_NOTRANSFORM;
@@ -3970,7 +4179,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 
             case ICAL_X_PROPERTY:
                 xname = icalproperty_get_x_name(prop);
-                if (strcmp(xname, "X-JMAP-USEDEFAULTALERTS") &&
+                if (strcmp(xname, "X-APPLE-DEFAULT-ALARM") &&
                     (strncmp(xname, "X-MOZ-", 6) ||
                      (strcmp(xname+6, "LASTACK") &&
                       strcmp(xname+6, "SNOOZE-TIME")))) {
@@ -4108,6 +4317,7 @@ static int write_personal_data(const char *userid,
                                struct mailbox *mailbox,
                                uint32_t uid,
                                modseq_t modseq,
+                               int usedefaultalerts,
                                icalcomponent *vpatch)
 {
     struct message_guid guid;
@@ -4124,6 +4334,7 @@ static int write_personal_data(const char *userid,
     message_guid_generate(&guid, icalstr, strlen(icalstr));
     dlist_setguid(dl, "GUID", &guid);
     dlist_setatom(dl, "VPATCH", icalstr);
+    dlist_setatom(dl, "USEDEFAULTALERTS", usedefaultalerts ? "YES" : "NO");
     dlist_printbuf(dl, 1, &value);
     dlist_free(&dl);
 
@@ -4236,13 +4447,15 @@ static int personalize_resource(struct transaction_t *txn,
         buf_reset(&txn->buf);
 
         /* Extract personal info from owner's resource and create vpatch */
+        int usedefaultalerts = icalcomponent_read_usedefaultalerts(oldical) > 0;
         ret = extract_personal_data(oldical, NULL, *userdata,
                                     &txn->buf /* path */, 0 /* read_only */,
                                     &num_changes);
         buf_reset(&txn->buf);
 
         if (!ret) ret = write_personal_data(owner, mailbox, cdata->dav.imap_uid,
-                                            cdata->dav.modseq, *userdata);
+                                            cdata->dav.modseq, usedefaultalerts,
+                                            *userdata);
 
         if (ret) goto done;
 
@@ -7107,6 +7320,286 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
     return HTTP_NOT_FOUND;
 }
 
+/* Callback to fetch CALDAV:default-alarm-vevent-date[time] property */
+static int propfind_defaultalarm(const xmlChar *name, xmlNsPtr ns,
+                                 struct propfind_ctx *fctx,
+                                 xmlNodePtr prop __attribute__((unused)),
+                                 xmlNodePtr resp __attribute__((unused)),
+                                 struct propstat propstat[],
+                                 void *rock __attribute__((unused)))
+{
+    struct buf attrib = BUF_INITIALIZER;
+    xmlNodePtr node;
+    int r = 0;
+
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
+               (const char *) ns->href, name);
+
+    if (fctx->mbentry && !fctx->record) {
+        r = annotatemore_lookupmask(fctx->mbentry->name,
+                                    buf_cstring(&fctx->buf),
+                                    httpd_userid, &attrib);
+    }
+
+    if (r) return HTTP_SERVER_ERROR;
+    if (!buf_len(&attrib)) return HTTP_NOT_FOUND;
+
+    const char *val = buf_cstring(&attrib);
+    size_t len = buf_len(&attrib);
+
+    /* Try to parse as dlist - we switched from storing the raw
+     * iCalendar payload to dlist for JMAP calendar alerts */
+    struct dlist *dl = NULL;
+    if (dlist_parsemap(&dl, 1, 0, buf_base(&attrib), buf_len(&attrib)) == 0) {
+        const char *content = NULL;
+        if (dlist_getatom(dl, "CONTENT", &content)) {
+            val = content;
+            len = strlen(content);
+        }
+    }
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                        name, ns, NULL, 0);
+    xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc, BAD_CAST val, len));
+
+    buf_free(&attrib);
+    dlist_free(&dl);
+
+    return 0;
+}
+
+static void format_defaultalarms_annot(struct buf *dst, const char *icalstr)
+{
+    struct dlist *dl = dlist_newkvlist(NULL, "DEFAULTALARMS");
+    struct message_guid guid;
+    message_guid_generate(&guid, icalstr, strlen(icalstr));
+    dlist_setatom(dl, "CONTENT", icalstr);
+    dlist_setatom(dl, "GUID", message_guid_encode(&guid));
+    dlist_printbuf(dl, 1, dst);
+    dlist_free(&dl);
+}
+
+struct bumpdefaultalarms_data {
+    bitvector_t bump;
+    bitvector_t shared;
+};
+
+static int bumpdefaultalarms_cb(void *rock, struct caldav_data *cdata)
+{
+    struct bumpdefaultalarms_data *data = rock;
+
+    if (cdata->comp_flags.defaultalerts) {
+        /* Definitely bump this record */
+        bv_set(&data->bump, cdata->dav.imap_uid);
+    }
+    if (cdata->comp_flags.shared) {
+        /* Inspect per-user data later */
+        bv_set(&data->shared, cdata->dav.imap_uid);
+    }
+
+    return 0;
+}
+
+HIDDEN int caldav_bump_defaultalarms(struct mailbox *mailbox)
+{
+    struct mailbox_iter *iter = NULL;
+    struct caldav_db *db = NULL;
+    int r = 0;
+
+    struct bumpdefaultalarms_data data = { BV_INITIALIZER, BV_INITIALIZER };
+
+    /* Gather record uids of events with default alerts */
+    db = caldav_open_mailbox(mailbox);
+    if (!db) {
+        syslog(LOG_ERR, "%s: can't open caldav.db for %s",
+                __func__, mailbox->name);
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+    r = caldav_foreach(db, mailbox->name, bumpdefaultalarms_cb, &data);
+    if (r) {
+        syslog(LOG_ERR, "%s: failed to iterate caldav.db %s: %s",
+                __func__, mailbox->name, error_message(r));
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+    if ((bv_first_set(&data.bump) < 0) && (bv_first_set(&data.shared) < 0)) {
+        goto done;
+    }
+
+    /* Bump modseqs of calendar event records */
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    if (!iter) {
+        syslog(LOG_ERR, "%s: can't open mailbox iterator for %s",
+                __func__, mailbox->name);
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Need to switch to message scope */
+    if (mailbox->annot_state) {
+        int annot_scope = annotate_state_scope(mailbox->annot_state);
+        if (annot_scope != ANNOTATION_SCOPE_MESSAGE) {
+            annotate_state_commit(&mailbox->annot_state);
+        }
+    }
+
+    /* Iterate records */
+    const message_t *msg;
+    struct buf userdata = BUF_INITIALIZER;
+    struct dlist *dl = NULL; // parsed user data
+
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        struct index_record copyrecord = *record;
+        buf_reset(&userdata);
+        dlist_free(&dl);
+
+        if (!bv_isset(&data.bump, record->uid) && bv_isset(&data.shared, record->uid)) {
+            /* Check per-user data */
+            mailbox_annotation_lookup(mailbox, record->uid, PER_USER_CAL_DATA,
+                                      httpd_userid, &userdata);
+            if (buf_len(&userdata)) {
+                /* Parse the userdata and fetch the validators */
+                dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+                if (read_usedefaultalerts(dl, mailbox, record, NULL)) {
+                    bv_set(&data.bump, record->uid);
+                }
+            }
+        }
+
+        if (!bv_isset(&data.bump, record->uid)) {
+            continue;
+        }
+
+        /* Bump record */
+        r = mailbox_rewrite_index_record(mailbox, &copyrecord);
+        if (r) {
+            syslog(LOG_ERR, "%s: rewrite index record %s:%d: %s",
+                    __func__, mailbox->name, record->uid, error_message(r));
+            continue;
+        }
+        if (dl) {
+            /* Update modseq in the per-user data */
+            dlist_updatedate(dl, "LASTMOD", copyrecord.last_updated);
+            dlist_updatenum64(dl, "MODSEQ", copyrecord.modseq);
+            buf_reset(&userdata);
+            dlist_printbuf(dl, 1, &userdata);
+            r = annotate_state_write(mailbox->annot_state, PER_USER_CAL_DATA,
+                                     httpd_userid, &userdata);
+            if (r) {
+                syslog(LOG_ERR, "%s: can't update per-user modseq for record %s:%d: %s",
+                        __func__, mailbox->name, record->uid, error_message(r));
+                continue;
+            }
+        }
+        r = caldav_alarm_touch_record(mailbox, record, /*force*/1);
+        if (r) {
+            syslog(LOG_ERR, "%s: touch alarms for index record %s:%d: %s",
+                    __func__, mailbox->name, record->uid, error_message(r));
+            continue;
+        }
+    }
+    buf_free(&userdata);
+    dlist_free(&dl);
+
+done:
+    bv_fini(&data.shared);
+    bv_fini(&data.bump);
+    mailbox_iter_done(&iter);
+    caldav_close(db);
+    return r;
+}
+
+HIDDEN int caldav_write_defaultalarms(struct mailbox *mailbox,
+                                      const char *userid,
+                                      const char *annot,
+                                      icalcomponent *ical)
+{
+    annotate_state_t *astate;
+    int r = mailbox_get_annotate_state(mailbox, 0, &astate);
+    if (r) return r;
+
+    struct buf val = BUF_INITIALIZER;
+    if (ical) {
+        struct buf raw = BUF_INITIALIZER;
+
+        if (icalcomponent_isa(ical) != ICAL_VALARM_COMPONENT) {
+            icalcomponent *comp;
+            for (comp = icalcomponent_get_first_component(ical, ICAL_VALARM_COMPONENT);
+                 comp;
+                 comp = icalcomponent_get_next_component(ical, ICAL_VALARM_COMPONENT)) {
+                buf_appendcstr(&raw, icalcomponent_as_ical_string(comp));
+            }
+        }
+        else buf_setcstr(&raw, icalcomponent_as_ical_string(ical));
+
+        format_defaultalarms_annot(&val, buf_cstring(&raw));
+        buf_free(&raw);
+    }
+
+    r = annotate_state_writemask(astate, annot, userid, &val);
+    buf_free(&val);
+
+    return r;
+}
+
+static void proppatch_defaultalarm_proc(struct proppatch_ctx *ctx)
+{
+    int r = caldav_bump_defaultalarms(ctx->mailbox);
+    if (r) {
+        syslog(LOG_ERR, "%s: can't bump default alarms: %s",
+                __func__, error_message(r));
+    }
+}
+
+/* Callback to write CALDAV:default-alarm-vevent-date[time] property */
+static int proppatch_defaultalarm(xmlNodePtr prop, unsigned set,
+                                  struct proppatch_ctx *pctx,
+                                  struct propstat propstat[],
+                                  void *rock __attribute__((unused)))
+{
+    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
+        xmlChar *freeme = NULL;
+        const char *icalstr = "";
+        struct buf buf = BUF_INITIALIZER;
+
+        if (set) {
+            freeme = xmlNodeGetContent(prop);
+            icalstr = (const char *) freeme;
+            format_defaultalarms_annot(&buf, icalstr);
+        }
+
+        proppatch_todb(prop, set, pctx, propstat,
+                buf_len(&buf) ? (void*) buf_cstring(&buf) : NULL);
+
+        if (freeme) xmlFree(freeme);
+        buf_free(&buf);
+
+        /* Bump alerts after properties are processed - but just once */
+        int i;
+        for (i = 0; i < ptrarray_size(&pctx->postprocs); i++) {
+            pctx_postproc_t *proc = ptrarray_nth(&pctx->postprocs, i);
+            if (proc == (pctx_postproc_t*) proppatch_defaultalarm_proc) {
+                break;
+            }
+        }
+        if (i == ptrarray_size(&pctx->postprocs)) {
+            ptrarray_append(&pctx->postprocs, proppatch_defaultalarm_proc);
+        }
+
+        return 0;
+    }
+
+    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                 &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
+
+    *pctx->ret = HTTP_FORBIDDEN;
+
+    return 0;
+}
+
 
 static icaltimezone *get_calendar_tz(const char *mboxname, const char *userid);
 
@@ -8137,6 +8630,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     const char *sched_tag;
     uint32_t newuid = 0;
     strarray_t myimapflags = STRARRAY_INITIALIZER;
+    int usedefaultalerts = 0; // for per-user data
 
     /* Copy add_imapflags, we might need to add some flags */
     if (add_imapflags) strarray_cat(&myimapflags, add_imapflags);
@@ -8210,6 +8704,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
         cdata->comp_flags.shared = 0;
     }
     else if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
+        usedefaultalerts = icalcomponent_read_usedefaultalerts(ical) > 0;
         ret = personalize_resource(txn, mailbox, ical,
                                    cdata, userid, &store_ical, &userdata);
         if (ret) goto done;
@@ -8323,7 +8818,8 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
             }
 
             int r = write_personal_data(userid, mailbox, newuid,
-                                        mailbox->i.highestmodseq+1, userdata);
+                                        mailbox->i.highestmodseq+1,
+                                        usedefaultalerts, userdata);
             if (r) {
                 /* XXX  We have already written the stripped resource
                    so we're pretty screwed.  All message annotations

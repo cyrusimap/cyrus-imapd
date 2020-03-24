@@ -3721,6 +3721,15 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
         }
     }
 
+    /* Process any post-processor functions */
+    if (ptrarray_size(&pctx->postprocs)) {
+        pctx_postproc_t proc;
+        while ((proc = ptrarray_pop(&pctx->postprocs))) {
+            /* XXX - allow return values? */
+            proc(pctx);
+        }
+    }
+
     return 0;
 }
 

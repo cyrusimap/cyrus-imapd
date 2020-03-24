@@ -82,4 +82,33 @@ extern int caldav_manage_attachments(const char *userid,
                                      icalcomponent *ical,
                                      icalcomponent *oldical);
 
+#define CALDAV_DEFAULTALARMS_ANNOT_WITHTIME \
+    DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-datetime"
+
+#define CALDAV_DEFAULTALARMS_ANNOT_WITHDATE \
+    DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-date"
+
+/* Read the default alarms for mailbox mboxname and userid as
+ * icalcomponent. The VALARMs are wrapped inside a libical
+ * XROOT component */
+extern icalcomponent *caldav_read_calendar_icalalarms(const char *mboxname,
+                                                      const char *userid,
+                                                      const char *annot);
+
+/* Write the default alarms in ical to annot, or delete if ical is NULL.
+ * The alarms MUST be wrapped in either a XROOT or VCALENDAR component. */
+extern int caldav_write_defaultalarms(struct mailbox *mailbox,
+                                      const char *userid,
+                                      const char *annot,
+                                      icalcomponent *ical);
+
+/* Bump the modseq of all records in mailbox that contain iCalendar
+ * components with enabled default alarms. Also forces calalarmd to
+ * recalculate the alarms for these records.
+ *
+ * Side-effect warning: if the mailbox has an open annotation state
+ * that isn't scoped to SCOPE_MESSAGE, then the state is committed
+ * and rescoped to messages. */
+extern int caldav_bump_defaultalarms(struct mailbox *mailbox);
+
 #endif /* HTTP_CALDAV_H */

@@ -79,12 +79,13 @@ extern const char *caldav_comp_type_as_string(unsigned comp_type);
 struct caldav_db;
 
 struct comp_flags {
-    unsigned recurring    : 1;          /* Has RRULE property */
-    unsigned transp       : 1;          /* Is TRANSParent */
-    unsigned status       : 2;          /* STATUS property value (see below) */
-    unsigned tzbyref      : 1;          /* VTIMEZONEs by reference */
-    unsigned mattach      : 1;          /* Has managed ATTACHment(s) */
-    unsigned shared       : 1;          /* Is shared (per-user-data stripped) */
+    unsigned recurring     : 1;          /* Has RRULE property */
+    unsigned transp        : 1;          /* Is TRANSParent */
+    unsigned status        : 2;          /* STATUS property value (see below) */
+    unsigned tzbyref       : 1;          /* VTIMEZONEs by reference */
+    unsigned mattach       : 1;          /* Has managed ATTACHment(s) */
+    unsigned shared        : 1;          /* Is shared (per-user-data stripped) */
+    unsigned defaultalerts : 1;          /* Has default alerts property set */
 };
 
 /* Status values */

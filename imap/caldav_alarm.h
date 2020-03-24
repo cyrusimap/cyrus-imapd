@@ -66,9 +66,11 @@ int caldav_alarm_add_record(struct mailbox *mailbox,
                             const struct index_record *record,
                             icalcomponent *ical);
 
-/* make sure that the alarms match the annotation */
+/* make sure that the alarms match the annotation. If forced,
+ * the event is not checked if it contains alarms */
 int caldav_alarm_touch_record(struct mailbox *mailbox,
-                              const struct index_record *record);
+                              const struct index_record *record,
+                              int force);
 
 /* set the caldav_alarm db nextcheck field for the record (from sync_support) */
 int caldav_alarm_sync_nextcheck(struct mailbox *mailbox,
