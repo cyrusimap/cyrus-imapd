@@ -1464,7 +1464,7 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
             return 0;
     }
 
-    return bb->proc(rec->mboxname, 0, rec->uid, rec->part, bb->rock);
+    return bb->proc(rec->mailbox, 0, rec->uid, rec->part, bb->rock);
 }
 
 
@@ -1481,7 +1481,11 @@ static int xapian_run_cb(void *data, size_t nmemb, void *rock)
     if (r) return r;
 
     struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
-    if (!cstate) return IMAP_NOTFOUND;
+    if (!cstate) {
+        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
+               bb->mailbox->name);
+        return IMAP_NOTFOUND;
+    }
 
     qsort(data, nmemb, 41, memcmp40); // byte 41 is always zero
 

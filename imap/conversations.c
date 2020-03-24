@@ -221,7 +221,7 @@ static int write_folders(struct conversations_state *state)
     int r;
     int i;
 
-    for (i = 0; i < state->folders->count; i++) {
+    for (i = 0; i < strarray_size(state->folders); i++) {
         const char *fname = strarray_nth(state->folders, i);
         dlist_setatom(dl, NULL, fname);
     }
