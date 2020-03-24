@@ -88,7 +88,7 @@ struct conversations_state {
     struct txn *txn;
     char *annotmboxname;
     strarray_t *counted_flags;
-    strarray_t *folder_names;
+    strarray_t *folder_ids;
     hash_table folderstatus;
     struct conv_quota quota;
     int trashfolder;
@@ -129,8 +129,8 @@ struct conv_folder {
 
 struct conv_guidrec {
     const char      *guidrep; // [MESSAGE_GUID_SIZE*2], hex-encoded
-    const char      *mboxname;
-    int             foldernum;
+    const char      *mboxid;
+    uint32_t        foldernum;
     uint32_t        uid;
     const char      *part;
     conversation_id_t cid;
@@ -257,10 +257,10 @@ extern conversation_id_t conversations_guid_cid_lookup(struct conversations_stat
 
 /* F record items */
 extern int conversation_getstatus(struct conversations_state *state,
-                                  const char *mboxname,
+                                  const char *mboxid,
                                   conv_status_t *status);
 extern int conversation_setstatus(struct conversations_state *state,
-                                  const char *mboxname,
+                                  const char *mboxid,
                                   const conv_status_t *status);
 extern int conversation_storestatus(struct conversations_state *state,
                                     const char *key, size_t keylen,

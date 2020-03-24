@@ -94,7 +94,7 @@
 
 /* per user conversations db extension */
 #define FNAME_CONVERSATIONS_SUFFIX "conversations"
-#define FNKEY "$FOLDER_NAMES"
+#define FIKEY "$FOLDER_IDS"
 #define CFKEY "$COUNTED_FLAGS"
 #define CONVSPLITFOLDER "#splitconversations"
 
@@ -220,15 +220,15 @@ static int write_folders(struct conversations_state *state)
     int r;
     int i;
 
-    for (i = 0; i < strarray_size(state->folder_names); i++) {
-        const char *fname = strarray_nth(state->folder_names, i);
+    for (i = 0; i < strarray_size(state->folder_ids); i++) {
+        const char *fname = strarray_nth(state->folder_ids, i);
         dlist_setatom(dl, NULL, fname);
     }
 
     dlist_printbuf(dl, 0, &buf);
     dlist_free(&dl);
 
-    r = cyrusdb_store(state->db, FNKEY, strlen(FNKEY),
+    r = cyrusdb_store(state->db, FIKEY, strlen(FIKEY),
                       buf.s, buf.len, &state->txn);
 
     buf_free(&buf);
@@ -237,21 +237,21 @@ static int write_folders(struct conversations_state *state)
 }
 
 EXPORTED int conversation_folder_number(struct conversations_state *state,
-                         const char *name,
+                         const char *id,
                          int create_flag)
 {
-    int pos = strarray_find(state->folder_names, name, 0);
+    int pos = strarray_find(state->folder_ids, id, 0);
     int r;
 
     /* if we have to add it, then save the keys back */
     if (pos < 0 && create_flag) {
         /* replace the first unused if there is one */
-        pos = strarray_find(state->folder_names, "-", 0);
+        pos = strarray_find(state->folder_ids, "-", 0);
         if (pos >= 0)
-            strarray_set(state->folder_names, pos, name);
+            strarray_set(state->folder_ids, pos, id);
         /* otherwise append */
         else
-            pos = strarray_append(state->folder_names, name);
+            pos = strarray_append(state->folder_ids, id);
 
         /* track the Trash folder number as it's added */
         if (!strcmpsafe(name, state->trashmboxname))
@@ -267,13 +267,13 @@ EXPORTED int conversation_folder_number(struct conversations_state *state,
 
 EXPORTED int conversations_num_folders(struct conversations_state *state)
 {
-    return strarray_size(state->folder_names);
+    return strarray_size(state->folder_ids);
 }
 
-EXPORTED const char* conversations_folder_name(struct conversations_state *state,
-                                               int foldernum)
+EXPORTED const char* conversations_folder_id(struct conversations_state *state,
+                                             int foldernum)
 {
-    return strarray_safenth(state->folder_names, foldernum);
+    return strarray_safenth(state->folder_ids, foldernum);
 }
 
 EXPORTED size_t conversations_estimate_emailcount(struct conversations_state *state)
@@ -281,9 +281,9 @@ EXPORTED size_t conversations_estimate_emailcount(struct conversations_state *st
     int i;
     size_t count = 0;
     conv_status_t status;
-    for (i = 0; i < strarray_size(state->folder_names); i++) {
-        const char *mboxname = strarray_nth(state->folder_names, i);
-        int r = conversation_getstatus(state, mboxname, &status);
+    for (i = 0; i < strarray_size(state->folder_ids); i++) {
+        const char *mboxid = strarray_nth(state->folder_ids, i);
+        int r = conversation_getstatus(state, mboxid, &status);
         if (r) continue;
         count += status.emailexists;
     }
@@ -343,13 +343,13 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     }
 
     /* we should just read the folder names up front too */
-    open->s.folder_names = strarray_new();
+    open->s.folder_ids = strarray_new();
 
     /* if there's a value, parse as a dlist */
     vallen = 0;
-    cyrusdb_fetch(open->s.db, FNKEY, strlen(FNKEY), &val, &vallen, &open->s.txn);
+    cyrusdb_fetch(open->s.db, FIKEY, strlen(FIKEY), &val, &vallen, &open->s.txn);
     if (vallen) {
-        dlist_parsesax(val, vallen, 0, _saxfolder, open->s.folder_names);
+        dlist_parsesax(val, vallen, 0, _saxfolder, open->s.folder_ids);
     }
 
     if (userid)
@@ -362,7 +362,7 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     open->s.trashmboxname = trashmboxname;
 
     /* create the status cache */
-    construct_hash_table(&open->s.folderstatus, strarray_size(open->s.folder_names)/4+4, 0);
+    construct_hash_table(&open->s.folderstatus, strarray_size(open->s.folder_ids)/4+4, 0);
 
     *statep = &open->s;
 
@@ -440,8 +440,8 @@ static void _conv_remove(struct conversations_state *state)
             free(cur->s.trashmboxname);
             if (cur->s.counted_flags)
                 strarray_free(cur->s.counted_flags);
-            if (cur->s.folder_names)
-                strarray_free(cur->s.folder_names);
+            if (cur->s.folder_ids)
+                strarray_free(cur->s.folder_ids);
             if (cur->local_namespacelock)
                 mboxname_release(&cur->local_namespacelock);
             free(cur);
@@ -744,12 +744,12 @@ static int folder_number_rename(struct conversations_state *state,
                                 const char *from_name,
                                 const char *to_name)
 {
-    int pos = strarray_find(state->folder_names, from_name, 0);
+    int pos = strarray_find(state->folder_ids, from_name, 0);
 
     if (pos < 0) return 0; /* nothing to do! */
 
     /* replace the name  - set to '-' if deleted */
-    strarray_set(state->folder_names, pos, to_name ? to_name : "-");
+    strarray_set(state->folder_ids, pos, to_name ? to_name : "-");
 
     return write_folders(state);
 }
@@ -787,10 +787,10 @@ EXPORTED int conversation_storestatus(struct conversations_state *state,
 }
 
 EXPORTED int conversation_setstatus(struct conversations_state *state,
-                                    const char *mboxname,
+                                    const char *mboxid,
                                     const conv_status_t *status)
 {
-    char *key = strconcat("F", mboxname, (char *)NULL);
+    char *key = strconcat("F", mboxid, (char *)NULL);
     conv_status_t *cachestatus = NULL;
 
     cachestatus = hash_lookup(key, &state->folderstatus);
@@ -1095,10 +1095,10 @@ EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
 }
 
 EXPORTED int conversation_getstatus(struct conversations_state *state,
-                                    const char *mboxname,
+                                    const char *mboxid,
                                     conv_status_t *status)
 {
-    char *key = strconcat("F", mboxname, (char *)NULL);
+    char *key = strconcat("F", mboxid, (char *)NULL);
     const char *data;
     size_t datalen;
     int r = 0;
@@ -1133,7 +1133,7 @@ EXPORTED int conversation_getstatus(struct conversations_state *state,
 
  done:
     if (r)
-        syslog(LOG_ERR, "IOERROR: conversations invalid status %s", mboxname);
+        syslog(LOG_ERR, "IOERROR: conversations invalid status %s", mboxid);
 
     free(key);
 
@@ -1882,8 +1882,8 @@ static int _guid_one(struct guid_foreach_rock *frock,
     int r = parseuint32(item, &err, &res);
     if (r || err != p) return IMAP_INTERNAL;
     rec.foldernum = res;
-    rec.mboxname = strarray_safenth(frock->state->folder_names, res);
-    if (!rec.mboxname) return IMAP_INTERNAL;
+    rec.mboxid = strarray_safenth(frock->state->folder_ids, res);
+    if (!rec.mboxid) return IMAP_INTERNAL;
 
     /* uid */
     r = parseuint32(p + 1, &err, &res);
@@ -2187,7 +2187,7 @@ static int conversations_set_guid(struct conversations_state *state,
                                   const struct index_record *record,
                                   int add)
 {
-    int folder = conversation_folder_number(state, mailbox->name, /*create*/1);
+    int folder = conversation_folder_number(state, mailbox->uniqueid, /*create*/1);
     struct buf item = BUF_INITIALIZER;
     struct body *body = NULL;
     int r = 0;

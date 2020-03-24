@@ -521,12 +521,12 @@ static int _findparent(const char *mboxname, mbentry_t **mbentryp)
 
 static int _mbox_get_readcounts(jmap_req_t *req,
                                 mbname_t *mbname,
+                                const mbentry_t *mbentry,
                                 hash_table *props,
                                 json_t *obj)
 {
     conv_status_t convstatus = CONV_STATUS_INIT;
-    int r = conversation_getstatus(req->cstate,
-                 mbname_intname(mbname), &convstatus);
+    int r = conversation_getstatus(req->cstate, mbentry->uniqueid, &convstatus);
     if (r) {
         syslog(LOG_ERR, "conversation_getstatus(%s): %s",
                 mbname_intname(mbname), error_message(r));
@@ -661,7 +661,7 @@ static json_t *_mbox_get(jmap_req_t *req,
     if (share_type == _SHAREDMBOX_SHARED && !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
         if (jmap_wantprop(props, "totalThreads") || jmap_wantprop(props, "unreadThreads") ||
             jmap_wantprop(props, "totalEmails") || jmap_wantprop(props, "unreadEmails")) {
-            r = _mbox_get_readcounts(req, mbname, props, obj);
+            r = _mbox_get_readcounts(req, mbname, mbentry, props, obj);
             if (r) goto done;
         }
         if (jmap_wantprop(props, "sortOrder")) {
@@ -2417,7 +2417,7 @@ static int _mbox_update_validate_serverset(jmap_req_t *req,
 
         mbname_t *mbname = mbname_from_intname(mbentry->name);
         json_t *tmp = json_object();
-        int r = _mbox_get_readcounts(req, mbname, NULL, tmp);
+        int r = _mbox_get_readcounts(req, mbname, mbentry, NULL, tmp);
         if (!r) {
             json_t *jval = json_object_get(args->jargs, "totalEmails");
             if (jval && !json_equal(jval, json_object_get(tmp, "totalEmails"))) {

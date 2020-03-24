@@ -5705,7 +5705,7 @@ static int xconvfetch_lookup(struct conversations_state *statep,
             continue;
 
         /* finally, something worth looking at */
-        strarray_add(folder_list, strarray_nth(statep->folder_names, folder->number));
+        strarray_add(folder_list, strarray_nth(statep->folder_ids, folder->number));
     }
 
 out:
@@ -5750,9 +5750,13 @@ static int do_xconvfetch(struct dlist *cidlist,
     init.out = imapd_out;
 
     for (i = 0; i < folder_list.count; i++) {
-        const char *mboxname = folder_list.data[i];
+        mbentry_t *mbentry = NULL;
 
-        r = index_open(mboxname, &init, &index_state);
+        mboxlist_lookup_by_uniqueid(folder_list.data[i], &mbentry, NULL);
+        if (r) goto out;
+
+        r = index_open(mbentry->name, &init, &index_state);
+        mboxlist_entry_free(&mbentry);
         if (r == IMAP_MAILBOX_NONEXISTENT)
             continue;
         if (r)
@@ -9268,7 +9272,7 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
         global_conversations = state;
     }
 
-    r = conversation_getstatus(state, mbentry->name, &sd->xconv);
+    r = conversation_getstatus(state, mbentry->uniqueid, &sd->xconv);
     if (r) return r;
 
 nonconv:

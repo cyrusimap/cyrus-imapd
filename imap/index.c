@@ -2145,7 +2145,7 @@ static int search_predict_total(struct index_state *state,
     uint32_t exists;
 
     if (conversations) {
-        conversation_getstatus(cstate, index_mboxname(state), &convstatus);
+        conversation_getstatus(cstate, state->mailbox->uniqueid, &convstatus);
         /* always grab xconvmodseq, so we report a growing
          * highestmodseq to all callers */
         if (xconvmodseqp) *xconvmodseqp = convstatus.threadmodseq;
@@ -3976,7 +3976,7 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     /* make sure we have appropriate rights */
-    r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
+    r = mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
     if (r) goto done;
     myrights = cyrus_acl_myrights(fmb_rock->state->authstate, mbentry->acl);
     if ((myrights & needrights) != needrights)
@@ -3986,7 +3986,7 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     if (rec->version == 0) {
         uint32_t system_flags, internal_flags;
 
-        r = mailbox_open_irl(rec->mboxname, &mailbox);
+        r = mailbox_open_irl(mbentry->name, &mailbox);
         if (r) goto done;
 
         r = msgrecord_find(mailbox, rec->uid, &msgrecord);
@@ -4002,7 +4002,7 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     if (fmb_rock->wantname) {
-        extname = mboxname_to_external(rec->mboxname,
+        extname = mboxname_to_external(mbentry->name,
                                        fmb_rock->fetchargs->namespace,
                                        fmb_rock->fetchargs->userid);
     }
