@@ -2368,18 +2368,19 @@ sub test_fileinto_mailboxid
     my $talk = $self->{store}->get_client();
 
     my $hitfolder = "INBOX.newfolder";
-    my $missfolder = "INBOX";
+    my $missfolder = "INBOX.testfolder";
 
     xlog $self, "Install the sieve script";
     my $scriptname = 'flatPack';
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailboxid"];
-fileinto :mailboxid "does-not-exist" "INBOX";
+fileinto :mailboxid "does-not-exist" "$missfolder";
 
 EOF
     );
 
     $talk->create($hitfolder);
+    $talk->create($missfolder);
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
@@ -2397,7 +2398,7 @@ EOF
 
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailboxid"];
-fileinto :mailboxid "$id" "INBOX";
+fileinto :mailboxid "$id" "$missfolder";
 EOF
     );
 
