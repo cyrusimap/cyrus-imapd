@@ -88,13 +88,6 @@
 
 #define DEBUG 0
 
-#define ANNOTATION_SCOPE_UNKNOWN    (-1)
-enum {
-  ANNOTATION_SCOPE_SERVER = 1,
-  ANNOTATION_SCOPE_MAILBOX = 2,
-  ANNOTATION_SCOPE_MESSAGE = 3
-};
-
 typedef struct annotate_entrydesc annotate_entrydesc_t;
 
 struct annotate_entry_list
@@ -1331,6 +1324,10 @@ EXPORTED int annotate_state_commit(annotate_state_t **statep)
     return r;
 }
 
+EXPORTED int annotate_state_scope(annotate_state_t *state)
+{
+    return state ? state->which : ANNOTATION_SCOPE_UNKNOWN;
+}
 
 static struct annotate_entry_list *
 _annotate_state_add_entry(annotate_state_t *state,

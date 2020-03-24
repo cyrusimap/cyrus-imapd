@@ -105,6 +105,14 @@ int annotate_state_set_message(annotate_state_t *state,
                                struct mailbox *mailbox,
                                unsigned int uid);
 
+#define ANNOTATION_SCOPE_UNKNOWN    (-1)
+enum {
+  ANNOTATION_SCOPE_SERVER = 1,
+  ANNOTATION_SCOPE_MAILBOX = 2,
+  ANNOTATION_SCOPE_MESSAGE = 3
+};
+int annotate_state_scope(annotate_state_t *state);
+
 /* String List Management */
 void appendstrlist(struct strlist **l, char *s);
 void freestrlist(struct strlist *l);
