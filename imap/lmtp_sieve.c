@@ -1099,7 +1099,7 @@ static int sieve_fileinto(void *ac,
     int ret = IMAP_MAILBOX_NONEXISTENT;
 
     const char *userid = mbname_userid(sd->mbname);
-    char *intname;
+    char *intname = NULL;
 
     if (sd->edited_header) {
         mdata = setup_special_delivery(mdata);
@@ -1112,10 +1112,11 @@ static int sieve_fileinto(void *ac,
         if (intname &&
             (mboxname_isdeletedmailbox(intname, NULL) ||
              mboxname_isnonimapmailbox(intname, 0))) {
-            goto done;
+            free(intname);
+            intname = NULL;
         }
     }
-    else {
+    if (!intname) {
         if (fc->specialuse) {
             intname = mboxname_from_external(fc->specialuse, sd->ns, userid);
             ret = mboxlist_lookup(intname, NULL, NULL);
