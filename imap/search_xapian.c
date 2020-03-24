@@ -1506,6 +1506,8 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
         strarray_add(partids, rec->part);
     }
 
+    mboxlist_entry_free(&mbentry);
+
     return 0;
 }
 
