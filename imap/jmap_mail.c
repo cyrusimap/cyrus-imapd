@@ -3223,7 +3223,7 @@ static int guidsearch_run_xapian_cb(const conv_guidrec_t *rec,
     if (rec->version < 1) {
         /* Legacy conversations.db. Guid search was just a waste of time. */
         syslog(LOG_ERR, "jmap: %s: G record for %s:%d has legacy version 0. "
-                "Aborting guidsearch.", __func__, rec->mboxid, rec->uid);
+                "Aborting guidsearch.", __func__, rec->mailbox, rec->uid);
         return IMAP_SEARCH_NOT_SUPPORTED;
     }
 
