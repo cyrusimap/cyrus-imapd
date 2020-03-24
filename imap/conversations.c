@@ -1576,7 +1576,20 @@ EXPORTED conv_folder_t *conversation_find_folder(struct conversations_state *sta
                                         conversation_t *conv,
                                         const char *mboxname)
 {
-    int number = conversation_folder_number(state, mboxname, /*create*/0);
+    int number;
+
+    if (state->folders_byname)
+        number = conversation_folder_number(state, mboxname, /*create*/0);
+    else {
+        mbentry_t *mbentry = NULL;
+
+        mboxlist_lookup(mboxname, &mbentry, NULL);
+        if (!mbentry) return NULL;
+
+        number = folder_number(state, mbentry->uniqueid, /*create*/0);
+        mboxlist_entry_free(&mbentry);
+    }
+
     return conversation_get_folder(conv, number, /*create*/0);
 }
 
