@@ -1195,13 +1195,19 @@ static int _email_get_cid_cb(const conv_guidrec_t *rec, void *rock)
     if (!rec->cid) return 0;
 
     struct email_getcid_rock *d = (struct email_getcid_rock *)rock;
+    mbentry_t *mbentry = NULL;
 
-    if (jmap_mbtype(d->req, rec->mboxname) != MBTYPE_EMAIL) {
+    mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+
+    if (!mbentry || mbtype_isa(mbtype) != MBTYPE_EMAIL) {
+        mboxlist_entry_free(&mbentry);
         return 0;
     }
-    if (d->checkacl && !jmap_hasrights(d->req, rec->mboxname, JACL_READITEMS)) {
+    if (d->checkacl && !jmap_hasrights_mbentry(d->req, mbentry, JACL_READITEMS)) {
+        mboxlist_entry_free(&mbentry);
         return 0;
     }
+    mboxlist_entry_free(&mbentry);
 
     d->cid = rec->cid;
     return IMAP_OK_COMPLETED;
