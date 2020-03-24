@@ -3661,7 +3661,8 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
     if (!old && !new)
         return 0;
 
-    return conversations_update_record(cstate, mailbox, old, new, /*allowrenumber*/1);
+    return conversations_update_record(cstate, mailbox, old, new,
+                                       /*allowrenumber*/1, /*ignorelimits*/0);
 }
 
 
@@ -5308,7 +5309,8 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
 
         struct index_record copyrecord = *record;
         copyrecord.silent = silent;
-        r = conversations_update_record(cstate, mailbox, NULL, &copyrecord, 1);
+        r = conversations_update_record(cstate, mailbox, NULL, &copyrecord, 1,
+                                        /*ignorelimits*/1);
         if (r) break;
 
         if (copyrecord.cid == record->cid)
@@ -5317,14 +5319,16 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
         assert(!silent); // can't change cid if silent!
 
         /* remove this record again */
-        r = conversations_update_record(cstate, mailbox, &copyrecord, NULL, 0);
+        r = conversations_update_record(cstate, mailbox, &copyrecord, NULL, 0,
+                                        /*ignorelimits*/1);
         if (r) break;
 
         /* we had a cid change, so rewrite will try to correct the counts, so we
          * need to add this one in again */
         struct index_record oldrecord = *record;
         /* add the old record that's going away */
-        r = conversations_update_record(cstate, mailbox, NULL, &oldrecord, 0);
+        r = conversations_update_record(cstate, mailbox, NULL, &oldrecord, 0,
+                                        /*ignorelimits*/1);
         if (r) break;
 
         /* and finally to the update that will reverse those two actions again */
@@ -5351,7 +5355,8 @@ static int mailbox_delete_conversations(struct mailbox *mailbox)
         if (!record->cid)
             continue;
 
-        r = conversations_update_record(cstate, mailbox, record, NULL, 0);
+        r = conversations_update_record(cstate, mailbox, record, NULL,
+                                        /*allowrenumber*/0, /*ignorelimits*/1);
         if (r) break;
     }
     mailbox_iter_done(&iter);

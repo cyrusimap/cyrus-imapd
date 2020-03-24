@@ -2325,7 +2325,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                          struct mailbox *mailbox,
                                          const struct index_record *old,
                                          struct index_record *new,
-                                         int allowrenumber)
+                                         int allowrenumber,
+                                         int ignorelimits)
 {
     conversation_t *conv = NULL;
     int delta_exists = 0;
@@ -2349,9 +2350,9 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
          * a removal and re-add, so cache gets parsed and msgids
          * updated */
         if (old->cid != new->cid) {
-            r = conversations_update_record(cstate, mailbox, old, NULL, 0);
+            r = conversations_update_record(cstate, mailbox, old, NULL, 0, ignorelimits);
             if (r) return r;
-            return conversations_update_record(cstate, mailbox, NULL, new, 0);
+            return conversations_update_record(cstate, mailbox, NULL, new, 0, ignorelimits);
         }
     }
 
@@ -2412,7 +2413,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     if (r) goto done;
 
     // check sanity limits
-    if (ecounts.post.numrecords > ecounts.pre.numrecords) {
+    if (!ignorelimits && ecounts.post.numrecords > ecounts.pre.numrecords) {
         if (ecounts.post.numrecords > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDRECORDS))
             r = IMAP_CONVERSATION_GUIDLIMIT;
         if (ecounts.post.exists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS))

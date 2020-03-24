@@ -296,7 +296,8 @@ extern int conversations_update_record(struct conversations_state *cstate,
                                        struct mailbox *mailbox,
                                        const struct index_record *old,
                                        struct index_record *new_,
-                                       int allowrenumber);
+                                       int allowrenumber,
+                                       int ignorelimits);
 
 extern int conversation_update(struct conversations_state *state,
                                 conversation_t *conv, int is_trash,
