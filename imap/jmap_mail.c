@@ -6496,6 +6496,15 @@ static int _email_get_bodies(jmap_req_t *req,
             for (i = 0; i < bodies.htmllist.count; i++)
                 ptrarray_append(&parts, ptrarray_nth(&bodies.htmllist, i));
         }
+        if (args->fetch_all_body) {
+            for (i = 0; i < bodies.attslist.count; i++) {
+                struct body *part = ptrarray_nth(&bodies.attslist, i);
+                if (!strcmpsafe(part->type, "TEXT")) {
+                    /* we weed out duplicate parts later */
+                    ptrarray_append(&parts, ptrarray_nth(&bodies.attslist, i));
+                }
+            }
+        }
         if (parts.count) {
             r = _cyrusmsg_need_mime(msg);
             if (r) goto done;
@@ -6506,6 +6515,7 @@ static int _email_get_bodies(jmap_req_t *req,
             if (strcmp("TEXT", part->type)) {
                 continue;
             }
+            /* Ignore duplicate list entries */
             if (part->part_id && json_object_get(body_values, part->part_id)) {
                 continue;
             }
