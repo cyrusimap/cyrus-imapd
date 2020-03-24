@@ -5802,19 +5802,19 @@ static int _email_get_snoozed_cb(const conv_guidrec_t *rec, void *vrock)
 
     if (rec->part) return 0;
 
-    mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
 
     if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
-        return 0;
+        goto done;
     }
     if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)) {
-        return 0;
+        goto done;
     }
 
     if (FLAG_INTERNAL_SNOOZED ==
         (rec->internal_flags & (FLAG_INTERNAL_SNOOZED|FLAG_INTERNAL_EXPUNGED))) {
         /* Fetch snoozed annotation */
-        rock->snoozed = jmap_fetch_snoozed(rec->mboxname, rec->uid);
+        rock->snoozed = jmap_fetch_snoozed(mbentry->name, rec->uid);
     }
 
     /* Short-circuit the foreach if we find a snoozed message */

@@ -1506,8 +1506,6 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
         strarray_add(partids, rec->part);
     }
 
-    mboxlist_entry_free(&mbentry);
-
     return 0;
 }
 
@@ -1526,7 +1524,11 @@ static int xapian_run_cb(void *data, size_t nmemb, void *rock)
     if (r) return r;
 
     struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
-    if (!cstate) return IMAP_NOTFOUND;
+    if (!cstate) {
+        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
+               bb->mailbox->name);
+        return IMAP_NOTFOUND;
+    }
 
     qsort(data, nmemb, 41, memcmp40); // byte 41 is always zero
 
