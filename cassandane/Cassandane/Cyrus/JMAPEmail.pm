@@ -12601,7 +12601,7 @@ sub test_email_set_update_too_many_mailboxes
 }
 
 sub test_email_set_update_too_many_mailboxes_lowlimit
-    :min_version_3_1 :needs_component_jmap :LowEmailLimits
+    :min_version_3_3 :needs_component_jmap :LowEmailLimits
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

@@ -223,6 +223,8 @@ magic(Conversations => sub {
     shift->config_set(conversations => 'yes');
 });
 magic(ConversationsQuota => sub {
+    # this setting is new in 3.3.0 -- any test using this magic
+    # also needs :min_version_3_3
     shift->config_set(quota_use_conversations => 'yes');
 });
 magic(Admin => sub {
@@ -296,6 +298,8 @@ magic(SearchSetForceScanMode => sub {
     shift->config_set(search_queryscan => '1');
 });
 magic(LowEmailLimits => sub {
+    # these settings are new in 3.3.0 -- any test using this magic
+    # also needs :min_version_3_3
     shift->config_set(
         conversations_max_guidrecords => 10,
         conversations_max_guidexists => 5,

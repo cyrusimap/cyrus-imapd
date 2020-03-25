@@ -2899,7 +2899,7 @@ sub test_num_folders_delete_delayed
 }
 
 sub test_storage_convquota
-    :Conversations :ConversationsQuota
+    :min_version_3_3 :Conversations :ConversationsQuota
 {
     my ($self) = @_;
 
