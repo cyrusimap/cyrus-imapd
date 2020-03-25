@@ -924,15 +924,15 @@ EXPORTED int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res)
     int cval;
 
     /* ULLONG_MAX == 18446744073709551615ULL
-     * - and I don't care about those last 5
      */
     for (n = 0; !maxlen || n < maxlen; n++) {
         if (!cyrus_isdigit(p[n]))
             break;
-        if (result > 1844674407370955161ULL) {
-            return -1;
-        }
         cval = p[n] - '0';
+        if (result >= 1844674407370955161ULL) {
+            if (result > 1844674407370955161ULL || cval > 5)
+                return -1;
+        }
         result = result * 10 + cval;
     }
 
@@ -962,10 +962,11 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
     int cval;
 
     /* ULLONG_MAX == 18446744073709551615ULL
-     * - and I don't care about those last 5
+     * so if we're greater or equal to (ULLONG_MAX+1)/16
+     * then we will overflow
      */
     for (n = 0; !maxlen || n < maxlen; n++) {
-        if (result > 1844674407370955161ULL) {
+        if (result >= 1152921504606846976ULL) {
             return -1;
         }
         cval = unxdigit[(int)p[n]];

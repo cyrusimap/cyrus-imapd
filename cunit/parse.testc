@@ -11,13 +11,58 @@
 
 static void test_parsenum(void)
 {
-    const char NUM[] = "18338747846901181684 some other stuff";
+    const char NUM0[] = "0 some other stuf";
+    const char NUM1[] = "1somestuff";
+    const char NUMBIG[] = "18446744073709551615ULL"; // non-digits parse OK
+    const char NUMTOOBIG[] = "18446744073709551616";
     bit64 val = CANARY;
     int r;
 
-    r = parsenum(NUM, NULL, strlen(NUM), &val);
+    r = parsenum(NUM0, NULL, strlen(NUM0), &val);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_EQUAL(val, 18338747846901181684LLU);
+    CU_ASSERT_EQUAL(val, 0);
+
+    val = CANARY;
+    r = parsenum(NUM1, NULL, strlen(NUM1), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 1);
+
+    val = CANARY;
+    r = parsenum(NUMBIG, NULL, strlen(NUMBIG), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 18446744073709551615ULL);
+
+    val = CANARY;
+    r = parsenum(NUMTOOBIG, NULL, strlen(NUMTOOBIG), &val);
+    CU_ASSERT_EQUAL(r, -1);
+}
+
+static void test_parsehex(void)
+{
+    const char NUM0[] = "0 some other stuf";
+    const char NUM1[] = "1somestuff";
+    const char NUMBIG[] = "ffffffffffffffff";
+    const char NUMTOOBIG[] = "10000000000000000";
+    bit64 val = CANARY;
+    int r;
+
+    r = parsehex(NUM0, NULL, strlen(NUM0), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 0);
+
+    val = CANARY;
+    r = parsehex(NUM1, NULL, strlen(NUM1), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 1);
+
+    val = CANARY;
+    r = parsehex(NUMBIG, NULL, strlen(NUMBIG), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 18446744073709551615ULL);
+
+    val = CANARY;
+    r = parsehex(NUMTOOBIG, NULL, strlen(NUMTOOBIG), &val);
+    CU_ASSERT_EQUAL(r, -1);
 }
 
 #define wrap_int_parser(func, type, s, outp, valp, inp) do          \
