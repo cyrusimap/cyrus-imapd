@@ -940,7 +940,7 @@ EXPORTED int conversation_store(struct conversations_state *state,
     return r;
 }
 
-static void _apply_delta(uint32_t *valp, int delta)
+static void _apply_delta(uint32_t *valp, ssize_t delta)
 {
     if (delta >= 0) {
         *valp += delta;
@@ -1795,7 +1795,7 @@ EXPORTED void conversation_update_sender(conversation_t *conv,
                                          const char *mailbox,
                                          const char *domain,
                                          time_t lastseen,
-                                         int delta_exists)
+                                         ssize_t delta_exists)
 {
     conv_sender_t *sender, *ptr, **nextp = &conv->senders;
 
@@ -2338,9 +2338,9 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                          int ignorelimits)
 {
     conversation_t *conv = NULL;
-    int delta_exists = 0;
+    size_t delta_exists = 0;
     int is_trash = 0;
-    int delta_size = 0;
+    size_t delta_size = 0;
     int *delta_counts = NULL;
     int i;
     modseq_t modseq = 0;
@@ -2543,7 +2543,7 @@ done:
 EXPORTED int conversation_update(struct conversations_state *state,
                          conversation_t *conv, int is_trash,
                          struct emailcounts *ecounts,
-                         int delta_size, int *delta_counts,
+                         ssize_t delta_size, int *delta_counts,
                          modseq_t modseq, modseq_t createdmodseq)
 {
     conv_folder_t *folder = conversation_get_folder(conv, ecounts->foldernum, /*create*/1);

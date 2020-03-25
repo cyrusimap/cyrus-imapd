@@ -302,7 +302,7 @@ extern int conversations_update_record(struct conversations_state *cstate,
 extern int conversation_update(struct conversations_state *state,
                                 conversation_t *conv, int is_trash,
                                 struct emailcounts *ecounts,
-                                int delta_size, int *delta_counts,
+                                ssize_t delta_size, int *delta_counts,
                                 modseq_t modseq, modseq_t createdmodseq);
 extern conv_folder_t *conversation_find_folder(struct conversations_state *state,
                                                conversation_t *,
@@ -317,7 +317,7 @@ extern void conversation_update_sender(conversation_t *conv,
                                        const char *mailbox,
                                        const char *domain,
                                        time_t lastseen,
-                                       int delta_exists);
+                                       ssize_t delta_exists);
 
 extern int conversations_prune(struct conversations_state *state,
                                time_t thresh, unsigned int *,
