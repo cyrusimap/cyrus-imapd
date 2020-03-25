@@ -1220,7 +1220,7 @@ static int _email_get_cid_cb(const conv_guidrec_t *rec, void *rock)
 
     mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
 
-    if (!mbentry || mbtype_isa(mbtype) != MBTYPE_EMAIL) {
+    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
         mboxlist_entry_free(&mbentry);
         return 0;
     }
