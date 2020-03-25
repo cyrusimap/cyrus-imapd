@@ -298,7 +298,7 @@ EXPORTED const char* conversations_folder_name(struct conversations_state *state
         mbentry_t *mbentry = NULL;
 
         mboxlist_lookup_by_uniqueid(folder, &mbentry, NULL);
-        strlcpy(fname, mbentry->name, sizeof(fname));
+        strlcpy(fname, mbentry ? mbentry->name : "", sizeof(fname));
         mboxlist_entry_free(&mbentry);
         return fname;
     }
