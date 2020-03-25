@@ -1100,6 +1100,7 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
     struct _email_find_rock *d = (struct _email_find_rock*) rock;
     jmap_req_t *req = d->req;
     mbentry_t *mbentry = NULL;
+    struct mailbox *mbox = NULL;
     int r = 0;
 
     if (rec->part) return 0;
@@ -1114,8 +1115,6 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
     /* Make sure we are allowed to read this mailbox */
     if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS))
         return 0;
-
-    struct mailbox *mbox = NULL;
 
     r = jmap_openmbox(req, mbentry->name, &mbox, 0);
     if (r) {
