@@ -1610,16 +1610,16 @@ EXPORTED int conversation_get_modseq(struct conversations_state *state,
 
 EXPORTED conv_folder_t *conversation_find_folder(struct conversations_state *state,
                                         conversation_t *conv,
-                                        const char *mboxname)
+                                        const char *mailbox)
 {
     int number;
 
     if (state->folders_byname)
-        number = conversation_folder_number(state, mboxname, /*create*/0);
+        number = conversation_folder_number(state, mailbox, /*create*/0);
     else {
         mbentry_t *mbentry = NULL;
 
-        mboxlist_lookup(mboxname, &mbentry, NULL);
+        mboxlist_lookup(mailbox, &mbentry, NULL);
         if (!mbentry) return NULL;
 
         number = conversation_folder_number(state, mbentry->uniqueid, /*create*/0);
