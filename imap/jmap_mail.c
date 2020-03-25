@@ -2281,7 +2281,7 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
     size_t i, j = 0;
     struct sortcrit *sortcrit;
 
-    sortcrit = xzmalloc((json_array_size(sort) + 2) * sizeof(struct sortcrit));
+    sortcrit = xzmalloc((json_array_size(sort) + 3) * sizeof(struct sortcrit));
 
     json_array_foreach(sort, i, jcomp) {
         const char *prop = json_string_value(json_object_get(jcomp, "property"));
@@ -2351,13 +2351,12 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
         j++;
     }
 
-    sortcrit[j].key = SORT_GUID;
-    if (j && sortcrit[j-1].key == SORT_ARRIVAL) {
-        /* Reuse receivedAt sort order for breaking ties by guid */
-        sortcrit[j].flags |= (sortcrit[j-1].flags & SORT_REVERSE);
-    }
-    sortcrit[j+1].key = SORT_SEQUENCE;
-    sortcrit[j+1].flags = SORT_REVERSE;
+    sortcrit[j+0].key = SORT_ARRIVAL;
+    sortcrit[j+0].flags |= SORT_REVERSE;
+    sortcrit[j+1].key = SORT_GUID;
+    sortcrit[j+1].flags |= SORT_REVERSE;
+    sortcrit[j+2].key = SORT_SEQUENCE;
+    sortcrit[j+2].flags |= SORT_REVERSE;
 
     return sortcrit;
 }
