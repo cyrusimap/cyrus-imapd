@@ -585,27 +585,6 @@ static int _conversations_set_key(struct conversations_state *state,
     return 0;
 }
 
-static int _sanity_check_counts(conversation_t *conv)
-{
-    conv_folder_t *folder;
-    uint32_t num_records = 0;
-    uint32_t exists = 0;
-
-    for (folder = conv->folders; folder; folder = folder->next) {
-        num_records += folder->num_records;
-        exists += folder->exists;
-    }
-
-    if (num_records != conv->num_records)
-        return IMAP_INTERNAL;
-
-    if (exists != conv->exists)
-        return IMAP_INTERNAL;
-
-    return 0;
-}
-
-
 EXPORTED int conversations_add_msgid(struct conversations_state *state,
                                      const char *msgid,
                                      conversation_id_t cid)
@@ -927,11 +906,6 @@ EXPORTED int conversation_store(struct conversations_state *state,
     struct buf buf = BUF_INITIALIZER;
 
     conv_to_buf(conv, &buf, state->counted_flags ? state->counted_flags->count : 0);
-
-    if (_sanity_check_counts(conv)) {
-        syslog(LOG_ERR, "IOERROR: conversations_audit on store: %s %.*s %.*s",
-               state->path, keylen, key, (int)buf.len, buf.s);
-    }
 
     int r = cyrusdb_store(state->db, key, keylen, buf.s, buf.len, &state->txn);
 
@@ -1525,8 +1499,8 @@ EXPORTED int conversation_load_advanced(struct conversations_state *state,
 
     r = conversation_parse(data, datalen, conv, flags);
 
-    if (r || ((conv->flags & CONV_WITHFOLDERS) && _sanity_check_counts(conv))) {
-        syslog(LOG_ERR, "IOERROR: conversations_audit on load: %s %s %.*s",
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: conversations_audit parse error: %s %s %.*s",
                state->path, bkey, (int)datalen, data);
     }
 
