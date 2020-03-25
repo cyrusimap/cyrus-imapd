@@ -165,9 +165,6 @@ struct conversation {
     uint32_t        num_records;
     uint32_t        exists;
     uint32_t        unseen;
-    uint32_t        prev_unseen;
-    uint32_t        trash_unseen;
-    uint32_t        prev_trash_unseen;
     uint32_t        size;
     uint32_t        counts[32];
     conv_folder_t   *folders;
@@ -178,7 +175,7 @@ struct conversation {
     int             flags;
 };
 
-#define CONVERSATION_INIT { 0, 0, 0, 0, 0, 0, 0, 0, {0}, NULL, NULL, NULL, NULL, 0, CONV_ISDIRTY }
+#define CONVERSATION_INIT { 0, 0, 0, 0, 0, {0}, NULL, NULL, NULL, NULL, 0, CONV_ISDIRTY }
 
 struct emailcountitems {
     size_t foldernumrecords;
@@ -193,12 +190,13 @@ struct emailcountitems {
 
 struct emailcounts {
     int foldernum;
+    int trashfolder;
     int ispost;
     struct emailcountitems pre;
     struct emailcountitems post;
 };
 
-#define EMAILCOUNTS_INIT { -1, 0, EMAILCOUNTITEMS_INIT, EMAILCOUNTITEMS_INIT }
+#define EMAILCOUNTS_INIT { -1, -1, 0, EMAILCOUNTITEMS_INIT, EMAILCOUNTITEMS_INIT }
 
 #include "mailbox.h"
 
@@ -300,7 +298,7 @@ extern int conversations_update_record(struct conversations_state *cstate,
                                        int ignorelimits);
 
 extern int conversation_update(struct conversations_state *state,
-                                conversation_t *conv, int is_trash,
+                                conversation_t *conv,
                                 struct emailcounts *ecounts,
                                 ssize_t delta_size, int *delta_counts,
                                 modseq_t modseq, modseq_t createdmodseq);

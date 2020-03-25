@@ -1241,7 +1241,6 @@ int _saxconvparse(int type, struct dlistsax_data *d)
         // unseen
         if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
         rock->conv->unseen = atol(d->data);
-        rock->conv->prev_unseen = rock->conv->unseen;
         rock->state = 5;
         return 0;
 
@@ -1302,7 +1301,6 @@ int _saxconvparse(int type, struct dlistsax_data *d)
             return 0;
         case 3:
             rock->folder->exists = atol(d->data);
-            rock->folder->prev_exists = rock->folder->exists;
             rock->substate = 4;
             return 0;
         case 4:
@@ -1502,14 +1500,6 @@ EXPORTED int conversation_load_advanced(struct conversations_state *state,
     if (r) {
         syslog(LOG_ERR, "IOERROR: conversations_audit parse error: %s %s %.*s",
                state->path, bkey, (int)datalen, data);
-    }
-
-    const conv_folder_t *folder = conversation_get_folder(conv, state->trashfolder, /*create*/0);
-    if (folder) {
-        conv->trash_unseen = conv->prev_trash_unseen = folder->unseen;
-    }
-    else {
-        conv->trash_unseen = conv->prev_trash_unseen = 0;
     }
 
     return r;
@@ -2297,7 +2287,7 @@ static int _read_emailcounts_cb(const conv_guidrec_t *rec, void *rock)
 
     // not seen or unsure, count it as unseen
     if (rec->version == 0 || !(rec->system_flags & (FLAG_SEEN|FLAG_DRAFT))) {
-        i->unseen++;
+        if (rec->foldernum != ecounts->trashfolder) i->unseen++;
         if (rec->foldernum == ecounts->foldernum) i->folderunseen++;
     }
 
@@ -2313,7 +2303,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 {
     conversation_t *conv = NULL;
     size_t delta_exists = 0;
-    int is_trash = 0;
     size_t delta_size = 0;
     int *delta_counts = NULL;
     int i;
@@ -2366,6 +2355,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     struct emailcounts ecounts = EMAILCOUNTS_INIT;
     ecounts.foldernum = conversation_folder_number(cstate, mailbox->name, /*create*/1);
+    ecounts.trashfolder = cstate->trashfolder;
 
     /* count the email state before making GUID changes */
     r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
@@ -2430,10 +2420,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     // the rest is bookkeeping purely for CIDed messages
     if (!record->cid) goto done;
-
-    /* IRIS-2534: check if it's the trash folder - XXX - should be separate
-     * conversation root or similar more useful method in future */
-    is_trash = mboxname_isusertrash(mailbox->name);
 
     if (cstate->counted_flags)
         delta_counts = xzmalloc(sizeof(int) * cstate->counted_flags->count);
@@ -2500,7 +2486,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                record->internaldate,
                                delta_exists);
 
-    r = conversation_update(cstate, conv, is_trash, &ecounts,
+    r = conversation_update(cstate, conv, &ecounts,
                             delta_size, delta_counts,
                             modseq, record->createdmodseq);
     if (r) goto done;
@@ -2515,52 +2501,58 @@ done:
 
 
 EXPORTED int conversation_update(struct conversations_state *state,
-                         conversation_t *conv, int is_trash,
-                         struct emailcounts *ecounts,
+                         conversation_t *conv, struct emailcounts *ecounts,
                          ssize_t delta_size, int *delta_counts,
                          modseq_t modseq, modseq_t createdmodseq)
 {
     conv_folder_t *folder = conversation_get_folder(conv, ecounts->foldernum, /*create*/1);
 
-    int delta_num_records = ecounts->post.numrecords - ecounts->pre.numrecords;
-    int delta_exists = ecounts->post.exists - ecounts->pre.exists;
-    int delta_unseen = ecounts->post.unseen - ecounts->pre.unseen;
-    int delta_folder_records = ecounts->post.foldernumrecords - ecounts->pre.foldernumrecords;
-    int delta_folder_exists = ecounts->post.folderexists - ecounts->pre.folderexists;
-    int delta_folder_unseen = ecounts->post.folderunseen - ecounts->pre.folderunseen;
+    int delta_num_records = !!ecounts->post.numrecords - !!ecounts->pre.numrecords;
+    int delta_exists = !!ecounts->post.exists - !!ecounts->pre.exists;
+    int delta_unseen = !!ecounts->post.unseen - !!ecounts->pre.unseen;
+    int delta_folder_records = !!ecounts->post.foldernumrecords - !!ecounts->pre.foldernumrecords;
+    int delta_folder_exists = !!ecounts->post.folderexists - !!ecounts->pre.folderexists;
+    int delta_folder_unseen = !!ecounts->post.folderunseen - !!ecounts->pre.folderunseen;
 
-    int oldexists = conv->exists;
-    int oldunseen = is_trash ? conv->trash_unseen : conv->unseen;
+    int oldfolderexists = folder->exists;
+    int oldfolderunseen = folder->unseen;
+    int oldunseen = conv->unseen;
 
+    int is_trash = (ecounts->foldernum == state->trashfolder);
+
+    struct buf buf = BUF_INITIALIZER;
+    conv_to_buf(conv, &buf, state->counted_flags ? state->counted_flags->count : 0);
+
+    /* update the conversation tracking values for the whole conversation */
     if (delta_num_records) {
         _apply_delta(&conv->num_records, delta_num_records);
-        conv->flags |= CONV_ISDIRTY;
-    }
-    if (delta_folder_records) {
-        _apply_delta(&folder->num_records, delta_folder_records);
         conv->flags |= CONV_ISDIRTY;
     }
     if (delta_exists) {
         _apply_delta(&conv->exists, delta_exists);
         conv->flags |= CONV_ISDIRTY;
     }
-    if (delta_folder_exists) {
-        _apply_delta(&folder->exists, delta_folder_exists);
-        conv->flags |= CONV_ISDIRTY;
-    }
     if (delta_unseen) {
-        if (is_trash) _apply_delta(&conv->trash_unseen, delta_unseen);
-        else _apply_delta(&conv->unseen, delta_unseen);
-        conv->flags |= CONV_ISDIRTY;
-    }
-    if (delta_folder_unseen) {
-        _apply_delta(&folder->unseen, delta_folder_unseen);
+        _apply_delta(&conv->unseen, delta_unseen);
         conv->flags |= CONV_ISDIRTY;
     }
     if (delta_size) {
         _apply_delta(&conv->size, delta_size);
         conv->flags |= CONV_ISDIRTY;
     }
+    if (delta_folder_records) {
+        _apply_delta(&folder->num_records, delta_folder_records);
+        conv->flags |= CONV_ISDIRTY;
+    }
+    if (delta_folder_exists) {
+        _apply_delta(&folder->exists, delta_folder_exists);
+        conv->flags |= CONV_ISDIRTY;
+    }
+    if (delta_folder_unseen) {
+        _apply_delta(&folder->unseen, delta_folder_unseen);
+        conv->flags |= CONV_ISDIRTY;
+    }
+
     if (state->counted_flags) {
         int i;
         for (i = 0; i < state->counted_flags->count; i++) {
@@ -2583,31 +2575,76 @@ EXPORTED int conversation_update(struct conversations_state *state,
         conv->flags |= CONV_ISDIRTY;
     }
 
-    /* XXX - it's super inefficient to be doing this for
-     * every cid in every folder in the transaction.  Big
-     * wins available by caching these in memory and writing
-     * once at the end of the transaction */
-    conv_status_t status;
-    const char *mboxname = strarray_nth(state->folder_names, folder->number);
-    int r = conversation_getstatus(state, mboxname, &status);
-    if (r) return r;
+    buf_reset(&buf);
+    conv_to_buf(conv, &buf, state->counted_flags ? state->counted_flags->count : 0);
+
+    // now update all the folder counts
 
     int dexists = !!ecounts->post.folderexists - !!ecounts->pre.folderexists;
     int dunseen = !!ecounts->post.folderunseen - !!ecounts->pre.folderunseen;
-    int dthreadexists = conv->exists - oldexists;
-    int dthreadunseen = (is_trash ? conv->trash_unseen : conv->unseen) - oldunseen;
+    int dthreadexists = !!folder->exists - !!oldfolderexists;
+    int dthreadunseen = !!conv->unseen - !!oldunseen;
+    if (is_trash) dthreadunseen = !!folder->unseen - !!oldfolderunseen;
 
-    if (dexists || dunseen || dthreadexists || dthreadunseen || status.threadmodseq < modseq) {
-        if (status.threadmodseq < modseq)
+    for (folder = conv->folders; folder; folder = folder->next) {
+        conv_status_t status;
+        const char *mboxname = strarray_nth(state->folder_names, folder->number);
+        int r = conversation_getstatus(state, mboxname, &status);
+        if (r) return r;
+
+        int dirty = 0;
+
+        // all counts apply to the current folder
+        if (folder->number == ecounts->foldernum) {
+            if (dexists) {
+                _apply_delta(&status.emailexists, dexists);
+                dirty = 1;
+            }
+            if (dunseen) {
+                _apply_delta(&status.emailunseen, dunseen);
+                dirty = 1;
+            }
+            if (dthreadexists) {
+                _apply_delta(&status.threadexists, dthreadexists);
+                dirty = 1;
+            }
+            if (dthreadunseen) {
+                _apply_delta(&status.threadunseen, dthreadunseen);
+                dirty = 1;
+            }
+
+            // case - adding an seen email to a new folder, but the thread is unseen
+            else if (folder->exists && !oldfolderexists && oldunseen) {
+                _apply_delta(&status.threadunseen, 1);
+                dirty = 1;
+            }
+            // case - removing the last message from a folder, and the thread remains unseen
+            else if (!folder->exists && oldfolderexists && oldunseen) {
+                _apply_delta(&status.threadunseen, -1);
+                dirty = 1;
+            }
+        }
+        // unseen changes apply to all other folders except trash if this isn't the trash folder
+        else if (!is_trash && ecounts->foldernum != state->trashfolder) {
+            if (dthreadunseen) {
+                _apply_delta(&status.threadunseen, dthreadunseen);
+                dirty = 1;
+            }
+
+        }
+
+        if (status.threadmodseq < modseq) {
             status.threadmodseq = modseq;
-        _apply_delta(&status.threadexists, dthreadexists);
-        _apply_delta(&status.threadunseen, dthreadunseen);
-        _apply_delta(&status.emailexists, dexists);
-        _apply_delta(&status.emailunseen, dunseen);
-        r = conversation_setstatus(state, mboxname, &status);
+            dirty = 1;
+        }
+
+        if (dirty) {
+            r = conversation_setstatus(state, mboxname, &status);
+            if (r) return r;
+        }
     }
 
-    return r;
+    return 0;
 }
 
 EXPORTED conversation_t *conversation_new()
