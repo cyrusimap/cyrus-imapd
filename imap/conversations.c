@@ -2520,9 +2520,6 @@ EXPORTED int conversation_update(struct conversations_state *state,
 
     int is_trash = (ecounts->foldernum == state->trashfolder);
 
-    struct buf buf = BUF_INITIALIZER;
-    conv_to_buf(conv, &buf, state->counted_flags ? state->counted_flags->count : 0);
-
     /* update the conversation tracking values for the whole conversation */
     if (delta_num_records) {
         _apply_delta(&conv->num_records, delta_num_records);
@@ -2574,9 +2571,6 @@ EXPORTED int conversation_update(struct conversations_state *state,
         conv->createdmodseq = createdmodseq;
         conv->flags |= CONV_ISDIRTY;
     }
-
-    buf_reset(&buf);
-    conv_to_buf(conv, &buf, state->counted_flags ? state->counted_flags->count : 0);
 
     // now update all the folder counts
 
