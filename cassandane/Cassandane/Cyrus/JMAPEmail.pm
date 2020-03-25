@@ -15861,7 +15861,7 @@ sub test_email_query_guidsearch_sort
     # Check GUID search results
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
     @wantIds = map { $_->{id} } sort {
-        $a->{receivedAt} cmp $b->{receivedAt} or $a->{id} cmp $b->{id}
+        $a->{receivedAt} cmp $b->{receivedAt} or $b->{id} cmp $a->{id}
     } @emails;
     $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
 
@@ -15874,7 +15874,7 @@ sub test_email_query_guidsearch_sort
     # Check UID search result
     $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isGuidSearch});
     @wantIds = map { $_->{id} } sort {
-        $a->{receivedAt} cmp $b->{receivedAt} or $a->{id} cmp $b->{id}
+        $a->{receivedAt} cmp $b->{receivedAt} or $b->{id} cmp $a->{id}
     } @emails;
     $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
 
@@ -16988,5 +16988,84 @@ sub test_email_get_bodyvalues_markdown
     $self->assert_equals(JSON::false,
         $res->[1][1]{list}[0]{bodyValues}{$partId}{isEncodingProblem});
 }
+
+sub test_email_query_sort_break_tie
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    my $emailCount = 10;
+    my %createEmails;
+    for (my $i = 1; $i <= $emailCount; $i++) {
+        $createEmails{$i} = {
+            mailboxIds => {
+                '$inbox' => JSON::true
+            },
+            from => [{ email => "from\@local" }],
+            to => [{ email => "to\@local" }],
+            subject => "email$i",
+            receivedAt => sprintf('2020-03-25T10:%02d:00Z', $i),
+            bodyStructure => {
+                partId => '1',
+            },
+            bodyValues => {
+                "1" => {
+                    value => "email$i body",
+                },
+            },
+        }
+    }
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => \%createEmails,
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals($emailCount, scalar keys %{$res->[0][1]{created}});
+    my @wantEmailIds;
+    # Want emails returned in descending receivedAt.
+    for (my $i = $emailCount; $i >= 1; $i--) {
+        push @wantEmailIds, $res->[0][1]{created}{$i}{id};
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Run queries";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+        }, 'R1'],
+        ['Email/query', {
+            sort => [{
+                property => 'from',
+            }],
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                body => 'body',
+            },
+        }, 'R3'],
+    ], $using);
+
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals(\@wantEmailIds, $res->[0][1]{ids});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals(\@wantEmailIds, $res->[1][1]{ids});
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals(\@wantEmailIds, $res->[2][1]{ids});
+}
+
 
 1;
