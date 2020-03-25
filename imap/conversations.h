@@ -96,12 +96,12 @@ struct conversations_state {
     strarray_t *counted_flags;
     strarray_t *folders;
     hash_table folderstatus;
-    int folders_byname;
     struct conv_quota quota;
     int trashfolder;
     char *trashmboxname;
     char *trashmboxid;
     char *path;
+    unsigned folders_byname:1;
     unsigned quota_loaded:1;
     unsigned quota_dirty:1;
     unsigned is_shared:1;
