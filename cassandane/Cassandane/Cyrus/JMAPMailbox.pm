@@ -3710,4 +3710,266 @@ sub test_mailbox_set_update_serverset_props
         $res->[0][1]{notUpdated}{$mboxIdA}{properties})
 }
 
+sub _check_one_count {
+    my $self = shift;
+    my $want = shift;
+    my $have = shift;
+    my $name = shift;
+    $self->assert_num_equals($want, $have);
+}
+
+sub _check_counts
+{
+    my $self = shift;
+    my $name = shift;
+    my %expect = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, 'R']]);
+
+    #  "totalEmails": 3,
+    #  "unreadEmails": 1,
+    #  "totalThreads": 3,
+    #  "unreadThreads": 1,
+
+    for my $folder (@{$res->[0][1]{list}}) {
+        my $want = $expect{$folder->{name}};
+        next unless $want;
+        $self->_check_one_count($want->[0], $folder->{totalEmails}, "$folder->{name} totalEmails");
+        $self->_check_one_count($want->[1], $folder->{unreadEmails}, "$folder->{name} unreadEmails");
+        $self->_check_one_count($want->[2], $folder->{totalThreads}, "$folder->{name} totalThreads");
+        $self->_check_one_count($want->[3], $folder->{unreadThreads}, "$folder->{name} unreadThreads");
+    }
+}
+
+sub test_mailbox_counts
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    $imap->uid(1);
+
+    xlog "Set up mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', { }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                "a" => { name => "a", parentId => undef },
+                "b" => { name => "b", parentId => undef },
+                "trash" => {
+                    name => "Trash",
+                    parentId => undef,
+                    role => "trash"
+                }
+            },
+        }, 'R2'],
+    ]);
+    my %ids = map { $_ => $res->[1][1]{created}{$_}{id} }
+              keys %{$res->[1][1]{created}};
+
+    xlog "Append same message twice to inbox";
+    my %raw = (
+        A => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test A\r
+EOF
+        B => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test B\r
+EOF
+        C => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test C\r
+EOF
+        D => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+        E => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test3\r
+Message-Id: <messageid3\@foo>\r
+In-Reply-To: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test E\r
+EOF
+        F => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid4\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test F\r
+EOF
+        G => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid5\@foo>\r
+In-Reply-To: <messageid4\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+    );
+
+    # threads:
+    # T1: A B C
+    # T2: D
+    # T3: E
+    # T4: F G (in-reply-to E, but different subject)
+
+    xlog $self, "Set up all the emails in all the folders";
+    $imap->append('INBOX.a', "(\\Seen)", $raw{A}) || die $@;
+    $imap->append('INBOX.a', "()", $raw{A}) || die $@;
+    $imap->append('INBOX.a', "(\\Seen)", $raw{C}) || die $@;
+    $imap->append('INBOX.a', "(\\Seen)", $raw{D}) || die $@;
+    $imap->append('INBOX.a', "()", $raw{E}) || die $@;
+    $imap->append('INBOX.a', "(\\Seen)", $raw{F}) || die $@;
+    $imap->append('INBOX.b', "()", $raw{B}) || die $@;
+    $imap->append('INBOX.b', "(\\Seen)", $raw{C}) || die $@;
+    $imap->append('INBOX.b', "(\\Seen)", $raw{E}) || die $@;
+    $imap->append('INBOX.Trash', "(\\Seen)", $raw{G}) || die $@;
+
+    # expectation:
+    # A (a:1, seen - a:2, unseen) == unseen
+    # B (b:1, unseen)
+    # C (a:3, seen - b:2, seen)
+    # D (a:4, seen)
+    # E (a:5, unseen - b:3, seen) == unseen
+    # F (a:6, seen)
+    # G (trash:1, seen)
+
+    # T1 in (a,b) unseen
+    # T2 in a, seen
+    # T3 in (a,b) unseen
+    # T4 in (a,trash) seen
+
+    $self->_check_counts('Initial Test',
+        a => [ 5, 2, 4, 2 ],
+        b => [ 3, 1, 2, 2 ],
+        trash => [ 1, 0, 1, 0 ],
+    );
+
+    xlog $self, "Move half an email to Trash";
+    $imap->select("INBOX.a");
+    $imap->move("2", "INBOX.Trash");
+
+    # expectation:
+    # A (a:1, seen - trash:2, unseen) == unseen in trash, seen in inbox
+    # B (b:1, unseen)
+    # C (a:3, seen - b:2, seen)
+    # D (a:4, seen)
+    # E (a:5, unseen - b:3, seen) == unseen
+    # F (a:6, seen)
+    # G (trash:1, seen)
+
+    $self->_check_counts('After first move',
+        a => [ 5, 1, 4, 2 ],
+        b => [ 3, 1, 2, 2 ],
+        trash => [ 2, 1, 2, 1 ],
+    );
+
+    xlog $self, "Mark the bits of the thread OUTSIDE Trash all seen";
+    $imap->select("INBOX.b");
+    $imap->store("1", "+flags", "(\\Seen)");
+
+    # expectation:
+    # A (a:1, seen - trash:2, unseen) == unseen in trash, seen in inbox
+    # B (b:1, seen)
+    # C (a:3, seen - b:2, seen)
+    # D (a:4, seen)
+    # E (a:5, unseen - b:3, seen) == unseen
+    # F (a:6, seen)
+    # G (trash:1, seen)
+
+    $self->_check_counts('Second change',
+        a => [ 5, 1, 4, 1 ],
+        b => [ 3, 0, 2, 1 ],
+        trash => [ 2, 1, 2, 1 ],
+    );
+
+    xlog $self, "Delete a message we don't care about";
+    $imap->select("INBOX.b");
+    $imap->store("1", "+flags", "(\\Deleted)");
+    $imap->expunge();
+
+    # expectation:
+    # A (a:1, seen - trash:2, unseen) == unseen in trash, seen in inbox
+    # C (a:3, seen - b:2, seen)
+    # D (a:4, seen)
+    # E (a:5, unseen - b:3, seen) == unseen
+    # F (a:6, seen)
+    # G (trash:1, seen)
+
+    $self->_check_counts('Third change',
+        a => [ 5, 1, 4, 1 ],
+        b => [ 2, 0, 2, 1 ],
+        trash => [ 2, 1, 2, 1 ],
+    );
+
+    xlog $self, "Delete some more";
+    $imap->select("INBOX.a");
+    $imap->store("1,3,6", "+flags", "(\\Deleted)");
+    $imap->expunge();
+
+    # expectation:
+    # A (trash:2, unseen) == unseen in trash
+    # C (b:2, seen)
+    # D (a:4, seen)
+    # E (a:5, unseen - b:3, seen) == unseen
+    # G (trash:1, seen)
+
+    $self->_check_counts('Forth change',
+        a => [ 2, 1, 2, 1 ],
+        b => [ 2, 0, 2, 1 ],
+        trash => [ 2, 1, 2, 1 ],
+    );
+
+}
+
+
 1;
