@@ -283,7 +283,7 @@ EXPORTED int conversation_folder_number(struct conversations_state *state,
 
 EXPORTED int conversations_num_folders(struct conversations_state *state)
 {
-    return strarray_size(state->folder_ids);
+    return strarray_size(state->folders);
 }
 
 EXPORTED const char* conversations_folder_name(struct conversations_state *state,
@@ -402,7 +402,7 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
         if (trashmboxname) mboxlist_lookup(trashmboxname, &mbentry, NULL);
         open->s.trashmboxid = mbentry ? xstrdup(mbentry->uniqueid) : NULL;
         mboxlist_entry_free(&mbentry);
-        open->s.trashfolder = folder_number(&open->s, open->s.trashmboxid, /*create*/0);
+        open->s.trashfolder = conversation_folder_number(&open->s, open->s.trashmboxid, /*create*/0);
     }
 
     /* create the status cache */
@@ -1622,7 +1622,7 @@ EXPORTED conv_folder_t *conversation_find_folder(struct conversations_state *sta
         mboxlist_lookup(mboxname, &mbentry, NULL);
         if (!mbentry) return NULL;
 
-        number = folder_number(state, mbentry->uniqueid, /*create*/0);
+        number = conversation_folder_number(state, mbentry->uniqueid, /*create*/0);
         mboxlist_entry_free(&mbentry);
     }
 

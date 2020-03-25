@@ -229,7 +229,7 @@ extern struct conversations_state *conversations_get_mbox(const char *mboxname);
 
 extern int conversations_num_folders(struct conversations_state *state);
 extern const char* conversations_folder_name(struct conversations_state *state,
-                                             int foldernum);
+                                             uint32_t foldernum);
 extern int conversation_folder_number(struct conversations_state *state,
                                       const char *name,
                                       int create_flag);
