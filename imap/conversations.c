@@ -2380,7 +2380,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     }
 
     struct emailcounts ecounts = EMAILCOUNTS_INIT;
-    ecounts.foldernum = conversation_folder_number(cstate, mailbox->name, /*create*/1);
+    ecounts.foldernum =
+        conversation_folder_number(cstate, CONV_FOLDER_KEY_MBOX(cstate, mailbox), /*create*/1);
     ecounts.trashfolder = cstate->trashfolder;
 
     /* count the email state before making GUID changes */
