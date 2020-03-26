@@ -2611,13 +2611,9 @@ EXPORTED int conversation_update(struct conversations_state *state,
                 _apply_delta(&status.threadexists, dthreadexists);
                 dirty = 1;
             }
-            if (dthreadunseen) {
-                _apply_delta(&status.threadunseen, dthreadunseen);
-                dirty = 1;
-            }
 
             // case - adding an seen email to a new folder, but the thread is unseen
-            else if (folder->exists && !oldfolderexists && oldunseen) {
+            if (folder->exists && !oldfolderexists && oldunseen) {
                 _apply_delta(&status.threadunseen, 1);
                 dirty = 1;
             }
@@ -2626,9 +2622,14 @@ EXPORTED int conversation_update(struct conversations_state *state,
                 _apply_delta(&status.threadunseen, -1);
                 dirty = 1;
             }
+            // case there's an email in this folder, and the thread has changed
+            else if (folder->exists && dthreadunseen) {
+                _apply_delta(&status.threadunseen, dthreadunseen);
+                dirty = 1;
+            }
         }
         // unseen changes apply to all other folders except trash if this isn't the trash folder
-        else if (!is_trash && ecounts->foldernum != state->trashfolder) {
+        else if (!is_trash && folder->number != state->trashfolder && folder->exists) {
             if (dthreadunseen) {
                 _apply_delta(&status.threadunseen, dthreadunseen);
                 dirty = 1;
