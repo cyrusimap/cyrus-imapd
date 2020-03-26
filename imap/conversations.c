@@ -396,13 +396,16 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     open->s.trashmboxname = trashmboxname;
     if (open->s.folders_byname)
         open->s.trashfolder = conversation_folder_number(&open->s, trashmboxname, /*create*/0);
-    else {
+    else if (trashmboxname) {
         mbentry_t *mbentry = NULL;
 
-        if (trashmboxname) mboxlist_lookup(trashmboxname, &mbentry, NULL);
-        open->s.trashmboxid = mbentry ? xstrdup(mbentry->uniqueid) : NULL;
-        mboxlist_entry_free(&mbentry);
-        open->s.trashfolder = conversation_folder_number(&open->s, open->s.trashmboxid, /*create*/0);
+        mboxlist_lookup(trashmboxname, &mbentry, NULL);
+        if (mbentry) {
+            open->s.trashmboxid = xstrdup(mbentry->uniqueid);
+            open->s.trashfolder =
+                conversation_folder_number(&open->s, open->s.trashmboxid, /*create*/0);
+            mboxlist_entry_free(&mbentry);
+        }
     }
 
     /* create the status cache */
@@ -1610,16 +1613,16 @@ EXPORTED int conversation_get_modseq(struct conversations_state *state,
 
 EXPORTED conv_folder_t *conversation_find_folder(struct conversations_state *state,
                                         conversation_t *conv,
-                                        const char *mailbox)
+                                        const char *mboxname)
 {
     int number;
 
     if (state->folders_byname)
-        number = conversation_folder_number(state, mailbox, /*create*/0);
+        number = conversation_folder_number(state, mboxname, /*create*/0);
     else {
         mbentry_t *mbentry = NULL;
 
-        mboxlist_lookup(mailbox, &mbentry, NULL);
+        mboxlist_lookup(mboxname, &mbentry, NULL);
         if (!mbentry) return NULL;
 
         number = conversation_folder_number(state, mbentry->uniqueid, /*create*/0);
