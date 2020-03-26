@@ -454,6 +454,7 @@ static int jmap_blob_get(jmap_req_t *req)
         ptrarray_t *getblobs = hash_iter_val(iter);
         struct mailbox *mbox = NULL;
         mbentry_t *mbentry = NULL;
+        int r = 0;
 
         if (req->cstate->folders_byname)
             jmap_mboxlist_lookup(mailbox, &mbentry, NULL);
@@ -461,18 +462,18 @@ static int jmap_blob_get(jmap_req_t *req)
             mbentry = jmap_mbentry_by_uniqueid_copy(req, mailbox);
 
         /* Open mailbox */
-        if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
-            mboxlist_entry_free(&mbentry);
-            continue;
+        if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+            r = IMAP_PERMISSION_DENIED;
         }
-        int r = jmap_openmbox(req, mbentry->name, &mbox, 0);
-        if (r) {
-            syslog(LOG_ERR, "jmap_blob_get: can't open mailbox %s: %s",
-                    mbentry->name, error_message(r));
-            mboxlist_entry_free(&mbentry);
-            continue;
+        else {
+            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+            if (r) {
+                syslog(LOG_ERR, "jmap_blob_get: can't open mailbox %s: %s",
+                       mbentry->name, error_message(r));
+            }
         }
         mboxlist_entry_free(&mbentry);
+        if (r) continue;
 
         int j;
         for (j = 0; j < ptrarray_size(getblobs); j++) {
