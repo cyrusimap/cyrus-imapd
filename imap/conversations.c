@@ -100,8 +100,6 @@
 
 #define DB config_conversations_db
 
-#define CONVERSATIONS_VERSION 0
-
 static struct conversations_open *open_conversations;
 
 static conv_status_t NULLSTATUS = CONV_STATUS_INIT;
@@ -556,7 +554,7 @@ static int _conversations_set_key(struct conversations_state *state,
 {
     int r;
     struct buf buf = BUF_INITIALIZER;
-    int version = CONVERSATIONS_VERSION;
+    int version = CONVERSATIONS_KEY_VERSION;
     int i;
 
     /* XXX: should this be a delete operation? */
@@ -627,7 +625,7 @@ static int _conversations_parse(const char *data, size_t datalen,
     rest++; /* skip space */
     restlen = datalen - (rest - data);
 
-    if (version != CONVERSATIONS_VERSION) {
+    if (version != CONVERSATIONS_KEY_VERSION) {
         /* XXX - an error code for "incorrect version"? */
         return IMAP_MAILBOX_BADFORMAT;
     }
@@ -795,7 +793,7 @@ EXPORTED int conversation_storestatus(struct conversations_state *state,
     dlist_setnum32(dl, "EMAILUNSEEN", status->emailunseen);
 
     struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "%d ", CONVERSATIONS_VERSION);
+    buf_printf(&buf, "%d ", CONVERSATIONS_STATUS_VERSION);
     dlist_printbuf(dl, 0, &buf);
     dlist_free(&dl);
 
@@ -836,7 +834,6 @@ static void conv_to_buf(conversation_t *conv, struct buf *buf, int flagcount)
     const conv_folder_t *folder;
     const conv_sender_t *sender;
     const conv_thread_t *thread;
-    int version = CONVERSATIONS_VERSION;
     int i;
 
     dl = dlist_newlist(NULL, NULL);
@@ -894,7 +891,7 @@ static void conv_to_buf(conversation_t *conv, struct buf *buf, int flagcount)
 
     dlist_setnum64(dl, "CREATEDMODSEQ", conv->createdmodseq);
 
-    buf_printf(buf, "%d ", version);
+    buf_printf(buf, "%d ", conv->version);
     dlist_printbuf(dl, 0, buf);
     dlist_free(&dl);
 }
@@ -1110,7 +1107,7 @@ EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
     rest++; /* skip space */
     restlen = datalen - (rest - data);
 
-    if (version != CONVERSATIONS_VERSION) {
+    if (version != CONVERSATIONS_STATUS_VERSION) {
         /* XXX - an error code for "incorrect version"? */
         return IMAP_MAILBOX_BADFORMAT;
     }
@@ -1458,7 +1455,7 @@ EXPORTED int conversation_parse(const char *data, size_t datalen,
     rest++; /* skip space */
     restlen = datalen - (rest - data);
 
-    if (version != CONVERSATIONS_VERSION) return IMAP_MAILBOX_BADFORMAT;
+    if (version > CONVERSATIONS_RECORD_VERSION) return IMAP_MAILBOX_BADFORMAT;
 
     struct convparserock rock = { conv, STRARRAY_INITIALIZER,
                                   NULL, NULL, NULL, 0, 0, flags };
@@ -1467,6 +1464,7 @@ EXPORTED int conversation_parse(const char *data, size_t datalen,
     if (r) return r;
 
     conv->flags = flags;
+    conv->version = version;
 
     return 0;
 }
@@ -1536,7 +1534,7 @@ static int _conversation_load_modseq(const char *data, int datalen,
     int r;
 
     r = parsenum(p, &p, (end-p), &version);
-    if (r || version != CONVERSATIONS_VERSION)
+    if (r || version > CONVERSATIONS_RECORD_VERSION)
         return IMAP_MAILBOX_BADFORMAT;
 
     if ((end - p) < 4 || p[0] != ' ' || p[1] != '(')
@@ -2507,12 +2505,23 @@ EXPORTED int conversation_update(struct conversations_state *state,
 {
     conv_folder_t *folder = conversation_get_folder(conv, ecounts->foldernum, /*create*/1);
 
+    // only count one per instance of the GUID in each folder, and in total
     int delta_num_records = !!ecounts->post.numrecords - !!ecounts->pre.numrecords;
     int delta_exists = !!ecounts->post.exists - !!ecounts->pre.exists;
     int delta_unseen = !!ecounts->post.unseen - !!ecounts->pre.unseen;
     int delta_folder_records = !!ecounts->post.foldernumrecords - !!ecounts->pre.foldernumrecords;
     int delta_folder_exists = !!ecounts->post.folderexists - !!ecounts->pre.folderexists;
     int delta_folder_unseen = !!ecounts->post.folderunseen - !!ecounts->pre.folderunseen;
+
+    // version 0 counted every UID rather than by GUID
+    if (conv->version < 1) {
+        delta_num_records = ecounts->post.numrecords - ecounts->pre.numrecords;
+        delta_exists = ecounts->post.exists - ecounts->pre.exists;
+        delta_unseen = ecounts->post.unseen - ecounts->pre.unseen;
+        delta_folder_records = ecounts->post.foldernumrecords - ecounts->pre.foldernumrecords;
+        delta_folder_exists = ecounts->post.folderexists - ecounts->pre.folderexists;
+        delta_folder_unseen = ecounts->post.folderunseen - ecounts->pre.folderunseen;
+    }
 
     int oldfolderexists = folder->exists;
     int oldfolderunseen = folder->unseen;
@@ -2646,6 +2655,7 @@ EXPORTED conversation_t *conversation_new()
     conversation_t *conv;
 
     conv = xzmalloc(sizeof(conversation_t));
+    conv->version = CONVERSATIONS_RECORD_VERSION;
     conv->flags |= CONV_ISDIRTY;
     xstats_inc(CONV_NEW);
 

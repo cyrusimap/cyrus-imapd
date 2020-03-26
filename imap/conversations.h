@@ -63,6 +63,10 @@ typedef bit64   conversation_id_t;
 struct index_record;
 struct mailbox;
 
+#define CONVERSATIONS_KEY_VERSION 0
+#define CONVERSATIONS_STATUS_VERSION 0
+#define CONVERSATIONS_RECORD_VERSION 1
+
 #define CONV_ISDIRTY     (1<<0)
 #define CONV_WITHFOLDERS (1<<1)
 #define CONV_WITHSENDERS (1<<2)
@@ -161,6 +165,7 @@ struct conv_status {
 #define CONV_STATUS_INIT { 0, 0, 0, 0, 0 }
 
 struct conversation {
+    int             version;
     modseq_t        modseq;
     uint32_t        num_records;
     uint32_t        exists;
@@ -175,7 +180,8 @@ struct conversation {
     int             flags;
 };
 
-#define CONVERSATION_INIT { 0, 0, 0, 0, 0, {0}, NULL, NULL, NULL, NULL, 0, CONV_ISDIRTY }
+#define CONVERSATION_INIT { CONVERSATIONS_RECORD_VERSION, 0, 0, 0, 0, 0, {0}, \
+                            NULL, NULL, NULL, NULL, 0, CONV_ISDIRTY }
 
 struct emailcountitems {
     size_t foldernumrecords;
