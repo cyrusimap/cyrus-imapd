@@ -287,7 +287,7 @@ EXPORTED int conversations_num_folders(struct conversations_state *state)
 }
 
 EXPORTED const char* conversations_folder_name(struct conversations_state *state,
-                                               uint32_t foldernum)
+                                               int foldernum)
 {
     const char *folder = strarray_safenth(state->folders, foldernum);
     if (state->folders_byname) {

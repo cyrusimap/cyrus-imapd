@@ -138,8 +138,8 @@ struct conv_folder {
 
 struct conv_guidrec {
     const char      *guidrep; // [MESSAGE_GUID_SIZE*2], hex-encoded
-    uint32_t        foldernum;
     const char      *mailbox;       // if version >= 2 mboxid, else mboxname
+    int             foldernum;
     uint32_t        uid;
     const char      *part;
     conversation_id_t cid;
@@ -229,7 +229,7 @@ extern struct conversations_state *conversations_get_mbox(const char *mboxname);
 
 extern int conversations_num_folders(struct conversations_state *state);
 extern const char* conversations_folder_name(struct conversations_state *state,
-                                             uint32_t foldernum);
+                                             int foldernum);
 extern int conversation_folder_number(struct conversations_state *state,
                                       const char *name,
                                       int create_flag);
