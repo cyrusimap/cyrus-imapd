@@ -3971,5 +3971,132 @@ EOF
 
 }
 
+sub test_mailbox_counts_add_remove
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    $imap->uid(1);
+
+    xlog "Set up mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', { }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                "a" => { name => "a", parentId => undef },
+                "b" => { name => "b", parentId => undef },
+            },
+        }, 'R2'],
+    ]);
+    my %ids = map { $_ => $res->[1][1]{created}{$_}{id} }
+              keys %{$res->[1][1]{created}};
+
+    xlog "Set up messages";
+    my %raw = (
+        A => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test A\r
+EOF
+        B => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test B\r
+EOF
+        C => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test C\r
+EOF
+        D => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+    );
+
+    # threads:
+    # T1: A B C
+    # T2: D
+
+    xlog $self, "Set up all the emails in all the folders";
+    $imap->append('INBOX.a', "(\\Seen)", $raw{A}) || die $@;
+    $imap->append('INBOX.a', "()", $raw{B}) || die $@;
+    $imap->append('INBOX.a', "(\\Seen)", $raw{C}) || die $@;
+    $imap->append('INBOX.a', "()", $raw{D}) || die $@;
+
+    $self->_check_counts('Initial Test',
+        a => [ 4, 2, 2, 2 ],
+        b => [ 0, 0, 0, 0 ],
+    );
+
+    xlog $self, "Move email to b";
+    $imap->select("INBOX.a");
+    $imap->move("3", "INBOX.b");
+    $self->_check_counts('After first move',
+        a => [ 3, 2, 2, 2 ],
+        b => [ 1, 0, 1, 1 ],
+    );
+
+    xlog $self, "mark seen";
+    $imap->store(2, "+flags", "\\Seen");
+    $self->_check_counts('After mark seen',
+        a => [ 3, 1, 2, 1 ],
+        b => [ 1, 0, 1, 0 ],
+    );
+
+    xlog $self, "move other";
+    $imap->move("4", "INBOX.b");
+    $self->_check_counts('After move other',
+        a => [ 2, 0, 1, 0 ],
+        b => [ 2, 1, 2, 1 ],
+    );
+
+    xlog $self, "move first back";
+    $imap->select("INBOX.b");
+    $imap->move("1", "INBOX.a");
+    $self->_check_counts('After move first back',
+        a => [ 3, 0, 1, 0 ],
+        b => [ 1, 1, 1, 1 ],
+    );
+
+    xlog $self, "mark unseen again (different email)";
+    $imap->select("INBOX.a");
+    $imap->store(1, "-flags", "\\Seen");
+    $self->_check_counts('After mark unseen again',
+        a => [ 3, 1, 1, 1 ],
+        b => [ 1, 1, 1, 1 ],
+    );
+}
+
 
 1;
