@@ -1173,16 +1173,6 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
         return r;
     }
 
-    /* Ignore blobs that don't belong to the current accountId */
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
-    int is_accountid_mbox =
-        (mbname && !strcmp(mbname_userid(mbname), d->from_accountid));
-    mbname_free(&mbname);
-    if (!is_accountid_mbox) {
-        mboxlist_entry_free(&mbentry);
-        return 0;
-    }
-
     /* Check ACL */
     if (d->is_shared_account) {
         int rights = jmap_myrights_mbentry(req, mbentry);
