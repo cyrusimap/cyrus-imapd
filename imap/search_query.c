@@ -395,7 +395,7 @@ static int compare_folders(const void **v1, const void **v2)
     const search_folder_t *f1 = (const search_folder_t *)*v1;
     const search_folder_t *f2 = (const search_folder_t *)*v2;
 
-    return bsearch_compare_mbox(f1->mboxname, f2->mboxname);
+    return strcmp(f1->mboxname, f2->mboxname);
 }
 
 /*
