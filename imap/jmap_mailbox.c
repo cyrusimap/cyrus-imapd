@@ -218,7 +218,7 @@ struct shared_mboxes *_shared_mboxes_new(jmap_req_t *req, int flags)
         free(sm);
         sm = NULL;
     }
-    strarray_sort(&sm->mboxes, cmpstringp_mbox);
+    strarray_sort(&sm->mboxes, cmpstringp_raw);
     return sm;
 }
 
@@ -244,7 +244,7 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
     int i = 0;
     for (i = 0; i < sm->mboxes.count; i++) {
         const char *sharedname = strarray_nth(&sm->mboxes, i);
-        int cmp = bsearch_compare_mbox(sharedname, name);
+        int cmp = strcmp(sharedname, name);
         if (!cmp)
             return _SHAREDMBOX_SHARED;
 

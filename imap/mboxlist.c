@@ -3377,7 +3377,7 @@ static int mboxlist_racl_matches(struct db *db,
                     buf_len(&raclprefix),
                     NULL, racl_cb, &raclrock, NULL);
 
-    strarray_sort(matches, cmpstringp_mbox);
+    strarray_sort(matches, cmpstringp_raw);
     strarray_uniq(matches);
 
     buf_free(&raclprefix);
@@ -4253,9 +4253,6 @@ EXPORTED void mboxlist_open(const char *fname)
     mboxlist_init(0);
 
     flags = CYRUSDB_CREATE;
-    if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT)) {
-        flags |= CYRUSDB_MBOXSORT;
-    }
 
     ret = cyrusdb_open(DB, fname, flags, &mbdb);
     if (ret != 0) {
@@ -4305,9 +4302,6 @@ mboxlist_opensubs(const char *userid,
     subsfname = user_hash_subs(userid);
 
     flags = CYRUSDB_CREATE;
-    if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT)) {
-        flags |= CYRUSDB_MBOXSORT;
-    }
 
     r = cyrusdb_open(SUBDB, subsfname, flags, ret);
     if (r != CYRUSDB_OK) {
