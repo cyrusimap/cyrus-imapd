@@ -712,9 +712,6 @@ EXPORTED void quotadb_open(const char *fname)
         fname = tofree;
     }
 
-    if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT))
-        flags |= CYRUSDB_MBOXSORT;
-
     ret = cyrusdb_open(QDB, fname, flags, &qdb);
     if (ret != 0) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,

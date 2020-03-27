@@ -184,10 +184,7 @@ int main(int argc,char **argv)
         fatal(error_message(r), EX_CONFIG);
     }
 
-    if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT))
-        compar = bsearch_compare_mbox;
-    else
-        compar = strcmp;
+    compar = strcmp;
 
     /*
      * Lock mailbox list to prevent mailbox creation/deletion
@@ -425,8 +422,7 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
 
 static int findroot(const char *name, int *thisquota)
 {
-    int i = config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT)
-            ? quota_todo : 0;
+    int i = 0;
 
     *thisquota = -1;
 
@@ -463,25 +459,6 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     int thisquota = -1;
     struct txn *txn = NULL;
-
-    if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT)) {
-        while (quota_todo < quota_num) {
-            const char *root = quotaroots[quota_todo].name;
-
-            /* in the future, definitely don't close yet */
-            if (compar(mbentry->name, root) < 0)
-                break;
-
-            /* inside the first root, don't close yet */
-            if (mboxname_is_prefix(mbentry->name, root))
-                break;
-
-            /* finished, close out now */
-            r = fixquota_finish(quota_todo);
-            quota_todo++;
-            if (r) goto done;
-        }
-    }
 
     test_sync_wait(mbentry->name);
 
