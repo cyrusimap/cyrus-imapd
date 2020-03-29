@@ -2869,6 +2869,9 @@ static int zero_b_cb(void *rock,
     /* zero out the size */
     conv->size = 0;
 
+    /* Update the version */
+    conv->version = CONVERSATIONS_RECORD_VERSION;
+
     r = conversation_store(state, key, keylen, conv);
 
 done:
