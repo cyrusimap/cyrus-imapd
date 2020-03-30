@@ -135,7 +135,7 @@ struct jmapical_datetime {
     bit64 nano;
 };
 
-#define JMAPICAL_DATETIME_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 };
+#define JMAPICAL_DATETIME_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 }
 
 /* True if all components are zero */
 extern int jmapical_datetime_has_zero_time(const struct jmapical_datetime *dt);
