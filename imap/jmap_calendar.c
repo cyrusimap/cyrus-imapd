@@ -1057,7 +1057,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             json_array_append_new(invalid, json_string("name"));
         }
 
-        jmap_readprop(arg, "color", 1,  invalid, "s", &color);
+        jmap_readprop(arg, "color", 0,  invalid, "s", &color);
 
         pe = jmap_readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
         if (pe > 0 && sortOrder < 0) {
