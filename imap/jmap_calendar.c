@@ -1430,38 +1430,73 @@ static int setcalendar_writeprops(jmap_req_t *req,
     return r;
 }
 
-/* Delete the calendar mailbox named mboxname for the userid in req. */
-static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
+static int _calendar_hasevents_cb(void *rock __attribute__((unused)),
+                                  struct caldav_data *cdata __attribute__((unused)))
 {
-    if (!jmap_hasrights(req, mboxname, JACL_READITEMS))
-        return IMAP_NOTFOUND;
-    if (!jmap_hasrights(req, mboxname, JACL_DELETE))
-        return IMAP_PERMISSION_DENIED;
+    /* Any alive event will do */
+    return CYRUSDB_DONE;
+}
 
-    char *userid = mboxname_to_userid(mboxname);
-    struct caldav_db *db = caldav_open_userid(userid);
-    if (!db) {
-        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", userid);
-        free(userid);
-        return IMAP_INTERNAL;
+/* Delete the calendar mailbox named mboxname for the userid in req. */
+static void setcalendars_destroy(jmap_req_t *req, const char *calid,
+                                 int destroy_events, json_t **err)
+{
+    char *mboxname = caldav_mboxname(req->accountid, calid);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    struct buf buf = BUF_INITIALIZER;
+    struct caldav_db *db = NULL;
+    int r = 0;
+
+    /* Make sure we don't delete special calendars */
+    if (!mbname || jmap_calendar_isspecial(mbname)) {
+        *err = json_pack("{s:s}", "type", "notFound");
+        goto done;
     }
-    /* XXX 
-     * JMAP spec says that: "A calendar MAY be deleted that is currently
-     * associated with one or more events. In this case, the events belonging
-     * to this calendar MUST also be deleted. Conceptually, this MUST happen
-     * prior to the calendar itself being deleted, and MUST generate a push
-     * event that modifies the calendarState for the account, and has a
-     * clientId of null, to indicate that a change has been made to the
-     * calendar data not explicitly requested by the client."
-     *
-     * Need the Events API for this requirement.
-     */
-    int r = caldav_delmbox(db, mboxname);
+
+    /* Check ACL */
+    if (!jmap_hasrights(req, mboxname, JACL_READITEMS)) {
+        *err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+    if (!jmap_hasrights(req, mboxname, JACL_DELETE)) {
+        *err = json_pack("{s:s}", "type", "accountReadOnly");
+        goto done;
+    }
+
+    /* Do not allow to remove the default calendar. */
+    char *defaultname = caldav_scheddefault(req->accountid);
+    if (!strcmp(calid, defaultname)) {
+        /* XXX - The isDefault set error is not documented in the spec. */
+        *err = json_pack("{s:s}", "type", "isDefault");
+        goto done;
+    }
+
+    db = caldav_open_userid(req->accountid);
+    if (!db) {
+        syslog(LOG_ERR, "%s: can't open caldav.db for account %s",
+                __func__, req->accountid);
+        *err = jmap_server_error(IMAP_INTERNAL);
+        goto done;
+    }
+
+    /* Validate onDestroyRemoveEvents */
+    if (!destroy_events) {
+        r = caldav_foreach(db, mboxname, _calendar_hasevents_cb, NULL);
+        if (r == CYRUSDB_DONE) {
+            *err = json_pack("{s:s}", "type", "calendarHasEvents");
+            goto done;
+        }
+        else if (r) {
+            *err = jmap_server_error(r);
+            goto done;
+        }
+    }
+
+    r = caldav_delmbox(db, mboxname);
     if (r) {
-        syslog(LOG_ERR, "failed to delete mailbox from caldav_db: %s",
-                error_message(r));
-        free(userid);
-        return r;
+        syslog(LOG_ERR, "%s: failed to delete mailbox from caldav_db: %s",
+                __func__, error_message(r));
+        goto done;
     }
     jmap_myrights_delete(req, mboxname);
 
@@ -1482,14 +1517,24 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
     }
     mboxevent_free(&mboxevent);
 
-    if (!r) r = caldav_update_shareacls(userid);
+    if (!r) r = caldav_update_shareacls(req->accountid);
 
-    int rr = caldav_close(db);
-    if (!r) r = rr;
-
-    free(userid);
-
-    return r;
+done:
+    if (db) {
+        int rr = caldav_close(db);
+        if (!r) r = rr;
+    }
+    if (r && *err == NULL) {
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            *err = json_pack("{s:s}", "type", "notFound");
+        }
+        else {
+            *err = jmap_server_error(r);
+        }
+    }
+    free(mboxname);
+    mbname_free(&mbname);
+    buf_free(&buf);
 }
 
 static void setcalendars_create(struct jmap_req *req,
@@ -1678,16 +1723,34 @@ done:
     free(mboxname);
 }
 
+static int setcalendars_parse_args(jmap_req_t *req __attribute__((unused)),
+                                   struct jmap_parser *parser __attribute__((unused)),
+                                   const char *arg, json_t *val, void *rock)
+{
+    int *on_destroy_remove_events = rock;
+    *on_destroy_remove_events = 0;
+
+    if (!strcmp(arg, "onDestroyRemoveEvents")) {
+        if (json_is_boolean(val)) {
+            *on_destroy_remove_events = json_boolean_value(val);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int jmap_calendar_set(struct jmap_req *req)
 {
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
+    int on_destroy_remove_events = 0;
     json_t *err = NULL;
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req, &argparser, calendar_props, NULL, NULL, &set, &err);
+    jmap_set_parse(req, &argparser, calendar_props, setcalendars_parse_args,
+                   &on_destroy_remove_events, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1741,88 +1804,51 @@ static int jmap_calendar_set(struct jmap_req *req)
     }
 
     /* update */
-    const char *uid;
-    json_object_foreach(set.update, uid, arg) {
-        if (uid && uid[0] == '#') {
-            const char *newuid = jmap_lookup_id(req, uid + 1);
-            if (!newuid) {
-                json_object_set_new(set.not_updated, uid,
+    const char *id;
+    json_object_foreach(set.update, id, arg) {
+        const char *calid = id;
+        if (calid && calid[0] == '#') {
+            const char *newcalid = jmap_lookup_id(req, calid + 1);
+            if (!newcalid) {
+                json_object_set_new(set.not_updated, id,
                         json_pack("{s:s}", "type", "notFound"));
                 continue;
             }
-            uid = newuid;
+            calid = newcalid;
         }
         json_t *record = NULL, *err = NULL;
-        setcalendars_update(req, uid, arg, &record, &err);
+        setcalendars_update(req, calid, arg, &record, &err);
         if (!err) {
-            json_object_set_new(set.updated, uid, record);
+            json_object_set_new(set.updated, id, record);
         }
-        else json_object_set_new(set.not_updated, uid, err);
+        else json_object_set_new(set.not_updated, id, err);
     }
 
     /* destroy */
     size_t index;
-    json_t *juid;
+    json_t *jid;
 
-    json_array_foreach(set.destroy, index, juid) {
+    json_array_foreach(set.destroy, index, jid) {
+        const char *id = json_string_value(jid);
+        if (!id) continue;
 
-        /* Validate uid */
-        const char *uid = json_string_value(juid);
-        if (!uid) {
-            continue;
-        }
-        if (uid && uid[0] == '#') {
-            const char *newuid = jmap_lookup_id(req, uid + 1);
-            if (!newuid) {
+        /* Resolve calid */
+        const char *calid = id;
+        if (calid && calid[0] == '#') {
+            const char *newcalid = jmap_lookup_id(req, calid + 1);
+            if (!newcalid) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(set.not_destroyed, uid, err);
+                json_object_set_new(set.not_destroyed, id, err);
                 continue;
             }
-            uid = newuid;
+            calid = newcalid;
         }
-
-        /* Do not allow to remove the default calendar. */
-        char *defaultname = caldav_scheddefault(req->accountid);
-        if (!strcmp(uid, defaultname)) {
-            /* XXX - The isDefault set error is not documented in the spec. */
-            json_t *err = json_pack("{s:s}", "type", "isDefault");
-            json_object_set_new(set.not_destroyed, uid, err);
-            free(defaultname);
-            continue;
+        json_t *err = NULL;
+        setcalendars_destroy(req, calid, on_destroy_remove_events, &err);
+        if (!err) {
+            json_array_append_new(set.destroyed, json_string(id));
         }
-        free(defaultname);
-
-        /* Make sure we don't delete special calendars */
-        char *mboxname = caldav_mboxname(req->accountid, uid);
-        mbname_t *mbname = mbname_from_intname(mboxname);
-        if (!mbname || jmap_calendar_isspecial(mbname)) {
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_destroyed, uid, err);
-            mbname_free(&mbname);
-            free(mboxname);
-            continue;
-        }
-        mbname_free(&mbname);
-
-        /* Destroy calendar. */
-        r = setcalendars_destroy(req, mboxname);
-        free(mboxname);
-        if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_destroyed, uid, err);
-            r = 0;
-            continue;
-        } else if (r == IMAP_PERMISSION_DENIED) {
-            json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-            json_object_set_new(set.not_destroyed, uid, err);
-            r = 0;
-            continue;
-        } else if (r) {
-            goto done;
-        }
-
-        /* Report calendar as destroyed. */
-        json_array_append_new(set.destroyed, json_string(uid));
+        else json_object_set_new(set.not_destroyed, id, err);
     }
 
 
