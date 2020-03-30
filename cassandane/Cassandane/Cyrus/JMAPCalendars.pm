@@ -872,7 +872,7 @@ sub test_calendar_set_error
     my $errType = $res->[0][1]{notCreated}{"1"}{type};
     my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
     $self->assert_str_equals("invalidProperties", $errType);
-    $self->assert_deep_equals([ "name", "color" ], $errProp);
+    $self->assert_deep_equals([ "name" ], $errProp);
 
     xlog $self, "create calendar with invalid optional attributes";
     $res = $jmap->CallMethods([
@@ -907,7 +907,6 @@ sub test_calendar_set_error
     $res = $jmap->CallMethods([
             ['Calendar/set', { create => { "1" => {
                             name => "foo",
-                            color => "coral",
                             sortOrder => 2,
                             isVisible => \1
              }}}, "R1"]
