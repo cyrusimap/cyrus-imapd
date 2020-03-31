@@ -1454,7 +1454,7 @@ static int autorespond(void *ac,
 }
 
 static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
-                   struct buf *header, const char *msg, struct buf *footer)
+                   struct buf *msg)
 {
     struct appendstate as;
     const char *userid;
@@ -1501,8 +1501,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
         if (f) {
             struct body *body = NULL;
 
-            fprintf(f, "%s%s%s",
-                    buf_cstring(header), msg, buf_cstring(footer));
+            fwrite(buf_base(msg), buf_len(msg), 1, f);
             fclose(f);
 
             r = append_fromstage(&as, &body, stage,
@@ -1540,7 +1539,6 @@ static int send_response(void *ac, void *ic,
     message_data_t *md = ((deliver_data_t *) mc)->m;
     script_data_t *sdata = (script_data_t *) sc;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
-    struct buf header = BUF_INITIALIZER, footer = BUF_INITIALIZER;
     struct buf msgbuf = BUF_INITIALIZER;
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
     smtp_envelope_t sm_env = SMTP_ENVELOPE_INITIALIZER;
@@ -1554,19 +1552,19 @@ static int send_response(void *ac, void *ic,
     snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%d-%d@%s>",
              (int) p, (int) t, global_outgoing_count++, config_servername);
 
-    buf_printf(&header, "Message-ID: %s\r\n", outmsgid);
+    buf_printf(&msgbuf, "Message-ID: %s\r\n", outmsgid);
 
     time_to_rfc5322(t, datestr, sizeof(datestr));
-    buf_printf(&header, "Date: %s\r\n", datestr);
+    buf_printf(&msgbuf, "Date: %s\r\n", datestr);
 
-    buf_printf(&header, "X-Sieve: %s\r\n", SIEVE_VERSION);
+    buf_printf(&msgbuf, "X-Sieve: %s\r\n", SIEVE_VERSION);
 
     if (strchr(src->fromaddr, '<'))
-        buf_printf(&header, "From: %s\r\n", src->fromaddr);
+        buf_printf(&msgbuf, "From: %s\r\n", src->fromaddr);
     else
-        buf_printf(&header, "From: <%s>\r\n", src->fromaddr);
+        buf_printf(&msgbuf, "From: <%s>\r\n", src->fromaddr);
 
-    buf_printf(&header, "To: <%s>\r\n", src->addr);
+    buf_printf(&msgbuf, "To: <%s>\r\n", src->addr);
     /* check that subject is sane */
     sl = strlen(src->subj);
     for (i = 0; i < sl; i++)
@@ -1575,32 +1573,25 @@ static int send_response(void *ac, void *ic,
             break;
         }
     subj = charset_encode_mimeheader(src->subj, strlen(src->subj), 0);
-    buf_printf(&header, "Subject:%s %s\r\n",  /* fold before long header body */
+    buf_printf(&msgbuf, "Subject:%s %s\r\n",  /* fold before long header body */
                strlen(subj) > 69 ? "\r\n" : "", subj);
     free(subj);
-    if (md->id) buf_printf(&header, "In-Reply-To: %s\r\n", md->id);
-    buf_printf(&header, "Auto-Submitted: auto-replied (vacation)\r\n");
-    buf_printf(&header, "MIME-Version: 1.0\r\n");
+    if (md->id) buf_printf(&msgbuf, "In-Reply-To: %s\r\n", md->id);
+    buf_appendcstr(&msgbuf, "Auto-Submitted: auto-replied (vacation)\r\n");
+    buf_appendcstr(&msgbuf, "MIME-Version: 1.0\r\n");
+
     if (src->mime) {
-        buf_printf(&header, "Content-Type: multipart/mixed;"
-                "\r\n\tboundary=\"%d/%s\"\r\n", (int) p, config_servername);
-        buf_printf(&header, "\r\n");
-        buf_printf(&header, "This is a MIME-encapsulated message\r\n");
-        buf_printf(&header, "\r\n--%d/%s\r\n", (int) p, config_servername);
+        /* Assume that the body is a fully-formed MIME entity */
+        /* XXX  Should we try to verify it as such? */
     } else {
-        buf_printf(&header, "Content-Type: text/plain; charset=utf-8\r\n");
-        buf_printf(&header, "Content-Transfer-Encoding: 8bit\r\n");
-        buf_printf(&header, "\r\n");
+        /* Add Content-* headers for the plaintext body */
+        buf_appendcstr(&msgbuf, "Content-Type: text/plain; charset=utf-8\r\n");
+        buf_appendcstr(&msgbuf, "Content-Transfer-Encoding: 8bit\r\n");
+        buf_appendcstr(&msgbuf, "\r\n");
     }
 
-    buf_printf(&footer, "\r\n");
-    if (src->mime) {
-        buf_printf(&footer, "\r\n--%d/%s--\r\n", (int) p, config_servername);
-    }
-
-    buf_append(&msgbuf, &header);
     buf_appendcstr(&msgbuf, src->msg);
-    buf_append(&msgbuf, &footer);
+    buf_appendcstr(&msgbuf, "\r\n");
 
     r = smtpclient_open(&sm);
     if (!r) {
@@ -1618,7 +1609,7 @@ static int send_response(void *ac, void *ic,
         duplicate_mark(&dkey, t, 0);
 
         if (src->fcc.mailbox) {
-            do_fcc(sdata, &src->fcc, &header, src->msg, &footer);
+            do_fcc(sdata, &src->fcc, &msgbuf);
         }
 
         prometheus_increment(CYRUS_LMTP_SIEVE_AUTORESPOND_SENT_TOTAL);
@@ -1630,8 +1621,6 @@ static int send_response(void *ac, void *ic,
         ret = SIEVE_FAIL;
     }
 
-    buf_free(&header);
-    buf_free(&footer);
     buf_free(&msgbuf);
     smtp_envelope_fini(&sm_env);
 
