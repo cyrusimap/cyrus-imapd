@@ -260,6 +260,8 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
 {
     struct dlist *dl = dlist_newkvlist(NULL, dbname);
 
+    dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mbentry->mbtype));
+
     if (mbentry->uniqueid)
         dlist_setatom(dl, "I", mbentry->uniqueid);
 
@@ -268,9 +270,6 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
 
     if (mbentry->server)
         dlist_setatom(dl, "S", mbentry->server);
-
-    if (mbentry->mbtype)
-        dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mbentry->mbtype));
 
     if (mbentry->uidvalidity)
         dlist_setnum32(dl, "V", mbentry->uidvalidity);
