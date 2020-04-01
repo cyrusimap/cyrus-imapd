@@ -11771,7 +11771,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
                     sync_name_list_add(master_quotaroots, mailbox->quotaroot);
                 }
 
-                r = sync_do_annotation(mailbox->name, xfer->be, flags);
+                r = sync_do_annotation(mailbox->name, xfer->be, NULL, flags);
                 if (r) {
                     syslog(LOG_ERR, "Could not move mailbox: %s,"
                            " sync_do_annotation() failed %s",

@@ -373,7 +373,7 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
         if (!action->active)
             continue;
 
-        r = sync_do_quota(action->name, sync_backend, flags);
+        r = sync_do_quota(action->name, sync_backend, channelp, flags);
         if (channelp && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_quota(*channelp, action->name);
             report_verbose("  Deferred: QUOTA %s\n", action->name);
@@ -393,7 +393,7 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
         /* NOTE: ANNOTATION "" is a special case - it's a server
          * annotation, hence the check for a character at the
          * start of the name */
-        r = sync_do_annotation(action->name, sync_backend, flags);
+        r = sync_do_annotation(action->name, sync_backend, channelp, flags);
         if (!*action->name) continue;
 
         if (channelp && r == IMAP_MAILBOX_LOCKED) {
@@ -412,7 +412,7 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
         if (!action->active)
             continue;
 
-        r = sync_do_seen(action->user, action->name, sync_backend, flags);
+        r = sync_do_seen(action->user, action->name, sync_backend, channelp, flags);
         if (channelp && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_seen(*channelp, action->user, action->name);
             report_verbose("  Deferred: SEEN %s %s\n",
