@@ -61,6 +61,7 @@
 #include <limits.h>
 
 #include "assert.h"
+#include "bsearch.h"
 #include "global.h"
 #include "imap_proxy.h"
 #include "mboxlist.h"
@@ -77,6 +78,8 @@
 #include "prot.h"
 #include "dlist.h"
 #include "xstrlcat.h"
+#include "strarray.h"
+#include "ptrarray.h"
 
 #ifdef USE_CALALARMD
 #include "caldav_alarm.h"
@@ -208,6 +211,40 @@ static void imap_postcapability(struct backend *s)
         /* server supports initial response in AUTHENTICATE command */
         s->prot->u.std.sasl_cmd.maxlen = USHRT_MAX;
     }
+}
+
+static const char *_synclock_name(const char *channel, const char *userid)
+{
+    const char *p;
+    static struct buf buf = BUF_INITIALIZER;
+    if (!userid) userid = ""; // no userid == global lock
+
+    buf_setcstr(&buf, "*S*");
+    buf_appendcstr(&buf, channel);
+    buf_putc(&buf, '*');
+
+    for (p = userid; *p; p++) {
+        switch(*p) {
+            case '.':
+                buf_putc(&buf, '^');
+                break;
+            default:
+                buf_putc(&buf, *p);
+                break;
+        }
+    }
+
+    return buf_cstring(&buf);
+}
+
+
+static struct mboxlock *sync_lock(const char **channelp, const char *userid)
+{
+    const char *channel = channelp ? *channelp : "";
+    const char *name = _synclock_name(channel, userid);
+    struct mboxlock *lock = NULL;
+    int r = mboxname_lock(name, &lock, LOCK_EXCLUSIVE);
+    return r ? NULL : lock;
 }
 
 /* channel-based configuration */
@@ -5699,7 +5736,7 @@ static int update_seen_work(const char *user, const char *uniqueid,
 }
 
 int sync_do_seen(const char *userid, char *uniqueid, struct backend *sync_be,
-                 unsigned flags)
+                 const char **channelp, unsigned flags)
 {
     int r = 0;
     struct seen *seendb = NULL;
@@ -5709,12 +5746,22 @@ int sync_do_seen(const char *userid, char *uniqueid, struct backend *sync_be,
     r = seen_open(userid, SEEN_SILENT, &seendb);
     if (r) return 0;
 
+    // XXX: we should pipe the channel through to here
+    struct mboxlock *synclock = sync_lock(channelp, userid);
+    if (!synclock) {
+        r = IMAP_MAILBOX_LOCKED;
+        goto done;
+    }
+
     r = seen_read(seendb, uniqueid, &sd);
 
     if (!r) r = update_seen_work(userid, uniqueid, &sd, sync_be, flags);
 
+done:
+
     seen_close(&seendb);
     seen_freedata(&sd);
+    mboxname_release(&synclock);
 
     return r;
 }
@@ -5722,14 +5769,27 @@ int sync_do_seen(const char *userid, char *uniqueid, struct backend *sync_be,
 /* ====================================================================== */
 
 int sync_do_quota(const char *root, struct backend *sync_be,
-                  unsigned flags)
+                  const char **channelp, unsigned flags)
 {
     int r = 0;
-    struct quota q;
 
+    char *userid = mboxname_to_userid(root);
+    // XXX: we should pipe the channel through to here
+    struct mboxlock *synclock = sync_lock(channelp, userid);
+    if (!synclock) {
+        r = IMAP_MAILBOX_LOCKED;
+        goto done;
+    }
+
+    struct quota q;
     quota_init(&q, root);
     r = update_quota_work(&q, NULL, sync_be, flags);
     quota_free(&q);
+
+done:
+
+    mboxname_release(&synclock);
+    free(userid);
 
     return r;
 }
@@ -5799,13 +5859,22 @@ static int do_getannotation(const char *mboxname,
     return r;
 }
 
-int sync_do_annotation(char *mboxname, struct backend *sync_be, unsigned flags)
+int sync_do_annotation(char *mboxname, struct backend *sync_be,
+                       const char **channelp, unsigned flags)
 {
     int r;
     struct sync_annot_list *replica_annot = sync_annot_list_create();
     struct sync_annot_list *master_annot = sync_annot_list_create();
     struct sync_annot *ma, *ra;
     int n;
+
+    char *userid = mboxname_to_userid(mboxname);
+    // XXX: we should pipe the channel through to here
+    struct mboxlock *synclock = sync_lock(channelp, userid);
+    if (!synclock) {
+        r = IMAP_MAILBOX_LOCKED;
+        goto bail;
+    }
 
     r = do_getannotation(mboxname, replica_annot, sync_be);
     if (r) goto bail;
@@ -5858,6 +5927,8 @@ int sync_do_annotation(char *mboxname, struct backend *sync_be, unsigned flags)
 bail:
     sync_annot_list_free(&master_annot);
     sync_annot_list_free(&replica_annot);
+    mboxname_release(&synclock);
+    free(userid);
     return r;
 }
 
@@ -6036,6 +6107,27 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
     struct dlist *kl = NULL;
     struct buf buf = BUF_INITIALIZER;
     int r;
+    strarray_t userids = STRARRAY_INITIALIZER;
+    ptrarray_t locks = PTRARRAY_INITIALIZER;
+
+    // what a pain, we need to lock all the users in order, so..
+    for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
+        char *userid = mboxname_to_userid(mbox->name);
+        strarray_add(&userids, userid ? userid : "");
+        free(userid);
+    }
+    strarray_sort(&userids, cmpstringp_raw);
+
+    int i;
+    for (i = 0; i < strarray_size(&userids); i++) {
+        const char *userid = strarray_nth(&userids, i);
+        struct mboxlock *lock = sync_lock(channelp, userid);
+        if (!lock) {
+            r = IMAP_MAILBOX_LOCKED;
+            goto done;
+        }
+        ptrarray_add(&locks, lock);
+    }
 
     kl = dlist_newlist(NULL, "MAILBOXES");
 
@@ -6060,18 +6152,25 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
 
     r = sync_response_parse(sync_be->in, "MAILBOXES", replica_folders,
                             NULL, NULL, NULL, NULL);
+    if (r) goto done;
 
     /* we don't want to delete remote folders which weren't found locally,
      * because we may be racing with a rename, and we don't want to lose
      * the remote files.  A real delete will always have inserted a
      * UNMAILBOX anyway */
-    if (!r) {
-        flags &= ~SYNC_FLAG_DELETE_REMOTE;
-        r = do_folders(mboxname_list, topart,
-                       replica_folders, sync_be, channelp, flags);
-    }
+    flags &= ~SYNC_FLAG_DELETE_REMOTE;
+    r = do_folders(mboxname_list, topart,
+                   replica_folders, sync_be, channelp, flags);
+
+done:
 
     sync_folder_list_free(&replica_folders);
+    strarray_fini(&userids);
+    for (i = 0; i < ptrarray_size(&locks); i++) {
+        struct mboxlock *lock = ptrarray_nth(&locks, i);
+        mboxname_release(&lock);
+    }
+    ptrarray_fini(&locks);
 
     return r;
 }
@@ -6363,6 +6462,12 @@ int sync_do_user(const char *userid, const char *topart,
     struct dlist *kl = NULL;
     struct mailbox *mailbox = NULL;
 
+    struct mboxlock *userlock = sync_lock(channelp, userid);
+    if (!userlock) {
+        r = IMAP_MAILBOX_LOCKED;
+        goto done;
+    }
+
     if (flags & SYNC_FLAG_VERBOSE)
         printf("USER %s\n", userid);
 
@@ -6413,6 +6518,7 @@ done:
     sync_sieve_list_free(&replica_sieve);
     sync_seen_list_free(&replica_seen);
     sync_quota_list_free(&replica_quota);
+    mboxname_release(&userlock);
 
     return r;
 }

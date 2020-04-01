@@ -485,9 +485,11 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_NO_COPYBACK (1<<4)
 
 int sync_do_seen(const char *userid, char *uniqueid, struct backend *sync_be,
-                 unsigned flags);
-int sync_do_quota(const char *root, struct backend *sync_be, unsigned flags);
-int sync_do_annotation(char *mboxname, struct backend *sync_be, unsigned flags);
+                 const char **channelp, unsigned flags);
+int sync_do_quota(const char *root, struct backend *sync_be,
+                  const char **channelp, unsigned flags);
+int sync_do_annotation(char *mboxname, struct backend *sync_be,
+                       const char **channelp, unsigned flags);
 int sync_do_mailboxes(struct sync_name_list *mboxname_list,
                       const char *topart, struct backend *sync_be,
                       const char **channelp, unsigned flags);
