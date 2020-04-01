@@ -12138,6 +12138,8 @@ static void cmd_xfer(const char *tag, const char *name,
             }
             if (r) goto next;
 
+            struct mboxlock *namespacelock = user_namespacelock(xfer->userid);
+
             if (!xfer->use_replication) {
                 /* set the quotaroot if needed */
                 r = xfer_setquotaroot(xfer, mbentry->name);
@@ -12153,7 +12155,6 @@ static void cmd_xfer(const char *tag, const char *name,
             r = mboxlist_usermboxtree(xfer->userid, NULL, xfer_addusermbox,
                                       xfer, MBOXTREE_DELETED);
 
-            struct mboxlock *namespacelock = user_namespacelock(xfer->userid);
             /* NOTE: mailboxes were added in reverse, so the inbox is
              * done last */
             r = do_xfer(xfer);
