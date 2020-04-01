@@ -12378,18 +12378,14 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
     /* Keep this message record as source to copy from? */
     if (!rock->mbox) {
         rock->mbox = mbox;
+        mbox = NULL;
         rock->mr = mr;
-    }
-    else {
-        msgrecord_unref(&mr);
-        jmap_closembox(req, &mbox);
+        mr = NULL;
     }
 
 done:
-    if (r) {
-        msgrecord_unref(&mr);
-        jmap_closembox(req, &mbox);
-    }
+    msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
     return r;
 }
 
