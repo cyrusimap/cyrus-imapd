@@ -245,6 +245,8 @@ struct dlist *dlist_getchildn(struct dlist *dl, int num);
 struct dlist *dlist_getkvchild_bykey(struct dlist *dl,
                                      const char *key, const char *val);
 
+void dlist_rename(struct dlist *dl, const char *name);
+
 const char *dlist_lastkey(void);
 
 /* print a dlist iteratively rather than recursively */
