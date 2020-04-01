@@ -1086,7 +1086,7 @@ int main(int argc, char **argv)
             }
             fclose(file);
         } else for (i = optind; !r && i < argc; i++) {
-            if (sync_do_user(argv[i], partition, sync_backend, NULL, flags)) {
+            if (sync_do_user(argv[i], partition, sync_backend, &channel, flags)) {
                 if (verbose)
                     fprintf(stderr, "Error from sync_do_user(%s): bailing out!\n",
                             argv[i]);
@@ -1102,7 +1102,7 @@ int main(int argc, char **argv)
         /* Open up connection to server */
         replica_connect(channel);
 
-        if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, NULL, 0))
+        if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &channel, 0))
             exit_rc = 1;
 
         replica_disconnect();
@@ -1139,7 +1139,7 @@ int main(int argc, char **argv)
             free(intname);
         }
 
-        if (sync_do_mailboxes(mboxname_list, partition, sync_backend, NULL, flags)) {
+        if (sync_do_mailboxes(mboxname_list, partition, sync_backend, &channel, flags)) {
             if (verbose) {
                 fprintf(stderr,
                         "Error from sync_do_mailboxes(): bailing out!\n");
