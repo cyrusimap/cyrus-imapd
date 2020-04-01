@@ -394,6 +394,7 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
 
     char *trashmboxname = mboxname_user_mbox(userid, "Trash");
     open->s.trashmboxname = trashmboxname;
+    open->s.trashfolder = -1;
     if (open->s.folders_byname)
         open->s.trashfolder = conversation_folder_number(&open->s, trashmboxname, /*create*/0);
     else if (trashmboxname) {
