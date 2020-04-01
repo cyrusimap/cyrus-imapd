@@ -461,7 +461,11 @@ HIDDEN void jmap_finireq(jmap_req_t *req)
         free(rec);
     }
     /* Fail after cleaning up open mailboxes */
-    assert(!req->mboxes->count);
+    if (req->mboxes->count) {
+        json_t *jdebug = json_pack("[s,s,s,o,o]", req->method, req->userid, req->accountid, req->args, req->response);
+        char *debug = json_dumps(jdebug, JSON_INDENT(2));
+        assert(!debug);
+    }
 
     ptrarray_free(req->mboxes);
     req->mboxes = NULL;
