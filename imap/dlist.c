@@ -1699,3 +1699,9 @@ EXPORTED const char *dlist_lastkey(void)
 {
     return lastkey;
 }
+
+EXPORTED void dlist_rename(struct dlist *dl, const char *name)
+{
+    free(dl->name);
+    dl->name = xstrdup(name);
+}
