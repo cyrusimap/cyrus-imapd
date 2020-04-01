@@ -3661,8 +3661,9 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
     if (!old && !new)
         return 0;
 
+    int ignorelimits = new ? new->silent : 1;
     return conversations_update_record(cstate, mailbox, old, new,
-                                       /*allowrenumber*/1, /*ignorelimits*/0);
+                                       /*allowrenumber*/1, ignorelimits);
 }
 
 
