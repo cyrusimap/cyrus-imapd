@@ -1021,12 +1021,10 @@ static int mboxlist_update_entry(const char *name,
             mbentry_t *oldid = NULL;
             struct dlist *name_history = dlist_newlist(NULL, "H");
 
-            /* Remove I field from N record value */
-            struct dlist *id = dlist_pop(dl);
-            dlist_free(&id);
-
-            /* Add N field for I record value */
-            dlist_push(dl, dlist_setatom(NULL, "N", dbname));
+            /* Rebrand I field as N field for I record value */
+            struct dlist *c = dlist_getchild(dl, "I");
+            dlist_rename(c, "N");
+            dlist_makeatom(c, dbname);
 
             mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &oldid, txn);
 
