@@ -183,7 +183,6 @@ static void process_mboxlist(void)
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
-    mboxlist_set_runiqueid(config_getswitch(IMAPOPT_REVERSEUNIQUEIDS));
 }
 
 static const char *dbfname(struct cyrusdb *db)
