@@ -220,7 +220,7 @@ static const char *_synclock_name(const char *channel, const char *userid)
     if (!userid) userid = ""; // no userid == global lock
 
     buf_setcstr(&buf, "*S*");
-    buf_appendcstr(&buf, channel);
+    if (channel) buf_appendcstr(&buf, channel);
     buf_putc(&buf, '*');
 
     for (p = userid; *p; p++) {
