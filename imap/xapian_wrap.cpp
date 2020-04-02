@@ -1355,7 +1355,9 @@ int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
     try {
         std::string text {buf_base(part), buf_len(part)};
         Xapian::Enquire enquire(*snipgen->memdb);
-        enquire.set_query(xapian_snipgen_build_query(snipgen, *stemmer));
+        Xapian::Query qq = xapian_snipgen_build_query(snipgen, *stemmer);
+        if (qq.empty()) return 0;
+        enquire.set_query(qq);
 
         unsigned flags = Xapian::MSet::SNIPPET_EXHAUSTIVE |
                          Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH;
