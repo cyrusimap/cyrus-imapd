@@ -154,7 +154,6 @@ char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
                              const struct auth_state *auth_state);
 
 
-
 /* insert/delete stub entries */
 int mboxlist_insertremote(mbentry_t *mbentry, struct txn **rettid);
 int mboxlist_deleteremote(const char *name, struct txn **in_tid);
@@ -325,7 +324,6 @@ int mboxlist_findone_withp(struct namespace *namespace,
                      const char *userid, const struct auth_state *auth_state,
                      findall_p *p, findall_cb *cb, void *rock);
 
-
 /* Find a mailbox's parent (if any) */
 int mboxlist_findparent(const char *mboxname,
                         mbentry_t **mbentryp);
@@ -351,8 +349,6 @@ int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *rock, int f
 int mboxlist_usermboxtree(const char *userid, const struct auth_state *auth_state,
                           mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_usersubs(const char *userid, mboxlist_cb *proc, void *rock, int flags);
-int mboxlist_foreach_uniqueid(const char *uniqueid, mboxlist_cb *proc,
-                              void *rock, int flags);
 
 strarray_t *mboxlist_sublist(const char *userid);
 
