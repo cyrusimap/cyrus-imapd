@@ -12336,6 +12336,8 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
 {
     struct emailcopy_pickrecord_rock *rock = vrock;
     jmap_req_t *req = rock->req;
+    struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
     int r = 0;
 
     if (jmap_mbtype(req, rec->mboxname) != MBTYPE_EMAIL) {
@@ -12344,9 +12346,6 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
     if (!jmap_hasrights(req, rec->mboxname, JACL_READITEMS)) {
         goto done;
     }
-
-    struct mailbox *mbox = NULL;
-    msgrecord_t *mr = NULL;
 
     /* Lookup record */
     r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
