@@ -94,9 +94,7 @@ static struct db *mbdb;
 static int mboxlist_dbopen = 0;
 static int mboxlist_initialized = 0;
 
-#define RACL_VERSION 2
 static int have_racl = 0;
-#define RUNQ_VERSION 1
 static int have_runq = 0;
 
 static int mboxlist_opensubs(const char *userid, struct db **ret);
@@ -3389,7 +3387,7 @@ EXPORTED int mboxlist_set_racls(int enabled)
 
     init_internal();
 
-    if (have_racl && (!enabled || have_racl != RACL_VERSION)) {
+    if (have_racl && !enabled) {
         syslog(LOG_NOTICE, "removing reverse acl support");
         /* remove */
         r = cyrusdb_foreach(mbdb, "$RACL", 5, NULL, del_cb, &tid, &tid);
@@ -3398,8 +3396,6 @@ EXPORTED int mboxlist_set_racls(int enabled)
     if (enabled && !have_racl) {
         /* add */
         struct allmb_rock mbrock = { NULL, racls_add_cb, &tid, 0 };
-        struct buf vbuf = BUF_INITIALIZER;
-        buf_printf(&vbuf, "%d", RACL_VERSION);
         /* we can't use mboxlist_allmbox because it doesn't do transactions */
         syslog(LOG_NOTICE, "adding reverse acl support");
         r = cyrusdb_foreach(mbdb, "", 0, allmbox_p, allmbox_cb, &mbrock, &tid);
@@ -3407,9 +3403,8 @@ EXPORTED int mboxlist_set_racls(int enabled)
             syslog(LOG_ERR, "ERROR: failed to add reverse acl support %s", error_message(r));
         }
         mboxlist_entry_free(&mbrock.mbentry);
-        if (!r) r = cyrusdb_store(mbdb, "$RACL", 5, vbuf.s, vbuf.len, &tid);
-        if (!r) have_racl = RACL_VERSION;
-        buf_free(&vbuf);
+        if (!r) r = cyrusdb_store(mbdb, "$RACL", 5, "", 0, &tid);
+        if (!r) have_racl = 1;
     }
 
     if (r)
@@ -3433,7 +3428,7 @@ EXPORTED int mboxlist_set_runiqueid(int enabled)
 
     init_internal();
 
-    if (have_runq && (!enabled || have_runq != RUNQ_VERSION)) {
+    if (have_runq && !enabled) {
         syslog(LOG_NOTICE, "removing reverse unique id support");
         /* remove */
         r = cyrusdb_foreach(mbdb, "$RUNQ", 5, NULL, del_cb, &tid, &tid);
@@ -3442,8 +3437,6 @@ EXPORTED int mboxlist_set_runiqueid(int enabled)
     if (enabled && !have_runq) {
         /* add */
         struct allmb_rock mbrock = { NULL, runiqueid_add_cb, &tid, 0 };
-        struct buf vbuf = BUF_INITIALIZER;
-        buf_printf(&vbuf, "%d", RUNQ_VERSION);
         /* we can't use mboxlist_allmbox because it doesn't do transactions */
         syslog(LOG_NOTICE, "adding reverse uniqueid support");
         r = cyrusdb_foreach(mbdb, "", 0, allmbox_p, allmbox_cb, &mbrock, &tid);
@@ -3451,9 +3444,8 @@ EXPORTED int mboxlist_set_runiqueid(int enabled)
             syslog(LOG_ERR, "ERROR: failed to add reverse uniqueid support %s", error_message(r));
         }
         mboxlist_entry_free(&mbrock.mbentry);
-        if (!r) r = cyrusdb_store(mbdb, "$RUNQ", 5, vbuf.s, vbuf.len, &tid);
-        if (!r) have_runq = RUNQ_VERSION;
-        buf_free(&vbuf);
+        if (!r) r = cyrusdb_store(mbdb, "$RUNQ", 5, "", 0, &tid);
+        if (!r) have_runq = 1;
     }
 
     if (r)
@@ -4439,28 +4431,6 @@ EXPORTED void mboxlist_init(int myflags)
     mboxlist_initialized = 1;
 }
 
-static int read_version(const char *key)
-{
-    const char *data = NULL;
-    size_t len = 0;
-    int r = cyrusdb_fetch(mbdb, key, strlen(key), &data, &len, NULL);
-
-    if (r == CYRUSDB_NOTFOUND) return 0; // missing == not enabled == 0
-    assert(!r); // crash on rubbish
-
-    if (len == 0) return 1; // no value == version 1
-
-    int val = 0;
-    size_t i = 0;
-    for (i = 0; i < len; i++) {
-        assert(cyrus_isdigit(data[i])); // crash on rubbish
-        val *= 10;
-        val += data[i] - '0';
-    }
-
-    return val;
-}
-
 EXPORTED void mboxlist_open(const char *fname)
 {
     int ret, flags;
@@ -4496,8 +4466,8 @@ EXPORTED void mboxlist_open(const char *fname)
 
     mboxlist_dbopen = 1;
 
-    have_racl = read_version("$RACL");
-    have_runq = read_version("$RUNQ");
+    have_racl = !cyrusdb_fetch(mbdb, "$RACL", 5, NULL, NULL, NULL);
+    have_runq = !cyrusdb_fetch(mbdb, "$RUNQ", 5, NULL, NULL, NULL);
 }
 
 EXPORTED void mboxlist_close(void)
