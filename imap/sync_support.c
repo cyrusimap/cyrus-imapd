@@ -6865,6 +6865,7 @@ done:
     sync_seen_list_free(&replica_seen);
     sync_quota_list_free(&replica_quota);
     mboxname_release(&userlock);
+    mailbox_close(&mailbox);
 
     return r;
 }
