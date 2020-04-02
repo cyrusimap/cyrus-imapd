@@ -820,20 +820,36 @@ static void mboxlist_runiqueid_key(const char *uniqueid, const char *mbname, str
 static int mboxlist_update_runiqueid(const char *name, const mbentry_t *oldmbentry, const mbentry_t *newmbentry, struct txn **txn)
 {
     struct buf buf = BUF_INITIALIZER;
+    strarray_t oldids = STRARRAY_INITIALIZER;
+    strarray_t newids = STRARRAY_INITIALIZER;
+    const mbentry_t *old;
+    const mbentry_t *new;
+    int i;
     int r = 0;
 
-    if (oldmbentry && oldmbentry->uniqueid) {
-        mboxlist_runiqueid_key(oldmbentry->uniqueid, name, &buf);
+    for (old = oldmbentry; old; old = old->deletedentry)
+        if (old->uniqueid) strarray_add(&oldids, old->uniqueid);
+
+    for (new = newmbentry; new; new = new->deletedentry)
+        if (new->uniqueid) strarray_add(&newids, new->uniqueid);
+
+    strarray_subtract_complement(&oldids, &newids);
+    strarray_subtract_complement(&newids, &oldids);
+
+    for (i = 0; i < strarray_size(&oldids); i++) {
+        mboxlist_runiqueid_key(strarray_nth(&oldids, i), name, &buf);
         r = cyrusdb_delete(mbdb, buf.s, buf.len, txn, /*force*/1);
         if (r) goto done;
     }
-    if (newmbentry && newmbentry->uniqueid) {
-        mboxlist_runiqueid_key(newmbentry->uniqueid, name, &buf);
+    for (i = 0; i < strarray_size(&newids); i++) {
+        mboxlist_runiqueid_key(strarray_nth(&newids, i), name, &buf);
         r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);
         if (r) goto done;
     }
 
  done:
+    strarray_fini(&oldids);
+    strarray_fini(&newids);
     buf_free(&buf);
     return r;
 }
@@ -3285,9 +3301,17 @@ struct _foreach_uniqueid_data {
 
 static int _foreach_uniqueid(const mbentry_t *mbentry, void *rock) {
     struct _foreach_uniqueid_data *d = rock;
+    const mbentry_t *item;
 
-    if (!strcmpsafe(d->uniqueid, mbentry->uniqueid)) {
-        return d->proc(mbentry, d->rock);
+    for (item = mbentry; item; item = item->deletedentry) {
+        if (!strcmpsafe(d->uniqueid, item->uniqueid)) {
+            // child items might not have the name, but we want it in the callback.  This hack works around it :)
+            mbentry_t copy = *item;
+            copy.name = mbentry->name;
+            return d->proc(&copy, d->rock);
+        }
+        // if we're not doing tombstones, don't check the rest
+        if (!(d->flags & MBOXTREE_TOMBSTONES)) break;
     }
 
     return 0;
