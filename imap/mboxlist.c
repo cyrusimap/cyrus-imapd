@@ -732,13 +732,15 @@ EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid,
     int r;
     const char *data;
     size_t datalen;
+    char dbname[MAX_MAILBOX_NAME];
 
     init_internal();
 
     r = mboxlist_read_uniqueid(uniqueid, &data, &datalen, NULL, 0);
     if (r) return NULL;
 
-    return xstrndup(data, datalen);
+    snprintf(dbname, sizeof(dbname), "%.*s", (int) datalen, data);
+    return mboxname_from_dbname(dbname);
 }
 
 /* given a mailbox name, find the staging directory.  XXX - this should
