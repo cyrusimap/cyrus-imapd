@@ -976,14 +976,14 @@ static int mboxlist_update_entry(const char *name,
 
                 if (strcmp(name, oldid->name)) {
                     /* Renamed mailbox */
-                    dlist_setnum64(synonyms, name, mbentry->foldermodseq);
+                    dlist_setnum64(synonyms, dbname, mbentry->foldermodseq);
                 }
                 mboxlist_entry_free(&oldid);
             }
             else {
                 /* New mailbox */
                 synonyms = dlist_newkvlist(NULL, "Y");
-                dlist_setnum64(synonyms, name, mbentry->foldermodseq);
+                dlist_setnum64(synonyms, dbname, mbentry->foldermodseq);
             }
 
             /* Add Y field for I record value */
