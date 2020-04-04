@@ -547,7 +547,7 @@ done:
 }
 
 /* read a record and parse into parts */
-static int mboxlist_mylookup(mbname_t *mbname,
+static int mboxlist_mylookup(const char *dbname,
                              mbentry_t **mbentryptr,
                              struct txn **tid, int wrlock, int allow_all)
 {
@@ -558,12 +558,11 @@ static int mboxlist_mylookup(mbname_t *mbname,
 
     init_internal();
 
-    char *dbname = mbname_dbname(mbname);
     r = mboxlist_read(dbname, &data, &datalen, tid, wrlock);
-    if (r) goto done;
+    if (r) return r;
 
     r = mboxlist_parse_entry(&entry, dbname, 0, data, datalen);
-    if (r) goto done;
+    if (r) return r;
 
     if (!allow_all) {
         /* Ignore "reserved" entries, like they aren't there */
@@ -582,11 +581,9 @@ static int mboxlist_mylookup(mbname_t *mbname,
         }
     }
 
-  done:
     if (!r && mbentryptr) *mbentryptr = entry;
     else mboxlist_entry_free(&entry);
 
-    free(dbname);
     return r;
 }
 
@@ -596,10 +593,10 @@ static int mboxlist_mylookup(mbname_t *mbname,
 EXPORTED int mboxlist_lookup(const char *name,
                              mbentry_t **entryptr, struct txn **tid)
 {
-    mbname_t *mbname = mbname_from_intname(name);
-    int r = mboxlist_mylookup(mbname, entryptr, tid,
+    char *dbname = mboxname_to_dbname(name);
+    int r = mboxlist_mylookup(dbname, entryptr, tid,
                               0/*wrlock*/, 0/*allow_all*/);
-    mbname_free(&mbname);
+    free(dbname);
     return r;
 }
 
@@ -607,10 +604,10 @@ EXPORTED int mboxlist_lookup_allow_all(const char *name,
                                    mbentry_t **entryptr,
                                    struct txn **tid)
 {
-    mbname_t *mbname = mbname_from_intname(name);
-    int r = mboxlist_mylookup(mbname, entryptr, tid,
+    char *dbname = mboxname_to_dbname(name);
+    int r = mboxlist_mylookup(dbname, entryptr, tid,
                               0/*wrlock*/, 1/*allow_all*/);
-    mbname_free(&mbname);
+    free(dbname);
     return r;
 }
 
@@ -831,18 +828,17 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
 
 static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, struct txn **txn)
 {
-    mbname_t *mbname = mbname_from_intname(name);
+    char *dbname = mboxname_to_dbname(name);
     mbentry_t *old = NULL;
     int r = 0;
 
-    mboxlist_mylookup(mbname, &old, txn, 0, 1); // ignore errors, it will be NULL
+    mboxlist_mylookup(dbname, &old, txn, 0, 1); // ignore errors, it will be NULL
 
     if (have_racl) {
         r = mboxlist_update_racl(name, old, mbentry, txn);
         /* XXX return value here is discarded? */
     }
 
-    char *dbname = mbname_dbname(mbname);
     if (mbentry) {
         char *mboxent = mboxlist_entry_cstring(mbentry);
         r = cyrusdb_store(mbdb, dbname, strlen(dbname), mboxent, strlen(mboxent), txn);
@@ -865,7 +861,6 @@ static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, str
     free(dbname);
 
     mboxlist_entry_free(&old);
-    mbname_free(&mbname);
     return r;
 }
 
@@ -1254,9 +1249,12 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         }
 
         const char *mboxname = mbname_intname(mbname);
+        char *dbname = mbname_dbname(mbname);
 
         mboxlist_entry_free(&mbentry);
-        r = mboxlist_mylookup(mbname, &mbentry, NULL, 0, 1);
+        r = mboxlist_mylookup(dbname, &mbentry, NULL, 0, 1);
+        free(dbname);
+
         if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
         if (r) goto out;
 
@@ -1660,7 +1658,7 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     struct txn **tid;
     struct txn *lcl_tid = NULL;
     mbentry_t *mbentry = NULL;
-    mbname_t *mbname = mbname_from_intname(name);
+    char *dbname = mboxname_to_dbname(name);
 
     if(in_tid) {
         tid = in_tid;
@@ -1669,7 +1667,7 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     }
 
  retry:
-    r = mboxlist_mylookup(mbname, &mbentry, tid, 1, 1);
+    r = mboxlist_mylookup(dbname, &mbentry, tid, 1, 1);
     switch (r) {
     case 0:
         break;
@@ -1714,7 +1712,7 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     }
 
  done:
-    mbname_free(&mbname);
+    free(dbname);
     if (r && !in_tid && tid) {
         /* Abort the transaction if it is still in progress */
         cyrusdb_abort(mbdb, *tid);
@@ -2670,7 +2668,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     /* XXX - enforce cross domain restrictions */
     identifier = mbname_userid(idname);
 
-    mbname_t *mbname = mbname_from_intname(name);
+    char *dbname = mboxname_to_dbname(name);
 
     /* checks if the mailbox belongs to the user who is trying to change the
        access rights */
@@ -2697,7 +2695,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     /* 1. Start Transaction */
     /* lookup the mailbox to make sure it exists and get its acl */
     do {
-        r = mboxlist_mylookup(mbname, &mbentry, &tid, 1, 1);
+        r = mboxlist_mylookup(dbname, &mbentry, &tid, 1, 1);
     } while(r == IMAP_AGAIN);
 
     /* Can't do this to an in-transit or reserved mailbox */
@@ -2719,7 +2717,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
         if (!r) {
             do {
                 /* lookup the mailbox to make sure it exists and get its acl */
-                r = mboxlist_mylookup(mbname, &mbentry, &tid, 1, 1);
+                r = mboxlist_mylookup(dbname, &mbentry, &tid, 1, 1);
             } while (r == IMAP_AGAIN);
         }
 
@@ -2877,8 +2875,8 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     mailbox_close(&mailbox);
     free(newacl);
     mboxlist_entry_free(&mbentry);
-    mbname_free(&mbname);
     mbname_free(&idname);
+    free(dbname);
 
     return r;
 }
@@ -2912,14 +2910,14 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
     mbentry_t *mbentry = NULL;
     int r;
     struct txn *tid = NULL;
-    mbname_t *mbname = mbname_from_intname(name);
+    char *dbname = mboxname_to_dbname(name);
 
     init_internal();
 
     /* 1. Start Transaction */
     /* lookup the mailbox to make sure it exists and get its acl */
     do {
-        r = mboxlist_mylookup(mbname, &mbentry, &tid, 1, 1);
+        r = mboxlist_mylookup(dbname, &mbentry, &tid, 1, 1);
     } while(r == IMAP_AGAIN);
     if (r) goto done;
 
@@ -2984,7 +2982,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
     }
 
 done:
-    mbname_free(&mbname);
+    free(dbname);
 
     if (tid) {
         /* if we are mid-transaction, abort it! */
@@ -3123,7 +3121,9 @@ static int find_cb(void *rockp,
     int i;
 
     if (rock->checkmboxlist && !rock->mbentry) {
-        r = mboxlist_mylookup(rock->mbname, &rock->mbentry, NULL, 0, 0);
+        char *dbname = mbname_dbname(rock->mbname);
+        r = mboxlist_mylookup(dbname, &rock->mbentry, NULL, 0, 0);
+        free(dbname);
         if (r) {
             if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
             goto done;
@@ -4555,7 +4555,9 @@ static int usersubs_cb(void *rock, const char *key, size_t keylen,
         goto done;
     }
 
-    r = mboxlist_mylookup(mbname, &mbrock->mbentry, NULL, 0, 0);
+    char *dbname = mbname_dbname(mbname);
+    r = mboxlist_mylookup(dbname, &mbrock->mbentry, NULL, 0, 0);
+    free(dbname);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = 0;
         goto done;
@@ -4644,11 +4646,11 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
         return r;
     }
 
-    mbname_t *mbname = mbname_from_intname(name);
+    char *dbname = mboxname_to_dbname(name);
 
     if (add && !force) {
         /* Ensure mailbox exists and can be seen by user */
-        if ((r = mboxlist_mylookup(mbname, &mbentry, NULL, 0, 0))!=0) {
+        if ((r = mboxlist_mylookup(dbname, &mbentry, NULL, 0, 0))!=0) {
             mboxlist_closesubs(subs);
             goto done;
         }
@@ -4660,7 +4662,6 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
         }
     }
 
-    char *dbname = mbname_dbname(mbname);
     if (add) {
         r = cyrusdb_store(subs, dbname, strlen(dbname), "", 0, NULL);
     } else {
@@ -4668,7 +4669,6 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
         /* if it didn't exist, that's ok */
         if (r == CYRUSDB_EXISTS) r = CYRUSDB_OK;
     }
-    free(dbname);
 
     switch (r) {
     case CYRUSDB_OK:
@@ -4695,7 +4695,7 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
     }
 
   done:
-    mbname_free(&mbname);
+    free(dbname);
     return r;
 }
 
