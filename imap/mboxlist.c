@@ -290,8 +290,8 @@ EXPORTED char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t u
                              uid);
 }
 
-static void mboxlist_dbname_to_key(const char *dbname, size_t len,
-                                   struct buf *key)
+static void mboxlist_dbname_to_key(const char *dbname,
+                                   size_t len, struct buf *key)
 {
     buf_setcstr(key, "N");
     buf_appendmap(key, dbname, len);
