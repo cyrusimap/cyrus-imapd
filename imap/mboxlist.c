@@ -883,16 +883,14 @@ static void mboxlist_racl_key(int isuser, const char *keyuser,
 {
     buf_reset(buf);
     buf_putc(buf, KEY_TYPE_ACL);
-    if (keyuser || dbname) {
-        buf_putc(buf, isuser ? 'U' : 'S');
+    buf_putc(buf, isuser ? 'U' : 'S');
+    buf_putc(buf, ACL_RECORDSEP_CHAR);
+    if (keyuser) {
+        buf_appendcstr(buf, keyuser);
         buf_putc(buf, ACL_RECORDSEP_CHAR);
-        if (keyuser) {
-            buf_appendcstr(buf, keyuser);
-            buf_putc(buf, ACL_RECORDSEP_CHAR);
-        }
-        if (dbname) {
-            buf_appendcstr(buf, dbname);
-        }
+    }
+    if (dbname) {
+        buf_appendcstr(buf, dbname);
     }
 }
 
