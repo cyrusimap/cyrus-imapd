@@ -5145,20 +5145,48 @@ static int _check_rec_cb(void *rock,
                          const char *data, size_t datalen)
 {
     int *do_upgrade = (int *) rock;
+    int r = CYRUSDB_OK;
 
-    if (keylen && key[0] == KEY_TYPE_ID) {
+    if (!keylen) return r;
+
+    switch (key[0]) {
+    case '$':
+        /* Verify that we have a $RACL$ or $RUNQ$ record */
+        if (keylen >= 6 &&
+            (!strncmp(key, "$RACL$", 6) || !strncmp(key, "$RUNQ$", 6))) {
+            *do_upgrade = 1;
+            r = CYRUSDB_DONE;
+        }
+        break;
+
+    case KEY_TYPE_ACL: {
+        /* Verify that we have a valid A record */
+        struct buf aclkey = BUF_INITIALIZER;
+
+        mboxlist_racl_key(0, NULL, NULL, &aclkey);
+        if (keylen >= buf_len(&aclkey) &&
+            !strncmp(key, buf_cstring(&aclkey), buf_len(&aclkey))) {
+            *do_upgrade = 0;
+            r = CYRUSDB_DONE;
+        }
+        break;
+    }
+
+    case KEY_TYPE_ID: {
         /* Verify that we have a valid I record */
         mbentry_t *mbentry = NULL;
 
-        int r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
-        if (r) return r;
-
-        *do_upgrade = (mbentry->name == NULL);
-        mboxlist_entry_free(&mbentry);
+        r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
+        if (!r) {
+            *do_upgrade = (mbentry->name == NULL);
+            mboxlist_entry_free(&mbentry);
+            r = CYRUSDB_DONE;
+        }
+        break;
     }
-    else *do_upgrade = 1;
+    }
 
-    return CYRUSDB_DONE;
+    return r;
 }
 
 struct upgrade_rock {
@@ -5174,8 +5202,11 @@ static int _upgrade_cb(void *rock,
     mbentry_t *mbentry = NULL;
     int r;
 
-    /* skip $RACL or other $ space keys */
-    if (key[0] == '$') return CYRUSDB_OK;
+    /* skip $RACL$ or $RUNQ$ keys */
+    if (keylen >= 6 &&
+        (!strncmp(key, "$RACL$", 6) || !strncmp(key, "$RUNQ$", 6))) {
+        return CYRUSDB_OK;
+    }
 
     r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
     if (r) return r;
