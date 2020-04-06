@@ -130,7 +130,7 @@ int webdav_abort(struct webdav_db *webdavdb);
  * If kind is non-negative, only process entries of this kind.
  * If max_records is positive, only call cb for at most this entries. */
 int webdav_get_updates(struct webdav_db *webdavdb,
-                       modseq_t oldmodseq, const char *mboxname, int kind,
+                       modseq_t oldmodseq, const mbentry_t *mbentry, int kind,
                        int max_records, webdav_cb_t *cb, void *rock);
 
 #endif /* WITH_DAV */
