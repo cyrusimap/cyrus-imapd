@@ -5982,7 +5982,7 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
     }
 
 
-    if (channelp) {
+    if (flags & SYNC_FLAG_BATCH) {
         batchsize = config_getint(IMAPOPT_SYNC_BATCHSIZE);
     }
 

@@ -1190,6 +1190,8 @@ int main(int argc, char **argv)
             if (!min_delta)
                 min_delta = sync_get_durationconfig(channel, "sync_repeat_interval", 's');
 
+            flags |= SYNC_FLAG_BATCH;
+
             do_daemon(channel, sync_shutdown_file, timeout, min_delta);
         }
 

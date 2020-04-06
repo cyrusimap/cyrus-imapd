@@ -483,6 +483,7 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_LOCALONLY (1<<2)
 #define SYNC_FLAG_DELETE_REMOTE (1<<3)
 #define SYNC_FLAG_NO_COPYBACK (1<<4)
+#define SYNC_FLAG_BATCH (1<<5)
 
 int sync_do_seen(const char *userid, char *uniqueid, struct backend *sync_be,
                  const char **channelp, unsigned flags);
