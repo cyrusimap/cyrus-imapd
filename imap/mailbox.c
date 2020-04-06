@@ -2603,12 +2603,11 @@ static char *mailbox_header_data_cstring(struct mailbox *mailbox)
     struct buf buf = BUF_INITIALIZER;
     struct dlist *dl = dlist_newkvlist(NULL, mailbox->name);
 
+    dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mailbox->mbtype));
+
     dlist_setatom(dl, "N", mailbox->name);
 
     dlist_setatom(dl, "I", mailbox->uniqueid);
-
-    if (mailbox->mbtype)
-        dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mailbox->mbtype));
 
     if (mailbox->quotaroot)
         dlist_setatom(dl, "Q", mailbox->quotaroot);
