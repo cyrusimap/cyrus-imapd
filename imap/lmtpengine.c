@@ -701,12 +701,8 @@ static int savemsg(struct clientdata *cd,
 
     /* now, using our header cache, fill in the data that we want */
 
-    /* first check x-me-message-id, then resent-message-id */
-    if ((body = msg_getheader(m, "x-me-message-id")) && body[0][0]) {
-        m->id = xstrdup(body[0]);
-    } else if ((body = msg_getheader(m, "resent-message-id")) && body[0][0]) {
-        m->id = xstrdup(body[0]);
-    } else if ((body = msg_getheader(m, "message-id")) && body[0][0]) {
+    /* get message-id */
+    if ((body = msg_getheader(m, "message-id")) && body[0][0]) {
         m->id = xstrdup(body[0]);
     } else if (body) {
         r = IMAP_MESSAGE_BADHEADER;  /* empty message-id */
