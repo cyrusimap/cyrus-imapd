@@ -487,7 +487,7 @@ HIDDEN json_t *jmap_server_error(int r)
         break;
     default:
         return json_pack("{s:s, s:s}",
-                         "type", "serverError",
+                         "type", "serverFail",
                          "description", error_message(r));
     }
 }
