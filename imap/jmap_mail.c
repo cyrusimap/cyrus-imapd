@@ -2153,6 +2153,14 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "to")))) {
             _email_search_string(this, s, "to", perf_filters);
         }
+        if ((s = json_string_value(json_object_get(filter, "language")))) {
+            /* non-standard */
+            search_expr_t *e = search_expr_new(this, SEOP_FUZZYMATCH);
+            e->attr = search_attr_find("language");
+            e->value.s = xstrdup(s);
+            _email_search_perf_attr(e->attr, perf_filters);
+        }
+
     }
 
     return this;

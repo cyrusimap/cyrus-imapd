@@ -1303,6 +1303,20 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
         const char *val = strarray_nth(on->items, 0);
         qq = xapian_query_new_has_doctype(db, val[0], NULL);
         break;
+    case SEARCH_PART_LANGUAGE:
+        if (strarray_size(on->items) > 1) {
+            for (j = 0; j < strarray_size(on->items); j++) {
+                void *q = xapian_query_new_language(db, strarray_nth(on->items, j));
+                if (q) ptrarray_push(&childqueries, q);
+            }
+            qq = xapian_query_new_compound(db, /*is_or*/1,
+                                           (xapian_query_t **)childqueries.data,
+                                           childqueries.count);
+        }
+        else {
+            qq = xapian_query_new_language(db, strarray_nth(on->items, 0));
+        }
+        break;
     default:
         assert(on->items != NULL);
         assert(on->children == NULL);
@@ -1789,11 +1803,31 @@ out:
     return r;
 }
 
+static int validate_query(xapian_db_t *db, struct opnode *on)
+{
+    if (!on) return 0;
+
+    if (on->op == SEARCH_PART_LANGUAGE && !xapian_db_supports_langquery(db)) {
+        return IMAP_SEARCH_NOT_SUPPORTED;
+    }
+    struct opnode *child;
+    for (child = on->children ; child ; child = child->next) {
+        int r = validate_query(db, child);
+        if (r) return r;
+    }
+
+    return 0;
+}
+
 static int run_query(xapian_builder_t *bb)
 {
     struct opnode *root = NULL;
     xapian_query_t *xq = NULL;
     int r = 0;
+
+    /* Validate query for this db */
+    r = validate_query(bb->lock.db, bb->root);
+    if (r) return r;
 
     if (bb->proc_guidsearch) {
         xq = opnode_to_query(bb->lock.db, bb->root, bb->opts);
@@ -1901,6 +1935,22 @@ out:
     return r;
 }
 
+static void add_stemmers(xapian_db_t *db, struct opnode *on)
+{
+    if (!on) return;
+
+    if (on->op == SEARCH_PART_LANGUAGE) {
+        int i;
+        for (i = 0; i < strarray_size(on->items); i++) {
+            xapian_db_add_stemmer(db, strarray_nth(on->items, i));
+        }
+    }
+    struct opnode *child;
+    for (child = on->children ; child ; child = child->next) {
+        add_stemmers(db, child);
+    }
+}
+
 static int run_internal(xapian_builder_t *bb)
 {
     int r = 0;
@@ -1915,6 +1965,9 @@ static int run_internal(xapian_builder_t *bb)
     if (r) return r;
 
     if (bb->root) optimise_nodes(NULL, bb->root);
+
+    /* Stem using any languages explicitly requested by the user. */
+    add_stemmers(bb->lock.db, bb->root);
 
     /* A database can contain sub-databases of multiple versions */
     if (xapian_db_has_otherthan_v4_index(bb->lock.db)) {

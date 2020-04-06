@@ -213,6 +213,20 @@ HIDDEN void jmap_email_filtercondition_parse(struct jmap_parser *parser,
                 jmap_parser_invalid(parser, field);
             }
         }
+        else if (strarray_find(capabilities, JMAP_SEARCH_EXTENSION, 0) >= 0 &&
+                !strcmp(field, "language")) {
+            if (json_is_string(arg)) {
+                const char *s = json_string_value(arg);
+                if (!(isalpha(s[0]) && isalpha(s[1]) &&
+                    (s[2] == '\0' || (isalpha(s[2]) && s[3] == '\0')))) {
+                    /* not a two or three-letter code */
+                    jmap_parser_invalid(parser, field);
+                }
+            }
+            else {
+                jmap_parser_invalid(parser, field);
+            }
+        }
         else {
             jmap_parser_invalid(parser, field);
         }
