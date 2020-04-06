@@ -3874,7 +3874,12 @@ static void _email_query(jmap_req_t *req, struct jmap_emailquery *q,
     q->super.query_state = _email_make_querystate(modseq, 0, addrbook_modseq);
 
 done:
-    if (r && *err == NULL) *err = jmap_server_error(r);
+    if (r && *err == NULL) {
+        if (r == IMAP_SEARCH_SLOW) {
+            *err = json_pack("{s:s}", "type", "unsupportedFilter");
+        }
+        else *err = jmap_server_error(r);
+    }
     _emailsearch_free(search);
 }
 
