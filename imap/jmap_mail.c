@@ -732,7 +732,7 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
 
     // we only want regular mailboxes!
     static int needrights = JACL_READITEMS;
-    if (!mbentry || (mbtype_isa(mbox->mbtype) != MBTYPE_EMAIL) ||
+    if (!mbentry || (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) ||
         !jmap_hasrights_mbentry(req, mbentry, needrights)) {
         mboxlist_entry_free(&mbentry);
         return 0;
@@ -5798,7 +5798,7 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *vrock)
 
     mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
 
-    if (!mbentry || (mbtype_isa(mbox->mbtype) != MBTYPE_EMAIL) ||
+    if (!mbentry || (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) ||
         !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         mboxlist_entry_free(&mbentry);
         return 0;
