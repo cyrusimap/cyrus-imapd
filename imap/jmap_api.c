@@ -3270,24 +3270,28 @@ HIDDEN int jmap_mboxlist_lookup(const char *name,
     return 0;
 }
 
-static int _mbentry_by_uniqueid_cb(const mbentry_t *mbentry, void *rock)
+EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req,
+                                                   const char *id)
 {
-    struct hash_table *hash = rock;
-    hash_insert(mbentry->uniqueid, mboxlist_entry_copy(mbentry), hash);
-    return 0;
-}
+    mbentry_t *mbentry = NULL;
 
-EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id)
-{
     if (!req->mbentry_byid) {
         req->mbentry_byid = xzmalloc(sizeof(struct hash_table));
         construct_hash_table(req->mbentry_byid, 1024, 0);
-        mboxlist_usermboxtree(req->accountid, req->authstate,
-                              _mbentry_by_uniqueid_cb, req->mbentry_byid,
-                              MBOXTREE_INTERMEDIATES);
+    }
+    else mbentry = hash_lookup(id, req->mbentry_byid);
+
+    if (!mbentry) {
+        int r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
+        if (r || !mbentry || (mbentry->mbtype & MBTYPE_DELETED)) {
+            mboxlist_entry_free(&mbentry);
+            return NULL;
+        }
+
+        hash_insert(mbentry->uniqueid, mbentry, req->mbentry_byid);
     }
 
-    return (const mbentry_t *)hash_lookup(id, req->mbentry_byid);
+    return mbentry;
 }
 
 EXPORTED mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id)
