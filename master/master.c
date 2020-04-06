@@ -813,8 +813,7 @@ static void run_startup(const char *name, const strarray_t *cmd)
 static void fcntl_unset(int fd, int flag)
 {
     int fdflags = fcntl(fd, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
-                                       fdflags & ~flag);
+    if (fdflags != -1) fdflags = fcntl(fd, F_SETFD, fdflags & ~flag);
     if (fdflags == -1) {
         syslog(LOG_ERR, "fcntl(): unable to unset %d: %m", flag);
     }
