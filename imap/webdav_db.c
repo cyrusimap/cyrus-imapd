@@ -509,13 +509,16 @@ HIDDEN int webdav_delmbox(struct webdav_db *webdavdb, const mbentry_t *mbentry)
 }
 
 EXPORTED int webdav_get_updates(struct webdav_db *webdavdb,
-                                modseq_t oldmodseq, const char *mboxname,
+                                modseq_t oldmodseq, const mbentry_t *mbentry,
                                 int kind __attribute__((unused)), int limit,
                                 int (*cb)(void *rock, struct webdav_data *wdata),
                                 void *rock)
 {
+    const char *mailbox = !mbentry ? NULL :
+        ((webdavdb->db->version >= DB_MBOXID_VERSION) ?
+         mbentry->uniqueid : mbentry->name);
     struct sqldb_bindval bval[] = {
-        { ":mailbox",      SQLITE_TEXT,    { .s = mboxname  } },
+        { ":mailbox",      SQLITE_TEXT,    { .s = mailbox  } },
         { ":modseq",       SQLITE_INTEGER, { .i = oldmodseq } },
         /* SQLite interprets a negative limit as unbounded. */
         { ":limit",        SQLITE_INTEGER, { .i = limit > 0 ? limit : -1 } },
@@ -527,7 +530,7 @@ EXPORTED int webdav_get_updates(struct webdav_db *webdavdb,
     int r;
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
-    if (mboxname) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    if (mailbox) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
     if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
     buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
 
