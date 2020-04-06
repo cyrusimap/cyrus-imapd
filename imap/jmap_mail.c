@@ -3619,7 +3619,14 @@ static int _email_query_uidsearch(jmap_req_t *req,
     const ptrarray_t *msgdata = NULL;
     r = _emailsearch_run_uidsearch(req, search, &msgdata);
     if (r) {
-        *err = jmap_server_error(r);
+        switch (r) {
+            case IMAP_SEARCH_NOT_SUPPORTED:
+            case IMAP_SEARCH_SLOW:
+                *err = json_pack("{s:s}", "type", "unsupportedFilter");
+                break;
+            default:
+                *err = jmap_server_error(r);
+        }
         goto done;
     }
 
