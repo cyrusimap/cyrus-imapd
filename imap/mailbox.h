@@ -168,7 +168,7 @@ struct index_record {
 
     /* metadata */
     uint32_t recno;
-    int silent;
+    unsigned silentupdate:1;
     bit64 basecid;
     struct cacherecord crec;
 };

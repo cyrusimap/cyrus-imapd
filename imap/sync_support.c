@@ -1718,7 +1718,7 @@ out:
             // NOTE: this is because we don't pass the annotations through
             // with the record as we create it, so we can't update the alarm
             // database properly.  Instead, we don't set anything when we append
-            // by checking for .silent, and instead update the database by touching
+            // by checking for .silentupdate, and instead update the database by touching
             // the alarm AFTER writing the record.
             caldav_alarm_sync_nextcheck(mailbox, record);
         }
@@ -2619,7 +2619,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
                 goto out;
             }
 
-            copy.silent = 1;
+            copy.silentupdate = 1;
             r = mailbox_rewrite_index_record(mailbox, &copy);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to rewrite record %s %u",
@@ -2642,7 +2642,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             /* skip out on the first pass */
             if (!doupdate) continue;
 
-            mrecord.silent = 1;
+            mrecord.silentupdate = 1;
             r = sync_append_copyfile(mailbox, &mrecord, mannots, part_list);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to append file %s %d",
@@ -3754,7 +3754,7 @@ int sync_apply_expunge(struct dlist *kin,
         r = mailbox_find_index_record(mailbox, dlist_num(ui), &oldrecord);
         if (r) continue; /* skip */
         oldrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-        oldrecord.silent = 1; /* so the next sync will succeed */
+        oldrecord.silentupdate = 1; /* so the next sync will succeed */
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
         if (r) goto done;
     }
@@ -3974,7 +3974,7 @@ int sync_restore_mailbox(struct dlist *kin,
 
         /* reuse a provided modseq/last_updated if safe */
         if (highestmodseq && record.modseq && record.modseq <= mailbox->i.highestmodseq)
-            record.silent = 1;
+            record.silentupdate = 1;
 
         r = sync_append_copyfile(mailbox, &record, annots, part_list);
 

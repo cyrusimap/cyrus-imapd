@@ -3350,7 +3350,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
             /* remove associated alarms */
             caldav_alarm_delete_record(cdata->dav.mailbox, cdata->dav.imap_uid);
         }
-        else if (!new->silent) {
+        else if (!new->silentupdate) {
             /* make sure record is up to date - see add below for description of
              * why we don't touch silent records */
             caldav_alarm_touch_record(mailbox, new);
@@ -3394,7 +3394,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
          * because the lastalarm annotation won't be set yet -
          * instead, we have an explicit sync from the annotation
          * which is done after the annotations are written in sync_support.c */
-        if (cdata->dav.alive && !new->silent) {
+        if (cdata->dav.alive && !new->silentupdate) {
             r = caldav_alarm_add_record(mailbox, new, ical);
             if (r) goto alarmdone;
         }
@@ -3664,7 +3664,7 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
     if (!old && !new)
         return 0;
 
-    int ignorelimits = new ? new->silent : 1;
+    int ignorelimits = new ? new->silentupdate : 1;
     return conversations_update_record(cstate, mailbox, old, new,
                                        /*allowrenumber*/1, ignorelimits);
 }
@@ -3821,7 +3821,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
      * being silent about it (i.e. marking an already EXPUNGED
      * message as UNLINKED, or just updating the content_lines
      * field or cache_offset) */
-    if (record->silent) {
+    if (record->silentupdate) {
         mailbox_index_dirty(mailbox);
     }
     else {
@@ -3924,7 +3924,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     }
 
     /* update the highestmodseq if needed */
-    if (record->silent) {
+    if (record->silentupdate) {
         mailbox_index_dirty(mailbox);
     }
     else {
@@ -4081,7 +4081,7 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
             struct index_record copyrecord = *record;
             mailbox_record_cleanup(mailbox, &copyrecord);
             copyrecord.internal_flags &= ~FLAG_INTERNAL_NEEDS_CLEANUP;
-            copyrecord.silent = 1;
+            copyrecord.silentupdate = 1;
             /* XXX - error handling */
             mailbox_rewrite_index_record(mailbox, &copyrecord);
         }
@@ -4800,7 +4800,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
         }
 
         /* rewrite the index record */
-        copyrecord.silent = 1;
+        copyrecord.silentupdate = 1;
         if (mailbox_rewrite_index_record(mailbox, &copyrecord))
             continue;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
@@ -4955,7 +4955,7 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mar
 
         struct index_record copyrecord = *record;
         copyrecord.internal_flags |= FLAG_INTERNAL_UNLINKED;
-        copyrecord.silent = 1;
+        copyrecord.silentupdate = 1;
         if (mailbox_rewrite_index_record(mailbox, &copyrecord)) {
             syslog(LOG_ERR, "IOERROR: failed to mark unlinked %s %u (recno %d)",
                    mailbox->name, copyrecord.uid, copyrecord.recno);
@@ -5312,7 +5312,7 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
             continue;
 
         struct index_record copyrecord = *record;
-        copyrecord.silent = silent;
+        copyrecord.silentupdate = silent;
         r = conversations_update_record(cstate, mailbox, NULL, &copyrecord, 1,
                                         /*ignorelimits*/1);
         if (r) break;

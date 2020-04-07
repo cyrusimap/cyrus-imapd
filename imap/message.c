@@ -3585,7 +3585,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     }
 
     /* calculate the CID if needed */
-    if (!record->silent) {
+    if (!record->silentupdate) {
         /* match for GUID, it always has the same CID */
         conversation_id_t currentcid = conversations_guid_cid_lookup(state, message_guid_encode(&record->guid));
         if (currentcid) {
@@ -3630,7 +3630,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     if (!conv) conv = conversation_new();
 
     uint32_t max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
-    if (conv->exists >= max_thread && !mustkeep && !record->silent) {
+    if (conv->exists >= max_thread && !mustkeep && !record->silentupdate) {
         /* time to reset the conversation */
         conversation_id_t was = record->cid;
         record->cid = generate_conversation_id(record);
