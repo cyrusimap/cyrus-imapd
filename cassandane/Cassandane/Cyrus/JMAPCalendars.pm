@@ -1167,9 +1167,6 @@ sub normalize_event
             if (not exists $link->{size}) {
                 $link->{size} = undef;
             }
-            if (not exists $link->{rel}) {
-                $link->{rel} = 'related';
-            }
             if (not exists $link->{title}) {
                 $link->{title} = undef;
             }
@@ -1363,7 +1360,6 @@ sub test_calendarevent_get_links
         '113fa6c507397df199a18d1371be615577f9117f' => {
             '@type' => 'Link',
             href => "http://example.com/some.url",
-            rel => "enclosure",
         },
         'describedby-attach' => {
             '@type' => 'Link',
@@ -1373,7 +1369,7 @@ sub test_calendarevent_get_links
         'describedby-url' => {
             '@type' => 'Link',
             href => "http://describedby/url",
-            rel => "describedby",
+            rel => 'describedby',
         }
     };
 
@@ -6789,6 +6785,110 @@ sub test_calendarevent_get_utctime_with_tzid
     $self->assert_str_equals('Europe/Vienna', $event->{timeZone});
     $self->assert_str_equals('2019-12-19T19:00:00', $event->{start});
     $self->assert_str_equals('PT2H20M', $event->{duration});
+}
+
+sub test_calendarevent_set_linksurl
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DTEND;TZID=Europe/Vienna:20160928T170000
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:
+SUMMARY:test
+URL:https://url.example.com
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => ['links'],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[1][1]{list}[0]{id};
+    $self->assert_not_null($eventId);
+
+    my $wantLinks = [{
+        '@type' => 'Link',
+        href => 'https://url.example.com',
+        rel => 'describedby',
+    }];
+
+    my @links = values %{$res->[1][1]{list}[0]{links}};
+    $self->assert_deep_equals($wantLinks, \@links);
+
+    # Set some property other than links
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => 'update'
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['links'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    @links = values %{$res->[1][1]{list}[0]{links}};
+    $self->assert_deep_equals($wantLinks, \@links);
+    my $linkId = (keys %{$res->[1][1]{list}[0]{links}})[0];
+    $self->assert_not_null($linkId);
+
+    $res = $caldav->Request('GET', '/dav/calendars/user/cassandane/Default/test.ics');
+    $ical = $res->{content} =~ s/\r\n[ \t]//rg;
+    $self->assert($ical =~ /\nURL[^:]*:https:\/\/url\.example\.com/);
+
+    # Even changing rel sticks links to their former iCalendar property
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    "links/$linkId/rel" => 'enclosure',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['links'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $wantLinks->[0]{rel} = 'enclosure';
+
+    @links = values %{$res->[1][1]{list}[0]{links}};
+    $self->assert_deep_equals($wantLinks, \@links);
+
+    $res = $caldav->Request('GET', '/dav/calendars/user/cassandane/Default/test.ics');
+    $ical = $res->{content} =~ s/\r\n[ \t]//rg;
+    $self->assert($ical =~ /\nURL[^:]*:https:\/\/url\.example\.com/);
 }
 
 
