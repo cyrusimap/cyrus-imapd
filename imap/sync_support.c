@@ -6138,7 +6138,7 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
             r = IMAP_MAILBOX_LOCKED;
             goto done;
         }
-        ptrarray_add(&locks, lock);
+        ptrarray_append(&locks, lock);
     }
 
     kl = dlist_newlist(NULL, "MAILBOXES");
