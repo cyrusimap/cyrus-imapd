@@ -95,9 +95,12 @@ json_t* jmapical_tojmap(icalcomponent *ical, hash_table *props);
 json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props);
 
 /* Convert the jsevent to iCalendar.
- * Returns NULL on error.
+ * The oldical argument points to the previous VCALENDAR of the event,
+ * or NULL.
+ * Returns a new ical component, or NULL on error.
  */
-icalcomponent* jmapical_toical(json_t *jsevent, json_t *invalid);
+icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
+                               json_t *invalid);
 void icalcomponent_add_required_timezones(icalcomponent *ical);
 
 /* for CalDAV content negotiation */
