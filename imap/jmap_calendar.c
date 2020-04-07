@@ -2615,7 +2615,7 @@ static int setcalendarevents_create(jmap_req_t *req,
             json_object_set_new(event, "updated", json_string(datestr));
         }
     }
-    ical = jmapical_toical(event, invalid);
+    ical = jmapical_toical(event, NULL, invalid);
 
     // check that participantId is either not present or is a valid participant
     json_t *jparticipantId = json_object_get(event, "participantId");
@@ -3043,7 +3043,7 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
     json_decref(jdiff);
 
     /* Convert to iCalendar */
-    *newical = jmapical_toical(new_event, invalid);
+    *newical = jmapical_toical(new_event, oldical, invalid);
 
 done:
     json_decref(new_event);
