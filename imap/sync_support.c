@@ -2268,6 +2268,9 @@ int sync_append_copyfile(struct mailbox *mailbox,
     }
 
  just_write:
+    /* Never apply GUID limits when replicating or repairing */
+    record->ignorelimits = 1;
+
     r = mailbox_append_index_record(mailbox, record);
     if (r) return r;
 
@@ -2620,6 +2623,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             }
 
             copy.silentupdate = 1;
+            copy.ignorelimits = 1;
             r = mailbox_rewrite_index_record(mailbox, &copy);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to rewrite record %s %u",
@@ -3755,6 +3759,7 @@ int sync_apply_expunge(struct dlist *kin,
         if (r) continue; /* skip */
         oldrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
         oldrecord.silentupdate = 1; /* so the next sync will succeed */
+        oldrecord.ignorelimits = 1;
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
         if (r) goto done;
     }

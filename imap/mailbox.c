@@ -3664,7 +3664,7 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
     if (!old && !new)
         return 0;
 
-    int ignorelimits = new ? new->silentupdate : 1;
+    int ignorelimits = new ? new->ignorelimits : 1;
     return conversations_update_record(cstate, mailbox, old, new,
                                        /*allowrenumber*/1, ignorelimits);
 }
@@ -4082,6 +4082,7 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
             mailbox_record_cleanup(mailbox, &copyrecord);
             copyrecord.internal_flags &= ~FLAG_INTERNAL_NEEDS_CLEANUP;
             copyrecord.silentupdate = 1;
+            copyrecord.ignorelimits = 1;
             /* XXX - error handling */
             mailbox_rewrite_index_record(mailbox, &copyrecord);
         }
@@ -4801,6 +4802,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 
         /* rewrite the index record */
         copyrecord.silentupdate = 1;
+        copyrecord.ignorelimits = 1;
         if (mailbox_rewrite_index_record(mailbox, &copyrecord))
             continue;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
@@ -4956,6 +4958,7 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mar
         struct index_record copyrecord = *record;
         copyrecord.internal_flags |= FLAG_INTERNAL_UNLINKED;
         copyrecord.silentupdate = 1;
+        copyrecord.ignorelimits = 1;
         if (mailbox_rewrite_index_record(mailbox, &copyrecord)) {
             syslog(LOG_ERR, "IOERROR: failed to mark unlinked %s %u (recno %d)",
                    mailbox->name, copyrecord.uid, copyrecord.recno);
@@ -6669,6 +6672,9 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
         r = 0 ;
         goto out;
     }
+
+    /* always allow reconstruct to add records, even if we'd hit GUID limits */
+    record.ignorelimits = 1;
 
     r = mailbox_append_index_record(mailbox, &record);
 
