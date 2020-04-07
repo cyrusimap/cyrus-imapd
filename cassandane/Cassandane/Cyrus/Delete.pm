@@ -718,4 +718,27 @@ sub test_cyr_expire_dont_resurrect_convdb
     $self->assert(!-f "$basedir/conf/user/c/cassandane.conversations");
 }
 
+sub test_no_delete_with_children
+    :DelayedDelete :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $subfolder = 'INBOX.foo';
+    my $subsubfolder = 'INBOX.foo.bar';
+
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->create($subsubfolder)
+        or $self->fail("Cannot create folder $subsubfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->delete($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+}
+
 1;
