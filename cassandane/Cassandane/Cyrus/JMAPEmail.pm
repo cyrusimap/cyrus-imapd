@@ -17363,7 +17363,7 @@ sub test_email_copy_has_expunged
 
 sub test_email_query_language
     :min_version_3_1 :needs_component_jmap :JMAPExtensions
-    :SearchLanguage :SearchIndexParts
+    :SearchLanguage :SearchIndexParts :needs_dependency_cld2
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
