@@ -209,9 +209,14 @@ static int do_unmailbox(const char *mboxname, struct backend *sync_be,
     r = mailbox_open_irl(mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* make sure there's an explicit local tombstone */
-        /* XXX but, what if the tombstone expired out before replication ran? */
         mbentry_t *tombstone = NULL;
         r = mboxlist_lookup_allow_all(mboxname, &tombstone, NULL);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            // otherwise we don't change anything on the replica
+            syslog(LOG_NOTICE, "SYNCNOTICE: attempt to UNMAILBOX without a tombstone %s", mboxname);
+            r = 0;
+            goto skip;
+        }
         if (r) {
             syslog(LOG_ERR, "%s: mboxlist_lookup() failed: %s '%s'",
                             __func__, mboxname, error_message(r));
@@ -227,6 +232,7 @@ static int do_unmailbox(const char *mboxname, struct backend *sync_be,
                                 __func__, mboxname, error_message(r));
             }
         }
+        skip:
         mboxlist_entry_free(&tombstone);
     }
     mailbox_close(&mailbox);
