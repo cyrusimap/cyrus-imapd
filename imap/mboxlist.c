@@ -5169,7 +5169,7 @@ EXPORTED int mboxlist_addsubs(strarray_t *names, const char *userid)
     for (i = 0; i < strarray_size(names); i++) {
         const char *name = strarray_nth(names, i);
 
-        mboxlist_name_to_key(name, strlen(name), 1, userid, &key);
+        mboxlist_dbname_to_key(name, strlen(name), 1, userid, &key);
         r = cyrusdb_store(subs->db, buf_base(&key), buf_len(&key), "", 0, &tid);
 
         if (r != CYRUSDB_OK) {
