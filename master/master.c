@@ -3220,8 +3220,12 @@ finished:
                 }
 
                 r = kill(c->pid, SIGTERM);
-                if (r && errno != ESRCH)
-                    fatalf(EX_OSERR, "kill %ld: %m", (long) c->pid);
+                if (r && errno != ESRCH) {
+                    syslog(LOG_ERR, "kill child %ld of %s/%s: %m",
+                                    (long) c->pid, s->name, s->familyname);
+                    centry_set_state(c, SERVICE_STATE_DEAD);
+                    continue;
+                }
 
                 syslog(LOG_NOTICE, "waiting for child %ld of %s/%s to exit...",
                         (long) c->pid, s->name, s->familyname);
