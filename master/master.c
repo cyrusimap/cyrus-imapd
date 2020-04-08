@@ -876,7 +876,7 @@ static void spawn_waitdaemon(struct service *s, int wdi)
     char path[PATH_MAX], childready_buf[4], ignored;
     pid_t p, pgid;
     int pgid_pipe[2], childready_pipe[2];
-    int i, r;
+    int i, r = 0;
     struct centry *c;
 
     if (!s->name) {
@@ -895,10 +895,14 @@ static void spawn_waitdaemon(struct service *s, int wdi)
      * the child unblocks and can carry on, now that its pgid is set
      */
     r = pipe(pgid_pipe);
-    if (r) fatalf(EX_OSERR, "pipe failed: %m");
-
-    r = pipe(childready_pipe);
-    if (r) fatalf(EX_OSERR, "pipe failed: %m");
+    if (!r) r = pipe(childready_pipe);
+    if (r) {
+        syslog(LOG_ERR, "ERROR: unable to spawn waitdaemon %s/%s:"
+                        " pipe failed: %m",
+                        s->name, s->familyname);
+        r = EX_OSERR;
+        goto done;
+    }
 
     p = fork();
     if (p == 0) {
@@ -989,6 +993,7 @@ static void spawn_waitdaemon(struct service *s, int wdi)
              */
             syslog(LOG_NOTICE, "unable to set pgid for %s/%s: %m",
                                 s->name, s->familyname);
+            r = 0;
         }
         else if (waitdaemon_pgid == -1) {
             waitdaemon_pgid = p;
@@ -1002,8 +1007,11 @@ static void spawn_waitdaemon(struct service *s, int wdi)
         if (nread < 0 || (size_t) nread != sizeof childready_buf
             || strncmp(childready_buf, "ok\r\n", nread))
         {
-            fatalf(EX_CONFIG, "wait daemon %s did not write \"%s\" to fd %i: %m",
-                              s->name, "ok\\r\\n", STATUS_FD);
+            syslog(LOG_ERR,
+                   "ERROR: waitdaemon %s/%s did not write \"%s\" to fd %i: %m",
+                   s->name, s->familyname, "ok\\r\\n", STATUS_FD);
+            r = EX_CONFIG;
+            goto done;
         }
         close(childready_pipe[0]);
 
@@ -1017,7 +1025,20 @@ static void spawn_waitdaemon(struct service *s, int wdi)
     }
     else {
         /* fork failed */
-        fatalf(EX_OSERR, "fork failed: %m");
+        syslog(LOG_ERR, "ERROR: unable to spawn waitdaemon %s/%s:"
+                        " fork failed: %m",
+                        s->name, s->familyname);
+        r = EX_OSERR;
+    }
+
+done:
+    /* if we failed to start a waitdaemon, we need to kill any we did start,
+     * and then exit out */
+    if (r) {
+        if (waitdaemon_pgid != -1) {
+            kill(-waitdaemon_pgid, SIGTERM);
+        }
+        fatalf(r, "unable to spawn waitdaemon %s/%s", s->name, s->familyname);
     }
 }
 
