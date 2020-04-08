@@ -1538,4 +1538,44 @@ sub test_userprefix
     # Error from sync_do_user(ua): bailing out!
 }
 
+# this is testing a bug where DELETED namespace lookup in mboxlist_mboxtree
+# wasn't correctly looking only for children of that name, so it would try
+# to delete the wrong user's mailbox.
+sub test_reset_on_master
+    :DelayedDelete :min_version_3_3
+{
+    my ($self) = @_;
+    $self->{instance}->create_user("user2");
+
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $astore = $mastersvc->create_store(username => "user2");
+    my $atalk = $astore->get_client();
+
+    xlog "Creating some users with some deleted mailboxes";
+    $atalk->create("INBOX.hi");
+    $atalk->create("INBOX.no");
+    $atalk->delete("INBOX.hi");
+
+    $self->run_replication(user => "user2");
+
+    # reset user2
+    $self->{instance}->run_command({cyrus => 1}, 'sync_reset', '-f', "user2");
+
+    my $file = $self->{instance}->{basedir} . "/sync.log";
+    open(FH, ">", $file);
+    print FH "UNMAILBOX user.user2.hi\n";
+    print FH "MAILBOX user.user2.hi\n";
+    print FH "UNMAILBOX user.user2.no\n";
+    print FH "MAILBOX user.user2.no\n";
+    print FH "MAILBOX user.cassandane\n";
+    close(FH);
+
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+    xlog $self, "Run replication from a file with just the mailbox name in it";
+    $self->run_replication(inputfile => $file, rolling => 1);
+    my @mastersyslog = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/SYNCNOTICE: attempt to UNMAILBOX without a tombstone user.user2.no/, "@mastersyslog");
+}
+
 1;
