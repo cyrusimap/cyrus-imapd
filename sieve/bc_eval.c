@@ -151,7 +151,7 @@ static char* look_for_me(char *myaddr, strarray_t *addresses, const char **body,
                 /* is this address one of my addresses? */
                 altaddr = address_canonicalise(str);
 
-                if (!strcasecmp(addr,altaddr)) {
+                if (altaddr && !strcasecmp(addr, altaddr)) {
                     free(altaddr);
                     found=xstrdup(str);
                     break;
