@@ -1050,7 +1050,12 @@ static void spawn_service(struct service *s, int si, int wdi)
          * the child unblocks and can carry on, now that its pgid is set
          */
         r = pipe(wdpgid_pipe);
-        if (r) fatalf(EX_OSERR, "pipe failed: %m");
+        if (r) {
+            syslog(LOG_ERR,
+                   "ERROR: unable to respawn waitdaemon %s/%s: pipe failed: %m",
+                   s->name, s->familyname);
+            return;
+        }
     }
 
     switch (p = fork()) {
