@@ -2706,6 +2706,8 @@ EXPORTED void conversation_free(conversation_t *conv)
 
 struct prune_rock {
     struct conversations_state *state;
+    arrayu64_t *cidfilter;
+    arrayu64_t cids;
     time_t thresh;
     unsigned int nseen;
     unsigned int ndeleted;
@@ -2723,12 +2725,23 @@ static int prunecb(void *rock,
     r = check_msgid(key, keylen, NULL);
     if (r) goto done;
 
-    r = _conversations_parse(data, datalen, NULL, &stamp);
+    arrayu64_truncate(&prock->cids, 0);
+
+    r = _conversations_parse(data, datalen, &prock->cids, &stamp);
     if (r) goto done;
 
-    /* keep records newer than the threshold */
-    if (stamp >= prock->thresh)
-        goto done;
+    if (prock->cidfilter) {
+        size_t i;
+        for (i = 0; i < arrayu64_size(&prock->cids); i++) {
+            if (arrayu64_bsearch(prock->cidfilter, arrayu64_nth(&prock->cids, i)))
+                goto done; // found a match
+        }
+    }
+    else {
+        /* keep records newer than the threshold */
+        if (stamp >= prock->thresh)
+            goto done;
+    }
 
     prock->ndeleted++;
 
@@ -2741,13 +2754,41 @@ done:
     return r;
 }
 
+static int addknowncid(void *rock,
+                       const char *key, size_t keylen,
+                       const char *data __attribute__((unused)),
+                       size_t datalen __attribute__((unused)))
+{
+    arrayu64_t *knowncids = (arrayu64_t *)rock;
+    conversation_id_t cid;
+    const char *rest;
+
+    // errors - just skip them, they won't be readable!
+    if (keylen != 17 || key[0] != 'B') return 0;
+    int r = parsehex(key+1, &rest, 16, &cid);
+    if (!r) arrayu64_append(knowncids, cid);
+    return 0;
+}
+
 EXPORTED int conversations_prune(struct conversations_state *state,
                                  time_t thresh, unsigned int *nseenp,
                                  unsigned int *ndeletedp)
 {
-    struct prune_rock rock = { state, thresh, 0, 0 };
+    struct prune_rock rock = { state, NULL, ARRAYU64_INITIALIZER, thresh, 0, 0 };
+
+    if (config_getswitch(IMAPOPT_CONVERSATIONS_KEEP_EXISTING)) {
+        // these will be added in CID order, so we don't need to sort them
+        rock.cidfilter = arrayu64_new();
+        cyrusdb_foreach(state->db, "B", 1, NULL, addknowncid, &rock.cidfilter, &state->txn);
+    }
 
     cyrusdb_foreach(state->db, "<", 1, NULL, prunecb, &rock, &state->txn);
+
+    arrayu64_fini(&rock.cids);
+    if (rock.cidfilter) {
+        arrayu64_fini(rock.cidfilter);
+        free(rock.cidfilter);
+    }
 
     if (nseenp)
         *nseenp = rock.nseen;

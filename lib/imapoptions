@@ -698,6 +698,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, days is
    assumed. */
 
+{ "conversations_keep_existing", 0, SWITCH, "3.3.0" }
+/* during conversations cleanup, don't clean up if there are still existing emails
+   with one of the mentioned CIDs */
+
 { "conversations_max_thread", 100, INT, "3.1.1" }
 /* maximum size for a single thread.  Threads will split if they have this many
    messages in them and another message arrives */
