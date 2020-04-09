@@ -92,5 +92,6 @@ void arrayu64_uniq(arrayu64_t *);
 size_t arrayu64_size(const arrayu64_t *);
 
 off_t arrayu64_find(const arrayu64_t *au, uint64_t val, off_t start);
+off_t arrayu64_bsearch(const arrayu64_t *au, uint64_t val);
 
 #endif /* __CYRUS_ARRAYU64_H__ */

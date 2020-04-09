@@ -287,6 +287,25 @@ EXPORTED off_t arrayu64_find(const arrayu64_t *au, uint64_t val, off_t idx)
     return -1;
 }
 
+// needs a sorted array
+EXPORTED off_t arrayu64_bsearch(const arrayu64_t *au, uint64_t val)
+{
+    size_t low = 0;
+    size_t high = au->count - 1;
+
+    while (low <= high) {
+        off_t mid = (high - low)/2 + low;
+        uint64_t this = arrayu64_nth(au, mid);
+        if (this == val)
+            return mid;
+        if (this > val)
+            high = mid - 1;
+        else
+            low = mid + 1;
+    }
+    return -1;
+}
+
 EXPORTED size_t arrayu64_size(const arrayu64_t *au)
 {
     return au->count;
