@@ -66,7 +66,6 @@ void arrayu64_free(arrayu64_t *);
 
 int arrayu64_append(arrayu64_t *, uint64_t);
 int arrayu64_add(arrayu64_t *, uint64_t);
-int arrayu64_find(arrayu64_t *, uint64_t, int start);
 void arrayu64_set(arrayu64_t *, int idx, uint64_t);
 void arrayu64_insert(arrayu64_t *, int idx, uint64_t);
 uint64_t arrayu64_remove(arrayu64_t *, int idx);
@@ -90,6 +89,8 @@ void arrayu64_sort(arrayu64_t *, arrayu64_cmp_fn_t *);
 
 void arrayu64_uniq(arrayu64_t *);
 
-int arrayu64_size(const arrayu64_t *);
+size_t arrayu64_size(const arrayu64_t *);
+
+off_t arrayu64_find(const arrayu64_t *au, uint64_t val, off_t start);
 
 #endif /* __CYRUS_ARRAYU64_H__ */

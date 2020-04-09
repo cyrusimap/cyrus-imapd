@@ -1224,7 +1224,7 @@ static int sieve_snooze(void *ac,
     /* Determine until time */
     time_t now = time(NULL), until;
     struct tm *tm = localtime(&now);
-    int i, day_inc = -1;
+    int day_inc = -1;
     unsigned t;
     char tbuf[26];
 
@@ -1232,6 +1232,7 @@ static int sieve_snooze(void *ac,
         /* We have times for today - see if a future one is still available */
         unsigned today_sec = 3600 * tm->tm_hour + 60 * tm->tm_min + tm->tm_sec;
 
+        size_t i;
         for (i = 0; i < arrayu64_size(sn->times); i++) {
             t = arrayu64_nth(sn->times, i);
             if (t >= today_sec) {
@@ -1245,6 +1246,7 @@ static int sieve_snooze(void *ac,
         t = arrayu64_nth(sn->times, 0);
 
         /* Find next available day */
+        int i;
         for (i = tm->tm_wday+1; i < 14; i++) {
             if (sn->days & (1 << (i % 7))) {
                 day_inc = i - tm->tm_wday;

@@ -272,7 +272,7 @@ EXPORTED void arrayu64_uniq(arrayu64_t *au)
     }
 }
 
-EXPORTED int arrayu64_find(arrayu64_t *au, uint64_t val, int idx)
+EXPORTED off_t arrayu64_find(const arrayu64_t *au, uint64_t val, off_t idx)
 {
     int i;
 
@@ -287,7 +287,7 @@ EXPORTED int arrayu64_find(arrayu64_t *au, uint64_t val, int idx)
     return -1;
 }
 
-EXPORTED int arrayu64_size(const arrayu64_t *au)
+EXPORTED size_t arrayu64_size(const arrayu64_t *au)
 {
     return au->count;
 }

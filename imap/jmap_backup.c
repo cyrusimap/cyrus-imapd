@@ -1510,7 +1510,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     jmap_req_t *req = rrock->req;
     mbname_t *mbname = mbname_from_intname(mboxname);
     struct mailbox *newmailbox = NULL, *mailbox = NULL;
-    int i, r = 0;
+    int r = 0;
+    size_t i = 0;
 
     if (!rrock->jrestore->dry_run && mbname_isdeleted(mbname)) {
         /* Look for existing mailbox with same (undeleted) name */
