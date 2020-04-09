@@ -4000,7 +4000,8 @@ static int _email_queryargs_parse(jmap_req_t *req,
             jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
         query->disable_guidsearch = json_boolean_value(arg);
     }
-    else if (!strcmp(key, "findAllInThread") && json_is_boolean(arg)) {
+    else if (!strcmp(key, "findAllInThread") && json_is_boolean(arg) &&
+            jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
         query->findallthread = json_boolean_value(arg);
     }
     else r = 0;
