@@ -2137,6 +2137,8 @@ struct getcalendarevents_rock {
     int check_acl;
     hash_table utctimes_fallbacktz_by_mboxname;
     ptrarray_t malloced_fallbacktzs;
+    struct jmapical_datetime overrides_before;
+    struct jmapical_datetime overrides_after;
 };
 
 struct recurid_instanceof_rock {
@@ -2660,7 +2662,20 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     hash_table *props = rock->get->props;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     msgrecord_t *mr = NULL;
-    icaltimezone *utctimes_fallbacktz = NULL;
+    icaltimezone *utctimes_fallbacktz =
+        hash_lookup(cdata->dav.mailbox, &rock->utctimes_fallbacktz_by_mboxname);
+
+    /* Initialize fallback timezone for UTC times */
+    if (!utctimes_fallbacktz) {
+        int is_malloced = 0;
+        utctimes_fallbacktz =
+            calendarevent_get_utctimes_fallbacktz(cdata->dav.mailbox, req->userid,
+                    &is_malloced);
+        hash_insert(cdata->dav.mailbox, utctimes_fallbacktz,
+                &rock->utctimes_fallbacktz_by_mboxname);
+        if (is_malloced)
+            ptrarray_append(&rock->malloced_fallbacktzs, utctimes_fallbacktz);
+    }
 
     struct jmapical_jmapcontext jmapctx;
     jmap_calendarcontext_init(&jmapctx, req);
@@ -2789,19 +2804,52 @@ gotevent:
     /* Set utcStart and utcEnd */
     if (jmap_wantprop(props, "utcStart") || jmap_wantprop(props, "utcEnd")) {
         /* Lookup fall-back time zone on calendar collection */
-        utctimes_fallbacktz = hash_lookup(cdata->dav.mailbox,
-                                          &rock->utctimes_fallbacktz_by_mboxname);
-        if (!utctimes_fallbacktz) {
-            int is_malloced = 0;
-            utctimes_fallbacktz =
-                calendarevent_get_utctimes_fallbacktz(cdata->dav.mailbox, req->userid,
-                                                      &is_malloced);
-            hash_insert(cdata->dav.mailbox, utctimes_fallbacktz,
-                         &rock->utctimes_fallbacktz_by_mboxname);
-            if (is_malloced)
-                ptrarray_append(&rock->malloced_fallbacktzs, utctimes_fallbacktz);
-        }
         getcalendarevents_get_utctimes(jsevent, utctimes_fallbacktz);
+    }
+
+    /* Process recurrenceOverrides[Before,After] */
+    if (!jmapical_datetime_has_zero_time(&rock->overrides_before) ||
+        !jmapical_datetime_has_zero_time(&rock->overrides_after)) {
+
+        json_t *joverrides = json_object_get(jsevent, "recurrenceOverrides");
+
+        if (json_object_size(joverrides)) {
+            const char *tzid = json_string_value(json_object_get(jsevent, "timeZone"));
+            icaltimezone *utc = icaltimezone_get_utc_timezone();
+            icaltimezone *tz = NULL;
+            if (tzid) tz = icaltimezone_lookup_tzid(tzid);
+            if (!tz) tz = utctimes_fallbacktz;
+            if (!tz) tz = utc;
+
+            /* Filter overrides */
+            const char *rid;
+            json_t *jval;
+            void *tmp;
+            json_object_foreach_safe(joverrides, tmp, rid, jval) {
+                struct jmapical_datetime ridt = JMAPICAL_DATETIME_INITIALIZER;
+                if (jmapical_localdatetime_from_string(rid, &ridt) < 0) {
+                    continue;
+                }
+                if (tz != utc) {
+                    /* Convert recurid to UTC */
+                    icaltimetype icalrid = jmapical_datetime_to_icaltime(&ridt, tz);
+                    icalrid = icaltime_convert_to_zone(icalrid, utc);
+                    bit64 nano = ridt.nano;
+                    jmapical_datetime_from_icaltime(icalrid, &ridt);
+                    ridt.nano = nano;
+                }
+                if (!jmapical_datetime_has_zero_time(&rock->overrides_before) &&
+                        jmapical_datetime_compare(&ridt, &rock->overrides_before) >= 0) {
+                    /* Remove override */
+                    json_object_del(joverrides, rid);
+                }
+                if (!jmapical_datetime_has_zero_time(&rock->overrides_after) &&
+                        jmapical_datetime_compare(&ridt, &rock->overrides_after) < 0) {
+                    /* Remove override */
+                    json_object_del(joverrides, rid);
+                }
+            }
+        }
     }
 
     /* Remove isDraft if client didn't ask for it */
@@ -3088,6 +3136,36 @@ static void cachecalendarevents_cb(uint64_t rowid, void *payload, void *vrock)
                            JMAPCACHE_CALVERSION, eventrep);
 }
 
+struct getcalendarevents_args {
+    struct jmapical_datetime overrides_before;
+    struct jmapical_datetime overrides_after;
+};
+
+static int getcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
+                                        struct jmap_parser *parser __attribute__((unused)),
+                                        const char *arg,
+                                        json_t *val,
+                                        void *vrock)
+{
+    struct getcalendarevents_rock *rock = vrock;
+    const char *s = json_string_value(val);
+    if (!s) return 0;
+
+    if (!strcmp(arg, "recurrenceOverridesAfter")) {
+        if (jmapical_utcdatetime_from_string(s, &rock->overrides_after) == 0) {
+
+            return 1;
+        }
+    }
+    else if (!strcmp(arg, "recurrenceOverridesBefore")) {
+        if (jmapical_utcdatetime_from_string(s, &rock->overrides_before) == 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static int jmap_calendarevent_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -3110,7 +3188,9 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            NULL, /* want_eventids */
                                            checkacl,
                                            HASH_TABLE_INITIALIZER, /* utctimes_fallbacktz */
-                                           PTRARRAY_INITIALIZER    /* malloced_fallbacktzs */
+                                           PTRARRAY_INITIALIZER,   /* malloced_fallbacktzs */
+                                           JMAPICAL_DATETIME_INITIALIZER,
+                                           JMAPICAL_DATETIME_INITIALIZER
     };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
@@ -3118,7 +3198,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
 
     /* Parse request */
     jmap_get_parse(req, &parser, event_props, /*allow_null_ids*/1,
-                   NULL, NULL, &get, &err);
+                   getcalendarevents_parse_args, &rock, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
