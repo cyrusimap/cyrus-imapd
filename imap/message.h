@@ -193,6 +193,7 @@ extern void message_read_bodystructure(const struct index_record *record,
                                        struct body **body);
 
 extern int message_update_conversations(struct conversations_state *, struct mailbox *, struct index_record *, conversation_t **);
+extern char *message_extract_convsubject(const struct index_record *record);
 
 /* Call proc for each header in headers, which must contain valid
  * MIME header bytes. Header keys and values passed to the callback

@@ -3442,6 +3442,19 @@ static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
     return r;
 }
 
+EXPORTED char *message_extract_convsubject(const struct index_record *record)
+{
+    char *msubj = NULL;
+    if (cacheitem_base(record, CACHE_HEADERS)) {
+        struct buf msubject = BUF_INITIALIZER;
+        message1_get_subject(record, &msubject);
+        conversation_normalise_subject(&msubject);
+        msubj = buf_release(&msubject);
+        buf_free(&msubject);
+    }
+    return msubj;
+}
+
 /*
  * Update the conversations database for the given
  * mailbox, to account for the given message.
@@ -3455,13 +3468,12 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 {
     char *hdrs[4];
     char *c_refs = NULL, *c_env = NULL, *c_me_msgid = NULL;
-    struct buf msubject = BUF_INITIALIZER;
     strarray_t msgidlist = STRARRAY_INITIALIZER;
     arrayu64_t matchlist = ARRAYU64_INITIALIZER;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
     int mustkeep = 0;
     conversation_t *conv = NULL;
-    const char *msubj = NULL;
+    char *msubj = NULL;
     int i;
     int j;
     int r = 0;
@@ -3509,8 +3521,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 
         strarray_fini(&want);
 
-        message1_get_subject(record, &msubject);
-
         /* work around stupid message_guid API */
         message_guid_isnull(&record->guid);
     }
@@ -3524,8 +3534,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 
     /* Note that a NULL subject, e.g. due to a missing Subject: header
      * field in the original message, is normalised to "" not NULL */
-    conversation_normalise_subject(&msubject);
-    msubj = buf_cstring(&msubject);
+    msubj = message_extract_convsubject(record);
 
     for (i = 0 ; i < 4 ; i++) {
         int hcount = 0;
@@ -3692,7 +3701,7 @@ out:
     free(c_refs);
     free(c_env);
     free(c_me_msgid);
-    buf_free(&msubject);
+    free(msubj);
     if (local_mailbox)
         mailbox_close(&local_mailbox);
 

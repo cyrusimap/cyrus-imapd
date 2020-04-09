@@ -2339,6 +2339,12 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     else if (record->cid) {
         r = conversation_load(cstate, record->cid, &conv);
         if (r) goto done;
+        /* add subject if it loses draft flag */
+        if (conv && !conv->subject && !(record->system_flags & FLAG_DRAFT)) {
+            r = mailbox_cacherecord(mailbox, record);
+            if (r) goto done;
+            conv->subject = message_extract_convsubject(record);
+        }
         if (!conv) {
             if (!new) {
                 /* We're trying to delete a conversation that's already
