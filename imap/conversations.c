@@ -2619,12 +2619,12 @@ EXPORTED int conversation_update(struct conversations_state *state,
             }
 
             // case - adding an seen email to a new folder, but the thread is unseen
-            if (folder->exists && !oldfolderexists && oldunseen) {
+            if (folder->exists && !oldfolderexists && (is_trash ? folder->unseen : conv->unseen)) {
                 _apply_delta(&status.threadunseen, 1);
                 dirty = 1;
             }
             // case - removing the last message from a folder, and the thread remains unseen
-            else if (!folder->exists && oldfolderexists && oldunseen) {
+            else if (!folder->exists && oldfolderexists && (is_trash ? oldfolderunseen : oldunseen)) {
                 _apply_delta(&status.threadunseen, -1);
                 dirty = 1;
             }
