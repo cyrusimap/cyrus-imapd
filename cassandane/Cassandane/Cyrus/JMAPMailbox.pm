@@ -4098,5 +4098,116 @@ EOF
     );
 }
 
+sub test_mailbox_trash_counts_ondelete
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    $imap->uid(1);
+
+    xlog "Set up mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', { }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                "a" => { name => "a", parentId => undef },
+                "b" => { name => "b", parentId => undef },
+                "trash" => { name => "Trash", parentId => undef, role => "trash" },
+            },
+        }, 'R2'],
+    ]);
+    my %ids = map { $_ => $res->[1][1]{created}{$_}{id} }
+              keys %{$res->[1][1]{created}};
+
+    xlog "Set up messages";
+    my %raw = (
+        A => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test A\r
+EOF
+        B => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test B\r
+EOF
+        C => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test C\r
+EOF
+        D => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+    );
+
+    # threads:
+    # T1: A B C
+    # T2: D
+
+    xlog $self, "Set up all the emails in all the folders";
+    $imap->append('INBOX.a', "(\\Seen)", $raw{A}) || die $@;
+    $imap->append('INBOX.a', "()", $raw{B}) || die $@;
+    $imap->append('INBOX.a', "(\\Seen)", $raw{C}) || die $@;
+    $imap->append('INBOX.a', "()", $raw{D}) || die $@;
+
+    $self->_check_counts('Initial Test',
+        a => [ 4, 2, 2, 2 ],
+        b => [ 0, 0, 0, 0 ],
+        Trash => [ 0, 0, 0, 0 ],
+    );
+
+    xlog $self, "Move everything to trash";
+    $imap->select("INBOX.a");
+    $imap->move("1:*", "INBOX.Trash");
+    $self->_check_counts('After move all to Trash',
+        a => [ 0, 0, 0, 0 ],
+        b => [ 0, 0, 0, 0 ],
+        Trash => [ 4, 2, 2, 2 ],
+    );
+
+    xlog $self, "Destroy everything via JMAP";
+
+    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+    $res = $jmap->CallMethods([['Email/set', { destroy => $ids }, "R1"]]);
+
+    $self->_check_counts('After Destroy Everything',
+        a => [ 0, 0, 0, 0 ],
+        b => [ 0, 0, 0, 0 ],
+        Trash => [ 0, 0, 0, 0 ],
+    );
+}
 
 1;
