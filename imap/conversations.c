@@ -2779,7 +2779,7 @@ EXPORTED int conversations_prune(struct conversations_state *state,
     if (config_getswitch(IMAPOPT_CONVERSATIONS_KEEP_EXISTING)) {
         // these will be added in CID order, so we don't need to sort them
         rock.cidfilter = arrayu64_new();
-        cyrusdb_foreach(state->db, "B", 1, NULL, addknowncid, &rock.cidfilter, &state->txn);
+        cyrusdb_foreach(state->db, "B", 1, NULL, addknowncid, rock.cidfilter, &state->txn);
     }
 
     cyrusdb_foreach(state->db, "<", 1, NULL, prunecb, &rock, &state->txn);
