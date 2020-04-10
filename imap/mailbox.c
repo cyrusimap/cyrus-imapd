@@ -175,6 +175,7 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox,
 static void cleanup_stale_expunged(struct mailbox *mailbox);
 static bit32 mailbox_index_record_to_buf(struct index_record *record, int version,
                                          unsigned char *buf);
+static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype);
 
 #ifdef WITH_DAV
 static int mailbox_commit_dav(struct mailbox *mailbox);
@@ -1167,7 +1168,8 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
          * so the file may have changed */
         if (!r) r = mailbox_open_index(mailbox);
         /* lock_internal so DELETED doesn't cause it to appear to be
-         * NONEXISTENT */
+         * NONEXISTENT - but we still need conversations so we can write changes! */
+        if (!r) r = mailbox_lock_conversations(mailbox, LOCK_EXCLUSIVE);
         if (!r) r = mailbox_lock_index_internal(mailbox, LOCK_EXCLUSIVE);
         if (!r) {
             /* finish cleaning up */
