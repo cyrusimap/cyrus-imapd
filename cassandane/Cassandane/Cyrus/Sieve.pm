@@ -1470,7 +1470,11 @@ sub test_editheader
     $self->{instance}->install_sieve_script(<<EOF
 require ["editheader", "index", "regex", "fileinto", "copy"];
 fileinto :copy "$target";
-addheader "X-Cassandane-Test" "prepend1";
+addheader "X-Cassandane-Test" text:
+
+ prepend1
+.
+;
 addheader "X-Cassandane-Test2" "prepend2";
 addheader "X-Cassandane-Test2" "prepend3";
 addheader :last "X-Cassandane-Test" "append1";
@@ -1501,7 +1505,7 @@ EOF
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/^X-Cassandane-Test: prepend1/, $msg1);
+    $self->assert_matches(qr/^X-Cassandane-Test: \n prepend1\r\n/, $msg1);
     $self->assert_matches(qr/X-Cassandane-Test: append1\r\nX-Cassandane-Test: append3\r\nX-Cassandane-Test: append5\r\n\r\n/, $msg1);
 
     $imaptalk->select($target);
