@@ -6886,6 +6886,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     struct dlist *use;
     struct mailbox *mailbox = NULL;
     char *mailboxid = NULL;
+    mbentry_t *parent = NULL;
 
     /* We don't care about trailing hierarchy delimiters. */
     if (name[0] && name[strlen(name)-1] == imapd_namespace.hier_sep) {
@@ -6990,8 +6991,6 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
                 // for the proxy servers setting ... :/
                 if (!config_getstring(IMAPOPT_PROXYSERVERS)) {
                     // Find the parent mailbox, if any.
-                    mbentry_t *parent = NULL;
-
                     // mboxlist_findparent either supplies the parent
                     // or has a return code of IMAP_MAILBOX_NONEXISTENT.
                     r = mboxlist_findparent(mbname_intname(mbname), &parent);
@@ -7142,6 +7141,51 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     }
 
 localcreate:
+    // find the nearest ancestor to see if we have to fill out the branch
+    r = mboxlist_findparent(mbname_intname(mbname), &parent);
+    if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+
+    if (!r && (parent || !mbname_userid(mbname))) {
+        mbname_t *ancestor = mbname_from_intname(parent ? parent->name : NULL);
+        int oldest = strarray_size(mbname_boxes(ancestor));
+        int youngest = strarray_size(boxes) - 1;
+
+        // any missing ancestors?
+        if (oldest > youngest) {
+            // verify that we can create the requested mailbox
+            // before creating its ancestors
+            r = mboxlist_createmailboxcheck(mbname_intname(mbname),
+                                            mbtype, partition,
+                                            imapd_userisadmin
+                                            || imapd_userisproxyadmin,
+                                            imapd_userid, imapd_authstate,
+                                            NULL, NULL, 0);
+
+            int i;
+            for (i = oldest; !r && i < youngest; i++) {
+                // create the ancestors
+                mbname_push_boxes(ancestor, strarray_nth(boxes, i));
+                r = mboxlist_createmailbox(mbname_intname(ancestor),
+                                           mbtype, partition,
+                                           imapd_userisadmin
+                                           || imapd_userisproxyadmin,
+                                           imapd_userid, imapd_authstate,
+                                           localonly, localonly, 0, 1, NULL);
+                if (r) {
+                    // XXX  should we delete the ancestors we just created?
+                    break;
+                }
+            }
+        }
+
+        mbname_free(&ancestor);
+    }
+    if (r) {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+        goto done;
+    }
+
+    // now create the requested mailbox
     r = mboxlist_createmailbox_opts(
             mbname_intname(mbname),                             // const char *name
             mbtype,                                             // int mbtype
@@ -7239,6 +7283,7 @@ localcreate:
 done:
     mboxname_release(&namespacelock);
     mailbox_close(&mailbox);
+    mboxlist_entry_free(&parent);
     buf_free(&specialuse);
     mbname_free(&mbname);
     free(mailboxid);
