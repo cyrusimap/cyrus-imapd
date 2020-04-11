@@ -64,10 +64,25 @@ comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script)
 {
     if (c->match == -1) c->match = IS;
     if (c->collation == -1) c->collation = ASCIICASEMAP;
-    if (c->match == COUNT && c->collation != ASCIINUMERIC) {
-        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
-                     ":count", "i;ascii-numeric");
+
+    /* i;ascii-numeric is only supported for IS, COUNT, and VALUE match-types */
+    if (c->collation == ASCIINUMERIC) {
+        const char *invalid_match = NULL;
+
+        if (c->match == CONTAINS) invalid_match = ":contains";
+        else if (c->match == MATCHES) invalid_match = ":matches";
+        else if (c->match == REGEX) invalid_match = ":regex";
+
+        if (invalid_match) {
+            sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
+                         invalid_match, "i;ascii-numeric");
+        }
     }
+    else if (c->match == COUNT) {
+        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT, ":count",
+                     c->collation == OCTET ? "i;octet" : "i;ascii-casemap");
+    }
+
     return c;
 }
 
