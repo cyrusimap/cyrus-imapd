@@ -367,8 +367,9 @@ static int snooze(void *ac, void *ic, void *sc __attribute__((unused)),
 
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
-    int i, day_inc = -1;
+    int day_inc = -1;
     unsigned t;
+    size_t i;
 
     if (sn->days & (1 << tm->tm_wday)) {
         /* We have times for today - see if a future one is still available */
