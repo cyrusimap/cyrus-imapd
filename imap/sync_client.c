@@ -374,10 +374,7 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
 
     construct_hash_table(&user_mailboxes, 1024 /* XXX */, 0);
 
-    while (1) {
-        r = sync_log_reader_getitem(slr, args);
-        if (r == EOF) break;
-
+    while (sync_log_reader_getitem(slr, args) != EOF) {
         if (!strcmp(args[0], "USER"))
             sync_action_list_add(user_list, NULL, args[1]);
         else if (!strcmp(args[0], "UNUSER"))
