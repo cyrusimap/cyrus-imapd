@@ -1578,4 +1578,20 @@ sub test_reset_on_master
     $self->assert_matches(qr/SYNCNOTICE: attempt to UNMAILBOX without a tombstone user.user2.no/, "@mastersyslog");
 }
 
+# this is testing a bug where sync_client would abort on zero-length file
+sub test_sync_empty_file
+    :DelayedDelete :min_version_3_3
+{
+    my ($self) = @_;
+
+    $self->run_replication();
+
+    my $file = $self->{instance}->{basedir} . "/sync.log";
+    open(FH, ">", $file);
+    close(FH);
+
+    xlog $self, "Run replication from an empty file";
+    $self->run_replication(inputfile => $file, rolling => 1);
+}
+
 1;
