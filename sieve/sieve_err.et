@@ -93,6 +93,6 @@ ec SIEVE_IHAVE_INCOMPAT,
    "\"%s\" extension MUST NOT be used in \"ihave\" test"
 
 ec SIEVE_MATCH_INCOMPAT,
-   "\"%s\" match-type MUST be used with \"%s\" comparator"
+   "\"%s\" match-type MUST NOT be used with \"%s\" comparator"
 
 end
