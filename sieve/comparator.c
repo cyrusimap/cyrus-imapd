@@ -121,7 +121,8 @@ static int rel_le(const char *text, size_t tlen, const char *pat,
     return (compar(text, tlen, pat) <= 0);
 }
 
-/* --- i;octet comparators --- */
+
+/* --- i;octet comparators (RFC 4790, Section 9.3) --- */
 
 /* just compare the two; pat should be NULL terminated */
 static int octet_cmp_(const char *text, size_t tlen,
@@ -382,8 +383,7 @@ static int octet_regex(const char *text, size_t tlen, const char *pat,
 #endif
 
 
-/* --- i;ascii-casemap comparators --- */
-
+/* --- i;ascii-casemap comparators (RFC 4790, Section 9.2) --- */
 
 static int ascii_casemap_cmp(const char *text, size_t tlen, const char *pat)
 {
@@ -419,24 +419,15 @@ static int ascii_casemap_matches(const char *text, size_t tlen,
     return ret;
 }
 
-/* i;ascii-numeric; only supports relational tests
+
+/* --- i;ascii-numeric comparator (RFC 4790, Section 9.1) --- */
+
+/* only supports relational tests; pat should be NULL terminated
  *
  *  A \ B    number   not-num
  *  number   A ? B    A < B
  *  not-num  A > B    A == B
  */
-
-/* From RFC 2244:
- *
- * The i;ascii-numeric comparator interprets strings as decimal
- * positive integers represented as US-ASCII digits.  All values
- * which do not begin with a US-ASCII digit are considered equal
- * with an ordinal value higher than all non-NIL single-valued
- * attributes.  Otherwise, all US-ASCII digits (octet values
- * 0x30 to 0x39) are interpreted starting from the beginning of
- * the string to the first non-digit or the end of the string.
- */
-
 static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
 {
     unsigned text_digit_len;
@@ -448,47 +439,21 @@ static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
             for (text_digit_len = 0;
                  tlen-- && Uisdigit(text[text_digit_len]);
                  text_digit_len++);
-            for (pat_digit_len = 0;
-                 Uisdigit(pat[pat_digit_len]);
-                 pat_digit_len++);
+            pat_digit_len = strspn(pat, "0123456789");
 
-            if (text_digit_len < pat_digit_len) {
-                /* Pad "text" with leading 0s */
-                while (pat_digit_len > text_digit_len) {
-                    /* "text" can only be less or equal to "pat" */
-                    if ('0' < *pat) {
-                        return (-1);
-                    }
-                    pat++;
-                    pat_digit_len--;
-                }
-            } else if (text_digit_len > pat_digit_len) {
-                /* Pad "pad" with leading 0s */
-                while (text_digit_len > pat_digit_len) {
-                    /* "pad" can only be greater or equal to "text" */
-                    if (*text > '0') {
-                        return 1;
-                    }
-                    text++;
-                    text_digit_len--;
-                }
-            }
+            unsigned num_digits = MAX(text_digit_len, pat_digit_len);
+            int r;
 
-            /* CLAIM: If we here, we have two non-empty digital suffixes
-               of equal length */
-            while (text_digit_len > 0) {
-                if (*text < *pat) {
-                    return -1;
-                } else if (*text > *pat) {
-                    return 1;
-                }
-                /* Characters are equal, carry on */
-                text++;
-                pat++;
-                text_digit_len--;
-            }
+            do {
+                /* Pad the shorter string with leading 0s */
+                const char t = text_digit_len < num_digits ? '0' : *text++;
+                const char p =  pat_digit_len < num_digits ? '0' : *pat++;
 
-            return (0);
+                r = t - p;
+
+            } while (!r && --num_digits);
+
+            return r;
         } else {
             return 1;
         }
