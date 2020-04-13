@@ -187,6 +187,7 @@ EXPORTED void notify(const char *method,
         notify_dlist(notify_sock+6, method, class, priority,
                      user, mailbox, nopt, options,
                      message, fname, loginfo);
+        free(loginfo);
         return;
     }
 
