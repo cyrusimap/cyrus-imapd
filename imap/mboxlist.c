@@ -1037,15 +1037,10 @@ static int mboxlist_update_entry(const char *name,
 
                 if (strcmp(name, oldid->name)) {
                     /* Renamed mailbox */
-                    add_former_name(name_history, name,
-                                    time(NULL), mbentry->foldermodseq);
+                    add_former_name(name_history, oldid->name,
+                                    time(NULL), oldid->foldermodseq);
                 }
                 mboxlist_entry_free(&oldid);
-            }
-            else {
-                /* New mailbox */
-                add_former_name(name_history, name,
-                                time(NULL), mbentry->foldermodseq);
             }
 
             /* Add H field for I record value */
