@@ -5528,15 +5528,14 @@ static int _cyrusmsg_from_record(msgrecord_t *mr, struct cyrusmsg **msgptr)
     return 0;
 }
 
-static int _cyrusmsg_from_bodypart(msgrecord_t *mr,
-                                   struct body *body,
-                                   const struct body *part,
-                                   struct cyrusmsg **msgptr)
+static int _cyrusmsg_from_rfc822body(msgrecord_t *mr,
+                                     const struct body *body,
+                                     struct cyrusmsg **msgptr)
 {
     struct cyrusmsg *msg = xzmalloc(sizeof(struct cyrusmsg));
     msg->mr = mr;
     msg->part0 = body;
-    msg->rfc822part = part;
+    msg->rfc822part = body;
     *msgptr = msg;
     return 0;
 }
@@ -5660,14 +5659,17 @@ static int _cyrusmsg_get_headers(struct cyrusmsg *msg,
     /* Prefetch body structure */
     int r = _cyrusmsg_need_part0(msg);
     if (r) return r;
+
     /* Prefetch MIME message */
     r = _cyrusmsg_need_mime(msg);
     if (r) return r;
     const struct body *header_part = part ? part : msg->part0;
+
     struct headers *headers = xmalloc(sizeof(struct headers));
     _headers_init(headers);
     _headers_from_mime(msg->mime->s + header_part->header_offset,
                        header_part->header_size, headers);
+
     if (part && part->part_id)
         hash_insert(part->part_id, headers, msg->_headers_by_part_id);
     else if (part == NULL)
@@ -5684,10 +5686,14 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
                                   int want_all)
 {
     if (!part) {
-        /* Fetch bodypart */
-        int r = _cyrusmsg_need_part0(msg);
-        if (r) return json_null();
-        part = msg->part0;
+        if (msg->rfc822part) {
+            part = msg->rfc822part->subpart;
+        }
+        else {
+            int r = _cyrusmsg_need_part0(msg);
+            if (r) return json_null();
+            part = msg->part0;
+        }
     }
 
     /* Try to read the header from the parsed body part */
@@ -5759,7 +5765,8 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
     }
 
     /* Try to read the value from the index record or header cache */
-    if (msg->mr && part == msg->part0 && !want_all && want_form != HEADER_FORM_RAW) {
+    if (msg->mr && part == msg->part0 && !msg->rfc822part &&
+            !want_all && want_form != HEADER_FORM_RAW) {
         if (!msg->_m) {
             int r = msgrecord_get_message(msg->mr, &msg->_m);
             if (r) return json_null();
@@ -6693,15 +6700,14 @@ static int _email_from_record(jmap_req_t *req,
     return r;
 }
 
-static int _email_from_body(jmap_req_t *req,
-                            struct email_getargs *args,
-                            msgrecord_t *mr,
-                            struct body *body,
-                            const struct body *part,
-                            json_t **emailptr)
+static int _email_from_rfc822body(jmap_req_t *req,
+                                  struct email_getargs *args,
+                                  msgrecord_t *mr,
+                                  const struct body *body,
+                                  json_t **emailptr)
 {
     struct cyrusmsg *msg = NULL;
-    int r = _cyrusmsg_from_bodypart(mr, body, part, &msg);
+    int r = _cyrusmsg_from_rfc822body(mr, body, &msg);
     if (!r) r = _email_from_msg(req, args, msg, emailptr);
     _cyrusmsg_free(&msg);
     return r;
@@ -7230,8 +7236,11 @@ static int jmap_email_parse(jmap_req_t *req)
                 syslog(LOG_ERR, "jmap: Email/parse(%s): %s", blobid, error_message(r));
             }
         }
-        else {
-            _email_from_body(req, &getargs, mr, body, part, &email);
+        else if (part) {
+            _email_from_rfc822body(req, &getargs, mr, part, &email);
+        }
+        else if (body) {
+            _email_from_record(req, &getargs, mr, &email);
         }
 
         if (email) {
