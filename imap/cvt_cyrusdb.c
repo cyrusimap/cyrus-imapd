@@ -122,7 +122,11 @@ int main(int argc, char *argv[])
     printf("Converting from %s (%s) to %s (%s)\n", old_db, OLDDB,
            new_db, NEWDB);
 
-    cyrusdb_convert(old_db, new_db, OLDDB, NEWDB);
+    int r = cyrusdb_convert(old_db, new_db, OLDDB, NEWDB);
+    if (r) {
+        printf("\nDBERROR: Conversion failed (r was %d)."
+               " Check syslog for details.\n", r);
+    }
 
     cyrus_done();
 
