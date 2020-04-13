@@ -2044,7 +2044,13 @@ static int verify_regexlist(sieve_script_t *sscript,
     }
 
     for (i = 0 ; !ret && i < strarray_size(sa) ; i++) {
-        if ((ret = regcomp(&reg, strarray_nth(sa, i), cflags)) != 0) {
+        const char *s = strarray_nth(sa, i);
+
+        /* Don't try to validate a regex that includes variables */
+        if (supported(SIEVE_CAPA_VARIABLES) && strstr(s, "${")) continue;
+
+        /* Check if the regex will compile */
+        if ((ret = regcomp(&reg, s, cflags)) != 0) {
             size_t errbuf_size = regerror(ret, &reg, NULL, 0);
 
             buf_reset(&sscript->sieveerr);
