@@ -145,10 +145,7 @@ static int _myopen(const char *backend, const char *fname,
 
     /* check if it opens normally.  Horray */
     r = db->backend->open(fname, flags, &db->engine, tid);
-    if (r == CYRUSDB_NOTFOUND) {
-        syslog(LOG_ERR, "DBERROR: DB %s (backend %s) not found", fname, backend);
-        goto done; /* no open flags */
-    }
+    if (r == CYRUSDB_NOTFOUND) goto done; /* no open flags */
     if (!r) goto done;
 
     /* magic time - we need to work out if the file was created by a different
