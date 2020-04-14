@@ -526,9 +526,12 @@ static int check_msgid(const char *msgid, size_t len, size_t *lenp)
     if (msgid[0] != '<' || msgid[len-1] != '>' || len < 3)
         return IMAP_INVALID_IDENTIFIER;
 
+#if 0  /* XXX  This check results in messages with invalid Message-ID
+          to be threadid incorrectly. */
     /* Leniently accept msg-id without @, but refuse multiple @ */
     if (memchr(msgid, '@', len) != memrchr(msgid, '@', len))
         return IMAP_INVALID_IDENTIFIER;
+#endif
 
     /* Leniently accept specials, but refuse the outright broken */
     size_t i;
