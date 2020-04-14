@@ -867,7 +867,7 @@ static int get_search_criterion(struct protstream *pin,
             search_expr_new(parent, SEOP_TRUE);
             break;
         }
-        else if (!strcmp(criteria.s, "annotation")) {   /* RFC 5259 */
+        else if (!strcmp(criteria.s, "annotation")) {   /* RFC 5257 */
             struct searchannot *annot = NULL;
             c = get_search_annotation(pin, pout, base, c, &annot);
             if (c == EOF)
