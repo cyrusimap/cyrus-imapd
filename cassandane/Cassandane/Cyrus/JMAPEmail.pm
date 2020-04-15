@@ -17669,7 +17669,7 @@ no utf8;
 }
 
 sub test_email_query_findallinthread
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
