@@ -234,7 +234,7 @@ static json_t *get_participant_identities(const char *userid,
     for (i = 0; i < strarray_size(&addrs); i++) {
         const char *addr = strarray_nth(&addrs, i);
         const char *type = "unknown";
-        if (strncasecmp(addr, "mailto:", 7)) {
+        if (!strchr(addr, ':') || strncasecmp(addr, "mailto:", 7)) {
             buf_setcstr(&buf, "mailto:");
             buf_appendcstr(&buf, addr);
             addr = buf_cstring(&buf);
@@ -2167,6 +2167,7 @@ struct getcalendarevents_rock {
     ptrarray_t malloced_fallbacktzs;
     struct jmapical_datetime overrides_before;
     struct jmapical_datetime overrides_after;
+    int reduce_participants;
 };
 
 struct recurid_instanceof_rock {
@@ -2941,6 +2942,37 @@ gotevent:
         json_object_del(jsevent, "isDraft");
     }
 
+    /* reduceParticipants */
+    if (rock->reduce_participants) {
+        if (strarray_size(&schedule_addresses) == 0) {
+            get_schedule_addresses(NULL, rock->mbentry->name, req->userid,
+                                   &schedule_addresses);
+        }
+        json_t *jparticipants = json_object_get(jsevent, "participants");
+        const char *participant_id;
+        json_t *jparticipant;
+        void *tmp;
+        json_object_foreach_safe(jparticipants, tmp, participant_id, jparticipant) {
+            if (json_object_get(json_object_get(jparticipant, "roles"), "owner")) {
+                continue;
+            }
+            json_t *jsendto = json_object_get(jparticipant,"sendTo");
+            const char *uri = json_string_value(json_object_get(jsendto, "imip"));
+            if (uri && !strncasecmp(uri, "mailto:", 7)) {
+                /* XXX case-insensitive comparison of complete email addresses
+                 * isn't entirely correct: only the domain is case-insensitive.
+                 * But better allow false positives. */
+                if (!strcasecmp(req->userid, uri + 7)) {
+                    continue;
+                }
+                if (strarray_find_case(&schedule_addresses, uri + 7, 0) >= 0) {
+                    continue;
+                }
+            }
+            json_object_del(jparticipants, participant_id);
+        }
+    }
+
     if (rock->want_eventids == NULL) {
         /* Client requested all events */
         jmap_filterprops(jsevent, props);
@@ -3232,17 +3264,24 @@ static int getcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
                                         void *vrock)
 {
     struct getcalendarevents_rock *rock = vrock;
-    const char *s = json_string_value(val);
-    if (!s) return 0;
 
     if (!strcmp(arg, "recurrenceOverridesAfter")) {
+        const char *s = json_string_value(val);
+        if (!s) return 0;
         if (jmapical_utcdatetime_from_string(s, &rock->overrides_after) == 0) {
-
             return 1;
         }
     }
     else if (!strcmp(arg, "recurrenceOverridesBefore")) {
+        const char *s = json_string_value(val);
+        if (!s) return 0;
         if (jmapical_utcdatetime_from_string(s, &rock->overrides_before) == 0) {
+            return 1;
+        }
+    }
+    else if (!strcmp(arg, "reduceParticipants")) {
+        if (json_is_boolean(val)) {
+            rock->reduce_participants = json_boolean_value(val);
             return 1;
         }
     }
@@ -3274,7 +3313,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            HASH_TABLE_INITIALIZER, /* utctimes_fallbacktz */
                                            PTRARRAY_INITIALIZER,   /* malloced_fallbacktzs */
                                            JMAPICAL_DATETIME_INITIALIZER,
-                                           JMAPICAL_DATETIME_INITIALIZER
+                                           JMAPICAL_DATETIME_INITIALIZER,
+                                           0 /* reduce_participants */
     };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
