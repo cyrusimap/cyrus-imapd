@@ -2002,6 +2002,21 @@ static void add_waitdaemon(const char *name, struct entry *e, void *rock)
         fatal(buf, EX_CONFIG);
     }
 
+    /* make sure this name doesn't conflict with a service */
+    for (i = 0; i < nservices; i++) {
+        if (!strcmpsafe(Services[i].name, name) && Services[i].exec) {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "multiple entries for waitdaemon '%s'", name);
+
+            if (ignore_err) {
+                syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+                goto done;
+            }
+
+            fatal(buf, EX_CONFIG);
+        }
+    }
+
     /* see if we have an existing entry that can be reused */
     for (i = 0; i < nwaitdaemons; i++) {
         /* skip non-primary instances */
@@ -2093,6 +2108,21 @@ static void add_daemon(const char *name, struct entry *e, void *rock)
         fatal(buf, EX_CONFIG);
     }
 
+    /* make sure this name doesn't conflict with a waitdaemon */
+    for (i = 0; i < nwaitdaemons; i++) {
+        if (!strcmpsafe(WaitDaemons[i].name, name) && WaitDaemons[i].exec) {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
+
+            if (ignore_err) {
+                syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+                goto done;
+            }
+
+            fatal(buf, EX_CONFIG);
+        }
+    }
+
     /* see if we have an existing entry that can be reused */
     for (i = 0; i < nservices; i++) {
         /* skip non-primary instances */
@@ -2182,6 +2212,21 @@ static void add_service(const char *name, struct entry *e, void *rock)
         }
 
         fatal(buf, EX_CONFIG);
+    }
+
+    /* make sure this name doesn't conflict with a waitdaemon */
+    for (i = 0; i < nwaitdaemons; i++) {
+        if (!strcmpsafe(WaitDaemons[i].name, name) && WaitDaemons[i].exec) {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
+
+            if (ignore_err) {
+                syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+                goto done;
+            }
+
+            fatal(buf, EX_CONFIG);
+        }
     }
 
     /* see if we have an existing entry that can be reused */
