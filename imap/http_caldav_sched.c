@@ -2435,7 +2435,8 @@ void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
     struct buf buf = BUF_INITIALIZER;
 
     /* allow override of schedule-address per-message (FM specific) */
-    const char **hdr = spool_getheader(req_hdrs, "Schedule-Address");
+    const char **hdr = req_hdrs ?
+        spool_getheader(req_hdrs, "Schedule-Address") : NULL;
 
     if (hdr) {
         if (!strncasecmp(hdr[0], "mailto:", 7))
