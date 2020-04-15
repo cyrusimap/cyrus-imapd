@@ -469,64 +469,6 @@ int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
     return 0;
 }
 
-/* add a header to the message
- *
- * incompatible with: none
- */
-int do_addheader(action_list_t *a, const char *name, const char *value,
-                 int index)
-{
-    action_list_t *b = NULL;
-
-    /* see if this conflicts with any previous actions taken on this message */
-    while (a != NULL) {
-        b = a;
-        a = a->next;
-    }
-
-    /* add to the action list */
-    a = new_action_list();
-    a->a = ACTION_ADDHEADER;
-    a->u.addh.name = name;
-    a->u.addh.value = value;
-    a->u.addh.index = index;
-
-    b->next = a;
-
-    return 0;
-}
-
-/* delete a header from the message
- *
- * incompatible with: none
- */
-int do_deleteheader(action_list_t *a, const char *name, void *patterns,
-                    int index, int comptype,
-                    comparator_t *compfunc, void *comprock)
-{
-    action_list_t *b = NULL;
-
-    /* see if this conflicts with any previous actions taken on this message */
-    while (a != NULL) {
-        b = a;
-        a = a->next;
-    }
-
-    /* add to the action list */
-    a = new_action_list();
-    a->a = ACTION_DELETEHEADER;
-    a->u.delh.name = name;
-    a->u.delh.patterns = patterns;
-    a->u.delh.index = index;
-    a->u.delh.comptype = comptype;
-    a->u.delh.compfunc = compfunc;
-    a->u.delh.comprock = comprock;
-
-    b->next = a;
-
-    return 0;
-}
-
 int do_duptrack(duptrack_list_t *d, sieve_duplicate_context_t *dc)
 {
     duptrack_list_t *b = NULL;
@@ -593,10 +535,6 @@ void free_action_list(action_list_t *a)
             if(a->u.vac.send.addr) free(a->u.vac.send.addr);
             if(a->u.vac.send.fromaddr) free(a->u.vac.send.fromaddr);
             strarray_free(a->u.vac.send.fcc.imapflags);
-            break;
-
-        case ACTION_DELETEHEADER:
-            ptrarray_free(a->u.delh.patterns);
             break;
 
         default:

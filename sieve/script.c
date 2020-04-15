@@ -420,8 +420,6 @@ static char *action_to_string(action_t action)
         case ACTION_SETFLAG: return "Setflag";
         case ACTION_ADDFLAG: return "Addflag";
         case ACTION_REMOVEFLAG: return "Removeflag";
-        case ACTION_ADDHEADER: return "AddHeader";
-        case ACTION_DELETEHEADER: return "DeleteHeader";
         case ACTION_MARK: return "Mark";
         case ACTION_UNMARK: return "Unmark";
         case ACTION_NOTIFY: return "Notify";
@@ -824,127 +822,6 @@ static int do_action_list(sieve_interp_t *interp,
 
                 break;
             }
-
-        case ACTION_ADDHEADER:
-            if (!interp->addheader)
-                return SIEVE_INTERNAL_ERROR;
-            ret = interp->addheader(script_context,
-                                    message_context,
-                                    a->u.addh.name,
-                                    a->u.addh.value,
-                                    a->u.addh.index);
-            free(interp->lastitem);
-            interp->lastitem = xstrdup(a->u.addh.name);
-            if (ret == SIEVE_OK)
-                snprintf(actions_string+strlen(actions_string),
-                         ACTIONS_STRING_LEN-strlen(actions_string),
-                         "Added header %s\n", a->u.addh.name);
-            break;
-
-        case ACTION_DELETEHEADER:
-            if (!interp->deleteheader)
-                return SIEVE_INTERNAL_ERROR;
-
-            if (!ptrarray_size(a->u.delh.patterns)) {
-                ret = interp->deleteheader(script_context,
-                                           message_context,
-                                           a->u.addh.name,
-                                           a->u.addh.index);
-            }
-            else {
-                strarray_t decoded_vals = STRARRAY_INITIALIZER;
-                int v, nval = 0, first_val = 0, index = a->u.addh.index;
-                unsigned long delete_mask = 0;
-                const char **vals;
-                char scount[20];
-
-                /* get the header values */
-                if (interp->getheader(message_context,
-                                      a->u.delh.name, &vals) != SIEVE_OK) {
-                    ret = 0;
-                    break;
-                }
-
-                for (nval = 0; vals[nval]; nval++) {
-                    if (a->u.delh.comptype == B_COUNT) {
-                        /* count only */
-                        continue;
-                    }
-
-                    /* decode header value and add to strarray_t */
-                    strarray_appendm(&decoded_vals,
-                                     charset_parse_mimeheader(vals[nval],
-                                                              0 /*flags*/));
-                }
-
-                if (a->u.delh.comptype == B_COUNT) {
-                    /* convert number of headers to a string.
-                       Note: use of :index restricts count to at most 1 */
-                    snprintf(scount, sizeof(scount), "%u", index ? 1 : nval);
-                }
-
-                if (nval && index) {
-                    /* normalize index */
-                    index += (index < 0) ? nval : -1;  /* 0-based */
-                    if (index < 0 || index >= nval) {
-                        /* index out of range */
-                        nval = 0;
-                    }
-                    else {
-                        /* target single instance */
-                        first_val = index;
-                        nval = index + 1;
-                    }
-                }
-
-                /* get (and optionally compare) each value pattern */
-                void *pat;
-                while ((pat = ptrarray_pop(a->u.delh.patterns))) {
-                    for (v = first_val; v < nval; v++) {
-                        if (!(delete_mask & (1 << v))) {
-                            const char *val;
-
-                            if (a->u.delh.comptype == B_COUNT) {
-                                val = scount;
-                            }
-                            else {
-                                val = strarray_nth(&decoded_vals, v);
-                            }
-                            if (a->u.delh.compfunc(val, strlen(val),
-                                                   pat, NULL/*match_vars*/,
-                                                   a->u.delh.comprock)) {
-                                /* flag the header for deletion */
-                                delete_mask |= (1 << v);
-                            }
-                        }
-                    }
-
-                    if (a->u.delh.comptype == B_REGEX)
-                        regfree(pat);
-                    free(pat);
-                }
-                strarray_fini(&decoded_vals);
-
-                /* delete flagged headers in reverse order
-                   (so indexing is consistent) */
-                for (v = nval - 1; v >= first_val; v--) {
-                    if (delete_mask & (1 << v)) {
-                        ret = interp->deleteheader(script_context,
-                                                   message_context,
-                                                   a->u.addh.name,
-                                                   v+1 /* 1-based */);
-                        if (ret) break;
-                    }
-                }
-            }
-
-            free(interp->lastitem);
-            interp->lastitem = xstrdup(a->u.delh.name);
-            if (ret == SIEVE_OK)
-                snprintf(actions_string+strlen(actions_string),
-                         ACTIONS_STRING_LEN-strlen(actions_string),
-                         "Deleted header %s\n", a->u.delh.name);
-            break;
 
         case ACTION_NONE:
             break;
