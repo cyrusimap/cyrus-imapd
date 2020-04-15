@@ -221,45 +221,32 @@ struct getcalendars_rock {
     int skip_hidden;
 };
 
-static json_t *get_schedule_address_set(const char *userid,
-                                        const char *mboxname)
+static json_t *get_participant_identities(const char *userid,
+                                          const char *mboxname)
 {
-    struct buf attrib = BUF_INITIALIZER;
-    json_t *val = json_array();
-    static const char *annot =
-        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-    int r = annotatemore_lookupmask(mboxname, annot, httpd_userid, &attrib);
-    if (r || !attrib.len) {
-        // fetch from my own principal
-        char *prinmbox = mboxname_user_mbox(httpd_userid, "#calendars");
-        r = annotatemore_lookupmask(prinmbox, annot, httpd_userid, &attrib);
-        free(prinmbox);
-    }
-    if (!r && attrib.len) {
-        strarray_t *values = strarray_split(buf_cstring(&attrib), ",", STRARRAY_TRIM);
-        int i;
-        for (i = 0; i < strarray_size(values); i++) {
-            const char *item = strarray_nth(values, i);
-            if (!strncasecmp(item, "mailto:", 7)) item += 7;
-            char *value = strconcat("mailto:", item, NULL);
-            json_array_append_new(val, json_string(value));
-            free(value);
+    strarray_t addrs = STRARRAY_INITIALIZER;
+    json_t *jids = json_array();
+
+    get_schedule_addresses(NULL, mboxname, userid, &addrs);
+
+    struct buf buf = BUF_INITIALIZER;
+    int i;
+    for (i = 0; i < strarray_size(&addrs); i++) {
+        const char *addr = strarray_nth(&addrs, i);
+        const char *type = "unknown";
+        if (strncasecmp(addr, "mailto:", 7)) {
+            buf_setcstr(&buf, "mailto:");
+            buf_appendcstr(&buf, addr);
+            addr = buf_cstring(&buf);
+            type = "imip";
         }
-        strarray_free(values);
+        json_array_append_new(jids, json_pack("{s:s s:s s:s}",
+                    "name", "", "type", type, "uri", addr));
     }
-    else if (strchr(userid, '@')) {
-        char *value = strconcat("mailto:", userid, NULL);
-        json_array_append_new(val, json_string(value));
-        free(value);
-    }
-    else {
-        const char *domain = httpd_extradomain ? httpd_extradomain : config_defdomain;
-        char *value = strconcat("mailto:", userid, "@", domain, NULL);
-        json_array_append_new(val, json_string(value));
-        free(value);
-    }
-    buf_free(&attrib);
-    return val;
+    buf_free(&buf);
+
+    strarray_fini(&addrs);
+    return jids;
 }
 
 static json_t *getcalendar_defaultalerts(const char *userid,
@@ -547,9 +534,9 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "shareesActAs", json_string("self"));
     }
 
-    if (jmap_wantprop(rock->get->props, "scheduleAddressSet")) {
-        json_t *set = get_schedule_address_set(rock->req->userid, mbentry->name);
-        json_object_set_new(obj, "scheduleAddressSet", set);
+    if (jmap_wantprop(rock->get->props, "participantIdentities")) {
+        json_object_set_new(obj, "participantIdentities",
+            get_participant_identities(rock->req->userid, mbentry->name));
     }
 
     json_array_append_new(rock->get->list, obj);
@@ -622,9 +609,9 @@ static const jmap_property_t calendar_props[] = {
         0
     },
     {
-        "paticipantIdentities",
+        "participantIdentities",
         NULL,
-        JMAP_PROP_SERVER_SET
+        0
     },
     {
         "shareWith",
@@ -677,11 +664,6 @@ static const jmap_property_t calendar_props[] = {
         "x-href",
         JMAP_CALENDARS_EXTENSION,
         JMAP_PROP_SERVER_SET
-    },
-    {
-        "scheduleAddressSet",
-        JMAP_CALENDARS_EXTENSION,
-        0
     },
 
     { NULL, NULL, 0 }
@@ -938,7 +920,7 @@ struct setcalendar_props {
     int isVisible;
     int isSubscribed;
     int transp;
-    json_t *scheduleAddressSet;
+    json_t *participant_identities;
     struct {
         json_t *With;
         int overwrite_acl;
@@ -1075,13 +1057,47 @@ static void setcalendar_readprops(jmap_req_t *req,
         jmap_parser_invalid(parser, "shareWith");
     }
 
-    /* scheduleAddressSet */
-    jprop = json_object_get(arg, "scheduleAddressSet");
-    if (json_is_array(jprop) || json_is_null(jprop)) {
-        props->scheduleAddressSet = jprop;
+    /* participantIdentities */
+    jprop = json_object_get(arg, "participantIdentities");
+    if (json_array_size(jprop)) {
+        size_t i;
+        json_t *jval;
+        props->participant_identities = jprop;
+        json_array_foreach(jprop, i, jval) {
+            if (json_is_object(jval)) {
+                jmap_parser_push_index(parser, "participantIdentities", i, NULL);
+                const char *propname;
+                json_t *jv;
+                struct buf buf = BUF_INITIALIZER;
+                json_object_foreach(jval, propname, jv) {
+                    if (!strcmp(propname, "name")) {
+                        if (JNOTNULL(jv) && !json_is_string(jv)) {
+                            jmap_parser_invalid(parser, "name");
+                        }
+                    }
+                    else if (!strcmp(propname, "type") || !strcmp(propname, "uri")) {
+                        const char *s = json_string_value(jv);
+                        if (s) buf_setcstr(&buf, s);
+                        buf_trim(&buf);
+                        if (!s || buf_len(&buf) == 0) {
+                            jmap_parser_invalid(parser, propname);
+                        }
+                        buf_reset(&buf);
+                    }
+                    else jmap_parser_invalid(parser, propname);
+                }
+                buf_free(&buf);
+                jmap_parser_pop(parser);
+            }
+            else {
+                jmap_parser_push_index(parser, "participantIdentities", i, NULL);
+                jmap_parser_invalid(parser, NULL);
+                jmap_parser_pop(parser);
+            }
+        }
     }
     else if (jprop) {
-        jmap_parser_invalid(parser, "scheduleAddressSet");
+        jmap_parser_invalid(parser, "participantIdentities");
     }
 
     /* includeInAvailablity */
@@ -1274,25 +1290,25 @@ static int setcalendar_writeprops(jmap_req_t *req,
         }
         buf_reset(&val);
     }
-    /* scheduleAddressSet */
-    if (!r && json_is_array(props->scheduleAddressSet)) {
+
+    /* participantIdentities */
+    if (!r && json_is_array(props->participant_identities)) {
         static const char *annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-        strarray_t *array = strarray_new();
         size_t i;
-        json_t *jval;
-        json_array_foreach(props->scheduleAddressSet, i, jval) {
-            strarray_add(array, json_string_value(jval));
+        json_t *jpid;
+        json_array_foreach(props->participant_identities, i, jpid) {
+            const char *uri = json_string_value(json_object_get(jpid, "uri"));
+            if (!uri) continue;
+            buf_appendcstr(&val, uri);
+            if (i < json_array_size(props->participant_identities)-1)
+                buf_putc(&val, ',');
         }
-        char *joined = strarray_join(array, ",");
-        buf_setcstr(&val, joined);
         r = annotate_state_writemask(astate, annot, req->userid, &val);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                    annot, error_message(r));
         }
-        free(joined);
-        strarray_free(array);
         buf_reset(&val);
     }
 
@@ -1560,6 +1576,9 @@ static void setcalendars_create(struct jmap_req *req,
             jmap_parser_invalid(&parser, "shareWith");
         }
     }
+    if (props.participant_identities && !jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+        jmap_parser_invalid(&parser, "participantIdentities");
+    }
     if (json_array_size(parser.invalid)) {
         *err = json_pack("{s:s, s:O}",
                 "type", "invalidProperties",
@@ -1642,8 +1661,8 @@ static void setcalendars_create(struct jmap_req *req,
     /* Report calendar as created. */
     *record = json_pack("{s:s}", "id", uid);
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
-        json_t *addrset = get_schedule_address_set(req->userid, mboxname);
-        if (addrset) json_object_set_new(*record, "scheduleAddressSet", addrset);
+        json_object_set_new(*record, "participantIdentities",
+            get_participant_identities(req->userid, mboxname));
     }
     jmap_add_id(req, creation_id, uid);
 
@@ -1675,6 +1694,12 @@ static void setcalendars_update(jmap_req_t *req,
     char *mboxname = caldav_mboxname(req->accountid, uid);
     mbname_t *mbname = mbname_from_intname(mboxname);
 
+    /* Make sure we don't mess up special calendars */
+    if (jmap_calendar_isspecial(mbname)) {
+        *err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+
     /* Parse and validate properties. */
     struct setcalendar_props props;
     setcalendar_readprops(req, &parser, &props, arg, /*is_create*/0);
@@ -1683,16 +1708,18 @@ static void setcalendars_update(jmap_req_t *req,
             jmap_parser_invalid(&parser, "shareWith");
         }
     }
+    if (props.participant_identities) {
+        if (!jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+            json_t *jcurr_identities = get_participant_identities(req->userid, mboxname);
+            if (!json_equal(jcurr_identities, props.participant_identities)) {
+                jmap_parser_invalid(&parser, "participantIdentities");
+            }
+        }
+    }
     if (json_array_size(parser.invalid)) {
         *err = json_pack("{s:s, s:O}",
                 "type", "invalidProperties",
                 "properties", parser.invalid);
-        goto done;
-    }
-
-    /* Make sure we don't mess up special calendars */
-    if (jmap_calendar_isspecial(mbname)) {
-        *err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
 
