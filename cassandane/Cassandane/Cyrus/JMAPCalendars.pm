@@ -1161,10 +1161,6 @@ sub normalize_event
             }
         }
     }
-    if (not exists $event->{participantId}) {
-        # non-standard
-        $event->{participantId} = undef;
-    }
     if (not exists $event->{participants}) {
         $event->{participants} = undef;
     } elsif (defined $event->{participants}) {
@@ -2456,7 +2452,6 @@ sub test_calendarevent_set_bymonth
                 "freeBusyStatus"=> "busy",
                 "replyTo"=> undef,
                 "participants"=> undef,
-                "participantId"=> undef,
                 "useDefaultAlerts"=> JSON::false,
                 "alerts"=> undef
         };
@@ -3167,7 +3162,6 @@ sub test_calendarevent_set_participants
             "web" => "http://local/rsvp",
 
         },
-        participantId => 'foo',
         "participants" => {
             'foo' => {
                 name => 'Foo',
@@ -3597,13 +3591,11 @@ sub test_calendarevent_set_participantid
         "status" => "confirmed",
         "replyTo" => { imip => "mailto:cassandane\@example.com" },
         "participants" => $participants,
-        "participantId" => 'you',
     };
 
     my $ret = $self->createandget_event($event);
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
-    $event->{participantId} = 'you';
 
     $self->assert_normalized_event_equals($event, $ret);
 
@@ -3633,7 +3625,6 @@ sub test_calendarevent_set_participants_justorga
         "replyTo" => {
             "imip" => "mailto:foo\@local",
         },
-        participantId => 'foo',
         "participants" => {
             'foo' => {
                 '@type' => 'Participant',
@@ -5963,9 +5954,6 @@ sub test_calendarevent_set_rsvpsequence
     $self->assert_not_null($event);
     $self->assert_num_equals(1, $event->{sequence});
 
-    my $participantId = $event->{participantId};
-    $self->assert_not_null($participantId);
-
     my $eventId = $event->{id};
 
     # Update a partstat doesn't bump sequence.
@@ -5973,7 +5961,7 @@ sub test_calendarevent_set_rsvpsequence
             ['CalendarEvent/set',{
                 update => {
                     $eventId => {
-                        ('participants/' . $participantId . '/participationStatus') => 'accepted',
+                        ('participants/me/participationStatus') => 'accepted',
                     }
                 }
             }, "R1"],
