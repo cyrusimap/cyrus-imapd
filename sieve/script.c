@@ -957,6 +957,10 @@ static int do_action_list(sieve_interp_t *interp,
 
         if (ret != SIEVE_OK) {
             /* uh oh! better bail! */
+
+            /* XXX  the calling program will deliver to INBOX anyways
+               and we don't want duplicate suppression to squash it */
+            implicit_keep = 0;
             break;
         }
     }
