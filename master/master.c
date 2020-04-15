@@ -2528,6 +2528,13 @@ static void do_prom_report(struct timeval now)
         buf_printf(&report, " %d %" PRId64 "\n",
                             s->ready_workers, last_updated);
     }
+    for (i = 0; i < nwaitdaemons; i++) {
+        const struct service *s = &WaitDaemons[i];
+        buf_printf(&report, "cyrus_master_ready_workers{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %d %" PRId64 "\n",
+                            s->ready_workers, last_updated);
+    }
 
     buf_printf(&report, "# HELP %s %s\n",
                         "cyrus_master_forks_total",
@@ -2535,6 +2542,13 @@ static void do_prom_report(struct timeval now)
     buf_appendcstr(&report, "# TYPE cyrus_master_forks_total counter\n");
     for (i = 0; i < nservices; i++) {
         const struct service *s = &Services[i];
+        buf_printf(&report, "cyrus_master_forks_total{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %d %" PRId64 "\n",
+                            s->nforks, last_updated);
+    }
+    for (i = 0; i < nwaitdaemons; i++) {
+        const struct service *s = &WaitDaemons[i];
         buf_printf(&report, "cyrus_master_forks_total{service=\"%s\",family=\"%s\"}",
                             s->name, s->familyname);
         buf_printf(&report, " %d %" PRId64 "\n",
@@ -2552,6 +2566,13 @@ static void do_prom_report(struct timeval now)
         buf_printf(&report, " %d %" PRId64 "\n",
                             s->nactive, last_updated);
     }
+    for (i = 0; i < nwaitdaemons; i++) {
+        const struct service *s = &WaitDaemons[i];
+        buf_printf(&report, "cyrus_master_active_children{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %d %" PRId64 "\n",
+                            s->nactive, last_updated);
+    }
 
     buf_printf(&report, "# HELP %s %s\n",
                         "cyrus_master_max_children",
@@ -2559,6 +2580,13 @@ static void do_prom_report(struct timeval now)
     buf_appendcstr(&report, "# TYPE cyrus_master_max_children gauge\n");
     for (i = 0; i < nservices; i++) {
         const struct service *s = &Services[i];
+        buf_printf(&report, "cyrus_master_max_children{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %d %" PRId64 "\n",
+                            s->max_workers, last_updated);
+    }
+    for (i = 0; i < nwaitdaemons; i++) {
+        const struct service *s = &WaitDaemons[i];
         buf_printf(&report, "cyrus_master_max_children{service=\"%s\",family=\"%s\"}",
                             s->name, s->familyname);
         buf_printf(&report, " %d %" PRId64 "\n",
@@ -2578,6 +2606,13 @@ static void do_prom_report(struct timeval now)
         buf_printf(&report, " %g %" PRId64 "\n",
                             s->forkrate, last_updated);
     }
+    for (i = 0; i < nwaitdaemons; i++) {
+        const struct service *s = &WaitDaemons[i];
+        buf_printf(&report, "cyrus_master_forks_per_second{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %g %" PRId64 "\n",
+                            s->forkrate, last_updated);
+    }
 
     buf_printf(&report, "# HELP %s %s\n",
                         "cyrus_master_max_forks_per_second",
@@ -2585,6 +2620,13 @@ static void do_prom_report(struct timeval now)
     buf_appendcstr(&report, "# TYPE cyrus_master_max_forks_per_second gauge\n");
     for (i = 0; i < nservices; i++) {
         const struct service *s = &Services[i];
+        buf_printf(&report, "cyrus_master_max_forks_per_second{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %u %" PRId64 "\n",
+                            s->maxforkrate, last_updated);
+    }
+    for (i = 0; i < nwaitdaemons; i++) {
+        const struct service *s = &WaitDaemons[i];
         buf_printf(&report, "cyrus_master_max_forks_per_second{service=\"%s\",family=\"%s\"}",
                             s->name, s->familyname);
         buf_printf(&report, " %u %" PRId64 "\n",
@@ -2602,8 +2644,13 @@ static void do_prom_report(struct timeval now)
         buf_printf(&report, " %d %" PRId64 "\n",
                             s->nreadyfails, last_updated);
     }
-
-    /* XXX count details for WaitDaemons */
+    for (i = 0; i < nwaitdaemons; i++) {
+        const struct service *s = &WaitDaemons[i];
+        buf_printf(&report, "cyrus_master_ready_fails_total{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %d %" PRId64 "\n",
+                            s->nreadyfails, last_updated);
+    }
 
     /* write it out */
     retry_write(fd, buf_cstring(&report), buf_len(&report));
