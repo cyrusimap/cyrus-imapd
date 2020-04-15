@@ -1395,16 +1395,21 @@ enum {
     REFCNT_INC  = 1
 };
 
+struct update_rock {
+    struct mailbox *attachments;
+    struct webdav_db *webdavdb;
+};
+
 static void update_refcount(const char *mid, short *op,
-                            struct mailbox *attachments)
+                            struct update_rock *urock)
 {
     switch (*op) {
     case REFCNT_DEC:
-        decrement_refcount(mid, attachments, attachments->local_webdav);
+        decrement_refcount(mid, urock->attachments, urock->webdavdb);
         break;
 
     case REFCNT_INC:
-        increment_refcount(mid, attachments->local_webdav);
+        increment_refcount(mid, urock->webdavdb);
         break;
     }
 }
@@ -1563,9 +1568,10 @@ static int manage_attachments(struct transaction_t *txn,
         }
 
         /* Update reference counts of attachments in hash table */
+        struct update_rock urock = { attachments, webdavdb };
         hash_enumerate(&mattach_table,
                        (void(*)(const char*,void*,void*)) &update_refcount,
-                       attachments);
+                       &urock);
     }
 
   done:
