@@ -3577,6 +3577,7 @@ static int setcalendarevents_create(jmap_req_t *req,
                                     json_t *event,
                                     struct caldav_db *db,
                                     json_t *invalid,
+                                    int send_scheduling_messages,
                                     json_t *create)
 {
     int r = 0, pe;
@@ -3734,7 +3735,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
 
     /* Handle scheduling. */
-    if (!is_draft) {
+    if (!is_draft && send_scheduling_messages) {
         r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
                                        NULL, ical, JMAP_CREATE);
         if (r) goto done;
@@ -4272,6 +4273,7 @@ static int setcalendarevents_update(jmap_req_t *req,
                                     struct event_id *eid,
                                     struct caldav_db *db,
                                     json_t *invalid,
+                                    int send_scheduling_messages,
                                     json_t *update,
                                     json_t **err)
 {
@@ -4445,7 +4447,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
 
     /* Handle scheduling. */
-    if (!(record.system_flags & FLAG_DRAFT)) {
+    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
         r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
                                        oldical, ical, JMAP_UPDATE);
         if (r) goto done;
@@ -4540,7 +4542,8 @@ done:
 
 static int setcalendarevents_destroy(jmap_req_t *req,
                                      struct event_id *eid,
-                                     struct caldav_db *db)
+                                     struct caldav_db *db,
+                                     int send_scheduling_messages)
 {
     int r;
     int needrights = JACL_REMOVEITEMS;
@@ -4563,7 +4566,8 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         json_t *invalid = json_array();
         json_t *update = NULL;
         json_t *err = NULL;
-        r = setcalendarevents_update(req, event_patch, eid, db, invalid, update, &err);
+        r = setcalendarevents_update(req, event_patch, eid, db, invalid,
+                                     send_scheduling_messages, update, &err);
         json_decref(event_patch);
         json_decref(update);
         if (err || (!r && json_array_size(invalid))) {
@@ -4624,7 +4628,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     }
 
     /* Handle scheduling. */
-    if (!(record.system_flags & FLAG_DRAFT)) {
+    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
         r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
                                        oldical, ical, JMAP_DESTROY);
         if (r) goto done;
@@ -4677,6 +4681,23 @@ static struct event_id *setcalendarevents_parse_id(jmap_req_t *req, const char *
     return parse_eventid(id);
 }
 
+static int setcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
+                                        struct jmap_parser *parser __attribute__((unused)),
+                                        const char *arg,
+                                        json_t *val,
+                                        void *vrock)
+{
+    int *send_scheduling_messages = vrock;
+
+    if (!strcmp(arg, "sendSchedulingMessages")) {
+        if (json_is_boolean(val)) {
+            *send_scheduling_messages = json_boolean_value(val);
+            return 1;
+        }
+    }
+
+    return 0;
+}
 
 static int jmap_calendarevent_set(struct jmap_req *req)
 {
@@ -4687,9 +4708,11 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     struct event_id *eid = NULL;
     const char *id;
     int r = 0;
+    int send_scheduling_messages = 1;
 
     /* Parse arguments */
-    jmap_set_parse(req, &parser, event_props, NULL, NULL, &set, &err);
+    jmap_set_parse(req, &parser, event_props, setcalendarevents_parse_args,
+                   &send_scheduling_messages, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -4743,7 +4766,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         /* Create the calendar event. */
         json_t *invalid = json_array();
         json_t *create = json_object();
-        r = setcalendarevents_create(req, req->accountid, arg, db, invalid, create);
+        r = setcalendarevents_create(req, req->accountid, arg, db, invalid,
+                                     send_scheduling_messages, create);
         if (r) {
             json_t *err = NULL;
             switch (r) {
@@ -4812,7 +4836,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         json_t *invalid = json_array();
         json_t *update = json_object();
         json_t *err = NULL;
-        r = setcalendarevents_update(req, arg, eid, db, invalid, update, &err);
+        r = setcalendarevents_update(req, arg, eid, db, invalid,
+                                     send_scheduling_messages, update, &err);
         if (r || err) {
             if (!err) {
                 switch (r) {
@@ -4880,7 +4905,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         }
 
         /* Destroy the calendar event. */
-        r = setcalendarevents_destroy(req, eid, db);
+        r = setcalendarevents_destroy(req, eid, db, send_scheduling_messages);
         if (r == IMAP_NOTFOUND) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(set.not_destroyed, eid->raw, err);
@@ -6037,7 +6062,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     json_t *invalid = json_array();
     *new_event = json_object();
     r = setcalendarevents_create(req, req->accountid, dst_event,
-                                 dst_db, invalid, *new_event);
+                                 dst_db, invalid, /*send_schedule*/0, *new_event);
     if (r || json_array_size(invalid)) {
         if (!r) {
             *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
