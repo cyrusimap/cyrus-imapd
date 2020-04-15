@@ -9729,4 +9729,107 @@ sub test_calendar_set_participantidentities
     $self->assert_str_equals('mailto:xxx@local', $addressSet->[1]{content});
 }
 
+sub test_calendarevent_get_reduceparticipants
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarId => 'Default',
+                    uid => 'event1uidlocal',
+                    title => "event1",
+                    start => "2020-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    replyTo => {
+                        imip => 'mailto:owner@example.com',
+                    },
+                    participants => {
+                        owner => {
+                            roles => {
+                                'owner' => JSON::true,
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:owner@example.com',
+                            },
+                        },
+                        attendee1 => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:attendee1@example.com',
+                            },
+                        },
+                        attendee2 => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:attendee2@example.com',
+                            },
+                        },
+                        cassandane => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+            reduceParticipants => JSON::true,
+            properties => ['participants'],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
+
+    my $wantUris = {
+        'mailto:owner@example.com' => 1,
+        'mailto:cassandane@example.com' => 1,
+    };
+    my %haveUris = map { $_->{sendTo}{imip} => 1 }
+            values %{$res->[1][1]{list}[0]{participants}};
+    $self->assert_deep_equals($wantUris, \%haveUris);
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    participantIdentities => [{
+                        name => '',
+                        type => 'imip',
+                        uri => 'mailto:attendee1@example.com',
+                    }],
+                }
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            reduceParticipants => JSON::true,
+            properties => ['participants'],
+        }, 'R2'],
+    ]);
+    $wantUris = {
+        'mailto:owner@example.com' => 1,
+        'mailto:attendee1@example.com' => 1,
+    };
+    %haveUris = map { $_->{sendTo}{imip} => 1 }
+            values %{$res->[1][1]{list}[0]{participants}};
+    $self->assert_deep_equals($wantUris, \%haveUris);
+}
+
 1;
