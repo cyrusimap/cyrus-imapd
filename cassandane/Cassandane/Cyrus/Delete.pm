@@ -719,7 +719,7 @@ sub test_cyr_expire_dont_resurrect_convdb
 }
 
 sub test_no_delete_with_children
-    :DelayedDelete :min_version_3_0
+    :DelayedDelete :min_version_3_3
 {
     my ($self) = @_;
 
