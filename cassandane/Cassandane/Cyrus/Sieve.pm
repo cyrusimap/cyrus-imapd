@@ -2649,13 +2649,16 @@ sub test_error_flag
 
     xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
     $self->{instance}->install_sieve_script(<<EOF);
-require ["ihave"];
+require ["ihave", "fileinto"];
 
 if header :contains "Subject" "fail" {
     error "this test fails";
 }
+elsif header :contains "Subject" "file" {
+    fileinto :copy "INBOX.not_exists";
+}
 EOF
-    xlog $self, "Deliver three messages";
+    xlog $self, "Deliver four messages";
 
     # should NOT get flagged
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
@@ -2669,16 +2672,21 @@ EOF
     my $msg3 = $self->{gen}->generate(subject => "Message 3");
     $self->{instance}->deliver($msg3);
 
+    # SHOULD get flagged
+    my $msg4 = $self->{gen}->generate(subject => "this fileinto won't succeed");
+    $self->{instance}->deliver($msg4);
+
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->select("INBOX");
-    $self->assert_num_equals(3, $imaptalk->get_response_code('exists'));
+    $self->assert_num_equals(4, $imaptalk->get_response_code('exists'));
 
     my $res = $imaptalk->fetch('1:*', 'flags');
 
     $self->assert_null(grep { $_ eq '$SieveFailed' } @{$res->{1}{flags}});
     $self->assert_not_null(grep { $_ eq '$SieveFailed' } @{$res->{2}{flags}});
     $self->assert_null(grep { $_ eq '$SieveFailed' } @{$res->{3}{flags}});
+    $self->assert_not_null(grep { $_ eq '$SieveFailed' } @{$res->{4}{flags}});
 }
 
 sub test_double_require
