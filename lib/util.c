@@ -1526,6 +1526,8 @@ EXPORTED void buf_refresh_mmap(struct buf *buf, int onceonly, int fd,
 
 EXPORTED void buf_free(struct buf *buf)
 {
+    if (!buf) return;
+
     if (buf->alloc)
         free(buf->s);
     else if (buf->flags & BUF_MMAP)
