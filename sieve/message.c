@@ -534,7 +534,7 @@ void free_action_list(action_list_t *a)
 
         case ACTION_KEEP:
             strarray_free(a->u.keep.imapflags);
-            buf_free(a->u.fil.headers);
+            buf_free(a->u.keep.headers);
             break;
 
         case ACTION_VACATION:
