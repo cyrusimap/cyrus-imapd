@@ -129,8 +129,7 @@ static int getheader(void *v, const char *phead, const char ***body)
     }
 }
 
-static void getheaders_cb(const char *name __attribute__((unused)),
-                          const char *value __attribute__((unused)),
+static void getheaders_cb(const char *name, const char *value,
                           const char *raw, void *rock)
 {
     struct buf *contents = (struct buf *) rock;
