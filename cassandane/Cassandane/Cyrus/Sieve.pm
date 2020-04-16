@@ -1458,8 +1458,67 @@ EOF
     $self->assert_num_equals(0, $imaptalk->get_response_code('exists'));
 }
 
-sub test_editheader
+sub test_editheader_basic
     :min_version_3_1
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my $target = "INBOX.target";
+
+    xlog $self, "Install a sieve script with editheader actions";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["editheader", "index", "regex", "fileinto", "copy"];
+fileinto :copy "$target";
+addheader "X-Cassandane-Test" text:
+
+ prepend1
+.
+;
+addheader "X-Cassandane-Test2" "prepend2";
+addheader "X-Cassandane-Test2" "prepend3";
+addheader :last "X-Cassandane-Test" "append1";
+addheader :last "X-Cassandane-Test" "append2";
+addheader :last "X-Cassandane-Test" "append3";
+addheader :last "X-Cassandane-Test" "append4";
+addheader :last "X-Cassandane-Test" "append5";
+addheader :last "X-Cassandane-Test" "append6";
+deleteheader :index 3 :contains "X-Cassandane-Test" "append";
+deleteheader :regex "X-Cassandane-Test" "append4";
+deleteheader :index 1 :last "X-Cassandane-Test";
+deleteheader "X-Cassandane-Test2";
+EOF
+    );
+
+    xlog $self, "Create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create($target)
+         or die "Cannot create $target: $@";
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    $imaptalk->select("INBOX");
+    my $res = $imaptalk->fetch(1, 'rfc822');
+
+    $msg1 = $res->{1}->{rfc822};
+
+    $self->assert_matches(qr/^X-Cassandane-Test: \n prepend1\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: append1\r\nX-Cassandane-Test: append3\r\nX-Cassandane-Test: append5\r\n\r\n/, $msg1);
+
+    $imaptalk->select($target);
+    $res = $imaptalk->fetch(1, 'rfc822');
+
+    $msg1 = $res->{1}->{rfc822};
+
+    $self->assert_matches(qr/^Return-Path: /, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Unique: .*\r\n\r\n/, $msg1);
+}
+
+sub test_editheader_currentheaders
+    :min_version_3_3
     :needs_component_sieve
 {
     my ($self) = @_;
