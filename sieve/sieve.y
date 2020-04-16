@@ -1264,7 +1264,10 @@ time1: time                      {
         ;
 
 
-time: STRING                     { $$ = verify_time(sscript, $1); }
+time: STRING                     {
+                                     $$ = verify_time(sscript, $1);
+                                     free($1);  /* done with this string */
+                                 }
         ;
 
 
