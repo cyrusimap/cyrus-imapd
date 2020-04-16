@@ -1469,7 +1469,10 @@ sub test_editheader
     xlog $self, "Install a sieve script with editheader actions";
     $self->{instance}->install_sieve_script(<<EOF
 require ["editheader", "index", "regex", "fileinto", "copy"];
-fileinto :copy "$target";
+addheader "X-Hello" "World";
+if header :contains "X-Hello" "World" {
+    fileinto :copy "$target";
+}
 addheader "X-Cassandane-Test" text:
 
  prepend1
@@ -1505,15 +1508,15 @@ EOF
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/^X-Cassandane-Test: \n prepend1\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: append1\r\nX-Cassandane-Test: append3\r\nX-Cassandane-Test: append5\r\n\r\n/, $msg1);
+    $self->assert_matches(qr/^X-Cassandane-Test: \n prepend1\r\nX-Hello: World\r\nReturn-Path: /, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Unique: .*\r\nX-Cassandane-Test: append1\r\nX-Cassandane-Test: append3\r\nX-Cassandane-Test: append5\r\n\r\n/, $msg1);
 
     $imaptalk->select($target);
     $res = $imaptalk->fetch(1, 'rfc822');
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/^Return-Path: /, $msg1);
+    $self->assert_matches(qr/^X-Hello: World\r\nReturn-Path: /, $msg1);
     $self->assert_matches(qr/X-Cassandane-Unique: .*\r\n\r\n/, $msg1);
 }
 
