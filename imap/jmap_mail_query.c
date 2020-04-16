@@ -227,6 +227,12 @@ HIDDEN void jmap_email_filtercondition_parse(struct jmap_parser *parser,
                 jmap_parser_invalid(parser, field);
             }
         }
+        else if (strarray_find(capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
+                !strcmp(field, "deliveredto")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
         else {
             jmap_parser_invalid(parser, field);
         }

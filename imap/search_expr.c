@@ -2393,6 +2393,20 @@ EXPORTED void search_attr_init(void)
             search_string_free,
             (void *)message_get_bcc
         },{
+            "deliveredto",
+            SEA_FUZZABLE,
+            SEARCH_PART_DELIVEREDTO,
+            SEARCH_COST_BODY,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_string_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)message_get_deliveredto
+        },{
             "cc",
             SEA_FUZZABLE,
             SEARCH_PART_CC,

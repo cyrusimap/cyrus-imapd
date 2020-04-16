@@ -975,6 +975,12 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "draft")) {        /* RFC 3501 */
             systemflag_match(parent, FLAG_DRAFT, /*not*/0);
         }
+        else if (!strcmp(criteria.s, "deliveredto")) {  /* nonstandard */
+            if (c != ' ') goto missingarg;
+            c = getastring(pin, pout, &arg);
+            if (c == EOF) goto missingarg;
+            string_match(parent, arg.s, criteria.s, base);
+        }
         else goto badcri;
         break;
 

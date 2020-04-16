@@ -137,6 +137,7 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
  * Version 4: indexes headers and bodies in separate documents
  * Version 5: indexes headers and bodies together and stems by language
  * Version 6: stores all detected languages of a document in slot SLOT_DOCLANGS
+ * Version 7: index new DELIVEREDTO search part
  */
 #define XAPIAN_DB_CURRENT_VERSION 6
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
@@ -302,7 +303,9 @@ static const char *get_term_prefix(int db_version, int partnum)
         "",                  /* BODY */
         "XO",                /* LOCATION */
         "XA",                /* ATTACHMENTNAME */
-        "XAB"                /* ATTACHMENTBODY */
+        "XAB",               /* ATTACHMENTBODY */
+        "XDT",               /* DELIVEREDTO */
+        NULL                 /* LANGUAGE */
     };
 
     static const char * const term_prefixes_v0[SEARCH_NUM_PARTS] = {
@@ -318,7 +321,9 @@ static const char *get_term_prefix(int db_version, int partnum)
         "D",                /* BODY */
         "O",                /* LOCATION */
         "A",                /* ATTACHMENTNAME */
-        "AB"                /* ATTACHMENTBODY */
+        "AB",               /* ATTACHMENTBODY */
+        "E",                /* DELIVEREDTO */
+        NULL                /* LANGUAGE */
     };
 
     return db_version > 0 ? term_prefixes[partnum] : term_prefixes_v0[partnum];
@@ -340,7 +345,9 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
         Xapian::TermGenerator::STEM_SOME,  /* BODY */
         Xapian::TermGenerator::STEM_SOME,  /* LOCATION */
         Xapian::TermGenerator::STEM_NONE,  /* ATTACHMENTNAME */
-        Xapian::TermGenerator::STEM_SOME   /* ATTACHMENTBODY */
+        Xapian::TermGenerator::STEM_SOME,  /* ATTACHMENTBODY */
+        Xapian::TermGenerator::STEM_NONE,  /* DELIVEREDTO */
+        Xapian::TermGenerator::STEM_NONE   /* LANGUAGE */
     };
 
     static Xapian::TermGenerator::stem_strategy stem_strategy_v1[SEARCH_NUM_PARTS] = {
@@ -357,7 +364,9 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
         Xapian::TermGenerator::STEM_SOME,  /* BODY */
         Xapian::TermGenerator::STEM_SOME,  /* LOCATION */
         Xapian::TermGenerator::STEM_NONE,  /* ATTACHMENTNAME */
-        Xapian::TermGenerator::STEM_SOME   /* ATTACHMENTBODY */
+        Xapian::TermGenerator::STEM_SOME,  /* ATTACHMENTBODY */
+        Xapian::TermGenerator::STEM_ALL,   /* DELIVEREDTO */
+        Xapian::TermGenerator::STEM_NONE   /* LANGUAGE */
     };
 
     static Xapian::TermGenerator::stem_strategy stem_strategy_v0[SEARCH_NUM_PARTS] = {
@@ -374,7 +383,9 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
         Xapian::TermGenerator::STEM_ALL,   /* BODY */
         Xapian::TermGenerator::STEM_ALL,   /* LOCATION */
         Xapian::TermGenerator::STEM_ALL,   /* ATTACHMENTNAME */
-        Xapian::TermGenerator::STEM_ALL    /* ATTACHMENTBODY */
+        Xapian::TermGenerator::STEM_ALL,   /* ATTACHMENTBODY */
+        Xapian::TermGenerator::STEM_ALL,   /* DELIVEREDTO */
+        Xapian::TermGenerator::STEM_NONE   /* LANGUAGE */
     };
 
     switch (db_version) {
@@ -1057,7 +1068,6 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
     }
     const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
     if (!prefix) {
-        // Legacy prefix handling code, this is not an error
         return NULL;
     }
 

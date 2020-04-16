@@ -307,6 +307,7 @@ extern int message_get_from(message_t *m, struct buf *buf);
 extern int message_get_to(message_t *m, struct buf *buf);
 extern int message_get_cc(message_t *m, struct buf *buf);
 extern int message_get_bcc(message_t *m, struct buf *buf);
+extern int message_get_deliveredto(message_t *m, struct buf *buf);
 extern int message_get_inreplyto(message_t *m, struct buf *buf);
 extern int message_get_references(message_t *m, struct buf *buf);
 extern int message_get_subject(message_t *m, struct buf *buf);

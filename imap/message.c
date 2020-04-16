@@ -4701,6 +4701,15 @@ EXPORTED int message_get_bcc(message_t *m, struct buf *buf)
     return message_get_field(m, "bcc", MESSAGE_RAW, buf);
 }
 
+EXPORTED int message_get_deliveredto(message_t *m, struct buf *buf)
+{
+    int r = message_get_field(m, "X-Original-Delivered-To", MESSAGE_RAW, buf);
+    if (!r && buf_len(buf) == 0) {
+        r = message_get_field(m, "X-Delivered-To", MESSAGE_RAW, buf);
+    }
+    return r;
+}
+
 EXPORTED int message_get_cc(message_t *m, struct buf *buf)
 {
     return message_get_field(m, "cc", MESSAGE_RAW, buf);
