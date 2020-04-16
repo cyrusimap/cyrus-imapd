@@ -521,7 +521,7 @@ void free_action_list(action_list_t *a)
         switch (a->a) {
         case ACTION_FILEINTO:
             strarray_free(a->u.fil.imapflags);
-            buf_free(a->u.fil.headers);
+            buf_destroy(a->u.fil.headers);
             break;
 
         case ACTION_SNOOZE:
@@ -529,12 +529,12 @@ void free_action_list(action_list_t *a)
             strarray_free(a->u.snz.addflags);
             strarray_free(a->u.snz.removeflags);
             arrayu64_free(a->u.snz.times);
-            buf_free(a->u.snz.headers);
+            buf_destroy(a->u.snz.headers);
             break;
 
         case ACTION_KEEP:
             strarray_free(a->u.keep.imapflags);
-            buf_free(a->u.keep.headers);
+            buf_destroy(a->u.keep.headers);
             break;
 
         case ACTION_VACATION:
@@ -545,7 +545,7 @@ void free_action_list(action_list_t *a)
             break;
 
         case ACTION_REDIRECT:
-            buf_free(a->u.red.headers);
+            buf_destroy(a->u.red.headers);
             break;
 
         default:

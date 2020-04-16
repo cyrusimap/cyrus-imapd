@@ -647,7 +647,7 @@ static int do_sieve_error(int ret,
         lastaction = ACTION_KEEP;
         keep_ret = interp->keep(&keep_context, interp->interp_context,
                                 script_context, message_context, &errmsg);
-        buf_free(keep_context.headers);
+        buf_destroy(keep_context.headers);
         ret |= keep_ret;
         if (keep_ret == SIEVE_OK)
             snprintf(actions_string+strlen(actions_string),
