@@ -102,7 +102,7 @@ int do_reject(action_list_t *a, int action, const char *msg)
 int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
               strarray_t *addflags, strarray_t *removeflags,
               unsigned char days, arrayu64_t *times,
-              strarray_t *imapflags)
+              strarray_t *imapflags, struct buf *headers)
 {
     action_list_t *b = NULL;
 
@@ -148,6 +148,7 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
     a->u.snz.days = days;
     a->u.snz.times = times;
     a->u.snz.is_mboxid = is_mboxid;
+    a->u.snz.headers = headers;
 
     b->next = a;
 
@@ -160,7 +161,7 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
  */
 int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
                 int cancel_keep, int do_create, const char *mailboxid,
-                strarray_t *imapflags)
+                strarray_t *imapflags, struct buf *headers)
 {
     action_list_t *b = NULL;
 
@@ -198,6 +199,7 @@ int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
     a->u.fil.imapflags = imapflags;
     a->u.fil.do_create = do_create;
     a->u.fil.mailboxid = mailboxid;
+    a->u.fil.headers = headers;
 
     b->next = a;
 
@@ -210,7 +212,7 @@ int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
  */
 int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
                 const char *dsn_notify, const char *dsn_ret,
-                int is_ext_list, int cancel_keep)
+                int is_ext_list, int cancel_keep, struct buf *headers)
 {
     action_list_t *b = NULL;
 
@@ -234,6 +236,7 @@ int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
     a->u.red.deliverby = deliverby;
     a->u.red.dsn_notify = dsn_notify;
     a->u.red.dsn_ret = dsn_ret;
+    a->u.red.headers = headers;
 
     b->next = a;
 
@@ -244,7 +247,7 @@ int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
  *
  * incompatible with: [e]reject
  */
-int do_keep(action_list_t *a, strarray_t *imapflags)
+int do_keep(action_list_t *a, strarray_t *imapflags, struct buf *headers)
 {
     action_list_t *b = NULL;
 
@@ -277,6 +280,7 @@ int do_keep(action_list_t *a, strarray_t *imapflags)
     a->a = ACTION_KEEP;
     a->cancel_keep = 1;
     a->u.keep.imapflags = imapflags;
+    a->u.keep.headers = headers;
 
     b->next = a;
 
@@ -517,6 +521,7 @@ void free_action_list(action_list_t *a)
         switch (a->a) {
         case ACTION_FILEINTO:
             strarray_free(a->u.fil.imapflags);
+            buf_free(a->u.fil.headers);
             break;
 
         case ACTION_SNOOZE:
@@ -524,10 +529,12 @@ void free_action_list(action_list_t *a)
             strarray_free(a->u.snz.addflags);
             strarray_free(a->u.snz.removeflags);
             arrayu64_free(a->u.snz.times);
+            buf_free(a->u.snz.headers);
             break;
 
         case ACTION_KEEP:
             strarray_free(a->u.keep.imapflags);
+            buf_free(a->u.fil.headers);
             break;
 
         case ACTION_VACATION:
@@ -535,6 +542,10 @@ void free_action_list(action_list_t *a)
             if(a->u.vac.send.addr) free(a->u.vac.send.addr);
             if(a->u.vac.send.fromaddr) free(a->u.vac.send.fromaddr);
             strarray_free(a->u.vac.send.fcc.imapflags);
+            break;
+
+        case ACTION_REDIRECT:
+            buf_free(a->u.red.headers);
             break;
 
         default:

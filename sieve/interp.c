@@ -311,6 +311,12 @@ EXPORTED void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f)
     interp->getheader = f;
 }
 
+EXPORTED void sieve_register_headersection(sieve_interp_t *interp,
+                                           sieve_get_headersection *f)
+{
+    interp->getheadersection = f;
+}
+
 EXPORTED void sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f)
 {
     interp->addheader = f;

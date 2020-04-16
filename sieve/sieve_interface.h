@@ -52,6 +52,7 @@
 
 #include "arrayu64.h"
 #include "strarray.h"
+#include "util.h"
 #include "sieve/sieve_err.h"
 
 /* external sieve types */
@@ -73,10 +74,12 @@ typedef int sieve_get_metadata(void *interp_context, const char *extname,
 typedef int sieve_get_header(void *message_context,
                              const char *header,
                              const char ***contents);
-typedef int sieve_add_header(void *script_context, void *message_context,
+typedef int sieve_get_headersection(void *message_context,
+                                    struct buf **contents);
+typedef int sieve_add_header(void *message_context,
                              const char *header, const char *contents, int index);
-typedef int sieve_delete_header(void *script_context, void *message_context,
-                             const char *header, int index);
+typedef int sieve_delete_header(void *message_context,
+                                const char *header, int index);
 typedef int sieve_get_fname(void *message_context, const char **fname);
 typedef int sieve_get_envelope(void *message_context,
                                const char *field,
@@ -131,6 +134,7 @@ typedef struct sieve_redirect_context {
     const char *deliverby;
     const char *dsn_notify;
     const char *dsn_ret;
+    struct buf *headers;
 } sieve_redirect_context_t;
 
 typedef struct sieve_reject_context {
@@ -146,6 +150,7 @@ typedef struct sieve_snooze_context {
     unsigned char days;
     arrayu64_t *times;
     int is_mboxid : 1;
+    struct buf *headers;
 } sieve_snooze_context_t;
 
 typedef struct sieve_fileinto_context {
@@ -154,10 +159,12 @@ typedef struct sieve_fileinto_context {
     strarray_t *imapflags;
     int do_create :1;
     const char *mailboxid;
+    struct buf *headers;
 } sieve_fileinto_context_t;
 
 typedef struct sieve_keep_context {
     strarray_t *imapflags;
+    struct buf *headers;
 } sieve_keep_context_t;
 
 typedef struct sieve_notify_context {
@@ -221,6 +228,8 @@ void sieve_register_specialuseexists(sieve_interp_t *interp,
                                      sieve_get_specialuseexists *f);
 void sieve_register_metadata(sieve_interp_t *interp, sieve_get_metadata *f);
 void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
+void sieve_register_headersection(sieve_interp_t *interp,
+                                  sieve_get_headersection *f);
 void sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f);
 void sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f);
 void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f);

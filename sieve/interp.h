@@ -54,6 +54,7 @@ struct sieve_interp {
 
     sieve_get_size *getsize;
     sieve_get_header *getheader;
+    sieve_get_headersection *getheadersection;
     sieve_add_header *addheader;
     sieve_delete_header *deleteheader;
     sieve_get_envelope *getenvelope;
@@ -91,6 +92,9 @@ struct sieve_interp {
 
     /* time when allocated */
     time_t time;
+
+    /* have we addedd/deleted any headers? */
+    int edited_headers : 1;
 };
 
 

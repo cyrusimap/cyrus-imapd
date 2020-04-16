@@ -132,11 +132,11 @@ void free_duptrack_list(duptrack_list_t *d);
 int do_reject(action_list_t *m, int action, const char *msg);
 int do_fileinto(action_list_t *m, const char *mbox, const char *specialuse,
                 int cancel_keep, int do_create, const char *mailboxid,
-                strarray_t *imapflags);
+                strarray_t *imapflags, struct buf *headers);
 int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
                 const char *dsn_notify, const char *dsn_ret,
-                int is_ext_list, int cancel_keep);
-int do_keep(action_list_t *m, strarray_t *imapflags);
+                int is_ext_list, int cancel_keep, struct buf *headers);
+int do_keep(action_list_t *m, strarray_t *imapflags, struct buf *headers);
 int do_discard(action_list_t *m);
 int do_vacation(action_list_t *m, char *addr, char *fromaddr, char *subj,
                 const char *msg, int seconds, int mime, const char *handle,
@@ -155,6 +155,6 @@ int do_duptrack(duptrack_list_t *d, sieve_duplicate_context_t *dc);
 int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
               strarray_t *addflags, strarray_t *removeflags,
               unsigned char days, arrayu64_t *times,
-              strarray_t *imapflags);
+              strarray_t *imapflags, struct buf *headers);
 
 #endif

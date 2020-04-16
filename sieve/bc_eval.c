@@ -1684,6 +1684,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         case B_KEEP:
         case B_KEEP_COPY:
         case B_KEEP_ORIG:
+        {
+            struct buf *headers = NULL;
+
             unwrap_flaglist(cmd.u.k.flags, &actionflags,
                             (requires & BFE_VARIABLES) ? variables: NULL);
 
@@ -1692,12 +1695,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 actionflags = strarray_dup(variables->var);
             }
 
-            res = do_keep(actions, actionflags);
+            if (i->edited_headers) i->getheadersection(m, &headers);
+
+            res = do_keep(actions, actionflags, headers);
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Keep can not be used with Reject";
 
             actionflags = NULL;
             break;
+        }
 
 
         case B_DISCARD:
@@ -1734,6 +1740,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         {
             const char *folder = cmd.u.f.folder;
             const char *specialuse = cmd.u.f.specialuse;
+            struct buf *headers = NULL;
 
             if (requires & BFE_VARIABLES) {
                 folder = parse_string(folder, variables);
@@ -1748,9 +1755,11 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 actionflags = strarray_dup(variables->var);
             }
 
+            if (i->edited_headers) i->getheadersection(m, &headers);
+
             res = do_fileinto(actions, folder, specialuse,
                               !cmd.u.f.copy, cmd.u.f.create, cmd.u.f.mailboxid,
-                              actionflags);
+                              actionflags, headers);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Fileinto can not be used with Reject";
@@ -1765,6 +1774,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             const char *awaken_mbox = cmd.u.sn.mailbox;
             strarray_t *addflags = NULL;
             strarray_t *removeflags = NULL;
+            struct buf *headers = NULL;
 
             if (requires & BFE_VARIABLES) {
                 awaken_mbox = parse_string(awaken_mbox, variables);
@@ -1777,9 +1787,11 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             actionflags = strarray_dup(variables->var);
 
+            if (i->edited_headers) i->getheadersection(m, &headers);
+
             res = do_snooze(actions, awaken_mbox, cmd.u.sn.is_mboxid,
                             addflags, removeflags,
-                            cmd.u.sn.days, cmd.u.sn.times, actionflags);
+                            cmd.u.sn.days, cmd.u.sn.times, actionflags, headers);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Snooze can not be used with Reject";
@@ -1800,6 +1812,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             const char *dsn_notify = cmd.u.r.dsn_notify;
             const char *dsn_ret = cmd.u.r.dsn_ret;
             const char *deliverby = NULL;
+            struct buf *headers = NULL;
 
             if (requires & BFE_VARIABLES) {
                 address = parse_string(address, variables);
@@ -1848,9 +1861,11 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 deliverby = by_value;
             }
 
+            if (i->edited_headers) i->getheadersection(m, &headers);
+
             res = do_redirect(actions, address,
                               deliverby, dsn_notify, dsn_ret,
-                              cmd.u.r.list, !cmd.u.r.copy);
+                              cmd.u.r.list, !cmd.u.r.copy, headers);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Redirect can not be used with Reject";
@@ -2070,7 +2085,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 cmd.u.v.fcc.specialuse,
                 NULL,
                 cmd.u.v.fcc.create,
-                /*mailboxid*/0
+                /*mailboxid*/0,
+                /*headers*/NULL
             };
             char *fromaddr = NULL; /* relative to message we send */
             char *toaddr = NULL;   /* relative to message we send */
@@ -2263,7 +2279,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 value = parse_string(value, variables);
             }
 
-            i->addheader(sc, m, name, value, index);
+            i->addheader(m, name, value, index);
+            i->edited_headers = 1;
             break;
         }
 
@@ -2295,7 +2312,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             }
 
             if (!npat) {
-                if (name) i->deleteheader(sc, m, name, index);
+                if (name) {
+                    i->deleteheader(m, name, index);
+                    i->edited_headers = 1;
+                }
             }
             else {
                 const char **vals, *pat;
@@ -2369,7 +2389,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                    (so indexing is consistent) */
                 for (v = nval - 1; v >= first_val; v--) {
                     if (delete_mask & (1<<v)) {
-                        i->deleteheader(sc, m, name, v+1 /* 1-based */);
+                        i->deleteheader(m, name, v+1 /* 1-based */);
+                        i->edited_headers = 1;
                     }
                 }
             }

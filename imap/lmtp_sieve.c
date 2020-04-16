@@ -94,13 +94,12 @@ typedef struct script_data {
     const mbname_t *mbname;
     const struct auth_state *authstate;
     const struct namespace *ns;
-
-    int edited_header;
 } script_data_t;
 
 static int autosieve_createfolder(const char *userid, const struct auth_state *auth_state,
                                   const char *internalname, int createsievefolder);
-static deliver_data_t *setup_special_delivery(deliver_data_t *mydata);
+static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
+                                              struct buf *headers);
 static void cleanup_special_delivery(deliver_data_t *mydata);
 
 static char *make_sieve_db(const char *user)
@@ -130,11 +129,30 @@ static int getheader(void *v, const char *phead, const char ***body)
     }
 }
 
-/* adds the header "head" with body "body" to msg */
-static int addheader(void *sc, void *mc,
-                     const char *head, const char *body, int index)
+static void getheaders_cb(const char *name __attribute__((unused)),
+                          const char *value __attribute__((unused)),
+                          const char *raw, void *rock)
 {
-    script_data_t *sd = (script_data_t *)sc;
+    struct buf *contents = (struct buf *) rock;
+
+    if (raw) buf_appendcstr(contents, raw);
+    else buf_printf(contents, "%s: %s\r\n", name, value);
+}
+
+static int getheadersection(void *mc, struct buf **contents)
+{
+    message_data_t *m = ((deliver_data_t *) mc)->m;
+
+    *contents = buf_new();
+
+    spool_enum_hdrcache(m->hdrcache, &getheaders_cb, *contents);
+
+    return SIEVE_OK;
+}
+
+/* adds the header "head" with body "body" to msg */
+static int addheader(void *mc, const char *head, const char *body, int index)
+{
     message_data_t *m = ((deliver_data_t *) mc)->m;
 
     if (head == NULL || body == NULL) return SIEVE_FAIL;
@@ -144,23 +162,18 @@ static int addheader(void *sc, void *mc,
     else
         spool_prepend_header(xstrdup(head), xstrdup(body), m->hdrcache);
 
-    sd->edited_header = 1;
-
     return SIEVE_OK;
 }
 
 /* deletes (instance "index" of) the header "head" from msg */
-static int deleteheader(void *sc, void *mc, const char *head, int index)
+static int deleteheader(void *mc, const char *head, int index)
 {
-    script_data_t *sd = (script_data_t *)sc;
     message_data_t *m = ((deliver_data_t *) mc)->m;
 
     if (head == NULL) return SIEVE_FAIL;
 
     if (!index) spool_remove_header(xstrdup(head), m->hdrcache);
     else spool_remove_header_instance(xstrdup(head), index, m->hdrcache);
-
-    sd->edited_header = 1;
 
     return SIEVE_OK;
 }
@@ -863,15 +876,15 @@ static int sieve_redirect(void *ac, void *ic,
         }
     }
 
-    if (sd->edited_header) {
-        mdata = setup_special_delivery(mdata);
+    if (rc->headers) {
+        mdata = setup_special_delivery(mdata, rc->headers);
         if (!mdata) return SIEVE_FAIL;
         else m = mdata->m;
     }
 
     res = send_forward(rc, ctx, m->return_path, m->data);
 
-    if (sd->edited_header) cleanup_special_delivery(mdata);
+    if (rc->headers) cleanup_special_delivery(mdata);
 
     if (res == 0) {
         /* mark this message as redirected */
@@ -1011,15 +1024,8 @@ static int sieve_reject(void *ac, void *ic,
     }
 }
 
-static void dump_header(const char *name, const char *value, const char *raw, void *rock)
-{
-    FILE *f = (FILE *)rock;
-
-    if (raw) fputs(raw, f);
-    else fprintf(f, "%s: %s\r\n", name, value);
-}
-
-static deliver_data_t *setup_special_delivery(deliver_data_t *mydata)
+static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
+                                              struct buf *headers)
 {
     static deliver_data_t dd;
     static message_data_t md;
@@ -1047,7 +1053,7 @@ static deliver_data_t *setup_special_delivery(deliver_data_t *mydata)
         char buf[4096];
 
         /* write updated message headers */
-        spool_enum_hdrcache(mydata->m->hdrcache, &dump_header, md.f);
+        fwrite(buf_base(headers), buf_len(headers), 1, md.f);
 
         /* get offset of message body */
         md.body_offset = ftell(md.f);
@@ -1101,8 +1107,8 @@ static int sieve_fileinto(void *ac,
     const char *userid = mbname_userid(sd->mbname);
     char *intname = NULL;
 
-    if (sd->edited_header) {
-        mdata = setup_special_delivery(mdata);
+    if (fc->headers) {
+        mdata = setup_special_delivery(mdata, fc->headers);
         if (!mdata) return SIEVE_FAIL;
         else md = mdata->m;
     }
@@ -1162,7 +1168,7 @@ static int sieve_fileinto(void *ac,
     }
 
 done:
-    if (sd->edited_header) cleanup_special_delivery(mdata);
+    if (fc->headers) cleanup_special_delivery(mdata);
 
     if (!ret) {
         prometheus_increment(CYRUS_LMTP_SIEVE_FILEINTO_TOTAL);
@@ -1212,8 +1218,8 @@ static int sieve_snooze(void *ac,
     const char *userid = mbname_userid(sd->mbname);
     int ret = IMAP_MAILBOX_NONEXISTENT;
 
-    if (sd->edited_header) {
-        mdata = setup_special_delivery(mdata);
+    if (sn->headers) {
+        mdata = setup_special_delivery(mdata, sn->headers);
         if (!mdata) return SIEVE_FAIL;
         else md = mdata->m;
     }
@@ -1328,7 +1334,7 @@ static int sieve_snooze(void *ac,
     freeentryatts(annots);
 
 done:
-    if (sd->edited_header) cleanup_special_delivery(mdata);
+    if (sn->headers) cleanup_special_delivery(mdata);
 
     if (!ret) {
         prometheus_increment(CYRUS_LMTP_SIEVE_SNOOZE_TOTAL);
@@ -1355,14 +1361,14 @@ static int sieve_keep(void *ac,
     struct imap4flags imap4flags = { kc->imapflags, sd->authstate };
     int ret;
 
-    if (sd->edited_header) {
-        mydata = setup_special_delivery(mydata);
+    if (kc->headers) {
+        mydata = setup_special_delivery(mydata, kc->headers);
         if (!mydata) return SIEVE_FAIL;
     }
 
     ret = deliver_local(mydata, &imap4flags, sd->mbname);
 
-    if (sd->edited_header) cleanup_special_delivery(mydata);
+    if (kc->headers) cleanup_special_delivery(mydata);
  
     if (!ret) {
         prometheus_increment(CYRUS_LMTP_SIEVE_KEEP_TOTAL);
@@ -1798,6 +1804,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_register_specialuseexists(interp, &getspecialuseexists);
     sieve_register_metadata(interp, &getmetadata);
     sieve_register_header(interp, &getheader);
+    sieve_register_headersection(interp, &getheadersection);
     sieve_register_addheader(interp, &addheader);
     sieve_register_deleteheader(interp, &deleteheader);
     sieve_register_fname(interp, &getfname);
@@ -1936,7 +1943,6 @@ int run_sieve(const mbname_t *mbname, sieve_interp_t *interp, deliver_data_t *ms
 
     sdata.mbname = mbname;
     sdata.ns = msgdata->ns;
-    sdata.edited_header = 0;
 
     if (mbname_userid(mbname)) {
         sdata.authstate = freeauthstate = auth_newstate(mbname_userid(mbname));

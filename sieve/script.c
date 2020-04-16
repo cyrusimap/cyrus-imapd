@@ -637,9 +637,12 @@ static int do_sieve_error(int ret,
     }
 
     if (implicit_keep) {
-        sieve_keep_context_t keep_context;
+        sieve_keep_context_t keep_context = { imapflags, NULL };
         int keep_ret;
-        keep_context.imapflags = imapflags;
+
+        if (interp->edited_headers) {
+            interp->getheadersection(message_context, &keep_context.headers);
+        }
 
         lastaction = ACTION_KEEP;
         keep_ret = interp->keep(&keep_context, interp->interp_context,
