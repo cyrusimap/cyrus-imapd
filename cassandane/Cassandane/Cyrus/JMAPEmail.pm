@@ -17850,7 +17850,6 @@ sub test_email_parse_replyto
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Append same message twice to inbox";
     my $rawMessage = <<'EOF';
 From: <from@local>
 To: to@local
