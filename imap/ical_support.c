@@ -94,20 +94,38 @@ EXPORTED void ical_support_init(void)
 
 EXPORTED int cyrus_icalrestriction_check(icalcomponent *ical)
 {
-    icalcomponent *vtz;
+    icalcomponent *comp;
+    icalproperty *prop;
 
-    /* Strip COMMENT properties from VTIMEZONEs */
-    /* XXX  These were added by KSM in a previous version of vzic,
-       but libical doesn't allow them in its restrictions checks */
-    for (vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-         vtz;
-         vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
-        icalproperty *prop =
-            icalcomponent_get_first_property(vtz, ICAL_COMMENT_PROPERTY);
+    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
 
-        if (prop) {
-            icalcomponent_remove_property(vtz, prop);
-            icalproperty_free(prop);
+        switch (icalcomponent_isa(comp)) {
+        case ICAL_VTIMEZONE_COMPONENT:
+            /* Strip COMMENT properties from VTIMEZONEs */
+            /* XXX  These were added by KSM in a previous version of vzic,
+               but libical doesn't allow them in its restrictions checks */
+            prop = icalcomponent_get_first_property(comp, ICAL_COMMENT_PROPERTY);
+            if (prop) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
+            break;
+
+        case ICAL_VEVENT_COMPONENT:
+            /* Strip TZID properies from VEVENTs */
+            /* XXX  Zoom invites contain these,
+               but libical doesn't allow them in its restrictions checks */
+            prop = icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
+            if (prop) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
+            break;
+
+        default:
+            break;
         }
     }
 
