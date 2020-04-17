@@ -3223,9 +3223,9 @@ void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
 
     if (hdr) {
         if (!strncasecmp(hdr[0], "mailto:", 7))
-            strarray_append(addresses, hdr[0]+7);
+            strarray_add(addresses, hdr[0]+7);
         else
-            strarray_append(addresses, hdr[0]);
+            strarray_add(addresses, hdr[0]);
     }
     else {
         /* find schedule address based on the destination calendar's user */
@@ -3251,13 +3251,13 @@ void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
             for (i = 0; i < strarray_size(values); i++) {
                 const char *item = strarray_nth(values, i);
                 if (!strncasecmp(item, "mailto:", 7)) item += 7;
-                strarray_append(addresses, item);
+                strarray_add(addresses, item);
             }
             strarray_free(values);
         }
         else if (strchr(userid, '@')) {
             /* userid corresponding to target */
-            strarray_append(addresses, userid);
+            strarray_add(addresses, userid);
         }
         else {
             /* append fully qualified userids */
@@ -3267,7 +3267,7 @@ void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
                 buf_reset(&buf);
                 buf_printf(&buf, "%s@%s", userid, domains->s);
 
-                strarray_appendm(addresses, buf_release(&buf));
+                strarray_add(addresses, buf_cstring(&buf));
             }
         }
     }
