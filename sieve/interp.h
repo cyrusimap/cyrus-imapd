@@ -94,7 +94,7 @@ struct sieve_interp {
     time_t time;
 
     /* have we addedd/deleted any headers? */
-    int edited_headers : 1;
+    unsigned edited_headers : 1;
 };
 
 
