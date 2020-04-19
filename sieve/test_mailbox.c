@@ -152,11 +152,29 @@ static int getheader(void *v, const char *phead, const char ***body)
     }
 }
 
-/* adds the header "head" with body "body" to msg */
-static int addheader(void *sc, void *mc,
-                     const char *head, const char *body, int index)
+static void getheaders_cb(const char *name, const char *value,
+                          const char *raw, void *rock)
 {
-    script_data_t *sd = (script_data_t *)sc;
+    struct buf *contents = (struct buf *) rock;
+
+    if (raw) buf_appendcstr(contents, raw);
+    else buf_printf(contents, "%s: %s\r\n", name, value);
+}
+
+static int getheadersection(void *mc, struct buf **contents)
+{
+    message_data_t *m = (message_data_t *) mc;
+
+    *contents = buf_new();
+
+    spool_enum_hdrcache(m->cache, &getheaders_cb, *contents);
+
+    return SIEVE_OK;
+}
+
+/* adds the header "head" with body "body" to msg */
+static int addheader(void *mc, const char *head, const char *body, int index)
+{
     message_data_t *m = (message_data_t *) mc;
 
     if (head == NULL || body == NULL) return SIEVE_FAIL;
@@ -170,15 +188,12 @@ static int addheader(void *sc, void *mc,
         spool_prepend_header(xstrdup(head), xstrdup(body), m->cache);
     }
 
-    sd->edited_header = 1;
-
     return SIEVE_OK;
 }
 
 /* deletes (instance "index" of) the header "head" from msg */
-static int deleteheader(void *sc, void *mc, const char *head, int index)
+static int deleteheader(void *mc, const char *head, int index)
 {
-    script_data_t *sd = (script_data_t *)sc;
     message_data_t *m = (message_data_t *) mc;
 
     if (head == NULL) return SIEVE_FAIL;
@@ -191,8 +206,6 @@ static int deleteheader(void *sc, void *mc, const char *head, int index)
         printf("removing header '%s[%d]'\n", head, index);
         spool_remove_header_instance(xstrdup(head), index, m->cache);
     }
-
-    sd->edited_header = 1;
 
     return SIEVE_OK;
 }
@@ -696,6 +709,7 @@ int main(int argc, char *argv[])
     sieve_register_keep(i, keep);
     sieve_register_size(i, getsize);
     sieve_register_header(i, getheader);
+    sieve_register_headersection(i, getheadersection);
     sieve_register_addheader(i, addheader);
     sieve_register_deleteheader(i, deleteheader);
     sieve_register_envelope(i, getenvelope);
