@@ -1796,13 +1796,19 @@ sieve_libcyrus_sieve_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
-sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
+sieve_test_SOURCES = \
+    sieve/test.c \
+    imap/mutex_fake.c \
+    sieve/sieve_interface.h
 if JMAP
 sieve_test_SOURCES += imap/jmap_util.c imap/jmap_mail_query.c
 endif
 sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
-sieve_test_mailbox_SOURCES = sieve/test_mailbox.c imap/mutex_fake.c
+sieve_test_mailbox_SOURCES = \
+    sieve/test_mailbox.c \
+    imap/mutex_fake.c \
+    sieve/sieve_interface.h
 sieve_test_mailbox_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 timsieved_timsieved_SOURCES = \
