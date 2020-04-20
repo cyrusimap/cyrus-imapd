@@ -4,6 +4,7 @@
 #include "cunit/cyrunit.h"
 #include "imap/conversations.h"
 #include "imap/global.h"
+#include "retry.h"
 #include "strarray.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
@@ -15,6 +16,18 @@
 #define DBNAME  DBDIR "/conversations.db"
 #define DBNAME2 DBDIR "/conversations2.db"
 #define DBNAME3 DBDIR "/conversations.db"
+
+static void config_read_string(const char *s)
+{
+    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
+    int fd = mkstemp(fname);
+    retry_write(fd, s, strlen(s));
+    config_reset();
+    config_read(fname, 0);
+    unlink(fname);
+    free(fname);
+    close(fd);
+}
 
 static void test_open(void)
 {
@@ -1370,6 +1383,11 @@ static int set_up(void)
     }
 
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "conversations_keep_existing: false\n"
+    );
+
     cyrusdb_init();
 #ifdef HAVE_ZEROSKIP
     config_conversations_db = "zeroskip";
