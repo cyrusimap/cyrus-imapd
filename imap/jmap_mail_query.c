@@ -228,7 +228,7 @@ HIDDEN void jmap_email_filtercondition_parse(struct jmap_parser *parser,
             }
         }
         else if (strarray_find(capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
-                !strcmp(field, "deliveredto")) {
+                !strcmp(field, "deliveredTo")) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
             }
