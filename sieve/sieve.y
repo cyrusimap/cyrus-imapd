@@ -2476,14 +2476,19 @@ static int verify_weekday(sieve_script_t *sscript, char *day)
 static int verify_time(sieve_script_t *sscript, char *time)
 {
     struct tm tm;
+    int t = 0;
     char *r = strptime(time, "%T", &tm);
 
     if (r && *r == '\0') {
-        return (3600 * tm.tm_hour + 60 * tm.tm_min + tm.tm_sec);
+        t = 3600 * tm.tm_hour + 60 * tm.tm_min + tm.tm_sec;
+    }
+    else {
+        sieveerror_f(sscript, "'%s': not a valid time for snooze", time);
     }
 
-    sieveerror_f(sscript, "'%s': not a valid time for snooze", time);
-    return 0;
+    free(time);  /* done with this string */
+
+    return t;
 }
 
 static commandlist_t *build_snooze(sieve_script_t *sscript,
