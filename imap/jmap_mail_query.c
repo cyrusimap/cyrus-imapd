@@ -663,6 +663,85 @@ static xapian_query_t *_email_matchmime_contactgroup(const char *groupid,
     return xq;
 }
 
+static xapian_query_t *build_type_query(xapian_db_t *db, const char *type)
+{
+    strarray_t types = STRARRAY_INITIALIZER;
+    ptrarray_t xqs = PTRARRAY_INITIALIZER;
+
+    /* Handle type wildcards */
+    if (!strcasecmp(type, "image")) {
+        strarray_append(&types, "image_gif");
+        strarray_append(&types, "image_jpeg");
+        strarray_append(&types, "image_pjpeg");
+        strarray_append(&types, "image_jpg");
+        strarray_append(&types, "image_png");
+        strarray_append(&types, "image_bmp");
+        strarray_append(&types, "image_tiff");
+    }
+    else if (!strcasecmp(type, "document")) {
+        strarray_append(&types, "application_msword");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.wordprocessingml.document");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.wordprocessingml.template");
+        strarray_append(&types, "application_vnd.sun.xml.writer");
+        strarray_append(&types, "application_vnd.sun.xml.writer.template");
+        strarray_append(&types, "application_vnd.oasis.opendocument.text");
+        strarray_append(&types, "application_vnd.oasis.opendocument.text-template");
+        strarray_append(&types, "application_x-iwork-pages-sffpages");
+        strarray_append(&types, "application_vnd.apple.pages");
+    }
+    else if (!strcasecmp(type, "spreadsheet")) {
+        strarray_append(&types, "application_vnd.ms-excel");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.spreadsheetml.template");
+        strarray_append(&types, "application_vnd.sun.xml.calc");
+        strarray_append(&types, "application_vnd.sun.xml.calc.template");
+        strarray_append(&types, "application_vnd.oasis.opendocument.spreadsheet");
+        strarray_append(&types, "application_vnd.oasis.opendocument.spreadsheet-template");
+        strarray_append(&types, "application_x-iwork-numbers-sffnumbers");
+        strarray_append(&types, "application_vnd.apple.numbers");
+    }
+    else if (!strcasecmp(type, "presentation")) {
+        strarray_append(&types, "application_vnd.ms-powerpoint");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.presentation");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.template");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.slideshow");
+        strarray_append(&types, "application_vnd.sun.xml.impress");
+        strarray_append(&types, "application_vnd.sun.xml.impress.template");
+        strarray_append(&types, "application_vnd.oasis.opendocument.presentation");
+        strarray_append(&types, "application_vnd.oasis.opendocument.presentation-template");
+        strarray_append(&types, "application_x-iwork-keynote-sffkey");
+        strarray_append(&types, "application_vnd.apple.keynote");
+    }
+    else if (!strcasecmp(type, "email")) {
+        strarray_append(&types, "message_rfc822");
+    }
+    else if (!strcasecmp(type, "pdf")) {
+        strarray_append(&types, "application_pdf");
+    }
+    else {
+        /* FUZZY contenttype is indexed as `type_subtype` */
+        char *tmp = xstrdup(type);
+        char *p = strchr(tmp, '/');
+        if (p) *p = '_';
+        strarray_append(&types, tmp);
+        free(tmp);
+    }
+
+    /* Build expression */
+    int i;
+    for (i = 0; i < strarray_size(&types); i++) {
+        const char *t = strarray_nth(&types, i);
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_TYPE, t);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    xapian_query_t *xq = xapian_query_new_compound(db, /*is_or*/1,
+                          (xapian_query_t **) xqs.data, xqs.count);
+
+    ptrarray_fini(&xqs);
+    strarray_fini(&types);
+    return xq;
+}
+
 static int _email_matchmime_evaluate(json_t *filter,
                                      message_t *m,
                                      xapian_db_t *db,
@@ -748,6 +827,10 @@ static int _email_matchmime_evaluate(json_t *filter,
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_BCC, match);
         if (xq) ptrarray_append(&xqs, xq);
     }
+    if ((match = json_string_value(json_object_get(filter, "deliveredTo")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_DELIVEREDTO, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
     if ((match = json_string_value(json_object_get(filter, "subject")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_SUBJECT, match);
         if (xq) ptrarray_append(&xqs, xq);
@@ -786,6 +869,14 @@ static int _email_matchmime_evaluate(json_t *filter,
     }
     if ((json_is_true(json_object_get(filter, "bccAnyContact")))) {
         xapian_query_t *xq = _email_matchmime_contactgroup("", SEARCH_PART_BCC, db, cfilter);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "attachmentName")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_ATTACHMENTNAME, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "attachmentType")))) {
+        xapian_query_t *xq = build_type_query(db, match);
         if (xq) ptrarray_append(&xqs, xq);
     }
 
