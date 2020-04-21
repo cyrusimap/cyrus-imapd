@@ -2134,6 +2134,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     hash_table *wantprops = NULL;
     json_t *event = json_pack("{s:s}", "@type", "jsevent");
     struct buf buf = BUF_INITIALIZER;
+    char *tzid_start = NULL;
 
     if (jmap_wantprop(props, "recurrenceOverrides") && !is_exception) {
         /* Fetch all properties if recurrenceOverrides are requested,
@@ -2143,8 +2144,10 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* Handle bogus mix of floating and time zoned types */
-    const char *tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
-    if (!tzid_start) tzid_start = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
+    tzid_start = xstrdupnull(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
+    if (!tzid_start) {
+        tzid_start = xstrdupnull(tzid_from_ical(comp, ICAL_DTEND_PROPERTY));
+    }
 
     /* start */
     if (jmap_wantprop(props, "start")) {
@@ -2421,6 +2424,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     buf_free(&buf);
+    free(tzid_start);
     return event;
 }
 
