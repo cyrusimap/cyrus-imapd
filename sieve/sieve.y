@@ -133,7 +133,7 @@ static test_t *build_ihave(sieve_script_t*, strarray_t *sa);
 static test_t *build_mbox_meta(sieve_script_t*, test_t *t, char *extname,
                                char *keyname, strarray_t *keylist);
 static test_t *build_duplicate(sieve_script_t*, test_t *t);
-static test_t *build_jmapquery(sieve_script_t*, test_t *t, const char *json);
+static test_t *build_jmapquery(sieve_script_t*, test_t *t, char *json);
 
 static int verify_weekday(sieve_script_t *sscript, char *day);
 static int verify_time(sieve_script_t *sscript, char *time);
@@ -3041,8 +3041,7 @@ static int jmap_parse_filter(json_t *filter, strarray_t *path)
     return 1;
 }
 
-static test_t *build_jmapquery(sieve_script_t *sscript,
-                               test_t *t, const char *json)
+static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
 {
     strarray_t path = STRARRAY_INITIALIZER;
     json_t *jquery;
@@ -3065,13 +3064,16 @@ static test_t *build_jmapquery(sieve_script_t *sscript,
     t->u.jquery = json_dumps(jquery, JSON_COMPACT);
     json_decref(jquery);
 
+    free(json);  /* done with this string */
+
     return t;
 }
 #else
-static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t,
-                               const char *json __attribute__((unused)))
+static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
 {
     sieveerror_c(sscript, SIEVE_UNSUPP_EXT, "x-cyrus-jmapquery");
+
+    free(json);  /* done with this string */
 
     return t;
 }
