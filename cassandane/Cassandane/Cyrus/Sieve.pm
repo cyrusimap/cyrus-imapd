@@ -2792,5 +2792,78 @@ EOF
     $self->check_messages({ 1 => $msg2 }, check_guid => 0);
 }
 
+sub test_jmapquery
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my $imap = $self->{store}->get_client();
+    $imap->create("INBOX.matches") or die;
+
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+    "operator" : "OR",
+    "conditions" : [
+        {
+           "deliveredTo" : "xxx@yyy.zzz",
+           "attachmentType" : "image"
+        }
+    ]
+  }
+.
+  )
+{
+  fileinto "INBOX.matches";
+}
+EOF
+    );
+
+    my $body = << 'EOF';
+--047d7b33dd729737fe04d3bde348
+Content-Type: text/plain; charset=UTF-8
+
+plain
+
+--047d7b33dd729737fe04d3bde348
+Content-Type: image/tiff
+Content-Transfer-Encoding: base64
+
+abc=
+
+--047d7b33dd729737fe04d3bde348--
+EOF
+    $body =~ s/\r?\n/\r\n/gs;
+
+    xlog $self, "Deliver a matching message";
+    my $msg1 = $self->{gen}->generate(
+        subject => "Message 1",
+        extra_headers => [['X-Delivered-To', 'xxx@yyy.zzz']],
+        mime_type => "multipart/mixed",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body,
+    );
+    $self->{instance}->deliver($msg1);
+
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Assert that message got moved into INBOX.matches";
+    $self->{store}->set_folder('INBOX.matches');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog $self, "Deliver a non-matching message";
+    my $msg2 = $self->{gen}->generate(subject => "Message 2");
+    $self->{instance}->deliver($msg2);
+    $msg2->set_attribute(uid => 1);
+
+    xlog "Assert that message got moved into INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg2 }, check_guid => 0);
+}
+
+
 
 1;
