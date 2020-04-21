@@ -17992,7 +17992,7 @@ EOF
     $res = $jmap->CallMethods([
         ['Email/query', {
             filter => {
-                deliveredto => 'deliveredto@local',
+                deliveredTo => 'deliveredto@local',
             },
             sort => [{
                 property => 'subject',
