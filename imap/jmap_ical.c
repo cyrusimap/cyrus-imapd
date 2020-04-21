@@ -116,17 +116,21 @@ static json_t *calendarevent_from_ical(icalcomponent *comp, hash_table *props, i
 static void calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
                                   struct jmap_parser *parser, json_t *jsevent);
 
-static char *sha1key(const char *val)
+static const char *sha1key_arr(const char *val, char *idhex)
 {
     unsigned char dest[SHA1_DIGEST_LENGTH];
-    char idbuf[2*SHA1_DIGEST_LENGTH+1];
-    int r;
 
     xsha1((const unsigned char *) val, strlen(val), dest);
-    r = bin_to_hex(dest, SHA1_DIGEST_LENGTH, idbuf, BH_LOWER);
+    int r = bin_to_hex(dest, SHA1_DIGEST_LENGTH, idhex, BH_LOWER);
     assert(r == 2*SHA1_DIGEST_LENGTH);
-    idbuf[2*SHA1_DIGEST_LENGTH] = '\0';
-    return xstrdup(idbuf);
+    idhex[2*SHA1_DIGEST_LENGTH] = '\0';
+    return idhex;
+}
+
+static char *sha1key(const char *val)
+{
+    char idhex[2*SHA1_DIGEST_LENGTH+1];
+    return xstrdup(sha1key_arr(val, idhex));
 }
 
 static char *mailaddr_from_uri(const char *uri)
@@ -3360,18 +3364,19 @@ static icalproperty* findprop_byid(icalcomponent *comp, const char *id,
                                    icalproperty_kind kind)
 {
     icalproperty *prop = NULL;
-    char *oldid = NULL;
 
     for (prop = icalcomponent_get_first_property(comp, kind);
          prop;
          prop = icalcomponent_get_next_property(comp, kind)) {
 
-        oldid = xstrdupnull(get_icalxparam_value(prop, JMAPICAL_XPARAM_ID));
-        if (!oldid) oldid = sha1key(icalproperty_get_value_as_string(prop));
+        char idhex[2*SHA1_DIGEST_LENGTH+1];
+        const char *oldid = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
+        if (!oldid) {
+            oldid = sha1key_arr(icalproperty_get_value_as_string(prop), idhex);
+        }
         if (!strcmp(id, oldid)) break;
     }
 
-    free(oldid);
     return prop;
 }
 
