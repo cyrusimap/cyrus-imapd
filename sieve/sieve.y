@@ -2977,7 +2977,7 @@ static int jmap_parse_condition(json_t *cond, strarray_t *path)
             if (!json_is_string(val)) break;
         }
         /* JMAP Search Extension: https://cyrusimap.org/ns/jmap/search */
-        else if (!strcmp(field, "deliveredto")) {
+        else if (!strcmp(field, "deliveredTo")) {
             if (!json_is_string(val)) break;
         }
         /* JMAP Mail Extension: https://cyrusimap.org/ns/jmap/mail */
