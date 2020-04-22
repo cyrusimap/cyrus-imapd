@@ -90,6 +90,8 @@ void sieveerror_c(sieve_script_t*, int code, ...);
 static int check_reqs(sieve_script_t*, strarray_t *sl);
 static int chk_match_vars(sieve_script_t*, char *s);
 
+static unsigned bc_precompile(cmdarg_t args[], const char *fmt, ...);
+
 /* construct/canonicalize action commands */
 static commandlist_t *build_keep(sieve_script_t*, commandlist_t *c);
 static commandlist_t *build_fileinto(sieve_script_t*,
@@ -1294,11 +1296,16 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
         | EXISTS stringlist      {
                                      $$ = new_test(BC_EXISTS, sscript);
                                      $$->u.sl = $2;
+                                     $$->nargs = bc_precompile($$->args, "S",
+                                                               $$->u.sl);
                                  }
         | SIZE sizetag NUMBER    {
                                      $$ = new_test(BC_SIZE, sscript);
                                      $$->u.sz.t = $2;
                                      $$->u.sz.n = $3;
+                                     $$->nargs = bc_precompile($$->args, "ii",
+                                                               $$->u.sz.t,
+                                                               $$->u.sz.n);
                                  }
 
         | HEADERT htags stringlist stringlist
@@ -1337,6 +1344,8 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                  {
                                      $$ = new_test(BC_VALIDNOTIFYMETHOD, sscript);
                                      $$->u.sl = $2;
+                                     $$->nargs = bc_precompile($$->args, "S",
+                                                               $$->u.sl);
                                  }
         | NOTIFYMETHODCAPABILITY methtags string string stringlist
                                  { $$ = build_mbox_meta(sscript,
@@ -1378,6 +1387,8 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                  {
                                      $$ = new_test(BC_VALIDEXTLIST, sscript);
                                      $$->u.sl = $2;
+                                     $$->nargs = bc_precompile($$->args, "S",
+                                                               $$->u.sl);
                                  }
         | DUPLICATE duptags      { $$ = build_duplicate(sscript, $2); }
 
@@ -2259,6 +2270,46 @@ static int check_reqs(sieve_script_t *sscript, strarray_t *sa)
     return ret;
 }
 
+/* take a format string and a variable list of arguments
+   and populate the command arguments array */
+static unsigned bc_precompile(cmdarg_t args[], const char *fmt, ...)
+{
+    va_list ap;
+    unsigned n = 0;
+
+    va_start(ap, fmt);
+    for (n = 0; *fmt; fmt++, n++) {
+        args[n].type = *fmt;
+
+        switch (*fmt) {
+        case 'i':
+            args[n].u.i = va_arg(ap, int);
+            break;
+        case 's':
+            args[n].u.s = va_arg(ap, const char *);
+            break;
+        case 'S':
+            args[n].u.sa = va_arg(ap, const strarray_t *);
+            break;
+        case 'U':
+            args[n].u.ua = va_arg(ap, const arrayu64_t *);
+            break;
+        case 'C':
+            args[n].u.c = va_arg(ap, const comp_t *);
+            break;
+        case 't':
+            args[n].u.t = va_arg(ap, const test_t *);
+            break;
+        case 'T':
+            args[n].u.tl = va_arg(ap, const testlist_t *);
+            break;
+        }
+    }
+    va_end(ap);
+
+    return n;
+}
+
 static commandlist_t *build_keep(sieve_script_t *sscript, commandlist_t *c)
 {
     assert(c && c->type == B_KEEP);
@@ -2266,6 +2317,8 @@ static commandlist_t *build_keep(sieve_script_t *sscript, commandlist_t *c)
     if (c->u.k.flags && !_verify_flaglist(c->u.k.flags)) {
         strarray_add(c->u.k.flags, "");
     }
+
+    c->nargs = bc_precompile(c->args, "S", c->u.k.flags);
 
     return c;
 }
@@ -2280,6 +2333,14 @@ static commandlist_t *build_fileinto(sieve_script_t *sscript,
     }
     verify_mailbox(sscript, folder);
     c->u.f.folder = folder;
+
+    c->nargs = bc_precompile(c->args, "ssiSis",
+                             c->u.f.mailboxid,
+                             c->u.f.specialuse,
+                             c->u.f.create,
+                             c->u.f.flags,
+                             c->u.f.copy,
+                             c->u.f.folder);
 
     return c;
 }
@@ -2353,6 +2414,16 @@ static commandlist_t *build_redirect(sieve_script_t *sscript,
 
     c->u.r.address = address;
 
+    c->nargs = bc_precompile(c->args, "ssissiis",
+                             c->u.r.bytime,
+                             c->u.r.bymode,
+                             c->u.r.bytrace,
+                             c->u.r.dsn_notify,
+                             c->u.r.dsn_ret,
+                             c->u.r.list,
+                             c->u.r.copy,
+                             c->u.r.address);
+
     return c;
 }
 
@@ -2378,6 +2449,11 @@ static commandlist_t *build_set(sieve_script_t *sscript,
 
     c->u.s.variable = variable;
     c->u.s.value = value;
+
+    c->nargs = bc_precompile(c->args, "iss",
+                             c->u.s.modifiers,
+                             c->u.s.variable,
+                             c->u.s.value);
 
     return c;
 }
@@ -2415,6 +2491,20 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
     if (c->u.v.seconds < min) c->u.v.seconds = min;
     if (c->u.v.seconds > max) c->u.v.seconds = max;
 
+    c->nargs = bc_precompile(c->args,
+                             c->u.v.fcc.folder ? "SssiisssiSs" : "Sssiisss",
+                             c->u.v.addresses,
+                             c->u.v.subject,
+                             c->u.v.message,
+                             c->u.v.seconds,
+                             c->u.v.mime,
+                             c->u.v.from,
+                             c->u.v.handle,
+                             c->u.v.fcc.folder,
+                             c->u.v.fcc.create,
+                             c->u.v.fcc.flags,
+                             c->u.v.fcc.specialuse);
+
     return c;
 }
 
@@ -2435,6 +2525,10 @@ static commandlist_t *build_flag(sieve_script_t *sscript,
         sieveerror_c(sscript, SIEVE_INVALID_VALUE, "variablename");
     }
 
+    c->nargs = bc_precompile(c->args, "sS",
+                             c->u.fl.variable,
+                             c->u.fl.flags);
+
     return c;
 }
 
@@ -2449,6 +2543,11 @@ static commandlist_t *build_addheader(sieve_script_t *sscript,
     if (c->u.ah.index == 0) c->u.ah.index = 1;
     c->u.ah.name = name;
     c->u.ah.value = value;
+
+    c->nargs = bc_precompile(c->args, "iss",
+                             c->u.ah.index,
+                             c->u.ah.name,
+                             c->u.ah.value);
 
     return c;
 }
@@ -2469,6 +2568,12 @@ static commandlist_t *build_deleteheader(sieve_script_t *sscript,
 
     c->u.dh.name = name;
     c->u.dh.values = values;
+
+    c->nargs = bc_precompile(c->args, "iCsS",
+                             c->u.dh.comp.index,
+                             &c->u.dh.comp,
+                             c->u.dh.name,
+                             c->u.dh.values);
 
     return c;
 }
@@ -2521,6 +2626,15 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
     arrayu64_sort(times, NULL/*ascending*/);
     c->u.sn.times = times;
 
+    c->nargs = bc_precompile(c->args, "sSSiU",
+                             c->u.sn.mailbox,
+                             c->u.sn.addflags,
+                             c->u.sn.removeflags,
+                             c->u.sn.is_mboxid ?
+                                 (c->u.sn.days | SNOOZE_IS_ID_MASK) :
+                                 (c->u.sn.days & ~SNOOZE_IS_ID_MASK),
+                             c->u.sn.times);
+
     return c;
 }
 
@@ -2535,6 +2649,8 @@ static commandlist_t *build_rej_err(sieve_script_t *sscript,
 
     c = new_command(t, sscript);
     c->u.str = message;
+
+    c->nargs = bc_precompile(c->args, "s", c->u.str);
 
     return c;
 }
@@ -2593,6 +2709,13 @@ static commandlist_t *build_notify(sieve_script_t *sscript, int t,
     if (c->u.n.priority == -1) c->u.n.priority = B_NORMAL;
     if (!c->u.n.message) c->u.n.message = xstrdup("$from$: $subject$");
 
+    c->nargs = bc_precompile(c->args, "ssSis",
+                             c->u.n.method,
+                             (c->type == B_ENOTIFY) ? c->u.n.from : c->u.n.id,
+                             c->u.n.options,
+                             c->u.n.priority,
+                             c->u.n.message);
+
     return c;
 }
 
@@ -2602,6 +2725,8 @@ static commandlist_t *build_denotify(sieve_script_t *sscript,
     assert(t && t->type == B_DENOTIFY);
 
     canon_comptags(&t->u.d.comp, sscript);
+    t->u.d.comp.collation = -1;  /* unused - force it to be ignored */
+
     if (t->u.d.priority == -1) t->u.d.priority = B_ANY;
     if (t->u.d.pattern) {
         strarray_t sa = STRARRAY_INITIALIZER;
@@ -2611,6 +2736,11 @@ static commandlist_t *build_denotify(sieve_script_t *sscript,
         strarray_pop(&sa);
         strarray_fini(&sa);
     }
+
+    t->nargs = bc_precompile(t->args, "iCs",
+                             t->u.d.priority,
+                             &t->u.d.comp,
+                             t->u.d.pattern);
 
     return t;
 }
@@ -2629,6 +2759,11 @@ static commandlist_t *build_include(sieve_script_t *sscript,
     if (c->u.inc.location == -1) c->u.inc.location = B_PERSONAL;
     if (c->u.inc.optional == -1) c->u.inc.optional = 0;
 
+    c->nargs = bc_precompile(c->args, "is",
+                             c->u.inc.location |
+                                 (c->u.inc.once << 6) | (c->u.inc.optional << 7),
+                             c->u.inc.script);
+
     return c;
 }
 
@@ -2644,6 +2779,8 @@ static commandlist_t *build_log(sieve_script_t *sscript, char *text)
 
     c = new_command(B_LOG, sscript);
     c->u.l.text = text;
+
+    c->nargs = bc_precompile(c->args, "s", c->u.l.text);
 
     return c;
 }
@@ -2686,6 +2823,8 @@ static test_t *build_anyof(sieve_script_t *sscript, testlist_t *tl)
         }
     }
 
+    t->nargs = bc_precompile(t->args, "T", t->u.tl);
+
     return t;
 }
 
@@ -2714,6 +2853,8 @@ static test_t *build_allof(sieve_script_t *sscript, testlist_t *tl)
         }
     }
 
+    t->nargs = bc_precompile(t->args, "T", t->u.tl);
+
     return t;
 }
 
@@ -2731,6 +2872,8 @@ static test_t *build_not(sieve_script_t *sscript, test_t *t)
     n = new_test(BC_NOT, sscript);
     n->u.t = t;
 
+    n->nargs = bc_precompile(n->args, "t", n->u.t);
+
     return n;
 }
 
@@ -2744,6 +2887,11 @@ static test_t *build_hhs(sieve_script_t *sscript, test_t *t,
     t->u.hhs.sl = sl;
     t->u.hhs.pl = pl;
 
+    t->nargs += bc_precompile(t->args + t->nargs, "CSS",
+                              &t->u.hhs.comp,
+                              t->u.hhs.sl,
+                              t->u.hhs.pl);
+
     return t;
 }
 
@@ -2753,6 +2901,8 @@ static test_t *build_header(sieve_script_t *sscript, test_t *t,
     assert(t && t->type == BC_HEADER);
 
     verify_stringlist(sscript, sl, verify_headername);
+
+    t->nargs = bc_precompile(t->args, "i", t->u.hhs.comp.index);
 
     return build_hhs(sscript, t, sl, pl);
 }
@@ -2794,6 +2944,12 @@ static test_t *build_ae(sieve_script_t *sscript, test_t *t,
     t->u.ae.sl = sl;
     t->u.ae.pl = pl;
 
+    t->nargs += bc_precompile(t->args + t->nargs, "CiSS",
+                              &t->u.ae.comp,
+                              t->u.ae.addrpart,
+                              t->u.ae.sl,
+                              t->u.ae.pl);
+
     return t;
 }
 
@@ -2803,6 +2959,8 @@ static test_t *build_address(sieve_script_t *sscript, test_t *t,
     assert(t && t->type == BC_ADDRESS);
 
     verify_stringlist(sscript, sl, verify_addrheader);
+
+    t->nargs = bc_precompile(t->args, "i", t->u.ae.comp.index);
 
     return build_ae(sscript, t, sl, pl);
 }
@@ -2833,6 +2991,13 @@ static test_t *build_body(sieve_script_t *sscript,
     }
     t->u.b.pl = pl;
 
+    t->nargs = bc_precompile(t->args, "CiiSS",
+                             &t->u.b.comp,
+                             t->u.b.transform,
+                             t->u.b.offset,
+                             t->u.b.content_types,
+                             t->u.b.pl);
+
     return t;
 }
 
@@ -2857,6 +3022,20 @@ static test_t *build_date(sieve_script_t *sscript,
     t->u.dt.date_part = part;
     t->u.dt.header_name = hn;
     t->u.dt.kl = kl;
+
+    if (t->type == BC_DATE) {
+        t->nargs = bc_precompile(t->args, "i", t->u.dt.comp.index);
+    }
+    t->nargs += bc_precompile(t->args + t->nargs, "i", t->u.dt.zonetag);
+    if (t->u.dt.zonetag == B_TIMEZONE) {
+        t->nargs += bc_precompile(t->args + t->nargs, "i", t->u.dt.tzoffset);
+    }
+    t->nargs += bc_precompile(t->args + t->nargs, "Ci",
+                              &t->u.dt.comp, t->u.dt.date_part);
+    if (t->type == BC_DATE) {
+        t->nargs += bc_precompile(t->args + t->nargs, "s", t->u.dt.header_name);
+    }
+    t->nargs += bc_precompile(t->args + t->nargs, "S", t->u.dt.kl);
 
     return t;
 }
@@ -2886,6 +3065,8 @@ static test_t *build_ihave(sieve_script_t *sscript, strarray_t *sa)
         }
     }
 
+    t->nargs = bc_precompile(t->args, "S", t->u.sl);
+
     return t;
 }
 
@@ -2893,17 +3074,49 @@ static test_t *build_mbox_meta(sieve_script_t *sscript,
                                test_t *t, char *extname,
                                char *keyname, strarray_t *keylist)
 {
-    assert(t &&
-           (t->type == BC_MAILBOXEXISTS  || t->type == BC_MAILBOXIDEXISTS      ||
-            t->type == BC_METADATA       || t->type == BC_METADATAEXISTS       ||
-            t->type == BC_SERVERMETADATA || t->type == BC_SERVERMETADATAEXISTS ||
-            t->type == BC_ENVIRONMENT    || t->type == BC_SPECIALUSEEXISTS     ||
-            t->type == BC_NOTIFYMETHODCAPABILITY));
+    assert(t);
 
     canon_comptags(&t->u.mm.comp, sscript);
     t->u.mm.extname = extname;
     t->u.mm.keyname = keyname;
     t->u.mm.keylist = keylist;
+
+    switch (t->type) {
+    case BC_MAILBOXEXISTS:
+    case BC_MAILBOXIDEXISTS:
+    case BC_SERVERMETADATAEXISTS:
+        t->nargs = bc_precompile(t->args, "S",
+                                 t->u.mm.keylist);
+        break;
+
+    case BC_METADATAEXISTS:
+    case BC_SPECIALUSEEXISTS:
+        t->nargs = bc_precompile(t->args, "sS",
+                                 t->u.mm.extname,
+                                 t->u.mm.keylist);
+        break;
+
+    case BC_SERVERMETADATA:
+    case BC_ENVIRONMENT:
+        t->nargs = bc_precompile(t->args, "CsS",
+                                 &t->u.mm.comp,
+                                 t->u.mm.keyname,
+                                 t->u.mm.keylist);
+        break;
+
+    case BC_METADATA:
+    case BC_NOTIFYMETHODCAPABILITY:
+        t->nargs = bc_precompile(t->args, "CssS",
+                                 &t->u.mm.comp,
+                                 t->u.mm.extname,
+                                 t->u.mm.keyname,
+                                 t->u.mm.keylist);
+        break;
+
+    default:
+        assert(0);
+        break;
+    }
 
     return t;
 }
@@ -2931,6 +3144,13 @@ static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
     else verify_utf8(sscript, t->u.dup.handle);
 
     if (t->u.dup.seconds == -1) t->u.dup.seconds = 7 * 86400; /* 7 days */
+
+    t->nargs = bc_precompile(t->args, "issii",
+                             t->u.dup.idtype,
+                             t->u.dup.idval,
+                             t->u.dup.handle,
+                             t->u.dup.seconds,
+                             t->u.dup.last);
 
     return t;
 }
@@ -3080,6 +3300,8 @@ static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
     json_decref(jquery);
 
     free(json);  /* done with this string */
+
+    t->nargs = bc_precompile(t->args, "s", t->u.jquery);
 
     return t;
 }

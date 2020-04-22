@@ -66,7 +66,7 @@ typedef struct
         int jump;
 
         int listlen;
-        char *str;
+        const char *str;
     } u;
 
 } bytecode_t;
@@ -217,6 +217,9 @@ enum bytecode {
     B_LOG,              /* require x-cyrus-log */
 
     B_SNOOZE,           /* require x-cyrus-snooze */
+
+    /* insert new actions above this line */
+    B_ILLEGAL_VALUE     /* any value >= this code is illegal */
 };
 
 enum bytecode_comps {
@@ -250,7 +253,10 @@ enum bytecode_comps {
     BC_VALIDNOTIFYMETHOD,/* require enotify */
     BC_NOTIFYMETHODCAPABILITY,
     BC_MAILBOXIDEXISTS, /* require mailboxid */
-    BC_JMAPQUERY        /* require x-cyrus-jmapquery */
+    BC_JMAPQUERY,       /* require x-cyrus-jmapquery */
+
+    /* insert new tests above this line */
+    BC_ILLEGAL_VALUE    /* any value >= this code is illegal */
 };
 
 /* currently one enum so as to help determine where values are being misused.

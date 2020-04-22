@@ -50,11 +50,37 @@
 #include "strarray.h"
 #include "arrayu64.h"
 
+#define MAX_CMD_ARGS 12  /* bump if required (currently vacation needs 11) */
+
 /* abstract syntax tree for sieve */
 typedef struct Commandlist commandlist_t;
 typedef struct Test test_t;
 typedef struct Testlist testlist_t;
 typedef struct Comp comp_t;
+typedef struct CmdArg cmdarg_t;
+
+struct CmdArg {
+    unsigned char type;  /* argument data type */
+    union {
+        int i;
+        const char *s;
+        const strarray_t *sa;
+        const arrayu64_t *ua;
+        const comp_t *c;
+        const test_t *t;
+        const testlist_t *tl;
+    } u;
+};
+
+enum argument_data_type {
+    AT_INT      = 'i',
+    AT_STR      = 's',
+    AT_STRARRAY = 'S',
+    AT_ARRAYU64 = 'U',
+    AT_COMP     = 'C',
+    AT_TEST     = 't',
+    AT_TESTLIST = 'T'
+};
 
 struct Comp {
     int match;
@@ -64,7 +90,7 @@ struct Comp {
 };
 
 struct Test {
-    int type;
+    unsigned type;
     int ignore_err;
     union {
         test_t *t; /* not */
@@ -119,6 +145,9 @@ struct Test {
         } dup;
         char *jquery; /* jmapquery */
     } u;
+
+    unsigned nargs;
+    cmdarg_t args[MAX_CMD_ARGS]; /* only used for precompilation */
 };
 
 struct Testlist {
@@ -136,7 +165,7 @@ struct Fileinto {
 };
 
 struct Commandlist {
-    int type;
+    unsigned type;
     union {
         int jump; /* bytecode parsing/eval only */
         char *str; /* its a reject or error action */
@@ -222,6 +251,9 @@ struct Commandlist {
         } sn;
     } u;
     struct Commandlist *next;
+
+    unsigned nargs;
+    cmdarg_t args[MAX_CMD_ARGS]; /* only used for compilation */
 };
 
 comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script);
