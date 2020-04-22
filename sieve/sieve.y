@@ -1023,11 +1023,14 @@ ahtags: /* empty */              { $$ = new_command(B_ADDHEADER, sscript); }
 
 
 /* DELETEHEADER tagged arguments */
-dhtags: /* empty */              { $$ = new_command(B_DELETEHEADER, sscript);}
-        | dhtags { ctags = &($1->u.dh.comp); } matchtype
-        | dhtags { ctags = &($1->u.dh.comp); } listmatch
-        | dhtags { ctags = &($1->u.dh.comp); } comparator
-        | dhtags { ctags = &($1->u.dh.comp); } idxtags
+dhtags: /* empty */              {
+                                     $$ = new_command(B_DELETEHEADER, sscript);
+                                     ctags = &($$->u.dh.comp);
+                                 }
+        | dhtags matchtype
+        | dhtags listmatch
+        | dhtags comparator
+        | dhtags idxtags
         ;
 
 
@@ -1135,7 +1138,10 @@ priority: LOW                    { $$ = B_LOW;    }
 
 
 /* DENOTIFY tagged arguments */
-dtags: /* empty */               { $$ = new_command(B_DENOTIFY, sscript); }
+dtags: /* empty */               {
+                                     $$ = new_command(B_DENOTIFY, sscript);
+                                     ctags = &($$->u.d.comp);
+                                 }
         | dtags priority         {
                                      if ($$->u.d.priority != -1) {
                                          sieveerror_c(sscript,
@@ -1146,10 +1152,10 @@ dtags: /* empty */               { $$ = new_command(B_DENOTIFY, sscript); }
                                      $$->u.d.priority = $2;
                                  }
 
-        | dtags { ctags = &($1->u.d.comp); } matchtype string
+        | dtags matchtype string
                                  {
                                      if ($$->u.d.pattern) free($$->u.d.pattern);
-                                     $$->u.d.pattern = $4;
+                                     $$->u.d.pattern = $3;
                                  }
         ;
 
@@ -1429,16 +1435,20 @@ sizetag:  OVER                   { $$ = B_OVER;  }
 
 
 /* HEADER tagged arguments */
-htags: /* empty */               { $$ = new_test(BC_HEADER, sscript); }
-        | htags { ctags = &($1->u.hhs.comp); } matchtype
-        | htags { ctags = &($1->u.hhs.comp); } listmatch
-        | htags { ctags = &($1->u.hhs.comp); } comparator
-        | htags { ctags = &($1->u.hhs.comp); } idxtags
+htags: /* empty */               {
+                                     $$ = new_test(BC_HEADER, sscript);
+                                     ctags = &($$->u.hhs.comp);
+                                 }
+        | htags matchtype
+        | htags listmatch
+        | htags comparator
+        | htags idxtags
         ;
 
 
 /* All match-types except for :list */
 matchtype: matchtag              {
+                                     /* ctags is assigned by the calling rule */
                                      if (ctags->match != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1502,6 +1512,7 @@ relation: EQ                     { $$ = B_EQ; }
 
 /* :list match-type */
 listmatch: LIST                  {
+                                     /* ctags is assigned by the calling rule */
                                      if (ctags->match != B_LIST &&
                                          !supported(SIEVE_CAPA_EXTLISTS)) {
                                          sieveerror_c(sscript,
@@ -1522,6 +1533,7 @@ listmatch: LIST                  {
 /* :comparator */
 comparator: COMPARATOR collation
                                  {
+                                     /* ctags is assigned by the calling rule */
                                      if (ctags->collation != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1551,6 +1563,7 @@ collation: OCTET                 { $$ = B_OCTET;        }
 
 /* Index tags */
 idxtags: INDEX NUMBER            {
+                                     /* ctags is assigned by the calling rule */
                                      if (ctags->index == INT_MIN) {
                                          /* parsed :last before :index */
                                          ctags->index = -$2;
@@ -1595,12 +1608,15 @@ idxtags: INDEX NUMBER            {
 
 
 /* ADDRESS tagged arguments */
-atags: /* empty */               { $$ = new_test(BC_ADDRESS, sscript); }
+atags: /* empty */               {
+                                     $$ = new_test(BC_ADDRESS, sscript);
+                                     ctags = &($$->u.ae.comp);
+                                 }
         | atags addrpart
-        | atags { ctags = &($1->u.ae.comp); } matchtype
-        | atags { ctags = &($1->u.ae.comp); } listmatch
-        | atags { ctags = &($1->u.ae.comp); } comparator
-        | atags { ctags = &($1->u.ae.comp); } idxtags
+        | atags matchtype
+        | atags listmatch
+        | atags comparator
+        | atags idxtags
         ;
 
 
@@ -1640,23 +1656,32 @@ subaddress: USER                 { $$ = B_USER;   }
 
 
 /* ENVELOPE tagged arguments */
-etags: /* empty */               { $$ = new_test(BC_ENVELOPE, sscript); }
+etags: /* empty */               {
+                                     $$ = new_test(BC_ENVELOPE, sscript);
+                                     ctags = &($$->u.ae.comp);
+                                 }
         | etags addrpart
-        | etags { ctags = &($1->u.ae.comp); } matchtype
-        | etags { ctags = &($1->u.ae.comp); } listmatch
-        | etags { ctags = &($1->u.ae.comp); } comparator
+        | etags matchtype
+        | etags listmatch
+        | etags comparator
         ;
 
 
 /* ENVIRONMENT tagged arguments */
-envtags: /* empty */               { $$ = new_test(BC_ENVIRONMENT, sscript); }
-        | envtags { ctags = &($1->u.mm.comp); } matchtype
-        | envtags { ctags = &($1->u.mm.comp); } comparator
+envtags: /* empty */             {
+                                     $$ = new_test(BC_ENVIRONMENT, sscript);
+                                     ctags = &($$->u.mm.comp);
+                                 }
+        | envtags matchtype
+        | envtags comparator
         ;
 
 
 /* BODY tagged arguments */
-btags: /* empty */               { $$ = new_test(BC_BODY, sscript); }
+btags: /* empty */               {
+                                     $$ = new_test(BC_BODY, sscript);
+                                     ctags = &($$->u.b.comp);
+                                 }
         | btags transform        {
                                      if ($$->u.b.transform != -1) {
                                          sieveerror_c(sscript,
@@ -1680,8 +1705,8 @@ btags: /* empty */               { $$ = new_test(BC_BODY, sscript); }
                                      $$->u.b.content_types = $3;
                                  }
 
-        | btags { ctags = &($1->u.b.comp); } matchtype
-        | btags { ctags = &($1->u.b.comp); } comparator
+        | btags matchtype
+        | btags comparator
         ;
 
 
@@ -1692,22 +1717,31 @@ transform: RAW                   { $$ = B_RAW;  }
 
 
 /* STRING tagged arguments */
-strtags: /* empty */             { $$ = new_test(BC_STRING, sscript); }
-        | strtags { ctags = &($1->u.hhs.comp); } matchtype
-        | strtags { ctags = &($1->u.hhs.comp); } listmatch
-        | strtags { ctags = &($1->u.hhs.comp); } comparator
+strtags: /* empty */             {
+                                     $$ = new_test(BC_STRING, sscript);
+                                     ctags = &($$->u.hhs.comp);
+                                 }
+        | strtags matchtype
+        | strtags listmatch
+        | strtags comparator
         ;
 
 
 /* HASFLAG tagged arguments */
-hftags: /* empty */              { $$ = new_test(BC_HASFLAG, sscript); }
-        | hftags { ctags = &($1->u.hhs.comp); } matchtype
-        | hftags { ctags = &($1->u.hhs.comp); } comparator
+hftags: /* empty */              {
+                                     $$ = new_test(BC_HASFLAG, sscript);
+                                     ctags = &($$->u.hhs.comp);
+                                 }
+        | hftags matchtype
+        | hftags comparator
         ;
 
 
 /* DATE tagged arguments */
-dttags: /* empty */              { $$ = new_test(BC_DATE, sscript); }
+dttags: /* empty */              {
+                                     $$ = new_test(BC_DATE, sscript);
+                                     ctags = &($$->u.dt.comp);
+                                 }
         | dttags zone
         | dttags ORIGINALZONE    {
                                      if ($$->u.dt.zonetag != -1) {
@@ -1718,9 +1752,9 @@ dttags: /* empty */              { $$ = new_test(BC_DATE, sscript); }
 
                                      $$->u.dt.zonetag = B_ORIGINALZONE;
                                  }
-        | dttags { ctags = &($1->u.dt.comp); } matchtype
-        | dttags { ctags = &($1->u.dt.comp); } comparator
-        | dttags { ctags = &($1->u.dt.comp); } idxtags
+        | dttags matchtype
+        | dttags comparator
+        | dttags idxtags
         ;
 
 
@@ -1742,10 +1776,13 @@ zone: ZONE TZOFFSET              {
 
 
 /* CURRENTDATE tagged arguments */
-cdtags: /* empty */              { $$ = new_test(BC_CURRENTDATE, sscript); }
+cdtags: /* empty */              {
+                                     $$ = new_test(BC_CURRENTDATE, sscript);
+                                     ctags = &($$->u.dt.comp);
+                                 }
         | cdtags zone
-        | cdtags { ctags = &($1->u.dt.comp); } matchtype
-        | cdtags { ctags = &($1->u.dt.comp); } comparator
+        | cdtags matchtype
+        | cdtags comparator
         ;
 
 
@@ -1767,16 +1804,24 @@ datepart: YEARP                  { $$ = B_YEAR;    }
 
 
 /* NOTIFYMETHODCAPABILITY tagged arguments */
-methtags: /* empty */            { $$ = new_test(BC_NOTIFYMETHODCAPABILITY, sscript); }
-        | methtags { ctags = &($1->u.mm.comp); } matchtype
-        | methtags { ctags = &($1->u.mm.comp); } comparator
+methtags: /* empty */            {
+                                     $$ = new_test(BC_NOTIFYMETHODCAPABILITY,
+                                                   sscript);
+                                     ctags = &($$->u.mm.comp);
+                                 }
+        | methtags matchtype
+        | methtags comparator
         ;
 
 
-/* [SERVER]METADATA tagged arguments - bctype is set by calling rule */
-mtags: /* empty */               { $$ = new_test(bctype, sscript); }
-        | mtags { ctags = &($1->u.mm.comp); } matchtype
-        | mtags { ctags = &($1->u.mm.comp); } comparator
+/* [SERVER]METADATA tagged arguments */
+mtags: /* empty */               {
+                                     /* bctype is set by calling rule */
+                                     $$ = new_test(bctype, sscript);
+                                     ctags = &($$->u.mm.comp);
+                                 }
+        | mtags matchtype
+        | mtags comparator
         ;
 
 
