@@ -339,15 +339,9 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
 
 
     case B_SET:             /* 25 */
-        bits = ntohl(bc[pos++].value);
+        cmd->u.s.modifiers = ntohl(bc[pos++].value);
         pos = bc_string_parse(bc, pos, &cmd->u.s.variable);
         pos = bc_string_parse(bc, pos, &cmd->u.s.value);
-
-        cmd->u.s.mod40 = bits & BFV_MOD40_MASK;
-        cmd->u.s.mod30 = bits & BFV_MOD30_MASK;
-        cmd->u.s.mod20 = bits & BFV_MOD20_MASK;
-        cmd->u.s.mod15 = bits & BFV_MOD15_MASK;
-        cmd->u.s.mod10 = bits & BFV_MOD10_MASK;
         break;
 
 

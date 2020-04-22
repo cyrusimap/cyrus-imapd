@@ -2218,8 +2218,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         {
             const char *name = cmd.u.s.variable;
             const char *value = cmd.u.s.value;
-            int modifiers = cmd.u.s.mod40 | cmd.u.s.mod30 |
-                cmd.u.s.mod20 | cmd.u.s.mod15 | cmd.u.s.mod10;
 
 	    /* RFC 5229, 3. Interpretation of Strings
                Strings where no variable substitutions take place are referred to as
@@ -2243,7 +2241,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             value = parse_string(value, variables);
             strarray_fini(variable->var);
             strarray_appendm(variable->var,
-                             variables_modify_string(value, modifiers));
+                             variables_modify_string(value, cmd.u.s.modifiers));
 #if VERBOSE
 	    printf("\nB_SET:%s\n\n", strarray_nth(variable->var, -1));
 #endif

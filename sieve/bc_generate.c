@@ -187,40 +187,6 @@ static int bc_testlist_generate(int codep, bytecode_info_t *retval,
     return codep;
 }
 
-/* output a relation into almost-flat form at codep.
- * returns new codep on success, -1 on failure. */
-static int bc_relation_generate(int codep, bytecode_info_t *retval, int relat)
-{
-    if (!atleast(retval, codep + 1)) return -1;
-
-    retval->data[codep].type = BT_VALUE;
-    switch (relat) {
-    case GT:
-        retval->data[codep++].u.value = B_GT;
-        break;
-    case GE:
-        retval->data[codep++].u.value = B_GE;
-        break;
-    case LT:
-        retval->data[codep++].u.value = B_LT;
-        break;
-    case LE:
-        retval->data[codep++].u.value = B_LE;
-        break;
-    case EQ:
-        retval->data[codep++].u.value = B_EQ;
-        break;
-    case NE:
-        retval->data[codep++].u.value = B_NE;
-        break;
-    default:
-        /* comparator has no relational field */
-        retval->data[codep++].u.value = -1;
-        break;
-    }
-    return codep;
-}
-
 /* writes a single comparator into almost-flat form starting at codep.
  * will always write out 3 words
  * returns the next code location or -1 on error. */
@@ -231,60 +197,20 @@ static int bc_comparator_generate(int codep, bytecode_info_t *retval,
 
     /* comptag */
     if (!atleast(retval, codep + 1)) return -1;
-
     retval->data[codep].type = BT_VALUE;
-    switch (comptag) {
-    case IS:
-        retval->data[codep++].u.value = B_IS;
-        break;
-    case CONTAINS:
-        retval->data[codep++].u.value = B_CONTAINS;
-        break;
-    case MATCHES:
-        retval->data[codep++].u.value = B_MATCHES;
-        break;
-#ifdef ENABLE_REGEX
-    case REGEX:
-        retval->data[codep++].u.value = B_REGEX;
-        break;
-#endif
-    case LIST:
-        retval->data[codep++].u.value = B_LIST;
-        break;
-    case COUNT:
-        retval->data[codep++].u.value = B_COUNT;
-        break;
-    case VALUE:
-        retval->data[codep++].u.value = B_VALUE;
-        break;
-
-    default:
-        return -1;
-    }
+    retval->data[codep++].u.value = comptag;
 
     /* relation */
-    codep = bc_relation_generate(codep, retval, relat);
+    if (!atleast(retval, codep + 1)) return -1;
+    retval->data[codep].type = BT_VALUE;
+    retval->data[codep++].u.value = relat;
 
     if (!collation) return codep;
 
     /* collation (value specified with :comparator) */
     if (!atleast(retval, codep + 1)) return -1;
-
     retval->data[codep].type = BT_VALUE;
-    switch (collation) {
-    case OCTET:
-        retval->data[codep++].u.value = B_OCTET;
-        break;
-    case ASCIICASEMAP:
-        retval->data[codep++].u.value = B_ASCIICASEMAP;
-        break;
-    case ASCIINUMERIC:
-        retval->data[codep++].u.value = B_ASCIINUMERIC;
-        break;
-
-    default:
-        return -1;
-    }
+    retval->data[codep++].u.value = collation;
 
     return codep;
 }
@@ -298,16 +224,15 @@ static int bc_zone_generate(int codep, bytecode_info_t *retval,
     if (!atleast(retval, codep + 1)) return -1;
 
     retval->data[codep].type = BT_VALUE;
+    retval->data[codep++].u.value = zonetag;
     switch (zonetag) {
-    case ZONE:
+    case B_TIMEZONE:
         /* time-zone offset in minutes */
-        retval->data[codep++].u.value = B_TIMEZONE;
         if (!atleast(retval, codep + 1)) return -1;
         retval->data[codep].type = BT_VALUE;
         retval->data[codep++].u.value = zone;
         break;
-    case ORIGINALZONE:
-        retval->data[codep++].u.value = B_ORIGINALZONE;
+    case B_ORIGINALZONE:
         break;
     default:
         return -1;
@@ -328,53 +253,41 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
     if (!atleast(retval, codep+1)) return -1;
 
     retval->data[codep].type = BT_OPCODE;
+    retval->data[codep++].u.op = t->type;
+
     switch(t->type) {
-    case STRUE: /* BC_TRUE */
-        retval->data[codep++].u.op = BC_TRUE;
+    case BC_TRUE: /* BC_TRUE */
         break;
-    case SFALSE:/* BC_FALSE */
-        retval->data[codep++].u.op = BC_FALSE;
+    case BC_FALSE:/* BC_FALSE */
         break;
-    case NOT: /* BC_NOT {subtest : test} */
-        retval->data[codep++].u.op = BC_NOT;
+    case BC_NOT: /* BC_NOT {subtest : test} */
         codep = bc_test_generate(codep, retval, t->u.t);
         if (codep == -1) return -1;
         break;
-    case SIZE: /* BC_SIZE (B_OVER | B_UNDER) {size : int} */
-        retval->data[codep++].u.op = BC_SIZE;
+    case BC_SIZE: /* BC_SIZE (B_OVER | B_UNDER) {size : int} */
         if(!atleast(retval,codep+2)) return -1;
         retval->data[codep].type = BT_VALUE;
-        retval->data[codep++].u.value =
-            (t->u.sz.t == OVER ? B_OVER : B_UNDER);
+        retval->data[codep++].u.value = t->u.sz.t;
         retval->data[codep].type = BT_VALUE;
         retval->data[codep++].u.value = t->u.sz.n;
         break;
-    case EXISTS:       /* BC_EXISTS       { headers    : string list } */
-    case IHAVE:        /* BC_IHAVE        { extensions : string list } */
-    case VALIDEXTLIST: /* BC_VALIDEXTLIST { listnames  : string list } */
-    case VALIDNOTIFYMETHOD: /* BC_VALIDNOTIFYMETHOD { uris  : string list } */
-        switch (t->type) {
-        case EXISTS:       retval->data[codep++].u.op = BC_EXISTS; break;
-        case IHAVE:        retval->data[codep++].u.op = BC_IHAVE; break;
-        case VALIDEXTLIST: retval->data[codep++].u.op = BC_VALIDEXTLIST; break;
-        case VALIDNOTIFYMETHOD:
-            retval->data[codep++].u.op = BC_VALIDNOTIFYMETHOD; break;
-        }
+    case BC_EXISTS:    /* BC_EXISTS       { headers    : string list } */
+    case BC_IHAVE:     /* BC_IHAVE        { extensions : string list } */
+    case BC_VALIDEXTLIST: /* BC_VALIDEXTLIST { listnames  : string list } */
+    case BC_VALIDNOTIFYMETHOD: /* BC_VALIDNOTIFYMETHOD { uris  : string list } */
         codep = bc_stringlist_generate(codep, retval, t->u.sl);
         break;
-    case ANYOF:/* BC_ANYOF { tests : test list } */
-        retval->data[codep++].u.op = BC_ANYOF;
+    case BC_ANYOF:/* BC_ANYOF { tests : test list } */
         codep=bc_testlist_generate(codep, retval, t->u.tl);
         if (codep == -1) return -1;
         break;
-    case ALLOF: /* BC_ALLOF { tests : test list } */
-        retval->data[codep++].u.op = BC_ALLOF;
+    case BC_ALLOF: /* BC_ALLOF { tests : test list } */
         codep= bc_testlist_generate(codep, retval, t->u.tl);
         if (codep == -1) return -1;
         break;
-    case HEADERT:
-    case HASFLAG:
-    case STRINGT:
+    case BC_HEADER:
+    case BC_HASFLAG:
+    case BC_STRING:
         /* BC_HEADER { i: index } { c: comparator }
          * { haystacks : string list } { patterns : string list }
          *
@@ -382,19 +295,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
          * { haystacks : string list } { patterns : string list }
          */
 
-        switch (t->type) {
-        case HEADERT:
-            retval->data[codep++].u.op = BC_HEADER;
-            break;
-        case HASFLAG:
-            retval->data[codep++].u.op = BC_HASFLAG;
-            break;
-        case STRINGT:
-            retval->data[codep++].u.op = BC_STRING;
-            break;
-        }
-
-        if (t->type == HEADERT) {
+        if (t->type == BC_HEADER) {
             /* index */
             if (!atleast(retval, codep + 1)) return -1;
             retval->data[codep].type = BT_VALUE;
@@ -416,8 +317,8 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         codep = bc_stringlist_generate(codep, retval, t->u.hhs.pl);
         if (codep == -1) return -1;
         break;
-    case ADDRESS:
-    case ENVELOPE:
+    case BC_ADDRESS:
+    case BC_ENVELOPE:
         /* BC_ADDRESS {i : index } {c : comparator}
            (B_ALL | B_LOCALPART | ...) { header : string list }
            { pattern : string list }
@@ -426,11 +327,8 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
            (B_ALL | B_LOCALPART | ...) { header : string list }
            { pattern : string list } */
 
-        retval->data[codep++].u.op =
-            (t->type == ADDRESS) ? BC_ADDRESS : BC_ENVELOPE;
-
         /* index */
-        if (t->type == ADDRESS) {
+        if (t->type == BC_ADDRESS) {
             if (!atleast(retval, codep+1)) return -1;
             retval->data[codep].type = BT_VALUE;
             retval->data[codep++].u.value = t->u.ae.comp.index;
@@ -445,25 +343,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         /*address part*/
         retval->data[codep].type = BT_VALUE;
-        switch(t->u.ae.addrpart) {
-        case ALL:
-            retval->data[codep++].u.value = B_ALL;
-            break;
-        case LOCALPART:
-            retval->data[codep++].u.value = B_LOCALPART;
-            break;
-        case DOMAIN:
-            retval->data[codep++].u.value = B_DOMAIN;
-            break;
-        case USER:
-            retval->data[codep++].u.value = B_USER;
-            break;
-        case DETAIL:
-            retval->data[codep++].u.value = B_DETAIL;
-            break;
-        default:
-            return -1;
-        }
+        retval->data[codep++].u.value = t->u.ae.addrpart;
 
         /* headers */
         codep = bc_stringlist_generate(codep, retval, t->u.ae.sl);
@@ -474,13 +354,11 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         if (codep == -1) return -1;
 
         break;
-    case BODY:
+    case BC_BODY:
         /* BC_BODY {c : comparator} (B_RAW | B_TEXT | ...)
            { offset : int }
            { content-types : stringlist }
            { pattern : string list } */
-
-        retval->data[codep++].u.op = BC_BODY;
 
         codep = bc_comparator_generate(codep, retval,t->u.b.comp.match,
                                        t->u.b.comp.relation,
@@ -491,19 +369,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         /* transform */
         retval->data[codep].type = BT_VALUE;
-        switch(t->u.b.transform) {
-        case RAW:
-            retval->data[codep++].u.value = B_RAW;
-            break;
-        case TEXT:
-            retval->data[codep++].u.value = B_TEXT;
-            break;
-        case CONTENT:
-            retval->data[codep++].u.value = B_CONTENT;
-            break;
-        default:
-            return -1;
-        }
+        retval->data[codep++].u.value = t->u.b.transform;
 
         /* offset */
         retval->data[codep].type = BT_VALUE;
@@ -518,8 +384,8 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         if (codep == -1) return -1;
 
         break;
-    case DATE:
-    case CURRENTDATE:
+    case BC_DATE:
+    case BC_CURRENTDATE:
         /* BC_DATE { i: index } { time-zone: string} { c: comparator }
          *         { date-part: string } { header-name : string }
          *         { key-list : string list }
@@ -528,11 +394,8 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
          *         { date-part: string } { key-list : string list }
         */
 
-        retval->data[codep++].u.op =
-            (DATE == t->type) ? BC_DATE : BC_CURRENTDATE;
-
         /* index */
-        if (DATE == t->type) {
+        if (BC_DATE == t->type) {
             if(!atleast(retval,codep + 1)) return -1;
             retval->data[codep].type = BT_VALUE;
             retval->data[codep++].u.value = t->u.dt.comp.index;
@@ -554,49 +417,9 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         /* date-part */
         if (!atleast(retval, codep + 1)) return -1;
         retval->data[codep].type = BT_VALUE;
-        switch (t->u.dt.date_part) {
-        case YEARP:
-                retval->data[codep++].u.value = B_YEAR;
-                break;
-        case MONTHP:
-                retval->data[codep++].u.value = B_MONTH;
-                break;
-        case DAYP:
-                retval->data[codep++].u.value = B_DAY;
-                break;
-        case DATEP:
-                retval->data[codep++].u.value = B_DATE;
-                break;
-        case JULIAN:
-                retval->data[codep++].u.value = B_JULIAN;
-                break;
-        case HOURP:
-                retval->data[codep++].u.value = B_HOUR;
-                break;
-        case MINUTEP:
-                retval->data[codep++].u.value = B_MINUTE;
-                break;
-        case SECONDP:
-                retval->data[codep++].u.value = B_SECOND;
-                break;
-        case TIMEP:
-                retval->data[codep++].u.value = B_TIME;
-                break;
-        case ISO8601:
-                retval->data[codep++].u.value = B_ISO8601;
-                break;
-        case STD11:
-                retval->data[codep++].u.value = B_STD11;
-                break;
-        case ZONEP:
-                retval->data[codep++].u.value = B_ZONE;
-                break;
-        case WEEKDAYP:
-                retval->data[codep++].u.value = B_WEEKDAY;
-                break;
-        }
+        retval->data[codep++].u.value = t->u.dt.date_part;
 
-        if (DATE == t->type) {
+        if (BC_DATE == t->type) {
             /* header-name */
             if (!atleast(retval, codep + 1)) return -1;
             retval->data[codep].type = BT_STR;
@@ -609,19 +432,15 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         break;
 
-    case MAILBOXEXISTS:
-        retval->data[codep++].u.op = BC_MAILBOXEXISTS;
+    case BC_MAILBOXEXISTS:
         /* XXX ops ? */
         codep = bc_stringlist_generate(codep,retval,t->u.mm.keylist);
         if (codep == -1) return -1;
 
         break;
 
-    case METADATA:
-    case NOTIFYMETHODCAPABILITY:
-        retval->data[codep++].u.op =
-            t->type == METADATA ? BC_METADATA : BC_NOTIFYMETHODCAPABILITY;
-
+    case BC_METADATA:
+    case BC_NOTIFYMETHODCAPABILITY:
         /* comparator */
         codep = bc_comparator_generate(codep, retval,
                                        t->u.mm.comp.match,
@@ -640,10 +459,8 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         break;
 
-    case METADATAEXISTS:
-    case SPECIALUSEEXISTS:
-        retval->data[codep++].u.op =
-            t->type == METADATAEXISTS ? BC_METADATAEXISTS : BC_SPECIALUSEEXISTS;
+    case BC_METADATAEXISTS:
+    case BC_SPECIALUSEEXISTS:
         if (!atleast(retval, codep+1)) return -1;
         retval->data[codep].type = BT_STR;
         retval->data[codep++].u.str = t->u.mm.extname;
@@ -652,11 +469,8 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         break;
 
-    case SERVERMETADATA:
-    case ENVIRONMENT:
-        retval->data[codep++].u.op =
-            t->type == ENVIRONMENT ? BC_ENVIRONMENT : BC_SERVERMETADATA;
-
+    case BC_SERVERMETADATA:
+    case BC_ENVIRONMENT:
         /* comparator */
         codep = bc_comparator_generate(codep, retval,
                                        t->u.mm.comp.match,
@@ -673,24 +487,20 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         break;
 
-    case SERVERMETADATAEXISTS:
-        retval->data[codep++].u.op = BC_SERVERMETADATAEXISTS;
+    case BC_SERVERMETADATAEXISTS:
         codep = bc_stringlist_generate(codep,retval,t->u.mm.keylist);
         if (codep == -1) return -1;
 
         break;
 
-    case DUPLICATE:
+    case BC_DUPLICATE:
         /* BC_DUPLICATE { idtype: HEADER | UNIQUEID }
          *              { hdrname/uniqueid : string }
          *              { handle: string} { seconds: int } { last: int }
          */
-        retval->data[codep++].u.op = BC_DUPLICATE;
-
         if (!atleast(retval, codep+1)) return -1;
         retval->data[codep].type = BT_VALUE;
-        retval->data[codep++].u.value =
-            (t->u.dup.idtype == UNIQUEID) ? B_UNIQUEID : B_HEADER;
+        retval->data[codep++].u.value = t->u.dup.idtype;
 
         if (!atleast(retval, codep+1)) return -1;
         retval->data[codep].type = BT_STR;
@@ -710,16 +520,14 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         break;
 
-    case MAILBOXIDEXISTS:
-        retval->data[codep++].u.op = BC_MAILBOXIDEXISTS;
+    case BC_MAILBOXIDEXISTS:
         /* XXX ops ? */
         codep = bc_stringlist_generate(codep,retval,t->u.mm.keylist);
         if (codep == -1) return -1;
 
         break;
 
-    case JMAPQUERY:
-        retval->data[codep++].u.op = BC_JMAPQUERY;
+    case BC_JMAPQUERY:
         if (!atleast(retval, codep+1)) return -1;
         retval->data[codep].type = BT_STR;
         retval->data[codep++].u.str = t->u.jquery;
@@ -754,63 +562,42 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
         do {
             if (!atleast(retval, codep+1)) return -1;
             retval->data[codep].type = BT_OPCODE;
+            retval->data[codep++].u.op = c->type;
 
             switch(c->type) {
-            case STOP:
+            case B_STOP:
                 /* STOP (no arguments) */
-                retval->data[codep++].u.op = B_STOP;
                 break;
 
-            case DISCARD:
+            case B_DISCARD:
                 /* DISCARD (no arguments) */
-                retval->data[codep++].u.op = B_DISCARD;
                 break;
 
-            case KEEP:
+            case B_KEEP:
                 /* KEEP
                    STRINGLIST flags
                 */
-                retval->data[codep++].u.op = B_KEEP;
                 codep = bc_stringlist_generate(codep,retval,c->u.k.flags);
                 if (codep == -1) return -1;
                 break;
 
-            case MARK:
+            case B_MARK:
                 /* MARK (no arguments) */
-                retval->data[codep++].u.op = B_MARK;
                 break;
 
-            case UNMARK:
+            case B_UNMARK:
                 /* UNMARK (no arguments) */
-                retval->data[codep++].u.op = B_UNMARK;
                 break;
 
-            case RETURN:
+            case B_RETURN:
                 /* RETURN (no arguments) */
-                retval->data[codep++].u.op = B_RETURN;
                 break;
 
-            case DENOTIFY:
+            case B_DENOTIFY:
                 /* DENOTIFY  */
-                retval->data[codep++].u.op = B_DENOTIFY;
                 if (!atleast(retval, codep+1)) return -1;
                 retval->data[codep].type = BT_VALUE;
-                switch(c->u.d.priority) {
-                case LOW:
-                    retval->data[codep++].u.value = B_LOW;
-                    break;
-                case NORMAL:
-                    retval->data[codep++].u.value = B_NORMAL;
-                    break;
-                case HIGH:
-                    retval->data[codep++].u.value = B_HIGH;
-                    break;
-                case ANY:
-                    retval->data[codep++].u.value = B_ANY;
-                    break;
-                default:
-                    return -1;
-                }
+                retval->data[codep++].u.value = c->u.d.priority;
 
                 /* comparator */
                 codep = bc_comparator_generate(codep, retval,
@@ -825,21 +612,16 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
                 break;
 
-            case REJCT:
-            case EREJECT:
-            case ERROR:
+            case B_REJECT:
+            case B_EREJECT:
+            case B_ERROR:
                 /* (REJECT | EREJECT | ERROR) (STRING: len + dataptr) */
-                switch (c->type) {
-                case REJCT:   retval->data[codep++].u.op = B_REJECT; break;
-                case EREJECT: retval->data[codep++].u.op = B_EREJECT; break;
-                case ERROR:   retval->data[codep++].u.op = B_ERROR; break;
-                }
                 if (!atleast(retval, codep+1)) return -1;
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.str;
                 break;
 
-            case FILEINTO:
+            case B_FILEINTO:
                 /* FILEINTO
                    STRING mailboxid
                    STRING specialuse
@@ -848,7 +630,6 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    VALUE copy
                    STRING folder
                 */
-                retval->data[codep++].u.op = B_FILEINTO;
                 if (!atleast(retval, codep+2)) return -1;
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.f.mailboxid;
@@ -866,7 +647,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 retval->data[codep++].u.str = c->u.f.folder;
                 break;
 
-            case REDIRECT:
+            case B_REDIRECT:
                 /* REDIRECT
                    STRING bytime
                    STRING bymode
@@ -877,7 +658,6 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    VALUE copy
                    STRING address
                 */
-                retval->data[codep++].u.op = B_REDIRECT;
                 if (!atleast(retval, codep+8)) return -1;
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.r.bytime;
@@ -897,21 +677,10 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 retval->data[codep++].u.str = c->u.r.address;
                 break;
 
-            case ADDFLAG:
-            case SETFLAG:
-            case REMOVEFLAG:
+            case B_ADDFLAG:
+            case B_SETFLAG:
+            case B_REMOVEFLAG:
                 /* (ADDFLAG | SETFLAG | REMOVEFLAG) string stringlist */
-                switch(c->type) {
-                case ADDFLAG:
-                    retval->data[codep++].u.op = B_ADDFLAG;
-                    break;
-                case SETFLAG:
-                    retval->data[codep++].u.op = B_SETFLAG;
-                    break;
-                case REMOVEFLAG:
-                    retval->data[codep++].u.op = B_REMOVEFLAG;
-                    break;
-                }
                 if (!atleast(retval, codep+1)) return -1;
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.fl.variable;
@@ -919,8 +688,8 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 if (codep == -1) return -1;
                 break;
 
-            case NOTIFY:
-            case ENOTIFY:
+            case B_NOTIFY:
+            case B_ENOTIFY:
             {
                 /* (E)NOTIFY
                    (STRING: len + dataptr)
@@ -930,19 +699,14 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    (STRING: len + dataptr)
                    method/(from|id) /options list/priority/message
                 */
-                int op;
                 char *str;
 
                 if (c->type == ENOTIFY) {
-                    op = B_ENOTIFY;
                     str = c->u.n.from;
                 }
                 else {
-                    op = B_NOTIFY;
                     str = c->u.n.id;
                 }
-
-                retval->data[codep++].u.op = op;
 
                 if (!atleast(retval, codep+2)) return -1;
                 retval->data[codep].type = BT_STR;
@@ -957,29 +721,14 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 if (!atleast(retval, codep+2)) return -1;
 
                 retval->data[codep].type = BT_VALUE;
-                switch(c->u.n.priority) {
-                case LOW:
-                    retval->data[codep++].u.value = B_LOW;
-                    break;
-                case NORMAL:
-                    retval->data[codep++].u.value = B_NORMAL;
-                    break;
-                case HIGH:
-                    retval->data[codep++].u.value = B_HIGH;
-                    break;
-                case ANY:
-                    retval->data[codep++].u.value = B_ANY;
-                    break;
-                default:
-                    return -1;
-                }
+                retval->data[codep++].u.value = c->u.n.priority;
 
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.n.message;
             }
             break;
 
-            case VACATION:
+            case B_VACATION:
                 /* VACATION
                    STRINGLIST addresses
                    STRING subject (if len is -1, then subject was NULL)
@@ -993,8 +742,6 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                       STRINGLIST flags (if and only if fcc != NULL)
                       STRING specialuse (if and only if fcc != NULL)
                 */
-
-                retval->data[codep++].u.op = B_VACATION;
 
                 codep = bc_stringlist_generate(codep,retval,c->u.v.addresses);
                 if (codep == -1) return -1;
@@ -1041,24 +788,14 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 if (codep == -1) return -1;
                 break;
 
-            case INCLUDE:
+            case B_INCLUDE:
                 /* INCLUDE
                    VALUE location + (once << 6) + (optional << 7)
                    STRING filename */
-                retval->data[codep++].u.op = B_INCLUDE;
 
                 if (!atleast(retval, codep+3)) return -1;
                 retval->data[codep].type = BT_VALUE;
-                switch(c->u.inc.location) {
-                case PERSONAL:
-                    retval->data[codep].u.value = B_PERSONAL;
-                    break;
-                case GLOBAL:
-                    retval->data[codep].u.value = B_GLOBAL;
-                    break;
-                default:
-                    return -1;
-                }
+                retval->data[codep].u.value = c->u.inc.location;
 
                 retval->data[codep].type = BT_VALUE;
                 retval->data[codep++].u.value |=
@@ -1067,64 +804,27 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 retval->data[codep++].u.str = c->u.inc.script;
                 break;
 
-            case SET:
+            case B_SET:
                 /* SET
                    BITFIELD modifiers
                    STRING variable
                    STRING value
                 */
-                retval->data[codep++].u.op = B_SET;
                 if (!atleast(retval, codep+3)) return -1;
                 retval->data[codep].type = BT_VALUE;
-                retval->data[codep].u.value = 0;
-                switch(c->u.s.mod40) {
-                case LOWER:
-                    retval->data[codep].u.value |= BFV_LOWER;
-                    break;
-                case UPPER:
-                    retval->data[codep].u.value |= BFV_UPPER;
-                    break;
-                }
-                switch(c->u.s.mod30) {
-                case LOWERFIRST:
-                    retval->data[codep].u.value |= BFV_LOWERFIRST;
-                    break;
-                case UPPERFIRST:
-                    retval->data[codep].u.value |= BFV_UPPERFIRST;
-                    break;
-                }
-                switch(c->u.s.mod20) {
-                case QUOTEWILDCARD:
-                    retval->data[codep].u.value |= BFV_QUOTEWILDCARD;
-                    break;
-                case QUOTEREGEX:
-                    retval->data[codep].u.value |= BFV_QUOTEREGEX;
-                    break;
-                }
-                switch(c->u.s.mod15) {
-                case ENCODEURL:
-                    retval->data[codep].u.value |= BFV_ENCODEURL;
-                    break;
-                }
-                switch(c->u.s.mod10) {
-                case LENGTH:
-                    retval->data[codep].u.value |= BFV_LENGTH;
-                    break;
-                }
-                codep++;
+                retval->data[codep++].u.value = c->u.s.modifiers;
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.s.variable;
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.s.value;
                 break;
 
-            case ADDHEADER:
+            case B_ADDHEADER:
                 /* ADDHEADER
                    NUMBER index
                    STRING name
                    STRING value
                 */
-                retval->data[codep++].u.op = B_ADDHEADER;
                 if (!atleast(retval, codep+3)) return -1;
                 retval->data[codep].type = BT_VALUE;
                 retval->data[codep++].u.value = c->u.ah.index;
@@ -1134,14 +834,13 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 retval->data[codep++].u.str = c->u.ah.value;
                 break;
 
-            case DELETEHEADER:
+            case B_DELETEHEADER:
                 /* DELETEHEADER
                    NUMBER index
                    COMPARATOR
                    STRING name
                    STRINGLIST value-patterns
                 */
-                retval->data[codep++].u.op = B_DELETEHEADER;
                 if (!atleast(retval, codep+1)) return -1;
                 retval->data[codep].type = BT_VALUE;
                 retval->data[codep++].u.value = c->u.dh.comp.index;
@@ -1160,17 +859,16 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 if (codep == -1) return -1;
                 break;
 
-            case LOG:
+            case B_LOG:
                 /* LOG
                    STRING text
                 */
-                retval->data[codep++].u.op = B_LOG;
                 if (!atleast(retval, codep+1)) return -1;
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.l.text;
                 break;
 
-            case SNOOZE:
+            case B_SNOOZE:
                 /* SNOOZE
                    STRING mailbox / mailboxid
                    STRINGLIST addflags
@@ -1178,7 +876,6 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    VALUE weekdays + (is_mboxid << 7)
                    VALUELIST times
                 */
-                retval->data[codep++].u.op = B_SNOOZE;
                 if (!atleast(retval, codep+1)) return -1;
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.sn.mailbox;
@@ -1199,7 +896,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 if (codep == -1) return -1;
                 break;
 
-            case IF:
+            case B_IF:
             {
                 int jumpVal;
                 /* IF
@@ -1210,8 +907,6 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    (then block)
                    (else block)(optional)
                 */
-
-                retval->data[codep++].u.op = B_IF;
 
                 /* Allocate jump table offsets */
                 if (!atleast(retval, codep+3)) return -1;

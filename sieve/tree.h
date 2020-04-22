@@ -153,11 +153,7 @@ struct Commandlist {
             char *script;
         } inc;
         struct { /* it's a set action */
-            int mod40; /* :lower or :upper */
-            int mod30; /* :lowerfirst or :upperfirst */
-            int mod20; /* :quotewildcard */
-            int mod15; /* :encodeurl */
-            int mod10; /* :length */
+            unsigned modifiers;
             char *variable;
             char *value;
         } s;

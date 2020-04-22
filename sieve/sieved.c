@@ -732,15 +732,17 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
         case B_SET:
             printf("SET LOWER(%d) UPPER(%d)",
-                   cmd.u.s.mod40 & BFV_LOWER, cmd.u.s.mod40 & BFV_UPPER);
+                   cmd.u.s.modifiers & BFV_LOWER,
+                   cmd.u.s.modifiers & BFV_UPPER);
             printf(" LOWERFIRST(%d) UPPERFIRST(%d)",
-                   cmd.u.s.mod30 & BFV_LOWERFIRST,
-                   cmd.u.s.mod30 & BFV_UPPERFIRST);
+                   cmd.u.s.modifiers & BFV_LOWERFIRST,
+                   cmd.u.s.modifiers & BFV_UPPERFIRST);
             printf("\n\tQUOTEWILDCARD(%d) QUOTEREGEX(%d)",
-                   cmd.u.s.mod20 & BFV_QUOTEWILDCARD,
-                   cmd.u.s.mod20 & BFV_QUOTEREGEX);
+                   cmd.u.s.modifiers & BFV_QUOTEWILDCARD,
+                   cmd.u.s.modifiers & BFV_QUOTEREGEX);
             printf(" ENCODEURL(%d) LENGTH(%d)",
-                   cmd.u.s.mod15 & BFV_ENCODEURL, cmd.u.s.mod10 & BFV_LENGTH);
+                   cmd.u.s.modifiers & BFV_ENCODEURL,
+                   cmd.u.s.modifiers & BFV_LENGTH);
             print_string("\n\tVARIABLE", cmd.u.s.variable);
             print_string(" VALUE", cmd.u.s.value);
             break;
