@@ -748,6 +748,11 @@ static int _email_matchmime_evaluate(json_t *filter,
                                      struct email_contactfilter *cfilter,
                                      time_t internaldate)
 {
+    if (!json_object_size(filter)) {
+        /* Match all */
+        return 1;
+    }
+
     json_t *conditions = json_object_get(filter, "conditions");
     if (json_is_array(conditions)) {
 
@@ -791,7 +796,7 @@ static int _email_matchmime_evaluate(json_t *filter,
 
     /* Evaluate FilterCondition */
 
-    int matches = 1;
+    int matches = 0;
 
     /* Xapian-backed criteria */
     ptrarray_t xqs = PTRARRAY_INITIALIZER;
@@ -881,7 +886,6 @@ static int _email_matchmime_evaluate(json_t *filter,
     }
 
     if (xqs.count) {
-        matches = 0;
         xapian_query_t *xq = xapian_query_new_compound(db, /*is_or*/0,
                 (xapian_query_t **) xqs.data, xqs.count);
         xapian_query_run(db, xq, 0, _email_matchmime_evaluate_xcb, &matches);
@@ -896,13 +900,14 @@ static int _email_matchmime_evaluate(json_t *filter,
         if (message_get_size(m, &size) == 0) {
             json_int_t jint;
             if ((jint = json_integer_value(json_object_get(filter, "minSize"))) > 0) {
-                if (size < jint) return 0;
+                matches = matches && size >= jint;
             }
             if ((jint = json_integer_value(json_object_get(filter, "maxSize"))) > 0) {
-                if (size > jint) return 0;
+                matches = matches && size < jint;
             }
         }
     }
+    if (!matches) return 0;
 
     json_t *jval;
 
@@ -914,13 +919,12 @@ static int _email_matchmime_evaluate(json_t *filter,
             if (jmap_emailbodies_extract(body, &bodies) == 0) {
                 int have = ptrarray_size(&bodies.attslist) > 0;
                 int want = jval == json_true();
-                if (have != want) {
-                    matches = 0;
-                }
+                matches = matches && have == want;
             }
             jmap_emailbodies_fini(&bodies);
         }
     }
+    if (!matches) return 0;
 
     /* header */
     if (JNOTNULL((jval = json_object_get(filter, "header")))) {
@@ -934,8 +938,6 @@ static int _email_matchmime_evaluate(json_t *filter,
             val = NULL; // match any value
         }
 
-        matches = 0;
-
         /* Replicate match_header logic in search_expr.c */
         char *lhdr = lcase(xstrdup(hdr));
         struct buf buf = BUF_INITIALIZER;
@@ -948,8 +950,8 @@ static int _email_matchmime_evaluate(json_t *filter,
                 if ((v = charset_convert(val, utf8, charset_flags))) {
                     comp_pat *pat = charset_compilepat(v);
                     if (pat) {
-                        matches = charset_searchstring(v, pat, buf.s, buf.len,
-                                                       charset_flags);
+                        matches = matches &&
+                            charset_searchstring(v, pat, buf.s, buf.len, charset_flags);
                     }
                     charset_freepat(pat);
                 }
@@ -957,26 +959,25 @@ static int _email_matchmime_evaluate(json_t *filter,
                 charset_free(&utf8);
             }
             else {
-                matches = buf_len(&buf) > 0;
+                matches = matches && buf_len(&buf) > 0;
             }
         }
         buf_free(&buf);
         free(lhdr);
-
-        if (!matches) return 0;
     }
+    if (!matches) return 0;
 
     /* before */
     if (JNOTNULL(jval = json_object_get(filter, "before"))) {
         time_t t;
         time_from_iso8601(json_string_value(jval), &t);
-        if (internaldate >= t) return 0;
+        matches = matches && internaldate < t;
     }
     /* after */
     if (JNOTNULL(jval = json_object_get(filter, "after"))) {
         time_t t;
         time_from_iso8601(json_string_value(jval), &t);
-        if (internaldate < t) return 0;
+        matches = matches && internaldate >= t;
     }
 
     return matches;
