@@ -76,7 +76,13 @@
 int encoded_char = 0;    /* used to send encoded-character feedback to lexer */
 int getdatepart = 0;     /* used to send start state feedback to lexer */
 static comp_t *ctags;    /* used for accessing comp_t* in a test/command union */
-static unsigned bctype;  /* used to set the bytecode command type in rules */
+static int *copy;        /* used for accessing copy flag in a command union */
+static int *create;      /* used for accessing create flag in a command union */
+static strarray_t **flags; /* used for accessing imap flags in a command union */
+static char **specialuse; /* used for accessing special-use flag in a command */
+static char **mailboxid; /* used for accessing mailboxid in a command */
+static char **fccfolder; /* used for accessing fcc.folder in a command */
+static unsigned bctype;  /* used to set the bytecode command type in mtags */
 
 extern int addrparse(sieve_script_t*);
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
@@ -485,35 +491,23 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
         | INCLUDE itags string   { $$ = build_include(sscript, $2, $3); }
         | LOG string             { $$ = build_log(sscript, $2); }
-        | SNOOZE sntags timelist
-                                 { $$ = build_snooze(sscript, $2, $3); }
+        | SNOOZE sntags timelist { $$ = build_snooze(sscript, $2, $3); }
         | RETURN                 { $$ = new_command(B_RETURN, sscript); }
         ;
 
 
 /* KEEP tagged arguments */
-ktags: /* empty */               { $$ = new_command(B_KEEP, sscript); }
+ktags: /* empty */               {
+                                     $$ = new_command(B_KEEP, sscript);
+                                     flags = &($$->u.k.flags);
+                                 }
         | ktags flags
         ;
 
 
 /* :flags */
 flags: FLAGS stringlist          {
-                                     /* $0 refers to ktags, ftags, or vtags */
-                                     commandlist_t *c = $<cl>0;
-                                     strarray_t **flags = NULL;
-
-                                     switch (c->type) {
-                                     case B_KEEP:
-                                         flags = &c->u.k.flags; break;
-                                     case B_FILEINTO:
-                                         flags = &c->u.f.flags; break;
-                                     case B_VACATION:
-                                         flags = &c->u.v.fcc.flags; break;
-                                     case B_ENOTIFY:
-                                         flags = &c->u.n.fcc.flags; break;
-                                     }
-
+                                     /* **flags assigned by the calling rule */
                                      if (*flags != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -532,7 +526,14 @@ flags: FLAGS stringlist          {
 
 
 /* FILEINTO tagged arguments */
-ftags: /* empty */               { $$ = new_command(B_FILEINTO, sscript); }
+ftags: /* empty */               {
+                                     $$ = new_command(B_FILEINTO, sscript);
+                                     copy = &($$->u.f.copy);
+                                     flags = &($$->u.f.flags);
+                                     create = &($$->u.f.create);
+                                     specialuse = &($$->u.f.specialuse);
+                                     mailboxid = &($$->u.f.mailboxid);
+                                 }
         | ftags copy
         | ftags flags
         | ftags create
@@ -543,11 +544,7 @@ ftags: /* empty */               { $$ = new_command(B_FILEINTO, sscript); }
 
 /* :copy */
 copy: COPY                       {
-                                     /* $0 refers to ftags or rtags */
-                                     commandlist_t *c = $<cl>0;
-                                     int *copy = (c->type == B_FILEINTO) ?
-                                         &c->u.f.copy : &c->u.r.copy;
-
+                                     /* *copy assigned by the calling rule */
                                      if ((*copy)++) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -564,19 +561,7 @@ copy: COPY                       {
 
 /* :create */
 create: CREATE                  {
-                                     /* $0 refers to ftags or vtags */
-                                     commandlist_t *c = $<cl>0;
-                                     int *create = NULL;
-
-                                     switch (c->type) {
-                                     case B_FILEINTO:
-                                         create = &c->u.f.create; break;
-                                     case B_VACATION:
-                                         create = &c->u.v.fcc.create; break;
-                                     case B_ENOTIFY:
-                                         create = &c->u.n.fcc.create; break;
-                                     }
-
+                                     /* *create assigned by the calling rule */
                                      if ((*create)++) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -593,22 +578,7 @@ create: CREATE                  {
 
 /* :specialuse */
 specialuse: SPECIALUSE string    {
-                                     /* $0 refers to ftags or vtags */
-                                     commandlist_t *c = $<cl>0;
-                                     char **specialuse = NULL;
-
-                                     switch (c->type) {
-                                     case B_FILEINTO:
-                                         specialuse = &c->u.f.specialuse;
-                                         break;
-                                     case B_VACATION:
-                                         specialuse = &c->u.v.fcc.specialuse;
-                                         break;
-                                     case B_ENOTIFY:
-                                         specialuse = &c->u.n.fcc.specialuse;
-                                         break;
-                                     }
-
+                                     /* **specialuse assigned by calling rule */
                                      if (*specialuse != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -626,25 +596,7 @@ specialuse: SPECIALUSE string    {
         ;
 
 mailboxid: MAILBOXID string      {
-                                     /* $0 refers to ftags, sntags or vtags */
-                                     commandlist_t *c = $<cl>0;
-                                     char **mailboxid = NULL;
-
-                                     switch (c->type) {
-                                     case B_FILEINTO:
-                                         mailboxid = &c->u.f.mailboxid;
-                                         break;
-                                     case B_SNOOZE:
-                                         mailboxid = &c->u.sn.mailbox;
-                                         break;
-                                     case B_VACATION:
-                                         mailboxid = &c->u.v.fcc.mailboxid;
-                                         break;
-                                     case B_ENOTIFY:
-                                         mailboxid = &c->u.n.fcc.mailboxid;
-                                         break;
-                                     }
-
+                                     /* **mailboxid assigned by the calling rule */
                                      if (*mailboxid != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -663,7 +615,10 @@ mailboxid: MAILBOXID string      {
 
 
 /* REDIRECT tagged arguments */
-rtags: /* empty */               { $$ = new_command(B_REDIRECT, sscript); }
+rtags: /* empty */               {
+                                     $$ = new_command(B_REDIRECT, sscript);
+                                     copy = &($$->u.r.copy);
+                                 }
         | rtags copy
         | rtags LIST             {
                                      if ($$->u.r.list++) {
@@ -864,7 +819,14 @@ mod10:    LENGTH                 { $$ = BFV_LENGTH; }
 
 
 /* VACATION tagged arguments */
-vtags: /* empty */               { $$ = new_command(B_VACATION, sscript); }
+vtags: /* empty */               {
+                                     $$ = new_command(B_VACATION, sscript);
+                                     flags = &($$->u.v.fcc.flags);
+                                     create = &($$->u.v.fcc.create);
+                                     specialuse = &($$->u.v.fcc.specialuse);
+                                     mailboxid = &($$->u.v.fcc.mailboxid);
+                                     fccfolder = &($$->u.v.fcc.folder);
+                                 }
         | vtags DAYS NUMBER      {
                                      if ($$->u.v.seconds != -1) {
                                          sieveerror_c(sscript,
@@ -944,22 +906,12 @@ vtags: /* empty */               { $$ = new_command(B_VACATION, sscript); }
 
 
 fcctags: FCC string              {
-                                     /* $0 refers to vtags or ntags */
-                                     commandlist_t *c = $<cl>0;
-                                     char **folder = NULL;
-
-                                     switch (c->type) {
-                                     case B_VACATION:
-                                         folder = &c->u.v.fcc.folder; break;
-                                     case B_ENOTIFY:
-                                         folder = &c->u.n.fcc.folder; break;
-                                     }
-
-                                     if (*folder != NULL) {
+                                     /* **fccfolder assigned by the calling rule */
+                                     if (*fccfolder != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":fcc");
-                                         free(*folder);
+                                         free(*fccfolder);
                                      }
                                      else if (!supported(SIEVE_CAPA_FCC)) {
                                          sieveerror_c(sscript,
@@ -967,7 +919,7 @@ fcctags: FCC string              {
                                                       "fcc");
                                      }
 
-                                     *folder = $2;
+                                     *fccfolder = $2;
                                  }
         | create
         | flags
@@ -1047,7 +999,14 @@ reject:   REJCT                  { $$ = B_REJECT;  }
  * try to police it during parsing.  Note that this allows :importance
  * and :low/:normal/:high to be used with the incorrect notify flavor.
  */
-ntags: /* empty */               { $$ = new_command(B_ENOTIFY, sscript); }
+ntags: /* empty */               {
+                                     $$ = new_command(B_ENOTIFY, sscript);
+                                     flags = &($$->u.n.fcc.flags);
+                                     create = &($$->u.n.fcc.create);
+                                     specialuse = &($$->u.n.fcc.specialuse);
+                                     mailboxid = &($$->u.n.fcc.mailboxid);
+                                     fccfolder = &($$->u.n.fcc.folder);
+                                 }
 
         /* enotify-only tagged arguments */
         | ntags FROM string      {
@@ -1199,7 +1158,10 @@ location: PERSONAL               { $$ = B_PERSONAL; }
 
 
 /* SNOOZE tagged arguments */
-sntags: /* empty */              { $$ = new_command(B_SNOOZE, sscript); }
+sntags: /* empty */              {
+                                     $$ = new_command(B_SNOOZE, sscript);
+                                     mailboxid = &($$->u.sn.mailbox);
+                                 }
         | sntags MAILBOX string  {
                                      if ($$->u.sn.mailbox != NULL) {
                                          sieveerror_c(sscript,
@@ -1448,7 +1410,7 @@ htags: /* empty */               {
 
 /* All match-types except for :list */
 matchtype: matchtag              {
-                                     /* ctags is assigned by the calling rule */
+                                     /* *ctags assigned by the calling rule */
                                      if (ctags->match != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1512,7 +1474,7 @@ relation: EQ                     { $$ = B_EQ; }
 
 /* :list match-type */
 listmatch: LIST                  {
-                                     /* ctags is assigned by the calling rule */
+                                     /* *ctags assigned by the calling rule */
                                      if (ctags->match != B_LIST &&
                                          !supported(SIEVE_CAPA_EXTLISTS)) {
                                          sieveerror_c(sscript,
@@ -1533,7 +1495,7 @@ listmatch: LIST                  {
 /* :comparator */
 comparator: COMPARATOR collation
                                  {
-                                     /* ctags is assigned by the calling rule */
+                                     /* *ctags assigned by the calling rule */
                                      if (ctags->collation != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1563,7 +1525,7 @@ collation: OCTET                 { $$ = B_OCTET;        }
 
 /* Index tags */
 idxtags: INDEX NUMBER            {
-                                     /* ctags is assigned by the calling rule */
+                                     /* *ctags assigned by the calling rule */
                                      if (ctags->index == INT_MIN) {
                                          /* parsed :last before :index */
                                          ctags->index = -$2;
@@ -1816,7 +1778,7 @@ methtags: /* empty */            {
 
 /* [SERVER]METADATA tagged arguments */
 mtags: /* empty */               {
-                                     /* bctype is set by calling rule */
+                                     /* bctype assigned by the calling rule */
                                      $$ = new_test(bctype, sscript);
                                      ctags = &($$->u.mm.comp);
                                  }
