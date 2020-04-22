@@ -158,30 +158,29 @@ static int bc_vallist_generate(int codep, bytecode_info_t *retval,
 static int bc_testlist_generate(int codep, bytecode_info_t *retval,
                                 const testlist_t *tl)
 {
-    int len_codep = codep;
+    int lenloc = codep;
     int testcount = 0;
     const testlist_t *cur;
 
-    codep++;
-
-    /* Bounds check the test list length */
+    /* Allocate list len */
     if (!atleast(retval,codep+1)) return -1;
+    retval->data[codep++].type = BT_STRLISTLEN;
 
-    for (cur=tl; cur; cur = cur->next) {
-        int oldcodep = codep;
+    for (cur = tl; cur; cur = cur->next, testcount++) {
+        int jumploc = codep;
 
-        /* Make room for tail marker */
+        /* Allocate jump location */
         if (!atleast(retval, codep+1)) return -1;
+        retval->data[codep++].type = BT_JUMP;
 
-        testcount++;
-        codep = bc_test_generate(codep+1, retval, cur->t);
+        codep = bc_test_generate(codep, retval, cur->t);
 
-        retval->data[oldcodep].type = BT_JUMP;
-        retval->data[oldcodep].u.jump = codep;
+        /* update jump location */
+        retval->data[jumploc].u.jump = codep;
     }
 
-    retval->data[len_codep].type = BT_STRLISTLEN;
-    retval->data[len_codep].u.listlen = testcount;
+    /* update list length */
+    retval->data[lenloc].u.listlen = testcount;
 
     return codep;
 }
@@ -295,8 +294,6 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, const test_t *t)
 static int bc_action_generate(int codep, bytecode_info_t *retval,
                               commandlist_t *c)
 {
-    int jumploc;
-
     if (!retval) return -1;
 
     if (c == NULL) {
@@ -316,7 +313,6 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
             retval->data[codep++].u.op = c->type;
 
             if (c->type == B_IF) {
-                int jumpVal;
                 /* IF
                    (int: begin then block)
                    (int: end then block/begin else block)
@@ -325,52 +321,37 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    (then block)
                    (else block)(optional)
                 */
+                int jumploc = codep;
 
                 /* Allocate jump table offsets */
                 if (!atleast(retval, codep+3)) return -1;
-                jumploc = codep+3;
-
-                /* beginning of then  code */
-                jumpVal = bc_test_generate(jumploc,retval,c->u.i.t);
-                if (jumpVal == -1)
-                    return -1;
-                else {
+                do {
                     retval->data[codep].type = BT_JUMP;
-                    retval->data[codep].u.jump = jumpVal;
-                    codep++;
-                }
+                    retval->data[codep++].u.jump = -1;
+                } while (codep - jumploc < 3);
 
-                /* find then code and offset to else code,
-                 * we want to write this code starting at the offset we
-                 * just found */
+                /* write test */
+                codep = bc_test_generate(codep, retval, c->u.i.t);
+                if (codep == -1) return -1;
 
-                jumpVal = bc_action_generate(jumpVal,retval, c->u.i.do_then);
-                if (jumpVal == -1)
-                    return -1;
-                else {
-                    retval->data[codep].type = BT_JUMP;
-                    retval->data[codep].u.jump = jumpVal;
-                }
+                /* update jump table with beginning of then block */
+                retval->data[jumploc].u.jump = codep;
 
-                codep++;
-                /* write else code if its there*/
+                /* write then block */
+                codep = bc_action_generate(codep, retval, c->u.i.do_then);
+                if (codep == -1) return -1;
+
+                /* update jump table with end of then block */
+                retval->data[jumploc+1].u.jump = codep;
+
+                /* write else block */
                 if (c->u.i.do_else) {
-                    jumpVal = bc_action_generate(jumpVal,retval, c->u.i.do_else);
-                    if (jumpVal == -1) return -1;
-                    else {
-                        retval->data[codep].type = BT_JUMP;
-                        retval->data[codep].u.jump = jumpVal;
-                    }
+                    codep = bc_action_generate(codep, retval, c->u.i.do_else);
+                    if (codep == -1) return -1;
 
-                    /* Update code pointer to end of else code */
-                    codep = retval->data[codep].u.jump;
-                } else {
-                    /*there is no else block, so its -1*/
-                    retval->data[codep].u.jump = -1;
-                    /* Update code pointer to end of then code */
-                    codep = retval->data[codep-1].u.jump;
+                    /* update jump table with end of else block */
+                    retval->data[jumploc+2].u.jump = codep;
                 }
-
             }
             else {
                 codep = bc_args_generate(codep, retval, c->nargs, c->args);
