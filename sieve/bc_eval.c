@@ -1061,7 +1061,7 @@ envelope_err:
 
         /* timezone offset */
         if (zone == B_TIMEZONE) {
-            timezone_offset = test.u.dt.zone;
+            timezone_offset = test.u.dt.tzoffset;
         }
 
         /* comparator */

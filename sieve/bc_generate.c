@@ -541,7 +541,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         /* zone */
         codep = bc_zone_generate(codep, retval,
                                  t->u.dt.zonetag,
-                                 t->u.dt.zone);
+                                 t->u.dt.tzoffset);
         if (codep == -1) return -1;
 
         /* comparator */

@@ -583,7 +583,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
 
         test->u.dt.zonetag = ntohl(bc[pos++].value);
         if (test->u.dt.zonetag == B_TIMEZONE)
-            test->u.dt.zone = ntohl(bc[pos++].value);
+            test->u.dt.tzoffset = ntohl(bc[pos++].value);
 
         pos = bc_comparator_parse(bc, pos, &test->u.dt.comp);
         test->u.dt.date_part = ntohl(bc[pos++].value);

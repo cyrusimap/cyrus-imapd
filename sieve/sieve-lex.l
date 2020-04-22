@@ -78,7 +78,7 @@ CRLF            (\r\n|\r|\n)
 ws              [ \t]+
 
     /* UTC offset of timezone +/-hhmm */
-timezone        [-|+][0-1][0-9][0-5][0-9]
+tzoffset        [-|+][0-1][0-9][0-5][0-9]
 
     /* case-insensitive date-parts */
 year            [Y|y][E|e][A|a][R|r]
@@ -100,7 +100,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 %state QCOLLATION
 %state QRELATION
 %state QIMPORTANCE
-%state QTIMEZONE
+%state QTZOFFSET
 %state QDATEPART
 
 %%
@@ -306,17 +306,17 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
     /* date - RFC 5260 */
 <INITIAL>date                 return DATE;
 <INITIAL>:originalzone        return ORIGINALZONE;
-<INITIAL>:zone                { BEGIN QTIMEZONE; return ZONE; }
+<INITIAL>:zone                { BEGIN QTZOFFSET; return ZONE; }
 <INITIAL>currentdate          { getdatepart = 1; return CURRENTDATE; }
 
-<QTIMEZONE>[ \t\n\r] ;        /* ignore whitespace */
-<QTIMEZONE>\"{timezone}\"     {
+<QTZOFFSET>[ \t\n\r] ;        /* ignore whitespace */
+<QTZOFFSET>\"{tzoffset}\"     {
                                   BEGIN INITIAL;
                                   int tz = atoi(yytext+1); /* skip leading " */
                                   yylval->nval = 60 * (tz / 100) + (tz % 100);
-                                  return TIMEZONE;
+                                  return TZOFFSET;
                               }
-<QTIMEZONE>\"[^\"]*\"         {
+<QTZOFFSET>\"[^\"]*\"         {
                                   BEGIN INITIAL;
                                   sieveerror_f(sscript,
                                                "invalid time-zone %s", yytext);

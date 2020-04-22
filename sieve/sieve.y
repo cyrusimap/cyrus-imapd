@@ -255,7 +255,7 @@ extern void sieverestart(FILE *f);
 
 /* date - RFC 5260 */
 %token DATE CURRENTDATE ORIGINALZONE ZONE
-%token <nval> TIMEZONE
+%token <nval> TZOFFSET
 %token <nval> YEARP MONTHP DAYP DATEP JULIAN
 %token <nval> HOURP MINUTEP SECONDP TIMEP ISO8601 STD11 ZONEP WEEKDAYP
 %type <test> dttags cdtags
@@ -1703,7 +1703,7 @@ dttags: /* empty */              { $$ = new_test(DATE, sscript); }
 
 
 /* :zone */
-zone: ZONE TIMEZONE              {
+zone: ZONE TZOFFSET              {
                                      /* $0 refers to a test_t* ([CURRENT]DATE)*/
                                      test_t *test = $<test>0;
 
@@ -1714,7 +1714,7 @@ zone: ZONE TIMEZONE              {
                                      }
 
                                      test->u.dt.zonetag = ZONE;
-                                     test->u.dt.zone = $2;
+                                     test->u.dt.tzoffset = $2;
                                  }
         ;
 
@@ -2838,7 +2838,7 @@ static test_t *build_date(sieve_script_t *sscript,
         time_t now = time(NULL);
 
         localtime_r(&now, &tm);
-        t->u.dt.zone = gmtoff_of(&tm, now) / 60;
+        t->u.dt.tzoffset = gmtoff_of(&tm, now) / 60;
         t->u.dt.zonetag = ZONE;
     }
 

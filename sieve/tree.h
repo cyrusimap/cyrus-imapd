@@ -99,7 +99,7 @@ struct Test {
         struct { /* it's a date test */
             comp_t comp;
             int zonetag;
-            int zone;  /* time-zone offset in minutes */
+            int tzoffset;  /* time-zone offset in minutes */
             int date_part;
             char *header_name;
             strarray_t *kl;
