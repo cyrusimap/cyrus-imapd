@@ -2793,7 +2793,7 @@ EOF
 }
 
 sub test_jmapquery
-    :needs_component_sieve
+    :min_version_3_3 :needs_component_sieve
 {
     my ($self) = @_;
 
