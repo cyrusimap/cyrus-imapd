@@ -796,7 +796,8 @@ static int _email_matchmime_evaluate(json_t *filter,
 
     /* Evaluate FilterCondition */
 
-    int matches = 0;
+    int need_matches = json_object_size(filter);
+    int have_matches = 0;
 
     /* Xapian-backed criteria */
     ptrarray_t xqs = PTRARRAY_INITIALIZER;
@@ -886,13 +887,18 @@ static int _email_matchmime_evaluate(json_t *filter,
     }
 
     if (xqs.count) {
+        int matches = 0;
         xapian_query_t *xq = xapian_query_new_compound(db, /*is_or*/0,
                 (xapian_query_t **) xqs.data, xqs.count);
         xapian_query_run(db, xq, 0, _email_matchmime_evaluate_xcb, &matches);
         xapian_query_free(xq);
+        size_t xqs_count = xqs.count;
+        ptrarray_fini(&xqs);
+        if (matches) {
+            have_matches += xqs_count; // assumes one xapian query per criteria
+        }
+        else return 0;
     }
-    ptrarray_fini(&xqs);
-    if (!matches) return 0;
 
     /* size */
     if (json_object_get(filter, "minSize") || json_object_get(filter, "maxSize")) {
@@ -900,14 +906,19 @@ static int _email_matchmime_evaluate(json_t *filter,
         if (message_get_size(m, &size) == 0) {
             json_int_t jint;
             if ((jint = json_integer_value(json_object_get(filter, "minSize"))) > 0) {
-                matches = matches && size >= jint;
+                if (size >= jint) {
+                    have_matches++;
+                }
+                else return 0;
             }
             if ((jint = json_integer_value(json_object_get(filter, "maxSize"))) > 0) {
-                matches = matches && size < jint;
+                if (size < jint) {
+                    have_matches++;
+                }
+                else return 0;
             }
         }
     }
-    if (!matches) return 0;
 
     json_t *jval;
 
@@ -919,12 +930,14 @@ static int _email_matchmime_evaluate(json_t *filter,
             if (jmap_emailbodies_extract(body, &bodies) == 0) {
                 int have = ptrarray_size(&bodies.attslist) > 0;
                 int want = jval == json_true();
-                matches = matches && have == want;
+                if (have == want) {
+                    have_matches++;
+                }
+                else return 0;
             }
             jmap_emailbodies_fini(&bodies);
         }
     }
-    if (!matches) return 0;
 
     /* header */
     if (JNOTNULL((jval = json_object_get(filter, "header")))) {
@@ -938,6 +951,8 @@ static int _email_matchmime_evaluate(json_t *filter,
             val = NULL; // match any value
         }
 
+        int matches = 0;
+
         /* Replicate match_header logic in search_expr.c */
         char *lhdr = lcase(xstrdup(hdr));
         struct buf buf = BUF_INITIALIZER;
@@ -950,8 +965,7 @@ static int _email_matchmime_evaluate(json_t *filter,
                 if ((v = charset_convert(val, utf8, charset_flags))) {
                     comp_pat *pat = charset_compilepat(v);
                     if (pat) {
-                        matches = matches &&
-                            charset_searchstring(v, pat, buf.s, buf.len, charset_flags);
+                        matches = charset_searchstring(v, pat, buf.s, buf.len, charset_flags);
                     }
                     charset_freepat(pat);
                 }
@@ -959,28 +973,34 @@ static int _email_matchmime_evaluate(json_t *filter,
                 charset_free(&utf8);
             }
             else {
-                matches = matches && buf_len(&buf) > 0;
+                matches = buf_len(&buf) > 0;
             }
         }
         buf_free(&buf);
         free(lhdr);
+        if (matches) {
+            have_matches++;
+        } else return 0;
     }
-    if (!matches) return 0;
 
     /* before */
     if (JNOTNULL(jval = json_object_get(filter, "before"))) {
         time_t t;
         time_from_iso8601(json_string_value(jval), &t);
-        matches = matches && internaldate < t;
+        if (internaldate < t) {
+            have_matches++;
+        } else return 0;
     }
     /* after */
     if (JNOTNULL(jval = json_object_get(filter, "after"))) {
         time_t t;
         time_from_iso8601(json_string_value(jval), &t);
-        matches = matches && internaldate >= t;
+        if (internaldate >= t) {
+            have_matches++;
+        } else return 0;
     }
 
-    return matches;
+    return need_matches == have_matches;
 }
 
 HIDDEN int jmap_email_matchmime(struct buf *mime,
