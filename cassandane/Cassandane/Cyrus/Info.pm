@@ -145,7 +145,7 @@ sub test_info_lint_junk
 }
 
 sub test_info_lint_channels
-    :NoStartInstances
+    :min_version_3_2 :NoStartInstances
 {
     my ($self) = @_;
 
