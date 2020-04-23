@@ -122,6 +122,15 @@ EXPORTED int cyrus_icalrestriction_check(icalcomponent *ical)
                 icalcomponent_remove_property(comp, prop);
                 icalproperty_free(prop);
             }
+
+            /* Strip CALSCALE properies from VEVENTs */
+            /* XXX  CiviCRM invites contain these,
+               but libical doesn't allow them in its restrictions checks */
+            prop = icalcomponent_get_first_property(comp, ICAL_CALSCALE_PROPERTY);
+            if (prop) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
             break;
 
         default:
