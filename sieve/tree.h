@@ -57,6 +57,7 @@ typedef struct Commandlist commandlist_t;
 typedef struct Test test_t;
 typedef struct Testlist testlist_t;
 typedef struct Comp comp_t;
+typedef struct Zone zone_t;
 typedef struct CmdArg cmdarg_t;
 
 struct CmdArg {
@@ -86,6 +87,11 @@ struct Comp {
     int relation;
     int collation;  /* only used where :comparator can be defined */
     int index;      /* only used where index extension is defined */
+};
+
+struct Zone {
+    int tag;
+    int offset;     /* time-zone offset in minutes */
 };
 
 struct Test {
@@ -123,8 +129,7 @@ struct Test {
         } sz;
         struct { /* it's a date test */
             comp_t comp;
-            int zonetag;
-            int tzoffset;  /* time-zone offset in minutes */
+            zone_t zone;
             int date_part;
             char *header_name;
             strarray_t *kl;

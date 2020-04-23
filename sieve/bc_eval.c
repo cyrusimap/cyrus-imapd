@@ -1057,11 +1057,11 @@ envelope_err:
         index = test.u.dt.comp.index;
 
         /* zone tag */
-        zone = test.u.dt.zonetag;
+        zone = test.u.dt.zone.tag;
 
         /* timezone offset */
         if (zone == B_TIMEZONE) {
-            timezone_offset = test.u.dt.tzoffset;
+            timezone_offset = test.u.dt.zone.offset;
         }
 
         /* comparator */

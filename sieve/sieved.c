@@ -324,8 +324,8 @@ static void print_test(test_t *test)
             printf(" INDEX(%d %s)", abs(test->u.dt.comp.index),
                    (test->u.dt.comp.index < 0) ? "[LAST]" : "");
         }
-        if (test->u.dt.zonetag == B_TIMEZONE)
-            printf(" ZONE(%+dmin)", test->u.dt.tzoffset);
+        if (test->u.dt.zone.tag == B_TIMEZONE)
+            printf(" ZONE(%+dmin)", test->u.dt.zone.offset);
         else
             printf(" ZONE(ORIGINAL)");
         print_comparator(&test->u.dt.comp);
@@ -336,8 +336,8 @@ static void print_test(test_t *test)
 
     case BC_CURRENTDATE:
         printf("CURRENTDATE");
-        if (test->u.dt.zonetag == B_TIMEZONE)
-            printf(" ZONE(%+dmin)", test->u.dt.tzoffset);
+        if (test->u.dt.zone.tag == B_TIMEZONE)
+            printf(" ZONE(%+dmin)", test->u.dt.zone.offset);
         else
             printf(" ZONE(ORIGINAL)");
         print_comparator(&test->u.dt.comp);

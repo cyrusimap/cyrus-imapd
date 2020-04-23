@@ -1706,13 +1706,13 @@ dttags: /* empty */              {
                                  }
         | dttags zone
         | dttags ORIGINALZONE    {
-                                     if ($$->u.dt.zonetag != -1) {
+                                     if ($$->u.dt.zone.tag != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":originalzone");
                                      }
 
-                                     $$->u.dt.zonetag = B_ORIGINALZONE;
+                                     $$->u.dt.zone.tag = B_ORIGINALZONE;
                                  }
         | dttags matchtype
         | dttags comparator
@@ -1725,14 +1725,14 @@ zone: ZONE TZOFFSET              {
                                      /* $0 refers to a test_t* ([CURRENT]DATE)*/
                                      test_t *test = $<test>0;
 
-                                     if (test->u.dt.zonetag != -1) {
+                                     if (test->u.dt.zone.tag != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":zone");
                                      }
 
-                                     test->u.dt.zonetag = B_TIMEZONE;
-                                     test->u.dt.tzoffset = $2;
+                                     test->u.dt.zone.tag = B_TIMEZONE;
+                                     test->u.dt.zone.offset = $2;
                                  }
         ;
 
@@ -2322,6 +2322,20 @@ static unsigned bc_precompile(cmdarg_t args[], const char *fmt, ...)
             }
             break;
         }
+        case 'Z': {
+            /* Expand the zone into its component parts */
+            const zone_t *z = va_arg(ap, const zone_t *);
+
+            args[n].type = AT_INT;
+            args[n].u.i = z->tag;
+
+            if (z->tag == B_TIMEZONE) {
+                args[++n].type = AT_INT;
+                args[n].u.i = z->offset;
+            }
+            break;
+        }
+        default: assert(*fmt);
         }
     }
     va_end(ap);
@@ -3029,13 +3043,13 @@ static test_t *build_date(sieve_script_t *sscript,
     verify_patternlist(sscript, kl, &t->u.dt.comp, NULL);
 
     if (t->u.dt.comp.index == 0) t->u.dt.comp.index = 1;
-    if (t->u.dt.zonetag == -1) {
+    if (t->u.dt.zone.tag == -1) {
         struct tm tm;
         time_t now = time(NULL);
 
         localtime_r(&now, &tm);
-        t->u.dt.tzoffset = gmtoff_of(&tm, now) / 60;
-        t->u.dt.zonetag = B_TIMEZONE;
+        t->u.dt.zone.offset = gmtoff_of(&tm, now) / 60;
+        t->u.dt.zone.tag = B_TIMEZONE;
     }
 
     t->u.dt.date_part = part;
@@ -3043,18 +3057,21 @@ static test_t *build_date(sieve_script_t *sscript,
     t->u.dt.kl = kl;
 
     if (t->type == BC_DATE) {
-        t->nargs = bc_precompile(t->args, "i", t->u.dt.comp.index);
+        t->nargs = bc_precompile(t->args, "iZCisS",
+                                 t->u.dt.comp.index,
+                                 &t->u.dt.zone,
+                                 &t->u.dt.comp,
+                                 t->u.dt.date_part,
+                                 t->u.dt.header_name,
+                                 t->u.dt.kl);
     }
-    t->nargs += bc_precompile(t->args + t->nargs, "i", t->u.dt.zonetag);
-    if (t->u.dt.zonetag == B_TIMEZONE) {
-        t->nargs += bc_precompile(t->args + t->nargs, "i", t->u.dt.tzoffset);
+    else {
+        t->nargs = bc_precompile(t->args, "ZCiS",
+                                 &t->u.dt.zone,
+                                 &t->u.dt.comp,
+                                 t->u.dt.date_part,
+                                 t->u.dt.kl);
     }
-    t->nargs += bc_precompile(t->args + t->nargs, "Ci",
-                              &t->u.dt.comp, t->u.dt.date_part);
-    if (t->type == BC_DATE) {
-        t->nargs += bc_precompile(t->args + t->nargs, "s", t->u.dt.header_name);
-    }
-    t->nargs += bc_precompile(t->args + t->nargs, "S", t->u.dt.kl);
 
     return t;
 }

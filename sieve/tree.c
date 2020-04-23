@@ -146,7 +146,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
         supported = parse_script->support & SIEVE_CAPA_DATE;
 
         init_comptags(&p->u.dt.comp);
-        p->u.dt.zonetag = -1;
+        p->u.dt.zone.tag = -1;
         break;
 
     case BC_NOTIFYMETHODCAPABILITY:
