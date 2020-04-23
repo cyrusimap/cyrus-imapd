@@ -148,112 +148,363 @@ typedef union
 /* IMPORTANT: To maintain forward compatibility of bytecode, please only add
  * new instructions to the end of these enums.  (The reason these values
  * are all duplicated here is to avoid silliness if this caveat is forgotten
- * about in the other tables.) */
+ * about in the other tables.)
+ *
+ * Comments below show which extensions are supported
+ * and the order of the arguments as they are written out in bytecode.
+ *
+ * In all cases below, COMPARATOR expands to:
+ * <match-type: int> <relational-match: int> <collation: int>
+ */
+
 enum bytecode {
     B_STOP,
-
-    B_KEEP_ORIG,        /* legacy keep w/o support for :flags */
+    B_KEEP_ORIG,                /* legacy keep w/o support for :flags          */
     B_DISCARD,
-    B_REJECT,           /* require reject */
-    B_FILEINTO_ORIG,    /* legacy fileinto w/o support for :copy */
-    B_REDIRECT_ORIG,    /* legacy redirect w/o support for :copy */
+    B_REJECT,                   /* require "reject"
 
-    B_IF,
+                                   <reason: string>                            */
 
-    B_MARK,             /* require imapflags */
-    B_UNMARK,           /* require imapflags */
+    B_FILEINTO_ORIG,            /* legacy fileinto w/o support for :copy
 
-    B_ADDFLAG_ORIG,	/* legacy addflag w/o support for variables */
-    B_SETFLAG_ORIG,	/* legacy setflag w/o support for variables */
-    B_REMOVEFLAG_ORIG,	/* legacy removeflag w/o support for variables */
+                                   require "fileinto"
 
-    B_NOTIFY,           /* require notify/enotify */
-    B_DENOTIFY,         /* require notify */
+                                   <mailbox: string>  */
 
-    B_VACATION_ORIG,    /* legacy vacation w/o support for :seconds */
+    B_REDIRECT_ORIG,            /* legacy redirect w/o support for :copy
+
+                                   <address: string>                           */
+
+    B_IF,                       /* <jump-begin-then>: int>
+                                   <jump-begin-else: int>
+                                   <jump-end-else: int>
+                                   <test: test>
+                                   <then-block: command-list>
+                                   <else-block: command-list> (optional)       */
+
+    B_MARK,                     /* require "imapflags"                         */
+    B_UNMARK,                   /* require "imapflags"                         */
+
+    B_ADDFLAG_ORIG,	        /* legacy addflag w/o support for variables
+
+                                   require "imap4flags"
+
+                                   <flag-list: string-list>                    */
+
+    B_SETFLAG_ORIG,	        /* legacy setflag w/o support for variables
+
+                                   require "imap4flags"
+
+                                   <flag-list: string-list>                    */
+
+    B_REMOVEFLAG_ORIG,	        /* legacy removeflag w/o support for variables
+
+                                   require "imap4flags"
+
+                                   <flag-list: string-list>                    */
+
+    B_NOTIFY,                   /* require "notify"
+
+                                   <method: string> <id: string>
+                                   <options: string-list> <priority: int>
+                                   <message: string>                           */
+
+    B_DENOTIFY,                 /* require "notify"
+                                   <priority: int>
+                                   <match-type: int> <relational-match: int>
+                                   <pattern: string>                           */
+
+    B_VACATION_ORIG,            /* legacy vacation w/o support for :seconds
+
+                                   require "vacation"
+
+                                   <addresses: string-list> <subject: string>
+                                   <message: string> <days: int> <mime: int>
+                                   <from: string> <handle: string>             */
+
     B_NULL,
-    B_JUMP,
+    B_JUMP,                     /* <byte-offset: int>                          */
 
-    B_INCLUDE,          /* require include */
-    B_RETURN,           /* require include */
+    B_INCLUDE,                  /* require "include"
 
-    B_FILEINTO_COPY,    /* legacy fileinto w/o support for :flags */
-    B_REDIRECT_COPY,    /* legacy redirect w/o support for :list */
+                                   <parameters-bitmask: int>
+                                   <script-name: string>                       */
 
-    B_VACATION_SEC,     /* legacy vacation w/o support for :fcc */
+    B_RETURN,                   /* require "include"                           */
 
-    B_KEEP_COPY,        /* legacy keep with bogus support for :copy */
-    B_FILEINTO_FLAGS,   /* legacy fileinto w/o support for :create */
-    B_FILEINTO_CREATE,  /* legacy fileinto w/o support for :specialuse */
+    B_FILEINTO_COPY,            /* legacy fileinto w/o support for :flags
 
-    B_SET,              /* require variables */
+                                   require ["fileinto", "copy"]
 
-    B_ADDFLAG,          /* require imap4flags */
-    B_SETFLAG,          /* require imap4flags */
-    B_REMOVEFLAG,       /* require imap4flags */
+                                   <copy: int> <mailbox: string>               */
 
-    B_ADDHEADER,        /* require editheader */
-    B_DELETEHEADER,     /* require editheader */
+    B_REDIRECT_COPY,            /* legacy redirect w/o support for :list */
 
-    B_EREJECT,          /* require ereject */
+    B_VACATION_SEC,             /* legacy vacation w/o support for :fcc
 
-    B_REDIRECT_LIST,    /* legacy redirect w/o support for :notify or :ret */
+                                   require ["vacation", "vacation-seconds"]
 
-    B_ENOTIFY,          /* require enotify */
+                                   <addresses: string-list> <subject: string>
+                                   <message: string> <seconds: int> <mime: int>
+                                   <from: string> <handle: string>             */
 
-    B_ERROR,            /* require ihave */
+    B_KEEP_COPY,                /* legacy keep with bogus support for :copy */
 
-    B_KEEP,
+    B_FILEINTO_FLAGS,           /* legacy fileinto w/o support for :create
 
-    B_VACATION_FCC,     /* legacy vacation w/o support for :specialuse */
+                                   require ["fileinto", "copy", "imap4flags"]
 
-    B_VACATION,         /* require vacation, fcc, specialuse */
-    B_FILEINTO_SPECIALUSE, /* legacy fileinto w/o support for :mailboxid */
+                                   <flag-list: string-list>
+                                   <copy: int> <mailbox: string>               */
 
-    B_REDIRECT,         /* require copy, list, redirect-dsn */
+    B_FILEINTO_CREATE,          /* legacy fileinto w/o support for :specialuse
 
-    B_FILEINTO,         /* require mailbox, imap4flags, copy, specialuse, mailboxid */
+                                   require ["fileinto", "copy", "imap4flags",
+                                            "mailbox"]
 
-    B_LOG,              /* require x-cyrus-log */
+                                   <create: int> <flag-list: string-list>
+                                   <copy: int> <mailbox: string>               */
 
-    B_SNOOZE,           /* require x-cyrus-snooze */
+    B_SET,                      /* require "variables"
 
-    /* insert new actions above this line */
-    B_ILLEGAL_VALUE     /* any value >= this code is illegal */
+                                   <modifiers-bitmask: int>
+                                   <variable-name: string> <value: string>     */
+
+    B_ADDFLAG,                  /* require "imap4flags"
+
+                                   <variable-name: string>
+                                   <flag-list: string-list>                    */
+
+    B_SETFLAG,                  /* require "imap4flags"
+
+                                   <variable-name: string>
+                                   <flag-list: string-list>                    */
+
+    B_REMOVEFLAG,               /* require "imap4flags"
+
+                                   <variable-name: string>
+                                   <flag-list: string-list>                    */
+
+    B_ADDHEADER,                /* require "editheader"
+
+                                   <index: int>
+                                   <header-name: string> <value: string>       */
+
+    B_DELETEHEADER,             /* require "editheader"
+
+                                   <index: int> <COMPARATOR>
+                                   <header-name: string> <patterns: string-list> */
+
+    B_EREJECT,                  /* require "ereject"
+
+                                   <reason: string>                            */
+
+    B_REDIRECT_LIST,            /* legacy redirect w/o support for dsn/deliverby
+
+                                   require ["copy", "list"]
+
+                                   <list: int> <copy: int> <address: string>   */
+
+
+    B_ENOTIFY,                  /* require "enotify"
+
+                                   <method: string> <from: string>
+                                   <options: string-list> <priority: int>
+                                   <message: string>                           */
+
+    B_ERROR,                    /* require ihave */
+
+    B_KEEP,                     /* require "imap4flags"
+
+                                   <flag-list: string-list>                    */
+
+    B_VACATION_FCC,             /* legacy vacation w/o support for :specialuse
+
+                                   require ["vacation", "vacation-seconds,
+                                            "fcc", "mailbox"]
+
+                                   <addresses: string-list> <subject: string>
+                                   <message: string> <seconds: int> <mime: int>
+                                   <from: string> <handle: string>
+                                   <fcc-mailbox: string>
+                                   IF (fcc-mailbox != NIL)
+                                     <create: int> <flag-list: string-list>    */
+
+    B_VACATION,                 /* require ["vacation", "vacation-seconds,
+                                            "fcc", "mailbox", "special-use"]
+
+                                   <addresses: string-list> <subject: string>
+                                   <message: string> <seconds: int> <mime: int>
+                                   <from: string> <handle: string>
+                                   <fcc-mailbox: string>
+                                   IF (fcc-mailbox != NIL):
+                                     <create: int> <flag-list: string-list>
+                                     <special-use: string>                     */
+
+
+    B_FILEINTO_SPECIALUSE,      /* legacy fileinto w/o support for :mailboxid
+
+                                   require ["fileinto", "copy", "imap4flags",
+                                            "mailbox", "specialuse"]
+
+                                   <special-use: string>
+                                   <create: int> <flag-list: string-list>
+                                   <copy: int> <mailbox: string>               */
+
+
+    B_REDIRECT,                 /* require ["copy", "list", "redirect-dsn",
+                                            "redirect-deliveryby"]
+
+                                   <bytime: string> <bymode: string>
+                                   <bytrace: int>
+                                   <notify: string> <return: string>
+                                   <list: int> <copy: int> <address: string>   */
+
+    B_FILEINTO,                 /* require ["fileinto", "copy", "imap4flags",
+                                            "mailbox", "specialuse", "mailboxid"]
+
+                                   <mailbox-id: string> <special-use: string>
+                                   <create: int> <flag-list: string-list>
+                                   <copy: int> <mailbox: string>               */
+
+    B_LOG,                      /* require "x-cyrus-log"
+
+                                   <message: string>                           */
+
+    B_SNOOZE,                   /* require x-cyrus-snooze
+                                   <mailbox-name/id: string>
+                                   <addflags: string-list>
+                                   <removeflags: string-list>
+                                   <days-is-id-bitmask: int>
+                                   <times: value-list>                         */
+
+    /*****  insert new actions above this line  *****/
+    B_ILLEGAL_VALUE             /* any value >= this code is illegal */
 };
 
 enum bytecode_comps {
     BC_FALSE,
     BC_TRUE,
-    BC_NOT,
-    BC_EXISTS,
-    BC_SIZE,
-    BC_ANYOF,
-    BC_ALLOF,
-    BC_ADDRESS_PRE_INDEX,
-    BC_ENVELOPE,        /* require envelope */
-    BC_HEADER_PRE_INDEX,
-    BC_BODY,            /* require body */
-    BC_DATE,            /* require date */
-    BC_CURRENTDATE,     /* require date */
-    BC_ADDRESS,
-    BC_HEADER,
-    BC_HASFLAG,         /* require imap4flags */
-    BC_MAILBOXEXISTS,   /* require mailbox */
-    BC_METADATA,        /* require mboxmetadata */
-    BC_METADATAEXISTS,
-    BC_SERVERMETADATA,  /* require servermetadata */
-    BC_SERVERMETADATAEXISTS,
-    BC_STRING,          /* require variables */
-    BC_VALIDEXTLIST,    /* require extlists */
-    BC_DUPLICATE,       /* require duplicate */
-    BC_IHAVE,           /* require ihave */
-    BC_SPECIALUSEEXISTS,/* require special-use */
-    BC_ENVIRONMENT,     /* require environment */
-    BC_VALIDNOTIFYMETHOD,/* require enotify */
-    BC_NOTIFYMETHODCAPABILITY,
-    BC_MAILBOXIDEXISTS, /* require mailboxid */
-    BC_JMAPQUERY,       /* require x-cyrus-jmapquery */
+    BC_NOT,                     /* <subtest: test>                             */
+
+    BC_EXISTS,                  /* <header-names: string-list>                 */
+
+    BC_SIZE,                    /* <over/under: int> <size: int>               */
+
+    BC_ANYOF,                   /* <subtests: test-list>                       */
+
+    BC_ALLOF,                   /* <subtests: test-list>                       */
+
+    BC_ADDRESS_PRE_INDEX,       /* <COMPARATOR> <address-part: int>
+                                   <header-names: string-list>
+                                   <patterns: string-list>                     */
+
+    BC_ENVELOPE,                /* require "envelope"
+                                   <COMPARATOR> <address-part: int>
+                                   <envelope-parts: string-list>
+                                   <patterns: string-list>                     */
+
+    BC_HEADER_PRE_INDEX,        /* <COMPARATOR> <header-names: string-list>
+                                   <patterns: string-list>                     */
+
+    BC_BODY,                    /* require "body"
+
+                                   <COMPARATOR>
+                                   <transform: int> <offset: int>
+                                   <content-types: string-list>
+                                   <patterns: string-list>                     */
+
+    BC_DATE,                    /* require ["date", "index"]
+
+                                   <index: int> <zonetag: int> <tzoffset: int>
+                                   <COMPARATOR> <date-part: int>
+                                   <header-name: string> <patterns: string-list> */
+
+    BC_CURRENTDATE,             /* require "date"
+
+                                   <zonetag: int> <tzoffset: int>
+                                   <COMPARATOR> <date-part: int>
+                                   <patterns: string-list>                     */
+
+    BC_ADDRESS,                 /* <index: int>
+                                   <COMPARATOR> <address-part: int>
+                                   <header-names: string-list>
+                                   <patterns: string-list>                     */
+
+    BC_HEADER,                  /* <index: int>
+                                   <COMPARATOR> <header-names: string-list>
+                                   <patterns: string-list>                     */
+
+    BC_HASFLAG,                 /* require "imap4flags"
+                                   <COMPARATOR> <variable-list: string-list>
+                                   <flag-list: string-list>                    */
+
+    BC_MAILBOXEXISTS,           /* require "mailbox"
+
+                                   <mailbox-names: string-list>                */
+
+    BC_METADATA,                /* require "mboxmetadata"
+                                   <COMPARATOR>
+                                   <mailbox: string>
+                                   <annotation-name: string>
+                                   <patterns: string-list>                     */
+
+    BC_METADATAEXISTS,          /* require "mboxmetadata"
+                                   <mailbox: string>
+                                   <annotation-names: string-list>             */
+
+
+    BC_SERVERMETADATA,          /* require "servermetadata"
+                                   <COMPARATOR>
+                                   <annotation-name: string>
+                                   <patterns: string-list>                     */
+
+    BC_SERVERMETADATAEXISTS,    /* require "servermetadata"
+
+                                   <annotation-names: string-list>             */
+
+    BC_STRING,                  /* require "variables"
+                                   <COMPARATOR> <strings: string-list>
+                                   <patterns: string-list>                     */
+
+    BC_VALIDEXTLIST,            /* require "extlists"
+
+                                   <ext-list-names: string-list>               */
+
+    BC_DUPLICATE,               /* require "duplicate" */
+
+    BC_IHAVE,                   /* require "ihave"
+
+                                   <capabilities: string-list>                 */
+
+    BC_SPECIALUSEEXISTS,        /* require "special-use"
+
+                                   <mailbox: string>
+                                   <special-use-attrs: string-list>            */
+
+    BC_ENVIRONMENT,             /* require "environment"
+                                   <COMPARATOR>
+                                   <name: string> <patterns: string-list>      */
+
+    BC_VALIDNOTIFYMETHOD,       /* require "enotify"
+
+                                   <notification-uris: string-list>            */
+
+    BC_NOTIFYMETHODCAPABILITY,  /* require "enotify"
+
+                                   <COMPARATOR>
+                                   <notification-uri: string>
+                                   <notification-capability: string>
+                                   <patterns: string-list>                     */
+
+
+    BC_MAILBOXIDEXISTS,         /* require "mailboxid"
+
+                                   <patterns: string-list>                     */
+
+    BC_JMAPQUERY,               /* require "x-cyrus-jmapquery"
+
+                                   <query: string>                             */
 
     /* insert new tests above this line */
     BC_ILLEGAL_VALUE    /* any value >= this code is illegal */
