@@ -3480,32 +3480,41 @@ static int _blob_to_card(struct jmap_req *req,
     char *decbuf = NULL;
     json_t *val;
     int r = -1;
+    const char *base = NULL;
+    size_t len = 0;
 
     if (!file) goto done;
 
     /* Extract blobId */
     val = json_object_get(file, "blobId");
-    if (val) blobid = json_string_value(val);
+    if (val) blobid = jmap_id_string_value(req, val);
     if (!blobid) goto done;
 
-    /* Find body part containing blob */
-    accountid = json_string_value(json_object_get(file, "accountId"));
-    r = jmap_findblob(req, accountid, blobid,
-                      &mbox, &mr, &body, &part, &blob_buf);
-    if (r) goto done;
+    struct buf *inmem = hash_lookup(blobid, req->inmemory_blobs);
+    if (inmem) {
+        base = buf_base(inmem);
+        len = buf_len(inmem);
+    }
+    else {
+        /* Find body part containing blob */
+        accountid = json_string_value(json_object_get(file, "accountId"));
+        r = jmap_findblob(req, accountid, blobid,
+                        &mbox, &mr, &body, &part, &blob_buf);
+        if (r) goto done;
 
-    /* Fetch blob contents and decode */
-    const char *base = buf_base(&blob_buf);
-    size_t len = buf_len(&blob_buf);
+        /* Fetch blob contents and decode */
+        base = buf_base(&blob_buf);
+        len = buf_len(&blob_buf);
 
-    if (part) {
-        /* Map into body part */
-        base += part->content_offset;
-        len = part->content_size;
+        if (part) {
+            /* Map into body part */
+            base += part->content_offset;
+            len = part->content_size;
 
-        /* Determine encoding */
-        int encoding = part->charset_enc & 0xff;
-        base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
+            /* Determine encoding */
+            int encoding = part->charset_enc & 0xff;
+            base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
+        }
     }
 
     /* Pre-flight base64 encoder to determine length */

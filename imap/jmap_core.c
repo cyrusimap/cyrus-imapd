@@ -51,6 +51,7 @@
 #include "acl.h"
 #include "append.h"
 #include "http_jmap.h"
+#include "times.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -64,6 +65,7 @@ static int jmap_blob_copy(jmap_req_t *req);
 static int jmap_core_echo(jmap_req_t *req);
 
 /* JMAP extension methods */
+static int jmap_blob_set(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
 
 jmap_method_t jmap_core_methods_standard[] = {
@@ -89,6 +91,12 @@ jmap_method_t jmap_core_methods_standard[] = {
 };
 
 jmap_method_t jmap_core_methods_nonstandard[] = {
+    {
+        "Blob/set",
+        JMAP_BLOB_EXTENSION,
+        &jmap_blob_set,
+        0 /*flags */
+    },
     {
         "Quota/get",
         JMAP_QUOTA_EXTENSION,
@@ -123,6 +131,8 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
               IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
     _read_opt(settings->limits[MAX_OBJECTS_IN_SET],
               IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
+    _read_opt(settings->limits[MAX_SIZE_BLOB_SET],
+              IMAPOPT_JMAP_MAX_SIZE_BLOB_SET);
 #undef _read_opt
 
     json_object_set_new(settings->server_capabilities,
@@ -156,6 +166,11 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                 JMAP_PERFORMANCE_EXTENSION, json_object());
         json_object_set_new(settings->server_capabilities,
                 JMAP_DEBUG_EXTENSION, json_object());
+        json_object_set_new(settings->server_capabilities,
+                JMAP_BLOB_EXTENSION,
+                json_pack("{s:i}",
+                    "maxSizeBlobSet",
+                    settings->limits[MAX_SIZE_BLOB_SET]));
 
         for (mp = jmap_core_methods_nonstandard; mp->name; mp++) {
             hash_insert(mp->name, mp, &settings->methods);
@@ -178,6 +193,9 @@ HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
 
         json_object_set_new(account_capabilities,
                 JMAP_DEBUG_EXTENSION, json_object());
+
+        json_object_set_new(account_capabilities,
+                JMAP_BLOB_EXTENSION, json_object());
     }
 }
 
@@ -533,6 +551,121 @@ done:
     jmap_get_fini(&get);
     return 0;
 }
+
+static const jmap_property_t blob_set_props[] = {
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "content",
+        NULL,
+        0
+    },
+    {
+        "content64",
+        NULL,
+        0
+    },
+    {
+        "type",
+        NULL,
+        0
+    },
+
+    { NULL, NULL, 0 }
+};
+
+
+static int jmap_blob_set(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set;
+    json_t *jerr = NULL;
+    int r = 0;
+    time_t now = time(NULL);
+
+    /* Parse arguments */
+    jmap_set_parse(req, &parser, blob_set_props, NULL, NULL, &set, &jerr);
+    if (jerr) {
+        jmap_error(req, jerr);
+        goto done;
+    }
+
+    /* create */
+    const char *key;
+    json_t *arg;
+    json_object_foreach(set.create, key, arg) {
+        struct buf *buf = buf_new();
+        struct message_guid guidobj;
+        char datestr[RFC3339_DATETIME_MAX];
+        char blob_id[JMAP_BLOBID_SIZE];
+
+        json_t *jitem = json_object_get(arg, "content");
+        if (JNOTNULL(jitem) && json_is_string(jitem)) {
+            buf_init_ro_cstr(buf, json_string_value(jitem));
+        }
+        else {
+            json_t *jitem64 = json_object_get(arg, "content64");
+            if (JNOTNULL(jitem64) && json_is_string(jitem64)) {
+                const char *val64 = json_string_value(jitem64);
+                int r = charset_decode(buf, val64, strlen(val64), ENCODING_BASE64);
+                if (r) buf_free(buf);
+            }
+        }
+
+        if (!buf_base(buf)) {
+            jerr = json_pack("{s:s}", "type", "invalidProperties");
+            json_object_set_new(set.not_updated, key, jerr);
+            buf_destroy(buf);
+            continue;
+        }
+
+        json_t *jtype = json_object_get(arg, "type");
+        const char *type = json_string_value(jtype);
+        if (!type) type = "application/octet-stream";
+
+        message_guid_generate(&guidobj, buf_base(buf), buf_len(buf));
+        jmap_set_blobid(&guidobj, blob_id);
+        time_to_rfc3339(now, datestr, RFC3339_DATETIME_MAX);
+
+        // json_string_value into the request lasts the lifetime of the request, so it's
+        // safe to zerocopy these blobs!
+        hash_insert(blob_id, buf, req->inmemory_blobs);
+
+        json_object_set_new(set.created, key, json_pack("{s:s, s:s, s:i, s:s, s:s}",
+            "id", blob_id,
+            "blobId", blob_id,
+            "size", buf_len(buf),
+            "expires", datestr,
+            "type", type));
+
+        jmap_add_id(req, key, blob_id);
+    }
+
+    const char *uid;
+    json_object_foreach(set.update, uid, arg) {
+        jerr = json_pack("{s:s}", "type", "notFound");
+        json_object_set_new(set.not_updated, key, jerr);
+    }
+
+    size_t index;
+    json_t *juid;
+    json_array_foreach(set.destroy, index, juid) {
+        jerr = json_pack("{s:s}", "type", "notFound");
+        json_object_set_new(set.not_destroyed, json_string_value(juid), jerr);
+    }
+
+    set.old_state = set.new_state = 0;
+    jmap_ok(req, jmap_set_reply(&set));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_set_fini(&set);
+    return r;
+}
+
 
 /* Quota/get method */
 static const jmap_property_t quota_props[] = {

@@ -63,6 +63,7 @@
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
 #define JMAP_URN_MDN        "urn:ietf:params:jmap:mdn"
 
+#define JMAP_BLOB_EXTENSION          "https://cyrusimap.org/ns/jmap/blob"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
 #define JMAP_CALENDARS_EXTENSION     "https://cyrusimap.org/ns/jmap/calendars"
 #define JMAP_MAIL_EXTENSION          "https://cyrusimap.org/ns/jmap/mail"
@@ -82,6 +83,7 @@ enum {
     MAX_OBJECTS_IN_SET,
     MAX_SIZE_UPLOAD,
     MAX_CONCURRENT_UPLOAD,
+    MAX_SIZE_BLOB_SET,
     JMAP_NUM_LIMITS  /* MUST be last */
 };
 
@@ -148,6 +150,7 @@ typedef struct jmap_req {
     ptrarray_t *mboxes;
     hash_table *mbstates;
     hash_table *created_ids;
+    hash_table *inmemory_blobs;
     hash_table *mbentry_byid;
     ptrarray_t *method_calls;
     const strarray_t *using_capabilities;

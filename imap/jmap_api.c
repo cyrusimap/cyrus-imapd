@@ -645,6 +645,11 @@ static void _free_json(void *val)
     json_decref((json_t *)val);
 }
 
+static void _free_buf(void *val)
+{
+    buf_destroy((struct buf *)val);
+}
+
 /* Perform an API request */
 HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
                     jmap_settings_t *settings)
@@ -655,6 +660,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     char *account_inboxname = NULL;
     int return_created_ids = 0;
     hash_table created_ids = HASH_TABLE_INITIALIZER;
+    hash_table inmemory_blobs = HASH_TABLE_INITIALIZER;
     hash_table capabilities_by_accountid = HASH_TABLE_INITIALIZER;
     hash_table mbstates = HASH_TABLE_INITIALIZER;
     strarray_t methods = STRARRAY_INITIALIZER;
@@ -681,6 +687,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
 
     /* Set up request-internal state */
     construct_hash_table(&capabilities_by_accountid, 8, 0);
+    construct_hash_table(&inmemory_blobs, 64, 0);
     construct_hash_table(&mbstates, 64, 0);
     construct_hash_table(&created_ids, 1024, 0);
 
@@ -821,6 +828,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         req.mbstates = &mbstates;
         req.method_calls = &method_calls;
         req.using_capabilities = &using_capabilities;
+        req.inmemory_blobs = &inmemory_blobs;
 
         if (do_perf) {
             struct rusage usage;
@@ -904,6 +912,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         ptrarray_fini(&method_calls);
     }
     free_hash_table(&created_ids, free);
+    free_hash_table(&inmemory_blobs, _free_buf);
     free_hash_table(&capabilities_by_accountid, _free_json);
     free_hash_table(&mbstates, free);
     free(account_inboxname);
@@ -1213,6 +1222,8 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
     const struct body *mypart = NULL;
     int i, r;
     struct conversations_state *cstate, *mycstate = NULL;
+
+    syslog(LOG_DEBUG, "jmap_findblob (%s, %s)", from_accountid, blobid);
 
     if (blobid[0] != 'G')
         return IMAP_NOTFOUND;

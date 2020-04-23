@@ -7408,15 +7408,31 @@ static int jmap_email_parse(jmap_req_t *req)
         msgrecord_t *mr = NULL;
         struct body *body = NULL;
         const struct body *part = NULL;
+        json_t *email = NULL;
+        int r = 0;
 
-        int r = jmap_findblob(req, NULL/*accountid*/, blobid,
+        struct buf *inmem = hash_lookup(blobid, req->inmemory_blobs);
+        if (inmem) {
+            r = _email_from_buf(req, &getargs, inmem, part->encoding, &email);
+            if (r) {
+                syslog(LOG_ERR, "jmap: Email/parse(%s): %s", blobid, error_message(r));
+            }
+            if (email) {
+                json_object_set_new(parse.parsed, blobid, email);
+            }
+            else {
+                json_array_append_new(parse.not_parsable, json_string(blobid));
+            }
+            continue;
+        }
+
+        r = jmap_findblob(req, NULL/*accountid*/, blobid,
                               &mbox, &mr, &body, &part, NULL);
         if (r) {
             json_array_append_new(parse.not_found, json_string(blobid));
             continue;
         }
 
-        json_t *email = NULL;
         if (part && (strcmp(part->type, "MESSAGE") || !strcmpnull(part->encoding, "BASE64"))) {
             struct buf msg_buf = BUF_INITIALIZER;
             r = msgrecord_get_body(mr, &msg_buf);
@@ -8547,7 +8563,8 @@ static void _emailpart_parse_headers(json_t *jpart,
     }
 }
 
-static struct emailpart *_emailpart_parse(json_t *jpart,
+static struct emailpart *_emailpart_parse(jmap_req_t *req,
+                                          json_t *jpart,
                                           struct jmap_parser *parser,
                                           json_t *bodies)
 {
@@ -8570,11 +8587,12 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
 
     /* blobId */
     jval = json_object_get(jpart, "blobId");
-    if (JNOTNULL(jval) && json_is_string(jval)) {
-        part->blob_id = xstrdup(json_string_value(jval));
-    }
-    else if (JNOTNULL(jval)) {
-        jmap_parser_invalid(parser, "blobId");
+    if (JNOTNULL(jval)) {
+        const char *blob_id = jmap_id_string_value(req, jval);
+        if (blob_id)
+            part->blob_id = xstrdup(blob_id);
+        else
+            jmap_parser_invalid(parser, "blobId");
     }
 
     /* size */
@@ -8760,7 +8778,7 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
 
     /* Validate by type */
     const char *part_id = json_string_value(json_object_get(jpart, "partId"));
-    const char *blob_id = json_string_value(json_object_get(jpart, "blobId"));
+    const char *blob_id = jmap_id_string_value(req, json_object_get(jpart, "blobId"));
     json_t *subParts = json_object_get(jpart, "subParts");
     json_t *bodyValue = part_id ? json_object_get(bodies, part_id) : NULL;
 
@@ -8776,7 +8794,7 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
             json_t *subPart;
             json_array_foreach(subParts, i, subPart) {
                 jmap_parser_push_index(parser, "subParts", i, NULL);
-                struct emailpart *subpart = _emailpart_parse(subPart, parser, bodies);
+                struct emailpart *subpart = _emailpart_parse(req, subPart, parser, bodies);
                 if (subpart) ptrarray_append(&part->subparts, subpart);
                 jmap_parser_pop(parser);
             }
@@ -8926,7 +8944,8 @@ static struct emailpart *_email_buildbody(struct emailpart *text_body,
 }
 
 
-static void _email_parse_bodies(json_t *jemail,
+static void _email_parse_bodies(jmap_req_t *req,
+                                json_t *jemail,
                                 struct jmap_parser *parser,
                                 struct email *email)
 {
@@ -8967,7 +8986,7 @@ static void _email_parse_bodies(json_t *jemail,
     json_t *jbody = json_object_get(jemail, "bodyStructure");
     if (json_is_object(jbody)) {
         jmap_parser_push(parser, "bodyStructure");
-        email->body = _emailpart_parse(jbody, parser, bodyValues);
+        email->body = _emailpart_parse(req, jbody, parser, bodyValues);
         jmap_parser_pop(parser);
         /* Top-level body part MUST NOT redefine headers in Email */
         if (email->body) {
@@ -9013,7 +9032,7 @@ static void _email_parse_bodies(json_t *jemail,
         if (json_array_size(jtextBody) == 1) {
             json_t *jpart = json_array_get(jtextBody, 0);
             jmap_parser_push_index(parser, "textBody", 0, NULL);
-            text_body = _emailpart_parse(jpart, parser, bodyValues);
+            text_body = _emailpart_parse(req, jpart, parser, bodyValues);
             if (text_body) {
                 if (!text_body->type) {
                     /* Set default type */
@@ -9038,7 +9057,7 @@ static void _email_parse_bodies(json_t *jemail,
         if (json_array_size(jhtmlBody) == 1) {
             json_t *jpart = json_array_get(jhtmlBody, 0);
             jmap_parser_push_index(parser, "htmlBody", 0, NULL);
-            html_body = _emailpart_parse(jpart, parser, bodyValues);
+            html_body = _emailpart_parse(req, jpart, parser, bodyValues);
             jmap_parser_pop(parser);
             if (html_body) {
                 if (!html_body->type) {
@@ -9067,7 +9086,7 @@ static void _email_parse_bodies(json_t *jemail,
             int have_inlined = 0;
             json_array_foreach(jattachments, i, jpart) {
                 jmap_parser_push_index(parser, "attachments", i, NULL);
-                attpart = _emailpart_parse(jpart, parser, bodyValues);
+                attpart = _emailpart_parse(req, jpart, parser, bodyValues);
                 if (attpart) {
                     if (!have_inlined && attpart->disposition) {
                         have_inlined = !strcasecmp(attpart->disposition, "INLINE");
@@ -9168,7 +9187,8 @@ static void _email_snoozed_parse(json_t *snoozed,
 }
 
 /* Parse a JMAP Email into its internal representation for creation. */
-static void _parse_email(json_t *jemail,
+static void _parse_email(jmap_req_t *req,
+                         json_t *jemail,
                          struct jmap_parser *parser,
                          struct email *email)
 {
@@ -9377,7 +9397,7 @@ static void _parse_email(json_t *jemail,
     buf_free(&buf);
 
     /* Parse bodies */
-    _email_parse_bodies(jemail, parser, email);
+    _email_parse_bodies(req, jemail, parser, email);
 
     /* Is snoozed being set? */
     json_t *snoozed = json_object_get(jemail, "snoozed");
@@ -9400,29 +9420,40 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     struct mailbox *mbox = NULL;
     struct body *body = NULL;
     const struct body *part = NULL;
-
-    /* Find body part containing blob */
-    int r = jmap_findblob(req, NULL/*accountid*/, emailpart->blob_id,
-                          &mbox, &mr, &body, &part, &blob_buf);
-    if (r) goto done;
-
-    uint32_t size;
-    r = msgrecord_get_size(mr, &size);
-    if (r) goto done;
-
-    /* Fetch blob contents and headers */
-    const char *content = blob_buf.s;
-    size_t content_size = blob_buf.len;
+    const char *content = NULL;
+    size_t content_size = 0;
     const char *src_encoding = NULL;
-    if (part) {
-        content += part->content_offset;
-        content_size = part->content_size;
-        src_encoding = part->encoding;
+    const char *encoding = NULL;
+    char *encbuf = NULL;
+    int r = 0;
+
+    struct buf *inmem = hash_lookup(emailpart->blob_id, req->inmemory_blobs);
+    if (inmem) {
+        content = buf_base(inmem);
+        content_size = buf_len(inmem);
+    }
+    else {
+        /* Find body part containing blob */
+        r = jmap_findblob(req, NULL/*accountid*/, emailpart->blob_id,
+                           &mbox, &mr, &body, &part, &blob_buf);
+        if (r) goto done;
+
+        uint32_t size;
+        r = msgrecord_get_size(mr, &size);
+        if (r) goto done;
+
+        /* Fetch blob contents and headers */
+        content = blob_buf.s;
+        content_size = blob_buf.len;
+        if (part) {
+            content += part->content_offset;
+            content_size = part->content_size;
+            src_encoding = part->encoding;
+        }
     }
 
     /* Determine target encoding */
-    const char *encoding = src_encoding;
-    char *encbuf = NULL;
+    encoding = src_encoding;
 
     if (!strcasecmpsafe(emailpart->type, "MESSAGE")) {
         if (!strcasecmpsafe(src_encoding, "BASE64")) {
@@ -9765,7 +9796,7 @@ static void _email_create(jmap_req_t *req,
     /* Parse Email object into internal representation */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct email email = { HEADERS_INITIALIZER, NULL, NULL, time(NULL), 0, NULL };
-    _parse_email(jemail, &parser, &email);
+    _parse_email(req, jemail, &parser, &email);
 
     /* Validate mailboxIds */
     json_t *jmailboxids = json_copy(json_object_get(jemail, "mailboxIds"));
@@ -12002,11 +12033,12 @@ static void _email_import(jmap_req_t *req,
                           json_t **new_email,
                           json_t **err)
 {
-    const char *blob_id = json_string_value(json_object_get(jemail_import, "blobId"));
+    const char *blob_id = jmap_id_string_value(req, json_object_get(jemail_import, "blobId"));
     json_t *jmailbox_ids = json_object_get(jemail_import, "mailboxIds");
     char *mboxname = NULL;
     struct _email_import_rock content = { BUF_INITIALIZER };
     int has_attachment = 0;
+    const char *sourcefile = NULL;
 
     /* Force write locks on mailboxes. */
     req->force_openmbox_rw = 1;
@@ -12051,8 +12083,13 @@ static void _email_import(jmap_req_t *req,
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
 
+    struct buf *inmem = hash_lookup(blob_id, req->inmemory_blobs);
+    if (inmem) {
+        buf_init_ro(&content.buf, buf_base(inmem), buf_len(inmem));
+        goto gotrecord;
+    }
+
     /* see if we can get a direct email! */
-    const char *sourcefile = NULL;
     int r = jmap_findblob_exact(req, NULL/*accountid*/, blob_id,
                                 &mbox, &mr);
     if (!r) r = msgrecord_get_fname(mr, &sourcefile);
@@ -12200,7 +12237,7 @@ static int jmap_email_import(jmap_req_t *req)
         const char *s;
 
         /* blobId */
-        s = json_string_value(json_object_get(jemail_import, "blobId"));
+        s = jmap_id_string_value(req, json_object_get(jemail_import, "blobId"));
         if (!s) {
             jmap_parser_invalid(&parser, "blobId");
         }

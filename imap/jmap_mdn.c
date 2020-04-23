@@ -623,16 +623,25 @@ static int jmap_mdn_parse(jmap_req_t *req)
         msgrecord_t *mr = NULL;
         struct body *body = NULL;
         const struct body *part = NULL;
+        struct buf buf = BUF_INITIALIZER;
 
-        int r = jmap_findblob(req, NULL/*accountid*/, blobid,
-                              &mbox, &mr, &body, &part, NULL);
-        if (r) {
-            json_array_append_new(parse.not_found, json_string(blobid));
-            continue;
+        struct buf *inmem = hash_lookup(blobid, req->inmemory_blobs);
+        if (inmem) {
+            buf_init_ro(&buf, buf_base(inmem), buf_len(inmem));
+        }
+        else {
+            int r = jmap_findblob(req, NULL/*accountid*/, blobid,
+                                  &mbox, &mr, &body, &part, &buf);
+            if (r) {
+                json_array_append_new(parse.not_found, json_string(blobid));
+                continue;
+            }
         }
 
         /* parse blob */
         json_t *mdn = NULL;
+
+        // XXX -> convert `buf` into an mdn
 
         if (mdn) {
             json_object_set_new(parse.parsed, blobid, mdn);
@@ -644,6 +653,7 @@ static int jmap_mdn_parse(jmap_req_t *req)
         jmap_closembox(req, &mbox);
         message_free_body(body);
         free(body);
+        buf_free(&buf);
     }
 
     /* Build response */
