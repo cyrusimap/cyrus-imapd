@@ -2301,15 +2301,27 @@ static unsigned bc_precompile(cmdarg_t args[], const char *fmt, ...)
         case 'U':
             args[n].u.ua = va_arg(ap, const arrayu64_t *);
             break;
-        case 'C':
-            args[n].u.c = va_arg(ap, const comp_t *);
-            break;
         case 't':
             args[n].u.t = va_arg(ap, const test_t *);
             break;
         case 'T':
             args[n].u.tl = va_arg(ap, const testlist_t *);
             break;
+        case 'C': {
+            /* Expand the comparator into its component parts */
+            const comp_t *c = va_arg(ap, const comp_t *);
+
+            args[n].type = AT_INT;
+            args[n].u.i = c->match;
+            args[++n].type = AT_INT;
+            args[n].u.i = c->relation;
+
+            if (c->collation != -1) {
+                args[++n].type = AT_INT;
+                args[n].u.i = c->collation;
+            }
+            break;
+        }
         }
     }
     va_end(ap);

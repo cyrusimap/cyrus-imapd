@@ -196,31 +196,6 @@ static int bc_testlist_generate(int codep, bytecode_info_t *retval,
     return codep;
 }
 
-/* writes a single comparator into almost-flat form starting at codep.
- * will write out 2 or 3 words
- * returns the next code location or -1 on error. */
-static int bc_comparator_generate(int codep, bytecode_info_t *retval,
-                                  const comp_t *comp)
-{
-    assert(retval != NULL);
-
-    /* comptag */
-    codep = bc_simple_generate(codep, retval, BT_VALUE, comp->match);
-    if (codep == -1) return -1;
-
-    /* relation */
-    codep = bc_simple_generate(codep, retval, BT_VALUE, comp->relation);
-    if (codep == -1) return -1;
-
-    if (comp->collation == -1) return codep;
-
-    /* collation (value specified with :comparator) */
-    codep = bc_simple_generate(codep, retval, BT_VALUE, comp->collation);
-    if (codep == -1) return -1;
-
-    return codep;
-}
-
 /* writes out a series of command arguments.
  * returns the next code location or -1 on error. */
 static int bc_args_generate(int codep, bytecode_info_t *retval,
@@ -244,10 +219,6 @@ static int bc_args_generate(int codep, bytecode_info_t *retval,
 
         case AT_ARRAYU64:
             codep = bc_vallist_generate(codep, retval, args[i].u.ua);
-            break;
-
-        case AT_COMP:
-            codep = bc_comparator_generate(codep, retval, args[i].u.c);
             break;
 
         case AT_TEST:

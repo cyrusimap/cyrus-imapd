@@ -77,7 +77,6 @@ enum argument_data_type {
     AT_STR      = 's',
     AT_STRARRAY = 'S',
     AT_ARRAYU64 = 'U',
-    AT_COMP     = 'C',
     AT_TEST     = 't',
     AT_TESTLIST = 'T'
 };
