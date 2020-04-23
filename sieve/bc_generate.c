@@ -86,6 +86,28 @@ static int atleast(bytecode_info_t *arr, size_t len)
     return 1;
 }
 
+static inline int bc_simple_generate(int codep, bytecode_info_t *retval,
+                                     int type, ...)
+{
+    va_list ap;
+
+    if (!atleast(retval, codep+1)) return -1;
+
+    retval->data[codep].type = type;
+
+    va_start(ap, type);
+    if (type == BT_STR) {
+        retval->data[codep++].u.str = va_arg(ap, const char *);
+    }
+    else {
+        /* XXX  can use any of: op, value, jump, listlen */
+        retval->data[codep++].u.value = va_arg(ap, int);
+    }
+    va_end(ap);
+
+    return codep;
+}
+
 /*
  * functions of the form bc_XXX_generate have the following properties:
  * on success they return an int that corresponds to the next empty location
@@ -103,22 +125,17 @@ static int bc_stringlist_generate(int codep, bytecode_info_t *retval,
     int strcount = sa ? sa->count : 0;
     int i;
 
-    /* Bounds check the string list length */
-    if (!atleast(retval, codep+1)) return -1;
+    /* Bounds check the string list length (count + 1) */
+    if (!atleast(retval, codep + strcount + 1)) return -1;
 
-    retval->data[codep].type = BT_STRLISTLEN;
-    retval->data[codep++].u.listlen = strcount;
+    codep = bc_simple_generate(codep, retval, BT_STRLISTLEN, strcount);
 
     for (i = 0 ; i < strcount ; i++) {
         char *s = sa->data[i];
 
         assert(s != NULL);
 
-        /* Bounds check for each string before we allocate it */
-        if (!atleast(retval, codep+1)) return -1;
-
-        retval->data[codep].type = BT_STR;
-        retval->data[codep++].u.str = s;
+        codep = bc_simple_generate(codep, retval, BT_STR, s);
     }
 
     return codep;
@@ -133,18 +150,13 @@ static int bc_vallist_generate(int codep, bytecode_info_t *retval,
     int count = va ? va->count : 0;
     int i;
 
-    /* Bounds check the string list length */
-    if (!atleast(retval, codep+1)) return -1;
+    /* Bounds check the value list length (count + 1) */
+    if (!atleast(retval, codep + count + 1)) return -1;
 
-    retval->data[codep].type = BT_VALLISTLEN;
-    retval->data[codep++].u.listlen = count;
+    codep = bc_simple_generate(codep, retval, BT_VALLISTLEN, count);
 
     for (i = 0 ; i < count ; i++) {
-        /* Bounds check for each string before we allocate it */
-        if (!atleast(retval, codep+1)) return -1;
-
-        retval->data[codep].type = BT_VALUE;
-        retval->data[codep++].u.value = arrayu64_nth(va, i);;
+        codep = bc_simple_generate(codep, retval, BT_VALUE, arrayu64_nth(va, i));
     }
 
     return codep;
@@ -158,29 +170,28 @@ static int bc_vallist_generate(int codep, bytecode_info_t *retval,
 static int bc_testlist_generate(int codep, bytecode_info_t *retval,
                                 const testlist_t *tl)
 {
-    int lenloc = codep;
+    int lenloc = codep++;
     int testcount = 0;
     const testlist_t *cur;
 
     /* Allocate list len */
-    if (!atleast(retval,codep+1)) return -1;
-    retval->data[codep++].type = BT_STRLISTLEN;
+    if (!atleast(retval, lenloc+1)) return -1;
 
     for (cur = tl; cur; cur = cur->next, testcount++) {
         int jumploc = codep;
 
         /* Allocate jump location */
-        if (!atleast(retval, codep+1)) return -1;
-        retval->data[codep++].type = BT_JUMP;
+        if (!atleast(retval, jumploc+1)) return -1;
 
-        codep = bc_test_generate(codep, retval, cur->t);
+        codep = bc_test_generate(jumploc+1, retval, cur->t);
+        if (codep == -1) return -1;
 
         /* update jump location */
-        retval->data[jumploc].u.jump = codep;
+        bc_simple_generate(jumploc, retval, BT_JUMP, codep);
     }
 
     /* update list length */
-    retval->data[lenloc].u.listlen = testcount;
+    bc_simple_generate(lenloc, retval, BT_STRLISTLEN, testcount);
 
     return codep;
 }
@@ -194,21 +205,18 @@ static int bc_comparator_generate(int codep, bytecode_info_t *retval,
     assert(retval != NULL);
 
     /* comptag */
-    if (!atleast(retval, codep + 1)) return -1;
-    retval->data[codep].type = BT_VALUE;
-    retval->data[codep++].u.value = comp->match;
+    codep = bc_simple_generate(codep, retval, BT_VALUE, comp->match);
+    if (codep == -1) return -1;
 
     /* relation */
-    if (!atleast(retval, codep + 1)) return -1;
-    retval->data[codep].type = BT_VALUE;
-    retval->data[codep++].u.value = comp->relation;
+    codep = bc_simple_generate(codep, retval, BT_VALUE, comp->relation);
+    if (codep == -1) return -1;
 
     if (comp->collation == -1) return codep;
 
     /* collation (value specified with :comparator) */
-    if (!atleast(retval, codep + 1)) return -1;
-    retval->data[codep].type = BT_VALUE;
-    retval->data[codep++].u.value = comp->collation;
+    codep = bc_simple_generate(codep, retval, BT_VALUE, comp->collation);
+    if (codep == -1) return -1;
 
     return codep;
 }
@@ -223,45 +231,38 @@ static int bc_args_generate(int codep, bytecode_info_t *retval,
     for (i = 0; i < nargs; i++) {
         switch (args[i].type) {
         case AT_INT:
-            if (!atleast(retval, codep+1)) return -1;
-            retval->data[codep].type = BT_VALUE;
-            retval->data[codep++].u.value = args[i].u.i;
+            codep = bc_simple_generate(codep, retval, BT_VALUE, args[i].u.i);
             break;
 
         case AT_STR:
-            if (!atleast(retval, codep+1)) return -1;
-            retval->data[codep].type = BT_STR;
-            retval->data[codep++].u.str = args[i].u.s;
+            codep = bc_simple_generate(codep, retval, BT_STR, args[i].u.s);
             break;
 
         case AT_STRARRAY:
             codep = bc_stringlist_generate(codep, retval, args[i].u.sa);
-            if (codep == -1) return -1;
             break;
 
         case AT_ARRAYU64:
             codep = bc_vallist_generate(codep, retval, args[i].u.ua);
-            if (codep == -1) return -1;
             break;
 
         case AT_COMP:
             codep = bc_comparator_generate(codep, retval, args[i].u.c);
-            if (codep == -1) return -1;
             break;
 
         case AT_TEST:
             codep = bc_test_generate(codep, retval, args[i].u.t);
-            if (codep == -1) return -1;
             break;
 
         case AT_TESTLIST:
             codep = bc_testlist_generate(codep, retval, args[i].u.tl);
-            if (codep == -1) return -1;
             break;
 
         default:
             return -1;
         }
+
+        if (codep == -1) return -1;
     }
 
     return codep;
@@ -278,10 +279,8 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, const test_t *t)
         return -1;
     }
 
-    if (!atleast(retval, codep+1)) return -1;
-
-    retval->data[codep].type = BT_OPCODE;
-    retval->data[codep++].u.op = t->type;
+    codep = bc_simple_generate(codep, retval, BT_OPCODE, t->type);
+    if (codep == -1) return -1;
 
     return bc_args_generate(codep, retval, t->nargs, t->args);
 }
@@ -297,9 +296,8 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
     if (!retval) return -1;
 
     if (c == NULL) {
-        if (!atleast(retval, codep+1)) return -1;
-        retval->data[codep].type = BT_OPCODE;
-        retval->data[codep++].u.op = B_NULL;
+        codep = bc_simple_generate(codep, retval, BT_OPCODE, B_NULL);
+        if (codep == -1) return -1;
     }
     else {
         do {
@@ -308,9 +306,8 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 return -1;
             }
 
-            if (!atleast(retval, codep+1)) return -1;
-            retval->data[codep].type = BT_OPCODE;
-            retval->data[codep++].u.op = c->type;
+            codep = bc_simple_generate(codep, retval, BT_OPCODE, c->type);
+            if (codep == -1) return -1;
 
             if (c->type == B_IF) {
                 /* IF
@@ -324,25 +321,21 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 int jumploc = codep;
 
                 /* Allocate jump table offsets */
-                if (!atleast(retval, codep+3)) return -1;
-                do {
-                    retval->data[codep].type = BT_JUMP;
-                    retval->data[codep++].u.jump = -1;
-                } while (codep - jumploc < 3);
+                if (!atleast(retval, jumploc+3)) return -1;
 
                 /* write test */
-                codep = bc_test_generate(codep, retval, c->u.i.t);
+                codep = bc_test_generate(jumploc+3, retval, c->u.i.t);
                 if (codep == -1) return -1;
 
                 /* update jump table with beginning of then block */
-                retval->data[jumploc].u.jump = codep;
+                bc_simple_generate(jumploc, retval, BT_JUMP, codep);
 
                 /* write then block */
                 codep = bc_action_generate(codep, retval, c->u.i.do_then);
                 if (codep == -1) return -1;
 
                 /* update jump table with end of then block */
-                retval->data[jumploc+1].u.jump = codep;
+                bc_simple_generate(jumploc+1, retval, BT_JUMP, codep);
 
                 /* write else block */
                 if (c->u.i.do_else) {
@@ -350,7 +343,11 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                     if (codep == -1) return -1;
 
                     /* update jump table with end of else block */
-                    retval->data[jumploc+2].u.jump = codep;
+                    bc_simple_generate(jumploc+2, retval, BT_JUMP, codep);
+                }
+                else {
+                    /* no else block */
+                    bc_simple_generate(jumploc+2, retval, BT_JUMP, -1);
                 }
             }
             else {
@@ -396,9 +393,8 @@ EXPORTED int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s
 
     memset(*retval, 0, sizeof(bytecode_info_t));
 
-    if (!atleast(*retval, codep+1)) return -1;
-    (*retval)->data[codep].type = BT_VALUE;
-    (*retval)->data[codep++].u.value = requires;
+    codep = bc_simple_generate(codep, *retval, BT_VALUE, requires);
+    if (codep == -1) return -1;
 
     return bc_action_generate(codep, *retval, c);
 }
