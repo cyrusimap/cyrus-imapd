@@ -1563,9 +1563,24 @@ HIDDEN int jmap_myrights(jmap_req_t *req, const char *mboxname)
     return rights;
 }
 
+HIDDEN int jmap_myrights_mboxid(jmap_req_t *req, const char *mboxid)
+{
+    int rights = 0;
+    const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+    if (mbentry) {
+        rights = jmap_myrights_mbentry(req, mbentry);
+    }
+    return rights;
+}
+
+HIDDEN int jmap_hasrights_mboxid(jmap_req_t *req, const char *mboxid, int rights)
+{
+    const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+    return mbentry ? jmap_hasrights_mbentry(req, mbentry, rights) : 0;
+}
+
 // gotta have them all
-HIDDEN int jmap_hasrights(jmap_req_t *req, const char *mboxname,
-                                 int rights)
+HIDDEN int jmap_hasrights(jmap_req_t *req, const char *mboxname, int rights)
 {
     int myrights = jmap_myrights(req, mboxname);
     if ((myrights & rights) == rights) return 1;

@@ -246,6 +246,8 @@ extern int  jmap_hasrights_mbentry(jmap_req_t *req, const mbentry_t *mbentry,
                            int rights);
 extern int  jmap_myrights(jmap_req_t *req, const char *mboxname);
 extern int  jmap_hasrights(jmap_req_t *req, const char *mboxname, int rights);
+extern int  jmap_myrights_mboxid(jmap_req_t *req, const char *mboxid);
+extern int  jmap_hasrights_mboxid(jmap_req_t *req, const char *mboxid, int rights);
 extern void jmap_myrights_delete(jmap_req_t *req, const char *mboxname);
 extern int  jmap_mbtype(jmap_req_t *req, const char *mboxname);
 
