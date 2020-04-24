@@ -2145,51 +2145,23 @@ static int verify_mailbox(sieve_script_t *sscript, char *s)
     return 1;
 }
 
-static int verify_headername(sieve_script_t *sscript, char *hdr)
+static int verify_header(sieve_script_t *sscript, char *hdr)
 {
     char *h = hdr;
 
     while (*h) {
-        /*
-           field-name      =       1*ftext
+        /* field-name      =       1*ftext
            ftext           =       %d33-57 / %d59-126
            ; Any character except
            ;  controls, SP, and
-           ;  ":".
-        */
+           ;  ":". */
         if (!((*h >= 33 && *h <= 57) || (*h >= 59 && *h <= 126))) {
-            sieveerror_f(sscript, "header field name '%s':"
-                         " not a valid header field name"
-                         " per RFC 5322, Section 3.6.8", hdr);
+            sieveerror_f(sscript, "header '%s': not a valid header", hdr);
             return 0;
         }
         h++;
     }
     return 1;
-}
-
-static int verify_headerbody(sieve_script_t *sscript, char *val)
-{
-    char *v = val + strlen(val);
-
-    /* trim any trailing CR/LF */
-    while (--v >= val && (*v == '\r' || *v == '\n')) {
-        *v = '\0';
-    }
-
-    /* make sure any other CRLF is folding whitespace */
-    for (v = val; *v; v++) {
-        if (*v == '\r' && *++v != '\n') break;
-        if (*v == '\n' && *++v != ' ' && *v != '\t') break;
-    }
-    if (*v != '\0') {
-        sieveerror_f(sscript, "header field body '%s':"
-                     " not a valid header field body"
-                     " per RFC 5322, Section 3.2.5", val);
-        return 0;
-    }
-
-    return verify_utf8(sscript, val);
 }
 
 static int verify_addrheader(sieve_script_t *sscript, char *hdr)
@@ -2211,7 +2183,7 @@ static int verify_addrheader(sieve_script_t *sscript, char *hdr)
     if (contains_variable(sscript, hdr)) return 1;
 
     if (!config_getswitch(IMAPOPT_RFC3028_STRICT))
-        return verify_headername(sscript, hdr);
+        return verify_header(sscript, hdr);
 
     for (lcase(hdr), h = hdrs; *h; h++) {
         if (!strcmp(*h, hdr)) return 1;
@@ -2500,7 +2472,7 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
     assert(c && c->type == B_VACATION);
 
     if (c->u.v.handle) verify_utf8(sscript, c->u.v.handle);
-    if (c->u.v.subject) verify_headerbody(sscript, c->u.v.subject);
+    if (c->u.v.subject) verify_utf8(sscript, c->u.v.subject);
     if (c->u.v.from) verify_address(sscript, c->u.v.from);
     if (c->u.v.addresses)
         verify_stringlist(sscript, c->u.v.addresses, verify_address);
@@ -2570,8 +2542,8 @@ static commandlist_t *build_addheader(sieve_script_t *sscript,
 {
     assert(c && c->type == B_ADDHEADER);
 
-    verify_headername(sscript, name);
-    verify_headerbody(sscript, value);
+    verify_header(sscript, name);
+    verify_utf8(sscript, value);
 
     if (c->u.ah.index == 0) c->u.ah.index = 1;
     c->u.ah.name = name;
@@ -2596,7 +2568,7 @@ static commandlist_t *build_deleteheader(sieve_script_t *sscript,
                      "MUST NOT delete Received or Auto-Submitted headers");
     }
 
-    verify_headername(sscript, name);
+    verify_header(sscript, name);
     verify_patternlist(sscript, values, &c->u.dh.comp, verify_utf8);
 
     c->u.dh.name = name;
@@ -2933,7 +2905,7 @@ static test_t *build_header(sieve_script_t *sscript, test_t *t,
 {
     assert(t && t->type == BC_HEADER);
 
-    verify_stringlist(sscript, sl, verify_headername);
+    verify_stringlist(sscript, sl, verify_header);
 
     t->nargs = bc_precompile(t->args, "i", t->u.hhs.comp.index);
 
@@ -3039,7 +3011,7 @@ static test_t *build_date(sieve_script_t *sscript,
 {
     assert(t && (t->type == BC_DATE || t->type == BC_CURRENTDATE));
 
-    if (hn) verify_headername(sscript, hn);
+    if (hn) verify_header(sscript, hn);
     verify_patternlist(sscript, kl, &t->u.dt.comp, NULL);
 
     if (t->u.dt.comp.index == 0) t->u.dt.comp.index = 1;
@@ -3163,7 +3135,7 @@ static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
 
     switch (t->u.dup.idtype) {
     case B_HEADER:
-        verify_headername(sscript, t->u.dup.idval);
+        verify_header(sscript, t->u.dup.idval);
         break;
 
     case B_UNIQUEID:
