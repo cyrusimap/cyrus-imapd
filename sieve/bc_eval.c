@@ -2253,6 +2253,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         {
             const char *name = cmd.u.ah.name;
             const char *value = cmd.u.ah.value;
+            char *encoded_value;
             const char *h;
             int index = cmd.u.ah.index;
 
@@ -2277,8 +2278,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 value = parse_string(value, variables);
             }
 
-            i->addheader(m, name, value, index);
+            encoded_value = charset_encode_mimeheader(value, strlen(value), 0);
+
+            i->addheader(m, name, encoded_value, index);
             i->edited_headers = 1;
+
+            free(encoded_value);
             break;
         }
 
