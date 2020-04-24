@@ -7547,7 +7547,8 @@ static int _copy_msgrecords(struct auth_state *authstate,
     r = append_commit(&as);
     if (r) goto done;
 
-    sync_log_rename(src->name, dst->name);
+    sync_log_append(dst->name);
+
 done:
     return r;
 }
