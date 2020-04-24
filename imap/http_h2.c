@@ -208,6 +208,7 @@ static int begin_headers_cb(nghttp2_session *session,
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
         txn->zstrm = zlib_init();
         txn->brotli = brotli_init();
+        txn->zstd = zstd_init();
     }
 
 
