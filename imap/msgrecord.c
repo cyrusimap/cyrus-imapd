@@ -188,7 +188,7 @@ EXPORTED msgrecord_t *msgrecord_from_recno(struct mailbox *mbox, uint32_t recno)
 }
 
 EXPORTED msgrecord_t *msgrecord_from_index_record(struct mailbox *mbox,
-                                                  struct index_record *record)
+                                                  const struct index_record *record)
 {
     assert(record->recno);
     assert(record->uid);
