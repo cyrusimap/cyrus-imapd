@@ -1,5 +1,7 @@
 .. _upgrade:
 
+.. highlight:: none
+
 ================
 Upgrading to 3.2
 ================
@@ -71,6 +73,25 @@ entirely while you install the new package.  If your old installation
 was using Berkeley DB format databases, you will need to convert or
 upgrade the databases **before** you upgrade.  Cyrus v3.2 does not
 support Berkeley DB at all.
+
+.. note::
+
+    If you are upgrading from Cyrus version 2.5 or earlier,
+    and your system is configured with the following combination
+    in :cyrusman:`imapd.conf(5)`::
+
+        fulldirhash: yes
+        hashimapspool: either yes or no
+        unixhierarchysep: yes
+
+    then you will not be able to upgrade-in-place.  This is due to
+    a change in how directory hashes are calculated for users whose
+    localpart contains a dot, which was introduced in 3.0.0.  After
+    an in-place upgrade, Cyrus will not be able to find these users'
+    metadata and/or mailboxes.
+
+    If you have this configuration, you will need to upgrade by
+    replicating, not in place.
 
 Do What As Who?
 ###############
