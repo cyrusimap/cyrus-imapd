@@ -1470,11 +1470,7 @@ sub test_editheader_basic
     $self->{instance}->install_sieve_script(<<EOF
 require ["editheader", "index", "regex", "fileinto", "copy"];
 fileinto :copy "$target";
-addheader "X-Cassandane-Test" text:
-
- prepend1
-.
-;
+addheader "X-Cassandane-Test" "prepend1";
 addheader "X-Cassandane-Test2" "prepend2";
 addheader "X-Cassandane-Test2" "prepend3";
 addheader :last "X-Cassandane-Test" "append1";
@@ -1505,7 +1501,7 @@ EOF
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/^X-Cassandane-Test: \n prepend1\r\n/, $msg1);
+    $self->assert_matches(qr/^X-Cassandane-Test: prepend1\r\n/, $msg1);
     $self->assert_matches(qr/X-Cassandane-Test: append1\r\nX-Cassandane-Test: append3\r\nX-Cassandane-Test: append5\r\n\r\n/, $msg1);
 
     $imaptalk->select($target);
@@ -1517,7 +1513,7 @@ EOF
     $self->assert_matches(qr/X-Cassandane-Unique: .*\r\n\r\n/, $msg1);
 }
 
-sub test_editheader_currentheaders
+sub test_editheader_complex
     :min_version_3_3
     :needs_component_sieve
 {
@@ -1527,14 +1523,17 @@ sub test_editheader_currentheaders
 
     xlog $self, "Install a sieve script with editheader actions";
     $self->{instance}->install_sieve_script(<<EOF
-require ["editheader", "index", "regex", "fileinto", "copy"];
-addheader "X-Hello" "World";
-if header :contains "X-Hello" "World" {
+require ["editheader", "index", "regex", "fileinto", "copy", "encoded-character", "variables"];
+addheader "X-Hello" "World\${unicode:2217}";
+if header :contains "X-Hello" "World\${unicode:2217}" {
     fileinto :copy "$target";
 }
+set "x" text:
+prepend1
+.
+;
 addheader "X-Cassandane-Test" text:
-
- prepend1
+\${x}
 .
 ;
 addheader "X-Cassandane-Test2" "prepend2";
@@ -1542,7 +1541,11 @@ addheader "X-Cassandane-Test2" "prepend3";
 addheader :last "X-Cassandane-Test" "append1";
 addheader :last "X-Cassandane-Test" "append2";
 addheader :last "X-Cassandane-Test" "append3";
-addheader :last "X-Cassandane-Test" "append4";
+addheader :last "X-Cassandane-Test" text:
+
+ append4
+.
+;
 addheader :last "X-Cassandane-Test" "append5";
 addheader :last "X-Cassandane-Test" "append6";
 deleteheader :index 3 :contains "X-Cassandane-Test" "append";
@@ -1567,7 +1570,7 @@ EOF
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/^X-Cassandane-Test: \n prepend1\r\nX-Hello: World\r\nReturn-Path: /, $msg1);
+    $self->assert_matches(qr/^X-Cassandane-Test: =\?UTF-8\?Q\?prepend1=0A=0A\?=\r\nX-Hello: =\?UTF-8\?Q\?World=E2=88=97\?=\r\nReturn-Path: /, $msg1);
     $self->assert_matches(qr/X-Cassandane-Unique: .*\r\nX-Cassandane-Test: append1\r\nX-Cassandane-Test: append3\r\nX-Cassandane-Test: append5\r\n\r\n/, $msg1);
 
     $imaptalk->select($target);
@@ -1575,7 +1578,7 @@ EOF
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/^X-Hello: World\r\nReturn-Path: /, $msg1);
+    $self->assert_matches(qr/^X-Hello: =\?UTF-8\?Q\?World=E2=88=97\?=\r\nReturn-Path: /, $msg1);
     $self->assert_matches(qr/X-Cassandane-Unique: .*\r\n\r\n/, $msg1);
 }
 
