@@ -79,7 +79,9 @@ static struct ws_extension {
     const char *name;
     unsigned flag;
 } extensions[] = {
+#ifdef HAVE_ZLIB
     { "permessage-deflate", EXT_PMCE_DEFLATE },
+#endif
     { NULL, 0 }
 };
 
@@ -243,6 +245,10 @@ static void ws_zlib_init(struct transaction_t *txn, unsigned client_max_wbits)
             free(ctx->pmce.deflate.zstrm);
             ctx->pmce.deflate.zstrm = NULL;
         }
+        else {
+            /* Enable this PMCE */
+            ctx->ext = EXT_PMCE_DEFLATE;
+        }
     }
 }
 
@@ -331,13 +337,21 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
     /* Decompress request, if necessary */
     if (wslay_get_rsv1(arg->rsv)) {
-        /* Add trailing 4 bytes */
-        buf_appendmap(&inbuf, "\x00\x00\xff\xff", 4);
+        if (ctx->ext & EXT_PMCE_DEFLATE) {
+            /* Add trailing 4 bytes */
+            buf_appendmap(&inbuf, "\x00\x00\xff\xff", 4);
 
-        r = zlib_decompress(txn, buf_base(&inbuf), buf_len(&inbuf));
+            r = zlib_decompress(txn, buf_base(&inbuf), buf_len(&inbuf));
+            if (r) {
+                syslog(LOG_ERR, "on_msg_recv_cb(): zlib_decompress() failed");
+            }
+        }
+        else {
+            syslog(LOG_ERR, "on_msg_recv_cb(): unknown PMCE");
+            r = -1;
+        }
+
         if (r) {
-            syslog(LOG_ERR, "on_msg_recv_cb(): zlib_decompress() failed");
-
             err_code = WSLAY_CODE_PROTOCOL_ERROR;
             err_msg = DECOMP_FAILED_ERR;
             goto err;
@@ -504,46 +518,46 @@ static void parse_extensions(struct transaction_t *txn)
             while (extp->name && strcmp(token, extp->name)) extp++;
 
             /* Check if client wants per-message compression */
-            if (extp->flag == EXT_PMCE_DEFLATE &&
-                config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
-                unsigned client_max_wbits = MAX_WBITS;
+            if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
+                if (extp->flag == EXT_PMCE_DEFLATE) {
+                    unsigned client_max_wbits = MAX_WBITS;
 
-                ctx->pmce.deflate.max_wbits = MAX_WBITS;
+                    ctx->pmce.deflate.max_wbits = MAX_WBITS;
 
-                /* Process parameters */
-                while ((token = tok_next(&param))) {
-                    char *value = strchr(token, '=');
+                    /* Process parameters */
+                    while ((token = tok_next(&param))) {
+                        char *value = strchr(token, '=');
 
-                    if (value) *value++ = '\0';
+                        if (value) *value++ = '\0';
 
-                    if (!strcmp(token, "server_no_context_takeover")) {
-                        ctx->pmce.deflate.no_context = 1;
-                    }
-                    else if (!strcmp(token, "client_no_context_takeover")) {
-                        /* Don't HAVE to do anything here */
-                    }
-                    else if (!strcmp(token, "server_max_window_bits")) {
-                        if (value) {
-                            if (*value == '"') value++;
-                            ctx->pmce.deflate.max_wbits = atoi(value);
+                        if (!strcmp(token, "server_no_context_takeover")) {
+                            ctx->pmce.deflate.no_context = 1;
                         }
-                        else ctx->pmce.deflate.max_wbits = 0;  /* force error */
-                    }
-                    else if (!strcmp(token, "client_max_window_bits")) {
-                        if (value) {
-                            if (*value == '"') value++;
-                            client_max_wbits = atoi(value);
+                        else if (!strcmp(token, "client_no_context_takeover")) {
+                            /* Don't HAVE to do anything here */
+                        }
+                        else if (!strcmp(token, "server_max_window_bits")) {
+                            if (value) {
+                                if (*value == '"') value++;
+                                ctx->pmce.deflate.max_wbits = atoi(value);
+                            }
+                            else ctx->pmce.deflate.max_wbits = 0;  /* force error */
+                        }
+                        else if (!strcmp(token, "client_max_window_bits")) {
+                            if (value) {
+                                if (*value == '"') value++;
+                                client_max_wbits = atoi(value);
+                            }
                         }
                     }
+
+                    ws_zlib_init(txn, client_max_wbits);
                 }
 
-                ws_zlib_init(txn, client_max_wbits);
-
-                if (ctx->pmce.deflate.zstrm) {
+                if (ctx->ext) {
                     /* Compression has been enabled */
                     wslay_event_config_set_allowed_rsv_bits(ctx->event,
                                                             WSLAY_RSV1_BIT);
-                    ctx->ext = extp->flag;
                 }
             }
             tok_fini(&param);
