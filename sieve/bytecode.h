@@ -305,7 +305,6 @@ enum bytecode {
 
                                    <list: int> <copy: int> <address: string>   */
 
-
     B_ENOTIFY,                  /* require "enotify"
 
                                    <method: string> <from: string>
@@ -341,7 +340,6 @@ enum bytecode {
                                      <create: int> <flag-list: string-list>
                                      <special-use: string>                     */
 
-
     B_FILEINTO_SPECIALUSE,      /* legacy fileinto w/o support for :mailboxid
 
                                    require ["fileinto", "copy", "imap4flags",
@@ -350,7 +348,6 @@ enum bytecode {
                                    <special-use: string>
                                    <create: int> <flag-list: string-list>
                                    <copy: int> <mailbox: string>               */
-
 
     B_REDIRECT,                 /* require ["copy", "list", "redirect-dsn",
                                             "redirect-deliveryby"]
@@ -375,7 +372,7 @@ enum bytecode {
                                    <mailbox-name/id: string>
                                    <addflags: string-list>
                                    <removeflags: string-list>
-                                   <days-is-id-bitmask: int>
+                                   <weekdays/is_id-bitmask: int>
                                    <times: value-list>                         */
 
     /*****  insert new actions above this line  *****/
@@ -453,7 +450,6 @@ enum bytecode_comps {
                                    <mailbox: string>
                                    <annotation-names: string-list>             */
 
-
     BC_SERVERMETADATA,          /* require "servermetadata"
                                    <COMPARATOR>
                                    <annotation-name: string>
@@ -497,7 +493,6 @@ enum bytecode_comps {
                                    <notification-capability: string>
                                    <patterns: string-list>                     */
 
-
     BC_MAILBOXIDEXISTS,         /* require "mailboxid"
 
                                    <patterns: string-list>                     */
@@ -506,7 +501,7 @@ enum bytecode_comps {
 
                                    <query: string>                             */
 
-    /* insert new tests above this line */
+    /*****  insert new tests above this line  *****/
     BC_ILLEGAL_VALUE    /* any value >= this code is illegal */
 };
 
