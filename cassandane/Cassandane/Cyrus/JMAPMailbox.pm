@@ -4210,4 +4210,157 @@ EOF
     );
 }
 
+sub test_mailbox_set_destroy_movetomailbox
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $store = $self->{store};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    xlog "Create mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+                mboxC => {
+                    name => 'C',
+                },
+            },
+        }, 'R1'],
+        ['Email/set', {
+            create => {
+                emailA => {
+                    mailboxIds => {
+                        '#mboxA' => JSON::true,
+                    },
+                    subject => 'emailA',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        1 => {
+                            value => 'emailA',
+                        }
+                    },
+                },
+                emailAB => {
+                    mailboxIds => {
+                        '#mboxA' => JSON::true,
+                        '#mboxB' => JSON::true,
+                    },
+                    subject => 'emailAB',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        1 => {
+                            value => 'emailAB',
+                        }
+                    },
+                },
+            },
+        }, 'R2'],
+    ], $using);
+    my $mboxIdA = $res->[0][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxIdA);
+    my $mboxIdB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxIdB);
+    my $mboxIdC = $res->[0][1]{created}{mboxC}{id};
+    $self->assert_not_null($mboxIdC);
+    my $emailIdA = $res->[1][1]{created}{emailA}{id};
+    $self->assert_not_null($emailIdA);
+    my $emailIdAB = $res->[1][1]{created}{emailAB}{id};
+    $self->assert_not_null($emailIdAB);
+
+    xlog "Destroy mailbox A and move emails to C";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxIdA],
+            onDestroyMoveToMailboxIfNoMailbox => $mboxIdC,
+        }, 'R1'],
+        ['Email/get', {
+            ids => [$emailIdA],
+            properties => ['mailboxIds'],
+        }, 'R2'],
+        ['Email/get', {
+            ids => [$emailIdAB],
+            properties => ['mailboxIds'],
+        }, 'R3'],
+    ], $using);
+    $self->assert_deep_equals([$mboxIdA],
+        $res->[0][1]{destroyed});
+    $self->assert_deep_equals({$mboxIdC => JSON::true},
+        $res->[1][1]{list}[0]{mailboxIds});
+    $self->assert_deep_equals({$mboxIdB => JSON::true},
+        $res->[2][1]{list}[0]{mailboxIds});
+}
+
+sub test_mailbox_set_destroy_movetomailbox_errors
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    xlog "Create mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $mboxIdA = $res->[0][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxIdA);
+    my $mboxIdB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxIdB);
+
+    xlog "Can't move emails to updated or destroyed mailbox";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxIdA],
+            onDestroyMoveToMailboxIfNoMailbox => $mboxIdA,
+        }, 'R1'],
+        ['Mailbox/set', {
+            update => {
+                $mboxIdB => {
+                    role => 'trash',
+                },
+            },
+            destroy => [$mboxIdA],
+            onDestroyMoveToMailboxIfNoMailbox => $mboxIdB,
+        }, 'R2'],
+    ], $using);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+    $self->assert_deep_equals(['onDestroyMoveToMailboxIfNoMailbox'],
+            $res->[0][1]{arguments});
+    $self->assert_str_equals('invalidArguments', $res->[1][1]{type});
+    $self->assert_deep_equals(['onDestroyMoveToMailboxIfNoMailbox'],
+            $res->[1][1]{arguments});
+}
+
 1;
