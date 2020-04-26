@@ -682,6 +682,12 @@ HIDDEN void http2_output(struct transaction_t *txn)
             txn->flags.conn = CONN_CLOSE;
         }
     }
+    else if (!nghttp2_session_want_read(ctx->session)) {
+        /* We're done */
+        syslog(LOG_DEBUG, "closing connection");
+        txn->flags.conn = CONN_CLOSE;
+        return;
+    }
 }
 
 
@@ -691,9 +697,11 @@ HIDDEN void http2_input(struct transaction_t *txn)
     int want_read = nghttp2_session_want_read(ctx->session);
     int goaway = txn->flags.conn & CONN_CLOSE;
     nghttp2_error_code err = goaway ? NGHTTP2_REFUSED_STREAM : NGHTTP2_NO_ERROR;
+    struct protstream *pin = txn->conn->pin;
 
     syslog(LOG_DEBUG, "http2_input()  goaway: %d, eof: %d, want read: %d",
-           goaway, txn->conn->pin->eof, want_read);
+           goaway, prot_IS_EOF(pin), want_read);
+
 
     if (want_read && !goaway) {
         /* Read frame(s) */
@@ -711,12 +719,12 @@ HIDDEN void http2_input(struct transaction_t *txn)
         else {
             /* Failure */
             syslog(LOG_DEBUG, "nghttp2_session_recv: %s (%s)",
-                   nghttp2_strerror(r), prot_error(txn->conn->pin));
+                   nghttp2_strerror(r), prot_error(pin));
             goaway = 1;
 
             if (r == NGHTTP2_ERR_CALLBACK_FAILURE) {
                 /* Client timeout */
-                txn->error.desc = prot_error(txn->conn->pin);
+                txn->error.desc = prot_error(pin);
                 err = NGHTTP2_REFUSED_STREAM;
             }
             else {
