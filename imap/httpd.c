@@ -2005,6 +2005,8 @@ static void cmdloop(struct http_connection *conn)
 
             signals_poll();
 
+            syslog(LOG_DEBUG, "proxy_check_input()");
+
         } while (!proxy_check_input(protin, httpd_in, httpd_out,
                                     backend_current ? backend_current->in : NULL,
                                     NULL, 30));
