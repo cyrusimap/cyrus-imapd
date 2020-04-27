@@ -173,7 +173,8 @@ int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
             return SIEVE_RUN_ERROR;
         }
 
-        if (a->a == ACTION_FILEINTO && !strcmp(a->u.fil.mailbox, mbox)) {
+        if ((a->a == ACTION_FILEINTO && !strcmp(a->u.fil.mailbox, mbox)) ||
+            ((a->a == ACTION_KEEP && !strcmp("INBOX", mbox)))) {
             /* don't bother doing it twice */
             /* check that we have a valid action */
             if (b == NULL) {
@@ -259,7 +260,8 @@ int do_keep(action_list_t *a, strarray_t *imapflags, struct buf *headers)
             strarray_free(imapflags);
         }
 
-        if (a->a == ACTION_KEEP) {
+        if (a->a == ACTION_KEEP ||
+            (a->a == ACTION_FILEINTO && !strcmp(a->u.fil.mailbox, "INBOX"))) {
             /* don't bother doing it twice */
             /* check that we have a valid action */
             if (b == NULL) {
