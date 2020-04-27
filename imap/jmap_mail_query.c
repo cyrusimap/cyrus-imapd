@@ -726,6 +726,7 @@ static int _email_matchmime_evaluate(json_t *filter,
         xapian_query_t *xq = build_type_query(db, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
+    // ignore attachmentBody
 
 #undef MATCHMIME_XQ_OR_MATCHALL
 
