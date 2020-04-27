@@ -6,14 +6,15 @@ IMAP Developer Guide
 
 Getting Started
 ================
+
+See :ref:`setup` for compilation and installation.
+
 .. toctree::
     :maxdepth: 1
 
     developer/process
     developer/overview
     developer/github-guide
-    developer/compiling
-    installing
     developer/developer-testing
     developer/jmap
 
