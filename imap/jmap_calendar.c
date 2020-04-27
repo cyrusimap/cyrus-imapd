@@ -350,9 +350,9 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     if (jmap_wantprop(rock->get->props, "isVisible")) {
         int is_visible = 1;
         buf_reset(&attrib);
-        static const char *color_annot =
+        static const char *visible_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
-        r = annotatemore_lookupmask(mbentry->name, color_annot,
+        r = annotatemore_lookupmask(mbentry->name, visible_annot,
                                     httpd_userid, &attrib);
         if (!r && attrib.len) {
             const char *val = buf_cstring(&attrib);
