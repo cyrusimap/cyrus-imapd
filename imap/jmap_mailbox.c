@@ -53,6 +53,7 @@
 
 #include "acl.h"
 #include "annotate.h"
+#include "append.h"
 #include "bsearch.h"
 #include "cyr_qsort_r.h"
 #include "http_jmap.h"
@@ -65,6 +66,7 @@
 #include "msgrecord.h"
 #include "statuscache.h"
 #include "stristr.h"
+#include "sync_log.h"
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -1934,7 +1936,7 @@ EXPORTED int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
     return r;
 }
 
-static void _mbox_setargs_parse(json_t *jargs,
+static void _mboxset_args_parse(json_t *jargs,
                                 struct jmap_parser *parser,
                                 struct mboxset_args *args,
                                 jmap_req_t *req,
@@ -2231,6 +2233,14 @@ static void _mboxset_result_fini(struct mboxset_result *result)
 
 #define MBOXSET_RESULT_INITIALIZER { NULL, 0, NULL, NULL, NULL }
 
+struct mboxset {
+    struct jmap_set super;
+    ptrarray_t create;
+    ptrarray_t update;
+    strarray_t destroy;
+    int on_destroy_remove_msgs;
+    const char *on_destroy_move_to_mailboxid;
+};
 
 static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
                          enum mboxset_runmode mode,
@@ -2763,9 +2773,124 @@ done:
     mboxlist_entry_free(&mbentry);
 }
 
-static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
+static int in_otherfolder_cb(const conv_guidrec_t *rec, void *rock)
+{
+    intptr_t src_foldernum = (intptr_t)rock;
+
+    if (rec->version < 1) {
+        syslog(LOG_ERR, "%s:%s: outdated guid record in mailbox %s",
+                __FILE__, __func__, rec->mboxname);
+        return IMAP_INTERNAL;
+    }
+
+    if (rec->foldernum != src_foldernum &&
+        (rec->system_flags & FLAG_DELETED) == 0 &&
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) == 0) {
+        return IMAP_MAILBOX_EXISTS;
+    }
+
+    return 0;
+}
+
+static int _mbox_on_destroy_move(jmap_req_t *req,
+                                 struct mboxset *set,
+                                 const mbentry_t *src_mbentry,
+                                 struct mboxset_result *result)
+{
+    struct mailbox *src_mbox = NULL;
+    struct mailbox *dst_mbox = NULL;
+    ptrarray_t move_msgrecs = PTRARRAY_INITIALIZER;
+    int r = 0;
+
+    /* Open mailboxes */
+    const mbentry_t *dst_mbentry =
+        jmap_mbentry_by_uniqueid(req, set->on_destroy_move_to_mailboxid);
+    if (!dst_mbentry) {
+        syslog(LOG_ERR, "%s: can't find mailbox id %s", __func__,
+                        set->on_destroy_move_to_mailboxid);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+    r = jmap_openmbox(req, src_mbentry->name, &src_mbox, 0);
+    if (r) {
+        syslog(LOG_ERR, "%s: can't open %s", __func__, src_mbentry->name);
+        goto done;
+    }
+    r = jmap_openmbox(req, dst_mbentry->name, &dst_mbox, 1);
+    if (r) {
+        syslog(LOG_ERR, "%s: can't open %s", __func__, dst_mbentry->name);
+        goto done;
+    }
+
+    /* Find all messages that only exist in source mailbox */
+    int src_foldernum = conversation_folder_number(req->cstate, src_mbentry->name, 0);
+    if (src_foldernum < 0) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    struct mailbox_iter *iter = mailbox_iter_init(src_mbox, 0, ITER_SKIP_EXPUNGED);
+    const message_t *msg;
+    struct buf guid = BUF_INITIALIZER;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        buf_setcstr(&guid, message_guid_encode(&record->guid));
+        r = conversations_guid_foreach(req->cstate, buf_cstring(&guid),
+                                       in_otherfolder_cb,
+                                       (void*)((intptr_t) src_foldernum));
+        if (r) {
+            if (r == IMAP_MAILBOX_EXISTS) {
+                r = 0;
+                continue;
+            }
+            else break;
+        }
+        msgrecord_t *mr = msgrecord_from_index_record(src_mbox, record);
+        if (mr) ptrarray_append(&move_msgrecs, mr);
+    }
+    buf_free(&guid);
+    mailbox_iter_done(&iter);
+    if (r) goto done;
+
+    /* Move messages */
+    if (ptrarray_size(&move_msgrecs)) {
+        struct appendstate as;
+        int r;
+        int nolink = !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
+
+        r = append_setup_mbox(&as, dst_mbox, req->userid, req->authstate,
+                              JACL_ADDITEMS, NULL, &jmap_namespace, 0,
+                              EVENT_MESSAGE_COPY);
+        if (!r) {
+            r = append_copy(src_mbox, &as, &move_msgrecs, nolink,
+                    mboxname_same_userid(src_mbox->name, dst_mbox->name));
+            if (!r) {
+                r = append_commit(&as);
+                if (!r) sync_log_append(dst_mbox->name);
+            }
+            else append_abort(&as);
+        }
+        msgrecord_t *mr;
+        while ((mr = ptrarray_pop(&move_msgrecs))) {
+            msgrecord_unref(&mr);
+        }
+        if (r) goto done;
+    }
+
+done:
+    if (r && !result->err) {
+        result->err = jmap_server_error(r);
+    }
+    jmap_closembox(req, &dst_mbox);
+    jmap_closembox(req, &src_mbox);
+    ptrarray_fini(&move_msgrecs);
+    return r;
+}
+
+static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
+                          struct mboxset *set,
                           enum mboxset_runmode mode,
-                          struct mboxset_result *result, strarray_t *update_intermediaries)
+                          struct mboxset_result *result,
+                          strarray_t *update_intermediaries)
 {
     int r = 0;
     mbentry_t *mbinbox = NULL, *mbentry = NULL;
@@ -2805,20 +2930,27 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
         goto done;
     }
 
-    if (!remove_msgs && !is_intermediate) {
-        /* Check if the mailbox has any messages */
-        struct mailbox *mbox = NULL;
-        struct mailbox_iter *iter = NULL;
-
-        r = jmap_openmbox(req, mbentry->name, &mbox, 0);
-        if (r) goto done;
-        iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
-        if (mailbox_iter_step(iter) != NULL) {
-            result->err = json_pack("{s:s}", "type", "mailboxHasEmail");
+    if (!is_intermediate) {
+        if (set->on_destroy_move_to_mailboxid) {
+            /* Move messages if not in any other mailbox */
+            _mbox_on_destroy_move(req, set, mbentry, result);
+            if (result->err) goto done;
         }
-        mailbox_iter_done(&iter);
-        jmap_closembox(req, &mbox);
-        if (result->err) goto done;
+        else if (!set->on_destroy_remove_msgs) {
+            /* Check if the mailbox has any messages */
+            struct mailbox *mbox = NULL;
+            struct mailbox_iter *iter = NULL;
+
+            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+            if (r) goto done;
+            iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
+            if (mailbox_iter_step(iter) != NULL) {
+                result->err = json_pack("{s:s}", "type", "mailboxHasEmail");
+            }
+            mailbox_iter_done(&iter);
+            jmap_closembox(req, &mbox);
+            if (result->err) goto done;
+        }
     }
 
     /* Destroy mailbox. */
@@ -2881,14 +3013,6 @@ done:
     mboxlist_entry_free(&mbinbox);
     mboxlist_entry_free(&mbentry);
 }
-
-struct mboxset {
-    struct jmap_set super;
-    ptrarray_t create;
-    ptrarray_t update;
-    strarray_t destroy;
-    int on_destroy_remove_msgs;
-};
 
 struct toposort {
     hash_table *parent_id_by_id;
@@ -3117,7 +3241,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
     for (i = 0; i < strarray_size(ops->del); i++) {
         const char *mbox_id = strarray_nth(ops->del, i);
         struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
-        _mbox_destroy(req, mbox_id, set->on_destroy_remove_msgs, mode, &result, update_intermediaries);
+        _mbox_destroy(req, mbox_id, set, mode, &result, update_intermediaries);
         if (result.err) {
             json_object_set(set->super.not_destroyed, mbox_id, result.err);
         }
@@ -3438,24 +3562,28 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
     strarray_fini(&update_intermediaries);
 }
 
-static int _mboxset_args_parse(jmap_req_t *req __attribute__((unused)),
+static int _mboxset_req_parse(jmap_req_t *req,
                                struct jmap_parser *parser __attribute__((unused)),
                                const char *key,
                                json_t *arg,
                                void *rock)
 {
     struct mboxset *set = (struct mboxset *) rock;
-    int r = 1;
+    int r = 0;
 
-    if (!strcmp(key, "onDestroyRemoveMessages") && json_is_boolean(arg)) {
+    if ((!strcmp(key, "onDestroyRemoveMessages") ||
+         !strcmp(key, "onDestroyRemoveEmails")) && json_is_boolean(arg)) {
         set->on_destroy_remove_msgs = json_boolean_value(arg);
+        r = 1;
     }
-
-    else if (!strcmp(key, "onDestroyRemoveEmails") && json_is_boolean(arg)) {
-        set->on_destroy_remove_msgs = json_boolean_value(arg);
+    else if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+        if (!strcmp(key, "onDestroyMoveToMailboxIfNoMailbox")) {
+            if (json_is_string(arg) || json_is_null(arg)) {
+                set->on_destroy_move_to_mailboxid = json_string_value(arg);
+                r = 1;
+            }
+        }
     }
-
-    else r = 0;
 
     return r;
 }
@@ -3469,8 +3597,48 @@ static void _mboxset_parse(jmap_req_t *req,
     size_t i;
     memset(set, 0, sizeof(struct mboxset));
 
-    jmap_set_parse(req, parser, mailbox_props, &_mboxset_args_parse,
+    jmap_set_parse(req, parser, mailbox_props, &_mboxset_req_parse,
                    set, &set->super, err);
+
+    /* Validate onDestroyMoveToMailboxIfNoMailbox */
+    if (*err == NULL && set->on_destroy_move_to_mailboxid) {
+        const char *dst_mboxid = set->on_destroy_move_to_mailboxid;
+        const char *error_desc = NULL;
+        int rights = jmap_myrights_mboxid(req, dst_mboxid);
+
+        if ((rights & ACL_LOOKUP) == 0) {
+            error_desc = "not found";
+        }
+        else if ((rights & ACL_READ_WRITE) != ACL_READ_WRITE) {
+            error_desc = "no permission";
+        }
+        else {
+            const char *mboxid;
+            json_t *jval;
+            json_object_foreach(set->super.update, mboxid, jval) {
+                if (!strcmp(mboxid, dst_mboxid)) {
+                    error_desc = "mailbox must not be updated";
+                    break;
+                }
+            }
+            size_t i;
+            json_array_foreach(set->super.destroy, i, jval) {
+                if (!strcmp(json_string_value(jval), dst_mboxid)) {
+                    error_desc = "mailbox must not be destroyed";
+                    break;
+                }
+            }
+        }
+        if (error_desc) {
+            *err = json_pack("{s:s s:[s] s:s}",
+                    "type",
+                        "invalidArguments",
+                    "arguments",
+                        "onDestroyMoveToMailboxIfNoMailbox",
+                    "description",
+                        error_desc);
+        }
+    }
     if (*err) return;
 
     /* create */
@@ -3480,7 +3648,7 @@ static void _mboxset_parse(jmap_req_t *req,
         struct mboxset_args *args = xzmalloc(sizeof(struct mboxset_args));
         json_t *set_err = NULL;
 
-        _mbox_setargs_parse(jarg, &myparser, args, req, /*is_create*/1);
+        _mboxset_args_parse(jarg, &myparser, args, req, /*is_create*/1);
         args->creation_id = xstrdup(creation_id);
         if (json_array_size(myparser.invalid)) {
             set_err = json_pack("{s:s}", "type", "invalidProperties");
@@ -3505,7 +3673,7 @@ static void _mboxset_parse(jmap_req_t *req,
         /* Parse Mailbox/set arguments  */
         struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
         struct mboxset_args *args = xzmalloc(sizeof(struct mboxset_args));
-        _mbox_setargs_parse(jarg, &myparser, args, req, /*is_create*/0);
+        _mboxset_args_parse(jarg, &myparser, args, req, /*is_create*/0);
         if (args->mbox_id && strcmp(args->mbox_id, mbox_id)) {
             jmap_parser_invalid(&myparser, "id");
         }
