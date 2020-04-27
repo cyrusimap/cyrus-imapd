@@ -316,6 +316,15 @@ static int zlib_decompress(struct transaction_t *txn __attribute__((unused)),
 #endif /* HAVE_ZLIB */
 
 
+static void on_frame_recv_start_cb(wslay_event_context_ptr ev __attribute__((unused)),
+                                   const struct wslay_event_on_frame_recv_start_arg *arg,
+                                   void *user_data __attribute__((unused)))
+{
+    syslog(LOG_DEBUG,
+           "on_frame_recv_start_cb: opcode=%s; rsv=0x%x; fin=0x%x; length=%ld",
+           wslay_str_opcode(arg->opcode), arg->rsv, arg->fin, arg->payload_length);
+}
+
 #define COMP_FAILED_ERR    "Compressing message failed"
 #define DECOMP_FAILED_ERR  "Decompressing message failed"
 
@@ -660,6 +669,10 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
         if (r != SASL_OK) syslog(LOG_WARNING, "sasl_encode64: %d", r);
     }
 
+    if (config_getswitch(IMAPOPT_DEBUG)) {
+        callbacks.on_frame_recv_start_callback = &on_frame_recv_start_cb;
+    }
+
     /* Create server context */
     r = wslay_event_context_server_init(&ev, &callbacks, txn);
     if (r) {
@@ -768,10 +781,11 @@ HIDDEN void ws_output(struct transaction_t *txn)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
     wslay_event_context_ptr ev = ctx->event;
+    int want_read = wslay_event_want_read(ev);
     int want_write = wslay_event_want_write(ev);
 
-    syslog(LOG_DEBUG, "ws_output()  eof: %d, want write: %d",
-           txn->conn->pin->eof, want_write);
+    syslog(LOG_DEBUG, "ws_output()  eof: %d, want read: %d, want write: %d",
+           txn->conn->pin->eof, want_read, want_write);
 
     if (want_write) {
         /* Send queued frame(s) */
@@ -780,6 +794,11 @@ HIDDEN void ws_output(struct transaction_t *txn)
             syslog(LOG_ERR, "wslay_event_send: %s", wslay_strerror(r));
             txn->flags.conn = CONN_CLOSE;
         }
+    }
+    else if (!want_read) {
+        /* Connection is done */
+        syslog(LOG_DEBUG, "closing connection");
+        txn->flags.conn = CONN_CLOSE;
     }
 }
 
@@ -833,11 +852,6 @@ HIDDEN void ws_input(struct transaction_t *txn)
                 txn->error.desc = wslay_strerror(r);
             }
         }
-    }
-    else if (!want_write) {
-        /* Connection is done */
-        syslog(LOG_DEBUG, "connection closed");
-        txn->flags.conn = CONN_CLOSE;
     }
 
     if (goaway) {
