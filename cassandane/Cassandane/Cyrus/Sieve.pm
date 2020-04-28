@@ -43,6 +43,7 @@ use warnings;
 use IO::File;
 use version;
 use utf8;
+use File::Temp qw/tempfile/;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -3025,6 +3026,85 @@ EOF
     $self->check_messages({ 1 => $msg2 }, check_guid => 0);
 }
 
+sub test_jmapquery_attachmentindexing
+    :min_version_3_3 :needs_component_jmap :needs_search_xapian
+    :SearchAttachmentExtractor :SearchIndexParts :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $imap = $self->{store}->get_client();
+    my $instance = $self->{instance};
+
+    my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
+    my (undef, $filename) = tempfile('tmpXXXXXX', OPEN => 0,
+        DIR => $instance->{basedir} . "/tmp");
+
+    xlog "Start a dummy extractor server";
+    my $handler = sub {
+        my ($conn, $req) = @_;
+        open HANDLE, ">$filename" || die;
+        close HANDLE;
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } else {
+            my $res = HTTP::Response->new(200);
+            $res->content("data");
+            $conn->send_response($res);
+        }
+    };
+    $instance->start_httpd($handler, $uri->port());
+
+    xlog "Install JMAP sieve script";
+    $imap->create("INBOX.matches") or die;
+    $instance->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+    "body": "plaintext"
+  }
+.
+  )
+{
+  fileinto "INBOX.matches";
+}
+EOF
+    );
+
+    xlog "Deliver a message with attachment";
+    my $body = << 'EOF';
+--047d7b33dd729737fe04d3bde348
+Content-Type: text/plain; charset=UTF-8
+
+plaintext
+
+--047d7b33dd729737fe04d3bde348
+Content-Type: application/pdf
+
+data
+
+--047d7b33dd729737fe04d3bde348--
+EOF
+    $body =~ s/\r?\n/\r\n/gs;
+    my $msg1 = $self->{gen}->generate(
+        subject => "Message 1",
+        mime_type => "multipart/mixed",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body,
+    );
+    $instance->deliver($msg1);
+
+    xlog "Assert that extractor did NOT get called";
+    $self->assert(not -e $filename);
+
+    xlog "Assert that message got moved into INBOX.matches";
+    $self->{store}->set_folder('INBOX.matches');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
 sub test_notify
     :needs_component_sieve
 {
@@ -3049,6 +3129,5 @@ EOF
     $self->assert_not_null($addcal);
     $self->assert_not_null($updatecal);
 }
-
 
 1;
