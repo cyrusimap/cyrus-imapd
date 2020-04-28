@@ -70,6 +70,7 @@ sub new
             "envelope relational regex subaddress copy date index " .
             "imap4flags body");
     }
+    $config->set(sievenotifier => 'mailto');
 
     return $class->SUPER::new({
             config => $config,
@@ -2867,6 +2868,30 @@ EOF
     $self->check_messages({ 1 => $msg2 }, check_guid => 0);
 }
 
+sub test_notify
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["notify", "enotify"];
+
+notify :method "addcal" :options ["calendarId","6ae6a9e0-53f5-4559-8c5a-520208f86cfd"];
+notify "https://cyrusimap.org/notifiers/updatecal";
+EOF
+        );
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    my $data = $self->{instance}->getnotify();
+    my ($addcal) = grep { $_->{METHOD} eq 'addcal' } @$data;
+    my ($updatecal) = grep { $_->{METHOD} eq 'https://cyrusimap.org/notifiers/updatecal' } @$data;
+
+    $self->assert_not_null($addcal);
+    $self->assert_not_null($updatecal);
+}
 
 
 1;
