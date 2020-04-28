@@ -483,10 +483,10 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
 
         | reject string          { $$ = build_rej_err(sscript, $1, $2); }
         | NOTIFY ntags string    { $$ = build_notify(sscript,
-                                                     ENOTIFY, $2, $3); }
+                                                     B_ENOTIFY, $2, $3); }
 
         | NOTIFY ntags           { $$ = build_notify(sscript,
-                                                     NOTIFY, $2, NULL); }
+                                                     B_NOTIFY, $2, NULL); }
 
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
         | INCLUDE itags string   { $$ = build_include(sscript, $2, $3); }
