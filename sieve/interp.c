@@ -136,7 +136,7 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG)
             buf_appendcstr(&buf, " x-cyrus-log");
 #endif
-        if (i->jmapquery &&
+        if (i->snooze &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_SNOOZE))
             buf_appendcstr(&buf, " x-cyrus-snooze");
 
