@@ -16,62 +16,35 @@ Quick install
 A quick guide to getting a basic installation of Cyrus up and running in 5 minutes.
 
 The first place to start with a new installation of Cyrus IMAP is with
-your OS distribution of choice and their packaging, where available.  If
-there is no Cyrus IMAP 3.0 package available yet from your distro,
-download the `latest stable package`_ : version |imap_current_stable_version|.
+your OS distribution of choice and their packaging, where available.
 
-.. _latest stable package: ftp://ftp.cyrusimap.org/cyrus-imapd/debs/
+If there is no Cyrus IMAP |imap_current_stable_version| package available yet
+from your distro, download the official source tarball from GitHub_.  The
+:ref:`compiling` guide will help you get it built and installed.
 
-We only provide limited options for reference packages, so use a
-supported distribution whenever possible.  At this time the only
-official Cyrus packages are for Debian Jessie (with backports enabled).
+.. _GitHub: https://github.com/cyrusimap/cyrus-imapd/releases
 
-Please download both the packages (\*.deb) and the signature files.
-Installation is a two step process:
 
-1. Install Cyrus reference packages
+1. Install Cyrus package(s)
 -----------------------------------
 
-First, invoke the ``dpkg -i`` command with the list of all packages::
+Install the Cyrus IMAP package(s), either from your distribution's package
+manager, or from a release tarball.
 
-    $ sudo dpkg -i \
-        cyrus-common_3.0.1-jessie_amd64.deb  \
-        cyrus-doc_3.0.1-jessie_all.deb  \
-        cyrus-imapd_3.0.1-jessie_amd64.deb  \
-        cyrus-pop3d_3.0.1-jessie_amd64.deb  \
-        cyrus-admin_3.0.1-jessie_all.deb  \
-        cyrus-murder_3.0.1-jessie_amd64.deb  \
-        cyrus-replication_3.0.1-jessie_amd64.deb  \
-        cyrus-nntpd_3.0.1-jessie_amd64.deb  \
-        cyrus-caldav_3.0.1-jessie_amd64.deb  \
-        cyrus-clients_3.0.1-jessie_amd64.deb  \
-        cyrus-dev_3.0.1-jessie_amd64.deb  \
-        libcyrus-imap-perl_3.0.1-jessie_amd64.deb
+Your distribution might have split Cyrus IMAP into several packages.  Check
+their documentation if you're not sure what you need.
 
-That step will produce an error, as there will doubtless be unmet
-dependencies.  Not to worry, there's a fix for that...
-
-2. Use "apt-get install -f" to complete installation
-----------------------------------------------------
-
-Now invoke ``apt-get install -f`` to pull in the dependencies and
-complete the installation::
-
-    $ sudo apt-get install -f
-
-The packaging should pull along all necessary support libraries, etc..
-
-3. Setup the cyrus:mail user and group
+2. Setup the cyrus:mail user and group
 --------------------------------------
 
 .. include:: /assets/cyrus-user-group.rst
 
-4. Setting up authentication with SASL
+3. Setting up authentication with SASL
 --------------------------------------
 
 .. include:: /assets/setup-sasl-sasldb.rst
 
-5. Setup mail delivery from your MTA
+4. Setup mail delivery from your MTA
 ------------------------------------
 
 Your Cyrus IMAP server will want to receive the emails accepted by your
@@ -82,12 +55,12 @@ protocol called LMTP, which is usually supported by your SMTP server.
 
 .. include:: /assets/setup-postfix.rst
 
-6. Protocol ports
+5. Protocol ports
 -----------------
 
 .. include:: /assets/services.rst
 
-7. Configuring Cyrus
+6. Configuring Cyrus
 --------------------
 
 (Nearly there)
@@ -160,68 +133,14 @@ For example::
     vi /etc/cyrus.conf
     ...
 
-8. Launch Cyrus
+7. Launch Cyrus
 ---------------
 
-If using our packages on Debian Jessie, you will have a SystemV
-compatible init script installed, with systemd support.  Start Cyrus
-with the following command::
+If using a distribution package, you probably now have an init script
+installed, that you can invoke with your system's usual service control
+mechanism.
 
-    systemctl start cyrus-imapd
-
-Tada!  You should now have a working Cyrus IMAP server.
-
-Feature overview
-----------------
-
-The features (compile-time configuration options) supported in our
-reference packages are:
-
-Cyrus Server configured components
-    * event notification : yes
-    * gssapi             : /usr
-    * autocreate         : yes
-    * idled              : yes
-    * httpd              : yes
-    * kerberos V4        : no
-    * murder             : yes
-    * nntpd              : yes
-    * replication        : yes
-    * sieve              : yes
-    * calalarmd          : no
-    * jmap               : yes
-    * objectstore        : no
-    * backup             : no
-
-External dependencies
-    * ldap              : yes
-    * openssl           : yes
-    * zlib              : yes
-    * pcre              : yes
-    * clamav            : yes
-    * snmp              : yes
-    * caringo           : no
-    * openio            : no
-    * nghttp2           : no
-    * brotli            : no
-    * xml2              : yes
-    * ical              : yes
-    * icu4c             : no
-    * shapelib          : no
-
-Database support
-    * mysql             : no
-    * postgresql        : no
-    * sqlite            : yes
-
-Search engine
-    * squat             : yes
-    * xapian            : yes
-    * xapian_flavor     : vanilla
-
-Hardware support
-    * SSE4.2            : yes
-
-Installation directories
-    * prefix            : /usr
-    * sysconfdir        : /etc
+If you built from source, you will need to write your own init script.
+The simplest one will simply start/stop the :cyrusman:`master(8)` binary,
+with suitable options, as root (master will drop root privileges itself
+as soon as it possibly can).
