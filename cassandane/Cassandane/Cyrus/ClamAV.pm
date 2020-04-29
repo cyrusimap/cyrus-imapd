@@ -158,19 +158,19 @@ sub test_remove_infected_slow
     my ($v) = Cassandane::Instance->get_version();
     if ($v >= 3) {
         $self->assert_matches(
-            qr/user\.cassandane\s+1\s+UNREAD\s+Eicar-Test-Signature/,
+            qr/user\.cassandane\s+1\s+UNREAD\s+Eicar(?:-Test){0,1}-Signature/,
             $out);
         $self->assert_matches(
-            qr/shared\.folder\s+1\s+UNREAD\s+Eicar-Test-Signature/,
+            qr/shared\.folder\s+1\s+UNREAD\s+Eicar(?:-Test){0,1}-Signature/,
             $out);
     }
     else {
         # pre-3.0 a different output format was used
         $self->assert_matches(
-            qr/Working\son\sshared\.folder\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar-Test-Signature/,
+            qr/Working\son\sshared\.folder\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar(?:-Test){0,1}-Signature/,
             $out);
         $self->assert_matches(
-            qr/Working\son\suser\.cassandane\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar-Test-Signature/,
+            qr/Working\son\suser\.cassandane\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar(?:-Test){0,1}-Signature/,
             $out);
     }
 
