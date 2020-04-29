@@ -1,6 +1,6 @@
-.. _upgrade:
-
 .. highlight:: none
+
+.. _upgrade:
 
 ================
 Upgrading to 3.2
