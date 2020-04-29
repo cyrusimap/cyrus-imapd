@@ -1374,4 +1374,105 @@ sub test_not_match
     $self->assert_deep_equals([2], $uids);
 }
 
+sub test_striphtml_alternative
+    :min_version_3_0 :needs_search_xapian
+{
+    my ($self) = @_;
+    my $talk = $self->{store}->get_client();
+
+    xlog "Index message with both html and plain text part";
+    $self->make_message("test",
+        mime_type => "multipart/alternative",
+        mime_boundary => "boundary_1",
+        body => ""
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/plain; charset=\"UTF-8\"\r\n"
+          . "\r\n"
+          . "<div>This is a plain text body with <b>html</b>.</div>\r\n"
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/html; charset=\"UTF-8\"\r\n"
+          . "\r\n"
+          . "<div>This is an html body.</div>\r\n"
+          . "\r\n--boundary_1--\r\n"
+    ) || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Assert that HTML in plain text is stripped";
+    my $uids = $talk->search('fuzzy', 'body', 'html') || die;
+    $self->assert_deep_equals([1], $uids);
+
+    $uids = $talk->search('fuzzy', 'body', 'div') || die;
+    $self->assert_deep_equals([], $uids);
+}
+
+sub test_striphtml_plain
+    :min_version_3_0 :needs_search_xapian
+{
+    my ($self) = @_;
+    my $talk = $self->{store}->get_client();
+
+    xlog "Index message with only plain text part";
+    $self->make_message("test",
+        body => ""
+          . "<div>This is a plain text body with <b>html</b>.</div>\r\n"
+    ) || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Assert that HTML in plain-text only isn't stripped";
+    my $uids = $talk->search('fuzzy', 'body', 'html') || die;
+    $self->assert_deep_equals([1], $uids);
+
+    $uids = $talk->search('fuzzy', 'body', 'div') || die;
+    $self->assert_deep_equals([1], $uids);
+}
+
+sub test_striphtml_rfc822
+    :min_version_3_0 :needs_search_xapian
+{
+    my ($self) = @_;
+    my $talk = $self->{store}->get_client();
+
+    xlog "Index message with attached rfc822 message";
+    $self->make_message("test",
+        mime_type => "multipart/mixed",
+        mime_boundary => "boundary_1",
+        body => ""
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/plain; charset=\"UTF-8\"\r\n"
+          . "\r\n"
+          . "<main>plain</main>\r\n"
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: message/rfc822\r\n"
+          . "\r\n"
+          . "Subject: bar\r\n"
+          . "From: from\@local\r\n"
+          . "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n"
+          . "To: to\@local\r\n"
+          . "Mime-Version: 1.0\r\n"
+          . "Content-Type: multipart/alternative; boundary=boundary_2\r\n"
+          . "\r\n"
+          . "\r\n--boundary_2\r\n"
+          . "Content-Type: text/plain; charset=\"UTF-8\"\r\n"
+          . "\r\n"
+          . "<div>embeddedplain with <b>html</b>.</div>\r\n"
+          . "\r\n--boundary_2\r\n"
+          . "Content-Type: text/html; charset=\"UTF-8\"\r\n"
+          . "\r\n"
+          . "<div>embeddedhtml.</div>\r\n"
+          . "\r\n--boundary_2--\r\n"
+    ) || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Assert that HTML in top-level message isn't stripped";
+    my $uids = $talk->search('fuzzy', 'body', 'main') || die;
+    $self->assert_deep_equals([1], $uids);
+
+    xlog "Assert that HTML in embedded message plain text is stripped";
+    $uids = $talk->search('fuzzy', 'body', 'div') || die;
+    $self->assert_deep_equals([], $uids);
+    $uids = $talk->search('fuzzy', 'body', 'html') || die;
+    $self->assert_deep_equals([1], $uids);
+
+}
+
 1;
