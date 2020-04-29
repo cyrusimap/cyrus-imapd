@@ -3428,14 +3428,22 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
     /* Prepare post-processing filter for guid callback */
     if (exprrank & 0x1) {
         hash_table foldernum_by_mboxname = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&foldernum_by_mboxname, numfolders+1, 0);
+        construct_hash_table(&foldernum_by_mboxname, numfolders+2, 0);
         uint32_t num;
         for (num = 0; num < numfolders; num++) {
             const char *mboxname = conversations_folder_name(cstate, num);
-            hash_insert(mboxname, (void*)((uintptr_t)num+1), &foldernum_by_mboxname);
+            if (!mboxname_isnonimapmailbox(mboxname, 0)) {
+                hash_insert(mboxname, (void*)((uintptr_t)num+1), &foldernum_by_mboxname);
+            }
         }
+        char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+        if (!hash_lookup(inboxname, &foldernum_by_mboxname)) {
+            hash_insert(inboxname, (void*)((uintptr_t)num+1), &foldernum_by_mboxname);
+        }
+        free(inboxname);
         rock.msgexpr = guidsearch_expr_build(NULL, search->expr,
                                             &foldernum_by_mboxname);
+
         free_hash_table(&foldernum_by_mboxname, NULL);
     }
 
