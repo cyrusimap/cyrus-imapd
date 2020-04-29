@@ -6149,10 +6149,16 @@ static void cmd_search(char *tag, int usinguid)
     }
     else {
         n = index_search(imapd_index, searchargs, usinguid);
-        snprintf(mytime, sizeof(mytime), "%2.3f",
-                 (clock() - start) / (double) CLOCKS_PER_SEC);
-        prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
-                    error_message(IMAP_OK_COMPLETED), n, mytime);
+        int r = cmd_cancelled(/*insearch*/1);
+        if (!r) {
+            snprintf(mytime, sizeof(mytime), "%2.3f",
+                    (clock() - start) / (double) CLOCKS_PER_SEC);
+            prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
+                        error_message(IMAP_OK_COMPLETED), n, mytime);
+        }
+        else {
+            prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+        }
     }
 
     freesearchargs(searchargs);
