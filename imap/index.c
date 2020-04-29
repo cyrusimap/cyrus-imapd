@@ -5021,6 +5021,7 @@ struct getsearchtext_rock
     const strarray_t *partids;
     int snippet_iteration; /* 0..no snippet, 1..first run, 2..second run */
     struct extractor_ctx *ext;
+    strarray_t striphtml; /* strip HTML from these plain text body part ids */
 };
 
 static void stuff_part(search_text_receiver_t *receiver,
@@ -5725,9 +5726,19 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         }
         else {
             /* body-like */
+            int mycharset_flags = str->charset_flags;
+            const char *mysubtype = subtype;
+
+            if (!strcmpsafe(subtype, "PLAIN") && part &&
+                    strarray_find(&str->striphtml, part, 0) >= 0) {
+                /* Strip any HTML tags from plain text before indexing */
+                mycharset_flags &= ~(CHARSET_SKIPHTML|CHARSET_KEEPHTML);
+                mysubtype = "HTML";
+            }
+
             str->receiver->begin_part(str->receiver, SEARCH_PART_BODY, content_guid);
-            charset_extract(extract_cb, str, data, charset, encoding, subtype,
-                            str->charset_flags);
+            charset_extract(extract_cb, str, data, charset, encoding, mysubtype,
+                           mycharset_flags);
             str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
         }
     }
@@ -5760,6 +5771,90 @@ static void append_alnum(struct buf *buf, const char *ss)
         if (Uisalnum(*s))
             buf_putc(buf, *s);
     }
+}
+
+static int find_striphtml_parts(message_t *msg, strarray_t *striphtml)
+{
+    const struct body *root;
+    int r = message_get_cachebody(msg, &root);
+    if (r) return r;
+
+    ptrarray_t submsgs = PTRARRAY_INITIALIZER;
+    ptrarray_t work = PTRARRAY_INITIALIZER;
+
+    /* Add top-level message and find all rfc822 messages */
+    ptrarray_push(&submsgs, (void*)root);
+    ptrarray_push(&work, (void*) root);
+    const struct body *body;
+    while ((body = ptrarray_pop(&work))) {
+        if (!strcmpsafe(body->type, "MESSAGE") &&
+            !strcmpsafe(body->subtype, "RFC822")) {
+            ptrarray_push(&submsgs, (void*)body);
+        }
+        int i;
+        for (i = 0; i < body->numparts; i++) {
+            ptrarray_push(&work, body->subpart + i);
+        }
+    }
+
+    /* Process top-level and each embedded message separately */
+    while ((root = ptrarray_pop(&submsgs))) {
+        /* Check if submsg has any HTML part */
+        int has_htmlpart = 0;
+        int i;
+        for (i = 0; i < root->numparts; i++) {
+            ptrarray_push(&work, root->subpart + i);
+        }
+        while ((body = ptrarray_pop(&work))) {
+            if (!strcmpsafe(body->type, "TEXT") &&
+                !strcmpsafe(body->subtype, "HTML") &&
+                (!body->disposition || !strcmp(body->disposition, "INLINE"))) {
+                has_htmlpart = 1;
+                break;
+            }
+            else if (!strcmpsafe(body->type, "MESSAGE") &&
+                     !strcmpsafe(body->subtype, "RFC822")) {
+                continue;
+            }
+            else if (body->numparts) {
+                for (i = 0; i < body->numparts; i++) {
+                    ptrarray_push(&work, body->subpart + i);
+                }
+            }
+        }
+
+        if (!has_htmlpart) continue;
+
+        /* Keep track of plain text body part ids that
+         * coexist with HTML bodies in the same submsg */
+
+        for (i = 0; i < root->numparts; i++) {
+            ptrarray_push(&work, root->subpart + i);
+        }
+        while ((body = ptrarray_pop(&work))) {
+            if (!strcmpsafe(body->type, "TEXT") &&
+                !strcmpsafe(body->subtype, "PLAIN")) {
+                if (body->part_id) {
+                    strarray_push(striphtml, body->part_id);
+                }
+            }
+            else if (!strcmpsafe(body->type, "MESSAGE") &&
+                     !strcmpsafe(body->subtype, "RFC822")) {
+                continue;
+            }
+            else if (body->numparts) {
+                int i;
+                for (i = 0; i < body->numparts; i++) {
+                    ptrarray_push(&work, body->subpart + i);
+                }
+            }
+        }
+    }
+
+    ptrarray_fini(&submsgs);
+    ptrarray_fini(&work);
+
+    return 0;
 }
 
 EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
@@ -5886,8 +5981,14 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
             receiver->end_part(receiver, SEARCH_PART_TYPE);
         }
 
-        /* A regular message. Generate snippets in two passes. */
+        /* A regular message. */
+
+        /* Determine when to strip HTML from plain text */
+        find_striphtml_parts(msg, &str.striphtml);
+
+        /* Generate snippets in two passes. */
         str.snippet_iteration = snippet ? 1 : 0;
+
         r = message_foreach_section(msg, getsearchtext_cb, &str);
         if (snippet) {
             if (receiver->flush) {
@@ -5907,6 +6008,7 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
 done:
     buf_free(&buf);
     strarray_fini(&types);
+    strarray_fini(&str.striphtml);
 
     return r;
 }
