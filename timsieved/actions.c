@@ -100,37 +100,35 @@ int actions_init(void)
 
 int actions_setuser(const char *userid)
 {
-  char userbuf[1024], *user, *domain = NULL;
-  size_t size = 1024, len;
-  int result;
+  char *user, *domain = NULL;
+  struct buf buf = BUF_INITIALIZER;
+  int result, ret = TIMSIEVE_OK;
 
-  char *sieve_dir = (char *) xzmalloc(size+1);
-
-  sieved_userid = xstrdup(userid);
-  user = (char *) userid;
-  if (config_virtdomains && strchr(user, '@')) {
+  sieved_userid = user = xstrdup(userid);
+  if (config_virtdomains) {
       /* split the user and domain */
-      strlcpy(userbuf, userid, sizeof(userbuf));
-      user = userbuf;
       if ((domain = strrchr(user, '@'))) *domain++ = '\0';
   }
 
-  len = strlcpy(sieve_dir, sieve_dir_config, size);
+  buf_setcstr(&buf, sieve_dir_config);
 
   if (domain) {
       char dhash = (char) dir_hash_c(domain, config_fulldirhash);
-      len += snprintf(sieve_dir+len, size-len, "%s%c/%s",
-                      FNAME_DOMAINDIR, dhash, domain);
+      buf_printf(&buf, "%s%c/%s", FNAME_DOMAINDIR, dhash, domain);
   }
 
   if (sieved_userisadmin) {
-      strlcat(sieve_dir, "/global", size);
+      buf_appendcstr(&buf, "/global");
   }
   else {
       char hash = (char) dir_hash_c(user, config_fulldirhash);
-      snprintf(sieve_dir+len, size-len, "/%c/%s", hash, user);
+      buf_printf(&buf, "/%c/%s", hash, user);
   }
 
+  /* rejoin user and domain */
+  if (domain) domain[-1] = '@';
+
+  const char *sieve_dir = buf_cstring(&buf);
   result = chdir(sieve_dir);
   if (result != 0) {
       result = cyrus_mkdir(sieve_dir, 0755);
@@ -138,13 +136,12 @@ int actions_setuser(const char *userid)
       if (!result) result = chdir(sieve_dir);
       if (result) {
           syslog(LOG_ERR, "mkdir %s: %m", sieve_dir);
-          free(sieve_dir);
-          return TIMSIEVE_FAIL;
+          ret = TIMSIEVE_FAIL;
       }
   }
 
-  free(sieve_dir);
-  return TIMSIEVE_OK;
+  buf_free(&buf);
+  return ret;
 }
 
 /*
