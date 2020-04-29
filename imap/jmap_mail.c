@@ -371,6 +371,7 @@ static char *_decode_to_utf8(const char *charset,
     *is_encoding_problem = counts.invalid || counts.replacement;
 
     const char *charset_id = charset_canon_name(cs);
+
     if (!strncasecmp(charset_id, "UTF-32", 6)) {
         /* Special-handle UTF-32. Some clients announce the wrong endianess. */
         if (counts.invalid || counts.replacement) {
@@ -386,9 +387,39 @@ static char *_decode_to_utf8(const char *charset,
                     free(text);
                     text = guess;
                     counts = guess_counts;
+                    textlen = strlen(text);
+                    charset_id = charset_canon_name(guess_cs);
                 }
             }
             charset_free(&guess_cs);
+        }
+    }
+    else if (!charset_id || !strcasecmp("US-ASCII", charset_id)) {
+        int has_cntrl = 0;
+        size_t i;
+        for (i = 0; i < textlen; i++) {
+            if (iscntrl(text[i])) {
+                has_cntrl = 1;
+                break;
+            }
+        }
+        if (has_cntrl) {
+            /* Could be ISO-2022-JP */
+            charset_t guess_cs = charset_lookupname("ISO-2022-JP");
+            if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
+                char *guess = charset_to_utf8(data, datalen, guess_cs, enc);
+                if (guess) {
+                    struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
+                    if (!guess_counts.invalid && !guess_counts.replacement) {
+                        free(text);
+                        text = guess;
+                        counts = guess_counts;
+                        textlen = strlen(text);
+                        charset_id = charset_canon_name(guess_cs);
+                    }
+                }
+                charset_free(&guess_cs);
+            }
         }
     }
 
