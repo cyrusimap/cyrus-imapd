@@ -1147,13 +1147,18 @@ rst_prolog += """
 #"""
 
 # Use this as :task:`18`
+# XXX would be really nice to be able to have 'github-tarball' and 'github-sig'
+# XXX handlers here, except that these urls require expanding the version string
+# XXX twice, and the sphinx extlinks thingy currently only supports a single %s
 extlinks = {
-        'task':('https://git.cyrus.foundation/T%s', 'Task #'),
         'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #'),
-        'cyrus-2.5':('http://www.cyrusimap.org/2.5%s',None),
-        'cyrus-3.0':('http://www.cyrusimap.org/3.0%s',None),
-        'cyrus-dev':('http://www.cyrusimap.org/dev%s',None),
-        'cyrus-stable': ('http://www.cyrusimap.org/3.0%s',None),
+        'cyrus-2.5':('https://www.cyrusimap.org/2.5%s',None),
+        'cyrus-3.0':('https://www.cyrusimap.org/3.0%s',None),
+        'cyrus-dev':('https://www.cyrusimap.org/dev%s',None),
+        'cyrus-stable': ('https://www.cyrusimap.org%s',None),
+        'github-release':
+            ('https://github.com/cyrusimap/cyrus-imapd/releases/tag/cyrus-imapd-%s',
+             'cyrus-imapd-'),
     }
 
 # Change this to whatever your output root is
