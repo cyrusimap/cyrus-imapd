@@ -1786,7 +1786,22 @@ static int _recurid_instanceof_cb(icalcomponent *comp __attribute__((unused)),
                                   void *vrock)
 {
     struct recurid_instanceof_rock *rock = vrock;
-    int cmp = icaltime_compare(start, rock->recurid);
+    struct icaltimetype recurid = rock->recurid;
+
+    if (start.is_date && !recurid.is_date) {
+        start.is_date = 0;
+        start.hour = 0;
+        start.minute = 0;
+        start.second = 0;
+    }
+    else if (!start.is_date && recurid.is_date) {
+        recurid.is_date = 0;
+        recurid.hour = 0;
+        recurid.minute = 0;
+        recurid.second = 0;
+    }
+
+    int cmp = icaltime_compare(start, recurid);
     if (cmp == 0) {
         rock->found = 1;
     }
