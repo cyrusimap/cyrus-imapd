@@ -1112,42 +1112,59 @@ static int sieve_fileinto(void *ac,
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mdata = (deliver_data_t *) mc;
-    message_data_t *md = mdata->m;
-    int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
-    struct imap4flags imap4flags = { fc->imapflags, sd->authstate };
     int ret = IMAP_MAILBOX_NONEXISTENT;
 
     const char *userid = mbname_userid(sd->mbname);
     char *intname = NULL;
 
-    if (fc->headers) {
-        mdata = setup_special_delivery(mdata, fc->headers);
-        if (!mdata) return SIEVE_FAIL;
-        else md = mdata->m;
+    if (fc->resolved_mailbox) {
+        intname = xstrdup(fc->resolved_mailbox);
     }
-
-    if (fc->mailboxid) {
-        intname = mboxlist_find_uniqueid(fc->mailboxid, userid, sd->authstate);
-        if (intname &&
-            (mboxname_isdeletedmailbox(intname, NULL) ||
-             mboxname_isnonimapmailbox(intname, 0))) {
-            free(intname);
-            intname = NULL;
+    else {
+        if (fc->mailboxid) {
+            intname = mboxlist_find_uniqueid(fc->mailboxid, userid, sd->authstate);
+            if (intname &&
+                (mboxname_isdeletedmailbox(intname, NULL) ||
+                 mboxname_isnonimapmailbox(intname, 0))) {
+                free(intname);
+                intname = NULL;
+            }
         }
-    }
-    if (!intname) {
-        if (fc->specialuse) {
-            intname = mboxname_from_external(fc->specialuse, sd->ns, userid);
-            ret = mboxlist_lookup(intname, NULL, NULL);
-            if (ret) free(intname);
-        }
-        if (ret) {
-            intname = mboxname_from_externalUTF8(fc->mailbox, sd->ns, userid);
+        if (!intname) {
+            if (fc->specialuse) {
+                intname = mboxname_from_external(fc->specialuse, sd->ns, userid);
+                ret = mboxlist_lookup(intname, NULL, NULL);
+                if (ret) free(intname);
+            }
+            if (ret) {
+                intname = mboxname_from_externalUTF8(fc->mailbox, sd->ns, userid);
+            }
         }
     }
 
     // didn't resolve a name, this will always fail
     if (!intname) goto done;
+
+    if (!mdata) {
+        /* just doing destination mailbox resolution */
+        if (fc->resolved_mailbox) free(intname);
+        else fc->resolved_mailbox = intname;
+        return SIEVE_OK;
+    }
+
+
+    message_data_t *md = mdata->m;
+    int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
+    struct imap4flags imap4flags = { fc->imapflags, sd->authstate };
+
+    if (fc->headers) {
+        mdata = setup_special_delivery(mdata, fc->headers);
+        if (!mdata) {
+            ret = SIEVE_FAIL;
+            goto done;
+        }
+        else md = mdata->m;
+    }
 
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                           &imap4flags, NULL, userid, sd->authstate, md->id,
@@ -1180,9 +1197,9 @@ static int sieve_fileinto(void *ac,
         }
     }
 
-done:
     if (fc->headers) cleanup_special_delivery(mdata);
 
+done:
     if (!ret) {
         prometheus_increment(CYRUS_LMTP_SIEVE_FILEINTO_TOTAL);
         snmp_increment(SIEVE_FILEINTO, 1);
@@ -1395,26 +1412,99 @@ static int sieve_keep(void *ac,
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;
+    int ret = IMAP_MAILBOX_NONEXISTENT;
+
+    const char *userid = mbname_userid(sd->mbname);
+    char *intname = NULL;
+
+    if (kc->resolved_mailbox) {
+        intname = xstrdup(kc->resolved_mailbox);
+    }
+    else {
+        if (!userid) {
+            /* shared mailbox request */
+            ret = mboxlist_lookup(mbname_intname(sd->mbname), NULL, NULL);
+            if (!ret) intname = xstrdup(mbname_intname(sd->mbname));
+        }
+        else {
+            mbname_t *mbname = mbname_dup(sd->mbname);
+
+            if (strarray_size(mbname_boxes(mbname))) {
+                ret = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+                if (ret &&
+                    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
+                    fuzzy_match(mbname)) {
+                    /* try delivery to a fuzzy matched mailbox */
+                    ret = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+                }
+            }
+            if (ret) {
+                /* normal delivery to INBOX */
+                mbname_truncate_boxes(mbname, 0);
+                ret = 0;
+            }
+
+            intname = xstrdup(mbname_intname(mbname));
+            mbname_free(&mbname);
+        }
+    }
+
+    // didn't resolve a name, this will always fail
+    if (!intname) goto done;
+
+    if (!mydata) {
+        /* just doing destination mailbox resolution */
+        if (kc->resolved_mailbox) free(intname);
+        else kc->resolved_mailbox = intname;
+        return SIEVE_OK;
+    }
+
+
+    message_data_t *md = mydata->m;
+    int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
     struct imap4flags imap4flags = { kc->imapflags, sd->authstate };
-    int ret;
+    const char *authuser = mydata->authuser;
+    const struct auth_state *authstate = mydata->authstate;
+    struct auth_state *freeme = NULL;
+    int acloverride = 0;
 
     if (kc->headers) {
         mydata = setup_special_delivery(mydata, kc->headers);
-        if (!mydata) return SIEVE_FAIL;
+        if (!mydata) {
+            ret = SIEVE_FAIL;
+            goto done;
+        }
+        else md = mydata->m;
     }
 
-    ret = deliver_local(mydata, &imap4flags, sd->mbname);
+    if (mboxname_isusermailbox(intname, 1)) {
+        authstate = freeme = auth_newstate(userid);
+        authuser = userid;
+        acloverride = 1;
+    }
+
+    ret = deliver_mailbox(md->f, mydata->content, mydata->stage, md->size,
+                          &imap4flags, NULL, authuser, authstate, md->id,
+                          userid, mydata->notifyheader, intname, md->date,
+                          0 /*savedate*/, quotaoverride, acloverride);
+
+    if (freeme) auth_freestate(freeme);
 
     if (kc->headers) cleanup_special_delivery(mydata);
  
+  done:
     if (!ret) {
         prometheus_increment(CYRUS_LMTP_SIEVE_KEEP_TOTAL);
         snmp_increment(SIEVE_KEEP, 1);
-        return SIEVE_OK;
+        ret = SIEVE_OK;
     } else {
         *errmsg = error_message(ret);
-        return SIEVE_FAIL;
+        ret = SIEVE_FAIL;
     }
+
+    free(intname);
+
+    return ret;
 }
 
 static int sieve_notify(void *ac,

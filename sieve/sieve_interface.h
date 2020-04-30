@@ -161,11 +161,13 @@ typedef struct sieve_fileinto_context {
     int do_create :1;
     const char *mailboxid;
     struct buf *headers;
+    char *resolved_mailbox;
 } sieve_fileinto_context_t;
 
 typedef struct sieve_keep_context {
     strarray_t *imapflags;
     struct buf *headers;
+    char *resolved_mailbox;
 } sieve_keep_context_t;
 
 typedef struct sieve_notify_context {
