@@ -2862,7 +2862,10 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
     }
 
     /* Find all messages that only exist in source mailbox */
-    int src_foldernum = conversation_folder_number(req->cstate, src_mbentry->name, 0);
+    int src_foldernum =
+        conversation_folder_number(req->cstate,
+                                   CONV_FOLDER_KEY_MBE(req->cstate, src_mbentry),
+                                   0);
     if (src_foldernum < 0) {
         // if the folder doesn't exist yet, it means there have never been any emails created in it!
         goto done;
