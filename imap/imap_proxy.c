@@ -993,7 +993,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 sep = ' ';
             }
             if (idate) {
-                prot_printf(imapd_out, "%cINTERNALDATE %s", sep, flags);
+                prot_printf(imapd_out, "%cINTERNALDATE %s", sep, idate);
                 sep = ' ';
             }
             prot_printf(imapd_out, ")\r\n");
