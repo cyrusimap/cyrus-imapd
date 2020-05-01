@@ -3129,7 +3129,7 @@ static struct guidsearch_expr *guidsearch_expr_build(search_expr_t *parent,
                         ge = gc;
                     }
                     else if (!ptrarray_size(&ge->children)) {
-                        ge->op = SEOP_FALSE;
+                        ge->op = GSEOP_FALSE;
                     }
                 }
                 else if (e->attr == &_emailsearch_folders_otherthan_attr) {
