@@ -432,7 +432,7 @@ static int begin_handling(void)
 
         default:
             if (config_getswitch(IMAPOPT_AUDITLOG))
-                syslog(LOG_NOTICE, "auditlog: failed userid=<%s> client=<%s>", key, smmapd_clienthost);
+                syslog(LOG_NOTICE, "auditlog: failed userid=<%s> client=<%s>", key ? key : "", smmapd_clienthost);
             if (errstring)
                 prot_printf(map_out, SIZE_T_FMT ":PERM %s (%s),",
                             5+strlen(error_message(r))+3+strlen(errstring),
