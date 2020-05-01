@@ -122,7 +122,7 @@ int actions_setuser(const char *userid)
       buf_appendcstr(&buf, "/global");
   }
   else {
-      buf_setcstr(&buf, user_sieve_path(userid);
+      buf_setcstr(&buf, user_sieve_path(userid));
   }
 
   if (sieve_dir) free(sieve_dir);
