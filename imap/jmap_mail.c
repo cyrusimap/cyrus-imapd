@@ -2270,10 +2270,18 @@ static void _email_parse_filter_cb(jmap_req_t *req,
                                    json_t **err)
 {
     struct email_contactfilter *cfilter = rock;
+    struct jmap_email_filter_parser_rock frock = { parser, unsupported } ;
+    jmap_email_filter_parse_ctx_t parse_ctx = {
+        &jmap_email_filtercondition_validate,
+        &jmap_filter_parser_invalid,
+        &jmap_filter_parser_push_index,
+        &jmap_filter_parser_pop,
+        req->using_capabilities,
+        &frock
+    };
 
     /* Parse filter */
-    jmap_email_filtercondition_parse(parser, filter, unsupported,
-                                     req->using_capabilities);
+    jmap_email_filtercondition_parse(filter, &parse_ctx);
     if (json_array_size(parser->invalid)) return;
 
     /* Gather contactgroups */

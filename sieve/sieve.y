@@ -3164,129 +3164,43 @@ static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
 }
 
 #ifdef WITH_JMAP
-#include "imap/json_support.h"
+#include "imap/jmap_api.h"
+#include "imap/jmap_mail_query_parse.h"
 
-static int jmap_parse_condition(json_t *cond, strarray_t *path)
+struct filter_rock {
+    strarray_t *path;
+    unsigned is_invalid;
+};
+
+static void filter_parser_invalid(const char *field, void *rock)
 {
-    json_t *val;
-    const char *field;
+    struct filter_rock *frock = (struct filter_rock *) rock;
 
-    json_object_foreach(cond, field, val) {
-        /* inMailbox* and *InThreadHaveKeywords properties are incompatible */
-        if (!strcmp(field, "before") ||
-            !strcmp(field, "after")) {
-            if (!json_is_utcdate(val)) break;
-        }
-        else if (!strcmp(field, "minSize") ||
-                 !strcmp(field, "maxSize")) {
-            if (!json_is_integer(val)) break;
-        }
-        else if (!strcmp(field, "hasAttachment")) {
-            if (!json_is_boolean(val)) break;
-        }
-        else if (!strcmp(field, "text") ||
-                 !strcmp(field, "from") ||
-                 !strcmp(field, "to") ||
-                 !strcmp(field, "cc") ||
-                 !strcmp(field, "bcc") ||
-                 !strcmp(field, "subject") ||
-                 !strcmp(field, "body")) {
-            if (!json_is_string(val)) break;
-        }
-        else if (!strcmp(field, "header")) {
-            size_t n = json_array_size(val);
-
-            if (n == 0 || n > 2) break;
-
-            do {
-                const char *s = json_string_value(json_array_get(val, --n));
-
-                if (!s || !strlen(s)) {
-                    struct buf buf = BUF_INITIALIZER;
-
-                    buf_printf(&buf, "header[%lu]", n);
-                    strarray_pushm(path, buf_release(&buf));
-                    return 0;
-                }
-            } while (n);
-        }
-        /* JMAP Search Extension: https://cyrusimap.org/ns/jmap/search */
-        else if (!strcmp(field, "attachmentBody")) {
-            if (!json_is_string(val)) break;
-        }
-        /* JMAP Mail Extension: https://cyrusimap.org/ns/jmap/mail */
-        else if (!strcmp(field, "attachmentName") ||
-                 !strcmp(field, "attachmentType")) {
-            if (!json_is_string(val)) break;
-        }
-        /* JMAP Search Extension: https://cyrusimap.org/ns/jmap/search */
-        else if (!strcmp(field, "deliveredTo")) {
-            if (!json_is_string(val)) break;
-        }
-        /* JMAP Mail Extension: https://cyrusimap.org/ns/jmap/mail */
-        else if (!strcmp(field, "fromContactGroupId") ||
-                 !strcmp(field, "toContactGroupId") ||
-                 !strcmp(field, "ccContactGroupId") ||
-                 !strcmp(field, "bccContactGroupId")) {
-            if (!json_is_string(val)) break;
-        }
-        /* JMAP Mail Extension: https://cyrusimap.org/ns/jmap/mail */
-        else if (!strcmp(field, "fromAnyContact") ||
-                 !strcmp(field, "toAnyContact") ||
-                 !strcmp(field, "ccAnyContact") ||
-                 !strcmp(field, "bccAnyContact")) {
-            if (!json_is_boolean(val)) break;
-        }
-        else break;
-    }
-
-    if (field) {
-        strarray_push(path, field);
-        return 0;
-    }
-
-    return 1;
+    if (!frock->is_invalid++) strarray_push(frock->path, field);
 }
 
-static int jmap_parse_filter(json_t *filter, strarray_t *path)
+static void filter_parser_push_index(const char *field, size_t index,
+                                     const char *name, void *rock)
 {
-    json_t *arg, *val;
-    const char *s;
-    size_t i;
+    struct filter_rock *frock = (struct filter_rock *) rock;
+    struct buf buf = BUF_INITIALIZER;
 
-    if (!JNOTNULL(filter) || !json_is_object(filter)) return 0;
-
-    arg = json_object_get(filter, "operator");
-    if (!arg) return jmap_parse_condition(filter, path);
-
-    strarray_push(path, "operator");
-    if (!json_is_string(arg)) return 0;
-
-    s = json_string_value(arg);
-    if (strcmp("AND", s) && strcmp("OR", s) && strcmp("NOT", s)) return 0;
-    free(strarray_pop(path));
-
-    arg = json_object_get(filter, "conditions");
-    if (!json_array_size(arg)) {
-        strarray_push(path, "conditions");
-        return 0;
+    if (!frock->is_invalid) {
+        if (name) buf_printf(&buf, "%s[%zu:%s]", field, index, name);
+        else buf_printf(&buf, "%s[%zu]", field, index);
+        strarray_pushm(frock->path, buf_release(&buf));
     }
+}
 
-    json_array_foreach(arg, i, val) {
-        struct buf buf = BUF_INITIALIZER;
+static void filter_parser_pop(void *rock)
+{
+    struct filter_rock *frock = (struct filter_rock *) rock;
 
-        buf_printf(&buf, "conditions[%lu]", i);
-        strarray_pushm(path, buf_release(&buf));
-        if (!jmap_parse_filter(val, path)) return 0;
-        free(strarray_pop(path));
-    }
-
-    return 1;
+    if (!frock->is_invalid) free(strarray_pop(frock->path));
 }
 
 static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
 {
-    strarray_t path = STRARRAY_INITIALIZER;
     json_t *jquery;
     json_error_t jerr;
 
@@ -3294,15 +3208,38 @@ static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
 
     /* validate query */
     jquery = json_loads(json, 0, &jerr);
-    if (!jmap_parse_filter(jquery, &path)) {
-        char *s = strarray_join(&path, "/");
+    if (jquery) {
+        strarray_t path = STRARRAY_INITIALIZER;
+        strarray_t capabilities = STRARRAY_INITIALIZER;
+        struct filter_rock frock = { &path, 0 };
+        jmap_email_filter_parse_ctx_t parse_ctx = {
+            NULL,
+            &filter_parser_invalid,
+            &filter_parser_push_index,
+            &filter_parser_pop,
+            &capabilities,
+            &frock
+        };
 
-        if (s) sieveerror_f(sscript, "invalid jmapquery argument: '%s'", s);
-        else sieveerror_f(sscript, "invalid jmapquery format");
+        strarray_append(&capabilities, JMAP_URN_MAIL);
+        strarray_append(&capabilities, JMAP_MAIL_EXTENSION);
+        strarray_append(&capabilities, JMAP_SEARCH_EXTENSION);
 
-        free(s);
+        jmap_email_filter_parse(jquery, &parse_ctx);
+
+        if (frock.is_invalid) {
+            char *s = strarray_join(&path, "/");
+
+            sieveerror_f(sscript, "invalid jmapquery argument: '%s'", s);
+            free(s);
+        }
+
+        strarray_fini(&path);
+        strarray_fini(&capabilities);
     }
-    strarray_fini(&path);
+    else {
+        sieveerror_f(sscript, "invalid jmapquery format");
+    }
 
     t->u.jquery = json_dumps(jquery, JSON_COMPACT);
     json_decref(jquery);
