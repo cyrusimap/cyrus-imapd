@@ -1805,7 +1805,10 @@ sieve_test_SOURCES = \
     imap/mutex_fake.c \
     sieve/sieve_interface.h
 if JMAP
-sieve_test_SOURCES += imap/jmap_util.c imap/jmap_mail_query.c imap/jmap_mail_query_parse.c
+sieve_test_SOURCES += \
+	imap/jmap_util.c \
+	imap/jmap_mail_query.c \
+	imap/jmap_mail_query_parse.c
 endif
 sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
