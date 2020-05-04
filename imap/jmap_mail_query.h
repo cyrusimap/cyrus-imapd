@@ -48,17 +48,8 @@
 
 #include "strarray.h"
 
+#include "jmap_mail_query_parse.h"
 #include "jmap_util.h"
-
-extern void jmap_email_filtercondition_parse(struct jmap_parser *parser,
-                                             json_t *filter,
-                                             json_t *unsupported,
-                                             const strarray_t *capabilities);
-
-extern void jmap_email_filter_parse(struct jmap_parser *parser,
-                                    json_t *filter,
-                                    json_t *unsupported,
-                                    const strarray_t *capabilities);
 
 #ifdef WITH_DAV
 
@@ -102,6 +93,18 @@ extern void jmap_emailbodies_fini(struct emailbodies *bodies);
 
 extern int jmap_emailbodies_extract(const struct body *root,
                                     struct emailbodies *bodies);
+
+struct jmap_email_filter_parser_rock {
+    struct jmap_parser *parser;
+    json_t *unsupported;
+};
+
+extern void jmap_filter_parser_invalid(const char *field, void *rock);
+extern void jmap_filter_parser_push_index(const char *field, size_t index,
+                                          const char *name, void *rock);
+extern void jmap_filter_parser_pop(void *rock);
+extern void jmap_email_filtercondition_validate(const char *field, json_t *arg,
+                                                void *rock);
 
 /* Matches MIME message mime against the JMAP Email query
  * filter.
