@@ -1502,15 +1502,24 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "mailbox_maxmessages_addressbook", 0, INT, "3.3.0" }
 /* Limit the number of messages that may exist in a single mailbox of
-   "addressbook" type. Default (0) means no limit */
+   "addressbook" type. Default (0) means no limit.  This limit applies
+   after quotas are checked, so if you have both quota limits and this
+   set, then you will be denied if you are either over quota or over
+   this per-mailbox count. */
 
 { "mailbox_maxmessages_calendar", 0, INT, "3.3.0" }
 /* Limit the number of messages that may exist in a single mailbox of
-   "calendar" type. Default (0) means no limit */
+   "calendar" type. Default (0) means no limit.  This limit applies
+   after quotas are checked, so if you have both quota limits and this
+   set, then you will be denied if you are either over quota or over
+   this per-mailbox count. */
 
 { "mailbox_maxmessages_email", 0, INT, "3.3.0" }
 /* Limit the number of messages that may exist in a single mailbox of
-   "email" (normal) type. Default (0) means no limit */
+   "email" (normal) type. Default (0) means no limit.  This limit applies
+   after quotas are checked, so if you have both quota limits and this
+   set, then you will be denied if you are either over quota or over
+   this per-mailbox count. */
 
 { "mailnotifier", NULL, STRING, "2.3.17" }
 /* Notifyd(8) method to use for "MAIL" notifications.  If not set, "MAIL"
