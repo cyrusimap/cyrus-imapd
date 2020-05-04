@@ -21,7 +21,6 @@ notifications:
   email:
     recipients:
     - jenkins@cyrus.works
-    on_pull_requests: false
     on_success: change
     on_failure: always
   slack:
@@ -29,4 +28,4 @@ notifications:
     on_success: change
     on_failure: always
     rooms:
-      secure: KkxhNDQv+mKP4Pot8bEgzwXyP+wlxuy2CGRTlDAknhlzRZZMJKM2qV5pHm10X/JmUpgwVapqthDvejzgwC574g6Z1MRZ3DWtTfZtkcjEq+dDjnoJYJ7sfWI2GVVmU4OiJfTlvafawbLIpnUh791t4psRwPCyQd6B1/kvu3R9ITrq826wsJ5K8OnSRGSUmRl+C0UOUGYh9p1AVUP3rxtCcR2hetIsC/RG4uSHzt/wQNAQ/EkvZzga0kLXJoaolWavcdymubKJMnUenWLCkXUxQlTY3IKjD5itaXMYt4/aX6UhYS+77Sd/8UpUvx8uZXEu55si5P9tJIIsug1QqlooH/cz0ZQzFWH4D4esqqXuvNAiyBmlZ9LDzM4dtIzacuMKP5oAuwUhHpF0CSvvfE/KaQ446j1jX/CEVs6JgtTiijunmkGu86ylkWpboMHqal4BGKw15L0rkRw6VyLGY9S7GD6rQ3ojFGv9CjMQN960IBUgIDQmyJmu+6UihuVCvwZB5cPtGLyLh8sW/kKbUu6b4ElgszDI2DZutJeRPhD2YDmfNTBO/EYz/h/KWNgZNJzXZ5wSpaz7LMSfBUyRABdPEvddzctt3/k0c48J+sEY8NYqVTg8njh6Nz3aAWKp8zejQFfpEXyGa2JSMz4f0LR4dwNN1pTDVkeMJl5FiGvn8s4=
+      - secure: KkxhNDQv+mKP4Pot8bEgzwXyP+wlxuy2CGRTlDAknhlzRZZMJKM2qV5pHm10X/JmUpgwVapqthDvejzgwC574g6Z1MRZ3DWtTfZtkcjEq+dDjnoJYJ7sfWI2GVVmU4OiJfTlvafawbLIpnUh791t4psRwPCyQd6B1/kvu3R9ITrq826wsJ5K8OnSRGSUmRl+C0UOUGYh9p1AVUP3rxtCcR2hetIsC/RG4uSHzt/wQNAQ/EkvZzga0kLXJoaolWavcdymubKJMnUenWLCkXUxQlTY3IKjD5itaXMYt4/aX6UhYS+77Sd/8UpUvx8uZXEu55si5P9tJIIsug1QqlooH/cz0ZQzFWH4D4esqqXuvNAiyBmlZ9LDzM4dtIzacuMKP5oAuwUhHpF0CSvvfE/KaQ446j1jX/CEVs6JgtTiijunmkGu86ylkWpboMHqal4BGKw15L0rkRw6VyLGY9S7GD6rQ3ojFGv9CjMQN960IBUgIDQmyJmu+6UihuVCvwZB5cPtGLyLh8sW/kKbUu6b4ElgszDI2DZutJeRPhD2YDmfNTBO/EYz/h/KWNgZNJzXZ5wSpaz7LMSfBUyRABdPEvddzctt3/k0c48J+sEY8NYqVTg8njh6Nz3aAWKp8zejQFfpEXyGa2JSMz4f0LR4dwNN1pTDVkeMJl5FiGvn8s4=
