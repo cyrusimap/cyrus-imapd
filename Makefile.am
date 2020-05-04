@@ -1174,7 +1174,8 @@ if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
 
 if JMAP
-imap_lmtpd_SOURCES += imap/jmap_util.c imap/jmap_mail_query.c imap/jmap_mail_query_parse.c
+imap_lmtpd_SOURCES += \
+	imap/jmap_util.c imap/jmap_mail_query.c imap/jmap_mail_query_parse.c
 endif # JMAP
 
 endif # SIEVE
@@ -1806,9 +1807,7 @@ sieve_test_SOURCES = \
     sieve/sieve_interface.h
 if JMAP
 sieve_test_SOURCES += \
-	imap/jmap_util.c \
-	imap/jmap_mail_query.c \
-	imap/jmap_mail_query_parse.c
+	imap/jmap_util.c imap/jmap_mail_query.c imap/jmap_mail_query_parse.c
 endif
 sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
