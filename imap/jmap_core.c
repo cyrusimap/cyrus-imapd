@@ -604,13 +604,13 @@ static int jmap_blob_set(struct jmap_req *req)
 
         json_t *jitem = json_object_get(arg, "content");
         if (JNOTNULL(jitem) && json_is_string(jitem)) {
-            buf_init_ro_cstr(buf, json_string_value(jitem));
+            buf_init_ro(buf, json_string_value(jitem), json_string_length(jitem));
         }
         else {
             json_t *jitem64 = json_object_get(arg, "content64");
             if (JNOTNULL(jitem64) && json_is_string(jitem64)) {
-                const char *val64 = json_string_value(jitem64);
-                int r = charset_decode(buf, val64, strlen(val64), ENCODING_BASE64);
+                int r = charset_decode(buf, json_string_value(jitem64),
+                                       json_string_length(jitem64), ENCODING_BASE64);
                 if (r) buf_free(buf);
             }
         }
