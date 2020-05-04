@@ -1500,6 +1500,18 @@ Blank lines and lines beginning with ``#'' are ignored.
    that fills the entire 128 available slots.  Default is NULL, which is
    no flags.  Example: $Label1 $Label2 $Label3 NotSpam Spam */
 
+{ "mailbox_maxmessages_addressbook", 0, INT, "3.3.0" }
+/* Limit the number of messages that may exist in a single mailbox of
+   "addressbook" type. Default (0) means no limit */
+
+{ "mailbox_maxmessages_calendar", 0, INT, "3.3.0" }
+/* Limit the number of messages that may exist in a single mailbox of
+   "calendar" type. Default (0) means no limit */
+
+{ "mailbox_maxmessages_email", 0, INT, "3.3.0" }
+/* Limit the number of messages that may exist in a single mailbox of
+   "email" (normal) type. Default (0) means no limit */
+
 { "mailnotifier", NULL, STRING, "2.3.17" }
 /* Notifyd(8) method to use for "MAIL" notifications.  If not set, "MAIL"
    notifications are disabled. */

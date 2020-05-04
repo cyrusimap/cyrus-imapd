@@ -3899,6 +3899,34 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     /* GUID must not be null */
     assert(!message_guid_isnull(&record->guid));
 
+    /* Check mailbox type size limits */
+    if (mailbox->i.exists) {
+        if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
+            int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_ADDRESSBOOK);
+            if (limit && limit <= (int)mailbox->i.exists) {
+                syslog(LOG_ERR, "IOERROR: client hit per-addressbook exists limit %s", mailbox->name);
+                return IMAP_NO_OVERQUOTA;
+            }
+        }
+        else if (mailbox->mbtype & MBTYPE_CALENDAR) {
+            int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_CALENDAR);
+            if (limit && limit <= (int)mailbox->i.exists) {
+                syslog(LOG_ERR, "IOERROR: client hit per-calendar exists limit %s", mailbox->name);
+                return IMAP_NO_OVERQUOTA;
+            }
+        }
+        else if (!mailbox->mbtype) { // default == email
+            int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_EMAIL);
+            if (limit && limit <= (int)mailbox->i.exists) {
+                syslog(LOG_ERR, "IOERROR: client hit per-mailbox exists limit %s", mailbox->name);
+                return IMAP_NO_OVERQUOTA;
+            }
+        }
+        else {
+            /* no limits for other types defined yet */
+        }
+    }
+
     /* belt AND suspenders - check the previous record too */
     if (mailbox->i.num_records) {
         struct index_record prev;
