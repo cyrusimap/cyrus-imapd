@@ -3900,7 +3900,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     assert(!message_guid_isnull(&record->guid));
 
     /* Check mailbox type size limits */
-    if (mailbox->i.exists) {
+    if (mailbox->i.exists && !record->ignorelimits) {
         if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
             int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_ADDRESSBOOK);
             if (limit && limit <= (int)mailbox->i.exists) {
