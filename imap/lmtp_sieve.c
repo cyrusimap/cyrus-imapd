@@ -1197,8 +1197,9 @@ done:
     return ret;
 }
 
-#ifdef HAVE_JANSSON
+#if defined(HAVE_JANSSON) && defined(HAVE_ICAL)
 #include <jansson.h>
+#include <libical/ical.h>
 
 static void add_keywords(strarray_t *flags, json_t *set_keywords, int add)
 {
@@ -1243,14 +1244,30 @@ static int sieve_snooze(void *ac,
     /* Determine until time */
     time_t now = time(NULL), until;
     struct tm *tm = localtime(&now);
+    struct icaltimetype tt;
+    icaltimezone *tz = NULL;
+    unsigned wday, today_sec;
     int day_inc = -1;
     unsigned t;
     char tbuf[26];
 
-    if (sn->days & (1 << tm->tm_wday)) {
-        /* We have times for today - see if a future one is still available */
-        unsigned today_sec = 3600 * tm->tm_hour + 60 * tm->tm_min + tm->tm_sec;
+    if (sn->tzid) {
+        tz = icaltimezone_get_builtin_timezone_from_tzid(sn->tzid);
 
+        if (!tz) tz = icaltimezone_get_builtin_timezone(sn->tzid);
+        if (!tz) goto done;
+
+        tt = icaltime_current_time_with_zone(tz);
+        wday = icaltime_day_of_week(tt) - 1;
+        today_sec = 3600 * tt.hour + 60 * tt.minute + tt.second;
+    }
+    else {
+        wday = tm->tm_wday;
+        today_sec = 3600 * tm->tm_hour + 60 * tm->tm_min + tm->tm_sec;
+    }
+
+    if (sn->days & (1 << wday)) {
+        /* We have times for today - see if a future one is still available */
         size_t i;
         for (i = 0; i < arrayu64_size(sn->times); i++) {
             t = arrayu64_nth(sn->times, i);
@@ -1266,19 +1283,26 @@ static int sieve_snooze(void *ac,
 
         /* Find next available day */
         int i;
-        for (i = tm->tm_wday+1; i < 14; i++) {
+        for (i = wday + 1; i < 14; i++) {
             if (sn->days & (1 << (i % 7))) {
-                day_inc = i - tm->tm_wday;
+                day_inc = i - wday;
                 break;
             }
         }
     }
 
-    tm->tm_mday += day_inc;
-    tm->tm_hour = t / 3600;
-    tm->tm_min = (t % 3600) / 60;
-    tm->tm_sec = t % 60;
-    until = mktime(tm);
+    if (tz) {
+        icaltime_adjust(&tt, day_inc, -tt.hour, -tt.minute, -tt.second + t);
+        until = icaltime_as_timet_with_zone(tt, tz);
+    }
+    else {
+        tm->tm_mday += day_inc;
+        tm->tm_hour = t / 3600;
+        tm->tm_min = (t % 3600) / 60;
+        tm->tm_sec = t % 60;
+        until = mktime(tm);
+    }
+
     time_to_iso8601(until, tbuf, sizeof(tbuf), 1);
 
     /* Create snoozeDetails annotation */
@@ -1362,7 +1386,7 @@ done:
 
     return ret;
 }
-#endif /* HAVE_JANSSON */
+#endif /* HAVE_JANSSON && HAVE_ICAL */
 
 static int sieve_keep(void *ac,
                       void *ic __attribute__((unused)),
@@ -1849,7 +1873,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interp, &jmapquery);
 #endif
-#ifdef HAVE_JANSSON
+#if defined(HAVE_JANSSON) && defined(HAVE_ICAL)
     sieve_register_snooze(interp, &sieve_snooze);
 #endif
     sieve_register_parse_error(interp, &sieve_parse_error_handler);

@@ -252,6 +252,7 @@ struct Commandlist {
             strarray_t *removeflags;
             unsigned char days;
             arrayu64_t *times;
+            char *tzid;
         } sn;
     } u;
     struct Commandlist *next;

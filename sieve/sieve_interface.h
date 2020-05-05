@@ -150,6 +150,7 @@ typedef struct sieve_snooze_context {
     unsigned char days;
     arrayu64_t *times;
     int is_mboxid : 1;
+    const char *tzid;
     struct buf *headers;
 } sieve_snooze_context_t;
 

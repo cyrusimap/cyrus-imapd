@@ -100,7 +100,7 @@ int do_reject(action_list_t *a, int action, const char *msg)
  * incompatible with: [e]reject
  */
 int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
-              strarray_t *addflags, strarray_t *removeflags,
+              strarray_t *addflags, strarray_t *removeflags, const char *tzid,
               unsigned char days, arrayu64_t *times,
               strarray_t *imapflags, struct buf *headers)
 {
@@ -148,6 +148,7 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
     a->u.snz.days = days;
     a->u.snz.times = times;
     a->u.snz.is_mboxid = is_mboxid;
+    a->u.snz.tzid = tzid;
     a->u.snz.headers = headers;
 
     b->next = a;

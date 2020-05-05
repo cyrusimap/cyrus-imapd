@@ -531,6 +531,7 @@ void free_tree(commandlist_t *cl)
 
         case B_SNOOZE:
             free(cl->u.sn.mailbox);
+            free(cl->u.sn.tzid);
             strarray_free(cl->u.sn.addflags);
             strarray_free(cl->u.sn.removeflags);
             arrayu64_free(cl->u.sn.times);

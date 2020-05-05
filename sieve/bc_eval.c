@@ -1770,14 +1770,17 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 
         case B_SNOOZE:
+        case B_SNOOZE_ORIG:
         {
             const char *awaken_mbox = cmd.u.sn.mailbox;
+            const char *tzid = cmd.u.sn.tzid;
             strarray_t *addflags = NULL;
             strarray_t *removeflags = NULL;
             struct buf *headers = NULL;
 
             if (requires & BFE_VARIABLES) {
                 awaken_mbox = parse_string(awaken_mbox, variables);
+                tzid = parse_string(tzid, variables);
             }
 
             unwrap_flaglist(cmd.u.sn.addflags, &addflags,
@@ -1790,7 +1793,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             if (i->edited_headers) i->getheadersection(m, &headers);
 
             res = do_snooze(actions, awaken_mbox, cmd.u.sn.is_mboxid,
-                            addflags, removeflags,
+                            addflags, removeflags, tzid,
                             cmd.u.sn.days, cmd.u.sn.times, actionflags, headers);
 
             if (res == SIEVE_RUN_ERROR)

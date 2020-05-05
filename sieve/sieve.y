@@ -348,7 +348,7 @@ extern void sieverestart(FILE *f);
 %token JMAPQUERY
 
 /* x-cyrus-snooze */
-%token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS WEEKDAYS
+%token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS WEEKDAYS TZID
 %type <nval> weekdaylist weekdays weekday time
 %type <nl> timelist times time1
 %type <cl> sntags
@@ -1205,6 +1205,16 @@ sntags: /* empty */              {
                                      }
 
                                      $$->u.sn.days = $3;
+                                 }
+        | sntags TZID string     {
+                                     if ($$->u.sn.tzid != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":tzid");
+                                         free($$->u.sn.tzid);
+                                     }
+
+                                     $$->u.sn.tzid = $3;
                                  }
         ;
 
@@ -2631,7 +2641,8 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
     arrayu64_sort(times, NULL/*ascending*/);
     c->u.sn.times = times;
 
-    c->nargs = bc_precompile(c->args, "sSSiU",
+    c->nargs = bc_precompile(c->args, "ssSSiU",
+                             c->u.sn.tzid,
                              c->u.sn.mailbox,
                              c->u.sn.addflags,
                              c->u.sn.removeflags,

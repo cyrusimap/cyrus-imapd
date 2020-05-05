@@ -773,11 +773,14 @@ static void dump2(bytecode_input_t *d, int bc_len)
             break;
 
 
+        case B_SNOOZE_ORIG:
         case B_SNOOZE: {
             const char *sep = "";
             int i;
 
             printf("SNOOZE");
+            if (cmd.type >= B_SNOOZE)
+                print_string(" TZID", cmd.u.sn.tzid);
             print_string(cmd.u.sn.is_mboxid ? " MAILBOXID" : " MAILBOX",
                          cmd.u.sn.mailbox);
             print_stringlist("\n\tADDFLAGS", cmd.u.sn.addflags);
