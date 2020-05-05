@@ -2833,9 +2833,9 @@ static test_t *build_anyof(sieve_script_t *sscript, testlist_t *tl)
                 sscript->ignore_err = t->ignore_err = fail->ignore_err;
             }
         }
-    }
 
-    t->nargs = bc_precompile(t->args, "T", t->u.tl);
+        t->nargs = bc_precompile(t->args, "T", t->u.tl);
+    }
 
     return t;
 }
@@ -2863,9 +2863,9 @@ static test_t *build_allof(sieve_script_t *sscript, testlist_t *tl)
                 break;
             }
         }
-    }
 
-    t->nargs = bc_precompile(t->args, "T", t->u.tl);
+        t->nargs = bc_precompile(t->args, "T", t->u.tl);
+    }
 
     return t;
 }
