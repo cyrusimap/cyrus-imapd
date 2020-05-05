@@ -2628,6 +2628,57 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
+sub test_snooze_tzid
+    :needs_component_sieve :needs_component_calalarmd
+    :needs_component_jmap
+    :min_version_3_3
+{
+    my ($self) = @_;
+
+    my $snoozed = "INBOX.snoozed";
+    my $awakened = "INBOX.awakened";
+
+    my $localtz = DateTime::TimeZone->new( name => 'local' );
+    my $maildate = DateTime->now(time_zone => $localtz);
+    $maildate->add(DateTime::Duration->new(minutes => 1));
+    my $timestr = $maildate->strftime('%T');
+
+    xlog $self, "Install script with tzid";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["x-cyrus-snooze"];
+snooze :tzid "Australia/Melbourne" :mailbox "$awakened" :addflags "\$awakened" "$timestr";
+EOF
+    );
+
+    xlog $self, "Create the awakened folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create($awakened)
+         or die "Cannot create $awakened: $@";
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Create the snoozed folder";
+    $imaptalk->create($snoozed, "(USE (\\Snoozed))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Check that the message made it to the snoozed folder";
+    $self->{store}->set_folder($snoozed);
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog $self, "Trigger re-delivery of snoozed email";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $maildate->epoch() + 39600 + 90 ); # 11h + 90s to account for NY/Mel time diff
+
+    xlog $self, "Check that the message made it to the awakened folder";
+    $self->{store}->set_folder($awakened);
+    $msg1->set_attribute(flags => [ '\\Recent', '$awakened' ]);
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
 sub test_utf8_subject_encoded
     :min_version_3_0
     :needs_component_sieve
