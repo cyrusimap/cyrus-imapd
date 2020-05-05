@@ -2787,10 +2787,6 @@ static commandlist_t *build_log(sieve_script_t *sscript, char *text)
 {
     commandlist_t *c;
 
-    if (!supported(SIEVE_CAPA_LOG)) {
-          sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "x-cyrus-log");
-    }
-
     verify_utf8(sscript, text);
 
     c = new_command(B_LOG, sscript);

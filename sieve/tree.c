@@ -317,6 +317,11 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         supported = parse_script->support & SIEVE_CAPA_EDITHEADER;
         break;
 
+    case B_LOG:
+        capability = "x-cyrus-log";
+        supported = parse_script->support & SIEVE_CAPA_LOG;
+        break;
+
     case B_SNOOZE:
         capability = "x-cyrus-snooze";
         supported = parse_script->support & SIEVE_CAPA_SNOOZE;
