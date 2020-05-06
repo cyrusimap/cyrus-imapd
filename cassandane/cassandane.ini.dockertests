@@ -47,7 +47,6 @@ cleanup = no
 [valgrind]
 
 [cyrus default]
-zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
 
 [gdb]
 
@@ -56,6 +55,7 @@ zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
 # remove this when they're fixed!
 altnamespace = no
 unixhierarchysep = no
+zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
 
 [imaptest]
 basedir = /srv/imaptest.git
