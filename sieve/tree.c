@@ -209,7 +209,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
         break;
 
     case BC_JMAPQUERY:
-        capability = "x-cyrus-jmapquery";
+        capability = "vnd.cyrus.jmapquery";
         supported = parse_script->support & SIEVE_CAPA_JMAPQUERY;
         break;
     }
@@ -318,12 +318,12 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         break;
 
     case B_LOG:
-        capability = "x-cyrus-log";
+        capability = "vnd.cyrus.log";
         supported = parse_script->support & SIEVE_CAPA_LOG;
         break;
 
     case B_SNOOZE:
-        capability = "x-cyrus-snooze";
+        capability = "vnd.cyrus.snooze";
         supported = parse_script->support & SIEVE_CAPA_SNOOZE;
         break;
     }

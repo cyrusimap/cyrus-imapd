@@ -240,6 +240,7 @@ while (<STDIN>) {
             my $e;
             my $v;
             my $count = 0;
+            my $bit = 0;
 
             # strip quotes from default value
             $def = substr($2, 1, -1);
@@ -260,17 +261,28 @@ while (<STDIN>) {
             # output the enum_options
             @values = eval $4;
             foreach $v (@values) {
+                # split any aliases
+                my @aliases = split('=', $v);
+
+                # the first option is used for the value
+                $v = $aliases[0];
+
                 $e = "IMAP_ENUM_" . uc($opt) . "_" . uc($v);
                 $e =~ s/[^0-9A-Z_a-z]/_/g;
-                $enums .= " { \"$v\" , $e },\n     ";
+
+                # assign all aliases the same value
+                foreach $a (@aliases) {
+                    $enums .= " { \"$a\" , $e },\n     ";
+                    $count += 1;  # count the number of options
+                }
 
                 # add the corresponding bit value
-                $e .= " = (1LL<<$count)";
+                $e .= " = (1LL<<$bit)";
 
                 # add this enum to enum_values
                 push(@enum_values, $e);
 
-                $count += 1;  # count the number of values
+                $bit += 1;  # bump the bit
             }
 
             # [re]set the size of the enum_options array

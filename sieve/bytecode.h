@@ -133,13 +133,13 @@ typedef union
  * version 0x14 scripts implemented Environment (RFC5183)
  * version 0x15 scripts implemented Redirect-DeliverBy, Redirect-DSN (RFC6009)
  * version 0x16 scripts implemented draft-gondwana-sieve-mailboxid-01
- * version 0x17 scripts implemented x-cyrus-log
- * version 0x18 scripts implemented x-cyrus-jmapquery
- * version 0x19 scripts implemented x-cyrus-snooze
+ * version 0x17 scripts implemented vnd.cyrus.log (aka x-cyrus-log)
+ * version 0x18 scripts implemented vnd.cyrus.jmapquery (aka x-cyrus-jmapquery)
+ * version 0x19 scripts implemented vnd.cyrus.snooze (aka x-cyrus-snooze)
  * version 0x1A scripts store fileinto mailbox names in UTF8 rather than mUTF7
- * version 0x1B scripts re-implemented x-cyrus-snooze times as HH:MM:SS
- *                                                    AND :weekdays as [0, 6]
- * version 0x1C scripts added :tzid arguments to x-cyrus-snooze
+ * version 0x1B scripts re-implemented vnd.cyrus.snooze times as HH:MM:SS
+ *                                                      AND :weekdays as [0, 6]
+ * version 0x1C scripts added :tzid arguments to vnd.cyrus.snooze
  */
 #define BYTECODE_VERSION 0x1C
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
@@ -365,13 +365,13 @@ enum bytecode {
                                    <create: int> <flag-list: string-list>
                                    <copy: int> <mailbox: string>               */
 
-    B_LOG,                      /* require "x-cyrus-log"
+    B_LOG,                      /* require "vnd.cyrus.log"
 
                                    <message: string>                           */
 
     B_SNOOZE_ORIG,              /* legacy snooze w/o support for :tzid         */
 
-    B_SNOOZE,                   /* require x-cyrus-snooze
+    B_SNOOZE,                   /* require vnd.cyrus.snooze
                                    <mailbox-name/id: string>
                                    <addflags: string-list>
                                    <removeflags: string-list>
@@ -500,7 +500,7 @@ enum bytecode_comps {
 
                                    <patterns: string-list>                     */
 
-    BC_JMAPQUERY,               /* require "x-cyrus-jmapquery"
+    BC_JMAPQUERY,               /* require "vnd.cyrus.jmapquery"
 
                                    <query: string>                             */
 

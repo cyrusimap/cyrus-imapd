@@ -133,12 +133,12 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " editheader");
 #if 0  /* Don't advertise this to ManageSieve clients -
           We probably don't want end users adding this action themselves */
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG)
-            buf_appendcstr(&buf, " x-cyrus-log");
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_LOG)
+            buf_appendcstr(&buf, " vnd.cyrus.log");
 #endif
         if (i->snooze &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_SNOOZE))
-            buf_appendcstr(&buf, " x-cyrus-snooze");
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_SNOOZE))
+            buf_appendcstr(&buf, " vnd.cyrus.snooze");
 
         /* add tests */
         if (i->getenvelope &&
@@ -165,8 +165,8 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)
             buf_appendcstr(&buf, " duplicate");
         if (i->jmapquery &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_JMAPQUERY))
-            buf_appendcstr(&buf, " x-cyrus-jmapquery");
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_JMAPQUERY))
+            buf_appendcstr(&buf, " vnd.cyrus.jmapquery");
 
         /* add match-types */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)
@@ -537,14 +537,17 @@ static const struct sieve_capa_t {
     /* Mailboxid - draft-gondwana-sieve-mailboxid */
     { "mailboxid", SIEVE_CAPA_MAILBOXID },
 
-    /* log - x-cyrus-log */
-    { "x-cyrus-log", SIEVE_CAPA_LOG },
+    /* Log - vnd.cyrus.log */
+    { "vnd.cyrus.log", SIEVE_CAPA_LOG },
+    { "x-cyrus-log",   SIEVE_CAPA_LOG },              // legacy capability
 
-    /* JMAP Query - x-cyrus-jmapquery */
-    { "x-cyrus-jmapquery", SIEVE_CAPA_JMAPQUERY },
+    /* JMAP Query - vnd.cyrus.jmapquery */
+    { "vnd.cyrus.jmapquery", SIEVE_CAPA_JMAPQUERY },
+    { "x-cyrus-jmapquery",   SIEVE_CAPA_JMAPQUERY },  // legacy capability
 
-    /* Snooze - x-cyrus-snooze */
-    { "x-cyrus-snooze", SIEVE_CAPA_SNOOZE },
+    /* Snooze - vnd.cyrus.snooze */
+    { "vnd.cyrus.snooze", SIEVE_CAPA_SNOOZE },
+    { "x-cyrus-snooze",   SIEVE_CAPA_SNOOZE },        // legacy capability
 
     { NULL, 0 }
 };
@@ -725,18 +728,18 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 
     case SIEVE_CAPA_LOG:
         if (!(interp->log &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG))) capa = 0;
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_LOG))) capa = 0;
         break;
 
     case SIEVE_CAPA_JMAPQUERY:
         if (!(interp->jmapquery &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_JMAPQUERY)))
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_JMAPQUERY)))
             capa = 0;
         break;
 
     case SIEVE_CAPA_SNOOZE:
         if (!(interp->snooze &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_SNOOZE))) capa = 0;
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_SNOOZE))) capa = 0;
         break;
 
     default:

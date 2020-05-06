@@ -341,13 +341,13 @@ extern void sieverestart(FILE *f);
 /* draft-gondwana-sieve-mailboxid */
 %token MAILBOXID MAILBOXIDEXISTS
 
-/* x-cyrus-log */
+/* vnd.cyrus.log */
 %token LOG
 
-/* x-cyrus-jmapquery */
+/* vnd.cyrus.jmapquery */
 %token JMAPQUERY
 
-/* x-cyrus-snooze */
+/* vnd.cyrus.snooze */
 %token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS WEEKDAYS TZID
 %type <nval> weekdaylist weekdays weekday time
 %type <nl> timelist times time1
@@ -3260,7 +3260,7 @@ static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
 #else
 static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
 {
-    sieveerror_c(sscript, SIEVE_UNSUPP_EXT, "x-cyrus-jmapquery");
+    sieveerror_c(sscript, SIEVE_UNSUPP_EXT, "vnd.cyrus.jmapquery");
 
     free(json);  /* done with this string */
 

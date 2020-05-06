@@ -436,13 +436,13 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>mailboxidexists       return MAILBOXIDEXISTS;
 <INITIAL>:mailboxid            return MAILBOXID;
 
-    /* x-cyrus-log */
+    /* vnd.cyrus.log */
 <INITIAL>log                   return LOG;
 
-    /* x-cyrus-jmapquery */
+    /* vnd.cyrus.jmapquery */
 <INITIAL>jmapquery             return JMAPQUERY;
 
-    /* x-cyrus-snooze */
+    /* vnd.cyrus.snooze */
 <INITIAL>snooze                return SNOOZE;
 <INITIAL>:mailbox              return MAILBOX;
 <INITIAL>:addflags             return ADDFLAGS;

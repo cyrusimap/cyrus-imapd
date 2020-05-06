@@ -207,17 +207,17 @@ enum sieve_capa_flag {
     /* Mailboxid - draft-gondwana-sieve-mailboxid */
     SIEVE_CAPA_MAILBOXID    = 1LL<<46,
 
-    /* Log - x-cyrus-log */
+    /* Log - vnd.cyrus.log */
     SIEVE_CAPA_LOG          = 1LL<<47,
 
-    /* JMAP Query - x-cyrus-jmapquery */
+    /* JMAP Query - vnd.cyrus.jmapquery */
 #ifdef WITH_JMAP
     SIEVE_CAPA_JMAPQUERY    = 1LL<<48,
 #else
     SIEVE_CAPA_JMAPQUERY    = 0LL<<48, /* disabled at compile-time */
 #endif
 
-    /* Snooze - x-cyrus-snooze */
+    /* Snooze - vnd.cyrus.snooze */
     SIEVE_CAPA_SNOOZE       = 1LL<<49,
 };
 

@@ -963,8 +963,19 @@ static void config_read_file(const char *filename)
                         imapopts[opt].val.s = e->name;
                     else if (imapopts[opt].t == OPT_ENUM)
                         imapopts[opt].val.e = e->val;
-                    else
+                    else {
+                        const struct enum_option_s *pref = e;
+                        for (; pref > imapopts[opt].enum_options &&
+                                 pref[-1].val == e->val; pref--);
+                        if (pref != e) {
+                            syslog(LOG_WARNING,
+                                   "Value '%s' for option '%s'"
+                                   " is deprecated in favor of value '%s'",
+                                   e->name, imapopts[opt].optname, pref->name);
+                        }
+
                         imapopts[opt].val.x |= e->val;
+                    }
 
                     /* find the start of the next value */
                     for (p = q; *p && Uisspace(*p); p++);
