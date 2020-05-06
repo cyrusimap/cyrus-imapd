@@ -47,6 +47,7 @@ cleanup = no
 [valgrind]
 
 [cyrus default]
+zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
 
 [gdb]
 
