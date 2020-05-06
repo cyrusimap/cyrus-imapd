@@ -471,8 +471,11 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | flagaction flagtags stringlist
                                  { $$ = build_flag(sscript, $2, $3); }
 
-        /* MARK/UNMARK */ 
-        | flagmark               { $$ = new_command($1, sscript); }
+        /* MARK/UNMARK - translate into ADD/REMOVEFLAG "\\Flagged" */ 
+        | flagmark               { $$ = build_flag(sscript,
+                                                   new_command($1, sscript),
+                                                   strarray_split("\\Flagged",
+                                                                  NULL, 0)); }
 
         | ADDHEADER ahtags string string
                                  { $$ = build_addheader(sscript,
@@ -955,8 +958,8 @@ flagtags: /* empty */            { $$ = new_command($<nval>0, sscript); }
 
 
 /* MARK/UNMARK */
-flagmark: MARK                   { $$ = B_MARK;   }
-        | UNMARK                 { $$ = B_UNMARK; }
+flagmark: MARK                   { $$ = B_ADDFLAG;   }
+        | UNMARK                 { $$ = B_REMOVEFLAG; }
         ;
 
 

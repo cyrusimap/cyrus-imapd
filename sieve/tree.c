@@ -264,15 +264,8 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
     case B_SETFLAG:
     case B_ADDFLAG:
     case B_REMOVEFLAG:
-        capability = "imap[4]flags";
-        supported =
-            parse_script->support & (SIEVE_CAPA_IMAP4FLAGS | SIEVE_CAPA_IMAPFLAGS);
-        break;
-
-    case B_MARK:
-    case B_UNMARK:
-        capability = "imapflags";
-        supported = parse_script->support & SIEVE_CAPA_IMAPFLAGS;
+        capability = "imap4flags";
+        supported = parse_script->support & SIEVE_CAPA_IMAP4FLAGS;
         break;
 
     case B_DENOTIFY:

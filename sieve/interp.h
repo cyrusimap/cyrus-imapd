@@ -77,9 +77,6 @@ struct sieve_interp {
 
     sieve_parse_error *err;
 
-    /* site-specific imapflags for mark/unmark */
-    const strarray_t *markflags;
-
     const strarray_t *notifymethods;
 
     sieve_execute_error *execute_err;
@@ -134,7 +131,7 @@ enum sieve_capa_flag {
 
     /* IMAP4 Flags - RFC 5232 */
     SIEVE_CAPA_IMAP4FLAGS   = 1LL<<12,
-    SIEVE_CAPA_IMAPFLAGS    = 1LL<<13, /* draft-melnikov-sieve-imapflags-04 */
+    SIEVE_CAPA_IMAPFLAGS    = 0LL<<13, /* deprecated */
 
     /* Subaddress - RFC 5233 */
     SIEVE_CAPA_SUBADDRESS   = 1LL<<14,

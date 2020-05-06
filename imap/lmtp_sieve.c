@@ -1833,7 +1833,6 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_register_reject(interp, &sieve_reject);
     sieve_register_fileinto(interp, &sieve_fileinto);
     sieve_register_keep(interp, &sieve_keep);
-    sieve_register_imapflags(interp, &mark);
     sieve_register_notify(interp, &sieve_notify, &methods);
     sieve_register_size(interp, &getsize);
     sieve_register_mailboxexists(interp, &getmailboxexists);

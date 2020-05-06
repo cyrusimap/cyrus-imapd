@@ -1899,26 +1899,13 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 
         case B_MARK:
-        {
-            int n = i->markflags->count;
-
-            while (n) {
-                strarray_add_case(variables->var, i->markflags->data[--n]);
-            }
+            strarray_add_case(variables->var, "\\Flagged");
             break;
-        }
 
 
         case B_UNMARK:
-        {
-            int n = i->markflags->count;
-
-            while (n) {
-                strarray_remove_all_case(variables->var,
-                                         i->markflags->data[--n]);
-            }
+            strarray_remove_all_case(variables->var, "\\Flagged");
             break;
-        }
 
 
         case B_ADDFLAG:

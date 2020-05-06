@@ -114,9 +114,6 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         else if (i->vacation &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))
             buf_appendcstr(&buf, " vacation");
-        if (i->markflags &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS))
-            buf_appendcstr(&buf, " imapflags");
         if (i->notify &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)) {
             buf_appendcstr(&buf, " notify enotify");
@@ -252,17 +249,6 @@ EXPORTED void sieve_register_snooze(sieve_interp_t *interp, sieve_callback *f)
 EXPORTED void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->keep = f;
-}
-
-EXPORTED void sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark)
-{
-    static strarray_t default_mark = STRARRAY_INITIALIZER;
-
-    if (!default_mark.count)
-        strarray_append(&default_mark, "\\flagged");
-
-    interp->markflags =
-        (mark && mark->data && mark->count) ? mark : &default_mark;
 }
 
 EXPORTED void sieve_register_notify(sieve_interp_t *interp,
@@ -464,7 +450,7 @@ static const struct sieve_capa_t {
 
     /* IMAP4 Flags - RFC 5232 */
     { "imap4flags", SIEVE_CAPA_IMAP4FLAGS },
-    { "imapflags",  SIEVE_CAPA_IMAPFLAGS }, /* draft-melnikov-sieve-imapflags-04 */
+    { "imapflags",  SIEVE_CAPA_IMAP4FLAGS }, /* draft-melnikov-sieve-imapflags-04 */
 
     /* Subaddress - RFC 5233 */
     { "subaddress", SIEVE_CAPA_SUBADDRESS },
@@ -621,11 +607,6 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS)) capa = 0;
         break;
         
-    case SIEVE_CAPA_IMAPFLAGS:
-        if (!(interp->markflags->count &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS))) capa = 0;
-        break;
-
     case SIEVE_CAPA_SUBADDRESS:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)) capa = 0;
         break;

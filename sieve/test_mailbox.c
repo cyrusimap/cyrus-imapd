@@ -567,7 +567,6 @@ int main(int argc, char *argv[])
     char *tmpscript = NULL, *script = NULL, *extname = NULL;
     int c, force_fail = 0;
     int fd, res, r;
-    static strarray_t mark = STRARRAY_INITIALIZER;
     char *alt_config = NULL;
     script_data_t sd = { NULL, "", NULL, 0 };
     FILE *f;
@@ -724,9 +723,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    strarray_append(&mark, "\\flagged");
-    sieve_register_imapflags(i, &mark);
-
     sieve_register_notify(i, notify, NULL);
     sieve_register_parse_error(i, mysieve_error);
     sieve_register_execute_error(i, mysieve_execute_error);
@@ -796,7 +792,6 @@ int main(int argc, char *argv[])
 
     strarray_fini(&e_from);
     strarray_fini(&e_to);
-    strarray_fini(&mark);
 
     cyrus_done();
 

@@ -167,7 +167,6 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
     sieve_register_reject(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_fileinto(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_keep(interpreter, (sieve_callback *) &stub_generic);
-    sieve_register_imapflags(interpreter, NULL);
     sieve_register_notify(interpreter, &stub_notify, NULL);
     sieve_register_size(interpreter, (sieve_get_size *) &stub_generic);
     sieve_register_mailboxexists(interpreter,
