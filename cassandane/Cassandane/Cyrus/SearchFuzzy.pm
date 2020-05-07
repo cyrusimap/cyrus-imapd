@@ -1308,7 +1308,7 @@ sub test_xapian_index_partid
 }
 
 sub test_detect_language
-    :min_version_3_0 :needs_search_xapian :needs_dependency_cld2 :SearchLanguage
+    :min_version_3_2 :needs_search_xapian :needs_dependency_cld2 :SearchLanguage
 {
     my ($self) = @_;
 
@@ -1375,7 +1375,7 @@ sub test_not_match
 }
 
 sub test_striphtml_alternative
-    :min_version_3_0 :needs_search_xapian
+    :min_version_3_3 :needs_search_xapian
 {
     my ($self) = @_;
     my $talk = $self->{store}->get_client();
@@ -1406,7 +1406,7 @@ sub test_striphtml_alternative
 }
 
 sub test_striphtml_plain
-    :min_version_3_0 :needs_search_xapian
+    :min_version_3_3 :needs_search_xapian
 {
     my ($self) = @_;
     my $talk = $self->{store}->get_client();
@@ -1427,7 +1427,7 @@ sub test_striphtml_plain
 }
 
 sub test_striphtml_rfc822
-    :min_version_3_0 :needs_search_xapian
+    :min_version_3_3 :needs_search_xapian
 {
     my ($self) = @_;
     my $talk = $self->{store}->get_client();
