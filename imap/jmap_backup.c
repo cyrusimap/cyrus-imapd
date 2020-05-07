@@ -449,7 +449,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
         strarray_remove_all_case(flags, "DAV:unbind");
 
         /* append the message to the mailbox. */
-        r = append_fromstage(&as, &body, stage, /*internaldate*/0,
+        r = append_fromstage(&as, &body, stage, record->internaldate,
                              is_update ? record->createdmodseq : 0,
                              flags, /*nolink*/0, annots);
 
