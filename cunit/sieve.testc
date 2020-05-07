@@ -578,7 +578,6 @@ static void context_setup(sieve_test_context_t *ctx,
                           const char *script)
 {
     int r;
-    static strarray_t mark = STRARRAY_INITIALIZER;
     static sieve_vacation_t vacation = {
         0,                      /* min response */
         0,                      /* max response */
@@ -593,8 +592,6 @@ static void context_setup(sieve_test_context_t *ctx,
     char tempfile[32];
 
     memset(ctx, 0, sizeof(*ctx));
-    if (!mark.count)
-        strarray_append(&mark, "\\flagged");
 
     ctx->compile_errors = strarray_new();
     ctx->run_errors = strarray_new();
@@ -611,7 +608,6 @@ static void context_setup(sieve_test_context_t *ctx,
     sieve_register_body(ctx->interp, getbody);
     sieve_register_include(ctx->interp, getinclude);
     sieve_register_vacation(ctx->interp, &vacation);
-    sieve_register_imapflags(ctx->interp, &mark);
     sieve_register_notify(ctx->interp, notify, NULL);
     sieve_register_parse_error(ctx->interp, mysieve_error);
     sieve_register_execute_error(ctx->interp, mysieve_execute_error);
