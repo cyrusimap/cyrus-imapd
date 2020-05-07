@@ -1095,6 +1095,18 @@ sub test_restore_mail_all
     $self->assert_str_equals("$emailId5", $res->[2][1]{notFound}[1]);
     $self->assert_str_equals("$draftId1", $res->[2][1]{notFound}[2]);
     $self->assert_str_equals("$draftId3", $res->[2][1]{notFound}[3]);
+
+    xlog "attempt to re-restore mailbox back to same point in time";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreMail', {
+            undoPeriod => "PT2S"
+         }, "R9"],
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreMail', $res->[0][0]);
+    $self->assert_str_equals('R9', $res->[0][2]);
+    $self->assert_num_equals(0, $res->[0][1]{numDraftsRestored});
+    $self->assert_num_equals(0, $res->[0][1]{numNonDraftsRestored});
 }
 
 sub test_restore_mail_all_dryrun
