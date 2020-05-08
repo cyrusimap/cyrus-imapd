@@ -10,7 +10,7 @@ before_install:
 - sudo service docker restart
 - docker pull cyrusimapdocker/cyrus-jessie
 script:
-- docker run --ulimit core=-1 -it cyrusimapdocker/cyrus-jessie /bin/sh -c "cd / &&
+- docker run --env TRAVIS_BRANCH --env TRAVIS_PULL_REQUEST --env TRAVIS_PULL_REQUEST_BRANCH --ulimit core=-1 -it cyrusimapdocker/cyrus-jessie /bin/sh -c "cd / &&
   ./entrypoint.sh"
 branches:
   only:
