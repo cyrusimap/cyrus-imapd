@@ -2300,11 +2300,8 @@ static unsigned bc_precompile(cmdarg_t args[], const char *fmt, ...)
             args[n].u.i = c->match;
             args[++n].type = AT_INT;
             args[n].u.i = c->relation;
-
-            if (c->collation != -1) {
-                args[++n].type = AT_INT;
-                args[n].u.i = c->collation;
-            }
+            args[++n].type = AT_INT;
+            args[n].u.i = c->collation;
             break;
         }
         case 'Z': {
@@ -2744,7 +2741,6 @@ static commandlist_t *build_denotify(sieve_script_t *sscript,
     assert(t && t->type == B_DENOTIFY);
 
     canon_comptags(&t->u.d.comp, sscript);
-    t->u.d.comp.collation = -1;  /* unused - force it to be ignored */
 
     if (t->u.d.priority == -1) t->u.d.priority = B_ANY;
     if (t->u.d.pattern) {
@@ -2756,9 +2752,10 @@ static commandlist_t *build_denotify(sieve_script_t *sscript,
         strarray_fini(&sa);
     }
 
-    t->nargs = bc_precompile(t->args, "iCs",
+    t->nargs = bc_precompile(t->args, "iiis",
                              t->u.d.priority,
-                             &t->u.d.comp,
+                             t->u.d.comp.match,
+                             t->u.d.comp.relation,
                              t->u.d.pattern);
 
     return t;
