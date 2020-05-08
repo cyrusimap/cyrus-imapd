@@ -2639,6 +2639,7 @@ sub test_snooze_tzid
     my $awakened = "INBOX.awakened";
 
     my $localtz = DateTime::TimeZone->new( name => 'local' );
+    xlog $self, "using local timezone: " . $localtz->name();
     my $maildate = DateTime->now(time_zone => $localtz);
     $maildate->add(DateTime::Duration->new(minutes => 1));
     my $timestr = $maildate->strftime('%T');
