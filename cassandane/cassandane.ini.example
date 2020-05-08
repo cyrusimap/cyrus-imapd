@@ -72,6 +72,10 @@
 # Base port number to use.  All Cyrus instances run by Cassandane
 # will listen at ports starting from this number.
 ##base_port = 9100
+# A list of tests or suites which will be suppressed.  These tests
+# will still run if requested on the command line, but will not be
+# run by default.
+## suppress =
 
 # This section describes configurable properties of Valgrind.
 [valgrind]

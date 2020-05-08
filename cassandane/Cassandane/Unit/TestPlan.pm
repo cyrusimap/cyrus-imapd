@@ -463,6 +463,7 @@ sub add_pass
 package Cassandane::Unit::TestPlan;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
+use Data::Dumper;
 use Cassandane::Util::Log;
 
 my @test_roots = (
@@ -576,12 +577,44 @@ sub _parse_test_spec
     die "Unrecognised test specification: $name";
 }
 
+sub _default_test_list
+{
+    my ($self) = @_;
+
+    my $cassini = Cassandane::Cassini::instance();
+    my @suppress = split /\s+/, $cassini->val('cassandane', 'suppress', '');
+
+    my %lookup;
+    @lookup{@test_roots} = ();
+
+    # skip suppressions
+    foreach my $s (@suppress) {
+        if (exists $lookup{$s}) {
+            # if it's named explicitly in the default list, un-name it
+            delete $lookup{$s};
+        }
+        else {
+            # otherwise, add a negation for it
+            $lookup{"!$s"} = undef;
+        }
+    }
+
+    die "no default tests" if not scalar keys %lookup;
+    return sort keys %lookup;
+}
+
 sub schedule
 {
     my ($self, @names) = @_;
 
-    @names = @test_roots
-        if !scalar @names;
+    if (not scalar @names) {
+        # if no names provided, use default list
+        @names = $self->_default_test_list();
+    }
+    elsif (not scalar grep { m/^[^!~]/ } @names) {
+        # if only negations provided, start with default list
+        @names = ($self->_default_test_list(), @names);
+    }
 
     foreach my $name (@names)
     {
@@ -592,10 +625,6 @@ sub schedule
             xlog "$name was explicitly requested. Enabling slow tests!";
             $self->{skip_slow} = 0;
         }
-
-        # to negate tests, first we need to have something to negate from
-        $self->schedule(@test_roots)
-            if $neg eq '!' && !scalar %{$self->{schedule}};
 
         if ($type eq 'd')
         {
