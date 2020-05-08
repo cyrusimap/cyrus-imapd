@@ -43,6 +43,11 @@
 [cassandane]
 rootdir = /tmp/cass
 cleanup = no
+# We skip some tests that are either long-time known failures, or
+# are brittle and fail sporadically, to keep the CI integration
+# useful.
+# This list last reviewed on 2020-05-08
+suppress = Rename.rename_inbox JMAPBackup
 
 [valgrind]
 
