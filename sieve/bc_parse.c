@@ -72,6 +72,7 @@ static const struct args_t cmd_args_table[] = {
       } },
     { B_IF,                      "i",                                    /*  6 */
       { offsetof(struct Commandlist, u.i.testend)
+        /* Tests are parsed by caller */
       } },
     { B_MARK,                    "", { 0 } },                            /*  7 */
     { B_UNMARK,                  "", { 0 } },                            /*  8 */
