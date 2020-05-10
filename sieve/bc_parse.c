@@ -546,13 +546,17 @@ static int bc_args_parse(bytecode_input_t *bc, int pos, const char *fmt,
             /* fccfolder [create flags [special-use] ] */
         case 'F': {
             struct Fileinto *fcc = base + *offsets++;
+            int have_specialuse = 0;
 
+            if (*fmt == '$') {
+                have_specialuse = 1;
+                fmt++;
+            }
             pos = bc_string_parse(bc, pos, &fcc->folder);
-            if (!fcc->folder) {
+            if (fcc->folder) {
                 fcc->create = ntohl(bc[pos++].value);
                 pos = bc_stringlist_parse(bc, pos, &fcc->flags);
-                if (*fmt == '$') {
-                    fmt++;
+                if (have_specialuse) {
                     pos = bc_string_parse(bc, pos, &fcc->specialuse);
                 }
             }
