@@ -1149,8 +1149,16 @@ EXPORTED void fatal(const char *s, int code)
     if (recurse_code) {
         /* We were called recursively. Just give up */
         proc_cleanup();
-        prometheus_decrement(CYRUS_IMAP_ACTIVE_CONNECTIONS);
-        snmp_increment(ACTIVE_CONNECTIONS, -1);
+        if (imapd_out) {
+            /* one less active connection */
+            prometheus_decrement(CYRUS_IMAP_ACTIVE_CONNECTIONS);
+            snmp_increment(ACTIVE_CONNECTIONS, -1);
+        }
+        else {
+            /* one less ready listener */
+            prometheus_decrement(CYRUS_IMAP_READY_LISTENERS);
+        }
+        prometheus_increment(CYRUS_IMAP_SHUTDOWN_TOTAL_STATUS_ERROR);
         exit(recurse_code);
     }
     recurse_code = code;
