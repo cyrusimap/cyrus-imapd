@@ -752,12 +752,12 @@ static int _email_matchmime_evaluate(json_t *filter,
             if (jmap_emailbodies_extract(body, &bodies) == 0) {
                 int have = ptrarray_size(&bodies.attslist) > 0;
                 int want = jval == json_true();
+                jmap_emailbodies_fini(&bodies);
                 if (have == want) {
                     have_matches++;
                 }
                 else return 0;
             }
-            jmap_emailbodies_fini(&bodies);
         }
     }
 
