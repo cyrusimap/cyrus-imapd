@@ -405,4 +405,78 @@ sub slowtest_50000_users
         $report->{'cyrus_usage_quota_commitment'}->{'partition="default",resource="STORAGE"'}->{value});
 }
 
+sub test_connection_setup_failure_imapd
+    :min_version_3_2 :needs_component_httpd :TLS :NoStartInstances
+{
+    my ($self) = @_;
+
+    # let's set up an IMAPS instance
+    my $instance = $self->{instance};
+    $instance->add_service(name => 'imaps',
+                           argv => ['imapd', '-s'],
+                           type => 'imap');
+    $self->_start_instances();
+
+    my $svc = $instance->get_service('imaps');
+    $self->assert_not_null($svc);
+
+    my $store = $svc->create_store();
+    $self->assert_not_null($store);
+
+    my $badconns = 2 + int(rand(4)); # between 2-5 tries
+    for (1 .. $badconns) {
+        # try to connect to it using a plain text client
+        # and expect the server to drop the connection
+        eval {
+            $store->get_client();
+        };
+        my $error = $@;
+        $self->assert_matches(qr{Connection closed by other end}, $error);
+    }
+
+    # wait a bit for the prometheus report to refresh
+    sleep 3;
+
+    # check the prom report
+    my $response = $self->http_report();
+    $self->assert($response->{success});
+
+    my $report = parse_report($response->{content});
+    $self->assert(scalar keys %{$report});
+
+    my $active = $report->{'cyrus_imap_active_connections'};
+    $self->assert_not_null($active);
+    my $ready = $report->{'cyrus_imap_ready_listeners'};
+    $self->assert_not_null($ready);
+    my $total = $report->{'cyrus_imap_connections_total'};
+    $self->assert_not_null($total);
+    my $shutdown = $report->{'cyrus_imap_shutdown_total'};
+    $self->assert_not_null($shutdown);
+
+    my $service_label = 'service="imaps"';
+
+    # number of active connections should definitely not be negative
+    $self->assert_num_gte(0, $active->{$service_label}->{value});
+
+    # number of active connections should in fact be zero
+    $self->assert_num_equals(0, $active->{$service_label}->{value});
+
+    # number of ready listeners should be zero or one, depending on
+    # whether it felt like preforking
+    $self->assert_num_gte(0, $ready->{$service_label}->{value});
+    $self->assert_num_lte(1, $ready->{$service_label}->{value});
+
+    # should not have had any successful connections to imaps
+    $self->assert(not exists $total->{$service_label});
+
+    # should be $badconn shutdowns counted (imapd treats this condition
+    # as an ok shutdown, not an error)
+    $self->assert_num_equals(
+        $badconns,
+        $shutdown->{"$service_label,status=\"ok\""}->{value}
+    );
+
+    # XXX someday: expect to find $badconns setup failures counted
+}
+
 1;
