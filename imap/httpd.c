@@ -1058,6 +1058,15 @@ void fatal(const char* s, int code)
     if (recurse_code) {
         /* We were called recursively. Just give up */
         proc_cleanup();
+        if (httpd_out) {
+            /* one less active connection */
+            prometheus_decrement(CYRUS_HTTP_ACTIVE_CONNECTIONS);
+        }
+        else {
+            /* one less ready listener */
+            prometheus_decrement(CYRUS_HTTP_READY_LISTENERS);
+        }
+        prometheus_increment(CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_ERROR);
         exit(recurse_code);
     }
     recurse_code = code;
