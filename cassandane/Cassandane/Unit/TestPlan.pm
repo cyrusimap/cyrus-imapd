@@ -582,25 +582,26 @@ sub _default_test_list
     my ($self) = @_;
 
     my $cassini = Cassandane::Cassini::instance();
-    my @suppress = split /\s+/, $cassini->val('cassandane', 'suppress', '');
+    my @tosuppress = split /\s+/, $cassini->val('cassandane', 'suppress', '');
 
-    my %lookup;
-    @lookup{@test_roots} = ();
+    my %default;
+    my %suppressed;
+    @default{@test_roots} = ();
 
     # skip suppressions
-    foreach my $s (@suppress) {
-        if (exists $lookup{$s}) {
+    foreach my $s (@tosuppress) {
+        if (exists $default{$s}) {
             # if it's named explicitly in the default list, un-name it
-            delete $lookup{$s};
+            delete $default{$s};
         }
         else {
             # otherwise, add a negation for it
-            $lookup{"!$s"} = undef;
+            $suppressed{"!$s"} = undef;
         }
     }
 
-    die "no default tests" if not scalar keys %lookup;
-    return sort keys %lookup;
+    die "no default tests" if not scalar keys %default;
+    return (sort(keys %default), sort(keys %suppressed));
 }
 
 sub schedule
