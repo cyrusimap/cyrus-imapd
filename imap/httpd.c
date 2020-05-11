@@ -819,7 +819,9 @@ int service_main(int argc __attribute__((unused)),
     struct auth_scheme_t *scheme;
     struct http_connection http_conn;
 
+    /* fatal/shut_down will adjust these, so we need to set them early */
     prometheus_decrement(CYRUS_HTTP_READY_LISTENERS);
+    prometheus_increment(CYRUS_HTTP_ACTIVE_CONNECTIONS);
 
     session_new_id();
 
@@ -933,8 +935,8 @@ int service_main(int argc __attribute__((unused)),
 
     index_text_extractor_init(httpd_in);
 
+    /* count the connection, now that it's established */
     prometheus_increment(CYRUS_HTTP_CONNECTIONS_TOTAL);
-    prometheus_increment(CYRUS_HTTP_ACTIVE_CONNECTIONS);
 
     cmdloop(&http_conn);
 
