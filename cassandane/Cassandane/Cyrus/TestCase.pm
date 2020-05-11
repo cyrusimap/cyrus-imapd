@@ -95,6 +95,7 @@ sub new
         gen => 1,
         deliver => 0,
         jmap => 0,
+        install_certificates => 0,
     };
     map {
         $want->{$_} = delete $params->{$_}
@@ -297,6 +298,12 @@ magic(SieveUTF8Fileinto => sub {
 magic(SearchSetForceScanMode => sub {
     shift->config_set(search_queryscan => '1');
 });
+magic(TLS => sub {
+    my $self = shift;
+    $self->config_set(tls_server_cert => '@basedir@/conf/certs/cert.pem');
+    $self->config_set(tls_server_key => '@basedir@/conf/certs/key.pem');
+    $self->want('install_certificates');
+});
 magic(LowEmailLimits => sub {
     # these settings are new in 3.3.0 -- any test using this magic
     # also needs :min_version_3_3
@@ -422,6 +429,7 @@ sub _create_instances
         }
 
         $instance_params{config} = $conf;
+        $instance_params{install_certificates} = $want->{install_certificates};
 
         $instance_params{description} = "main instance for test $self->{_name}";
         $self->{instance} = Cassandane::Instance->new(%instance_params);

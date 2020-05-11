@@ -43,6 +43,7 @@ use warnings;
 use Config;
 use Data::Dumper;
 use Errno qw(ENOENT);
+use File::Copy;
 use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
 use File::Basename;
@@ -110,6 +111,7 @@ sub new
         _shutdowncallbacks => [],
         _started => 0,
         _pwcheck => $cassini->val('cassandane', 'pwcheck', 'alwaystrue'),
+        install_certificates => 0,
     };
 
     $self->{name} = $params{name}
@@ -140,6 +142,8 @@ sub new
         if defined $params{description};
     $self->{pwcheck} = $params{pwcheck}
         if defined $params{pwcheck};
+    $self->{install_certificates} = $params{install_certificates}
+        if defined $params{install_certificates};
 
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
@@ -588,6 +592,7 @@ sub _build_skeleton
     my @subdirs =
     (
         'conf',
+        'conf/certs',
         'conf/cores',
         'conf/db',
         'conf/sieve',
@@ -1142,6 +1147,7 @@ sub start
                                                         $self->{cyrus_prefix});
         $self->_generate_imapd_conf();
         $self->_generate_master_conf();
+        $self->install_tls_certificates() if $self->{install_certificates};
         $self->_fix_ownership();
     }
     elsif (!scalar $self->{services})
@@ -2166,6 +2172,22 @@ sub install_old_mailbox
     xlog "installed version $version mailbox for user $user: user.$user.version$version";
 
     return "user.$user.version$version";
+}
+
+sub install_tls_certificates
+{
+    my ($self) = @_;
+
+    my $cert_file = abs_path("data/certs/cert.pem");
+    my $key_file = abs_path("data/certs/key.pem");
+    my $cacert_file = abs_path("data/certs/cacert.pem");
+
+    my $destdir = $self->get_basedir() . "/conf/certs";
+    xlog "installing certificate files to $destdir ...";
+    foreach my $f ($cert_file, $key_file, $cacert_file) {
+        copy($f, $destdir)
+            or die "cannot install $f to $destdir: $!";
+    }
 }
 
 sub get_servername
