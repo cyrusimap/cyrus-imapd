@@ -4150,6 +4150,7 @@ static void _contact_copy(jmap_req_t *req,
             *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
                                               "properties", invalid);
         }
+        else json_decref(invalid);
         json_decref(item);
         goto done;
     }
@@ -4163,7 +4164,6 @@ done:
             *set_err = json_pack("{s:s}", "type", "notFound");
         else
             *set_err = jmap_server_error(r);
-        return;
     }
     jmap_closembox(req, &dst_mbox);
     jmap_closembox(req, &src_mbox);
