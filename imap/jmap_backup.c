@@ -1596,10 +1596,28 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 
                 if (r) {
                     syslog(LOG_ERR,
-                           "IOERROR: failed to create mailbox %s", newmboxname);
+                           "IOERROR: failed to create mailbox %s: %s",
+                           newmboxname, error_message(r));
                 }
+                else {
+                    /* Copy over any role (/specialuse) */
+                    struct buf attrib = BUF_INITIALIZER;
+                    const char *annot = "/specialuse";
 
-                /* XXX  Copy over any role (specialuse) */
+                    annotatemore_lookup(mboxname, annot,
+                                        req->accountid, &attrib);
+
+                    if (attrib.len) {
+                        r = annotatemore_write(newmboxname, annot,
+                                               req->accountid, &attrib);
+                        if (r) {
+                            syslog(LOG_ERR,
+                                   "IOERROR: failed to write annotation %s: %s",
+                                   annot, error_message(r));
+                        }
+                    }
+                    buf_reset(&attrib);
+                }
             }
         }
     }
@@ -1607,7 +1625,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     if (!r) {
         r = jmap_openmbox(req, mboxname, &mailbox, /*rw*/newmailbox == NULL);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mboxname);
+            syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
+                   mboxname, error_message(r));
         }
     }
     if (r) goto done;
