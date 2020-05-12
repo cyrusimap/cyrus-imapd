@@ -908,6 +908,8 @@ sub test_restore_mail_all
                     mailboxIds => {
                         $inboxId => JSON::true
                     },
+                    # explicity set this keyword to make sure it gets removed
+                    keywords => { '$restored' => JSON::true },
                     from => [{ email => q{foo3@bar} }],
                     to => [{ email => q{bar3@foo} }],
                     subject => "email3"
@@ -1088,15 +1090,19 @@ sub test_restore_mail_all
     $self->assert_num_equals(4, scalar(@{$res->[3][1]{list}}));
     $self->assert_str_equals("$emailId2", $res->[3][1]{list}[0]{id});
     $self->assert_str_equals("$emailAt2", $res->[3][1]{list}[0]{receivedAt});
+    $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{keywords}->{'$restored'});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{mailboxIds}{$newFooId});
     $self->assert_str_equals("$emailId3", $res->[3][1]{list}[1]{id});
-    $self->assert_str_equals("$emailAt3", $res->[3][1]{list}[0]{receivedAt});
+    $self->assert_str_equals("$emailAt3", $res->[3][1]{list}[1]{receivedAt});
+    $self->assert_null($res->[3][1]{list}[1]{keywords}->{'$restored'});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[1]{mailboxIds}{$inboxId});
     $self->assert_str_equals("$emailId4", $res->[3][1]{list}[2]{id});
-    $self->assert_str_equals("$emailAt4", $res->[3][1]{list}[0]{receivedAt});
+    $self->assert_str_equals("$emailAt4", $res->[3][1]{list}[2]{receivedAt});
+    $self->assert_equals(JSON::true, $res->[3][1]{list}[2]{keywords}->{'$restored'});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[2]{mailboxIds}{$newFooId});
     $self->assert_str_equals("$draftId2", $res->[3][1]{list}[3]{id});
-    $self->assert_str_equals("$draftAt2", $res->[3][1]{list}[0]{receivedAt});
+    $self->assert_str_equals("$draftAt2", $res->[3][1]{list}[3]{receivedAt});
+    $self->assert_equals(JSON::true, $res->[3][1]{list}[3]{keywords}->{'$restored'});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[3]{mailboxIds}{$draftsId});
 
     $self->assert_num_equals(4, scalar(@{$res->[3][1]{notFound}}));
