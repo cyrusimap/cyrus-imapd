@@ -3068,4 +3068,84 @@ sub test_contact_set_issue2953
     $self->assert_str_equals('foo,bar', $res->[1][1]{list}[0]{online}[0]{value});
 }
 
+sub _set_quotaroot
+{
+    my ($self, $quotaroot) = @_;
+    $self->{quotaroot} = $quotaroot;
+}
+
+sub _set_quotalimits
+{
+    my ($self, %resources) = @_;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
+    my @quotalist;
+    foreach my $resource (keys %resources)
+    {
+        my $limit = $resources{$resource}
+            or die "No limit specified for $resource";
+        push(@quotalist, uc($resource), $limit);
+    }
+    $self->{limits}->{$quotaroot} = { @quotalist };
+    $admintalk->setquota($quotaroot, \@quotalist);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
+
+sub test_contact_copy_overquota
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared accounts";
+    $admintalk->create("user.other");
+
+    my $othercarddav = Net::CardDAVTalk->new(
+        user => "other",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl('user.other.#addressbooks.Default',
+                       'cassandane' => 'lrswipkxtecdn') or die;
+
+    $self->_set_quotaroot('user.other.#addressbooks');
+    $self->_set_quotalimits(storage => 1);
+
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                1 => {
+                    lastName => 'name',
+                    notes => ('x' x 1024),
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $contactId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($contactId);
+
+    $res = $jmap->CallMethods([
+        ['Contact/copy', {
+            fromAccountId => 'cassandane',
+            accountId => 'other',
+            create => {
+                2 => {
+                    id => $contactId,
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('overQuota', $res->[0][1]{notCreated}{2}{type});
+
+}
+
 1;
