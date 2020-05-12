@@ -484,7 +484,8 @@ HIDDEN json_t *jmap_server_error(int r)
     switch (r) {
     case IMAP_CONVERSATION_GUIDLIMIT:
         return json_pack("{s:s}", "type", "tooManyMailboxes");
-        break;
+    case IMAP_QUOTA_EXCEEDED:
+        return json_pack("{s:s}", "type", "overQuota");
     default:
         return json_pack("{s:s, s:s}",
                          "type", "serverFail",
