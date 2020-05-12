@@ -863,6 +863,9 @@ sub test_restore_mail_all
                 "1" => {
                     name => "foo"
                 },
+                "3" => {
+                    name => "bar"
+                },
                 "2" => {
                     name => "Drafts",
                     role => "Drafts"
@@ -874,11 +877,13 @@ sub test_restore_mail_all
     ]);
     $self->assert_not_null($res);
     my $fooId = $res->[0][1]{created}{"1"}{id};
+    my $barId = $res->[0][1]{created}{"3"}{id};
     my $draftsId = $res->[0][1]{created}{"2"}{id};
     $self->assert_not_null($fooId);
+    $self->assert_not_null($barId);
     $self->assert_not_null($draftsId);
 
-    $self->assert_num_equals(3, scalar(@{$res->[1][1]{list}}));
+    $self->assert_num_equals(4, scalar(@{$res->[1][1]{list}}));
     my %m = map { $_->{name} => $_ } @{$res->[1][1]{list}};
     my $inboxId = $m{"Inbox"}->{id};
     $self->assert_not_null($inboxId);
@@ -929,11 +934,19 @@ sub test_restore_mail_all
                     from => [{ email => q{foo5@bar} }],
                     to => [{ email => q{bar5@foo} }],
                     subject => "email5"
+                },
+                email6 => {
+                    mailboxIds => {
+                        $barId => JSON::true
+                    },
+                    from => [{ email => q{foo6@bar} }],
+                    to => [{ email => q{bar6@foo} }],
+                    subject => "email6"
                 }
             },
         }, 'R3'],
         ['Email/get', {
-            ids => [ '#email1', '#email2', '#email3', '#email4', '#email5' ],
+            ids => [ '#email1', '#email2', '#email3', '#email4', '#email5', '#email6' ],
             properties => ['receivedAt']
          }, "R3.2"]
     ]);
@@ -947,12 +960,15 @@ sub test_restore_mail_all
     $self->assert_not_null($emailId4);
     my $emailId5 = $res->[0][1]{created}{email5}{id};
     $self->assert_not_null($emailId5);
+    my $emailId6 = $res->[0][1]{created}{email6}{id};
+    $self->assert_not_null($emailId6);
 
     my $emailAt1 = $res->[1][1]{list}[0]{receivedAt};
     my $emailAt2 = $res->[1][1]{list}[1]{receivedAt};
     my $emailAt3 = $res->[1][1]{list}[2]{receivedAt};
     my $emailAt4 = $res->[1][1]{list}[3]{receivedAt};
     my $emailAt5 = $res->[1][1]{list}[4]{receivedAt};
+    my $emailAt6 = $res->[1][1]{list}[5]{receivedAt};
 
     xlog "create emails in Drafts";
     $res = $jmap->CallMethods([
@@ -1024,13 +1040,13 @@ sub test_restore_mail_all
     $self->assert_not_null($res->[0][1]{updated}{$emailId2});
 
     sleep 1;
-    xlog "destroy email2, all drafts, and 'foo' mailbox";
+    xlog "destroy email2, all drafts, 'foo' and 'bar' mailboxes";
     $res = $jmap->CallMethods([
         ['Email/set', {
             destroy => ["$emailId2", "$draftId1", "$draftId2", "$draftId3"]
          }, "R5"],
         ['Mailbox/set', {
-            destroy => ["$fooId"],
+            destroy => ["$fooId", "$barId"],
             onDestroyRemoveEmails => JSON::true
          }, "R5.5"],
     ]);
@@ -1039,9 +1055,28 @@ sub test_restore_mail_all
     $self->assert_str_equals($draftId1, $res->[0][1]{destroyed}[1]);
     $self->assert_str_equals($draftId2, $res->[0][1]{destroyed}[2]);
     $self->assert_str_equals($draftId3, $res->[0][1]{destroyed}[3]);
-    $self->assert_str_equals($fooId, $res->[1][1]{destroyed}[0]);
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{destroyed}});
+    my @expect = sort ($fooId, $barId);
+    my @got = sort @{$res->[1][1]{destroyed}};
+    $self->assert_deep_equals(\@expect, \@got);
 
-    xlog "restore mailbox prior to most recent changes";
+    xlog "create a new 'bar' mailbox";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                "1" => {
+                    name => "bar"
+                }
+            }
+         }, "R5.7"],
+        ['Mailbox/get', {
+         }, "R5.8"]
+    ]);
+    $self->assert_not_null($res);
+    my $newBarId = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($newBarId);
+
+    xlog "restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
             restoreDrafts => JSON::false,
@@ -1054,7 +1089,7 @@ sub test_restore_mail_all
         ['Mailbox/get', {
          }, "R7"],
         ['Email/get', {
-            ids => ["$emailId1", "$emailId2", "$emailId3", "$emailId4", "$emailId5",
+            ids => ["$emailId1", "$emailId2", "$emailId3", "$emailId4", "$emailId5", "$emailId6",
                     "$draftId1", "$draftId2", "$draftId3"],
             properties => ['subject', 'keywords', 'mailboxIds', 'receivedAt']
          }, "R8"]
@@ -1063,7 +1098,7 @@ sub test_restore_mail_all
     $self->assert_str_equals('Backup/restoreMail', $res->[0][0]);
     $self->assert_str_equals('R6', $res->[0][2]);
     $self->assert_num_equals(0, $res->[0][1]{numDraftsRestored});
-    $self->assert_num_equals(2, $res->[0][1]{numNonDraftsRestored});
+    $self->assert_num_equals(3, $res->[0][1]{numNonDraftsRestored});
 
     $self->assert_str_equals('R6.5', $res->[1][2]);
     $self->assert_num_equals(1, $res->[1][1]{numDraftsRestored});
@@ -1071,39 +1106,50 @@ sub test_restore_mail_all
 
     # - mailbox 'foo' should be recreated (will have a new id)
     # - email1 should NOT be restored (destroyed prior to cutoff)
-    # - email2 should be restored to mailbox 'foo' ONLY
+    # - email2 should be restored to the server-recreated 'foo' mailbox ONLY
     #   (it was destroyed most recently)
-    # - email4 should be restored to mailbox 'foo'
+    # - email4 should be restored to the server-recreated 'foo' mailbox
     # - email5 should NOT be restored (destroyed prior to cutoff)
+    # - email6 should be restored to the user-recreated 'bar' mailbox
     # - draft1 should NOT be restored (smaller than draft2)
     # - draft2 should be the only draft restored to mailbox 'Drafts'
     #   because it was the largest of those having the same Message-ID
     # - draft3 should NOT be restored (smaller than draft2)
     $self->assert_str_equals('Mailbox/get', $res->[2][0]);
     $self->assert_str_equals('R7', $res->[2][2]);
-    $self->assert_num_equals(3, scalar(@{$res->[2][1]{list}}));
-    $self->assert_str_equals("foo", $res->[2][1]{list}[2]{name});
-    $self->assert_str_equals($fooId, $res->[2][1]{list}[2]{id});
+    $self->assert_num_equals(4, scalar(@{$res->[2][1]{list}}));
+    $self->assert_str_equals("bar", $res->[2][1]{list}[2]{name});
+    $self->assert_str_equals($newBarId, $res->[2][1]{list}[2]{id});
+    $self->assert_str_equals("foo", $res->[2][1]{list}[3]{name});
+    $self->assert_str_equals($fooId, $res->[2][1]{list}[3]{id});
 
     $self->assert_str_equals('Email/get', $res->[3][0]);
     $self->assert_str_equals('R8', $res->[3][2]);
-    $self->assert_num_equals(4, scalar(@{$res->[3][1]{list}}));
+    $self->assert_num_equals(5, scalar(@{$res->[3][1]{list}}));
     $self->assert_str_equals("$emailId2", $res->[3][1]{list}[0]{id});
     $self->assert_str_equals("$emailAt2", $res->[3][1]{list}[0]{receivedAt});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{keywords}->{'$restored'});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{mailboxIds}{$fooId});
+
     $self->assert_str_equals("$emailId3", $res->[3][1]{list}[1]{id});
     $self->assert_str_equals("$emailAt3", $res->[3][1]{list}[1]{receivedAt});
     $self->assert_null($res->[3][1]{list}[1]{keywords}->{'$restored'});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[1]{mailboxIds}{$inboxId});
+
     $self->assert_str_equals("$emailId4", $res->[3][1]{list}[2]{id});
     $self->assert_str_equals("$emailAt4", $res->[3][1]{list}[2]{receivedAt});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[2]{keywords}->{'$restored'});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[2]{mailboxIds}{$fooId});
-    $self->assert_str_equals("$draftId2", $res->[3][1]{list}[3]{id});
-    $self->assert_str_equals("$draftAt2", $res->[3][1]{list}[3]{receivedAt});
+
+    $self->assert_str_equals("$emailId6", $res->[3][1]{list}[3]{id});
+    $self->assert_str_equals("$emailAt6", $res->[3][1]{list}[3]{receivedAt});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[3]{keywords}->{'$restored'});
-    $self->assert_equals(JSON::true, $res->[3][1]{list}[3]{mailboxIds}{$draftsId});
+    $self->assert_equals(JSON::true, $res->[3][1]{list}[3]{mailboxIds}{$newBarId});
+
+    $self->assert_str_equals("$draftId2", $res->[3][1]{list}[4]{id});
+    $self->assert_str_equals("$draftAt2", $res->[3][1]{list}[4]{receivedAt});
+    $self->assert_equals(JSON::true, $res->[3][1]{list}[4]{keywords}->{'$restored'});
+    $self->assert_equals(JSON::true, $res->[3][1]{list}[4]{mailboxIds}{$draftsId});
 
     $self->assert_num_equals(4, scalar(@{$res->[3][1]{notFound}}));
     $self->assert_str_equals("$emailId1", $res->[3][1]{notFound}[0]);
