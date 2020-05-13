@@ -1572,26 +1572,16 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                 }
             }
             else {
-                /* Create the mailbox with same ID as the deleted one */
+                /* Create the mailbox */
                 struct mboxlock *namespacelock =
                     user_namespacelock(req->accountid);
-                mbentry_t *mbentry = NULL;
 
-                r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
-
-                if (!r) {
-                    r = mboxlist_createmailbox_unq(newmboxname, MBTYPE_EMAIL,
-                                                   /*partition*/NULL,
-                                                   /*isadmin*/0,
-                                                   req->accountid,
-                                                   req->authstate,
-                                                   /*localonly*/0,
-                                                   /*forceuser*/0,
-                                                   /*dbonly*/0, /*notify*/0,
-                                                   mbentry->uniqueid,
-                                                   &newmailbox);
-                }
-                mboxlist_entry_free(&mbentry);
+                r = mboxlist_createmailbox(newmboxname, MBTYPE_EMAIL,
+                                           /*partition*/NULL, /*isadmin*/0,
+                                           req->accountid, req->authstate,
+                                           /*localonly*/0, /*forceuser*/0,
+                                           /*dbonly*/0, /*notify*/0,
+                                           &newmailbox);
                 mboxname_release(&namespacelock);
 
                 if (r) {
