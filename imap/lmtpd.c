@@ -335,6 +335,17 @@ void service_abort(int error)
 
 static void usage(void)
 {
+    if (deliver_out) {
+        /* one less active connection */
+        prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
+        snmp_increment(ACTIVE_CONNECTIONS, -1);
+    }
+    else {
+        /* one less ready listener */
+        prometheus_decrement(CYRUS_LMTP_READY_LISTENERS);
+    }
+    prometheus_increment(CYRUS_LMTP_SHUTDOWN_TOTAL_STATUS_ERROR);
+
     fprintf(stderr, "421-4.3.0 usage: lmtpd [-C <alt_config>] [-a]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EX_USAGE);
