@@ -1121,7 +1121,7 @@ sub test_restore_mail_all
     $self->assert_str_equals("bar", $res->[2][1]{list}[2]{name});
     $self->assert_str_equals($newBarId, $res->[2][1]{list}[2]{id});
     $self->assert_str_equals("foo", $res->[2][1]{list}[3]{name});
-    $self->assert_str_equals($fooId, $res->[2][1]{list}[3]{id});
+    my $newFooId = $res->[2][1]{list}[3]{id};
 
     $self->assert_str_equals('Email/get', $res->[3][0]);
     $self->assert_str_equals('R8', $res->[3][2]);
@@ -1129,7 +1129,7 @@ sub test_restore_mail_all
     $self->assert_str_equals("$emailId2", $res->[3][1]{list}[0]{id});
     $self->assert_str_equals("$emailAt2", $res->[3][1]{list}[0]{receivedAt});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{keywords}->{'$restored'});
-    $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{mailboxIds}{$fooId});
+    $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{mailboxIds}{$newFooId});
 
     $self->assert_str_equals("$emailId3", $res->[3][1]{list}[1]{id});
     $self->assert_str_equals("$emailAt3", $res->[3][1]{list}[1]{receivedAt});
@@ -1139,7 +1139,7 @@ sub test_restore_mail_all
     $self->assert_str_equals("$emailId4", $res->[3][1]{list}[2]{id});
     $self->assert_str_equals("$emailAt4", $res->[3][1]{list}[2]{receivedAt});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[2]{keywords}->{'$restored'});
-    $self->assert_equals(JSON::true, $res->[3][1]{list}[2]{mailboxIds}{$fooId});
+    $self->assert_equals(JSON::true, $res->[3][1]{list}[2]{mailboxIds}{$newFooId});
 
     $self->assert_str_equals("$emailId6", $res->[3][1]{list}[3]{id});
     $self->assert_str_equals("$emailAt6", $res->[3][1]{list}[3]{receivedAt});
