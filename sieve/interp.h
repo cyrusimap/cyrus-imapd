@@ -272,6 +272,7 @@ enum sieve_capa_flag {
 
 #define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODED_CHAR | SIEVE_CAPA_VARIABLES)
 
+extern const char *lookup_capability_string(unsigned long long capa);
 unsigned long long lookup_capability(const char *str);
 unsigned long long extension_isactive(sieve_interp_t *interp, const char *str);
 int interp_verify(sieve_interp_t *interp);

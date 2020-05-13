@@ -539,6 +539,17 @@ static const struct sieve_capa_t {
 };
     
 
+EXPORTED const char *lookup_capability_string(unsigned long long flag)
+{
+    const struct sieve_capa_t *capa;
+
+    for (capa = sieve_capabilities; capa->str; capa++) {
+        if (flag == capa->flag) return capa->str;
+    }
+
+    return NULL;
+}
+
 unsigned long long lookup_capability(const char *str)
 {
     const struct sieve_capa_t *capa;
