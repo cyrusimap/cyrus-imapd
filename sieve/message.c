@@ -160,25 +160,50 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
  *
  * incompatible with: [e]reject
  */
-int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
+int do_fileinto(sieve_interp_t *i, void *sc,
+                action_list_t *a, const char *mbox, const char *specialuse,
                 int cancel_keep, int do_create, const char *mailboxid,
                 strarray_t *imapflags, struct buf *headers)
 {
-    action_list_t *b = NULL;
+    action_list_t *new, *b = NULL;
+    const char *errmsg;
+    int ret;
+
+    if (!i->fileinto) return SIEVE_INTERNAL_ERROR;
+
+    new = new_action_list();
+    new->a = ACTION_FILEINTO;
+    new->cancel_keep |= cancel_keep;
+    new->u.fil.mailbox = mbox;
+    new->u.fil.specialuse = specialuse;
+    new->u.fil.imapflags = imapflags;
+    new->u.fil.do_create = do_create;
+    new->u.fil.mailboxid = mailboxid;
+    new->u.fil.headers = headers;
+    new->u.fil.resolved_mailbox = NULL;
+
+    ret = i->fileinto(&new->u.fil, i->interp_context, sc, NULL, &errmsg);
+    if (ret != SIEVE_OK) {
+        ret = SIEVE_RUN_ERROR;
+        goto done;
+    }
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT) {
-            strarray_free(imapflags);
-            return SIEVE_RUN_ERROR;
+            ret = SIEVE_RUN_ERROR;
+            goto done;
         }
 
-        if (a->a == ACTION_FILEINTO && !strcmp(a->u.fil.mailbox, mbox)) {
+        if ((a->a == ACTION_FILEINTO &&
+             !strcmp(a->u.fil.resolved_mailbox, new->u.fil.resolved_mailbox)) ||
+            ((a->a == ACTION_KEEP &&
+              !strcmp(a->u.keep.resolved_mailbox, new->u.fil.resolved_mailbox)))) {
             /* don't bother doing it twice */
             /* check that we have a valid action */
             if (b == NULL) {
-                strarray_free(imapflags);
-                return SIEVE_INTERNAL_ERROR;
+                ret = SIEVE_INTERNAL_ERROR;
+                goto done;
             }
 
             /* cut this action out of the list */
@@ -192,17 +217,13 @@ int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
         a = a->next;
     }
 
-    a = new_action_list();
-    a->a = ACTION_FILEINTO;
-    a->cancel_keep |= cancel_keep;
-    a->u.fil.mailbox = mbox;
-    a->u.fil.specialuse = specialuse;
-    a->u.fil.imapflags = imapflags;
-    a->u.fil.do_create = do_create;
-    a->u.fil.mailboxid = mailboxid;
-    a->u.fil.headers = headers;
+    b->next = new;
 
-    b->next = a;
+  done:
+    if (ret != SIEVE_OK) {
+        free_action_list(new);
+        return ret;
+    }
 
     return 0;
 }
@@ -248,23 +269,41 @@ int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
  *
  * incompatible with: [e]reject
  */
-int do_keep(action_list_t *a, strarray_t *imapflags, struct buf *headers)
+int do_keep(sieve_interp_t *i, void *sc,
+            action_list_t *a, strarray_t *imapflags, struct buf *headers)
 {
-    action_list_t *b = NULL;
+    action_list_t *new, *b = NULL;
+    const char *errmsg;
+    int ret;
+
+    new = new_action_list();
+    new->a = ACTION_KEEP;
+    new->cancel_keep = 1;
+    new->u.keep.imapflags = imapflags;
+    new->u.keep.headers = headers;
+    new->u.keep.resolved_mailbox = NULL;
+
+    ret = i->keep(&new->u.keep, i->interp_context, sc, NULL, &errmsg);
+    if (ret != SIEVE_OK) {
+        ret = SIEVE_RUN_ERROR;
+        goto done;
+    }
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT) {
-            return SIEVE_RUN_ERROR;
-            strarray_free(imapflags);
+            ret = SIEVE_RUN_ERROR;
+            goto done;
         }
 
-        if (a->a == ACTION_KEEP) {
+        if (a->a == ACTION_KEEP ||
+            (a->a == ACTION_FILEINTO &&
+             !strcmp(a->u.fil.resolved_mailbox, new->u.keep.resolved_mailbox))) {
             /* don't bother doing it twice */
             /* check that we have a valid action */
             if (b == NULL) {
-                strarray_free(imapflags);
-                return SIEVE_INTERNAL_ERROR;
+                ret = SIEVE_INTERNAL_ERROR;
+                goto done;
             }
             /* cut this action out of the list */
             b->next = a->next;
@@ -277,13 +316,13 @@ int do_keep(action_list_t *a, strarray_t *imapflags, struct buf *headers)
         a = a->next;
     }
 
-    a = new_action_list();
-    a->a = ACTION_KEEP;
-    a->cancel_keep = 1;
-    a->u.keep.imapflags = imapflags;
-    a->u.keep.headers = headers;
+    b->next = new;
 
-    b->next = a;
+  done:
+    if (ret != SIEVE_OK) {
+        free_action_list(new);
+        return ret;
+    }
 
     return 0;
 }

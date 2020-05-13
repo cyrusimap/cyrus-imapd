@@ -413,7 +413,7 @@ static int fuzzy_match_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static int fuzzy_match(mbname_t *mbname)
+EXPORTED int fuzzy_match(mbname_t *mbname)
 {
     struct fuzz_rock frock;
     char *prefix = NULL;
@@ -743,8 +743,8 @@ static void deliver_remote(message_data_t *msgdata,
     }
 }
 
-EXPORTED int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
-                           const mbname_t *origmbname)
+static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
+                         const mbname_t *origmbname)
 {
     message_data_t *md = mydata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
