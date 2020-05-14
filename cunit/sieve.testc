@@ -404,11 +404,16 @@ static int reject(void *ac, void *ic, void *sc __attribute__((unused)),
 }
 
 static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
-                    void *mc __attribute__((unused)),
+                    void *mc,
                     const char **errmsg __attribute__((unused)))
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *)ac;
     sieve_test_context_t *ctx = (sieve_test_context_t *)ic;
+
+    if (!mc) {
+        /* just doing destination mailbox resolution */
+        return SIEVE_OK;
+    }
 
     ctx->stats.actions++;
     ctx->stats.fileintos++;
@@ -424,11 +429,16 @@ static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
 }
 
 static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
-                void *mc __attribute__((unused)),
+                void *mc,
                 const char **errmsg __attribute__((unused)))
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *)ac;
     sieve_test_context_t *ctx = (sieve_test_context_t *)ic;
+
+    if (!mc) {
+        /* just doing destination mailbox resolution */
+        return SIEVE_OK;
+    }
 
     ctx->stats.actions++;
     ctx->stats.keeps++;
