@@ -58,7 +58,7 @@ sub new
     if ($maj == 3 && $min == 0) {
         # need to explicitly add 'body' to sieve_extensions for 3.0
         $config->set(sieve_extensions =>
-            "fileinto reject vacation vacation-seconds imapflags notify " .
+            "fileinto reject vacation vacation-seconds imap4flags notify " .
             "envelope relational regex subaddress copy date index " .
             "imap4flags mailbox mboxmetadata servermetadata variables " .
             "body");
@@ -66,7 +66,7 @@ sub new
     elsif ($maj < 3) {
         # also for 2.5 (the earliest Cyrus that Cassandane can test)
         $config->set(sieve_extensions =>
-            "fileinto reject vacation vacation-seconds imapflags notify " .
+            "fileinto reject vacation vacation-seconds imap4flags notify " .
             "envelope relational regex subaddress copy date index " .
             "imap4flags body");
     }
@@ -239,7 +239,7 @@ sub test_vacation_with_following_rules
     xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
     $self->{instance}->install_sieve_script(<<'EOF'
 
-require ["fileinto", "reject", "vacation", "imapflags", "notify", "envelope", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables"];
+require ["fileinto", "reject", "vacation", "imap4flags", "notify", "envelope", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables"];
 
 ### 5. Sieve generated for vacation responses
 if
@@ -803,7 +803,7 @@ sub XXXtest_shared_delivery_addflag
     xlog $self, "Install the sieve script";
     my $scriptname = 'cosbySweater';
     $self->{instance}->install_sieve_script(<<EOF
-require ["imapflags"];
+require ["imap4flags"];
 if header :comparator "i;ascii-casemap" :is "Subject" "quinoa"  {
     addflag "\\\\Flagged";
     keep;
@@ -1346,7 +1346,7 @@ sub test_sieve_setflag
 
     xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
     $self->{instance}->install_sieve_script(<<EOF
-require ["fileinto", "imapflags"];
+require ["fileinto", "imap4flags"];
 if header :matches "Subject" "Message 2" {
     setflag "\\\\Flagged";
 }
@@ -2690,7 +2690,7 @@ sub test_utf8_subject_encoded
 
     xlog $self, "Install a sieve script flagging messages that match utf8 snowman";
     $self->{instance}->install_sieve_script(<<EOF
-require ["fileinto", "imapflags"];
+require ["fileinto", "imap4flags"];
 if header :matches "Subject" "☃" {
     setflag "\\\\Flagged";
 }
@@ -2730,7 +2730,7 @@ sub test_utf8_subject_raw
 
     xlog $self, "Install a sieve script flagging messages that match utf8 snowman";
     $self->{instance}->install_sieve_script(<<EOF
-require ["fileinto", "imapflags"];
+require ["fileinto", "imap4flags"];
 if header :matches "Subject" "☃" {
     setflag "\\\\Flagged";
 }
@@ -2817,7 +2817,7 @@ sub test_double_require
     xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
-require ["imapflags"];
+require ["imap4flags"];
 addflag "\\\\Flagged";
 fileinto "$target";
 EOF

@@ -111,7 +111,7 @@ sub new
                  quotawarn => '98',
                  reverseacls => 'yes',
                  rfc3028_strict => 'no',
-                 sieve_extensions => 'fileinto reject vacation imapflags notify envelope body relational regex subaddress copy mailbox mboxmetadata servermetadata date index variables imap4flags editheader duplicate vacation-seconds',
+                 sieve_extensions => 'fileinto reject vacation imap4flags notify envelope body relational regex subaddress copy mailbox mboxmetadata servermetadata date index variables imap4flags editheader duplicate vacation-seconds',
                  sieve_utf8fileinto => 'yes',
                  sieve_use_lmtp_reject => 'no',
                  sievenotifier => 'mailto',
