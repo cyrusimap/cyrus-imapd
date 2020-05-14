@@ -1628,6 +1628,6 @@ static void generate_script(bytecode_input_t *d, int bc_len)
         printf("];\n\n");
     }
 
-    printf(buf_cstring(&buf));
+    printf("%s", buf_cstring(&buf));
     buf_free(&buf);
 }
