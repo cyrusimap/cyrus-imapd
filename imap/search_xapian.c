@@ -2173,11 +2173,6 @@ struct xapian_snippet_receiver
     const search_snippet_markup_t *markup;
 };
 
-/* Maximum size of a query, determined empirically, is a little bit
- * under 8MB.  That seems like more than enough, so let's limit the
- * total amount of parts text to 4 MB. */
-#define MAX_PARTS_SIZE      (4*1024*1024)
-
 static const char *xapian_rootdir(const char *tier, const char *partition)
 {
     char *confkey;
@@ -2414,12 +2409,12 @@ static void append_text(search_text_receiver_t *rx,
 
     if (tr->part) {
         unsigned len = text->len;
-        if (tr->parts_total + len > MAX_PARTS_SIZE) {
+        if (tr->parts_total + len > SEARCH_MAX_PARTS_SIZE) {
             if (!tr->truncate_warning++)
                 syslog(LOG_ERR, "Xapian: truncating text from "
                                 "message mailbox %s uid %u",
                                 tr->mailbox->name, tr->uid);
-            len = MAX_PARTS_SIZE - tr->parts_total;
+            len = SEARCH_MAX_PARTS_SIZE - tr->parts_total;
         }
 
         if (len) {

@@ -92,6 +92,11 @@ typedef struct search_snippet_markup {
 
 extern search_snippet_markup_t default_snippet_markup;
 
+/* Maximum size of a query, determined empirically, is a little bit
+ * under 8MB.  That seems like more than enough, so let's limit the
+ * total amount of parts text to 4 MB. */
+#define SEARCH_MAX_PARTS_SIZE      (4*1024*1024)
+
 /* The functions in search_text_receiver_t get called at least once for each part of every message.
    The invocations form a sequence:
        begin_message(message_t)

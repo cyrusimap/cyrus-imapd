@@ -51,6 +51,7 @@
 #include "jmap_mail_query.h"
 #include "jmap_util.h"
 #include "json_support.h"
+#include "search_engines.h"
 
 #ifndef JMAP_URN_MAIL
 #define JMAP_URN_MAIL                "urn:ietf:params:jmap:mail"
@@ -411,7 +412,18 @@ static void _matchmime_tr_append_text(search_text_receiver_t *rx,
                                       const struct buf *text)
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
-    buf_append(&tr->buf, text);
+
+    // the in-memory backend is less efficient at indexing long texts
+    static size_t max_len = SEARCH_MAX_PARTS_SIZE > 1024 * 1024 ?
+                            1024 * 1024 : SEARCH_MAX_PARTS_SIZE;
+
+    if (buf_len(&tr->buf) >= max_len) return;
+
+    size_t n = max_len - buf_len(&tr->buf);
+    if (n > buf_len(text)) {
+        n = buf_len(text);
+    }
+    buf_appendmap(&tr->buf, buf_base(text), n);
 }
 
 static void _matchmime_tr_end_part(search_text_receiver_t *rx, int part)
