@@ -468,7 +468,6 @@ static const struct sieve_capa_t {
 
     /* IMAP4 Flags - RFC 5232 */
     { "imap4flags", SIEVE_CAPA_IMAP4FLAGS },
-    { "imapflags",  SIEVE_CAPA_IMAP4FLAGS }, /* draft-melnikov-sieve-imapflags-04 */
 
     /* Subaddress - RFC 5233 */
     { "subaddress", SIEVE_CAPA_SUBADDRESS },

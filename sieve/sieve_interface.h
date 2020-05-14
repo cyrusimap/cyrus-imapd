@@ -135,8 +135,6 @@ typedef struct sieve_imip_context {
 } sieve_imip_context_t;
 
 
-/* sieve_imapflags: NULL -> defaults to \flagged */
-
 typedef struct sieve_redirect_context {
     const char *addr;
     int is_ext_list :1;

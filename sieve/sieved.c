@@ -1431,13 +1431,15 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_MARK:
-            *requires |= SIEVE_CAPA_IMAPFLAGS;
-            generate_token("mark", indent, buf);
+            *requires |= SIEVE_CAPA_IMAP4FLAGS;
+            generate_token("addflag", indent, buf);
+            generate_string(NULL, "\\Flagged", buf);
             break;
 
         case B_UNMARK:
-            *requires |= SIEVE_CAPA_IMAPFLAGS;
-            generate_token("unmark", indent, buf);
+            *requires |= SIEVE_CAPA_IMAP4FLAGS;
+            generate_token("removeflag", indent, buf);
+            generate_string(NULL, "\\Flagged", buf);
             break;
 
         case B_ADDFLAG_ORIG:

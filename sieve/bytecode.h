@@ -187,8 +187,11 @@ enum bytecode {
                                    <then-block: command-list>
                                    <else-block: command-list> (optional)       */
 
-    B_MARK,                     /* require "imapflags"                         */
-    B_UNMARK,                   /* require "imapflags"                         */
+    B_MARK,                     /* deprecated -
+                                   translated to addflag "\\Flagged";          */
+
+    B_UNMARK,                   /* deprecated -
+                                   translated to removeflag "\\Flagged";       */
 
     B_ADDFLAG_ORIG,	        /* legacy addflag w/o support for variables
 
