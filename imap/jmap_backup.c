@@ -1324,9 +1324,11 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    if (!mailbox_user_flag(mailbox, "$restored", &userflag, 0)) {
-        /* Remove $restored flag from mailbox */
-        mailbox_remove_user_flag(mailbox, userflag);
+    if (!(rrock->jrestore->mode & DRY_RUN)) {
+        if (!mailbox_user_flag(mailbox, "$restored", &userflag, 0)) {
+            /* Remove $restored flag from mailbox */
+            mailbox_remove_user_flag(mailbox, userflag);
+        }
     }
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
@@ -1342,7 +1344,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         }
 
         /* Remove $restored flag from message */
-        if (userflag >= 0) {
+        if (userflag >= 0 &&
+            (record->user_flags[userflag/32] & (1<<userflag%31))) {
             struct index_record *newrecord = (struct index_record *) record;
             newrecord->user_flags[userflag/32] &= ~(1<<userflag%31);
         }
