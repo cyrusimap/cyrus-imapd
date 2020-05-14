@@ -1397,7 +1397,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 struct removed_mail *rmail =
                     xmalloc(sizeof(struct removed_mail));
                 rmail->mboxname = xstrdup(mbentry->name);
-                rmail->removed = record->last_updated;
+                rmail->removed = 
+                    isdestroyed_mbox ? timestamp : record->last_updated;
                 rmail->msgno = record->recno;
                 rmail->size = record->size;
                 ptrarray_append(messages, rmail);
