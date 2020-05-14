@@ -1324,11 +1324,6 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    if (rrock->jrestore->cutoff < mailbox->i.changes_epoch) {
-        jmap_closembox(rrock->req, &mailbox);
-        return 0;
-    }
-
     if (!mailbox_user_flag(mailbox, "$restored", &userflag, 0)) {
         /* Remove $restored flag from mailbox */
         mailbox_remove_user_flag(mailbox, userflag);
