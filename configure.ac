@@ -171,6 +171,11 @@ AC_CHECK_SIZEOF(size_t)
 AC_CHECK_SIZEOF(off_t)
 AC_CHECK_SIZEOF(time_t)
 
+dnl Warn if time_t is only 32 bits
+AS_IF([test "$ac_cv_sizeof_time_t" -lt 8],
+      [AC_MSG_WARN([Your platform's time_t is less than 64 bits])
+])
+
 dnl Check that `long long int' is available
 AC_CHECK_SIZEOF(long long int)
 AC_CHECK_SIZEOF(unsigned long long int)
