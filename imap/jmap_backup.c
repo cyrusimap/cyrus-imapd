@@ -1116,6 +1116,7 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
     int r = 0;
 
     if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) return 0;
+    if (!jmap_hasrights_mbentry(rrock->req, mbentry, JACL_ADDITEMS)) return 0;
 
     if (!strcmp(mbentry->name, crock->inboxname) ||
         !strcmp(mbentry->name, crock->outboxname)) {
