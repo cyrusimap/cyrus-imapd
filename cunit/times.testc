@@ -557,22 +557,26 @@ test_rfc5322(void)
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 1230969900);
 
+#if SIZEOF_TIME_T >= 8
     /* Year 9999 */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("Fri, 31-Dec-9999 23:59:59 +0000", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, 253402300799);
+#endif
 
     /* Year 1 - This will fail*/
     t = UNINIT_TIMET;
     r = time_from_rfc5322("1 Jan 1 00:00:00 +0000", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, -1);
 
+#if SIZEOF_TIME_T >= 8
     /* 5 digit year */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("Sat, 1 Jan 10000 00:00:00", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 25);
     CU_ASSERT_EQUAL(t, 253402300800);
+#endif
 
     /* Invalid date */
     t = UNINIT_TIMET;
