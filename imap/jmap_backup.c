@@ -1520,25 +1520,6 @@ static void restore_choose_draft_cb(const char *msgid __attribute__((unused)),
     free(draft);
 }
 
-static int in_folder_cb(const conv_guidrec_t *rec, void *rock)
-{
-    intptr_t foldernum = (intptr_t)rock;
-
-    if (rec->version < 1) {
-        syslog(LOG_ERR, "%s:%s: outdated guid record in mailbox %s",
-                __FILE__, __func__, rec->mboxname);
-        return IMAP_INTERNAL;
-    }
-
-    if (rec->foldernum == foldernum &&
-        (rec->system_flags & FLAG_DELETED) == 0 &&
-        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) == 0) {
-        return IMAP_MAILBOX_EXISTS;
-    }
-
-    return 0;
-}
-
 static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 {
     arrayu64_t *msgnos = (arrayu64_t *) data;
@@ -1546,70 +1527,66 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     jmap_req_t *req = rrock->req;
     mbname_t *mbname = mbname_from_intname(mboxname);
     struct mailbox *newmailbox = NULL, *mailbox = NULL;
-    const char *destmboxname = mboxname;
     int r = 0;
     size_t i = 0;
 
-    if (mbname_isdeleted(mbname)) {
+    if (!(rrock->jrestore->mode & DRY_RUN) && mbname_isdeleted(mbname)) {
         /* Look for existing mailbox with same (undeleted) name */
         const char *newmboxname = NULL;
+        mbentry_t *mbentry = NULL;
 
         mbname_set_isdeleted(mbname, 0);
         newmboxname = mbname_intname(mbname);
-        destmboxname = newmboxname;
 
-        if (!(rrock->jrestore->mode & DRY_RUN)) {
-            r = mboxlist_lookup(newmboxname, NULL, NULL);
+        r = mboxlist_lookup(newmboxname, &mbentry, NULL);
+        mboxlist_entry_free(&mbentry);
 
-            if (!r) {
-                /* Open existing mailbox */
-                r = mailbox_open_iwl(newmboxname, &newmailbox);
+        if (!r) {
+            /* Open existing mailbox */
+            r = mailbox_open_iwl(newmboxname, &newmailbox);
 
-                if (r) {
-                    syslog(LOG_ERR,
-                           "IOERROR: failed to open mailbox %s", newmboxname);
-                }
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
+                       newmboxname, error_message(r));
+            }
+        }
+        else {
+            /* Create the mailbox */
+            struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+
+            r = mboxlist_createmailbox(newmboxname, MBTYPE_EMAIL,
+                                       /*partition*/NULL, /*isadmin*/0,
+                                       req->accountid, req->authstate,
+                                       /*localonly*/0, /*forceuser*/0,
+                                       /*dbonly*/0, /*notify*/0, &newmailbox);
+            mboxname_release(&namespacelock);
+
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to create mailbox %s: %s",
+                       newmboxname, error_message(r));
             }
             else {
-                /* Create the mailbox */
-                struct mboxlock *namespacelock =
-                    user_namespacelock(req->accountid);
+                /* Copy over any role (/specialuse) */
+                struct buf attrib = BUF_INITIALIZER;
+                const char *annot = "/specialuse";
 
-                r = mboxlist_createmailbox(newmboxname, MBTYPE_EMAIL,
-                                           /*partition*/NULL, /*isadmin*/0,
-                                           req->accountid, req->authstate,
-                                           /*localonly*/0, /*forceuser*/0,
-                                           /*dbonly*/0, /*notify*/0,
-                                           &newmailbox);
-                mboxname_release(&namespacelock);
+                annotatemore_lookup(mboxname, annot,
+                                    req->accountid, &attrib);
 
-                if (r) {
-                    syslog(LOG_ERR,
-                           "IOERROR: failed to create mailbox %s: %s",
-                           newmboxname, error_message(r));
-                }
-                else {
-                    /* Copy over any role (/specialuse) */
-                    struct buf attrib = BUF_INITIALIZER;
-                    const char *annot = "/specialuse";
-
-                    annotatemore_lookup(mboxname, annot,
-                                        req->accountid, &attrib);
-
-                    if (attrib.len) {
-                        r = annotatemore_write(newmboxname, annot,
-                                               req->accountid, &attrib);
-                        if (r) {
-                            syslog(LOG_ERR,
-                                   "IOERROR: failed to write annotation %s: %s",
-                                   annot, error_message(r));
-                        }
+                if (attrib.len) {
+                    r = annotatemore_write(newmboxname, annot,
+                                           req->accountid, &attrib);
+                    if (r) {
+                        syslog(LOG_ERR,
+                               "IOERROR: failed to write annotation %s: %s",
+                               annot, error_message(r));
                     }
-                    buf_reset(&attrib);
                 }
+                buf_reset(&attrib);
             }
         }
     }
+    mbname_free(&mbname);
 
     if (!r) {
         r = jmap_openmbox(req, mboxname, &mailbox, /*rw*/newmailbox == NULL);
@@ -1626,22 +1603,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     message_t *msg = message_new();
     for (i = 0; i < arrayu64_size(msgnos); i++) {
         uint32_t msgno = arrayu64_nth(msgnos, i);
-        int foldernum = conversation_folder_number(req->cstate, destmboxname, 0);
 
         message_set_from_mailbox(mailbox, msgno, msg);
-
-        if (foldernum >= 0) {
-            /* Don't restore if the message already exists in dest mailbox */
-            const struct index_record *record = msg_record(msg);
-
-            r = conversations_guid_foreach(req->cstate,
-                                           message_guid_encode(&record->guid),
-                                           in_folder_cb,
-                                           (void*)((intptr_t) foldernum));
-            if (r == IMAP_MAILBOX_EXISTS) continue;
-            else if (r) goto done;
-        }
-
         if (!(rrock->jrestore->mode & DRY_RUN)) {
             r = recreate_resource(msg, newmailbox, req, 0/*is_update*/);
         }
@@ -1664,7 +1627,6 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
   done:
     mailbox_close(&newmailbox);
     arrayu64_free(msgnos);
-    mbname_free(&mbname);
 }
 
 static int jmap_backup_restore_mail(jmap_req_t *req)
