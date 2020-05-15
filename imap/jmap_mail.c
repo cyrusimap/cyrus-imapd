@@ -2188,14 +2188,6 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "to")))) {
             _email_search_string(this, s, "to", perf_filters);
         }
-        if ((s = json_string_value(json_object_get(filter, "language")))) {
-            /* non-standard */
-            search_expr_t *e = search_expr_new(this, SEOP_FUZZYMATCH);
-            e->attr = search_attr_find("language");
-            e->value.s = xstrdup(s);
-            _email_search_perf_attr(e->attr, perf_filters);
-        }
-
     }
 
     return this;
@@ -2578,7 +2570,6 @@ static int _emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *searc
     search->query->ignore_timer = search->ignore_timer;
     search->query->checkfolder = _jmap_checkfolder;
     search->query->checkfolderrock = req;
-    search->query->attachments_in_any = jmap_is_using(req, JMAP_SEARCH_EXTENSION);
     r = search_query_run(search->query);
     if (r) {
         syslog(LOG_ERR, "jmap: %s: %s", __func__, error_message(r));
@@ -4102,27 +4093,6 @@ static int jmap_email_query(jmap_req_t *req)
     /* Build response */
     json_t *res = jmap_emailquery_reply(req, &query);
     json_object_set(res, "collapseThreads", json_boolean(query.collapse_threads));
-    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
-        /* List language stats */
-        const struct search_engine *engine = search_engine();
-        if (engine->list_lang_stats) {
-            ptrarray_t lstats = PTRARRAY_INITIALIZER;
-            int r = engine->list_lang_stats(req->accountid, &lstats);
-            if (!r) {
-                json_t *jstats = json_object();
-                struct search_lang_stats *lstat;
-                while ((lstat = ptrarray_pop(&lstats))) {
-                    json_t *jstat = json_pack("{s:f}", "weight", lstat->weight);
-                    json_object_set_new(jstats, lstat->iso_lang, jstat);
-                    free(lstat->iso_lang);
-                    free(lstat);
-                }
-                json_object_set_new(res, "debug",
-                        json_pack("{s:o}", "languageStats", jstats));
-            }
-            ptrarray_fini(&lstats);
-        }
-    }
     jmap_ok(req, res);
 
 done:

@@ -675,7 +675,6 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
 
     int opts = SEARCH_VERBOSE(query->verbose);
     if (query->multiple) opts |= SEARCH_MULTIPLE;
-    if (query->attachments_in_any) opts |= SEARCH_ATTACHMENTS_IN_ANY;
 
     /* If the subquery is NOT(x) or AND(NOT(x)..(NOT(y))) then
      * it's likely that we will get lots of results to look up

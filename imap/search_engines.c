@@ -80,7 +80,6 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
-    NULL,
     NULL
 };
 
@@ -110,7 +109,7 @@ EXPORTED const char *search_part_as_string(int part)
         /* ANY */NULL, "FROM", "TO", "CC",
         "BCC", "SUBJECT", "LISTID", "TYPE",
         "HEADERS", "BODY", "LOCATION", "ATTACHMENTNAME",
-        "ATTACHMENTBODY", "DELIVEREDTO", "LANGUAGE"
+        "ATTACHMENTBODY", "DELIVEREDTO"
     };
 
     return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);

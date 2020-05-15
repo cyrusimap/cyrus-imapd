@@ -5356,6 +5356,7 @@ extractor_timeout(struct protstream *s __attribute__((unused)),
 static struct protocol_t http =
 { "http", "HTTP", TYPE_SPEC, { .spec = { &login, &ping, &logout } } };
 
+__attribute__((unused)) // disabled experimental feature
 static int extractor_connect(const char *exturl, struct extractor_ctx *ext)
 {
     struct backend *be;
@@ -5861,8 +5862,6 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
                                  search_text_receiver_t *receiver,
                                  int snippet)
 {
-    const char *exturl =
-        config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
     struct getsearchtext_rock str;
     struct buf buf = BUF_INITIALIZER;
     int format = MESSAGE_SEARCH;
@@ -5887,11 +5886,6 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     str.charset_flags = charset_flags;
     str.partids = partids;
     str.snippet_iteration = 0;
-    if (exturl) {
-        str.ext = index_text_extractor;
-        r = extractor_connect(exturl, str.ext);
-        if (r) return r;
-    }
 
     /* Search receiver can override text conversion */
     if (receiver->index_charset_flags) {

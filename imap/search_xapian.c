@@ -1285,9 +1285,8 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
          * field"; instead we fake it by explicitly searching for
           * all of the available prefixes */
         for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-            if (i == SEARCH_PART_ATTACHMENTBODY &&
-                !(opts & SEARCH_ATTACHMENTS_IN_ANY)) {
-                continue;
+            if (i == SEARCH_PART_ATTACHMENTBODY) {
+                continue; // experimental
             }
             for (j = 0; j < strarray_size(on->items); j++) {
                 void *q = xapian_query_new_match(db, i, strarray_nth(on->items, j));
@@ -1302,20 +1301,6 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
         assert(on->items != NULL && strarray_size(on->items));
         const char *val = strarray_nth(on->items, 0);
         qq = xapian_query_new_has_doctype(db, val[0], NULL);
-        break;
-    case SEARCH_PART_LANGUAGE:
-        if (strarray_size(on->items) > 1) {
-            for (j = 0; j < strarray_size(on->items); j++) {
-                void *q = xapian_query_new_language(db, strarray_nth(on->items, j));
-                if (q) ptrarray_push(&childqueries, q);
-            }
-            qq = xapian_query_new_compound(db, /*is_or*/1,
-                                           (xapian_query_t **)childqueries.data,
-                                           childqueries.count);
-        }
-        else {
-            qq = xapian_query_new_language(db, strarray_nth(on->items, 0));
-        }
         break;
     default:
         assert(on->items != NULL);
@@ -1806,10 +1791,6 @@ out:
 static int validate_query(xapian_db_t *db, struct opnode *on)
 {
     if (!on) return 0;
-
-    if (on->op == SEARCH_PART_LANGUAGE && !xapian_db_supports_langquery(db)) {
-        return IMAP_SEARCH_NOT_SUPPORTED;
-    }
     struct opnode *child;
     for (child = on->children ; child ; child = child->next) {
         int r = validate_query(db, child);
@@ -1935,22 +1916,6 @@ out:
     return r;
 }
 
-static void add_stemmers(xapian_db_t *db, struct opnode *on)
-{
-    if (!on) return;
-
-    if (on->op == SEARCH_PART_LANGUAGE) {
-        int i;
-        for (i = 0; i < strarray_size(on->items); i++) {
-            xapian_db_add_stemmer(db, strarray_nth(on->items, i));
-        }
-    }
-    struct opnode *child;
-    for (child = on->children ; child ; child = child->next) {
-        add_stemmers(db, child);
-    }
-}
-
 static int run_internal(xapian_builder_t *bb)
 {
     int r = 0;
@@ -1965,9 +1930,6 @@ static int run_internal(xapian_builder_t *bb)
     if (r) return r;
 
     if (bb->root) optimise_nodes(NULL, bb->root);
-
-    /* Stem using any languages explicitly requested by the user. */
-    add_stemmers(bb->lock.db, bb->root);
 
     /* A database can contain sub-databases of multiple versions */
     if (xapian_db_has_otherthan_v4_index(bb->lock.db)) {
@@ -2157,7 +2119,6 @@ struct xapian_update_receiver
     strarray_t *activetiers;
     hash_table cached_seqs;
     int mode;
-    int reindex_parts;
 };
 
 /* receiver used for extracting snippets after a search */
@@ -2516,33 +2477,31 @@ static int end_message_update(search_text_receiver_t *rx)
     if (r) goto out;
     ++tr->uncommitted;
 
-    if (config_getswitch(IMAPOPT_SEARCH_INDEX_PARTS)) {
-        // index body parts with content guid
-        const struct message_guid *last_guid = NULL;
-        for (i = 0 ; i < tr->super.segs.count ; i++) {
-            seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
-            if (seg->doctype == SEARCH_XAPIAN_DOCTYPE_MSG) continue;
+    // index body parts with content guid
+    const struct message_guid *last_guid = NULL;
+    for (i = 0 ; i < tr->super.segs.count ; i++) {
+        seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
+        if (seg->doctype == SEARCH_XAPIAN_DOCTYPE_MSG) continue;
 
-            if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
-                if (last_guid) {
-                    r = xapian_dbw_end_doc(tr->dbw);
-                    if (r) goto out;
-                    ++tr->uncommitted;
-                }
-
-                last_guid = &seg->guid;
-                // TODO which internaldate, if any?
-                r = xapian_dbw_begin_doc(tr->dbw, &seg->guid, seg->doctype);
+        if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
+            if (last_guid) {
+                r = xapian_dbw_end_doc(tr->dbw);
                 if (r) goto out;
+                ++tr->uncommitted;
             }
-            r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
+
+            last_guid = &seg->guid;
+            // TODO which internaldate, if any?
+            r = xapian_dbw_begin_doc(tr->dbw, &seg->guid, seg->doctype);
             if (r) goto out;
         }
-        if (last_guid) {
-            r = xapian_dbw_end_doc(tr->dbw);
-            if (r) goto out;
-            ++tr->uncommitted;
-        }
+        r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
+        if (r) goto out;
+    }
+    if (last_guid) {
+        r = xapian_dbw_end_doc(tr->dbw);
+        if (r) goto out;
+        ++tr->uncommitted;
     }
 
 out:
@@ -2667,7 +2626,6 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     if (seq) seqset_free(seq);
 
     tr->super.mailbox = mailbox;
-    tr->reindex_parts = flags & SEARCH_UPDATE_REINDEX_PARTS;
 
 out:
     free(fname);
@@ -2811,7 +2769,6 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     }
 
     tr->super.mailbox = NULL;
-    tr->reindex_parts = 0;
 
     if (tr->dbw) {
         xapian_dbw_close(tr->dbw);
@@ -2993,10 +2950,7 @@ static int flush_snippets(search_text_receiver_t *rx)
                 r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
             if (r) goto out;
 
-            if (config_getswitch(IMAPOPT_SEARCH_INDEX_PARTS))
-                r = xapian_snipgen_begin_doc(tr->snipgen, &seg->guid, seg->doctype);
-            else
-                r = xapian_snipgen_begin_doc(tr->snipgen, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
+            r = xapian_snipgen_begin_doc(tr->snipgen, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
             if (r) break;
             generate_snippet_terms(tr->snipgen, seg->part, tr->root);
 
@@ -3355,7 +3309,6 @@ static int reindex_mb(void *rock,
     r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw, tr->mode);
     if (r) goto done;
     tr->super.mailbox = mailbox;
-    tr->reindex_parts = 1; /* force re-indexing body parts */
 
     tr->activedirs = strarray_dup(filter->destpaths);
     tr->activetiers = strarray_dup(filter->desttiers);
@@ -3981,27 +3934,6 @@ out:
     return r;
 }
 
-static int list_lang_stats(const char *userid, ptrarray_t *lstats)
-{
-    struct mailbox *mailbox = NULL;
-    char *inboxname = mboxname_user_mbox(userid, NULL);
-    struct xapiandb_lock lock = XAPIANDB_LOCK_INITIALIZER;
-
-    int r = mailbox_open_irl(inboxname, &mailbox);
-    if (r) goto out;
-
-    r = xapiandb_lock_open(mailbox, &lock);
-    if (r) goto out;
-
-    r = xapian_list_lang_stats(lock.db, lstats);
-
-out:
-    xapiandb_lock_release(&lock);
-    mailbox_close(&mailbox);
-    free(inboxname);
-    return r;
-}
-
 const struct search_engine xapian_search_engine = {
     "Xapian",
     SEARCH_FLAG_CAN_BATCH | SEARCH_FLAG_CAN_GUIDSEARCH,
@@ -4016,7 +3948,6 @@ const struct search_engine xapian_search_engine = {
     list_files,
     compact_dbs,
     delete_user,  /* XXX: fixme */
-    check_config,
-    list_lang_stats
+    check_config
 };
 
