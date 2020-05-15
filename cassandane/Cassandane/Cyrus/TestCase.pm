@@ -279,19 +279,6 @@ magic(JMAPNoHasAttachment => sub {
 magic(JMAPExtensions => sub {
     shift->config_set('jmap_nonstandard_extensions' => 'yes');
 });
-magic(SearchAttachmentExtractor => sub {
-    my $port = Cassandane::PortManager::alloc();
-    shift->config_set('search_attachment_extractor_url' =>
-        "http://localhost:$port/extractor");
-});
-magic(SearchIndexParts => sub {
-    shift->config_set('search_index_parts' => 'yes');
-});
-magic(SearchLanguage => sub {
-    my $self = shift;
-    $self->config_set('search_index_language' => 'yes');
-    $self->config_set('search_query_language' => 'yes');
-});
 magic(SieveUTF8Fileinto => sub {
     shift->config_set('sieve_utf8fileinto' => 'yes');
 });
