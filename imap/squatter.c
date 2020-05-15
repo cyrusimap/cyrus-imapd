@@ -99,7 +99,6 @@ static int verbose = 0;
 static int incremental_mode = 0;
 static int batch_mode = 0;
 static int xapindexed_mode = 0;
-static int reindex_parts_mode = 0;
 static int recursive_flag = 0;
 static int annotation_flag = 0;
 static int sleepmicroseconds = 0;
@@ -128,7 +127,6 @@ __attribute__((noreturn)) static int usage(const char *name)
             "  -i          index incrementally\n"
             "  -N name     index mailbox names starting with name\n"
             "  -S seconds  sleep seconds between indexing mailboxes\n"
-            "  -P          reindex body parts\n"
             "  -Z          Xapian: use internal index rather than cyrus.indexed.db\n"
             "\n"
             "Index sources:\n"
@@ -144,7 +142,7 @@ __attribute__((noreturn)) static int usage(const char *name)
             "  -t tier...  compact from tiers\n"
             "  -F          filter during compaction\n"
             "  -T dir      use temporary directory dir during compaction\n"
-            "  -X          reindex during compaction (including body parts)\n"
+            "  -X          reindex during compaction\n"
             "  -o          copy db rather compacting\n"
             "  -U          only compact if re-indexing\n"
             "\n"
@@ -242,8 +240,6 @@ static int index_one(const char *name, int blocking)
         flags |= SEARCH_UPDATE_BATCH;
     if (xapindexed_mode)
         flags |= SEARCH_UPDATE_XAPINDEXED;
-    if (reindex_parts_mode)
-        flags |= SEARCH_UPDATE_REINDEX_PARTS;
 
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &squat_namespace, NULL);
@@ -845,7 +841,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:N:RUXPZT:S:Fde:f:mn:riavAz:t:ouhl")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:N:RUXZT:S:Fde:f:mn:riavAz:t:ouhl")) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
@@ -862,10 +858,6 @@ int main(int argc, char **argv)
 
         case 'X':
             compact_flags |= SEARCH_COMPACT_REINDEX;
-            break;
-
-        case 'P':
-            reindex_parts_mode = 1;
             break;
 
         case 'Z':

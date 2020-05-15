@@ -101,9 +101,6 @@ extern int xapian_filter(const char *dest, const char **sources,
 extern int xapian_db_has_legacy_v4_index(const xapian_db_t *);
 extern int xapian_db_has_otherthan_v4_index(const xapian_db_t *);
 
-/* Language indexing support */
-extern int xapian_list_lang_stats(xapian_db_t*, ptrarray_t*);
-
 /* Document interface */
 extern xapian_doc_t *xapian_doc_new(void);
 extern void xapian_doc_index_text(xapian_doc_t *doc, const char *text, size_t len);

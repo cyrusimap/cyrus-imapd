@@ -149,7 +149,6 @@ struct search_engine {
 #define SEARCH_COMPACT_REINDEX  (1<<7)  /* re-index all matching messages */
 #define SEARCH_COMPACT_ONLYUPGRADE (1<<8) /* only compact if reindexing */
 #define SEARCH_COMPACT_XAPINDEXED (1<<9) /* use XAPIAN index */
-#define SEARCH_ATTACHMENTS_IN_ANY (1<<10) /* search attachments in ANY part */
     search_builder_t *(*begin_search)(struct mailbox *, int opts);
     void (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
@@ -168,7 +167,6 @@ struct search_engine {
                    int flags);
     int (*deluser)(const char *userid);
     int (*check_config)(char **errstr);
-    int (*list_lang_stats)(const char *userid, ptrarray_t *counts);
 };
 
 /* Returns the configured search engine */
@@ -189,7 +187,6 @@ extern void search_end_search(search_builder_t *);
 #define SEARCH_UPDATE_BATCH (1<<2)
 #define SEARCH_UPDATE_XAPINDEXED (1<<3)
 #define SEARCH_UPDATE_AUDIT (1<<4)
-#define SEARCH_UPDATE_REINDEX_PARTS (1<<5)
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox *mailbox,
