@@ -1278,21 +1278,23 @@ done:
 }
 
 struct mail_rock {
-    hash_table *messages;
-    hash_table *drafts;
+    hash_table *emailids;
+    hash_table *msgids;
+    hash_table *mailboxes;
     struct buf buf;
 };
 
 struct removed_mail {
     char *mboxname;
+    char *guid;
     time_t removed;
     uint32_t msgno;
     uint32_t size;
 };
 
-struct draft {
-    ptrarray_t messages;
-    int ignore;
+struct message_t {
+    ptrarray_t deleted;
+    unsigned undeleted : 1;
 };
 
 static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
@@ -1362,9 +1364,16 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
             isdestroyed_msg = 1;
         }
 
-        if (isdestroyed_msg) {
-            ptrarray_t *messages = NULL;
+        /* See if we already have this message GUID */
+        const char *guid = message_guid_encode(&record->guid);
+        struct message_t *message = hash_lookup(guid, mrock->emailids);
 
+        if (message && message->undeleted) {
+            /* An undeleted copy of this message exists */
+            isdestroyed_msg = 0;
+        }
+
+        if (isdestroyed_msg) {
             if (record->system_flags & FLAG_DRAFT) {
                 /* Destroyed draft */
                 if (!msgid) {
@@ -1373,52 +1382,56 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 }
 
                 /* See if we already have the Message-ID */
-                struct draft *draft = hash_lookup(msgid, mrock->drafts);
-
-                if (!draft) {
-                    /* Create message list for this Message-ID */
-                    draft = xzmalloc(sizeof(struct draft));
-                    hash_insert(msgid, draft, mrock->drafts);
+                message = hash_lookup(msgid, mrock->msgids);
+                if (!message) {
+                    /* Create message for this Message-ID */
+                    message = xzmalloc(sizeof(struct message_t));
+                    hash_insert(msgid, message, mrock->msgids);
                 }
-
-                if (!draft->ignore) messages = &draft->messages;
-            }
-            else if (rrock->jrestore->mode & UNDO_NONDRAFTS) {
-                /* See if we already have this message GUID */
-                const char *guid = message_guid_encode(&record->guid);
-
-                messages = hash_lookup(guid, mrock->messages);
-                if (!messages) {
-                    /* Create message list for this GUID */
-                    messages = ptrarray_new();
-                    hash_insert(guid, messages, mrock->messages);
+                else if (message->undeleted) {
+                    /* An undeleted copy of this draft exists */
+                    continue;
                 }
             }
+            else if (!message && (rrock->jrestore->mode & UNDO_NONDRAFTS)) {
+                /* Create message for this GUID */
+                message = xzmalloc(sizeof(struct message_t));
+                hash_insert(guid, message, mrock->emailids);
+            }
 
-            if (messages) {
+            if (message) {
                 /* Add this destroyed message to its list */
                 struct removed_mail *rmail =
                     xmalloc(sizeof(struct removed_mail));
                 rmail->mboxname = xstrdup(mbentry->name);
-                rmail->removed = 
+                rmail->guid = 
+                    (record->system_flags & FLAG_DRAFT) ? xstrdup(guid) : NULL;
+                rmail->removed =
                     isdestroyed_mbox ? timestamp : record->last_updated;
                 rmail->msgno = record->recno;
                 rmail->size = record->size;
-                ptrarray_append(messages, rmail);
+                ptrarray_append(&message->deleted, rmail);
             }
         }
-        else if (msgid && !(record->system_flags & FLAG_DRAFT)) {
-            /* Non-draft - see if we already have the Message-ID */
-            struct draft *draft = hash_lookup(msgid, mrock->drafts);
-
-            if (!draft) {
-                /* Create message list for this Message-ID */
-                draft = xzmalloc(sizeof(struct draft));
-                hash_insert(msgid, draft, mrock->drafts);
+        else {
+            if (!message) {
+                /* Create message for this GUID */
+                message = xzmalloc(sizeof(struct message_t));
+                hash_insert(guid, message, mrock->emailids);
             }
+            message->undeleted = 1;
 
-            /* Ignore any drafts with this Message-ID */
-            draft->ignore = 1;
+            if (msgid && !(record->system_flags & FLAG_DRAFT)) {
+                /* Non-draft - see if we already have this Message-ID */
+                message = hash_lookup(msgid, mrock->msgids);
+                if (!message) {
+                    /* Create message for this Message-ID */
+                    message = xzmalloc(sizeof(struct message_t));
+                    hash_insert(msgid, message, mrock->msgids);
+                }
+
+                message->undeleted = 1;
+            }
         }
     }
 
@@ -1440,68 +1453,84 @@ static int rmail_cmp(const void **a, const void **b)
 static void restore_mailbox_plan_cb(const char *guid __attribute__((unused)),
                                     void *data, void *rock)
 {
-    ptrarray_t *messages = (ptrarray_t *) data;
+    struct message_t *message = (struct message_t *) data;
+    ptrarray_t *deleted = &message->deleted;
     hash_table *mailboxes = (hash_table *) rock;
     time_t last_removed;
     int i;
 
-    ptrarray_sort(messages, &rmail_cmp);
+    if (!message->undeleted) ptrarray_sort(deleted, &rmail_cmp);
 
-    /* Add the latest draft (and any with the same removed date) to the plan */
-    for (i = 0; i < ptrarray_size(messages); i++) {
-        struct removed_mail *rmail = ptrarray_nth(messages, i);
+    for (i = 0; i < ptrarray_size(deleted); i++) {
+        struct removed_mail *rmail = ptrarray_nth(deleted, i);
 
-        if (i == 0) last_removed = rmail->removed;
+        if (!message->undeleted) {
+            /* Add the last removed copies of the message to the plan */
+            if (i == 0) last_removed = rmail->removed;
 
-        if (rmail->removed == last_removed) {
-            arrayu64_t *msgnos = hash_lookup(rmail->mboxname, mailboxes);
-            if (!msgnos) {
-                /* Create msgno list for this mailbox */
-                msgnos = arrayu64_new();
-                hash_insert(rmail->mboxname, msgnos, mailboxes);
+            if (rmail->removed == last_removed) {
+                arrayu64_t *msgnos = hash_lookup(rmail->mboxname, mailboxes);
+                if (!msgnos) {
+                    /* Create msgno list for this mailbox */
+                    msgnos = arrayu64_new();
+                    hash_insert(rmail->mboxname, msgnos, mailboxes);
+                }
+
+                /* Add this msgno to the mailbox */
+                arrayu64_append(msgnos, rmail->msgno);
             }
-
-            /* Add this msgno to the mailbox */
-            arrayu64_append(msgnos, rmail->msgno);
         }
 
         free(rmail->mboxname);
         free(rmail);
     }
 
-    ptrarray_free(messages);
+    ptrarray_fini(deleted);
+    free(message);
 }
 
 static void restore_choose_draft_cb(const char *msgid __attribute__((unused)),
                                     void *data, void *rock)
 {
-    struct draft *draft = (struct draft *) data;
-    ptrarray_t *messages = &draft->messages;
+    struct mail_rock *mrock = (struct mail_rock *) rock;
+    struct message_t *message = (struct message_t *) data;
+    ptrarray_t *drafts = &message->deleted;
     struct removed_mail *maxdraft = NULL;
     int i = 0, num_last = 0;
 
     /* Add the largest of the last 5 drafts to the plan */
-    if (!draft->ignore) {
-        ptrarray_sort(messages, &rmail_cmp);
-        maxdraft = ptrarray_nth(messages, i++);
+    if (!message->undeleted) {
+        ptrarray_sort(drafts, &rmail_cmp);
         num_last = 5;
     }
 
-    for (; i < ptrarray_size(messages); i++) {
-        struct removed_mail *rmail = ptrarray_nth(messages, i);
+    for (i = 0; i < ptrarray_size(drafts); i++) {
+        struct removed_mail *rmail = ptrarray_nth(drafts, i);
         struct removed_mail *freeme = rmail;
 
-        if (i < num_last && rmail->size > maxdraft->size) {
-            freeme = maxdraft;
-            maxdraft = rmail;
+        if (num_last) {
+            struct message_t *emailid =
+                hash_lookup(rmail->guid, mrock->emailids);
+
+            if (!(emailid && emailid->undeleted)) {
+                if (!maxdraft || rmail->size > maxdraft->size) {
+                    freeme = maxdraft;
+                    maxdraft = rmail;
+                }
+
+                num_last--;
+            }
         }
 
-        free(freeme->mboxname);
-        free(freeme);
+        if (freeme) {
+            free(freeme->mboxname);
+            free(freeme->guid);
+            free(freeme);
+        }
     }
 
     if (maxdraft) {
-        hash_table *mailboxes = (hash_table *) rock;
+        hash_table *mailboxes = mrock->mailboxes;
         arrayu64_t *msgnos = hash_lookup(maxdraft->mboxname, mailboxes);
         if (!msgnos) {
             /* Create msgno list for this mailbox */
@@ -1513,11 +1542,12 @@ static void restore_choose_draft_cb(const char *msgid __attribute__((unused)),
         arrayu64_append(msgnos, maxdraft->msgno);
 
         free(maxdraft->mboxname);
+        free(maxdraft->guid);
         free(maxdraft);
     }
 
-    ptrarray_fini(messages);
-    free(draft);
+    ptrarray_fini(drafts);
+    free(message);
 }
 
 static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
@@ -1644,12 +1674,13 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     }
 
     hash_table mailboxes = HASH_TABLE_INITIALIZER;
-    hash_table messages = HASH_TABLE_INITIALIZER;
-    hash_table drafts = HASH_TABLE_INITIALIZER;
+    hash_table emailids = HASH_TABLE_INITIALIZER;
+    hash_table msgids = HASH_TABLE_INITIALIZER;
     char *inbox = mboxname_user_mbox(req->accountid, NULL);
-    struct mail_rock mrock =
-      { construct_hash_table(&messages, 128, 0),
-        construct_hash_table(&drafts, 1024, 0), // every Message-ID of non-drafts
+    struct mail_rock mrock = {
+        construct_hash_table(&emailids, 1024, 0),  // every message GUID
+        construct_hash_table(&msgids, 1024, 0), // every Message-ID of non-drafts
+        construct_hash_table(&mailboxes, 32, 0),
         BUF_INITIALIZER };
     struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
                                   NULL, NULL, &mrock, NULL };
@@ -1660,24 +1691,22 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
                       MBOXTREE_DELETED);
     buf_free(&mrock.buf);
 
-    /* Find the most recent removedDate for each destroyed message
-       and group messages by mailbox */
-    construct_hash_table(&mailboxes, 32, 0);
-    hash_enumerate(&messages, &restore_mailbox_plan_cb, &mailboxes);
-    free_hash_table(&messages, NULL);
-
-    /* Find the largest of the 5 most recent destroyed copies of a draft
+    /* Find the largest of the 5 most recently destroyed copies of each draft
        and add them to the proper mailbox plan */
-    hash_enumerate(&drafts, &restore_choose_draft_cb, &mailboxes);
-    free_hash_table(&drafts, NULL);
+    hash_enumerate(&msgids, &restore_choose_draft_cb, &mrock);
+    free_hash_table(&msgids, NULL);
+
+    /* Find the most recently destroyed copies of non-draft messages
+       and add them to the proper mailbox plan */
+    hash_enumerate(&emailids, &restore_mailbox_plan_cb, &mailboxes);
+    free_hash_table(&emailids, NULL);
 
     /* Restore destroyed messages by mailbox */
     hash_enumerate(&mailboxes, &restore_mailbox_cb, &rrock);
     free_hash_table(&mailboxes, NULL);
 
     if (!(restore.mode & DRY_RUN)) {
-        mboxname_setdeletedmodseq(inbox,
-                                  rrock.deletedmodseq, MBTYPE_EMAIL, 0);
+        mboxname_setdeletedmodseq(inbox, rrock.deletedmodseq, MBTYPE_EMAIL, 0);
     }
     free(inbox);
 
