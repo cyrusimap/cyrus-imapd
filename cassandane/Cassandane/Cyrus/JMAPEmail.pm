@@ -5550,7 +5550,6 @@ sub test_email_query_toaddress
                         { "to" => 'bar@local' },
                         { "cc" => 'bar@local' },
                         { "bcc" => 'bar@local' },
-                        { "deliveredTo" => 'bar@local' },
                       ],
                    },
                    { "text" => "test" },
