@@ -53,12 +53,14 @@
 #include "global.h"
 #include "hash.h"
 #include "index.h"
-#include "imap_err.h"
 #include "jmap_util.h"
 #include "json_support.h"
 #include "search_query.h"
 #include "times.h"
 #include "xapian_wrap.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 EXPORTED int jmap_readprop_full(json_t *root, const char *prefix, const char *name,
                               int mandatory, json_t *invalid, const char *fmt,
