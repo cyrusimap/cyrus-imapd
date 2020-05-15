@@ -1349,7 +1349,15 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         if (userflag >= 0 &&
             (record->user_flags[userflag/32] & (1<<userflag%31))) {
             struct index_record *newrecord = (struct index_record *) record;
+
             newrecord->user_flags[userflag/32] &= ~(1<<userflag%31);
+            r = mailbox_rewrite_index_record(mailbox, newrecord);
+            if (r) {
+                syslog(LOG_ERR,
+                       "IOERROR: failed to rewrite index record for %s:%u",
+                       mbentry->name, record->uid);
+                return 0;
+            }
         }
 
         if ((record->system_flags & FLAG_DELETED) ||
