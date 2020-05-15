@@ -1436,7 +1436,7 @@ dnl Check for ICU library, needed for charset conversions and non-gregorian
 dnl rscale conversions
 dnl
 with_icu4c=no
-PKG_CHECK_MODULES([ICU], [icu-i18n icu-uc], [
+PKG_CHECK_MODULES([ICU], [icu-i18n >= 55 icu-uc >= 55], [
                     AC_DEFINE(HAVE_ICU, [], [Build with ICU support])
                     with_icu4c=yes
                   ],

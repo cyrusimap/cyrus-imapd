@@ -17,7 +17,7 @@ Required Build Dependencies
 Building a basic Cyrus that can send and receive email: the minimum libraries required to build a functional Cyrus.
 
 .. csv-table:: Build Dependencies
-    :header: "Package", "Debian", "RedHat"
+    :header: "Package", "Debian", "RedHat", "Notes"
 
     `autoconf`_, "autoconf", "autoconf"
     `automake`_, "automake", "automake"
@@ -29,7 +29,7 @@ Building a basic Cyrus that can send and receive email: the minimum libraries re
     `jansson`_, libjansson-dev, jansson-devel
     `libbsd`_ ,libbsd-dev, libbsd-devel
     `libtool`_, libtool, libtool
-    `ICU`_, libicu-dev, libicu-devel
+    `ICU`_, libicu-dev, libicu-devel, "version 55 or newer"
     `uuid`_, uuid-dev, libuuid-devel
     `openssl`_ :ref:`(Note about versions) <openssl-versions>`, libssl-dev, openssl-devel
     `pkgconfig`_, pkg-config, pkgconfig
