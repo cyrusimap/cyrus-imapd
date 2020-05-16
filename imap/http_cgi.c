@@ -163,6 +163,7 @@ static int meth_get(struct transaction_t *txn,
     hdrcache_t resp_hdrs = NULL;
     struct body_t resp_body;
     long code = 0;
+    extern char **environ;
     
     memset(&resp_body, 0, sizeof(struct body_t));
 
