@@ -154,7 +154,7 @@ enum sieve_capa_flag {
 
     /* Notifications - RFC 5435 */
     SIEVE_CAPA_ENOTIFY      = 1LL<<23,
-    SIEVE_CAPA_NOTIFY       = 1LL<<24, /* draft-martin-sieve-notify-01 */
+    SIEVE_CAPA_NOTIFY       = 0LL<<24, /* deprecated */
 
     /* Ihave - RFC 5463 */
     SIEVE_CAPA_IHAVE        = 1LL<<25,
@@ -242,7 +242,6 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_EREJECT      \
                         | SIEVE_CAPA_REJECT       \
                         | SIEVE_CAPA_ENOTIFY      \
-                        | SIEVE_CAPA_NOTIFY       \
                         | SIEVE_CAPA_IHAVE        \
                         | SIEVE_CAPA_MAILBOX      \
                         | SIEVE_CAPA_MBOXMETA     \

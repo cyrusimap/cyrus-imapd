@@ -116,7 +116,7 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " vacation");
         if (i->notify &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)) {
-            buf_appendcstr(&buf, " notify enotify");
+            buf_appendcstr(&buf, " enotify");
 
             /* Add NOTIFY capability */
             strarray_append(i->extensions, "NOTIFY");
@@ -483,7 +483,6 @@ static const struct sieve_capa_t {
 
     /* Notifications - RFC 5435 */
     { "enotify", SIEVE_CAPA_ENOTIFY },
-    { "notify",  SIEVE_CAPA_NOTIFY }, /* draft-martin-sieve-notify-01 */
 
     /* Ihave - RFC 5463 */
     { "ihave", SIEVE_CAPA_IHAVE },
@@ -653,7 +652,6 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_ENOTIFY:
-    case SIEVE_CAPA_NOTIFY:
         if (!(interp->notify &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))) capa = 0;
         break;
