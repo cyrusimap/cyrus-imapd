@@ -1,6 +1,6 @@
 /* http_ws.c - WebSockets support functions
  *
- * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2020 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -223,9 +223,40 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
 #ifdef HAVE_ZLIB
 #include <zlib.h>
 
-static void ws_zlib_init(struct transaction_t *txn, unsigned client_max_wbits)
+static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    unsigned client_max_wbits = MAX_WBITS;
+    char *token;
+
+    ctx->pmce.deflate.max_wbits = MAX_WBITS;
+
+    /* Process parameters */
+    while ((token = tok_next(params))) {
+        char *value = strchr(token, '=');
+
+        if (value) *value++ = '\0';
+
+        if (!strcmp(token, "server_no_context_takeover")) {
+            ctx->pmce.deflate.no_context = 1;
+        }
+        else if (!strcmp(token, "client_no_context_takeover")) {
+            /* Don't HAVE to do anything here */
+        }
+        else if (!strcmp(token, "server_max_window_bits")) {
+            if (value) {
+                if (*value == '"') value++;
+                ctx->pmce.deflate.max_wbits = atoi(value);
+            }
+            else ctx->pmce.deflate.max_wbits = 0;  /* force error */
+        }
+        else if (!strcmp(token, "client_max_window_bits")) {
+            if (value) {
+                if (*value == '"') value++;
+                client_max_wbits = atoi(value);
+            }
+        }
+    }
 
     /* (Re)configure compression context for raw deflate */
     if (txn->zstrm) deflateEnd(txn->zstrm);
@@ -302,7 +333,7 @@ static int zlib_decompress(struct transaction_t *txn,
 #define MAX_WBITS 0
 
 static void ws_zlib_init(struct transaction_t *txn __attribute__((unused)),
-                         unsigned client_max_wbits __attribute__((unused))) { }
+                         tok_t *params __attribute__((unused))) { }
 
 static void ws_zlib_done(struct ws_context *ctx __attribute__((unused))) { }
 
@@ -529,38 +560,7 @@ static void parse_extensions(struct transaction_t *txn)
             /* Check if client wants per-message compression */
             if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
                 if (extp->flag == EXT_PMCE_DEFLATE) {
-                    unsigned client_max_wbits = MAX_WBITS;
-
-                    ctx->pmce.deflate.max_wbits = MAX_WBITS;
-
-                    /* Process parameters */
-                    while ((token = tok_next(&param))) {
-                        char *value = strchr(token, '=');
-
-                        if (value) *value++ = '\0';
-
-                        if (!strcmp(token, "server_no_context_takeover")) {
-                            ctx->pmce.deflate.no_context = 1;
-                        }
-                        else if (!strcmp(token, "client_no_context_takeover")) {
-                            /* Don't HAVE to do anything here */
-                        }
-                        else if (!strcmp(token, "server_max_window_bits")) {
-                            if (value) {
-                                if (*value == '"') value++;
-                                ctx->pmce.deflate.max_wbits = atoi(value);
-                            }
-                            else ctx->pmce.deflate.max_wbits = 0;  /* force error */
-                        }
-                        else if (!strcmp(token, "client_max_window_bits")) {
-                            if (value) {
-                                if (*value == '"') value++;
-                                client_max_wbits = atoi(value);
-                            }
-                        }
-                    }
-
-                    ws_zlib_init(txn, client_max_wbits);
+                    ws_zlib_init(txn, &param);
                 }
 
                 if (ctx->ext) {
