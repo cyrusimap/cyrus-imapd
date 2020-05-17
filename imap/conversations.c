@@ -697,10 +697,10 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
  * Normalise a subject string, to a form which can be used for deciding
  * whether a message belongs in the same conversation as it's antecedent
  * messages.  What we're doing here is the same idea as the "base
- * subject" algorithm described in RFC5256 but slightly adapted from
+ * subject" algorithm described in RFC 5256 but slightly adapted from
  * experience.  Differences are:
  *
- *  - We eliminate all whitespace; RFC5256 normalises any sequence
+ *  - We eliminate all whitespace; RFC 5256 normalises any sequence
  *    of whitespace characters to a single SP.  We do this because
  *    we have observed combinations of buggy client software both
  *    add and remove whitespace around folding points.
@@ -715,7 +715,7 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
  *    step last instead of first.
  *
  *  - We eliminate leading tokens like Re: and Fwd: using a simpler
- *    and more generic rule than RFC5256's; this rule catches a number
+ *    and more generic rule than RFC 5256's; this rule catches a number
  *    of semantically identical prefixes in other human languages, but
  *    unfortunately also catches lots of other things.  We think we can
  *    get away with this because the normalised subject is never directly
@@ -750,7 +750,7 @@ EXPORTED void conversation_normalise_subject(struct buf *s)
         initialised_res = 1;
     }
 
-    /* step 1 is to decode any RFC2047 MIME encoding of the header
+    /* step 1 is to decode any RFC 2047 MIME encoding of the header
      * field, but we assume that has already happened */
 
     /* step 2 is to eliminate all "Re:"-like tokens and [] blobs

@@ -1229,8 +1229,8 @@ static int jmap_contactgroup_set(struct jmap_req *req)
  *
  * JMAP dates are _always_ YYYY-MM-DD, so use require_hyphens = 1
  *
- * For vCard, this handles "date-value" from RFC2426 (which is "date" from
- * RFC2425), used by BDAY (ANNIVERSARY isn't in vCard 3). vCard 4 says BDAY and
+ * For vCard, this handles "date-value" from RFC 2426 (which is "date" from
+ * RFC 2425), used by BDAY (ANNIVERSARY isn't in vCard 3). vCard 4 says BDAY and
  * ANNIVERSARY is date-and-or-time, which is far more complicated. I haven't
  * seen that in the wild yet and hope I never do.
  */

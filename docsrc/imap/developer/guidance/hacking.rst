@@ -399,3 +399,6 @@ out on the cyrus-devel list in June 2010.
     offset and a "within this mmap" offset though, and it also applies to
     using the same variable name for native order and network order numbers,
     which is where I've seen it a few times and been super frustrated!)
+
+*   Write RFCs in comments capitalized with space after the RFC, like
+    ``RFC 1234``, not like ``rfc 1234`` or ``RFC1234``.

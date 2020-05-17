@@ -1625,7 +1625,7 @@ static const int numdays[] = {
 #define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
 
 /*
- * Parse a date/time specification per RFC3977 section 7.3.
+ * Parse a date/time specification per RFC 3977 section 7.3.
  */
 static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
 {

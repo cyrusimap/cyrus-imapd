@@ -198,7 +198,7 @@ static void parseaddr_append(struct address ***addrpp, const char *name,
     *addrpp = &newaddr->next;
 }
 
-/* Macro to skip white space and rfc822 comments */
+/* Macro to skip white space and RFC 822 comments */
 
 #define SKIPWHITESPACE(s) \
 { \

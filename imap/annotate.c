@@ -1487,7 +1487,7 @@ static int _annotate_may_fetch(annotate_state_t *state,
         return 1;
 
     if (state->which == ANNOTATION_SCOPE_SERVER) {
-        /* RFC5464 doesn't mention access control for server
+        /* RFC 5464 doesn't mention access control for server
          * annotations, but this seems a sensible practice and is
          * consistent with past Cyrus behaviour */
         return 1;
@@ -1501,7 +1501,7 @@ static int _annotate_may_fetch(annotate_state_t *state,
 
         if (state->mailbox) acl = state->mailbox->acl;
         else if (state->mbentry) acl = state->mbentry->acl;
-        /* RFC5464 is a trifle vague about access control for mailbox
+        /* RFC 5464 is a trifle vague about access control for mailbox
          * annotations but this seems to be compliant */
         needed = ACL_LOOKUP|ACL_READ;
         /* fall through to ACL check */
@@ -1509,7 +1509,7 @@ static int _annotate_may_fetch(annotate_state_t *state,
     else if (state->which == ANNOTATION_SCOPE_MESSAGE) {
         assert(state->mailbox);
         acl = state->mailbox->acl;
-        /* RFC5257: reading from a private annotation needs 'r'.
+        /* RFC 5257: reading from a private annotation needs 'r'.
          * Reading from a shared annotation needs 'r' */
         needed = ACL_READ;
         /* fall through to ACL check */
@@ -1885,7 +1885,7 @@ static void annotation_get_fromdb(annotate_state_t *state,
 static const annotate_entrydesc_t message_builtin_entries[] =
 {
     {
-        /* RFC5257 defines /altsubject with both .shared & .priv */
+        /* RFC 5257 defines /altsubject with both .shared & .priv */
         "/altsubject",
         ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
@@ -1896,7 +1896,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         NULL
     },
     {
-        /* RFC5257 defines /comment with both .shared & .priv */
+        /* RFC 5257 defines /comment with both .shared & .priv */
         "/comment",
         ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
@@ -2019,7 +2019,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         annotation_set_todb,
         NULL
     },{
-        /* RFC5464 defines /shared/comment and /private/comment */
+        /* RFC 5464 defines /shared/comment and /private/comment */
         "/comment",
         ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
@@ -2045,7 +2045,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         NULL
     },{
         /*
-         * RFC6154 defines /private/specialuse.
+         * RFC 6154 defines /private/specialuse.
          */
         "/specialuse",
         ATTRIB_TYPE_STRING,
@@ -2279,7 +2279,7 @@ static const annotate_entrydesc_t mailbox_db_entry =
 static const annotate_entrydesc_t server_builtin_entries[] =
 {
     {
-        /* RFC5464 defines /shared/admin. */
+        /* RFC 5464 defines /shared/admin. */
         "/admin",
         ATTRIB_TYPE_STRING,
         PROXY_AND_BACKEND,
@@ -2289,7 +2289,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         annotation_set_todb,
         NULL
     },{
-        /* RFC5464 defines /shared/comment. */
+        /* RFC 5464 defines /shared/comment. */
         "/comment",
         ATTRIB_TYPE_STRING,
         PROXY_AND_BACKEND,
@@ -3125,7 +3125,7 @@ static int _annotate_may_store(annotate_state_t *state,
         return 1;
 
     if (state->which == ANNOTATION_SCOPE_SERVER) {
-        /* RFC5464 doesn't mention access control for server
+        /* RFC 5464 doesn't mention access control for server
          * annotations, but this seems a sensible practice and is
          * consistent with past Cyrus behaviour */
         return !is_shared;
@@ -3138,7 +3138,7 @@ static int _annotate_may_store(annotate_state_t *state,
             return 0;
 
         acl = state->mailbox->acl;
-        /* RFC5464 is a trifle vague about access control for mailbox
+        /* RFC 5464 is a trifle vague about access control for mailbox
          * annotations but this seems to be compliant */
         needed = ACL_LOOKUP;
         if (is_shared)
@@ -3148,7 +3148,7 @@ static int _annotate_may_store(annotate_state_t *state,
     else if (state->which == ANNOTATION_SCOPE_MESSAGE) {
         assert(state->mailbox);
         acl = state->mailbox->acl;
-        /* RFC5257: writing to a private annotation needs 'r'.
+        /* RFC 5257: writing to a private annotation needs 'r'.
          * Writing to a shared annotation needs 'n' */
         needed = (is_shared ? ACL_ANNOTATEMSG : ACL_READ);
         /* fall through to ACL check */
@@ -4055,7 +4055,7 @@ static void init_annotation_definitions(void)
             break;
         case ANNOTATION_SCOPE_MESSAGE:
             if (!strncmp(ae->name, "/flags/", 7)) {
-                /* RFC5257 reserves the /flags/ hierarchy for future use */
+                /* RFC 5257 reserves the /flags/ hierarchy for future use */
                 state.context = ae->name;
                 parse_error(&state, "message entry under /flags/");
                 goto bad;

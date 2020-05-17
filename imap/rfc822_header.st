@@ -1,4 +1,4 @@
-# rfc822_header.st - string table data for RFC822 headers
+# rfc822_header.st - string table data for RFC 822 headers
 #
 # Copyright (c) 1994-2010 Carnegie Mellon University.  All rights reserved.
 #

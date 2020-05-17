@@ -163,13 +163,13 @@ EXPORTED int time_to_rfc822(time_t t, char *buf, size_t len)
 
 
 /*
- * Skip RFC822 FWS = Folding White Space.  This is the white
+ * Skip RFC 822 FWS = Folding White Space.  This is the white
  * space that can be inserted harmlessly into structured
- * RFC822 headers, including splitting them over multiple lines.
+ * RFC 822 headers, including splitting them over multiple lines.
  *
- * Note that RFC822 isn't entirely clear about whether such
+ * Note that RFC 822 isn't entirely clear about whether such
  * space may be present in date-times, but it's successor
- * RFC2822 is quite clear and explicit.  Note also that
+ * RFC 2822 is quite clear and explicit.  Note also that
  * neither RFC allows for (comments) inside a date-time,
  * so we don't attempt to handle that here.
  */
@@ -178,7 +178,7 @@ static const char *skip_fws(const char *p)
     if (!p)
         return NULL;
     while (*p && Uisspace(*p)) {
-        /* check for end of an RFC822 header line */
+        /* check for end of an RFC 822 header line */
         if (*p == '\n') {
             p++;
             if (*p != ' ' && *p != '\t')
@@ -417,9 +417,9 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
 }
 
 /*
- * Parse an RFC822 (strictly speaking, RFC2822) date-time
+ * Parse an RFC 822 (strictly speaking, RFC 2822) date-time
  * from the @s into a UNIX time_t *@tp.  The string @s is
- * terminated either by a NUL or by an RFC822 end of header
+ * terminated either by a NUL or by an RFC 822 end of header
  * line (CRLF not followed by whitespace); this allows
  * parsing dates directly out of mapped messages.
  *
@@ -431,7 +431,7 @@ EXPORTED int time_from_rfc822(const char *s, time_t *tp)
 }
 
 /*
- * Parse an RFC822 (strictly speaking, RFC2822) date-time
+ * Parse an RFC 822 (strictly speaking, RFC 2822) date-time
  * from the @s into a UNIX time_t *@tp, but parse only the
  * date portion, ignoring the time and timezone and returning
  * a time in the server's timezone.  This is a godawful hack
@@ -648,7 +648,7 @@ EXPORTED int time_to_rfc3501(time_t date, char *buf, size_t len)
  * date and time parts.
  *
  * Specific formats accepted are listed below.  Note that only
- * the first two are compliant with RFC3501, the remainder
+ * the first two are compliant with RFC 3501, the remainder
  * are legacy formats.  Note that the " quotes are not part
  * of the format, they're just used in this comment to show
  * where the leading spaces are.
@@ -1334,7 +1334,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
  * time_from_rfc3501() functions.
  *
  * The argument `mode` is set to `DATETIME_DATE_ONLY` when we don't want to
- * parse the time and timezone parts of the RFC5322 date-time string. This is
+ * parse the time and timezone parts of the RFC 5322 date-time string. This is
  * a hack designed to support the Cyrus implementation of the IMAP SEARCH
  * command.
  * For all other cases, the mode should be set to `DATETIME_FULL`.

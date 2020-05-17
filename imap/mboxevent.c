@@ -1295,7 +1295,7 @@ void mboxevent_extract_content_msgrec(struct mboxevent *event,
             size = record_size;
         }
         else {
-            /* XXX RFC 5423 suggests to include a URLAUTH [RFC4467] reference
+            /* XXX RFC 5423 suggests to include a URLAUTH [RFC 4467] reference
              * for larger messages. IMAP URL of mailboxID seems enough though */
             return;
         }
@@ -1357,7 +1357,7 @@ void mboxevent_extract_content(struct mboxevent *event,
             size = record->size;
         }
         else {
-            /* XXX RFC 5423 suggests to include a URLAUTH [RFC4467] reference
+            /* XXX RFC 5423 suggests to include a URLAUTH [RFC 4467] reference
              * for larger messages. IMAP URL of mailboxID seems enough though */
             return;
         }

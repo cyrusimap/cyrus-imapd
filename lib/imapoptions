@@ -294,7 +294,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Whether to enable the legacy GETANNOTATION/SETANNOTATION commands.
    These commands are deprecated and will be removed in the future,
    but might be useful in the meantime for supporting old clients that
-   do not implement the RFC5464 IMAP METADATA extension. */
+   do not implement the RFC 5464 IMAP METADATA extension. */
 
 { "aps_topic", NULL, STRING, "3.0.0" }
 /* Topic for Apple Push Service registration. */
@@ -1130,7 +1130,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "jmap_inlinedcids_annot", NULL, STRING, "3.1.1" }
 /* The name of the per-message annotation, if any, that stores a
-   JSON object, mapping RFC2392 Content-IDs referenced in HTML bodies
+   JSON object, mapping RFC 2392 Content-IDs referenced in HTML bodies
    to the respective HTML body part number.
 
    For example, if message part 1.2 contains HTML and references an
@@ -1140,7 +1140,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    { "<foo>" : "1.2" }
 
    Note that the Content-ID key must be URL-unescaped and enclosed in
-   angular brackets, as defined in RFC2392. */
+   angular brackets, as defined in RFC 2392. */
 
 { "jmap_preview_length", 64, INT, "3.1.1" }
 /* The maximum byte length of dynamically generated message previews. Previews
@@ -2208,7 +2208,7 @@ If all partitions are over that limit, this feature is not used anymore.
 { "search_skipdiacrit", 1, SWITCH, "2.5.0" }
 /* When searching, should diacriticals be stripped from the search
    terms.  The default is "true", a search for "hav" will match
-   "Håvard".  This is not RFC5051 compliant, but it backwards
+   "Håvard".  This is not RFC 5051 compliant, but it backwards
    compatible, and may be preferred by some sites. */
 
 { "search_skiphtml", 0, SWITCH, "3.0.0" }

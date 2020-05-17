@@ -364,7 +364,7 @@ extern void sieverestart(FILE *f);
  * This allows us to pass values "forward" by reference.
  */
 
-/* Per RFC5228, Section 3.2, ALL require commands MUST appear first */
+/* Per RFC 5228, Section 3.2, ALL require commands MUST appear first */
 start:    reqs                   { sscript->cmds = NULL; }
         | reqs commands          { sscript->cmds = $2; }
         ;
@@ -2180,15 +2180,15 @@ static int verify_header(sieve_script_t *sscript, char *hdr)
 static int verify_addrheader(sieve_script_t *sscript, char *hdr)
 {
     const char **h, *hdrs[] = {
-        "from", "sender", "reply-to",   /* RFC5322 originator fields */
-        "to", "cc", "bcc",              /* RFC5322 destination fields */
-        "message-id", "in-reply-to",    /* RFC5322 identification fields */
+        "from", "sender", "reply-to",   /* RFC 5322 originator fields */
+        "to", "cc", "bcc",              /* RFC 5322 destination fields */
+        "message-id", "in-reply-to",    /* RFC 5322 identification fields */
         "references"
-        "resent-from", "resent-sender", /* RFC5322 resent fields */
+        "resent-from", "resent-sender", /* RFC 5322 resent fields */
         "resent-to", "resent-cc", "resent-bcc",
-        "return-path",                  /* RFC5322 trace fields */
-        "disposition-notification-to",  /* RFC8098 MDN request fields */
-        "approved",                     /* RFC5536 moderator/control fields */
+        "return-path",                  /* RFC 5322 trace fields */
+        "disposition-notification-to",  /* RFC 8098 MDN request fields */
+        "approved",                     /* RFC 5536 moderator/control fields */
         "delivered-to",                 /* non-standard (loop detection) */
         NULL
     };

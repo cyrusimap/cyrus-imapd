@@ -171,7 +171,7 @@ static char *message_ucase(char *s)
 }
 
 /*
- * Check a message 'from' of 'size' bytes for minimal RFC-822 compliance.
+ * Check a message 'from' of 'size' bytes for minimal RFC 822 compliance.
  * The message is read from 'from'. If 'to' is not NULL, the message
  * is copied to 'to', otherwise an in-memory buffer of 'from' is checked.
  *
@@ -966,7 +966,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 }
 
 /*
- * Parse a list of RFC-822 addresses from a header
+ * Parse a list of RFC 822 addresses from a header
  */
 static void message_parse_address(const char *hdr, struct address **addrp)
 {
@@ -1239,7 +1239,7 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
         message_parse_params(hdr+1, paramp);
         message_fold_params(paramp);
         if (decbuf && paramp && *paramp) {
-            /* The type header was erroneously encoded as a RFC2407 encoded word
+            /* The type header was erroneously encoded as a RFC 2407 encoded word
              * (rather than encoding its attributes), and the parameter values
              * might now contain non-ASCII characters. Let's reencode them. */
             struct param *param = *paramp;
@@ -1455,7 +1455,7 @@ skip:
 }
 
 /*
- * Decode RFC-2231 parameter continuations
+ * Decode RFC 2231 parameter continuations
  *
  * Algorithm: Run down the list of parameters looking for
  * an attribute of the form "foo*0" or "foo*0*".  When we find
@@ -1662,7 +1662,7 @@ static void message_parse_language(const char *hdr, struct param **paramp)
 }
 
 /*
- * Skip over RFC-822 whitespace and comments
+ * Skip over RFC 822 whitespace and comments
  */
 static void message_parse_rfc822space(const char **s)
 {
@@ -2583,7 +2583,7 @@ static void message_write_searchaddr(struct buf *buf,
 
     while (addrlist) {
 
-        /* Handle RFC-822 group addresses */
+        /* Handle RFC 822 group addresses */
         if (!addrlist->domain) {
             if (addrlist->mailbox) {
                 if (prevaddr) buf_putc(buf, ',');
@@ -3400,8 +3400,8 @@ static conversation_id_t generate_conversation_id(
 }
 
 /*
- * In RFC2822, the In-Reply-To field is explicitly required to contain
- * only message-ids, whitespace and commas.  The old RFC822 was less
+ * In RFC 2822, the In-Reply-To field is explicitly required to contain
+ * only message-ids, whitespace and commas.  The old RFC 822 was less
  * well specified and allowed all sorts of stuff.  We used to be equally
  * liberal here in parsing the field.  Sadly some versions of the NMH
  * mailer will generate In-Reply-To containing email addresses which we
@@ -3548,7 +3548,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
             }
             /*
              * The issue of case sensitivity of msgids is curious.
-             * RFC2822 seems to imply they're case-insensitive,
+             * RFC 2822 seems to imply they're case-insensitive,
              * without explicitly stating so.  So here we punt
              * on that being the case.
              *

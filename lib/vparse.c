@@ -906,7 +906,7 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
 {
     struct vparse_param *param;
 
-    // rfc6350 3.3 - it is RECOMMENDED that property and parameter names be upper-case on output.
+    // RFC 6350 3.3 - it is RECOMMENDED that property and parameter names be upper-case on output.
     if (entry->group) {
         _key_to_tgt(entry->group, tgt);
         buf_putc(tgt->buf, '.');

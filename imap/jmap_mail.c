@@ -872,7 +872,7 @@ static struct header_prop *_header_parseprop(const char *s)
      * in any form. */
     static hash_table allowed_header_forms = HASH_TABLE_INITIALIZER;
     if (allowed_header_forms.size == 0) {
-        /* TODO initialize with all headers in RFC5322 and RFC2369 */
+        /* TODO initialize with all headers in RFC 5322 and RFC 2369 */
         construct_hash_table(&allowed_header_forms, 32, 0);
         hash_insert("bcc",
                 (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
@@ -5645,7 +5645,7 @@ static int _email_getargs_parse(jmap_req_t *req __attribute__((unused)),
 struct cyrusmsg {
     msgrecord_t *mr;                 /* Message record for top-level message */
     const struct body *part0;        /* Root body-part */
-    const struct body *rfc822part;   /* RFC822 root part for embedded message */
+    const struct body *rfc822part;   /* RFC 822 root part for embedded message */
     const struct buf *mime;          /* Raw MIME buffer */
     json_t *imagesize_by_part;       /* FastMail-specific extension */
 

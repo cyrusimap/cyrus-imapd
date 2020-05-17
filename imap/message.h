@@ -212,16 +212,16 @@ struct mailbox;
 /* Flags for use as the 'flags' argument to message_get_field(). */
 enum message_format
 {
-    /* Original raw octets from the on-the-wire RFC5322 format,
-     * including folding and RFC2047 encoding of non-ASCII characters.
+    /* Original raw octets from the on-the-wire RFC 5322 format,
+     * including folding and RFC 2047 encoding of non-ASCII characters.
      * The result may point into a mapping and not be NUL-terminated,
      * use buf_cstring() if necessary.  */
     MESSAGE_RAW=        1,
-    /* Unfolded and RFC2047 decoded */
+    /* Unfolded and RFC 2047 decoded */
     MESSAGE_DECODED,
-    /* Unfolded, RFC2047 decoded, and HTML-escaped */
+    /* Unfolded, RFC 2047 decoded, and HTML-escaped */
     MESSAGE_SNIPPET,
-    /* Unfolded, RFC2047 decoded, and search-normalised */
+    /* Unfolded, RFC 2047 decoded, and search-normalised */
     MESSAGE_SEARCH,
 
 #define _MESSAGE_FORMAT_MASK    (0x7)

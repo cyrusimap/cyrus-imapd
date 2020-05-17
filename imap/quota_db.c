@@ -89,15 +89,15 @@ static const char * const quota_db_names[QUOTA_NUMRESOURCES] = {
 
 /* IMAP atoms for various quota resources */
 EXPORTED const char * const quota_names[QUOTA_NUMRESOURCES] = {
-    "STORAGE",                  /* QUOTA_STORAGE -- RFC2087 */
-    "MESSAGE",                  /* QUOTA_MESSAGE -- RFC2087 */
+    "STORAGE",                  /* QUOTA_STORAGE -- RFC 2087 */
+    "MESSAGE",                  /* QUOTA_MESSAGE -- RFC 2087 */
     "X-ANNOTATION-STORAGE",     /* QUOTA_ANNOTSTORAGE */
     "X-NUM-FOLDERS"             /* QUOTA_NUMFOLDERS */
 };
 
 EXPORTED const quota_t quota_units[QUOTA_NUMRESOURCES] = {
-    1024,               /* QUOTA_STORAGE -- RFC2087 */
-    1,                  /* QUOTA_MESSAGE -- RFC2087 */
+    1024,               /* QUOTA_STORAGE -- RFC 2087 */
+    1,                  /* QUOTA_MESSAGE -- RFC 2087 */
     1024,               /* QUOTA_ANNOTSTORAGE */
     1                   /* QUOTA_NUMFOLDERS */
 };

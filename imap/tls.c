@@ -69,7 +69,7 @@
 *
 *       tls_stop_servertls() sends the "close notify" alert via
 *       SSL_shutdown() to the peer and resets all connection specific
-*       TLS data. As RFC2487 does not specify a separate shutdown, it
+*       TLS data. As RFC 2487 does not specify a separate shutdown, it
 *       is supposed that the underlying TCP connection is shut down
 *       immediately afterwards, so we don't care about additional data
 *       coming through the channel.
@@ -250,7 +250,7 @@ static int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g)
  */
 static DH *get_dh1024(void)
 {
-    /* Second Oakley group 1024-bits MODP group from RFC2409 */
+    /* Second Oakley group 1024-bits MODP group from RFC 2409 */
     DH *dh;
     BIGNUM *p = NULL, *g = NULL;
 
