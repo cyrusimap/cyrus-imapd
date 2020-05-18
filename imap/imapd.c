@@ -300,7 +300,7 @@ static struct capa_struct base_capabilities[] = {
 /* pre-auth capabilities */
     { "IMAP4rev1",             3 },
     { "LITERAL+",              3 }, /* This is in RFC 7888, but likely the implementation is for RFC 2088 */
-    /* LITERAL- RFC 7888 is not sent */
+    /* LITERAL- (RFC 7888) sent instead of LITERAL+ when literalminus=yes */
     { "ID",                    3 }, /* RFC 2971 */
     { "ENABLE",                3 }, /* RFC 5161 */
 /* post-auth capabilities
@@ -3529,7 +3529,7 @@ static void capa_response(int flags)
         /* Don't show if they're not shown at this level of login */
         if (!(base_capabilities[i].mask & flags))
             continue;
-        /* cheap and nasty version of LITERAL- support - just say so */
+        /* cheap and nasty version of LITERAL- (RFC 7888) support - just say so */
         if (lminus && !strcmp(capa, "LITERAL+"))
             capa = "LITERAL-";
         /* print the capability */
