@@ -627,7 +627,7 @@ static int check_notification_template(const struct buf *template)
                                 subs[i]);
     }
 
-    /* stub a message, and do minimal checking for rfc822 compliance */
+    /* stub a message, and do minimal checking for RFC 822 compliance */
     fd = create_tempfile(config_getstring(IMAPOPT_TEMP_PATH));
     f = fdopen(fd, "w+");
     mbname = mbname_from_intname("user.nobody");

@@ -299,59 +299,88 @@ struct capa_struct {
 static struct capa_struct base_capabilities[] = {
 /* pre-auth capabilities */
     { "IMAP4rev1",             3 },
-    { "LITERAL+",              3 },
-    { "ID",                    3 },
-    { "ENABLE",                3 },
-/* post-auth capabilities */
-    { "ACL",                   2 },
-    { "RIGHTS=kxten",          2 },
-    { "QUOTA",                 2 },
-    { "MAILBOX-REFERRALS",     2 },
-    { "NAMESPACE",             2 },
-    { "UIDPLUS",               2 },
-    { "NO_ATOMIC_RENAME",      2 },
-    { "UNSELECT",              2 },
-    { "CHILDREN",              2 },
-    { "MULTIAPPEND",           2 },
-    { "BINARY",                2 },
-    { "CATENATE",              2 },
-    { "CONDSTORE",             2 },
-    { "SEARCH=FUZZY",          2 }, /* RFC 6203 */
-    { "ESEARCH",               2 },
-    { "ESORT",                 2 },
-    { "SORT",                  2 },
-    { "SORT=MODSEQ",           2 },
-    { "SORT=DISPLAY",          2 },
-    { "SORT=UID",              2 }, /* not standard */
-    { "THREAD=ORDEREDSUBJECT", 2 },
-    { "THREAD=REFERENCES",     2 },
-    { "THREAD=REFS",           2 }, /* draft-ietf-morg-inthread */
-    { "ANNOTATEMORE",          2 }, /* legacy SETANNOTATION/GETANNOTATION commands */
-    { "ANNOTATE-EXPERIMENT-1", 2 },
-    { "METADATA",              2 }, /* RFC 5464 */
-    { "LIST-EXTENDED",         2 },
-    { "LIST-STATUS",           2 },
+    { "LITERAL+",              3 }, /* This is in RFC 7888, but likely the implementation is for RFC 2088 */
+    /* LITERAL- RFC 7888 is not sent */
+    { "ID",                    3 }, /* RFC 2971 */
+    { "ENABLE",                3 }, /* RFC 5161 */
+/* post-auth capabilities
+ * this is kept sorted, so that it can be easily compared to https://www.iana.org/assignments/imap-capabilities/imap-capabilities.xhtml */
+    { "ACL",                   2 }, /* RFC 4314 */
+    { "ANNOTATE-EXPERIMENT-1", 2 }, /* RFC 5257 */
+    /* ANNOTATELIMIT    RFC 7889 is not implemented */
+    /* AUTH=            RFC 3501 is announced conditionally in capa_response() */
+    { "BINARY",                2 }, /* RFC 3516 */
+    { "CATENATE",              2 }, /* RFC 4469 */
+    { "CHILDREN",              2 }, /* RFC 3348 */
+    /* COMPRESS=DEFLATE RFC 4498 is announced conditionally in capa_response() */
+    { "CONDSTORE",             2 }, /* RFC 7162, but the implementation is likely from RFC 4551 */
+    /* CONTEXT=SEARCH   RFC 5267 is not implemented.  From that RFC only ESORT is ready */
+    /* CONTEXT=SORT     RFC 5267 is not implemented.  From that RFC only ESORT is ready */
+    /* CONVERT          RFC 5259 is not implemented */
+    { "CREATE-SPECIAL-USE",    2 }, /* RFC 6154 */
+    { "ESEARCH",               2 }, /* RFC 4731 */
+    { "ESORT",                 2 }, /* RFC 5267 */
+    /* FILTERS          RFC 5466 is not implemented */
+    /* I18NLEVEL=1      RFC 5255 is not implemented */
+    /* I18NLEVEL=2      RFC 5255 is not implemented */
+    /* IDLE             RFC 2177 is announced conditionally in capa_response() */
+    /* IMAPSIEVE=       RFC 6785 is not implemented */
+    /* LANGUAGE         RFC 5255 is not implemented */
+    { "LIST-EXTENDED",         2 }, /* RFC 5258 */
     { "LIST-MYRIGHTS",         2 }, /* RFC 8440 */
+    { "LIST-STATUS",           2 }, /* RFC 5819 */
+    /* LOGIN-REFERRALS  RFC 2221 is not implemented */
+    /* LOGINDISABLED    RFC 2595/RFC 3591 is announced conditionally in capa_response() */
+    { "MAILBOX-REFERRALS",     2 }, /* RFC 2193 */
+    { "METADATA",              2 }, /* RFC 5464 */
+    /*METADATA-SERVER   RFC 5464.  Sending METADATA implies METADATA-SERVER */
+    { "MOVE",                  2 }, /* RFC 6851 */
+    { "MULTIAPPEND",           2 }, /* RFC 3502 */
+    /* MULTISEARCH      RFC 7377 is not implemented */
+    { "NAMESPACE",             2 }, /* RFC 2342 */
+    /* NOTIFY           RFC 5465 is not implemented */
+    { "OBJECTID",              2 }, /* draft-ietf-extra-imap-objectid, see also RFC 8474 */
+    { "QRESYNC",               2 }, /* RFC 7162, but the implementation is likely from RFC 4551 and RFC 5162 */
+    { "QUOTA",                 2 }, /* RFC 2087 */
+    /* REPLACE          RFC 8508 is not implemented */
+    { "RIGHTS=kxten",          2 }, /* RFC 4314 */
+    /* SASL-IR          RFC 4959 is announced in capa_response() */
+    { "SAVEDATE",              2 }, /* draft-ietf-extra-imap-savedate, see also RFC 8514 */
+    { "SEARCH=FUZZY",          2 }, /* RFC 6203 */
+    /* SEARCHRES        RFC 5182 is not implemented */
+    { "SORT",                  2 }, /* RFC 5256 */
+    { "SORT=DISPLAY",          2 }, /* RFC 5957 */
+    { "SPECIAL-USE",           2 }, /* RFC 6154 */
+    /* STARTTLS         RFC 2595, RFC 3501 is announced in capa_response() */
+    { "STATUS=SIZE",           2 }, /* RFC 8438 */
+    { "THREAD=ORDEREDSUBJECT", 2 }, /* RFC 5256 */
+    { "THREAD=REFERENCES",     2 }, /* RFC 5256 */
+    { "UIDPLUS",               2 }, /* RFC 4315 */
+    /* UNAUTHENTICATE   RFC 8437 is implemented */
+    { "UNSELECT",              2 }, /* RFC 3691 */
+    /* URLFETCH=BINARY  RFC 5524 . This RFC talks interchangably about URLFETCH=BINARY and URLAUTH=BINARY capabilities, Cyrus IMAP announces the latter */
+    /* URL-PARTIAL      RFC 5550 is not implemented */
+    /* UTF8=ACCEPT      RFC 6855 is not implemented */
+    /* UTF8=ONLY        RFC 6855 is not implemented */
+    { "WITHIN",                2 }, /* RFC 5032 */
+    /* drafts, non-standard */
+    { "ANNOTATEMORE",          2 }, /* legacy SETANNOTATION/GETANNOTATION commands */
+    { "DIGEST=SHA1",           2 }, /* Cyrus custom */
     { "LIST-METADATA",         2 }, /* not standard */
-    { "WITHIN",                2 },
-    { "QRESYNC",               2 },
+    { "NO_ATOMIC_RENAME",      2 },
+    { "PREVIEW=FUZZY",         2 }, /* draft-ietf-extra-imap-fetch-preview */
     { "SCAN",                  2 },
+    { "SORT=MODSEQ",           2 },
+    { "SORT=UID",              2 }, /* not standard */
+    { "THREAD=REFS",           2 }, /* draft-ietf-morg-inthread */
+    { "X-CREATEDMODSEQ",       2 }, /* Cyrus custom */
+    { "X-REPLICATION",         2 }, /* Cyrus custom */
     { "XLIST",                 2 }, /* not standard */
     { "XMOVE",                 2 }, /* not standard */
-    { "MOVE",                  2 }, /* RFC 6851 */
-    { "SPECIAL-USE",           2 }, /* RFC 6154 */
-    { "CREATE-SPECIAL-USE",    2 }, /* RFC 6154 */
-    { "DIGEST=SHA1",           2 }, /* Cyrus custom */
-    { "X-REPLICATION",         2 }, /* Cyrus custom */
-    { "STATUS=SIZE",           2 }, /* RFC 8438 */
-    { "OBJECTID",              2 }, /* draft-ietf-extra-imap-objectid */
-    { "SAVEDATE",              2 }, /* draft-ietf-extra-imap-savedate */
-    { "X-CREATEDMODSEQ",       2 }, /* Cyrus custom */
-    { "PREVIEW=FUZZY",         2 }, /* draft-ietf-extra-imap-fetch-preview */
 
 #ifdef HAVE_SSL
-    { "URLAUTH",               2 },
-    { "URLAUTH=BINARY",        2 },
+    { "URLAUTH",               2 }, /* RFC 4467 */
+    { "URLAUTH=BINARY",        2 }, /* RFC 5524 */
 #endif
 
 /* keep this to mark the end of the list */
@@ -4031,7 +4060,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
         /* try to parse a sequence of "append-ext" */
         for (;;) {
             if (!strcasecmp(arg.s, "ANNOTATION")) {
-                /* RFC5257 */
+                /* RFC 5257 */
                 if (c != ' ') {
                     parseerr = "Missing annotation data in Append command";
                     r = IMAP_PROTOCOL_ERROR;
@@ -4363,7 +4392,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
             }
             else if (!strcmp(arg.s, "ANNOTATE")) {
                 /*
-                 * RFC5257 requires us to parse this keyword, which
+                 * RFC 5257 requires us to parse this keyword, which
                  * indicates that the client wants unsolicited
                  * ANNOTATION responses in this session, but we don't
                  * actually have to do anything with it, so we won't.
@@ -9002,7 +9031,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
         }
 
         c = getsint32(imapd_in, &limit);
-        /* note: we accept >= 0 according to rfc2087,
+        /* note: we accept >= 0 according to RFC 2087,
          * and also -1 to fix Bug #3559 */
         if (limit < -1) goto badlist;
         newquotas[res] = limit;
@@ -9524,7 +9553,7 @@ static int parsecreateargs(struct dlist **extargs)
 
     c = prot_getc(imapd_in);
     if (c == '(') {
-        /* new style RFC4466 arguments */
+        /* new style RFC 4466 arguments */
         do {
             c = getword(imapd_in, &arg);
             name = ucase(arg.s);
@@ -9778,7 +9807,7 @@ static int parse_metadata_string_or_list(const char *tag,
  * Any surrounding command text must be parsed elsewhere, ie,
  * SETANNOTATION, STORE, APPEND.
  *
- * Also parse RFC5257 per-message annotation store data, which
+ * Also parse RFC 5257 per-message annotation store data, which
  * is almost identical but differs in that entry names and attrib
  * names are astrings rather than strings, and that the whole set
  * of data *must* be enclosed in parentheses.
@@ -10432,7 +10461,7 @@ static void cmd_getmetadata(const char *tag)
     /*
      * We have three strings or lists of strings.  Now to figure out
      * what's what.  We have two complicating factors.  First, due to
-     * a erratum in RFC5464 and our earlier misreading of the document,
+     * a erratum in RFC 5464 and our earlier misreading of the document,
      * we historically supported specifying the options *after* the
      * mailbox name.  Second, we have for a few months now supported
      * a non-standard extension where a list of mailbox names could
@@ -10445,13 +10474,13 @@ static void cmd_getmetadata(const char *tag)
      * (mailboxes) entry
      * (mailboxes) (entries)
      *
-     * --- options in the correct place (per the ABNF in RFC5464)
+     * --- options in the correct place (per the ABNF in RFC 5464)
      * (options) mailbox entry
      * (options) mailbox (entries)
      * (options) (mailboxes) entry
      * (options) (mailboxes) (entries)
      *
-     * --- options in the wrong place (per the examples in RFC5464)
+     * --- options in the wrong place (per the examples in RFC 5464)
      * mailbox (options) entry
      * mailbox (options) (entries)
      * (mailboxes) (options) entry
@@ -13108,7 +13137,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
 
     if ((listargs->ret & LIST_RET_STATUS) &&
         !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
-        /* output the status line now, per rfc 5819 */
+        /* output the status line now, per RFC 5819 */
         if (mbentry) print_statusline(extname, listargs->statusitems, &sdata);
     }
 
@@ -14419,7 +14448,7 @@ static void cmd_enable(char *tag)
     int c;
     unsigned new_capa = 0;
 
-    /* RFC5161 says that enable while selected is actually bogus,
+    /* RFC 5161 says that enable while selected is actually bogus,
      * but it's no skin off our nose to support it, so don't
      * bother checking */
 

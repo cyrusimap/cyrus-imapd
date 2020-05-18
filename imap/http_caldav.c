@@ -2440,7 +2440,7 @@ static int list_calendars(struct transaction_t *txn)
 }
 
 
-/* Parse an RFC3339 date/time per
+/* Parse an RFC 3339 date/time per
    http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf */
 static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
 {

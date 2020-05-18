@@ -351,7 +351,7 @@ static void test_mime_trivial(void)
     CU_ASSERT_PTR_NULL(body.params->next);
 
     /*
-     * RFC2046 says that all headers and in particular the Content-Type:
+     * RFC 2046 says that all headers and in particular the Content-Type:
      * header may be missing in an entity, and if so the default
      * Content-Type is text/plain;charset="us-ascii"
      */
@@ -518,7 +518,7 @@ HTML_PART "\r\n"
 }
 
 /*
- * RFC2231 specifies, amongst other things, a method for
+ * RFC 2231 specifies, amongst other things, a method for
  * breaking up across multiple lines, long parameter values
  * which cannot have whitespace inserted into them.
  */
@@ -528,7 +528,7 @@ static void test_rfc2231_continuations(void)
 "From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
 "To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
 "Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
-/* This example based on one in RFC2231 */
+/* This example based on one in RFC 2231 */
 "Content-Type: message/external-body; access-type=URL;\r\n"
 "\tURL*0=\"ftp://\";\r\n"
 "\tURL*1=\"cs.utk.edu/pub/moore/\";\r\n"
@@ -566,7 +566,7 @@ static void test_rfc2231_continuations(void)
 }
 
 /*
- * RFC2231 has a second syntax for continuations, which
+ * RFC 2231 has a second syntax for continuations, which
  * indicates the language & charset info may be encoded
  * in the value and allows for %xx encoded chars.
  */
@@ -576,7 +576,7 @@ static void test_rfc2231_extended_continuations(void)
 "From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
 "To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
 "Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
-/* This example also loosely based on one in RFC2231 */
+/* This example also loosely based on one in RFC 2231 */
 "Content-Type: application/x-stuff;\r\n"
 "\ttitle*0*=us-ascii'en'This%20is%20even%20more%20;\r\n"
 "\ttitle*1*=%2A%2A%2Afun%2A%2A%2A%20;\r\n"

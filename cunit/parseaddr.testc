@@ -205,7 +205,7 @@ static void test_quoted_name_folded(void)
     /* If a quoted string contains an embedded CR+LF+WSP, because we're
      * parsing a header value directly, the CR+LF should be stripped out
      * and the WSP and any following WSP* should be preserved (i.e.  we
-     * should perform header field unfolding per RFC2822) */
+     * should perform header field unfolding per RFC 2822) */
 
     a = NULL;
     parseaddr_list("\"Akira\r\n \t Yoshizawa\" <akira@origami.jp>", &a);
@@ -282,7 +282,7 @@ static void test_mailbox_comment(void)
 {
     struct address *a;
 
-    /* This example is from the RFC822 text */
+    /* This example is from the RFC 822 text */
     a = NULL;
     parseaddr_list("Wilt . (the Stilt) Chamberlain@NBA.US", &a);
     CU_ASSERT_PTR_NOT_NULL_FATAL(a);
@@ -343,7 +343,7 @@ static void test_rfc2047_text(void)
 {
     struct address *a;
 
-    /* RFC2047 MIME-encoded text in an address is passed through
+    /* RFC 2047 MIME-encoded text in an address is passed through
      * unmolested, to be decoded by upper layers, or not, on demand */
 
     a = NULL;

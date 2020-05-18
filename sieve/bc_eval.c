@@ -190,8 +190,8 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
     };
 
     /* Implementations SHOULD NOT respond to any message that contains a
-       "List-Id" [RFC2919], "List-Help", "List-Subscribe", "List-
-       Unsubscribe", "List-Post", "List-Owner" or "List-Archive" [RFC2369]
+       "List-Id" [RFC 2919], "List-Help", "List-Subscribe", "List-
+       Unsubscribe", "List-Post", "List-Owner" or "List-Archive" [RFC 2369]
        header field. */
     for (j = 0; list_fields[j]; j++) {
         if (interp->getheader(m, list_fields[j], &body) == SIEVE_OK)
@@ -209,7 +209,7 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
 
     /* Implementations SHOULD NOT respond to any message that has an
        "Auto-submitted" header field with a value other than "no".
-       This header field is described in [RFC3834]. */
+       This header field is described in [RFC 3834]. */
     if (interp->getheader(m, "auto-submitted", &body) == SIEVE_OK) {
         /* we don't deal with comments, etc. here */
         /* skip leading white-space */

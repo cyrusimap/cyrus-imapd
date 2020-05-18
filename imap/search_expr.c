@@ -1455,7 +1455,7 @@ static int search_header_match(message_t *m, const union search_value *v,
             r = charset_searchstring(internal->s, internal->pat, buf.s, buf.len, charset_flags);
         }
         else {
-            /* RFC3501: If the string to search is zero-length, this matches
+            /* RFC 3501: If the string to search is zero-length, this matches
              * all messages that have a header line with the specified
              * field-name regardless of the contents. */
             r = buf.len ? 1 : 0;
@@ -1821,7 +1821,7 @@ struct search_annot_rock {
 static int _search_annot_match(const struct buf *match,
                                const struct buf *value)
 {
-    /* These cases are not explicitly defined in RFC5257 */
+    /* These cases are not explicitly defined in RFC 5257 */
 
     /* NIL matches NIL and nothing else */
     if (match->s == NULL)
@@ -1835,7 +1835,7 @@ static int _search_annot_match(const struct buf *match,
     if (value->len == 0)
         return 0;
 
-    /* RFC5257 seems to define a simple CONTAINS style search */
+    /* RFC 5257 seems to define a simple CONTAINS style search */
     return !!memmem(value->s, value->len,
                     match->s, match->len);
 }

@@ -621,7 +621,7 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
 
     } while (c == ' ');
 
-    /* rfc4731:
+    /* RFC 4731:
      * If the list of result options is empty, that requests the server to
      * return an ESEARCH response instead of the SEARCH response.  This is
      * equivalent to "(ALL)".
@@ -646,7 +646,7 @@ bad:
 }
 
 /*
- * Parse a ANNOTATION item for SEARCH (RFC5257) into a struct
+ * Parse a ANNOTATION item for SEARCH (RFC 5257) into a struct
  * searchannot and append it to the chain of such structures at *lp.
  * Returns the next character.
  */

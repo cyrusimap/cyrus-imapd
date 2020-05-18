@@ -368,7 +368,7 @@ static void qp_flushline(struct convert_rock *rock, int endline)
     struct qp_state *s = (struct qp_state *)rock->state;
     int i;
 
-    /* strip trailing whitespace: RFC2405 transport-padding */
+    /* strip trailing whitespace: RFC 2405 transport-padding */
     while (s->len && (s->buf[s->len-1] == ' ' || s->buf[s->len-1] == '\t'))
         s->len--;
 
@@ -477,7 +477,7 @@ static void b64_2byte(struct convert_rock *rock, uint32_t c)
 }
 
 /*
- * This filter unfolds folded RFC2822 header field lines, i.e. it strips
+ * This filter unfolds folded RFC 2822 header field lines, i.e. it strips
  * a CRLF pair only if the first character after the CRLF is LWS, and
  * leaves other CRLF or lone CR or LF alone.  In particular the CRLFs
  * which *separate* different header fields are preserved.  This allows
@@ -1899,7 +1899,7 @@ static charset_t lookup_buf(const char *buf, size_t len)
     return cs;
 }
 
-/* RFC2047: In this case the set of characters that may be used in a “Q”-encoded
+/* RFC 2047: In this case the set of characters that may be used in a “Q”-encoded
   ‘encoded-word’ is restricted to: <upper and lower case ASCII
   letters, decimal digits, "!", "*", "+", "-", "/", "=", and "_" */
 /* of course = and _ are not included in the set, because they themselves
@@ -3109,7 +3109,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
 
             /* Insert line break before exceeding line length limits */
             if (isheader) {
-                /* RFC2047 forbids splitting multi-octet characters */
+                /* RFC 2047 forbids splitting multi-octet characters */
                 int needbytes;
                 if (this < 0x80) needbytes = 0;
                 else if (this < 0xc0) needbytes = 0; // UTF-8 continuation
@@ -3242,7 +3242,7 @@ EXPORTED char *charset_encode_mimephrase(const char *data)
     for (n = 0; data[n]; n++) {
         unsigned char this = data[n];
 
-        /* RFC2047 forbids splitting multi-octet characters */
+        /* RFC 2047 forbids splitting multi-octet characters */
         int needbytes;
         if (this < 0x80) needbytes = 0;
         else if (this < 0xc0) needbytes = 0; // UTF-8 continuation

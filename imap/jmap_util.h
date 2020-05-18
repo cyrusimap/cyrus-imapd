@@ -70,13 +70,13 @@ extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch, json_t *invali
 /* Create a patch-object that transforms src into dst. */
 extern json_t *jmap_patchobject_create(json_t *src, json_t *dst);
 
-/* Return non-zero src and its RFC6901 encoding differ */
+/* Return non-zero src and its RFC 6901 encoding differ */
 extern int jmap_pointer_needsencode(const char *src);
 
-/* Encode src according to RFC6901 */
+/* Encode src according to RFC 6901 */
 extern char *jmap_pointer_encode(const char *src);
 
-/* Decode src according to RFC6901 */
+/* Decode src according to RFC 6901 */
 extern char *jmap_pointer_decode(const char *src, size_t len);
 
 /* Remove all properties in jobj that have no key in props */

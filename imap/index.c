@@ -825,7 +825,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
 
     /*
-     * RFC5257.  Note that we must report a maximum size for annotations
+     * RFC 5257.  Note that we must report a maximum size for annotations
      * but we don't enforce any such limit, so pick a "large" number.
      */
     prot_printf(state->out, "* OK [ANNOTATIONS %u] Ok\r\n", 64*1024);
@@ -1058,7 +1058,7 @@ static int _fetch_setseen(struct index_state *state,
 
     mboxevent_extract_record(mboxevent, state->mailbox, &record);
 
-    /* RFC2060 says:
+    /* RFC 2060 says:
      * The \Seen flag is implicitly set; if this causes
      * the flags to change they SHOULD be included as part
      * of the FETCH responses.   This is handled later by
@@ -1850,7 +1850,7 @@ static void begin_esearch_response(struct index_state *state,
     if (searchargs->tag) {
         prot_printf(state->out, " (TAG \"%s\")", searchargs->tag);
     }
-    /* RFC4731: 3.1
+    /* RFC 4731: 3.1
      * An extended UID SEARCH command MUST cause an ESEARCH response with
      * the UID indicator present. */
     if (usinguid) prot_printf(state->out, " UID");
@@ -4642,7 +4642,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
         data = charset_decode_mimebody(data, size, encoding,
                                        &decbuf, &size);
 
-        /* update the encoding of this part per RFC5524:3.2 */
+        /* update the encoding of this part per RFC 5524:3.2 */
         if (data && encoding) {
             domain = data_domain(data, size);
             free(body->encoding);
@@ -4882,7 +4882,7 @@ static int index_storeflag(struct index_state *state,
         }
     }
 
-    /* rfc4551:
+    /* RFC 4551:
      * 3.8.  Additional Quality-of-Implementation Issues
      *
      * Server implementations should follow the following rule, which
@@ -6309,7 +6309,7 @@ static char *get_displayname(const char *header)
     if (!addr) return NULL;
 
     if (addr->name && addr->name[0]) {
-        /* pure RFC5255 compatible "searchform" conversion */
+        /* pure RFC 5255 compatible "searchform" conversion */
         ret = charset_utf8_to_searchform(addr->name, /*flags*/0);
     }
     else if (addr->domain && addr->mailbox) {
