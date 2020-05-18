@@ -1280,7 +1280,7 @@ done:
 
 struct mail_rock {
     hash_table *emailids;
-    hash_table *msgids;
+    hashu64_table *msgids;
     hash_table *mailboxes;
     struct buf buf;
 };
@@ -1337,13 +1337,14 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        const char *msgid = NULL;
+        const char *guid = message_guid_encode(&record->guid);
+        conversation_id_t msgid = 0;
         int isdestroyed_msg = isdestroyed_mbox;
 
         /* Suppress fetching of Message-ID if not restoring drafts */
-        if ((rrock->jrestore->mode & UNDO_DRAFTS) &&
-            !message_get_messageid((message_t *) msg, &mrock->buf)) {
-            msgid = buf_cstring(&mrock->buf);
+        if (rrock->jrestore->mode & UNDO_DRAFTS) {
+            /* XXX  conversation ID is faster to lookup than Message-ID */
+            msgid = conversations_guid_cid_lookup(rrock->req->cstate, guid);
         }
 
         /* Remove $restored flag from message */
@@ -1374,7 +1375,6 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         }
 
         /* See if we already have this message GUID */
-        const char *guid = message_guid_encode(&record->guid);
         struct message_t *message = hash_lookup(guid, mrock->emailids);
 
         if (message && message->undeleted) {
@@ -1391,11 +1391,11 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 }
 
                 /* See if we already have the Message-ID */
-                message = hash_lookup(msgid, mrock->msgids);
+                message = hashu64_lookup(msgid, mrock->msgids);
                 if (!message) {
                     /* Create message for this Message-ID */
                     message = xzmalloc(sizeof(struct message_t));
-                    hash_insert(msgid, message, mrock->msgids);
+                    hashu64_insert(msgid, message, mrock->msgids);
                 }
                 else if (message->undeleted) {
                     /* An undeleted copy of this draft exists */
@@ -1432,11 +1432,11 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
             if (msgid) {
                 /* Mark this Message-ID as undeleted */
-                message = hash_lookup(msgid, mrock->msgids);
+                message = hashu64_lookup(msgid, mrock->msgids);
                 if (!message) {
                     /* Create message for this Message-ID */
                     message = xzmalloc(sizeof(struct message_t));
-                    hash_insert(msgid, message, mrock->msgids);
+                    hashu64_insert(msgid, message, mrock->msgids);
                 }
 
                 message->undeleted = 1;
@@ -1498,7 +1498,7 @@ static void restore_mailbox_plan_cb(const char *guid __attribute__((unused)),
     free(message);
 }
 
-static void restore_choose_draft_cb(const char *msgid __attribute__((unused)),
+static void restore_choose_draft_cb(uint64_t cid __attribute__((unused)),
                                     void *data, void *rock)
 {
     struct mail_rock *mrock = (struct mail_rock *) rock;
@@ -1684,11 +1684,11 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
 
     hash_table mailboxes = HASH_TABLE_INITIALIZER;
     hash_table emailids = HASH_TABLE_INITIALIZER;
-    hash_table msgids = HASH_TABLE_INITIALIZER;
+    hashu64_table msgids = HASHU64_TABLE_INITIALIZER;
     char *inbox = mboxname_user_mbox(req->accountid, NULL);
     struct mail_rock mrock = {
         construct_hash_table(&emailids, 1024, 0),  // every message GUID
-        construct_hash_table(&msgids, 1024, 0), // every Message-ID of non-drafts
+        construct_hashu64_table(&msgids, 1024, 0), // every Message-ID of non-drafts
         construct_hash_table(&mailboxes, 32, 0),
         BUF_INITIALIZER };
     struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
@@ -1702,8 +1702,8 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
 
     /* Find the largest of the 5 most recently destroyed copies of each draft
        and add them to the proper mailbox plan */
-    hash_enumerate(&msgids, &restore_choose_draft_cb, &mrock);
-    free_hash_table(&msgids, NULL);
+    hashu64_enumerate(&msgids, &restore_choose_draft_cb, &mrock);
+    free_hashu64_table(&msgids, NULL);
 
     /* Find the most recently destroyed copies of non-draft messages
        and add them to the proper mailbox plan */
