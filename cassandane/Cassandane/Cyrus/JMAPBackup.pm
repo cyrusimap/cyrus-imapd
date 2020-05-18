@@ -1495,22 +1495,17 @@ sub test_restore_mail_full
     $self->assert_not_null($res);
     $self->assert_str_equals('Backup/restoreMail', $res->[0][0]);
     $self->assert_str_equals('R9', $res->[0][2]);
-    $self->assert_num_equals(1, $res->[0][1]{numDraftsRestored});
+    $self->assert_num_equals(0, $res->[0][1]{numDraftsRestored});
     $self->assert_num_equals(0, $res->[0][1]{numNonDraftsRestored});
 
     $self->assert_str_equals('Email/get', $res->[1][0]);
     $self->assert_str_equals('R10', $res->[1][2]);
-    $self->assert_num_equals(6, scalar(@{$res->[1][1]{list}}));
+    $self->assert_num_equals(5, scalar(@{$res->[1][1]{list}}));
 
     $self->assert_str_equals("$draftId2", $res->[1][1]{list}[4]{id});
     $self->assert_str_equals("$draftAt2", $res->[1][1]{list}[4]{receivedAt});
     $self->assert_null($res->[4][1]{list}[4]{keywords}->{'$restored'});
     $self->assert_equals(JSON::true, $res->[1][1]{list}[4]{mailboxIds}{$draftsId});
-
-    $self->assert_str_equals("$draftId3", $res->[1][1]{list}[5]{id});
-    $self->assert_str_equals("$draftAt3", $res->[1][1]{list}[5]{receivedAt});
-    $self->assert_equals(JSON::true, $res->[1][1]{list}[5]{keywords}->{'$restored'});
-    $self->assert_equals(JSON::true, $res->[1][1]{list}[5]{mailboxIds}{$draftsId});
 }
 
 sub test_restore_notes
