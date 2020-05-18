@@ -1430,8 +1430,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
             }
             message->undeleted = 1;
 
-            if (msgid && !(record->system_flags & FLAG_DRAFT)) {
-                /* Non-draft - see if we already have this Message-ID */
+            if (msgid) {
+                /* Mark this Message-ID as undeleted */
                 message = hash_lookup(msgid, mrock->msgids);
                 if (!message) {
                     /* Create message for this Message-ID */
