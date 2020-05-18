@@ -1590,14 +1590,70 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
             }
         }
         else {
-            /* Create the mailbox */
             struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+            mbentry_t *parent = NULL;
 
-            r = mboxlist_createmailbox(newmboxname, MBTYPE_EMAIL,
-                                       /*partition*/NULL, /*isadmin*/0,
-                                       req->accountid, req->authstate,
-                                       /*localonly*/0, /*forceuser*/0,
-                                       /*dbonly*/0, /*notify*/0, &newmailbox);
+            /* Find the nearest ancestor of the deleted mailbox
+               to see if we have to fill out the branch */
+            r = mboxlist_findparent(mbname_intname(mbname), &parent);
+            if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+
+            if (!r && (parent || !mbname_userid(mbname))) {
+                const strarray_t *boxes = mbname_boxes(mbname);
+                mbname_t *ancestor =
+                    mbname_from_intname(parent ? parent->name : NULL);
+                int oldest = strarray_size(mbname_boxes(ancestor));
+                int youngest = strarray_size(boxes) - 1;
+
+                /* Are there any missing ancestors? */
+                if (oldest > youngest) {
+                    /* Verify that we can re-create the deleted mailbox
+                       before creating its ancestors */
+                    r = mboxlist_createmailboxcheck(mbname_intname(mbname),
+                                                    MBTYPE_EMAIL,
+                                                    /*partition*/NULL,
+                                                    /*isadmin*/0,
+                                                    req->accountid,
+                                                    req->authstate,
+                                                    /*dbonly*/0,
+                                                    /*notify*/0,
+                                                    /*forceuser*/0);
+
+                    int i;
+                    for (i = oldest; !r && i < youngest; i++) {
+                        /* Create the ancestors */
+                        mbname_push_boxes(ancestor, strarray_nth(boxes, i));
+                        r = mboxlist_createmailbox(mbname_intname(ancestor),
+                                                   MBTYPE_EMAIL,
+                                                   /*partition*/NULL,
+                                                   /*isadmin*/0,
+                                                   req->accountid,
+                                                   req->authstate,
+                                                   /*localonly*/0,
+                                                   /*forceuser*/0,
+                                                   /*dbonly*/0,
+                                                   /*notify*/0,
+                                                   /*mailboxptr*/NULL);
+                        if (r) {
+                            syslog(LOG_ERR,
+                                   "IOERROR: failed to create mailbox %s: %s",
+                                   mbname_intname(ancestor), error_message(r));
+                            break;
+                        }
+                    }
+                }
+                
+                mbname_free(&ancestor);
+            }
+            if (!r) {
+                /* Create the mailbox */
+                r = mboxlist_createmailbox(newmboxname, MBTYPE_EMAIL,
+                                           /*partition*/NULL, /*isadmin*/0,
+                                           req->accountid, req->authstate,
+                                           /*localonly*/0, /*forceuser*/0,
+                                           /*dbonly*/0, /*notify*/0,
+                                           &newmailbox);
+            }
             mboxname_release(&namespacelock);
 
             if (r) {
