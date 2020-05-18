@@ -2095,12 +2095,12 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The number of messages to be indexed in one batch (default 20).
    Note that long batches may delay user commands or mail delivery. */
 
-{ "search_attachment_extractor_url", NULL, STRING, "3.1.7", "3.2.1" }
+{ "search_attachment_extractor_url", NULL, STRING, "3.2.1", "3.2.1" }
 /*
   Reserved for future use.
  */
 
-{ "search_index_language", 0, SWITCH, "3.1.7", "3.2.1" }
+{ "search_index_language", 0, SWITCH, "3.2.1", "3.2.1" }
 /*
   Reserved for future use.
  */
@@ -2110,7 +2110,7 @@ If all partitions are over that limit, this feature is not used anymore.
   Deprecated. No longer used.
  */
 
-{ "search_query_language", 0, SWITCH, "3.1.7", "3.2.1" }
+{ "search_query_language", 0, SWITCH, "3.2.1", "3.2.1" }
 /*
   Reserved for future use.
  */
