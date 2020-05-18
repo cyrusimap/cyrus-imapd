@@ -487,6 +487,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         buf_printf(&ctx->log,
                    ") => \"Success\" (opcode=%s; rsv=0x%x; length=%ld",
                    wslay_str_opcode(msgarg.opcode), rsv, msgarg.msg_length);
+
+        session_new_id();
         break;
     }
 
