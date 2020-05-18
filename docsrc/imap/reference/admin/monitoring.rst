@@ -18,10 +18,10 @@ Setup
     * Add the `prometheus` module to your `httpmodules` in :cyrusman:`imapd.conf(5)`
     * Set the `prometheus_need_auth`, `prometheus_update_freq` and `prometheus_stats_dir`
       settings in :cyrusman:`imapd.conf(5)` to taste
+    * Add a job to run :cyrusman:`promstatsd(8)` to the DAEMON section of
+      :cyrusman:`cyrus.conf(5)` (the actual daemon process)
     * Add a job to run ``promstatsd -c`` to the START section of :cyrusman:`cyrus.conf(5)`
       (this cleans up the stats files from the previous run)
-    * Add a job to run ``promstatsd`` to the DAEMON section of :cyrusman:`cyrus.conf(5)`
-      (the actual daemon process)
     * Configure your Prometheus server to scrape http://yourserver.example.com/metrics
 
 Configuration options
