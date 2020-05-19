@@ -65,6 +65,7 @@
 #include <stdint.h>
 #endif
 #include <time.h>
+#include <ftw.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -478,6 +479,38 @@ EXPORTED int create_tempfile(const char *path)
 
     free(pattern);
     return fd;
+}
+
+EXPORTED char *create_tempdir(const char *path, const char *subname)
+{
+    struct buf buf = BUF_INITIALIZER;
+    char *dbpath = NULL;
+
+    buf_setcstr(&buf, path);
+    if (!buf.len || buf.s[buf.len-1] != '/') {
+        buf_putc(&buf, '/');
+    }
+    buf_appendcstr(&buf, "cyrus-");
+    buf_appendcstr(&buf, subname && *subname ? subname : "tmpdir");
+    buf_appendcstr(&buf, "-XXXXXX");
+    buf_cstring(&buf);
+    dbpath = xstrdupnull(mkdtemp(buf.s));
+
+    buf_free(&buf);
+    return dbpath;
+}
+
+static int removedir_cb(const char *fpath,
+                        const struct stat *sb __attribute__((unused)),
+                        int typeflag __attribute__((unused)),
+                        struct FTW *ftwbuf __attribute__((unused)))
+{
+    return remove(fpath);
+}
+
+EXPORTED int removedir(const char *path)
+{
+    return nftw(path, removedir_cb, 128, FTW_DEPTH|FTW_PHYS);
 }
 
 /* Create all parent directories for the given path,

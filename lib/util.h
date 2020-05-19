@@ -203,6 +203,17 @@ extern char *dir_hash_b(const char *name, int full, char buf[2]);
  */
 extern int create_tempfile(const char *path);
 
+/* create a temporary directory at path and return the directory
+ * name "cyrus-subname-XXXXXX", where subname defaults to "tmpdir"
+ * and XXXXXX is a string that makes the directory name unique.
+ * */
+extern char *create_tempdir(const char *path, const char *subname);
+
+/* recursively call remove(3) on path and its descendants, except
+ * symlinks. Returns zero on sucess, or the first non-zero return
+ * value of remove on error. */
+extern int removedir(const char *path);
+
 /* Close a network filedescriptor the "safe" way */
 extern int cyrus_close_sock(int fd);
 
