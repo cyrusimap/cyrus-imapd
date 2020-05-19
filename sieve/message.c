@@ -562,6 +562,7 @@ void free_action_list(action_list_t *a)
         case ACTION_FILEINTO:
             strarray_free(a->u.fil.imapflags);
             buf_destroy(a->u.fil.headers);
+            free(a->u.fil.resolved_mailbox);
             break;
 
         case ACTION_SNOOZE:
@@ -575,6 +576,7 @@ void free_action_list(action_list_t *a)
         case ACTION_KEEP:
             strarray_free(a->u.keep.imapflags);
             buf_destroy(a->u.keep.headers);
+            free(a->u.keep.resolved_mailbox);
             break;
 
         case ACTION_VACATION:
