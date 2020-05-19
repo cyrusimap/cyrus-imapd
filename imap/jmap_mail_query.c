@@ -53,6 +53,8 @@
 #include "json_support.h"
 #include "search_engines.h"
 
+#include "imap/imap_err.h"
+
 #ifndef JMAP_URN_MAIL
 #define JMAP_URN_MAIL                "urn:ietf:params:jmap:mail"
 #endif
@@ -413,13 +415,9 @@ static void _matchmime_tr_append_text(search_text_receiver_t *rx,
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
 
-    // the in-memory backend is less efficient at indexing long texts
-    static size_t max_len = SEARCH_MAX_PARTS_SIZE > 1024 * 1024 ?
-                            1024 * 1024 : SEARCH_MAX_PARTS_SIZE;
+    if (buf_len(&tr->buf) >= SEARCH_MAX_PARTS_SIZE) return;
 
-    if (buf_len(&tr->buf) >= max_len) return;
-
-    size_t n = max_len - buf_len(&tr->buf);
+    size_t n = SEARCH_MAX_PARTS_SIZE - buf_len(&tr->buf);
     if (n > buf_len(text)) {
         n = buf_len(text);
     }
@@ -920,6 +918,7 @@ HIDDEN int jmap_email_matchmime(struct buf *mime,
     xapian_dbw_t *dbw = NULL;
     message_t *m = NULL;
     int matches = 0;
+    char *dbpath = NULL;
 
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     strarray_t capabilities = STRARRAY_INITIALIZER;
@@ -981,10 +980,21 @@ HIDDEN int jmap_email_matchmime(struct buf *mime,
         goto done;
     }
 
-    /* Open in-memory search index */
-    r = xapian_dbw_openmem(&dbw);
+    /* Open temporary database */
+    dbpath = create_tempdir(config_getstring(IMAPOPT_TEMP_PATH), "matchmime");
+    if (!dbpath) {
+        syslog(LOG_ERR, "jmap_matchmime: can't create tempdir: %s", strerror(errno));
+        *err = jmap_server_error(IMAP_INTERNAL);
+        goto done;
+    }
+
+    /* Open search index in temp directory */
+    const char *paths[2];
+    paths[0] = dbpath;
+    paths[1] = NULL;
+    r = xapian_dbw_open(paths, &dbw, 0);
     if (r) {
-        syslog(LOG_ERR, "jmap_matchmime: can't open in-memory search backend: %s",
+        syslog(LOG_ERR, "jmap_matchmime: can't open search backend: %s",
                 error_message(r));
         *err = jmap_server_error(r);
         goto done;
@@ -1034,8 +1044,10 @@ done:
     jmap_parser_fini(&parser);
     strarray_fini(&capabilities);
     json_decref(unsupported);
-    xapian_dbw_close(dbw);
     message_unref(&m);
+    xapian_dbw_close(dbw);
+    if (dbpath) removedir(dbpath);
+    free(dbpath);
     return matches;
 }
 

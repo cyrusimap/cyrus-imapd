@@ -446,25 +446,6 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
     return 0;
 }
 
-int xapian_dbw_openmem(struct xapian_dbw **dbwp)
-{
-    xapian_dbw_t *dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
-    dbw->is_inmemory = true;
-
-    dbw->database = new Xapian::WritableDatabase{"", Xapian::DB_BACKEND_INMEMORY};
-    std::set<int> db_versions {XAPIAN_DB_CURRENT_VERSION};
-    set_db_versions(*dbw->database, db_versions);
-
-    int r = xapian_dbw_init(dbw);
-    if (r) {
-        xapian_dbw_close(dbw);
-        dbw = NULL;
-    }
-
-    *dbwp = dbw;
-    return r;
-}
-
 void xapian_dbw_close(xapian_dbw_t *dbw)
 {
     if (!dbw) return;
