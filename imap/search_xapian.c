@@ -940,12 +940,6 @@ out:
 
 /* ====================================================================== */
 
-/* XXX - replace with cyrus_mkdir and cyrus_copyfile */
-static void remove_dir(const char *dir)
-{
-    run_command(RM_BIN, "-rf", dir, (char *)NULL);
-}
-
 static int copy_files(const char *fromdir, const char *todir)
 {
     char *fromdir2 = strconcat(fromdir, "/", (char *)NULL);
@@ -3463,7 +3457,7 @@ static void cleanup_xapiandirs(const char *mboxname, const char *partition, stra
         char *path = activefile_path(mboxname, partition, item, /*dostat*/0);
         if (verbose)
             printf("Removing unreferenced item %s (%s)\n", item, path);
-        remove_dir(path);
+        removedir(path);
         free(path);
     }
 
@@ -3471,7 +3465,7 @@ static void cleanup_xapiandirs(const char *mboxname, const char *partition, stra
         const char *path = strarray_nth(&bogus, i);
         if (verbose)
             printf("Removing bogus path %s\n", path);
-        remove_dir(path);
+        removedir(path);
     }
 
     strarray_fini(&found);
@@ -3643,7 +3637,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     r = cyrus_mkdir(buf_cstring(&mytempdir), 0755);
     if (r) goto out;
     /* and doesn't contain any junk */
-    remove_dir(buf_cstring(&mytempdir));
+    removedir(buf_cstring(&mytempdir));
     r = mkdir(buf_cstring(&mytempdir), 0755);
     if (r) goto out;
 
@@ -3652,7 +3646,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
             printf("only one source, copying directly to %s\n", tempdestdir);
         }
         cyrus_mkdir(tempdestdir, 0755);
-        remove_dir(tempdestdir);
+        removedir(tempdestdir);
         r = copy_files(strarray_nth(srcdirs, 0), tempdestdir);
         if (r) goto out;
         created_something = 1;
@@ -3702,7 +3696,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
             r = search_reindex(userid, toreindex, newdirs, newtiers, flags);
             if (r) {
                 printf("ERROR: failed to reindex to %s", tempreindexdir);
-                remove_dir(tempreindexdir);
+                removedir(tempreindexdir);
                 goto out;
             }
             // remove tempreindexdir from newdirs again, it's going to be compacted instead
@@ -3740,9 +3734,9 @@ static int compact_dbs(const char *userid, const char *tempdir,
                         printf("copying from tempdir to destination\n");
                     }
                     cyrus_mkdir(tempdestdir, 0755);
-                    remove_dir(tempdestdir);
+                    removedir(tempdestdir);
                     r = copy_files(buf_cstring(&mytempdir), tempdestdir);
-                    remove_dir(buf_cstring(&mytempdir));
+                    removedir(buf_cstring(&mytempdir));
                     if (r) {
                         printf("Failed to rsync from %s to %s", buf_cstring(&mytempdir), tempdestdir);
                         goto out;
@@ -3753,7 +3747,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
         }
 
         if (tempreindexdir) {
-            remove_dir(tempreindexdir);
+            removedir(tempreindexdir);
             free(tempreindexdir);
             tempreindexdir = NULL;
         }
@@ -3792,7 +3786,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
         if (verbose) {
             printf("renaming tempdir into place\n");
         }
-        remove_dir(destdir);
+        removedir(destdir);
         r = rename(tempdestdir, destdir);
         if (r) {
             printf("ERROR: failed to rename into place %s to %s\n", tempdestdir, destdir);
@@ -3819,7 +3813,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
 
     /* And finally remove all directories on disk of the source dbs */
     for (i = 0; i < srcdirs->count; i++)
-        remove_dir(strarray_nth(srcdirs, i));
+        removedir(strarray_nth(srcdirs, i));
 
     /* remove any other files that are still lying around! */
     cleanup_xapiandirs(mboxname, mbentry->partition, active, verbose);
@@ -3880,7 +3874,7 @@ static void delete_one(const char *key, const char *val __attribute__((unused)),
 
     xapian_basedir(tier, mboxname, partition, NULL, &basedir);
     if (basedir)
-        remove_dir(basedir);
+        removedir(basedir);
 
     free(basedir);
     free(tier);
