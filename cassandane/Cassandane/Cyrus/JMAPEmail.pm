@@ -14225,6 +14225,149 @@ sub test_email_get_cid
 
 }
 
+sub test_searchsnippet_get_attachment
+    :min_version_3_1 :needs_component_jmap :needs_search_xapian
+    :SearchAttachmentExtractor :SearchIndexParts :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $instance = $self->{instance};
+
+    my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
+
+    # Start a dummy extractor server.
+    my %seenPath;
+    my $handler = sub {
+        my ($conn, $req) = @_;
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } elsif ($seenPath{$req->uri->path}) {
+            my $res = HTTP::Response->new(200);
+            $res->header("Keep-Alive" => "timeout=1");  # Force client timeout
+            $res->content("dog cat bat");
+            $conn->send_response($res);
+        } else {
+            $conn->send_error(404);
+            $seenPath{$req->uri->path} = 1;
+        }
+    };
+    $instance->start_httpd($handler, $uri->port());
+
+    # Append an email with PDF attachment text "dog cat bat".
+    my $file = "data/dogcatbat.pdf.b64";
+    open my $input, '<', $file or die "can't open $file: $!";
+    my $body = ""
+    ."\r\n--boundary_1\r\n"
+    ."Content-Type: text/plain\r\n"
+    ."\r\n"
+    ."text body"
+    ."\r\n--boundary_1\r\n"
+    ."Content-Type: application/pdf\r\n"
+    ."Content-Transfer-Encoding: BASE64\r\n"
+    . "\r\n";
+    while (<$input>) {
+        chomp;
+        $body .= $_ . "\r\n";
+    }
+    $body .= "\r\n--boundary_1--\r\n";
+    close $input or die "can't close $file: $!";
+
+    $self->make_message("msg1",
+        mime_type => "multipart/related",
+        mime_boundary => "boundary_1",
+        body => $body
+    ) || die;
+
+    # Run squatter
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v');
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/search',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    # Test 0: query attachmentbody
+    my $filter = { attachmentBody => "cat" };
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => $filter,
+            wantPartIds => JSON::true,
+        }, "R1"],
+    ], $using);
+    my $emailIds = $res->[0][1]{ids};
+    $self->assert_num_equals(1, scalar @{$emailIds});
+    my $partIds = $res->[0][1]{partIds};
+    $self->assert_not_null($partIds);
+
+    # Test 1: pass partIds
+    $res = $jmap->CallMethods([['SearchSnippet/get', {
+            emailIds => $emailIds,
+            partIds => $partIds,
+            filter => $filter
+    }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    my $snippet = $res->[0][1]->{list}[0];
+    $self->assert_str_equals("dog <mark>cat</mark> bat", $snippet->{preview});
+
+    # Test 2: pass null partids
+    $res = $jmap->CallMethods([['SearchSnippet/get', {
+            emailIds => $emailIds,
+            partIds => {
+                $emailIds->[0] => undef
+            },
+            filter => $filter
+    }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $snippet = $res->[0][1]->{list}[0];
+    $self->assert_null($snippet->{preview});
+
+    # Sleep 1 sec to force Cyrus to timeout the client connection
+    sleep(1);
+
+    # Test 3: pass no partids
+    $res = $jmap->CallMethods([['SearchSnippet/get', {
+            emailIds => $emailIds,
+            filter => $filter
+    }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $snippet = $res->[0][1]->{list}[0];
+    $self->assert_null($snippet->{preview});
+
+    # Test 4: test null partids for header-only match
+    $filter = {
+        text => "msg1"
+    };
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => $filter,
+            wantPartIds => JSON::true,
+        }, "R1"],
+    ], $using);
+    $emailIds = $res->[0][1]{ids};
+    $self->assert_num_equals(1, scalar @{$emailIds});
+    $partIds = $res->[0][1]{partIds};
+    my $wantPartIds = {
+        $emailIds->[0] => undef
+    };
+    $self->assert_deep_equals($wantPartIds, $partIds);
+
+    # Test 5: query text
+    $filter = { text => "cat" };
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => $filter,
+            wantPartIds => JSON::true,
+        }, "R1"],
+    ], $using);
+    $emailIds = $res->[0][1]{ids};
+    $self->assert_num_equals(1, scalar @{$emailIds});
+    $partIds = $res->[0][1]{partIds};
+    $self->assert_not_null($partIds);
+}
+
 sub test_email_set_date
     :min_version_3_1 :needs_component_jmap
 {
@@ -14266,6 +14409,71 @@ sub test_email_set_date
     $self->assert_str_equals(' Thu, 02 May 2019 03:15:00 +0700', $email->{'header:Date'});
 }
 
+sub test_email_query_language_stats
+    :min_version_3_1 :needs_component_jmap :needs_dependency_cld2
+    :SearchLanguage :SearchIndexParts :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $body = ""
+    . "--boundary\r\n"
+    . "Content-Type: text/plain;charset=utf-8\r\n"
+    . "Content-Transfer-Encoding: quoted-printable\r\n"
+    . "\r\n"
+    . "Hoch oben in den L=C3=BCften =C3=BCber den reichgesegneten Landschaften des\r\n"
+    . "s=C3=BCdlichen Frankreichs schwebte eine gewaltige dunkle Kugel.\r\n"
+    . "\r\n"
+    . "Ein Luftballon war es, der, in der Nacht aufgefahren, eine lange\r\n"
+    . "Dauerfahrt antreten wollte.\r\n"
+    . "\r\n"
+    . "--boundary\r\n"
+    . "Content-Type: text/plain;charset=utf-8\r\n"
+    . "Content-Transfer-Encoding: quoted-printable\r\n"
+    . "\r\n"
+    . "The Bellman, who was almost morbidly sensitive about appearances, used\r\n"
+    . "to have the bowsprit unshipped once or twice a week to be revarnished,\r\n"
+    . "and it more than once happened, when the time came for replacing it,\r\n"
+    . "that no one on board could remember which end of the ship it belonged to.\r\n"
+    . "\r\n"
+    . "--boundary\r\n"
+    . "Content-Type: text/plain;charset=utf-8\r\n"
+    . "Content-Transfer-Encoding: quoted-printable\r\n"
+    . "\r\n"
+    . "Verri=C3=A8res est abrit=C3=A9e du c=C3=B4t=C3=A9 du nord par une haute mon=\r\n"
+    . "tagne, c'est une\r\n"
+    . "des branches du Jura. Les cimes bris=C3=A9es du Verra se couvrent de neige\r\n"
+    . "d=C3=A8s les premiers froids d'octobre. Un torrent, qui se pr=C3=A9cipite d=\r\n"
+    . "e la\r\n"
+    . "montagne, traverse Verri=C3=A8res avant de se jeter dans le Doubs et donne =\r\n"
+    . "le\r\n"
+    . "mouvement =C3=A0 un grand nombre de scies =C3=A0 bois; c'est une industrie =\r\n"
+    . "--boundary--\r\n";
+
+    $self->make_message("A multi-language email",
+        mime_type => "multipart/mixed",
+        mime_boundary => "boundary",
+        body => $body
+    );
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1' ]
+    ], $using);
+    $self->assert_not_null($res->[0][1]{debug}{languageStats}{de}{weight});
+    $self->assert_not_null($res->[0][1]{debug}{languageStats}{fr}{weight});
+    $self->assert_not_null($res->[0][1]{debug}{languageStats}{en}{weight});
+}
 sub test_email_set_received_at
     :min_version_3_1 :needs_component_jmap
 {
@@ -14412,6 +14620,98 @@ sub test_searchsnippet_get_regression
         }, 'R2'],
     ], $using);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+}
+
+sub test_search_sharedpart
+    :min_version_3_1 :needs_component_jmap :SearchIndexParts :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $body = "--047d7b33dd729737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $body .= "\r\n";
+    $body .= "This is the lady plain text part.";
+    $body .= "\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/html;charset=\"UTF-8\"\r\n";
+    $body .= "\r\n";
+    $body .= "<html><body><p>This is the lady html part.</p></body></html>";
+    $body .= "\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348--\r\n";
+
+    $self->make_message("lady subject",
+        mime_type => "multipart/alternative",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body
+    ) || die;
+
+    $body = "--h8h89737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $body .= "\r\n";
+    $body .= "This is the foobar plain text part.";
+    $body .= "\r\n";
+    $body .= "--h8h89737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/html;charset=\"UTF-8\"\r\n";
+    $body .= "\r\n";
+    $body .= "<html><body><p>This is the lady html part.</p></body></html>";
+    $body .= "\r\n";
+    $body .= "--h8h89737fe04d3bde348--\r\n";
+
+    $self->make_message("foobar subject",
+        mime_type => "multipart/alternative",
+        mime_boundary => "h8h89737fe04d3bde348",
+        body => $body
+    ) || die;
+
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/search',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {text => "foobar"},
+            wantPartIds => JSON::true,
+        },"R1"],
+    ], $using);
+    my $emailIds = $res->[0][1]{ids};
+    my $partIds = $res->[0][1]{partIds};
+
+    my $fooId = $emailIds->[0];
+
+    $self->assert_num_equals(1, scalar @$emailIds);
+    $self->assert_num_equals(1, scalar keys %$partIds);
+    $self->assert_num_equals(1, scalar @{$partIds->{$fooId}});
+    $self->assert_str_equals("1", $partIds->{$fooId}[0]);
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {text => "lady"},
+            wantPartIds => JSON::true,
+        }, "R1"],
+    ], $using);
+    $emailIds = $res->[0][1]{ids};
+    $partIds = $res->[0][1]{partIds};
+
+    my ($ladyId) = grep { $_ ne $fooId } @$emailIds;
+
+    $self->assert_num_equals(2, scalar @$emailIds);
+    $self->assert_num_equals(2, scalar keys %$partIds);
+    $self->assert_num_equals(1, scalar @{$partIds->{$fooId}});
+    $self->assert_num_equals(2, scalar @{$partIds->{$ladyId}});
+    $self->assert_not_null(grep { $_ eq "2" } @{$partIds->{$fooId}});
+    $self->assert_not_null(grep { $_ eq "1" } @{$partIds->{$ladyId}});
+    $self->assert_not_null(grep { $_ eq "2" } @{$partIds->{$ladyId}});
 }
 
 sub test_email_query_not_match
@@ -17511,6 +17811,222 @@ sub test_email_copy_has_expunged
         }, 'R2']
     ]);
     $self->assert_not_null($res->[1][1]{list}[0]{mailboxIds}{$dstInboxId});
+}
+
+sub test_email_query_language
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :SearchLanguage :SearchIndexParts :needs_dependency_cld2
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+use utf8;
+
+    my @testEmailBodies = ({
+        id => 'de',
+        bodyStructure => {
+            type => 'text/plain',
+            partId => 'part1',
+        },
+        bodyValues => {
+            part1 => {
+                value =>  <<'EOF'
+Jemand mußte Josef K. verleumdet haben, denn ohne daß er etwas Böses getan
+hätte, wurde er eines Morgens verhaftet. Die Köchin der Frau Grubach,
+seiner Zimmervermieterin, die ihm jeden Tag gegen acht Uhr früh das
+Frühstück brachte, kam diesmal nicht. Das war noch niemals geschehen. K.
+wartete noch ein Weilchen, sah von seinem Kopfkissen aus die alte Frau
+die ihm gegenüber wohnte und die ihn mit einer an ihr ganz ungewöhnli
+EOF
+            },
+        },
+    }, {
+        id => 'en',
+        bodyStructure => {
+            type => 'text/plain',
+            partId => 'part1',
+        },
+        bodyValues => {
+            part1 => {
+                value =>  <<'EOF'
+All human beings are born free and equal in dignity and rights. They are
+endowed with reason and conscience and should act towards one another in
+a spirit of brotherhood. Everyone has the right to life, liberty and security
+of person. No one shall be held in slavery or servitude; slavery and the
+slave trade shall be prohibited in all their forms. No one shall be
+subjected to torture or to cruel, inhuman or degrading treatment or punishment.
+EOF
+            },
+        },
+    }, {
+        id => 'fr',
+        bodyStructure => {
+            type => 'text/plain',
+            partId => 'part1',
+        },
+        bodyValues => {
+            part1 => {
+                value =>  <<'EOF'
+Hé quoi ! charmante Élise, vous devenez mélancolique, après les obligeantes
+assurances que vous avez eu la bonté de me donner de votre foi ? Je vous
+vois soupirer, hélas ! au milieu de ma joie ! Est-ce du regret, dites-moi,
+de m'avoir fait heureux ? et vous repentez-vous de cet engagement où mes
+feux ont pu vous contraindre ?
+EOF
+            },
+        },
+    }, {
+        id => 'fr-and-de',
+        bodyStructure => {
+            type => 'multipart/mixed',
+            subParts => [{
+                type => 'text/plain',
+                partId => 'part1',
+            }, {
+                type => 'text/plain',
+                partId => 'part2',
+            }],
+        },
+        bodyValues => {
+            part1 => {
+                value =>  <<'EOF'
+Non, Valère, je ne puis pas me repentir de tout ce que je fais pour
+vous. Je m'y sens entraîner par une trop douce puissance, et je n'ai
+pas même la force de souhaiter que les choses ne fussent pas. Mais, a
+vous dire vrai, le succès me donne de l'inquiétude ; et je crains fort
+de vous aimer un peu plus que je ne devrais.
+EOF
+            },
+            part2 => {
+                value => <<'EOF'
+Pfingsten, das liebliche Fest, war gekommen! es grünten und blühten
+Feld und Wald; auf Hügeln und Höhn, in Büschen und Hecken
+Übten ein fröhliches Lied die neuermunterten Vögel;
+Jede Wiese sproßte von Blumen in duftenden Gründen,
+Festlich heiter glänzte der Himmel und farbig die Erde.
+EOF
+            },
+        },
+    });
+
+no utf8;
+
+    my %emailIds;
+    foreach (@testEmailBodies) {
+        my $res = $jmap->CallMethods([
+            ['Email/set', {
+                create => {
+                    $_->{id} => {
+                        mailboxIds => {
+                            '$inbox' => JSON::true
+                        },
+                        from => [{ email => 'foo@local' }],
+                        to => [{ email => 'bar@local' }],
+                        subject => $_->{id},
+                        bodyStructure => $_->{bodyStructure},
+                        bodyValues => $_->{bodyValues},
+                    },
+                },
+            }, 'R1'],
+        ], $using);
+        $emailIds{$_->{id}} = $res->[0][1]{created}{$_->{id}}{id};
+        $self->assert_not_null($emailIds{$_->{id}});
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                language => 'fr',
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                operator => 'OR',
+                conditions => [{
+                    language => 'de',
+                }, {
+                    language => 'fr',
+                }],
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    language => 'de',
+                }, {
+                    language => 'fr',
+                }],
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                language => 'en',
+            },
+        }, 'R4'],
+        ['Email/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    language => 'de',
+                }],
+            },
+        }, 'R5'],
+        ['Email/query', {
+            filter => {
+                language => 'chr',
+            },
+        }, 'R6'],
+        ['Email/query', {
+            filter => {
+                language => 'xxxx',
+            },
+        }, 'R7'],
+    ], $using);
+
+    # fr
+    my @wantIds = sort ($emailIds{'fr'}, $emailIds{'fr-and-de'});
+    my @gotIds = sort @{$res->[0][1]->{ids}};
+    $self->assert_deep_equals(\@wantIds, \@gotIds);
+
+    # OR de,fr
+    @wantIds = sort ($emailIds{'fr'}, $emailIds{'de'}, $emailIds{'fr-and-de'});
+    @gotIds = sort @{$res->[1][1]->{ids}};
+    $self->assert_deep_equals(\@wantIds, \@gotIds);
+
+    # AND de,fr
+    $self->assert_deep_equals([$emailIds{'fr-and-de'}], $res->[2][1]->{ids});
+
+    # en
+    $self->assert_deep_equals([$emailIds{'en'}], $res->[3][1]->{ids});
+
+    # NOT de
+    @wantIds = sort ($emailIds{'en'}, $emailIds{'fr'});
+    @gotIds = sort @{$res->[4][1]->{ids}};
+    $self->assert_deep_equals(\@wantIds, \@gotIds);
+
+    # chr
+    $self->assert_deep_equals([], $res->[5][1]->{ids});
+
+    # xxxx
+    $self->assert_str_equals('invalidArguments', $res->[6][1]{type});
 }
 
 sub test_email_query_findallinthread
