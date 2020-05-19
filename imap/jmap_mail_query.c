@@ -45,6 +45,7 @@
 
 #include <string.h>
 #include <syslog.h>
+#include <errno.h>
 
 #include "libconfig.h"
 
