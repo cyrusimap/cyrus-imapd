@@ -476,24 +476,29 @@ static xapian_query_t *_email_matchmime_contactgroup(const char *groupid,
                                                      xapian_db_t *db,
                                                      struct email_contactfilter *cfilter)
 {
-    if (!cfilter->contactgroups.size) return NULL;
-
     xapian_query_t *xq = NULL;
-    strarray_t *members = hash_lookup(groupid, &cfilter->contactgroups);
-    if (members && strarray_size(members)) {
-        ptrarray_t xsubqs = PTRARRAY_INITIALIZER;
-        int i;
-        for (i = 0; i < strarray_size(members); i++) {
-            const char *member = strarray_nth(members, i);
-            xapian_query_t *xsubq = xapian_query_new_match(db, part, member);
-            if (xsubq) ptrarray_append(&xsubqs, xsubq);
+
+    if (cfilter->contactgroups.size) {
+        strarray_t *members = hash_lookup(groupid, &cfilter->contactgroups);
+        if (members && strarray_size(members)) {
+            ptrarray_t xsubqs = PTRARRAY_INITIALIZER;
+            int i;
+            for (i = 0; i < strarray_size(members); i++) {
+                const char *member = strarray_nth(members, i);
+                if (!strchr(member, '@')) continue;
+                xapian_query_t *xsubq = xapian_query_new_match(db, part, member);
+                if (xsubq) ptrarray_append(&xsubqs, xsubq);
+            }
+            if (ptrarray_size(&xsubqs)) {
+                xq = xapian_query_new_compound(db, /*is_or*/1,
+                        (xapian_query_t **) xsubqs.data, xsubqs.count);
+            }
         }
-        if (ptrarray_size(&xsubqs)) {
-            xq = xapian_query_new_compound(db, /*is_or*/1,
-                    (xapian_query_t **) xsubqs.data, xsubqs.count);
-        }
-        ptrarray_fini(&xsubqs);
     }
+    if (!xq) {
+        xq = xapian_query_new_not(db, xapian_query_new_matchall(db));
+    }
+
     return xq;
 }
 

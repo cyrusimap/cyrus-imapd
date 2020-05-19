@@ -1834,23 +1834,31 @@ static void _email_search_contactgroup(search_expr_t *parent,
     if (!contactgroups || !contactgroups->size) return;
 
     strarray_t *members = hash_lookup(groupid, contactgroups);
-    if (members && strarray_size(members)) {
-        charset_t utf8 = charset_lookupname("utf-8");
-        const search_attr_t *attr = search_attr_find(attrname);
-        search_expr_t *e = search_expr_new(parent, SEOP_FUZZYMATCH);
-        e->attr = attr;
-        e->value.list = strarray_new();
-        int i;
-        for (i = 0; i < strarray_size(members); i++) {
-            char *s = charset_convert(strarray_nth(members, i), utf8, charset_flags);
-            strarray_appendm(e->value.list, s);
-        }
-        charset_free(&utf8);
-        _email_search_perf_attr(e->attr, perf_filters);
+    if (!members || !strarray_size(members)) {
+        search_expr_new(parent, SEOP_FALSE);
+        return;
     }
-    else {
-         search_expr_new(parent, SEOP_FALSE);
+
+    charset_t utf8 = charset_lookupname("utf-8");
+    strarray_t *val = strarray_new();
+    int i;
+    for (i = 0; i < strarray_size(members); i++) {
+        const char *member = strarray_nth(members, i);
+        if (!strchr(member, '@')) continue;
+        strarray_appendm(val, charset_convert(member, utf8, charset_flags));
     }
+    charset_free(&utf8);
+    if (!strarray_size(val)) {
+        strarray_free(val);
+        search_expr_new(parent, SEOP_FALSE);
+        return;
+    }
+
+    const search_attr_t *attr = search_attr_find(attrname);
+    search_expr_t *e = search_expr_new(parent, SEOP_FUZZYMATCH);
+    e->attr = attr;
+    e->value.list = val;
+    _email_search_perf_attr(e->attr, perf_filters);
 }
 
 /* ====================================================================== */
