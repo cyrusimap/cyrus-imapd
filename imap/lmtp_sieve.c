@@ -1846,11 +1846,19 @@ static int jmapquery(void *sc, void *mc, const char *json)
     r = jmap_email_matchmime(&msg, jfilter, userid, time(NULL), &err);
 
     if (err) {
+        const char *type = json_string_value(json_object_get(err, "type"));
         char *errstr = json_dumps(err, JSON_COMPACT);
-        syslog(LOG_ERR, "sieve: jmapquery error: %s", errstr);
+        int priority = LOG_NOTICE;
+
+        if (strcmpsafe(type, "invalidArguments")) {
+            priority = LOG_ERR;
+            r = SIEVE_RUN_ERROR;
+        }
+
+        syslog(priority, "sieve: jmapquery error: %s", errstr);
+
         free(errstr);
         json_decref(err);
-        r = SIEVE_RUN_ERROR;
     }
 
     json_decref(jfilter);
