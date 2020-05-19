@@ -69,11 +69,31 @@ sub new
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no');
 
+    # setup sieve
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj == 3 && $min == 0) {
+        # need to explicitly add 'body' to sieve_extensions for 3.0
+        $config->set(sieve_extensions =>
+            "fileinto reject vacation vacation-seconds imap4flags notify " .
+            "envelope relational regex subaddress copy date index " .
+            "imap4flags mailbox mboxmetadata servermetadata variables " .
+            "body");
+    }
+    elsif ($maj < 3) {
+        # also for 2.5 (the earliest Cyrus that Cassandane can test)
+        $config->set(sieve_extensions =>
+            "fileinto reject vacation vacation-seconds imap4flags notify " .
+            "envelope relational regex subaddress copy date index " .
+            "imap4flags body");
+    }
+    $config->set(sievenotifier => 'mailto');
+
     return $class->SUPER::new({
         config => $config,
         jmap => 1,
+        deliver => 1,
         adminstore => 1,
-        services => [ 'imap', 'http' ]
+        services => [ 'imap', 'http', 'sieve' ]
     }, @args);
 }
 
@@ -17916,6 +17936,84 @@ EOF
 
     $msg = $res->[1][1]->{created}{"2"};
     $self->assert_not_null($msg);
+}
+
+sub test_email_query_fromanycontact_ignore_localpartonly
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create contact with localpart-only mail address";
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/contacts',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact1 => {
+                    emails => [{
+                        type => 'personal',
+                        value => 'email',
+                    }],
+                },
+            }
+        }, 'R1'],
+    ], $using);
+    my $contactId1 = $res->[0][1]{created}{contact1}{id};
+    $self->assert_not_null($contactId1);
+
+    xlog "Assert JMAP sieve ignores localpart-only contacts";
+    $imap->create("INBOX.matches") or die;
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+    "operator" : "NOT",
+    "conditions" : [
+        {
+           "fromAnyContact" : true
+        }
+    ]
+  }
+.
+  )
+{
+  fileinto "INBOX.matches";
+}
+EOF
+    );
+
+    my $msg1 = $self->{gen}->generate(from => Cassandane::Address->new(
+            localpart => 'email', domain => 'local'
+    ));
+    $self->{instance}->deliver($msg1);
+    $self->{store}->set_fetch_attributes('uid');
+    $self->{store}->set_folder('INBOX.matches');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog "Assert Email/query ignores localpart-only contacts";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    fromAnyContact => JSON::true
+                }]
+            },
+            sort => [
+                { property => "subject" }
+            ],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 }
 
 1;
