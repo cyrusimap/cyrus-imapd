@@ -332,7 +332,15 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     char *resource = NULL;
     int recno, r;
 
-    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) return 0;
+    syslog(LOG_DEBUG, "restore_collection_cb: processing '%s'  (type = 0x%03x)",
+           mbentry->name, mbentry->mbtype);
+
+    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) {
+        syslog(LOG_DEBUG, "skipping '%s': not type 0x%03x",
+               mbentry->name, rrock->mbtype);
+
+        return 0;
+    }
 
     r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
     if (r) {
@@ -341,6 +349,10 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     }
 
     if (rrock->jrestore->cutoff < mailbox->i.changes_epoch) {
+        syslog(LOG_DEBUG,
+               "skipping '%s': cutoff (%ld) prior to mailbox history (%ld)",
+               mailbox->name, rrock->jrestore->cutoff, mailbox->i.changes_epoch);
+
         jmap_closembox(rrock->req, &mailbox);
         return 0;
     }
@@ -351,22 +363,39 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     for (recno = mailbox->i.num_records; recno > 0; recno--) {
         message_set_from_mailbox(mailbox, recno, msg);
 
-        resource = rrock->resource_name_cb(msg, rrock->rock);
-        if (!resource) continue;
-
         const struct index_record *record = msg_record(msg);
+
+        resource = rrock->resource_name_cb(msg, rrock->rock);
+        syslog(LOG_DEBUG,
+               "UID %u: expunged: %x, intdate: %ld, updated: %ld, name: %s",
+               record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
+               record->internaldate, record->last_updated,
+               resource ? resource : "NULL");
+
+        if (!resource) {
+            syslog(LOG_DEBUG, "skipping UID %u: no resource name",
+                   record->uid);
+            continue;
+        }
+
         struct restore_info *restore = NULL;
         if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             /* Tombstone - resource has been destroyed or updated */
             restore = hash_lookup(resource, &resources);
 
             if (restore && restore->msgno_torecreate) {
+                syslog(LOG_DEBUG, "skipping UID %u: found a newer version",
+                       record->uid);
+
                 free(resource);
                 continue;
             }
 
             if (record->internaldate > rrock->jrestore->cutoff &&
                 (rrock->jrestore->mode & UNDO_ALL)) {
+                syslog(LOG_DEBUG, "skipping UID %u: created AND deleted",
+                       record->uid);
+
                 free(resource);
                 continue;
             }
@@ -392,6 +421,8 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             }
             else {
                 /* Resource was destroyed before cutoff - not interested */
+                syslog(LOG_DEBUG, "skipping UID %u: destroyed before cutoff",
+                       record->uid);
             }
         }
         else if (record->internaldate > rrock->jrestore->cutoff) {
@@ -405,6 +436,8 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         }
         else {
             /* Resource was not modified after cutoff - not interested */
+            syslog(LOG_DEBUG, "skipping UID %u: not modified after cutoff",
+                   record->uid);
         }
 
         free(resource);
@@ -730,6 +763,10 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     }
 
     char *addrhomeset = carddav_mboxname(req->accountid, NULL);
+
+    syslog(LOG_DEBUG, "jmap_backup_restore_contacts(%s, %ld)",
+           addrhomeset, restore.cutoff);
+
     struct contact_rock crock =
         { carddav_open_userid(req->accountid), BUF_INITIALIZER, NULL };
     struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK, 0,
@@ -1174,6 +1211,10 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     }
 
     char *calhomeset = caldav_mboxname(req->accountid, NULL);
+
+    syslog(LOG_DEBUG, "jmap_backup_restore_calendars(%s, %ld)",
+           calhomeset, restore.cutoff);
+
     struct calendar_rock crock =
         { caldav_open_userid(req->accountid),
           caldav_mboxname(req->accountid, SCHED_INBOX),
@@ -1253,6 +1294,10 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
     }
 
     const char *subfolder = config_getstring(IMAPOPT_NOTESMAILBOX);
+
+    syslog(LOG_DEBUG, "jmap_backup_restore_notes(%s, %ld)",
+           subfolder ? subfolder : "NULL", restore.cutoff);
+
     if (subfolder) {
         char *notes = mboxname_user_mbox(req->accountid, subfolder);
         struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
