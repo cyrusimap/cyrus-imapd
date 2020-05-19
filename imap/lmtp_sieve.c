@@ -1849,6 +1849,7 @@ static int jmapquery(void *sc, void *mc, const char *json)
         char *errstr = json_dumps(err, JSON_COMPACT);
         syslog(LOG_ERR, "sieve: jmapquery error: %s", errstr);
         free(errstr);
+        json_decref(err);
         r = SIEVE_RUN_ERROR;
     }
 
