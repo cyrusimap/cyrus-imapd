@@ -638,7 +638,19 @@ static uint32_t crc32_slice8(uint32_t prev, const void *data, size_t length)
 static uint32_t crc32_slice8(uint32_t prev, const void *data, size_t length)
 {
     uint32_t crc = ~prev;
-    const uint32_t* current = (const uint32_t*) data;
+    unsigned unaligned;
+    const uint8_t *current_char;
+    const uint32_t *current;
+
+    unaligned = ALIGNOF_UINT32_T - ((uintptr_t) data % ALIGNOF_UINT32_T);
+    if (unaligned == ALIGNOF_UINT32_T) unaligned = 0;
+
+    /* process a byte at a time until we hit an alignment boundary */
+    current_char = (const uint8_t *) data;
+    for (; unaligned && length; unaligned--, length--)
+        crc = (crc >> 8) ^ crc32_lookup[0][(crc & 0xFF) ^ *current_char++];
+
+    current = (const uint32_t *) current_char;
 
     /* process eight bytes at once (Slicing-by-8) */
     while (length >= 8) {
@@ -669,7 +681,7 @@ static uint32_t crc32_slice8(uint32_t prev, const void *data, size_t length)
         length -= 8;
     }
 
-    const uint8_t* current_char = (const uint8_t*) current;
+    current_char = (const uint8_t*) current;
     /* remaining 1 to 7 bytes (standard algorithm) */
     while (length-- != 0)
         crc = (crc >> 8) ^ crc32_lookup[0][(crc & 0xFF) ^ *current_char++];
@@ -685,7 +697,19 @@ static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
 static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
 {
     uint32_t crc = ~prev;
-    const uint32_t* current = (const uint32_t*) data;
+    unsigned unaligned;
+    const uint8_t *current_char;
+    const uint32_t *current;
+
+    unaligned = ALIGNOF_UINT32_T - ((uintptr_t) data % ALIGNOF_UINT32_T);
+    if (unaligned == ALIGNOF_UINT32_T) unaligned = 0;
+
+    /* process a byte at a time until we hit an alignment boundary */
+    current_char = (const uint8_t *) data;
+    for (; unaligned && length; unaligned--, length--)
+        crc = (crc >> 8) ^ crc32_lookup[0][(crc & 0xFF) ^ *current_char++];
+
+    current = (const uint32_t *) current_char;
 
     /* enabling optimization (at least -O2) automatically unrolls the inner for-loop */
     const size_t unroll = 4;
@@ -742,7 +766,7 @@ static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
         length -= bytes_at_once;
     }
 
-    const uint8_t* current_char = (const uint8_t*) current;
+    current_char = (const uint8_t*) current;
     /* remaining 1 to 63 bytes (standard algorithm) */
     while (length-- != 0)
         crc = (crc >> 8) ^ crc32_lookup[0][(crc & 0xFF) ^ *current_char++];
