@@ -186,6 +186,9 @@ else
   AC_MSG_ERROR(The Cyrus IMAPD requires support for long long int)
 fi
 
+dnl Check the required alignment for various types
+AC_CHECK_ALIGNOF(uint32_t)
+
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
 
