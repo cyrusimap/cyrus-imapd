@@ -2754,6 +2754,19 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             }
             break;
         }
+
+        /* Fall through and specify supported content codings */
+        GCC_FALLTHROUGH
+
+    case HTTP_CREATED:
+    case HTTP_ACCEPTED:
+    case HTTP_NO_CONTENT:
+    case HTTP_RESET_CONTENT:
+    case HTTP_PARTIAL:
+    case HTTP_MULTI_STATUS:
+        if (accept_encodings && buf_len(&txn->req_body.payload)) {
+            comma_list_hdr(txn, "Accept-Encoding", ce, accept_encodings);
+        }
         break;
 
     case HTTP_NOT_ALLOWED:
