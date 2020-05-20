@@ -1353,13 +1353,28 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     int userflag = -1, isdestroyed_mbox = 0;
     int r;
 
-    if (mbentry->mbtype != MBTYPE_EMAIL) return 0;
+    syslog(LOG_DEBUG, "restore_message_list_cb: processing '%s'  (type = 0x%03x)",
+           mbentry->name, mbentry->mbtype);
 
-    if (mboxname_isnotesmailbox(mbentry->name, MBTYPE_EMAIL)) return 0;
+    if (mbentry->mbtype != MBTYPE_EMAIL) {
+        syslog(LOG_DEBUG, "skipping '%s': not type EMAIL", mbentry->name);
+
+        return 0;
+    }
+
+    if (mboxname_isnotesmailbox(mbentry->name, MBTYPE_EMAIL)) {
+        syslog(LOG_DEBUG, "skipping '%s': Notes mailbox", mbentry->name);
+
+        return 0;
+    }
 
     if (mboxname_isdeletedmailbox(mbentry->name, &timestamp)) {
         if (timestamp <= rrock->jrestore->cutoff) {
             /* Mailbox was destroyed before cutoff - not interested */
+        syslog(LOG_DEBUG,
+               "skipping '%s': destroyed (%ld) before cutoff",
+               mailbox->name, mailbox->i.changes_epoch);
+
             return 0;
         }
 
@@ -1385,6 +1400,11 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         const char *guid = message_guid_encode(&record->guid);
         conversation_id_t msgid = 0;
         int isdestroyed_msg = isdestroyed_mbox;
+
+        syslog(LOG_DEBUG,
+               "UID %u: expunged: %x, intdate: %ld, updated: %ld",
+               record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
+               record->internaldate, record->last_updated);
 
         /* Suppress fetching of Message-ID if not restoring drafts */
         if (rrock->jrestore->mode & UNDO_DRAFTS) {
@@ -1413,6 +1433,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
             if (record->last_updated <= rrock->jrestore->cutoff) {
                 /* Message has been destroyed before cutoff - ignore */
+                syslog(LOG_DEBUG, "skipping UID %u: destroyed before cutoff",
+                       record->uid);
+
                 continue;
             }
 
@@ -1432,6 +1455,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 /* Destroyed draft */
                 if (!msgid) {
                     /* No way to track this message */
+                    syslog(LOG_DEBUG, "skipping UID %u: no msgid", record->uid);
+
                     continue;
                 }
 
@@ -1444,6 +1469,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 }
                 else if (message->undeleted) {
                     /* An undeleted copy of this draft exists */
+                    syslog(LOG_DEBUG, "skipping UID %u: undeleted draft exists",
+                           record->uid);
+
                     continue;
                 }
             }
@@ -1787,6 +1815,10 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     hash_table emailids = HASH_TABLE_INITIALIZER;
     hashu64_table msgids = HASHU64_TABLE_INITIALIZER;
     char *inbox = mboxname_user_mbox(req->accountid, NULL);
+
+    syslog(LOG_DEBUG, "jmap_backup_restore_mail(%s, %ld)",
+           inbox, restore.cutoff);
+
     struct mail_rock mrock = {
         construct_hash_table(&emailids, 1024, 0),  // every message GUID
         construct_hashu64_table(&msgids, 1024, 0), // every Message-ID of non-drafts
