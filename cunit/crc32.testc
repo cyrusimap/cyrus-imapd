@@ -1,4 +1,5 @@
 /* Unit test for lib/crc32.c */
+#include <config.h>
 #include "cunit/cyrunit.h"
 #include "crc32.h"
 #include "crc32c.h"
@@ -102,6 +103,31 @@ static void test_map(void)
     uint32_t c;
 
     c = crc32_map(TEXT, sizeof(TEXT)-1);
+    CU_ASSERT_EQUAL(c, CRC32);
+}
+
+static void test_unaligned(void)
+{
+    struct aligned_data {
+        char pad1[1];
+        char UNALIGNED_TEXT[12];
+        char pad2[3];
+        char ALIGNED_TEXT[12];
+    } __attribute__((packed, aligned (ALIGNOF_UINT32_T)));
+
+    static const struct aligned_data data = {
+        { 0 },
+        "lorem ipsum",
+        { 0 },
+        "lorem ipsum",
+    };
+    static const uint32_t CRC32 = 0x72d7748e;
+    uint32_t c;
+
+    c = crc32_map(data.UNALIGNED_TEXT, sizeof(data.UNALIGNED_TEXT)-1);
+    CU_ASSERT_EQUAL(c, CRC32);
+
+    c = crc32_map(data.ALIGNED_TEXT, sizeof(data.ALIGNED_TEXT)-1);
     CU_ASSERT_EQUAL(c, CRC32);
 }
 
