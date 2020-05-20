@@ -38,7 +38,7 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-PROGRAMS=lemming gdbtramp crash
+PROGRAMS=lemming gdbtramp crash syslog_probe
 LIBS=syslog.so
 
 CC=gcc
@@ -62,6 +62,11 @@ crash_SOURCE=crash.c
 crash_OBJS=$(crash_SOURCE:.c=.o)
 crash: $(crash_OBJS)
 	$(LINK.c) -o $@ $(crash_OBJS)
+
+syslog_probe_SOURCE=syslog_probe.c
+syslog_probe_OBJS=$(syslog_probe_SOURCE:.c=.o)
+syslog_probe: $(syslog_probe_OBJS)
+	$(LINK.c) -o $@ $(syslog_probe_OBJS)
 
 syslog_SOURCE=syslog.c
 syslog_OBJS=$(syslog_SOURCE:.c=.o)

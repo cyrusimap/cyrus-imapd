@@ -1103,23 +1103,6 @@ sub start
     $self->_init_basedir_and_name();
     xlog "start $self->{description}: basedir $self->{basedir}";
 
-    my $syslog_start = 0;
-    if (-e 'utils/syslog.so') { # XXX check a bit harder?
-        $self->{syslog_fname} = "$self->{basedir}/conf/log/syslog";
-        $self->{have_syslog_replacement} = 1;
-
-        # if the syslog file already exists, remember how large it is
-        # so we can seek past existing content without missing the
-        # startup content!
-        $syslog_start = -s $self->{syslog_fname} if -e $self->{syslog_fname};
-    }
-    else {
-        xlog "utils/syslog.so not found (do you need to run 'make'?)";
-        xlog "tests will not examine syslog output";
-        $self->{have_syslog_replacement} = 0;
-    }
-
-
     # Start SMTP server before generating imapd config, we need to
     # to set smtp_host to the auto-assigned TCP port it listens on.
     $self->_start_smtpd();
@@ -1155,18 +1138,12 @@ sub start
     {
         $self->_add_services_from_cyrus_conf();
     }
+    $self->setup_syslog_replacement();
     $self->_start_notifyd();
     $self->_uncompress_berkeley_crud();
     $self->_start_master();
     $self->{_stopped} = 0;
     $self->{_started} = 1;
-
-    if ($self->{have_syslog_replacement}) {
-        $self->{_syslogfh} = IO::File->new($self->{syslog_fname}, 'r')
-            || die "can't open file $self->{syslog_fname}";
-        $self->{_syslogfh}->seek($syslog_start, 0);
-        $self->{_syslogfh}->blocking(0);
-    }
 
     # give fakesaslauthd a moment (but not more than 2s) to set up its
     # socket before anything starts trying to connect to services
@@ -2034,11 +2011,61 @@ sub getnotify
     return $data;
 }
 
+sub setup_syslog_replacement
+{
+    my ($self) = @_;
+
+    if (not(-e 'utils/syslog.so') || not(-e 'utils/syslog_probe')) {
+        xlog "utils/syslog.so not found (do you need to run 'make'?)";
+        xlog "tests will not examine syslog output";
+        $self->{have_syslog_replacement} = 0;
+        return;
+    }
+
+    $self->{syslog_fname} = "$self->{basedir}/conf/log/syslog";
+    $self->{have_syslog_replacement} = 1;
+
+    # if the syslog file already exists, remember how large it is
+    # so we can seek past existing content without missing the
+    # startup content!
+    my $syslog_start = 0;
+    $syslog_start = -s $self->{syslog_fname} if -e $self->{syslog_fname};
+
+    # check that we can syslog a message and find it again
+    my $syslog_probe = abs_path('utils/syslog_probe');
+    $self->run_command($syslog_probe, $self->{name});
+
+    $self->{_syslogfh} = IO::File->new($self->{syslog_fname}, 'r');
+
+    my @lines;
+
+    if ($self->{_syslogfh}) {
+        $self->{_syslogfh}->seek($syslog_start, 0);
+        $self->{_syslogfh}->blocking(0);
+
+        @lines = $self->getsyslog();
+
+        if (not scalar grep { m/\bthe magic word\b/ } @lines) {
+            xlog "didn't find the magic word when probing syslog";
+            xlog "tests will not examine syslog output";
+
+            $self->{have_syslog_replacement} = 0;
+            undef $self->{_syslogfh};
+        }
+    }
+    else {
+        xlog "couldn't read $self->{syslog_fname} when probing syslog";
+        xlog "tests will not examine syslog output";
+
+        $self->{have_syslog_replacement} = 0;
+    }
+}
+
 sub getsyslog
 {
     my ($self) = @_;
     my $logname = $self->{name};
-    if ($self->{_syslogfh}) {
+    if ($self->{have_syslog_replacement} && $self->{_syslogfh}) {
         # hopefully unobtrusively, let busy log finish writing
         usleep(100_000); # 100ms (0.1s) as us
         my @lines = grep { m/$logname/ } $self->{_syslogfh}->getlines();
