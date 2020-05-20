@@ -683,47 +683,47 @@ static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
         size_t unrolling;
         for (unrolling = 0; unrolling < unroll; unrolling++) {
 #if BYTE_ORDER == LITTLE_ENDIAN
-        uint32_t one   = *current++ ^ crc;
-        uint32_t two   = *current++;
-        uint32_t three = *current++;
-        uint32_t four  = *current++;
-        crc = crc32_lookup[ 0][(four  >> 24) & 0xFF] ^
-              crc32_lookup[ 1][(four  >> 16) & 0xFF] ^
-              crc32_lookup[ 2][(four  >>  8) & 0xFF] ^
-              crc32_lookup[ 3][ four         & 0xFF] ^
-              crc32_lookup[ 4][(three >> 24) & 0xFF] ^
-              crc32_lookup[ 5][(three >> 16) & 0xFF] ^
-              crc32_lookup[ 6][(three >>  8) & 0xFF] ^
-              crc32_lookup[ 7][ three        & 0xFF] ^
-              crc32_lookup[ 8][(two   >> 24) & 0xFF] ^
-              crc32_lookup[ 9][(two   >> 16) & 0xFF] ^
-              crc32_lookup[10][(two   >>  8) & 0xFF] ^
-              crc32_lookup[11][ two          & 0xFF] ^
-              crc32_lookup[12][(one   >> 24) & 0xFF] ^
-              crc32_lookup[13][(one   >> 16) & 0xFF] ^
-              crc32_lookup[14][(one   >>  8) & 0xFF] ^
-              crc32_lookup[15][ one          & 0xFF];
+            uint32_t one   = *current++ ^ crc;
+            uint32_t two   = *current++;
+            uint32_t three = *current++;
+            uint32_t four  = *current++;
+            crc = crc32_lookup[ 0][(four  >> 24) & 0xFF] ^
+                  crc32_lookup[ 1][(four  >> 16) & 0xFF] ^
+                  crc32_lookup[ 2][(four  >>  8) & 0xFF] ^
+                  crc32_lookup[ 3][ four         & 0xFF] ^
+                  crc32_lookup[ 4][(three >> 24) & 0xFF] ^
+                  crc32_lookup[ 5][(three >> 16) & 0xFF] ^
+                  crc32_lookup[ 6][(three >>  8) & 0xFF] ^
+                  crc32_lookup[ 7][ three        & 0xFF] ^
+                  crc32_lookup[ 8][(two   >> 24) & 0xFF] ^
+                  crc32_lookup[ 9][(two   >> 16) & 0xFF] ^
+                  crc32_lookup[10][(two   >>  8) & 0xFF] ^
+                  crc32_lookup[11][ two          & 0xFF] ^
+                  crc32_lookup[12][(one   >> 24) & 0xFF] ^
+                  crc32_lookup[13][(one   >> 16) & 0xFF] ^
+                  crc32_lookup[14][(one   >>  8) & 0xFF] ^
+                  crc32_lookup[15][ one          & 0xFF];
 #else
-        uint32_t one   = *current++ ^ swap(crc);
-        uint32_t two   = *current++;
-        uint32_t three = *current++;
-        uint32_t four  = *current++;
-        crc = crc32_lookup[ 0][ four         & 0xFF] ^
-              crc32_lookup[ 1][(four  >>  8) & 0xFF] ^
-              crc32_lookup[ 2][(four  >> 16) & 0xFF] ^
-              crc32_lookup[ 3][(four  >> 24) & 0xFF] ^
-              crc32_lookup[ 4][ three        & 0xFF] ^
-              crc32_lookup[ 5][(three >>  8) & 0xFF] ^
-              crc32_lookup[ 6][(three >> 16) & 0xFF] ^
-              crc32_lookup[ 7][(three >> 24) & 0xFF] ^
-              crc32_lookup[ 8][ two          & 0xFF] ^
-              crc32_lookup[ 9][(two   >>  8) & 0xFF] ^
-              crc32_lookup[10][(two   >> 16) & 0xFF] ^
-              crc32_lookup[11][(two   >> 24) & 0xFF] ^
-              crc32_lookup[12][ one          & 0xFF] ^
-              crc32_lookup[13][(one   >>  8) & 0xFF] ^
-              crc32_lookup[14][(one   >> 16) & 0xFF] ^
-              crc32_lookup[15][(one   >> 24) & 0xFF];
+            uint32_t one   = *current++ ^ swap(crc);
+            uint32_t two   = *current++;
+            uint32_t three = *current++;
+            uint32_t four  = *current++;
+            crc = crc32_lookup[ 0][ four         & 0xFF] ^
+                  crc32_lookup[ 1][(four  >>  8) & 0xFF] ^
+                  crc32_lookup[ 2][(four  >> 16) & 0xFF] ^
+                  crc32_lookup[ 3][(four  >> 24) & 0xFF] ^
+                  crc32_lookup[ 4][ three        & 0xFF] ^
+                  crc32_lookup[ 5][(three >>  8) & 0xFF] ^
+                  crc32_lookup[ 6][(three >> 16) & 0xFF] ^
+                  crc32_lookup[ 7][(three >> 24) & 0xFF] ^
+                  crc32_lookup[ 8][ two          & 0xFF] ^
+                  crc32_lookup[ 9][(two   >>  8) & 0xFF] ^
+                  crc32_lookup[10][(two   >> 16) & 0xFF] ^
+                  crc32_lookup[11][(two   >> 24) & 0xFF] ^
+                  crc32_lookup[12][ one          & 0xFF] ^
+                  crc32_lookup[13][(one   >>  8) & 0xFF] ^
+                  crc32_lookup[14][(one   >> 16) & 0xFF] ^
+                  crc32_lookup[15][(one   >> 24) & 0xFF];
 #endif
         }
 
