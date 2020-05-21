@@ -290,7 +290,6 @@ magic(SearchIndexParts => sub {
 magic(SearchLanguage => sub {
     my $self = shift;
     $self->config_set('search_index_language' => 'yes');
-    $self->config_set('search_query_language' => 'yes');
 });
 magic(SieveUTF8Fileinto => sub {
     shift->config_set('sieve_utf8fileinto' => 'yes');
