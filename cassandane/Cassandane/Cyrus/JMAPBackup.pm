@@ -597,7 +597,7 @@ sub test_restore_calendars_all
     $self->assert_not_null($id);
     $self->assert(exists $res->[0][1]{created}{'2'});
 
-    sleep 1;
+    sleep 2;
     xlog "update an event title and delete a calendar";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -623,7 +623,7 @@ sub test_restore_calendars_all
     xlog "restore calendars prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreCalendars', {
-            undoPeriod => "PT1S",
+            undoPeriod => "PT2S",
             undoAll => JSON::true
          }, "R4"],
         ['CalendarEvent/get', {
@@ -665,40 +665,18 @@ sub test_restore_calendars_all
 
     $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REQUEST");
-return;
-    # clean notification cache
-    $self->{instance}->getnotify();
 
-    xlog "restore calendar to before initial creation";
+    xlog "try to restore calendar to before initial creation";
     $res = $jmap->CallMethods([
         ['Backup/restoreCalendars', {
             undoPeriod => "P1D",
             undoAll => JSON::true
-         }, "R6"],
-        ['CalendarEvent/get', {
-            properties => ['title'],
-         }, "R7"]
+         }, "R6"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Backup/restoreCalendars', $res->[0][0]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
     $self->assert_str_equals('R6', $res->[0][2]);
-    $self->assert_num_equals(2, $res->[0][1]{numCreatesUndone});
-    $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
-    $self->assert_num_equals(0, $res->[0][1]{numDestroysUndone});
-
-    $self->assert_str_equals('CalendarEvent/get', $res->[1][0]);
-    $self->assert_str_equals('R7', $res->[1][2]);
-    $self->assert_deep_equals([], $res->[1][1]{list});
-
-    $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
-    $self->assert_not_null($imip);
-
-    $payload = decode_json($imip->{MESSAGE});
-    $ical = $payload->{ical};
-
-    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
-    $self->assert($ical =~ "METHOD:CANCEL");
 }
 
 sub test_restore_calendars_all_dryrun
@@ -798,7 +776,7 @@ sub test_restore_calendars_all_dryrun
     $self->assert_not_null($id);
     $self->assert(exists $res->[0][1]{created}{'2'});
 
-    sleep 1;
+    sleep 2;
     xlog "update an event title and delete a calendar";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -825,7 +803,7 @@ sub test_restore_calendars_all_dryrun
     $res = $jmap->CallMethods([
         ['Backup/restoreCalendars', {
             performDryRun => JSON::true,
-            undoPeriod => "PT1S",
+            undoPeriod => "PT2S",
             undoAll => JSON::true
          }, "R4"],
         ['CalendarEvent/get', {
