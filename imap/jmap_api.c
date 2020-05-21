@@ -347,6 +347,9 @@ static int validate_request(struct transaction_t *txn, json_t *req,
             syslog(LOG_DEBUG, "old capability %s used", s);
         }
         else if (!json_object_get(settings->server_capabilities, s))  {
+            buf_printf(&txn->buf, "The Request object used capability '%s',"
+                       " which is not supported by this server.", s);
+            txn->error.desc = buf_cstring(&txn->buf);
             return JMAP_UNKNOWN_CAPABILITY;
         }
     }
