@@ -345,7 +345,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
-        return 0;
+        return r;
     }
 
     if (rrock->jrestore->cutoff < mailbox->i.changes_epoch) {
@@ -354,7 +354,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                mailbox->name, rrock->jrestore->cutoff, mailbox->i.changes_epoch);
 
         jmap_closembox(rrock->req, &mailbox);
-        return 0;
+        return HTTP_UNPROCESSABLE;
     }
 
     construct_hash_table(&resources, 64, 0);
@@ -754,6 +754,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_restore restore = JMAP_RESTORE_INITIALIZER(0);
     json_t *err = NULL;
+    int r;
 
     /* Parse request */
     jmap_restore_parse(req, &parser, &restore, &err);
@@ -775,21 +776,28 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
 
     if (restore.mode & DRY_RUN) {
         /* Treat as regular collection since we won't create group vCard */
-        mboxlist_mboxtree(addrhomeset, restore_collection_cb,
-                          &rrock, MBOXTREE_SKIP_ROOT);
+        r = mboxlist_mboxtree(addrhomeset, restore_collection_cb,
+                              &rrock, MBOXTREE_SKIP_ROOT);
     }
     else {
-        mboxlist_mboxtree(addrhomeset, restore_addressbook_cb,
-                          &rrock, MBOXTREE_SKIP_ROOT);
-        mboxname_setdeletedmodseq(addrhomeset,
-                                  rrock.deletedmodseq, MBTYPE_ADDRESSBOOK, 0);
+        r = mboxlist_mboxtree(addrhomeset, restore_addressbook_cb,
+                              &rrock, MBOXTREE_SKIP_ROOT);
+        if (!r) mboxname_setdeletedmodseq(addrhomeset, rrock.deletedmodseq,
+                                          MBTYPE_ADDRESSBOOK, 0);
     }
     free(addrhomeset);
     carddav_close(crock.carddavdb);
     buf_free(&crock.buf);
 
     /* Build response */
-    jmap_ok(req, jmap_restore_reply(&restore));
+    if (r) {
+        jmap_error(req, (r == HTTP_UNPROCESSABLE) ? 
+                   json_pack("{s:s}", "type", "cannotCalculateChanges") : 
+                   jmap_server_error(r));
+    }
+    else {
+        jmap_ok(req, jmap_restore_reply(&restore));
+    }
 
 done:
     jmap_parser_fini(&parser);
@@ -1202,6 +1210,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_restore restore = JMAP_RESTORE_INITIALIZER(0);
     json_t *err = NULL;
+    int r;
 
     /* Parse request */
     jmap_restore_parse(req, &parser, &restore, &err);
@@ -1223,9 +1232,9 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
                                   &ical_resource_name, &restore_ical,
                                   &crock, NULL };
 
-    mboxlist_mboxtree(calhomeset, restore_calendar_cb, &rrock,
-                      MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
-    if (!(restore.mode & DRY_RUN)) {
+    r = mboxlist_mboxtree(calhomeset, restore_calendar_cb, &rrock,
+                          MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
+    if (!(r || (restore.mode & DRY_RUN))) {
         mboxname_setdeletedmodseq(calhomeset,
                                   rrock.deletedmodseq, MBTYPE_CALENDAR, 0);
     }
@@ -1235,7 +1244,14 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     caldav_close(crock.caldavdb);
 
     /* Build response */
-    jmap_ok(req, jmap_restore_reply(&restore));
+    if (r) {
+        jmap_error(req, (r == HTTP_UNPROCESSABLE) ? 
+                   json_pack("{s:s}", "type", "cannotCalculateChanges") : 
+                   jmap_server_error(r));
+    }
+    else {
+        jmap_ok(req, jmap_restore_reply(&restore));
+    }
 
 done:
     jmap_parser_fini(&parser);
@@ -1285,6 +1301,7 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_restore restore = JMAP_RESTORE_INITIALIZER(0);
     json_t *err = NULL;
+    int r = 0;
 
     /* Parse request */
     jmap_restore_parse(req, &parser, &restore, &err);
@@ -1304,9 +1321,9 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
                                       &note_resource_name, &restore_note,
                                       NULL, NULL };
 
-        mboxlist_mboxtree(notes, restore_collection_cb,
-                          &rrock, MBOXTREE_SKIP_CHILDREN);
-        if (!(restore.mode & DRY_RUN)) {
+        r = mboxlist_mboxtree(notes, restore_collection_cb,
+                              &rrock, MBOXTREE_SKIP_CHILDREN);
+        if (!(r || (restore.mode & DRY_RUN))) {
             mboxname_setdeletedmodseq(notes,
                                       rrock.deletedmodseq, MBTYPE_EMAIL, 0);
         }
@@ -1314,7 +1331,14 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
     }
 
     /* Build response */
-    jmap_ok(req, jmap_restore_reply(&restore));
+    if (r) {
+        jmap_error(req, (r == HTTP_UNPROCESSABLE) ? 
+                   json_pack("{s:s}", "type", "cannotCalculateChanges") : 
+                   jmap_server_error(r));
+    }
+    else {
+        jmap_ok(req, jmap_restore_reply(&restore));
+    }
 
 done:
     jmap_parser_fini(&parser);
@@ -1342,6 +1366,24 @@ struct message_t {
     ptrarray_t deleted;
     unsigned undeleted : 1;
 };
+
+static void message_t_free(void *data)
+{
+    struct message_t *message = (struct message_t *) data;
+    ptrarray_t *deleted = &message->deleted;
+    int n = ptrarray_size(deleted);
+
+    while (n) {
+        struct removed_mail *rmail = ptrarray_nth(deleted, --n);
+
+        free(rmail->mboxname);
+        free(rmail->guid);
+        free(rmail);
+    }
+
+    ptrarray_fini(deleted);
+    free(message);
+}
 
 static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 {
@@ -1371,9 +1413,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     if (mboxname_isdeletedmailbox(mbentry->name, &timestamp)) {
         if (timestamp <= rrock->jrestore->cutoff) {
             /* Mailbox was destroyed before cutoff - not interested */
-        syslog(LOG_DEBUG,
-               "skipping '%s': destroyed (%ld) before cutoff",
-               mailbox->name, mailbox->i.changes_epoch);
+            syslog(LOG_DEBUG,
+                   "skipping '%s': destroyed (%ld) before cutoff",
+                   mailbox->name, mailbox->i.changes_epoch);
 
             return 0;
         }
@@ -1384,7 +1426,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
-        return 0;
+        return r;
     }
 
     if (!(rrock->jrestore->mode & DRY_RUN)) {
@@ -1562,13 +1604,7 @@ static void restore_mailbox_plan_cb(const char *guid __attribute__((unused)),
                 arrayu64_append(msgnos, rmail->msgno);
             }
         }
-
-        free(rmail->mboxname);
-        free(rmail);
     }
-
-    ptrarray_fini(deleted);
-    free(message);
 }
 
 static void restore_choose_draft_cb(uint64_t cid __attribute__((unused)),
@@ -1588,7 +1624,6 @@ static void restore_choose_draft_cb(uint64_t cid __attribute__((unused)),
 
     for (i = 0; i < ptrarray_size(drafts); i++) {
         struct removed_mail *rmail = ptrarray_nth(drafts, i);
-        struct removed_mail *freeme = rmail;
 
         if (num_last) {
             struct message_t *emailid =
@@ -1596,18 +1631,11 @@ static void restore_choose_draft_cb(uint64_t cid __attribute__((unused)),
 
             if (!(emailid && emailid->undeleted)) {
                 if (!maxdraft || rmail->size > maxdraft->size) {
-                    freeme = maxdraft;
                     maxdraft = rmail;
                 }
 
                 num_last--;
             }
-        }
-
-        if (freeme) {
-            free(freeme->mboxname);
-            free(freeme->guid);
-            free(freeme);
         }
     }
 
@@ -1622,14 +1650,7 @@ static void restore_choose_draft_cb(uint64_t cid __attribute__((unused)),
 
         /* Add this msgno to the mailbox */
         arrayu64_append(msgnos, maxdraft->msgno);
-
-        free(maxdraft->mboxname);
-        free(maxdraft->guid);
-        free(maxdraft);
     }
-
-    ptrarray_fini(drafts);
-    free(message);
 }
 
 static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
@@ -1796,7 +1817,6 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 
   done:
     mailbox_close(&newmailbox);
-    arrayu64_free(msgnos);
 }
 
 static int jmap_backup_restore_mail(jmap_req_t *req)
@@ -1805,6 +1825,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     struct jmap_restore restore =
         JMAP_RESTORE_INITIALIZER(UNDO_EMAIL|UNDO_DRAFTS|UNDO_NONDRAFTS);
     json_t *err = NULL;
+    int r;
 
     /* Parse request */
     jmap_restore_parse(req, &parser, &restore, &err);
@@ -1831,31 +1852,42 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
 
     /* Find all destroyed messages within our window -
        remove $restored flag from all messages as a side-effect */
-    mboxlist_mboxtree(inbox, restore_message_list_cb, &rrock,
-                      MBOXTREE_DELETED);
+    r = mboxlist_mboxtree(inbox, restore_message_list_cb, &rrock,
+                          MBOXTREE_DELETED);
     buf_free(&mrock.buf);
 
-    /* Find the largest of the 5 most recently destroyed copies of each draft
-       and add them to the proper mailbox plan */
-    hashu64_enumerate(&msgids, &restore_choose_draft_cb, &mrock);
-    free_hashu64_table(&msgids, NULL);
+    if (!r) {
+        /* Find the largest of the 5 most recently destroyed copies of each draft
+           and add them to the proper mailbox plan */
+        hashu64_enumerate(&msgids, &restore_choose_draft_cb, &mrock);
 
-    /* Find the most recently destroyed copies of non-draft messages
-       and add them to the proper mailbox plan */
-    hash_enumerate(&emailids, &restore_mailbox_plan_cb, &mailboxes);
-    free_hash_table(&emailids, NULL);
+        /* Find the most recently destroyed copies of non-draft messages
+           and add them to the proper mailbox plan */
+        hash_enumerate(&emailids, &restore_mailbox_plan_cb, &mailboxes);
 
-    /* Restore destroyed messages by mailbox */
-    hash_enumerate(&mailboxes, &restore_mailbox_cb, &rrock);
-    free_hash_table(&mailboxes, NULL);
+        /* Restore destroyed messages by mailbox */
+        hash_enumerate(&mailboxes, &restore_mailbox_cb, &rrock);
 
-    if (!(restore.mode & DRY_RUN)) {
-        mboxname_setdeletedmodseq(inbox, rrock.deletedmodseq, MBTYPE_EMAIL, 0);
+        if (!(restore.mode & DRY_RUN)) {
+            mboxname_setdeletedmodseq(inbox,
+                                      rrock.deletedmodseq, MBTYPE_EMAIL, 0);
+        }
     }
+
+    free_hash_table(&mailboxes, (void (*)(void *)) &arrayu64_free);
+    free_hash_table(&emailids, &message_t_free);
+    free_hashu64_table(&msgids, &message_t_free);
     free(inbox);
 
     /* Build response */
-    jmap_ok(req, jmap_restore_reply(&restore));
+    if (r) {
+        jmap_error(req, (r == HTTP_UNPROCESSABLE) ? 
+                   json_pack("{s:s}", "type", "cannotCalculateChanges") : 
+                   jmap_server_error(r));
+    }
+    else {
+        jmap_ok(req, jmap_restore_reply(&restore));
+    }
 
 done:
     jmap_parser_fini(&parser);
