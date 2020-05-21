@@ -1718,6 +1718,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                 
                 mbname_free(&ancestor);
             }
+            mboxlist_entry_free(&parent);
+
             if (!r) {
                 /* Create the mailbox */
                 r = mboxlist_createmailbox(newmboxname, MBTYPE_EMAIL,
