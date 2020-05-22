@@ -1413,9 +1413,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     if (mboxname_isdeletedmailbox(mbentry->name, &timestamp)) {
         if (timestamp <= rrock->jrestore->cutoff) {
             /* Mailbox was destroyed before cutoff - not interested */
-            syslog(LOG_DEBUG,
-                   "skipping '%s': destroyed (%ld) before cutoff",
-                   mailbox->name, mailbox->i.changes_epoch);
+            syslog(LOG_DEBUG, "skipping '%s': destroyed (%ld) before cutoff",
+                   mbentry->name, timestamp);
 
             return 0;
         }
