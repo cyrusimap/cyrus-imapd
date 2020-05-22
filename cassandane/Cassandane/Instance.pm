@@ -2061,6 +2061,13 @@ sub setup_syslog_replacement
     }
 }
 
+# n.b. This only gives you syslog lines if we were able to successfully
+# inject our syslog replacement.
+# If you need to make sure an error WASN'T logged, it'll do approximately
+# the right thing.
+# But if you need to make sure an error WAS logged, first make sure that
+# $instance->{have_syslog_replacement} is true, otherwise you will always
+# fail on systems where the syslog replacement doesn't work.
 sub getsyslog
 {
     my ($self) = @_;
