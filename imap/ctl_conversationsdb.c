@@ -150,7 +150,10 @@ static int zero_cid_cb(const mbentry_t *mbentry,
     int r;
 
     r = mailbox_open_iwl(mbentry->name, &mailbox);
-    if (r) return r;
+    if (r) {
+        fprintf(stderr, "Failed to open mailbox %s, skipping\n", mbentry->name);
+        return 0;
+    }
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     const message_t *msg;
@@ -206,7 +209,10 @@ static int build_cid_cb(const mbentry_t *mbentry,
 
     while (!r && count) {
         r = mailbox_open_iwl(mbentry->name, &mailbox);
-        if (r) return r;
+        if (r) {
+            fprintf(stderr, "Failed to open mailbox %s, skipping\n", mbentry->name);
+            return 0;
+        }
 
         count = 0;
 
