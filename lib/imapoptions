@@ -2677,7 +2677,7 @@ product version in the capabilities
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
-{ "temp_path", "/tmp", STRING, "3.2.1" }
+{ "temp_path", "/tmp", STRING, "3.3.0" }
 /* The pathname to store temporary files in. It is recommended to
    use an in-memory filesystem such as tmpfs for this path. */
 
