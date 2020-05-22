@@ -4376,7 +4376,7 @@ sub test_mailbox_set_destroy_movetomailbox_empty
             properties => ['mailboxIds'],
         }, 'R2'],
     ], $using);
-    $self->assert_deep_equals([$mboxIdA],
+    $self->assert_deep_equals([$mboxIdB],
         $res->[0][1]{destroyed});
     $self->assert_deep_equals({$mboxIdA => JSON::true},
         $res->[1][1]{list}[0]{mailboxIds});
