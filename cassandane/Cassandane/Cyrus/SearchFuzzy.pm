@@ -1535,7 +1535,107 @@ sub test_striphtml_rfc822
     $self->assert_deep_equals([], $uids);
     $uids = $talk->search('fuzzy', 'body', 'html') || die;
     $self->assert_deep_equals([1], $uids);
+}
 
+sub test_squatter_partials
+    :min_version_3_3 :needs_search_xapian :SearchAttachmentExtractor
+{
+    my ($self) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
+
+    xlog "Start extractor server";
+    my $nrequests = 0;
+    my $handler = sub {
+        my ($conn, $req) = @_;
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } else {
+            $nrequests++;
+            if ($nrequests == 1) {
+                $conn->send_error(500);
+            } elsif ($nrequests == 2) {
+                my $res = HTTP::Response->new(200);
+                $res->content("attach2");
+                $conn->send_response($res);
+            } elsif ($nrequests == 3) {
+                my $res = HTTP::Response->new(200);
+                $res->content("attach1");
+                $conn->send_response($res);
+            } else {
+                xlog "Unexpected request";
+                $conn->send_error(500);
+            }
+        }
+    };
+    $instance->start_httpd($handler, $uri->port());
+
+    xlog "Append emails with PDF attachments to trigger extractor";
+    $self->make_message("msg1",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/pdf\r\n"
+        ."\r\n"
+        ."attach1"
+        ."\r\n--123456789abcdef--\r\n"
+    ) || die;
+    $self->make_message("msg2",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/pdf\r\n"
+        ."\r\n"
+        ."attach2"
+        ."\r\n--123456789abcdef--\r\n"
+    ) || die;
+
+    xlog "Run squatter and allow partials";
+    $self->{instance}->{ignore_syslog} = 1;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-p', '-Z');
+
+    xlog "Assert text bodies of both messages are indexed";
+    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1,2], $uids);
+
+    xlog "Assert attachment of first message is not indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attach1');
+    $self->assert_deep_equals([], $uids);
+
+    xlog "Assert attachment of second message is indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attach2');
+    $self->assert_deep_equals([2], $uids);
+
+    xlog "Run incremental squatter without recovering partials";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "Assert attachment of first message is not indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attach1');
+    $self->assert_deep_equals([], $uids);
+
+    xlog "Run incremental squatter with recovering partials";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', '-P');
+
+    xlog "Assert attachment of first message is indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attach1');
+    $self->assert_deep_equals([1], $uids);
+
+    # clear syslog to not fail for expected IOERROR messages
+    $self->{instance}->getsyslog();
 }
 
 1;

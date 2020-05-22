@@ -284,9 +284,6 @@ magic(SearchAttachmentExtractor => sub {
     shift->config_set('search_attachment_extractor_url' =>
         "http://localhost:$port/extractor");
 });
-magic(SearchIndexParts => sub {
-    shift->config_set('search_index_parts' => 'yes');
-});
 magic(SearchLanguage => sub {
     my $self = shift;
     $self->config_set('search_index_language' => 'yes');
