@@ -144,6 +144,20 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                 ctx->invalid_field(field, ctx->rock);
             }
         }
+        else if (strarray_find(ctx->capabilities, JMAP_SEARCH_EXTENSION, 0) >= 0 &&
+                !strcmp(field, "language")) {
+            if (json_is_string(arg)) {
+                const char *s = json_string_value(arg);
+                if (!(isalpha(s[0]) && isalpha(s[1]) &&
+                            (s[2] == '\0' || (isalpha(s[2]) && s[3] == '\0')))) {
+                    /* not a two or three-letter code */
+                    ctx->invalid_field(field, ctx->rock);
+                }
+            }
+            else {
+                ctx->invalid_field(field, ctx->rock);
+            }
+        }
         else if (ctx->validate_field) {
             ctx->validate_field(field, arg, ctx->rock);
         }

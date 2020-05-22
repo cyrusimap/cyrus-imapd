@@ -1910,6 +1910,22 @@ out:
     return r;
 }
 
+static void add_stemmers(xapian_db_t *db, struct opnode *on)
+{
+    if (!on) return;
+
+    if (on->op == SEARCH_PART_LANGUAGE) {
+        int i;
+        for (i = 0; i < strarray_size(on->items); i++) {
+            xapian_query_add_stemmer(db, strarray_nth(on->items, i));
+        }
+    }
+    struct opnode *child;
+    for (child = on->children ; child ; child = child->next) {
+        add_stemmers(db, child);
+    }
+}
+
 static int run_internal(xapian_builder_t *bb)
 {
     int r = 0;
@@ -1924,6 +1940,9 @@ static int run_internal(xapian_builder_t *bb)
     if (r) return r;
 
     if (bb->root) optimise_nodes(NULL, bb->root);
+
+    /* Stem using any languages explicitly requested by the user. */
+    add_stemmers(bb->lock.db, bb->root);
 
     /* A database can contain sub-databases of multiple versions */
     if (xapian_db_has_otherthan_v4_index(bb->lock.db)) {
@@ -2944,7 +2963,14 @@ static int flush_snippets(search_text_receiver_t *rx)
                 r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
             if (r) goto out;
 
-            r = xapian_snipgen_begin_doc(tr->snipgen, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
+            if (search_part_is_body(seg->part)) {
+                r = xapian_snipgen_begin_doc(tr->snipgen, &seg->guid,
+                        SEARCH_XAPIAN_DOCTYPE_PART);
+            }
+            else {
+                r = xapian_snipgen_begin_doc(tr->snipgen, &tr->super.guid,
+                        SEARCH_XAPIAN_DOCTYPE_MSG);
+            }
             if (r) break;
             generate_snippet_terms(tr->snipgen, seg->part, tr->root);
 
@@ -3928,6 +3954,27 @@ out:
     return r;
 }
 
+static int langstats(const char *userid, ptrarray_t *lstats, size_t *total_docs)
+{
+    struct mailbox *mailbox = NULL;
+    char *inboxname = mboxname_user_mbox(userid, NULL);
+    struct xapiandb_lock lock = XAPIANDB_LOCK_INITIALIZER;
+
+    int r = mailbox_open_irl(inboxname, &mailbox);
+    if (r) goto out;
+
+    r = xapiandb_lock_open(mailbox, &lock);
+    if (r || lock.db == NULL) goto out;
+
+    r = xapian_db_langstats(lock.db, lstats, total_docs);
+
+out:
+    xapiandb_lock_release(&lock);
+    mailbox_close(&mailbox);
+    free(inboxname);
+    return r;
+}
+
 const struct search_engine xapian_search_engine = {
     "Xapian",
     SEARCH_FLAG_CAN_BATCH | SEARCH_FLAG_CAN_GUIDSEARCH,
@@ -3942,6 +3989,7 @@ const struct search_engine xapian_search_engine = {
     list_files,
     compact_dbs,
     delete_user,  /* XXX: fixme */
-    check_config
+    check_config,
+    langstats
 };
 

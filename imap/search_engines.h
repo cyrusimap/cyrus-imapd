@@ -133,9 +133,9 @@ struct search_text_receiver {
     int (*index_charset_flags)(int base_flags);
 };
 
-struct search_lang_stats {
+struct search_langstat {
     char *iso_lang;
-    double weight; // of total indexed docs
+    size_t count;
 };
 
 #define SEARCH_FLAG_CAN_BATCH      (1<<0)
@@ -172,6 +172,7 @@ struct search_engine {
                    int flags);
     int (*deluser)(const char *userid);
     int (*check_config)(char **errstr);
+    int (*langstats)(const char *userid, ptrarray_t *lstats, size_t *total_docs);
 };
 
 /* Returns the configured search engine */

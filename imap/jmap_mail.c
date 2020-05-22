@@ -2203,6 +2203,13 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "to")))) {
             _email_search_string(this, s, "to", perf_filters);
         }
+        if ((s = json_string_value(json_object_get(filter, "language")))) {
+            /* non-standard */
+            search_expr_t *e = search_expr_new(this, SEOP_FUZZYMATCH);
+            e->attr = search_attr_find("language");
+            e->value.s = xstrdup(s);
+            _email_search_perf_attr(e->attr, perf_filters);
+        }
     }
 
     return this;
@@ -4210,6 +4217,28 @@ static int jmap_email_query(jmap_req_t *req)
     /* Build response */
     json_t *res = jmap_emailquery_reply(req, &query);
     json_object_set(res, "collapseThreads", json_boolean(query.collapse_threads));
+    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+        /* List language stats */
+        const struct search_engine *engine = search_engine();
+        if (engine->langstats) {
+            size_t total_docs = 0;
+            ptrarray_t lstats = PTRARRAY_INITIALIZER;
+            int r = engine->langstats(req->accountid, &lstats, &total_docs);
+            if (!r) {
+                json_t *jstats = json_object();
+                struct search_langstat *lstat;
+                while ((lstat = ptrarray_pop(&lstats))) {
+                    json_object_set_new(jstats, lstat->iso_lang,
+                            json_integer(lstat->count));
+                    free(lstat->iso_lang);
+                    free(lstat);
+                }
+                json_object_set_new(res, "languageStats",
+                        json_pack("{s:o s:I}", "iso", jstats, "unknown", total_docs));
+            }
+            ptrarray_fini(&lstats);
+        }
+    }
     jmap_ok(req, res);
 
 done:

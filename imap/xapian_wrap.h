@@ -76,6 +76,7 @@ extern int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *g
 extern int xapian_db_open(const char **paths, xapian_db_t **dbp);
 extern int xapian_db_opendbw(struct xapian_dbw *dbw, xapian_db_t **dbp);
 extern void xapian_db_close(xapian_db_t *);
+extern void xapian_query_add_stemmer(xapian_db_t *, const char *iso_lang);
 extern xapian_query_t *xapian_query_new_match(const xapian_db_t *, int num_part, const char *term);
 extern xapian_query_t *xapian_query_new_compound(const xapian_db_t *, int is_or, xapian_query_t **children, int n);
 extern xapian_query_t *xapian_query_new_matchall(const xapian_db_t *);
@@ -99,6 +100,9 @@ extern int xapian_filter(const char *dest, const char **sources,
 /* XXX legacy version 4 DB support */
 extern int xapian_db_has_legacy_v4_index(const xapian_db_t *);
 extern int xapian_db_has_otherthan_v4_index(const xapian_db_t *);
+
+/* Language indexing support */
+extern int xapian_db_langstats(xapian_db_t*, ptrarray_t*, size_t*);
 
 /* Document interface */
 extern xapian_doc_t *xapian_doc_new(void);

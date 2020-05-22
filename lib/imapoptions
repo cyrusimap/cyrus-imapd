@@ -2159,9 +2159,11 @@ If all partitions are over that limit, this feature is not used anymore.
   Reserved for future use.
  */
 
-{ "search_index_language", 0, SWITCH, "3.2.1", "3.2.1" }
+{ "search_index_language", 0, SWITCH, "3.3.0" }
 /*
-  Reserved for future use.
+  If enabled, then messages bodies are stemmed by detected language
+  in addition to the default English stemmer.
+  Xapian only.
  */
 
 { "search_index_parts", 0, SWITCH, "3.2.1", "3.2.1" }
@@ -2169,9 +2171,9 @@ If all partitions are over that limit, this feature is not used anymore.
   Deprecated. No longer used.
  */
 
-{ "search_query_language", 0, SWITCH, "3.2.1", "3.2.1" }
+{ "search_query_language", 0, SWITCH, "3.3.0", "3.3.0" }
 /*
-  Reserved for future use.
+  Deprecated. No longer used.
  */
 
 { "search_normalisation_max", 1000, INT, "3.0.0" }
