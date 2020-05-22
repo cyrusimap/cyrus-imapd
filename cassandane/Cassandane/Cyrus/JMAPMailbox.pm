@@ -4308,6 +4308,80 @@ sub test_mailbox_set_destroy_movetomailbox
         $res->[2][1]{list}[0]{mailboxIds});
 }
 
+sub test_mailbox_set_destroy_movetomailbox_empty
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $store = $self->{store};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    xlog "Create mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+                mboxC => {
+                    name => 'C',
+                },
+            },
+        }, 'R1'],
+        ['Email/set', {
+            create => {
+                emailA => {
+                    mailboxIds => {
+                        '#mboxA' => JSON::true,
+                    },
+                    subject => 'emailA',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        1 => {
+                            value => 'emailA',
+                        }
+                    },
+                },
+            },
+        }, 'R2'],
+    ], $using);
+    my $mboxIdA = $res->[0][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxIdA);
+    my $mboxIdB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxIdB);
+    my $mboxIdC = $res->[0][1]{created}{mboxC}{id};
+    $self->assert_not_null($mboxIdC);
+    my $emailIdA = $res->[1][1]{created}{emailA}{id};
+    $self->assert_not_null($emailIdA);
+
+    xlog "Destroy mailbox B and move emails to C";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxIdB],
+            onDestroyMoveToMailboxIfNoMailbox => $mboxIdC,
+        }, 'R1'],
+        ['Email/get', {
+            ids => [$emailIdA],
+            properties => ['mailboxIds'],
+        }, 'R2'],
+    ], $using);
+    $self->assert_deep_equals([$mboxIdA],
+        $res->[0][1]{destroyed});
+    $self->assert_deep_equals({$mboxIdA => JSON::true},
+        $res->[1][1]{list}[0]{mailboxIds});
+}
+
 sub test_mailbox_set_destroy_movetomailbox_errors
     :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
