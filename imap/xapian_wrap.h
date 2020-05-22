@@ -54,6 +54,10 @@ typedef struct xapian_query xapian_query_t;
 typedef struct xapian_snipgen xapian_snipgen_t;
 typedef struct xapian_doc xapian_doc_t;
 
+/* Document types */
+#define XAPIAN_WRAP_DOCTYPE_MSG  'G'
+#define XAPIAN_WRAP_DOCTYPE_PART 'P'
+
 /* compaction interface */
 extern int xapian_compact_dbs(const char *dest, const char **sources);
 extern void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex, int always_upgrade);
@@ -68,9 +72,8 @@ extern int xapian_dbw_commit_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_cancel_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
 extern int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part);
-extern int xapian_dbw_end_doc(xapian_dbw_t *dbw);
-extern int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
-
+extern int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel);
+extern uint8_t xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
 
 /* query-side interface */
 extern int xapian_db_open(const char **paths, xapian_db_t **dbp);

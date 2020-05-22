@@ -389,8 +389,8 @@ static uint32_t _matchmime_tr_first_unindexed_uid(search_text_receiver_t *rx __a
     return 1;
 }
 
-static int _matchmime_tr_is_indexed(search_text_receiver_t *rx __attribute__((unused)),
-                                    message_t *msg __attribute__((unused)))
+static uint8_t _matchmime_tr_is_indexed(search_text_receiver_t *rx __attribute__((unused)),
+                                        message_t *msg __attribute__((unused)))
 {
     return 0;
 }
@@ -432,10 +432,10 @@ static void _matchmime_tr_end_part(search_text_receiver_t *rx, int part)
     buf_reset(&tr->buf);
 }
 
-static int _matchmime_tr_end_message(search_text_receiver_t *rx)
+static int _matchmime_tr_end_message(search_text_receiver_t *rx, uint8_t indexlevel)
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
-    return xapian_dbw_end_doc(tr->dbw);
+    return xapian_dbw_end_doc(tr->dbw, indexlevel);
 }
 
 static int _matchmime_tr_end_mailbox(search_text_receiver_t *rx __attribute__((unused)),
@@ -1025,7 +1025,7 @@ HIDDEN int jmap_email_matchmime(struct buf *mime,
         },
         dbw, BUF_INITIALIZER
     };
-    r = index_getsearchtext(m, NULL, (struct search_text_receiver*) &tr, /*snippet*/0);
+    r = index_getsearchtext(m, NULL, (struct search_text_receiver*) &tr, 0);
     if (r) {
         syslog(LOG_ERR, "jmap_matchmime: can't index MIME message: %s",
                 error_message(r));

@@ -109,6 +109,7 @@ struct search_query {
     uint32_t want_mbtype;
     int verbose;
     int ignore_timer;
+    int attachments_in_any;
 
     /*
      * A query comprises multiple sub-queries logically ORed together.

@@ -2595,7 +2595,7 @@ EXPORTED int index_snippets(struct index_state *state,
             if (state->m) message_set_from_record(mailbox, &record, state->m);
             else state->m = message_new_from_record(mailbox, &record);
 
-            index_getsearchtext(state->m, NULL, rx, /*snippet*/1);
+            index_getsearchtext(state->m, NULL, rx, INDEX_GETSEARCHTEXT_SNIPPET);
         }
 
         r = rx->end_mailbox(rx, mailbox);
@@ -5022,6 +5022,8 @@ struct getsearchtext_rock
     int snippet_iteration; /* 0..no snippet, 1..first run, 2..second run */
     struct extractor_ctx *ext;
     strarray_t striphtml; /* strip HTML from these plain text body part ids */
+    uint8_t indexlevel;
+    int flags;
 };
 
 static void stuff_part(search_text_receiver_t *receiver,
@@ -5356,7 +5358,6 @@ extractor_timeout(struct protstream *s __attribute__((unused)),
 static struct protocol_t http =
 { "http", "HTTP", TYPE_SPEC, { .spec = { &login, &ping, &logout } } };
 
-__attribute__((unused)) // disabled experimental feature
 static int extractor_connect(const char *exturl, struct extractor_ctx *ext)
 {
     struct backend *be;
@@ -5369,7 +5370,10 @@ static int extractor_connect(const char *exturl, struct extractor_ctx *ext)
 
     syslog(LOG_DEBUG, "extractor_connect(%s)", exturl);
 
-    if (!ext || ext->failed > 1) return IMAP_INTERNAL;
+    if (ext->failed > 1) {
+        syslog(LOG_INFO, "extractor failed for url: %s", exturl);
+        return IMAP_INTERNAL;
+    }
 
     be = ext->be;
     if (be) {
@@ -5751,12 +5755,23 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         /* Only generate snippets from named attachmend parts */
         if (str->snippet_iteration >= 2 && !str->partids) goto done;
 
+        if (!str->ext) {
+            /* Message has attachment, but no extractor is configured */
+            str->indexlevel = 1;
+            goto done;
+        }
+
         r = extract_attachment(type, subtype, type_params, data, encoding,
                                content_guid, str);
-        if (r) {
-            syslog(LOG_ERR, "index: can't extract text from attachment: %s",
-                    error_message(r));
-            goto done;
+        if (r == IMAP_IOERROR && (str->flags & INDEX_GETSEARCHTEXT_PARTIALS)) {
+            /* mark message as partially indexed and continue */
+            str->indexlevel |= SEARCH_INDEXLEVEL_PARTIAL;
+            r = 0;
+        }
+        else if (r) {
+            syslog(LOG_ERR, "IOERROR index: can't extract attachment %s (%s/%s): %s",
+                    message_guid_encode(content_guid),
+                    type, subtype, error_message(r));
         }
     }
 
@@ -5860,8 +5875,10 @@ static int find_striphtml_parts(message_t *msg, strarray_t *striphtml)
 
 EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
                                  search_text_receiver_t *receiver,
-                                 int snippet)
+                                 int flags)
 {
+    const char *exturl =
+        config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
     struct getsearchtext_rock str;
     struct buf buf = BUF_INITIALIZER;
     int format = MESSAGE_SEARCH;
@@ -5886,13 +5903,26 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     str.charset_flags = charset_flags;
     str.partids = partids;
     str.snippet_iteration = 0;
+    str.flags = flags;
+    str.indexlevel = SEARCH_INDEXLEVEL_ATTACH; // may get downgraded in callback
+    if (exturl) {
+        if (index_text_extractor) {
+            str.ext = index_text_extractor;
+            r = extractor_connect(exturl, str.ext);
+            if (r) return r;
+        } else {
+            /* This is a legitimate case for sieve and lmtpd */
+            syslog(LOG_INFO, "%s: ignoring uninitialized extractor for url %s",
+                    __func__, exturl);
+        }
+    }
 
     /* Search receiver can override text conversion */
     if (receiver->index_charset_flags) {
         str.charset_flags = receiver->index_charset_flags(str.charset_flags);
     }
 
-    if (snippet) {
+    if (flags & INDEX_GETSEARCHTEXT_SNIPPET) {
         str.charset_flags |= CHARSET_KEEPCASE;
         format = MESSAGE_SNIPPET;
     }
@@ -5981,10 +6011,12 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
         find_striphtml_parts(msg, &str.striphtml);
 
         /* Generate snippets in two passes. */
-        str.snippet_iteration = snippet ? 1 : 0;
+        if (flags & INDEX_GETSEARCHTEXT_SNIPPET) {
+            str.snippet_iteration = 1; /* first pass */
+        }
 
         r = message_foreach_section(msg, getsearchtext_cb, &str);
-        if (snippet) {
+        if (!r && str.snippet_iteration) {
             if (receiver->flush) {
                 r = receiver->flush(receiver);
             }
@@ -5997,7 +6029,19 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
         if (r) goto done;
     }
 
-    r = receiver->end_message(receiver);
+    /* Finalize message. */
+    r = receiver->end_message(receiver, str.indexlevel);
+
+    /* Log partially indexed message */
+    if (!r && (str.indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) {
+        struct mailbox *mailbox = msg_mailbox(msg);
+        uint32_t uid = 0;
+        message_get_uid(msg, &uid);
+        if (uid && mailbox) {
+            syslog(LOG_ERR, "IOERROR: index: partially indexed %s:%d",
+                    mailbox->name, uid);
+        }
+    }
 
 done:
     buf_free(&buf);

@@ -39,6 +39,7 @@ extern int charset_flags;
 
 #define SLOT_CYRUSID        0
 #define SLOT_DOCLANGS       1
+#define SLOT_INDEXLEVEL     2
 
 /* ====================================================================== */
 
@@ -140,8 +141,9 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
  * Version 6: stores all detected languages of a document in slot SLOT_DOCLANGS (deprecated)
  * Version 7: index new DELIVEREDTO search part
  * Version 8: reintroduces language indexing for non-English text
+ * Version 9: introduces index levels as keys to cyrusid metadata
  */
-#define XAPIAN_DB_CURRENT_VERSION 8
+#define XAPIAN_DB_CURRENT_VERSION 9
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
 
 static std::set<int> get_db_versions(const Xapian::Database &database)
@@ -352,6 +354,61 @@ static std::string detect_language(const struct buf *part)
 
 /* ====================================================================== */
 
+static uint8_t better_indexlevel(uint8_t levela, uint8_t levelb)
+{
+    uint8_t a = levela & ~SEARCH_INDEXLEVEL_PARTIAL;
+    uint8_t b = levelb & ~SEARCH_INDEXLEVEL_PARTIAL;
+    if (a > b) return levela;
+    if (a < b) return levelb;
+    return (levela & SEARCH_INDEXLEVEL_PARTIAL) ? levelb : levela;
+}
+
+static uint8_t parse_indexlevel(const std::string& s)
+{
+    uint8_t level = 0;
+    if (hex_to_bin(s.c_str(), s.length(), &level) != 1) {
+        return 0;
+    }
+    return level;
+}
+
+static std::string format_indexlevel(uint8_t level)
+{
+    char hex[4];
+    bin_to_lchex(&level, 1, hex);
+    return std::string(hex, 2);
+}
+
+/* ====================================================================== */
+
+class CyrusMetadataCompactor : public Xapian::Compactor
+{
+    public:
+
+        CyrusMetadataCompactor() { }
+
+        std::string resolve_duplicate_metadata(const std::string &key,
+                                               size_t num_tags,
+                                               const std::string tags[])
+        {
+            if (key.rfind("cyrusid.", 0) == 0) {
+                uint8_t indexlevel = parse_indexlevel(tags[0]);
+                size_t bestpos = 0;
+                for (size_t i = 1; i < num_tags; i++) {
+                    uint8_t level = parse_indexlevel(tags[i]);
+                    if (better_indexlevel(indexlevel, level) == level) {
+                        indexlevel = level;
+                        bestpos = i;
+                    }
+                }
+                return tags[bestpos];
+            }
+
+            return tags[0];
+        }
+};
+
+
 int xapian_compact_dbs(const char *dest, const char **sources)
 {
     int r = 0;
@@ -382,8 +439,10 @@ int xapian_compact_dbs(const char *dest, const char **sources)
         }
         thispath = "(unknown path)";
 
-        /* FULLER because we never write to compression targets again */
-        db.compact(dest, Xapian::Compactor::FULLER | Xapian::DBCOMPACT_MULTIPASS);
+        // Compact database.
+        static CyrusMetadataCompactor comp;
+        // FULLER because we never write to compression targets again.
+        db.compact(dest, Xapian::Compactor::FULLER | Xapian::DBCOMPACT_MULTIPASS, 0, comp);
 
         Xapian::WritableDatabase newdb(dest);
         set_db_versions(newdb, db_versions);
@@ -409,13 +468,9 @@ static const char *get_term_prefix(int db_version, int partnum)
 {
     /*
      * We use term prefixes to store terms per search part.
-     * In addition, each Xapian document contains a special
-     * prefix to indicate its document type, e.g. 'G' for
-     * a message, or 'P' for a MIME part. This allow to query
-     * search results by both search part queries and filter
-     * by document type.
-     *
-     * The prefix "XE" is reserved for the document type and
+     * In addition, each Xapian document contains a "XE"
+     * prefix to indicate its document type, listed in
+     * the XAPIAN_WRAP_DOCTYPE definitions. The "XE" prefix
      * MUST not be used for any search part.
      *
      */
@@ -840,41 +895,41 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
     return r;
 }
 
-static int xapian_dbw_end_doc_language(xapian_dbw_t *dbw)
-{
-    // Keep track of languages used in this message.
-    if (dbw->doctype == 'G') {
-        std::string val = format_doclangs(*dbw->doclangs);
-        dbw->database->set_metadata(lang_doc_key(dbw->cyrusid), val);
-        dbw->document->add_value(SLOT_DOCLANGS, val);
-    }
-    // Index subjects by detected document languages.
-    for (const std::string& iso_lang : *dbw->doclangs) {
-        if (iso_lang.compare("en")) {
-            for (const std::string& subject : *dbw->subjects)
-                try {
-                    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_SUBJECT);
-                    dbw->term_generator->set_stemmer(Xapian::Stem(iso_lang));
-                    dbw->term_generator->set_stopper(get_stopper(iso_lang));
-                    dbw->term_generator->index_text(Xapian::Utf8Iterator(subject), 1,
-                            lang_prefix(iso_lang, prefix));
-                } catch (const Xapian::InvalidArgumentError &err) {
-                    // ignore unknown stemmer
-                }
-        }
-    }
-    return 0;
-}
-
-int xapian_dbw_end_doc(xapian_dbw_t *dbw)
+int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
 {
     int r = 0;
+
+    assert(indexlevel > 0);
+
     try {
         if (config_getswitch(IMAPOPT_SEARCH_INDEX_LANGUAGE)){
-            r = xapian_dbw_end_doc_language(dbw);
+            // Keep track of languages used in this message.
+            if (dbw->doctype == 'G') {
+                std::string val = format_doclangs(*dbw->doclangs);
+                dbw->database->set_metadata(lang_doc_key(dbw->cyrusid), val);
+                dbw->document->add_value(SLOT_DOCLANGS, val);
+            }
+            // Index subjects by detected document languages.
+            for (const std::string& iso_lang : *dbw->doclangs) {
+                if (iso_lang.compare("en")) {
+                    for (const std::string& subject : *dbw->subjects)
+                        try {
+                            const char *prefix =
+                                get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_SUBJECT);
+                            dbw->term_generator->set_stemmer(Xapian::Stem(iso_lang));
+                            dbw->term_generator->set_stopper(get_stopper(iso_lang));
+                            dbw->term_generator->index_text(Xapian::Utf8Iterator(subject), 1,
+                                    lang_prefix(iso_lang, prefix));
+                        } catch (const Xapian::InvalidArgumentError &err) {
+                            // ignore unknown stemmer
+                        }
+                }
+            }
         }
+        dbw->document->add_value(SLOT_INDEXLEVEL, format_indexlevel(indexlevel));
         dbw->database->add_document(*dbw->document);
-        dbw->database->set_metadata("cyrusid." + std::string(dbw->cyrusid), "1");
+        dbw->database->set_metadata("cyrusid." + std::string(dbw->cyrusid),
+                                    format_indexlevel(indexlevel));
         delete dbw->document;
         dbw->document = 0;
         dbw->doctype = 0;
@@ -891,25 +946,35 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw)
     return r;
 }
 
-int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype)
+uint8_t xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype)
 {
     struct buf buf = BUF_INITIALIZER;
     make_cyrusid(&buf, guid, doctype);
     std::string key = "cyrusid." + std::string(buf_cstring(&buf));
     buf_free(&buf);
 
+    /* body parts have no index levels */
+    if (doctype == XAPIAN_WRAP_DOCTYPE_PART) {
+        return parse_indexlevel(dbw->database->get_metadata(key));
+    }
+
     /* indexed in the current DB? */
-    if (!dbw->database->get_metadata(key).empty())
-        return 1;
+    uint8_t indexlevel = parse_indexlevel(dbw->database->get_metadata(key));
+    if (indexlevel == SEARCH_INDEXLEVEL_BEST) {
+        return indexlevel;
+    }
 
     /* indexed in other DBs? */
     for (int i = 0; i < dbw->otherdbs.count; i++) {
         Xapian::Database *database = (Xapian::Database *)ptrarray_nth(&dbw->otherdbs, i);
-        if (!database->get_metadata(key).empty()) return 1;
+        uint8_t level = parse_indexlevel(database->get_metadata(key));
+        if (level == SEARCH_INDEXLEVEL_BEST) {
+            return level;
+        }
+        else indexlevel = better_indexlevel(indexlevel, level);
     }
 
-    /* nup */
-    return 0;
+    return indexlevel;
 }
 
 /* ====================================================================== */
@@ -1610,40 +1675,71 @@ int xapian_filter(const char *dest, const char **sources,
          * might be worth trying to open each source and copy its documents to
          * destdb in turn for better locality of reference, and so better cache
          * use. -- Olly on the mailing list */
+
+        std::vector<Xapian::Database> srcdbs;
+
+        // Open databases and aggregate database-level metadata.
         while (*sources) {
             thispath = *sources++;
             const Xapian::Database srcdb {thispath};
+            srcdbs.push_back(srcdb);
 
             // Aggregate db versions.
             std::set<int> srcdb_versions = get_db_versions(srcdb);
             db_versions.insert(srcdb_versions.begin(), srcdb_versions.end());
+        }
+
+        // Copy all matching documents.
+
+        for (size_t i = 0; i < srcdbs.size(); ++i) {
+            const Xapian::Database& srcdb = srcdbs.at(i);
 
             /* copy all matching documents to the new DB */
             for (Xapian::ValueIterator it = srcdb.valuestream_begin(SLOT_CYRUSID);
                     it != srcdb.valuestream_end(SLOT_CYRUSID); ++it) {
-                const char *cyrusid = (*it).c_str();
-                if (cb(cyrusid, rock)) {
-                    /* is it already indexed? */
-                    std::string key {"cyrusid." + *it};
-                    if (destdb.get_metadata(key).empty()) {
-                        // add document
-                        Xapian::Document srcdoc = srcdb.get_document(it.get_docid());
-                        Xapian::docid docid = destdb.add_document(srcdoc);
-                        // filter legacy language data
-                        std::string val = srcdoc.get_value(SLOT_DOCLANGS);
-                        if (!val.empty() && !isalpha(val[0])) {
-                            destdb.get_document(docid).remove_value(SLOT_DOCLANGS);
-                        }
-                        destdb.set_metadata(key, "1");
+                const std::string& cyrusid = *it;
+                const std::string idkey {"cyrusid." + cyrusid};
+
+                // check if caller wants this cyrusid
+                if (!cb(cyrusid.c_str(), rock)) {
+                    continue;
+                }
+
+                // is it already indexed?
+                if (!destdb.get_metadata(idkey).empty()) {
+                    continue;
+                }
+
+                // is there a subsequent db with a better index level? (only for G docs)
+                uint8_t indexlevel = parse_indexlevel(srcdb.get_metadata(idkey));
+                if (cyrusid[1] == XAPIAN_WRAP_DOCTYPE_MSG) {
+                    int found_better = 0;
+                    for (size_t j = i + 1; !found_better && j < srcdbs.size(); ++j) {
+                        uint8_t level = parse_indexlevel(srcdbs[j].get_metadata(idkey));
+                        found_better = better_indexlevel(indexlevel, level) != indexlevel;
                     }
-                    // copy document language metadata
-                    key = lang_doc_key(cyrusid);
-                    if (destdb.get_metadata(key).empty()) {
-                        std::string val = srcdb.get_metadata(key);
-                        if (!val.empty() && isalpha(val[0])) {
-                            destdb.set_metadata(key, val);
-                        }
+                    if (found_better) {
+                        continue;
                     }
+                }
+
+
+                // add document
+                Xapian::Document srcdoc = srcdb.get_document(it.get_docid());
+                Xapian::docid docid = destdb.add_document(srcdoc);
+                destdb.set_metadata(idkey, format_indexlevel(indexlevel));
+
+                // copy document language metadata
+                std::string langkey = lang_doc_key(cyrusid.c_str());
+                if (destdb.get_metadata(langkey).empty()) {
+                    std::string val = srcdb.get_metadata(langkey);
+                    if (!val.empty() && isalpha(val[0])) {
+                        destdb.set_metadata(langkey, val);
+                    }
+                }
+                std::string val = srcdoc.get_value(SLOT_DOCLANGS);
+                if (!val.empty() && !isalpha(val[0])) {
+                    destdb.get_document(docid).remove_value(SLOT_DOCLANGS);
                 }
             }
         }
