@@ -4850,6 +4850,24 @@ EXPORTED int message_get_mailinglist(message_t *m, struct buf *buf)
     return message_get_field(m, "mailing-list", MESSAGE_RAW, buf);
 }
 
+EXPORTED int message_get_priority(message_t *m, struct buf *buf)
+{
+    /* Only returns priority value "1" or none. */
+    int r = message_get_field(m, "X-Priority", MESSAGE_RAW, buf);
+    buf_trim(buf);
+    if (!r && !strcmp(buf_cstring(buf), "1")) {
+        return 0;
+    }
+    r = message_get_field(m, "Importance", MESSAGE_RAW, buf);
+    buf_trim(buf);
+    if (!r && !strcmp(buf_cstring(buf), "high")) {
+        buf_setcstr(buf, "1");
+        return 0;
+    }
+    buf_reset(buf);
+    return r;
+}
+
 EXPORTED const struct index_record *msg_record(const message_t *m)
 {
     assert(!message_need(m, M_RECORD))

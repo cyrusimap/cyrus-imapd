@@ -144,6 +144,12 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                 ctx->invalid_field(field, ctx->rock);
             }
         }
+        else if (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
+                !strcmp(field, "isHighPriority")) {
+            if (!json_is_boolean(arg)) {
+                ctx->invalid_field(field, ctx->rock);
+            }
+        }
         else if (strarray_find(ctx->capabilities, JMAP_SEARCH_EXTENSION, 0) >= 0 &&
                 !strcmp(field, "language")) {
             if (json_is_string(arg)) {

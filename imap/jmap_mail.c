@@ -2210,6 +2210,15 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             e->value.s = xstrdup(s);
             _email_search_perf_attr(e->attr, perf_filters);
         }
+        if (JNOTNULL(val = json_object_get(filter, "isHighPriority"))) {
+            /* non-standard */
+            search_expr_t *parent = val != json_true() ?
+                                    search_expr_new(this, SEOP_NOT) : this;
+            search_expr_t *e = search_expr_new(parent, SEOP_FUZZYMATCH);
+            e->attr = search_attr_find("priority");
+            e->value.s = xstrdup("1");
+            _email_search_perf_attr(e->attr, perf_filters);
+        }
     }
 
     return this;

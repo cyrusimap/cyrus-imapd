@@ -139,9 +139,10 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
  * Version 4: indexes headers and bodies in separate documents
  * Version 5: indexes headers and bodies together and stems by language
  * Version 6: stores all detected languages of a document in slot SLOT_DOCLANGS (deprecated)
- * Version 7: index new DELIVEREDTO search part
+ * Version 7: indexes new DELIVEREDTO search part
  * Version 8: reintroduces language indexing for non-English text
  * Version 9: introduces index levels as keys to cyrusid metadata
+ * Version 10: indexes new PRIORITY search part
  */
 #define XAPIAN_DB_CURRENT_VERSION 9
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
@@ -489,7 +490,8 @@ static const char *get_term_prefix(int db_version, int partnum)
         "XA",                /* ATTACHMENTNAME */
         "XAB",               /* ATTACHMENTBODY */
         "XDT",               /* DELIVEREDTO */
-        "XI"                 /* LANGUAGE */
+        "XI",                /* LANGUAGE */
+        "XP"                 /* PRIORITY */
     };
 
     static const char * const term_prefixes_v0[SEARCH_NUM_PARTS] = {
@@ -507,7 +509,8 @@ static const char *get_term_prefix(int db_version, int partnum)
         "A",                /* ATTACHMENTNAME */
         "AB",               /* ATTACHMENTBODY */
         "E",                /* DELIVEREDTO */
-        NULL
+        NULL,               /* LANGUAGE */
+        NULL                /* PRIORITY */
     };
 
     return db_version > 0 ? term_prefixes[partnum] : term_prefixes_v0[partnum];
@@ -531,7 +534,8 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
         Xapian::TermGenerator::STEM_NONE,  /* ATTACHMENTNAME */
         Xapian::TermGenerator::STEM_SOME,  /* ATTACHMENTBODY */
         Xapian::TermGenerator::STEM_NONE,  /* DELIVEREDTO */
-        Xapian::TermGenerator::STEM_NONE   /* LANGUAGE */
+        Xapian::TermGenerator::STEM_NONE,  /* LANGUAGE */
+        Xapian::TermGenerator::STEM_NONE   /* PRIORITY */
     };
 
     static Xapian::TermGenerator::stem_strategy stem_strategy_v1[SEARCH_NUM_PARTS] = {
@@ -550,7 +554,8 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
         Xapian::TermGenerator::STEM_NONE,  /* ATTACHMENTNAME */
         Xapian::TermGenerator::STEM_SOME,  /* ATTACHMENTBODY */
         Xapian::TermGenerator::STEM_ALL,   /* DELIVEREDTO */
-        Xapian::TermGenerator::STEM_NONE   /* LANGUAGE */
+        Xapian::TermGenerator::STEM_NONE,  /* LANGUAGE */
+        Xapian::TermGenerator::STEM_NONE   /* PRIORITY */
     };
 
     static Xapian::TermGenerator::stem_strategy stem_strategy_v0[SEARCH_NUM_PARTS] = {
@@ -569,7 +574,8 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
         Xapian::TermGenerator::STEM_ALL,   /* ATTACHMENTNAME */
         Xapian::TermGenerator::STEM_ALL,   /* ATTACHMENTBODY */
         Xapian::TermGenerator::STEM_ALL,   /* DELIVEREDTO */
-        Xapian::TermGenerator::STEM_NONE   /* LANGUAGE */
+        Xapian::TermGenerator::STEM_NONE,  /* LANGUAGE */
+        Xapian::TermGenerator::STEM_NONE   /* PRIORITY */
     };
 
     switch (db_version) {
@@ -791,19 +797,36 @@ int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, cha
     return r;
 }
 
-static int index_boolean_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
+static int add_language_part(xapian_dbw_t *dbw, const struct buf *part)
 {
-    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, num_part);
+    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_LANGUAGE);
     std::string lpart{buf_cstring(part)};
     std::transform(lpart.begin(), lpart.end(), lpart.begin(), ::tolower);
-    if (num_part == SEARCH_PART_LANGUAGE) {
-        if (!valid_lang_code(lpart)) {
-            syslog(LOG_ERR, "IOERROR: Xapian: not a valid ISO 639 code: %s",
-                             lpart.c_str());
-            return IMAP_IOERROR;
-        }
+    if (!valid_lang_code(lpart)) {
+        syslog(LOG_ERR, "IOERROR: Xapian: not a valid ISO 639 code: %s",
+                lpart.c_str());
+        return IMAP_IOERROR;
     }
     dbw->document->add_boolean_term(std::string(prefix) + lpart);
+    return 0;
+}
+
+static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part)
+{
+    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_PRIORITY);
+    std::string val;
+    if (buf_len(part)) {
+        const char *err;
+        uint32_t u;
+        if (parseuint32(buf_cstring(part), &err, &u) == -1 || *err || u == 0) {
+            syslog(LOG_ERR, "IOERROR: Xapian: not a valid priority: %s",
+                    buf_cstring(part));
+            return IMAP_IOERROR;
+
+        }
+        val = std::to_string(u);
+    }
+    dbw->document->add_boolean_term(std::string(prefix) + val);
     return 0;
 }
 
@@ -820,7 +843,10 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
     try {
         // Handle boolean term search parts.
         if (num_part == SEARCH_PART_LANGUAGE) {
-            return index_boolean_part(dbw, part, num_part);
+            return add_language_part(dbw, part);
+        }
+        else if (num_part == SEARCH_PART_PRIORITY) {
+            return add_priority_part(dbw, part);
         }
 
         // Index text.
@@ -1239,6 +1265,7 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
         // no database to query
         return NULL;
     }
+
     const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
     if (!prefix) {
         return NULL;

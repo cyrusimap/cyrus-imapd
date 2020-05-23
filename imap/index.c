@@ -5971,10 +5971,14 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
         if (!message_get_field(msg, "Mailing-List", format, &buf))
             stuff_part(receiver, SEARCH_PART_LISTID, NULL, &buf);
 
-        if (!message_get_field(msg, "X-Original-Delivered-To", format, &buf) && buf_len(&buf))
+        if (!message_get_field(msg, "Mailing-List", format, &buf))
+            stuff_part(receiver, SEARCH_PART_LISTID, NULL, &buf);
+
+        if (!message_get_deliveredto(msg, &buf))
             stuff_part(receiver, SEARCH_PART_DELIVEREDTO, NULL, &buf);
-        else if (!message_get_field(msg, "X-Delivered-To", format, &buf))
-            stuff_part(receiver, SEARCH_PART_DELIVEREDTO, NULL, &buf);
+
+        if (!message_get_priority(msg, &buf))
+            stuff_part(receiver, SEARCH_PART_PRIORITY, NULL, &buf);
 
         if (!message_get_leaf_types(msg, &types) && types.count) {
             /* We add three search terms: the type, subtype, and a combined
