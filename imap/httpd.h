@@ -600,7 +600,10 @@ extern void *zlib_init();
 extern int zlib_compress(struct transaction_t *txn, unsigned flags,
                          const char *buf, unsigned len);
 
-extern void *zstd_init();
 extern void *brotli_init();
+
+extern void *zstd_init();
+extern int zstd_compress(struct transaction_t *txn, unsigned flags,
+                         const char *buf, unsigned len);
 
 #endif /* HTTPD_H */

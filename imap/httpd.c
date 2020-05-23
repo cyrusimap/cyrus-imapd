@@ -320,7 +320,7 @@ HIDDEN void *zstd_init()
     return cctx;
 }
 
-static int zstd_compress(struct transaction_t *txn,
+HIDDEN int zstd_compress(struct transaction_t *txn,
                          unsigned flags, const char *buf, unsigned len)
 {
     /* Only flush for static content or on last (zero-length) chunk */
@@ -367,7 +367,7 @@ static int zstd_compress(struct transaction_t *txn __attribute__((unused)),
     fatal("Zstandard Compression requested, but not available", EX_SOFTWARE);
 }
 
-static void zstd_done(void *brotli __attribute__((unused))) {}
+static void zstd_done(void *cctx __attribute__((unused))) {}
 
 #endif /* HAVE_ZSTD */
 

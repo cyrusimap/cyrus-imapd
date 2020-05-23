@@ -72,7 +72,8 @@
 
 /* WebSocket Extension flags */
 enum {
-    EXT_PMCE_DEFLATE   = (1<<0)      /* Per-Message Compression Ext (RFC 7692) */
+    EXT_PMCE_DEFLATE   = (1<<0),     /* Per-Message Compression Ext (RFC 7692) */
+    EXT_PMCE_ZSTD      = (1<<1),     /* draft-handte-hybi-zstd-pmce */
 };
 
 /* Supported WebSocket Extensions */
@@ -82,6 +83,9 @@ static struct ws_extension {
 } extensions[] = {
 #ifdef HAVE_ZLIB
     { "permessage-deflate", EXT_PMCE_DEFLATE },
+#endif
+#ifdef HAVE_ZSTD
+    { "permessage-zstd",    EXT_PMCE_ZSTD },
 #endif
     { NULL, 0 }
 };
@@ -106,6 +110,13 @@ struct ws_context {
             unsigned no_context : 1;
             unsigned max_wbits;
         } deflate;
+        struct {
+            void *dctx;              /* Zstd decompression context */
+            unsigned no_context      : 1;
+            unsigned server_no_magic : 1;
+            unsigned client_no_magic : 1;
+            unsigned max_wbits;
+        } zstd;
     } pmce;
 };
 
@@ -404,6 +415,137 @@ static void on_frame_recv_start_cb(wslay_event_context_ptr ev __attribute__((unu
            wslay_opcode_as_str(arg->opcode), arg->rsv, arg->fin, arg->payload_length);
 }
 
+#ifdef HAVE_ZSTD
+#include <zstd.h>
+#include <zstd_errors.h>
+
+static void ws_zstd_init(struct transaction_t *txn, tok_t *params)
+{
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    unsigned client_max_wbits = 31; // ZSTD_WINDOWLOG_MAX;
+    char *token;
+
+    ctx->pmce.zstd.max_wbits = 31; // ZSTD_WINDOWLOG_MAX;
+
+    /* Process parameters */
+    while ((token = tok_next(params))) {
+        char *value = strchr(token, '=');
+
+        if (value) *value++ = '\0';
+
+        if (!strcmp(token, "server_no_context_takeover")) {
+            ctx->pmce.zstd.no_context = 1;
+        }
+        else if (!strcmp(token, "client_no_context_takeover")) {
+            /* Don't HAVE to do anything here */
+        }
+        else if (!strcmp(token, "server_max_window_bits")) {
+            if (value) {
+                if (*value == '"') value++;
+                ctx->pmce.zstd.max_wbits = atoi(value);
+            }
+            else ctx->pmce.zstd.max_wbits = 0;  /* force error */
+        }
+        else if (!strcmp(token, "client_max_window_bits")) {
+            if (value) {
+                if (*value == '"') value++;
+                client_max_wbits = atoi(value);
+            }
+        }
+        else if (!strcmp(token, "server_no_zstd_magic")) {
+            ctx->pmce.zstd.server_no_magic = 1;
+        }
+        else if (!strcmp(token, "client_no_zstd_magic")) {
+            ctx->pmce.zstd.client_no_magic = 1;
+        }
+    }
+
+    /* (Re)configure compression context for Zstandard */
+    if (txn->zstd) ZSTD_freeCCtx(txn->zstd);
+    txn->zstd = ZSTD_createCCtx();
+
+    if (txn->zstd) {
+        ZSTD_CCtx_setParameter(txn->zstd, ZSTD_c_compressionLevel,
+                               ZSTD_CLEVEL_DEFAULT);
+        ZSTD_CCtx_setParameter(txn->zstd, ZSTD_c_windowLog,
+                               ctx->pmce.zstd.max_wbits);
+        ZSTD_CCtx_setParameter(txn->zstd, ZSTD_c_checksumFlag, 1);
+
+        /* Configure decompression context for Zstandard */
+        ctx->pmce.zstd.dctx = ZSTD_createDCtx();
+        if (ctx->pmce.zstd.dctx) {
+            ZSTD_DCtx_setParameter(txn->zstd, ZSTD_d_windowLogMax,
+                                   client_max_wbits);
+            if (ctx->pmce.zstd.client_no_magic) {
+//                ZSTD_DCtx_setFormat(txn->zstd, ZSTD_f_zstd1_magicless);
+            }
+
+            /* Enable this PMCE */
+            ctx->ext = EXT_PMCE_ZSTD;
+        }
+    }
+}
+
+static void ws_zstd_done(struct ws_context *ctx)
+{
+    if (ctx->pmce.zstd.dctx) {
+        ZSTD_freeDCtx(ctx->pmce.zstd.dctx);
+    }
+}
+
+static int zstd_decompress(struct transaction_t *txn,
+                           const char *buf, unsigned len)
+{
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    ZSTD_inBuffer input = { buf, len, 0 };
+    ZSTD_DCtx *dctx = ctx->pmce.zstd.dctx;
+
+    if (!dctx) {
+        syslog(LOG_ERR, "zstd_decompress(): no dctx");
+        return -1;
+    }
+
+    buf_reset(&txn->zbuf);
+
+    while (input.pos < input.size) {
+        buf_ensure(&txn->zbuf, 3 * (input.size - input.pos));
+
+        ZSTD_outBuffer output = { txn->zbuf.s + txn->zbuf.len,
+                                  txn->zbuf.alloc - txn->zbuf.len, 0 };
+
+        const size_t ret = ZSTD_decompressStream(dctx, &output, &input);
+
+        if (ZSTD_isError(ret)) {
+            syslog(LOG_ERR, "Zstandard decompress error: %s",
+                   ZSTD_getErrorString(ZSTD_getErrorCode(ret)));
+            return -1;
+        }
+
+        txn->zbuf.len += output.pos;
+
+    }
+
+    return 0;
+}
+#else /* !HAVE_ZSTD */
+
+#define ZSTD_WINDOWLOG_MAX 0
+
+static void ws_zstd_init(struct transaction_t *txn __attribute__((unused)),
+                         tok_t *params __attribute__((unused))) { }
+
+static void ws_zstd_done(struct ws_context *ctx __attribute__((unused))) { }
+
+static int zstd_decompress(struct transaction_t *txn __attribute__((unused)),
+                           const char *buf __attribute__((unused)),
+                           unsigned len __attribute__((unused)))
+{
+    fatal("zstd_decompress() called, but no libzstd", EX_SOFTWARE);
+}
+
+#endif /* HAVE_ZSTD */
+
+
 #define COMP_FAILED_ERR    "Compressing message failed"
 #define DECOMP_FAILED_ERR  "Decompressing message failed"
 
@@ -436,6 +578,12 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             r = zlib_decompress(txn, buf_base(&inbuf), buf_len(&inbuf));
             if (r) {
                 syslog(LOG_ERR, "on_msg_recv_cb(): zlib_decompress() failed");
+            }
+        }
+        else if (ctx->ext & EXT_PMCE_ZSTD) {
+            r = zstd_decompress(txn, buf_base(&inbuf), buf_len(&inbuf));
+            if (r) {
+                syslog(LOG_ERR, "on_msg_recv_cb(): zstd_decompress() failed");
             }
         }
         else {
@@ -548,6 +696,20 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             rsv |= WSLAY_RSV1_BIT;
             pmce_str = "deflate";
         }
+        else if (ctx->ext & EXT_PMCE_ZSTD) {
+            r = zstd_compress(txn,
+                              ctx->pmce.zstd.no_context ? COMPRESS_START : 0,
+                              buf_base(&outbuf), buf_len(&outbuf));
+            if (r) {
+                syslog(LOG_ERR, "on_msg_recv_cb(): zstd_compress() failed");
+
+                err_code = WSLAY_CODE_INTERNAL_SERVER_ERROR;
+                err_msg = COMP_FAILED_ERR;
+                goto err;
+            }
+
+            rsv |= WSLAY_RSV1_BIT;
+        }
 
         /* Queue the server response */
         msgarg.msg = (const uint8_t *) buf_base(&outbuf);
@@ -642,6 +804,9 @@ static void parse_extensions(struct transaction_t *txn)
             if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
                 if (extp->flag == EXT_PMCE_DEFLATE) {
                     ws_zlib_init(txn, &param);
+                }
+                else if (extp->flag == EXT_PMCE_ZSTD) {
+                    ws_zstd_init(txn, &param);
                 }
 
                 if (ctx->ext) {
@@ -849,6 +1014,15 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
                    "; server_no_context_takeover" : "",
                    ctx->pmce.deflate.max_wbits);
     }
+    else if (ctx->ext & EXT_PMCE_ZSTD) {
+        simple_hdr(txn, "Sec-WebSocket-Extensions",
+                   "permessage-zstd%s%s; server_max_window_bits=%u",
+                   ctx->pmce.zstd.server_no_magic ?
+                   "; server_no_zstd_magic" : "",
+                   ctx->pmce.zstd.no_context ?
+                   "; server_no_context_takeover" : "",
+                   ctx->pmce.zstd.max_wbits);
+    }
 }
 
 
@@ -889,6 +1063,7 @@ HIDDEN void ws_end_channel(void **ws_ctx, const char *msg)
     }
 
     ws_zlib_done(ctx);
+    ws_zstd_done(ctx);
 
     free(ctx);
 
