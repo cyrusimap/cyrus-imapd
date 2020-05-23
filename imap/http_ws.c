@@ -508,7 +508,12 @@ static int zstd_decompress(struct transaction_t *txn,
     buf_reset(&txn->zbuf);
 
     while (input.pos < input.size) {
-        buf_ensure(&txn->zbuf, 3 * (input.size - input.pos));
+        unsigned long long outsize =
+            ZSTD_getFrameContentSize(input.src + input.pos, input.size - input.pos);
+
+        if (outsize >= ZSTD_CONTENTSIZE_ERROR) outsize = 4096;
+
+        buf_ensure(&txn->zbuf, outsize);
 
         ZSTD_outBuffer output = { txn->zbuf.s + txn->zbuf.len,
                                   txn->zbuf.alloc - txn->zbuf.len, 0 };
