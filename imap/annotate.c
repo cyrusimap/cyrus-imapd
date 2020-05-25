@@ -982,8 +982,11 @@ static int split_attribs(const char *data, int datalen,
     }
 
     if (tmps < end) {
-        mdata->modseq = ntohll(*((unsigned long long *)tmps));
-        tmps += sizeof(unsigned long long);
+        /* make sure ntohll's input is correctly aligned */
+        modseq_t modseq;
+        memcpy(&modseq, tmps, sizeof(modseq));
+        mdata->modseq = ntohll(modseq);
+        tmps += sizeof(modseq_t);
     }
 
     if (tmps < end) {
