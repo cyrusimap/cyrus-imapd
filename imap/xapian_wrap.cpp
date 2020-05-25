@@ -318,11 +318,16 @@ static std::string format_doclangs(const std::vector<std::string>& doclangs)
     return val;
 }
 
-static int valid_lang_code(const std::string& code)
+static std::string parse_langcode(const char *str)
 {
+    std::string lstr(str);
+    std::transform(lstr.begin(), lstr.end(), lstr.begin(), ::tolower);
     // accept syntax for two and three letter ISO 639 codes
-    return isalpha(code[0]) && isalpha(code[1]) &&
-           (code[2] == '\0' || (isalpha(code[2]) && code[3] == '\0'));
+    if (!(isalpha(lstr[0]) && isalpha(lstr[1]) &&
+           (lstr[2] == '\0' || (isalpha(lstr[2]) && lstr[3] == '\0')))) {
+        return std::string();
+    }
+    return lstr;
 }
 
 #ifdef HAVE_CLD2
@@ -345,9 +350,7 @@ static std::string detect_language(const struct buf *part)
         else if (!code.compare("xxx")) {
             code = "";
         }
-        if (valid_lang_code(code)) {
-            iso_lang = code;
-        }
+        iso_lang = parse_langcode(code.c_str());
     }
 
     return iso_lang;
@@ -801,33 +804,38 @@ int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, cha
 static int add_language_part(xapian_dbw_t *dbw, const struct buf *part)
 {
     const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_LANGUAGE);
-    std::string lpart{buf_cstring(part)};
-    std::transform(lpart.begin(), lpart.end(), lpart.begin(), ::tolower);
-    if (!valid_lang_code(lpart)) {
+    std::string val = parse_langcode(buf_cstring(part));
+    if (val.empty()) {
         syslog(LOG_ERR, "IOERROR: Xapian: not a valid ISO 639 code: %s",
-                lpart.c_str());
+                buf_cstring(part));
         return IMAP_IOERROR;
     }
-    dbw->document->add_boolean_term(std::string(prefix) + lpart);
+    dbw->document->add_boolean_term(std::string(prefix) + val);
     return 0;
+}
+
+static std::string parse_priority(const char *str)
+{
+    const char *err;
+    uint32_t u;
+    if (parseuint32(str, &err, &u) == -1 || *err || u == 0) {
+        return std::string();
+    }
+    return std::to_string(u);
 }
 
 static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part)
 {
     const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_PRIORITY);
-    std::string val;
     if (buf_len(part)) {
-        const char *err;
-        uint32_t u;
-        if (parseuint32(buf_cstring(part), &err, &u) == -1 || *err || u == 0) {
+        std::string val = parse_priority(buf_cstring(part));
+        if (val.empty()) {
             syslog(LOG_ERR, "IOERROR: Xapian: not a valid priority: %s",
                     buf_cstring(part));
             return IMAP_IOERROR;
-
         }
-        val = std::to_string(u);
+        dbw->document->add_boolean_term(std::string(prefix) + val);
     }
-    dbw->document->add_boolean_term(std::string(prefix) + val);
     return 0;
 }
 
@@ -1300,6 +1308,30 @@ static Xapian::Query* query_new_textmatch(const xapian_db_t *db,
     }
 }
 
+static Xapian::Query *query_new_language(const xapian_db_t *db __attribute__((unused)),
+                                         const char *prefix,
+                                         const char *str)
+{
+    std::string val = parse_langcode(str);
+    if (val.empty()) {
+        syslog(LOG_DEBUG, "Xapian: invalid language in query: %s", str);
+        return new Xapian::Query(Xapian::Query::MatchNothing);
+    }
+    return new Xapian::Query(std::string(prefix) + val);
+}
+
+static Xapian::Query *query_new_priority(const xapian_db_t *db __attribute__((unused)),
+                                         const char *prefix,
+                                         const char *str)
+{
+    std::string val = parse_priority(str);
+    if (val.empty()) {
+        syslog(LOG_DEBUG, "Xapian: invalid priority in query: %s", str);
+        return new Xapian::Query(Xapian::Query::MatchNothing);
+    }
+    return new Xapian::Query(std::string(prefix) + val);
+}
+
 static Xapian::Query *query_new_listid(const xapian_db_t *db,
                                        const char *prefix,
                                        const char *str)
@@ -1348,7 +1380,13 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
         }
 
         // Handle special value search parts.
-        if (partnum == SEARCH_PART_LISTID) {
+        if (partnum == SEARCH_PART_LANGUAGE) {
+            return (xapian_query_t*) query_new_language(db, prefix, str);
+        }
+        else if (partnum == SEARCH_PART_PRIORITY) {
+            return (xapian_query_t*) query_new_priority(db, prefix, str);
+        }
+        else if (partnum == SEARCH_PART_LISTID) {
             return (xapian_query_t*) query_new_listid(db, prefix, str);
         }
 
