@@ -2219,6 +2219,19 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             e->value.s = xstrdup("1");
             _email_search_perf_attr(e->attr, perf_filters);
         }
+        if ((s = json_string_value(json_object_get(filter, "listId")))) {
+            /* non-standard */
+            struct buf buf = BUF_INITIALIZER;
+            const char *val = s;
+            if (!strchr(s, '<')) {
+                buf_putc(&buf, '<');
+                buf_appendcstr(&buf, s);
+                buf_putc(&buf, '>');
+                val = buf_cstring(&buf);
+            }
+            _email_search_string(this, val, "listid", perf_filters);
+            buf_free(&buf);
+        }
     }
 
     return this;

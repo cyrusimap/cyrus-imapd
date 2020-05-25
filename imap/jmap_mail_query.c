@@ -727,6 +727,10 @@ static int _email_matchmime_evaluate(json_t *filter,
         xapian_query_t *xq = build_type_query(db, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
+    if ((match = json_string_value(json_object_get(filter, "listId")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_LISTID, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
     if (JNOTNULL(jval = json_object_get(filter, "isHighPriority"))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_PRIORITY, "1");
         if (xq && !json_boolean_value(jval)) {

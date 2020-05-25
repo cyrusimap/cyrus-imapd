@@ -164,6 +164,12 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                 ctx->invalid_field(field, ctx->rock);
             }
         }
+        else if (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
+                !strcmp(field, "listId")) {
+            if (!json_is_string(arg)) {
+                ctx->invalid_field(field, ctx->rock);
+            }
+        }
         else if (ctx->validate_field) {
             ctx->validate_field(field, arg, ctx->rock);
         }
