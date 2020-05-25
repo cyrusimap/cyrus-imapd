@@ -57,6 +57,7 @@
 #include "http_h2.h"
 #include "http_ws.h"
 #include "retry.h"
+#include "telemetry.h"
 #include "tok.h"
 #include "xsha1.h"
 
@@ -371,6 +372,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     double cmdtime, nettime;
     const char *err_msg;
     int r, err_code = 0;
+    int logfd = -1;
 
     /* Place client request into a buf */
     buf_init_ro(&inbuf, (const char *) arg->msg, arg->msg_length);
@@ -419,7 +421,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
     case WSLAY_TEXT_FRAME:
     case WSLAY_BINARY_FRAME:
-        if (txn->conn->logfd != -1) {
+        session_new_id();
+        logfd = telemetry_log(httpd_userid, NULL, NULL, 0);
+        if (logfd >= 0) {
             /* Telemetry logging */
             struct iovec iov[2];
             int niov = 0;
@@ -429,7 +433,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             WRITEV_ADD_TO_IOVEC(iov, niov,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&inbuf), buf_len(&inbuf));
-            writev(txn->conn->logfd, iov, niov);
+            writev(logfd, iov, niov);
             buf_reset(&txn->buf);
         }
 
@@ -444,7 +448,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             goto err;
         }
 
-        if (txn->conn->logfd != -1) {
+        if (logfd >= 0) {
             /* Telemetry logging */
             struct iovec iov[2];
             int niov = 0;
@@ -454,7 +458,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             WRITEV_ADD_TO_IOVEC(iov, niov,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&outbuf), buf_len(&outbuf));
-            writev(txn->conn->logfd, iov, niov);
+            writev(logfd, iov, niov);
             buf_reset(&txn->buf);
         }
 
@@ -488,11 +492,16 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                    ") => \"Success\" (opcode=%s; rsv=0x%x; length=%ld",
                    wslay_str_opcode(msgarg.opcode), rsv, msgarg.msg_length);
 
-        session_new_id();
+        /* close out the telemetry log for this action */
+        if (logfd >= 0) close(logfd);
+        logfd = -1;
+
         break;
     }
 
   err:
+    if (logfd >= 0) close(logfd);
+
     if (err_code) {
         size_t err_msg_len = strlen(err_msg);
 
