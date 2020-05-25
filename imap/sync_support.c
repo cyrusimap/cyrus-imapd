@@ -213,14 +213,14 @@ static void imap_postcapability(struct backend *s)
     }
 }
 
-static const char *_synclock_name(const char *channel, const char *userid)
+static const char *_synclock_name(const char *hostname, const char *userid)
 {
     const char *p;
     static struct buf buf = BUF_INITIALIZER;
     if (!userid) userid = ""; // no userid == global lock
 
     buf_setcstr(&buf, "*S*");
-    if (channel) buf_appendcstr(&buf, channel);
+    if (hostname) buf_appendcstr(&buf, hostname);
     buf_putc(&buf, '*');
 
     for (p = userid; *p; p++) {
@@ -238,10 +238,11 @@ static const char *_synclock_name(const char *channel, const char *userid)
 }
 
 
-static struct mboxlock *sync_lock(const char **channelp, const char *userid)
+static struct mboxlock *sync_lock(struct backend *sync_be,
+                                  const char **channelp __attribute__((unused)),
+                                  const char *userid)
 {
-    const char *channel = channelp ? *channelp : "";
-    const char *name = _synclock_name(channel, userid);
+    const char *name = _synclock_name(sync_be->hostname, userid);
     struct mboxlock *lock = NULL;
     int r = mboxname_lock(name, &lock, LOCK_EXCLUSIVE);
     return r ? NULL : lock;
@@ -5752,7 +5753,7 @@ int sync_do_seen(const char *userid, char *uniqueid, struct backend *sync_be,
     if (r) return 0;
 
     // XXX: we should pipe the channel through to here
-    struct mboxlock *synclock = sync_lock(channelp, userid);
+    struct mboxlock *synclock = sync_lock(sync_be, channelp, userid);
     if (!synclock) {
         r = IMAP_MAILBOX_LOCKED;
         goto done;
@@ -5780,7 +5781,7 @@ int sync_do_quota(const char *root, struct backend *sync_be,
 
     char *userid = mboxname_to_userid(root);
     // XXX: we should pipe the channel through to here
-    struct mboxlock *synclock = sync_lock(channelp, userid);
+    struct mboxlock *synclock = sync_lock(sync_be, channelp, userid);
     if (!synclock) {
         r = IMAP_MAILBOX_LOCKED;
         goto done;
@@ -5875,7 +5876,7 @@ int sync_do_annotation(char *mboxname, struct backend *sync_be,
 
     char *userid = mboxname_to_userid(mboxname);
     // XXX: we should pipe the channel through to here
-    struct mboxlock *synclock = sync_lock(channelp, userid);
+    struct mboxlock *synclock = sync_lock(sync_be, channelp, userid);
     if (!synclock) {
         r = IMAP_MAILBOX_LOCKED;
         goto bail;
@@ -6138,7 +6139,7 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
     int i;
     for (i = 0; i < strarray_size(&userids); i++) {
         const char *userid = strarray_nth(&userids, i);
-        struct mboxlock *lock = sync_lock(channelp, userid);
+        struct mboxlock *lock = sync_lock(sync_be, channelp, userid);
         if (!lock) {
             r = IMAP_MAILBOX_LOCKED;
             goto done;
@@ -6479,7 +6480,7 @@ int sync_do_user(const char *userid, const char *topart,
     struct dlist *kl = NULL;
     struct mailbox *mailbox = NULL;
 
-    struct mboxlock *userlock = sync_lock(channelp, userid);
+    struct mboxlock *userlock = sync_lock(sync_be, channelp, userid);
     if (!userlock) {
         r = IMAP_MAILBOX_LOCKED;
         goto done;
