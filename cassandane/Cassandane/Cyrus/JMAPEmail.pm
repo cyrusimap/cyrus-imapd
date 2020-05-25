@@ -19107,4 +19107,75 @@ sub test_email_query_highpriority
     $self->assert_deep_equals([$ids[2]], $res->[2][1]{ids});
 }
 
+sub test_email_query_listid
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Append emails with list-id";
+    $self->make_message("msg1",
+        extra_headers => [['list-id', "Foo <xxx.y\tyy. ZZZ>"]],
+        body => "msg1"
+    ) || die;
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-Z');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{
+                property => 'subject',
+            }],
+        }, 'R1'],
+    ], $using);
+    my @ids = @{$res->[0][1]{ids}};
+    $self->assert_num_equals(1, scalar @ids);
+
+    xlog "Query listId";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                listId => 'xxx.yyy.zzz',
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                listId => 'yyy',
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                listId => 'xxx.yyy.*',
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                listId => 'foo',
+            },
+        }, 'R4'],
+        ['Email/query', {
+            filter => {
+                listId => 'xxx . yyy . zzz',
+            },
+        }, 'R5'],
+    ], $using);
+    $self->assert_deep_equals([$ids[0]], $res->[0][1]{ids});
+    $self->assert_deep_equals([], $res->[1][1]{ids});
+    $self->assert_deep_equals([], $res->[2][1]{ids});
+    $self->assert_deep_equals([], $res->[3][1]{ids});
+    $self->assert_deep_equals([$ids[0]], $res->[4][1]{ids});
+}
+
 1;
