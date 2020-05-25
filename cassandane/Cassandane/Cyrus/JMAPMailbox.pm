@@ -4437,4 +4437,46 @@ sub test_mailbox_set_destroy_movetomailbox_errors
             $res->[1][1]{arguments});
 }
 
+# This is to test for a bug where a query against an intermediate mailbox was returning all emails!
+sub test_mailbox_intermediate_no_emails
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "Generate emails in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+    $self->make_message("Email B") || die;
+    $self->make_message("Email C") || die;
+
+    xlog $self, "Create a deep folder";
+    $talk->create("INBOX.Inter.Mediate");
+
+    xlog $self, "Generate one email in the deep mailbox via IMAP";
+    $store->set_folder("INBOX.Inter.Mediate");
+    $self->make_message("Email D") || die;
+
+    xlog $self, "get mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my %byname = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    xlog $self, "three emails in the Inbox";
+    $res = $jmap->CallMethods([['Email/query', { filter => { inMailbox => $byname{Inbox} } }, "R1"]]);
+    $self->assert_num_equals(3, $res->[0][1]{total});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+
+    xlog $self, "no emails in the Intermediate mailbox";
+    $res = $jmap->CallMethods([['Email/query', { filter => { inMailbox => $byname{Inter} } }, "R1"]]);
+    $self->assert_num_equals(0, $res->[0][1]{total});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{ids}});
+
+    xlog $self, "one email in the deep mailbox";
+    $res = $jmap->CallMethods([['Email/query', { filter => { inMailbox => $byname{Mediate} } }, "R1"]]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+}
+
 1;
