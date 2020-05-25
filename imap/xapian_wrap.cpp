@@ -143,8 +143,9 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
  * Version 8: reintroduces language indexing for non-English text
  * Version 9: introduces index levels as keys to cyrusid metadata
  * Version 10: indexes new PRIORITY search part
+ * Version 11: indexes LIST-ID as single value
  */
-#define XAPIAN_DB_CURRENT_VERSION 9
+#define XAPIAN_DB_CURRENT_VERSION 11
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
 
 static std::set<int> get_db_versions(const Xapian::Database &database)
@@ -830,6 +831,44 @@ static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part)
     return 0;
 }
 
+static std::string parse_listid(const char *str)
+{
+    /* Extract list-id */
+    const char *start = strchr(str, '<');
+    const char *end = NULL;
+    if (start) {
+        end = strchr(++start, '>');
+        if (end) end++;
+    }
+    if (!end || !start || end - start < 1) {
+        return std::string();
+    }
+
+    /* Normalize list-id */
+    std::string val(start, end - start - 1);
+    val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
+    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+    return val;
+}
+
+static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part)
+{
+    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_LISTID);
+
+    /* Normalize list-id */
+    std::string val = parse_listid(buf_cstring(part));
+    val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
+    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+    if (val.empty()) {
+        syslog(LOG_ERR, "IOERROR: Xapian: not a valid list-id: %s",
+                buf_cstring(part));
+        return IMAP_IOERROR;
+    }
+
+    dbw->document->add_boolean_term(std::string(prefix) + val);
+    return 0;
+}
+
 int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
 {
     int r = 0;
@@ -841,12 +880,15 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
     }
 
     try {
-        // Handle boolean term search parts.
+        // Handle special value search parts.
         if (num_part == SEARCH_PART_LANGUAGE) {
             return add_language_part(dbw, part);
         }
         else if (num_part == SEARCH_PART_PRIORITY) {
             return add_priority_part(dbw, part);
+        }
+        else if (num_part == SEARCH_PART_LISTID) {
+            return add_listid_part(dbw, part);
         }
 
         // Index text.
@@ -1202,10 +1244,10 @@ int xapian_db_has_legacy_v4_index(const xapian_db_t *db)
     return db->legacydbv4 != NULL;
 }
 
-static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
-                                            const char *match,
-                                            const char *prefix,
-                                            Xapian::TermGenerator::stem_strategy tg_stem_strategy)
+static Xapian::Query* query_new_textmatch(const xapian_db_t *db,
+                                          const char *match,
+                                          const char *prefix,
+                                          Xapian::TermGenerator::stem_strategy tg_stem_strategy)
 {
     unsigned flags = Xapian::QueryParser::FLAG_PHRASE |
                      Xapian::QueryParser::FLAG_WILDCARD;
@@ -1258,6 +1300,33 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
     }
 }
 
+static Xapian::Query *query_new_listid(const xapian_db_t *db,
+                                       const char *prefix,
+                                       const char *str)
+{
+    Xapian::Query *q = NULL;
+
+    std::string val = parse_listid(str);
+    if (!val.empty()) {
+        q = new Xapian::Query(std::string(prefix) + val);
+    }
+    else {
+        syslog(LOG_DEBUG, "Xapian: invalid listid in query: %s", str);
+        q = new Xapian::Query(Xapian::Query::MatchNothing);
+    }
+
+    if (db->db_versions->lower_bound(11) != db->db_versions->begin()) {
+        // index in legacy format
+        db->parser->set_stemmer(Xapian::Stem());
+        db->parser->set_stopper(NULL);
+        db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
+        q = new Xapian::Query(Xapian::Query::OP_OR, *q,
+                db->parser->parse_query(str, 0, prefix));
+    }
+
+    return q;
+}
+
 xapian_query_t *
 xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
 {
@@ -1278,6 +1347,11 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
                     XAPIAN_DB_MIN_SUPPORTED_VERSION);
         }
 
+        // Handle special value search parts.
+        if (partnum == SEARCH_PART_LISTID) {
+            return (xapian_query_t*) query_new_listid(db, prefix, str);
+        }
+
         // Don't stem queries for Thaana codepage (0780) or higher.
         for (const unsigned char *p = (const unsigned char *)str; *p; p++) {
             if (*p > 221) //has highbit
@@ -1295,7 +1369,7 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
         Xapian::TermGenerator::stem_strategy stem_strategy =
             get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
 
-        Xapian::Query *qq = make_stem_match_query(db, str, prefix, stem_strategy);
+        Xapian::Query *qq = query_new_textmatch(db, str, prefix, stem_strategy);
         if (qq->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
             delete qq;
             qq = NULL;
