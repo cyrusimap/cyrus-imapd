@@ -2090,11 +2090,15 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             if (mbentry && jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
                 strarray_append(folders, mbentry->name);
             }
+            search_expr_t *e = search_expr_new(this, SEOP_MATCH);
             if (strarray_size(folders)) {
-                search_expr_t *e = search_expr_new(this, SEOP_MATCH);
                 e->attr = &_emailsearch_folders_attr;
                 e->value.list = folders;
                 strarray_add(perf_filters, "mailbox");
+            }
+            else {
+                e->op = SEOP_FALSE;
+                e->attr = NULL;
             }
         }
 
