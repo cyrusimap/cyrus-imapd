@@ -214,6 +214,19 @@ sub test_restore_contacts
     $self->assert_num_equals(0, scalar @{$res->[1][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[1][1]{destroyed}});
     $state = $res->[1][1]{newState};
+
+    xlog "try to re-restore contacts prior to most recent changes";
+    $res = $jmap->CallMethods([['Backup/restoreContacts', {
+                    undoPeriod => "PT2S",
+                    performDryRun => JSON::true,
+                    undoAll => JSON::false
+                }, "R7"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreContacts', $res->[0][0]);
+    $self->assert_str_equals('R7', $res->[0][2]);
+    $self->assert_num_equals(0, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numDestroysUndone});
 }
 
 sub test_restore_contacts_all
