@@ -290,14 +290,19 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
 
     switch (restore->type) {
     case DESTROYS:
+        syslog(LOG_DEBUG, "undo destroy %s", resource);
         break;
 
     case UPDATES:
         if (!(rrock->jrestore->mode & UNDO_ALL)) goto done;
+
+        syslog(LOG_DEBUG, "undo update %s", resource);
         break;
 
     case CREATES:
         if (!(rrock->jrestore->mode & UNDO_ALL)) goto done;
+
+        syslog(LOG_DEBUG, "undo create %s", resource);
         break;
 
     default:
@@ -367,9 +372,9 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 
         resource = rrock->resource_name_cb(msg, rrock->rock);
         syslog(LOG_DEBUG,
-               "UID %u: expunged: %x, intdate: %ld, updated: %ld, name: %s",
+               "UID %u: expunged: %x, savedate: %ld, updated: %ld, name: %s",
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
-               record->internaldate, record->last_updated,
+               record->savedate, record->last_updated,
                resource ? resource : "NULL");
 
         if (!resource) {
@@ -391,7 +396,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                 continue;
             }
 
-            if (record->internaldate > rrock->jrestore->cutoff &&
+            if (record->savedate > rrock->jrestore->cutoff &&
                 (rrock->jrestore->mode & UNDO_ALL)) {
                 syslog(LOG_DEBUG, "skipping UID %u: created AND deleted",
                        record->uid);
@@ -417,6 +422,13 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                 if (restore->type == CREATES) {
                     /* Tombstone is before cutoff so this is an update */
                     restore->type = UPDATES;
+
+                    syslog(LOG_DEBUG, "UID %u: updated after cutoff",
+                           record->uid);
+                }
+                else {
+                    syslog(LOG_DEBUG, "UID %u: destroyed after cutoff",
+                           record->uid);
                 }
             }
             else {
@@ -425,7 +437,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                        record->uid);
             }
         }
-        else if (record->internaldate > rrock->jrestore->cutoff) {
+        else if (record->savedate > rrock->jrestore->cutoff) {
             /* Resource has been created or updated after cutoff - 
                assume its a create unless we find a tombstone before cutoff.
                Either way, we need to destroy this version of the resource */
@@ -433,6 +445,9 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             hash_insert(resource, restore, &resources);
             restore->type = CREATES;
             restore->msgno_todestroy = recno;
+
+            syslog(LOG_DEBUG, "UID %u: created/updated after cutoff",
+                   record->uid);
         }
         else {
             /* Resource was not modified after cutoff - not interested */
@@ -471,6 +486,9 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
 
     if (!tomailbox) tomailbox = mailbox;
 
+    syslog(LOG_DEBUG, "recreating UID: %u (%s); is_update: %d",
+           record->uid, tomailbox->name, is_update);
+
     /* use latest version of the resource as the source for our append stage */
     r = message_get_fname(msg, &fname);
     if (r) return r;
@@ -492,7 +510,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
 
         /* mark as undeleted */
         strarray_remove_all_case(flags, "\\Deleted");
-        strarray_remove_all_case(flags, "DAV:unbind");
+        strarray_remove_all_case(flags, DFLAG_UNBIND);
 
         /* mark as $restored */ 
         strarray_add(flags, "$restored");
@@ -531,6 +549,9 @@ static int destroy_resource(message_t *msg, jmap_req_t *req, int is_replaced)
     const struct index_record *record = msg_record(msg);
     struct index_record newrecord;
     int r = 0;
+
+    syslog(LOG_DEBUG,
+           "destroying UID: %u; is_replaced: %d", record->uid, is_replaced);
 
     /* copy the existing index_record */
     memcpy(&newrecord, record, sizeof(struct index_record));
