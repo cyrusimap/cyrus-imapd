@@ -854,6 +854,12 @@ int deliver(message_data_t *msgdata, char *authuser,
             strarray_t flags = STRARRAY_INITIALIZER;
             struct imap4flags imap4flags = { &flags, authstate };
 
+            // lock conversations for the duration of delivery, so nothing else can read
+            // the state of any mailbox while the delivery is half done
+            struct conversations_state *state = NULL;
+            r = conversations_open_user(mbname_userid(mbname), 0/*shared*/, &state);
+            if (r) goto setstatus;
+
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
@@ -878,6 +884,7 @@ int deliver(message_data_t *msgdata, char *authuser,
                 r = deliver_local(&mydata, &imap4flags, mbname);
             }
             strarray_fini(&flags);
+            conversations_commit(&state);
         }
 
         telemetry_rusage(mbname_userid(mbname));
