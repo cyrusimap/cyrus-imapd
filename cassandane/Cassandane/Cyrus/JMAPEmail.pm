@@ -5408,7 +5408,6 @@ sub test_email_query_inmailboxid_conjunction
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog $self, "query emails in mailboxes A AND B";
@@ -5555,7 +5554,6 @@ sub test_email_query_toaddress
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog $self, "query emails that are to bar";
@@ -5628,7 +5626,6 @@ sub test_email_query_inmailboxotherthan
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog $self, "fetch emails without filter";
@@ -6102,7 +6099,6 @@ sub email_query_window_internal
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     my $imaptalk = $self->{store}->get_client();
@@ -14284,9 +14280,9 @@ sub test_searchsnippet_get_attachment
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v');
 
     my $using = [
-        'https://cyrusimap.org/ns/jmap/search',
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
     ];
 
     # Test 0: query attachmentbody
@@ -14607,7 +14603,6 @@ sub test_searchsnippet_get_regression
     my $using = [
         'https://cyrusimap.org/ns/jmap/performance',
         'https://cyrusimap.org/ns/jmap/debug',
-        'https://cyrusimap.org/ns/jmap/search',
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
     ];
@@ -14677,8 +14672,8 @@ sub test_search_sharedpart
 
     my $using = [
         'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/debug',
-        'https://cyrusimap.org/ns/jmap/search',
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
     ];
@@ -15632,7 +15627,6 @@ sub test_email_query_position
     my $using = [
         'https://cyrusimap.org/ns/jmap/performance',
         'https://cyrusimap.org/ns/jmap/debug',
-        'https://cyrusimap.org/ns/jmap/search',
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
     ];
@@ -15747,7 +15741,6 @@ sub test_email_query_negative_position
     my $using = [
         'https://cyrusimap.org/ns/jmap/performance',
         'https://cyrusimap.org/ns/jmap/debug',
-        'https://cyrusimap.org/ns/jmap/search',
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
     ];
@@ -15858,7 +15851,6 @@ sub test_email_query_guidsearch
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog "Running query with guidsearch";
@@ -15914,7 +15906,6 @@ sub test_email_query_guidsearch_scanmode
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog "Running query with guidsearch";
@@ -15961,7 +15952,6 @@ sub test_email_query_guidsearch_sort
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     my $emailCount = 10;
@@ -16153,7 +16143,6 @@ sub test_email_query_guidsearch_inmailbox
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog $self, "create mailboxes";
@@ -16450,7 +16439,6 @@ sub test_email_query_guidsearch_keywords
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog $self, "create emails";
@@ -16594,7 +16582,6 @@ sub test_email_set_guidsearch_updated_internaldate
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog $self, "create emails";
@@ -16728,7 +16715,6 @@ sub test_email_query_guidsearch_mixedfilter
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog $self, "create mailboxes";
@@ -16888,7 +16874,6 @@ sub test_email_query_guidsearch_only_email_mailboxes
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
         'https://cyrusimap.org/ns/jmap/calendars',
         'https://cyrusimap.org/ns/jmap/contacts',
     ];
@@ -17279,7 +17264,6 @@ sub test_email_query_guidsearch_collapsethreads
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
 
@@ -17461,7 +17445,6 @@ sub test_email_query_sort_break_tie
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     my $emailCount = 10;
@@ -17683,7 +17666,6 @@ sub test_email_query_notinmailboxid_attached
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog "Run queries with extra using";
@@ -17833,7 +17815,6 @@ sub test_email_query_language
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog $self, "run squatter";
@@ -18049,7 +18030,6 @@ sub test_email_query_findallinthread
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog "Create three top-level thread emails";
@@ -18395,7 +18375,6 @@ sub test_email_query_guidsearch_inbox
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog "Create message in mailbox A";
@@ -19059,7 +19038,6 @@ sub test_email_query_highpriority
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     my $res = $jmap->CallMethods([
@@ -19130,7 +19108,6 @@ sub test_email_query_listid
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     my $res = $jmap->CallMethods([
@@ -19244,7 +19221,6 @@ EOF
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     my $res = $jmap->CallMethods([
