@@ -84,7 +84,7 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                  (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
                   (!strcmp(field, "attachmentName") ||    /* FM-specific */
                    !strcmp(field, "attachmentType"))) ||  /* FM-specific */
-                 (strarray_find(ctx->capabilities, JMAP_SEARCH_EXTENSION, 0) >= 0 &&
+                 (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
                    !strcmp(field, "attachmentBody"))) {
             if (!json_is_string(arg)) {
                 ctx->invalid_field(field, ctx->rock);
@@ -150,7 +150,7 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                 ctx->invalid_field(field, ctx->rock);
             }
         }
-        else if (strarray_find(ctx->capabilities, JMAP_SEARCH_EXTENSION, 0) >= 0 &&
+        else if (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
                 !strcmp(field, "language")) {
             if (json_is_string(arg)) {
                 const char *s = json_string_value(arg);

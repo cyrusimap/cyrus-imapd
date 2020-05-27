@@ -287,8 +287,6 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
-                JMAP_SEARCH_EXTENSION, json_object());
-        json_object_set_new(settings->server_capabilities,
                 JMAP_MAIL_EXTENSION, json_object());
 
         for (mp = jmap_mail_methods_nonstandard; mp->name; mp++) {
@@ -334,7 +332,6 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTo
     json_object_set_new(account_capabilities, JMAP_URN_MAIL, email_capabilities);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        json_object_set_new(account_capabilities, JMAP_SEARCH_EXTENSION, json_object());
         json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION, json_object());
     }
 
@@ -2463,6 +2460,7 @@ static void _email_querychanges_destroyed(struct jmap_querychanges *query,
 
 struct emailsearch {
     int want_expunged;
+    int want_partids;
     int ignore_timer;
     int is_mutable;
     search_expr_t *expr;
@@ -2549,6 +2547,7 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
                                             json_t *jsort,
                                             hash_table *contactgroups,
                                             int want_expunged,
+                                            int want_partids,
                                             int ignore_timer)
 {
     struct emailsearch* search = xzmalloc(sizeof(struct emailsearch));
@@ -2573,6 +2572,7 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
     search->hash = _emailsearch_hash(search->expr, search->sort);
     search->is_mutable = search_is_mutable(search->sort, search->expr);
     search->want_expunged = want_expunged;
+    search->want_partids = want_partids;
     search->ignore_timer = ignore_timer;
 
     return search;
@@ -2612,7 +2612,7 @@ static int _emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *searc
     search->query->ignore_timer = search->ignore_timer;
     search->query->checkfolder = _jmap_checkfolder;
     search->query->checkfolderrock = req;
-    search->query->attachments_in_any = jmap_is_using(req, JMAP_SEARCH_EXTENSION);
+    search->query->attachments_in_any = search->want_partids;
     r = search_query_run(search->query);
     if (r) {
         syslog(LOG_ERR, "jmap: %s: %s", __func__, error_message(r));
@@ -2664,7 +2664,7 @@ static void jmap_emailquery_init(struct jmap_emailquery *q)
 static json_t *jmap_emailquery_reply(jmap_req_t *req, struct jmap_emailquery *q)
 {
     json_t *res = jmap_query_reply(&q->super);
-    if (jmap_is_using(req, JMAP_SEARCH_EXTENSION)) {
+    if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
         if (q->want_partids) {
             json_object_set(res, "partIds",
                     json_object_size(q->partids) ?  q->partids : json_null());
@@ -4101,7 +4101,8 @@ static void _email_query(jmap_req_t *req, struct jmap_emailquery *q,
 {
     struct emailsearch *search = _emailsearch_new(req, q->super.filter,
                                                   q->super.sort,
-                                                  contactgroups, 0, 0);
+                                                  contactgroups, 0,
+                                                  q->want_partids, 0);
     int r = 0;
 
     if (!search) {
@@ -4182,7 +4183,7 @@ static int _email_queryargs_parse(jmap_req_t *req,
         return is_valid;
     }
     else if (!strcmp(key, "wantPartIds") && json_is_boolean(arg) &&
-            jmap_is_using(req, JMAP_SEARCH_EXTENSION)) {
+            jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
         query->want_partids = json_boolean_value(arg);
     }
     else if (!strcmp(key, "disableGuidSearch") && json_is_boolean(arg) &&
@@ -4244,9 +4245,9 @@ static int jmap_email_query(jmap_req_t *req)
         /* List language stats */
         const struct search_engine *engine = search_engine();
         if (engine->langstats) {
-            size_t total_docs = 0;
+            size_t nolang = 0;
             ptrarray_t lstats = PTRARRAY_INITIALIZER;
-            int r = engine->langstats(req->accountid, &lstats, &total_docs);
+            int r = engine->langstats(req->accountid, &lstats, &nolang);
             if (!r) {
                 json_t *jstats = json_object();
                 struct search_langstat *lstat;
@@ -4257,7 +4258,7 @@ static int jmap_email_query(jmap_req_t *req)
                     free(lstat);
                 }
                 json_object_set_new(res, "languageStats",
-                        json_pack("{s:o s:I}", "iso", jstats, "unknown", total_docs));
+                        json_pack("{s:o s:I}", "iso", jstats, "unknown", nolang));
             }
             ptrarray_fini(&lstats);
         }
@@ -4299,7 +4300,9 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
                                                   &contactfilter->contactgroups,
-                                                  /*want_expunged*/1, /*ignore_timer*/0);
+                                                  /*want_expunged*/1,
+                                                  /*want_partids*/0,
+                                                  /*ignore_timer*/0);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
@@ -4516,7 +4519,9 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
                                                   &contactfilter->contactgroups,
-                                                  /*want_expunged*/1, /*ignore_timer*/0);
+                                                  /*want_expunged*/1,
+                                                  /*want_partids*/0,
+                                                  /*ignore_timer*/0);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
@@ -4716,6 +4721,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     struct emailsearch *search = _emailsearch_new(req, filter, sort,
                                                   /*contactgroups*/NULL,
                                                   /*want_expunged*/1,
+                                                  /*want_partids*/0,
                                                   /*ignore_timer*/1);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
@@ -4842,6 +4848,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     struct emailsearch *search = _emailsearch_new(req, filter, sort,
                                                   /*contactgroups*/NULL,
                                                   /*want_expunged*/1,
+                                                  /*want_partids*/0,
                                                   /*ignore_timer*/1);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
@@ -5203,7 +5210,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
         }
 
         /* partIds */
-        else if (jmap_is_using(req, JMAP_SEARCH_EXTENSION) && !strcmp(key, "partIds")) {
+        else if (jmap_is_using(req, JMAP_MAIL_EXTENSION) && !strcmp(key, "partIds")) {
             jemailpartids = arg;
             int is_valid = 1;
             if (json_is_object(jemailpartids)) {
