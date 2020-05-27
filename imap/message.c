@@ -1736,7 +1736,9 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 
     /* Find boundary id */
     boundary = body->params;
-    while(boundary && strcmp(boundary->attribute, "BOUNDARY") != 0) {
+    while (boundary &&
+           strcmp(boundary->attribute, "BOUNDARY") != 0 &&
+           strcmp(boundary->attribute, "BOUNDARY*") != 0) {
         boundary = boundary->next;
     }
 
@@ -1747,7 +1749,13 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
     }
 
     /* Add the new boundary id */
-    strarray_append(boundaries, boundary->value);
+    char *id = NULL;
+    if (boundary->attribute[8] == '*') {
+        /* Decode boundary id */
+        id = charset_parse_mimexvalue(boundary->value, NULL);
+    }
+    if (!id) id = xstrdup(boundary->value);
+    strarray_appendm(boundaries, id);
     depth = boundaries->count;
 
     /* Parse preamble */
