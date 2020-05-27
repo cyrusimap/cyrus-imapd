@@ -19,6 +19,7 @@ extern "C" {
 #include "xapian_wrap.h"
 #include "charset.h"
 #include "ptrarray.h"
+#include "parseaddr.h"
 
 
 /* generated headers are not necessarily in current directory */
@@ -144,8 +145,9 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
  * Version 9: introduces index levels as keys to cyrusid metadata
  * Version 10: indexes new PRIORITY search part
  * Version 11: indexes LIST-ID as single value
+ * Version 12: indexes email domains as single values. Supports subdomain search.
  */
-#define XAPIAN_DB_CURRENT_VERSION 11
+#define XAPIAN_DB_CURRENT_VERSION 12
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
 
 static std::set<int> get_db_versions(const Xapian::Database &database)
@@ -480,7 +482,7 @@ static const char *get_term_prefix(int db_version, int partnum)
      *
      */
     static const char * const term_prefixes[SEARCH_NUM_PARTS] = {
-        NULL,
+        NULL,                /* ANY */
         "XF",                /* FROM */
         "XT",                /* TO */
         "XC",                /* CC */
@@ -499,7 +501,7 @@ static const char *get_term_prefix(int db_version, int partnum)
     };
 
     static const char * const term_prefixes_v0[SEARCH_NUM_PARTS] = {
-        NULL,
+        NULL,               /* ANY */
         "F",                /* FROM */
         "T",                /* TO */
         "C",                /* CC */
@@ -524,7 +526,7 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
 {
     static Xapian::TermGenerator::stem_strategy stem_strategy[SEARCH_NUM_PARTS] = {
         // Version 2 and higher
-        Xapian::TermGenerator::STEM_NONE,
+        Xapian::TermGenerator::STEM_NONE,  /* ANY */
         Xapian::TermGenerator::STEM_NONE,  /* FROM */
         Xapian::TermGenerator::STEM_NONE,  /* TO */
         Xapian::TermGenerator::STEM_NONE,  /* CC */
@@ -544,7 +546,7 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
 
     static Xapian::TermGenerator::stem_strategy stem_strategy_v1[SEARCH_NUM_PARTS] = {
         // Version 1: Stem bodies using STEM_SOME with stopwords
-        Xapian::TermGenerator::STEM_NONE,
+        Xapian::TermGenerator::STEM_NONE,  /* ANY */
         Xapian::TermGenerator::STEM_ALL,   /* FROM */
         Xapian::TermGenerator::STEM_ALL,   /* TO */
         Xapian::TermGenerator::STEM_ALL,   /* CC */
@@ -564,7 +566,7 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
 
     static Xapian::TermGenerator::stem_strategy stem_strategy_v0[SEARCH_NUM_PARTS] = {
         // Version 0: Initial version
-        Xapian::TermGenerator::STEM_NONE,
+        Xapian::TermGenerator::STEM_NONE,  /* ANY */
         Xapian::TermGenerator::STEM_ALL,   /* FROM */
         Xapian::TermGenerator::STEM_ALL,   /* TO */
         Xapian::TermGenerator::STEM_ALL,   /* CC */
@@ -801,16 +803,16 @@ int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, cha
     return r;
 }
 
-static int add_language_part(xapian_dbw_t *dbw, const struct buf *part)
+static int add_language_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
-    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_LANGUAGE);
+    std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
     std::string val = parse_langcode(buf_cstring(part));
     if (val.empty()) {
         syslog(LOG_ERR, "IOERROR: Xapian: not a valid ISO 639 code: %s",
                 buf_cstring(part));
         return IMAP_IOERROR;
     }
-    dbw->document->add_boolean_term(std::string(prefix) + val);
+    dbw->document->add_boolean_term(prefix + val);
     return 0;
 }
 
@@ -824,9 +826,9 @@ static std::string parse_priority(const char *str)
     return std::to_string(u);
 }
 
-static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part)
+static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
-    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_PRIORITY);
+    std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
     if (buf_len(part)) {
         std::string val = parse_priority(buf_cstring(part));
         if (val.empty()) {
@@ -834,7 +836,7 @@ static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part)
                     buf_cstring(part));
             return IMAP_IOERROR;
         }
-        dbw->document->add_boolean_term(std::string(prefix) + val);
+        dbw->document->add_boolean_term(prefix + val);
     }
     return 0;
 }
@@ -859,9 +861,9 @@ static std::string parse_listid(const char *str)
     return val;
 }
 
-static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part)
+static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
-    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_LISTID);
+    std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
 
     /* Normalize list-id */
     std::string val = parse_listid(buf_cstring(part));
@@ -873,93 +875,175 @@ static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part)
         return IMAP_IOERROR;
     }
 
-    dbw->document->add_boolean_term(std::string(prefix) + val);
+    dbw->document->add_boolean_term(prefix + val);
     return 0;
 }
 
-int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
+static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+{
+    std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
+    struct buf mypart = BUF_INITIALIZER;
+    buf_copy(&mypart, part);
+    buf_lcase(&mypart);
+    struct address_itr itr;
+    address_itr_init(&itr, buf_cstring(&mypart), 0);
+
+    const struct address *addr;
+    while ((addr = address_itr_next(&itr))) {
+        if (addr->invalid) {
+            continue;
+        }
+        if (addr->name) {
+            dbw->term_generator->set_stemmer(Xapian::Stem());
+            dbw->term_generator->set_stopper(NULL);
+            dbw->term_generator->index_text(Xapian::Utf8Iterator(addr->name), 1, prefix + 'N');
+
+            dbw->term_generator->set_stemmer(Xapian::Stem());
+            dbw->term_generator->set_stopper(NULL);
+            dbw->term_generator->index_text(Xapian::Utf8Iterator(addr->name), 1, prefix);
+        }
+        if (addr->mailbox) {
+            // index mailbox as single value
+            std::string val(addr->mailbox);
+            // ignore whitespace (as seen in quoted mailboxes)
+            val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
+            dbw->document->add_boolean_term(prefix + 'L' + val);
+            size_t pos = val.find('+');
+            if (pos != std::string::npos) {
+                // index also without label
+                dbw->document->add_boolean_term(prefix + 'L' + val.substr(0, pos));
+            }
+            // index individual terms
+            dbw->term_generator->set_stemmer(Xapian::Stem());
+            dbw->term_generator->set_stopper(NULL);
+            dbw->term_generator->index_text(Xapian::Utf8Iterator(val), 1, prefix);
+        }
+        if (addr->domain && strcmp(addr->domain, "unspecified-domain")) {
+            // index reversed domain
+            std::string val;
+            strarray_t *sa = strarray_split(addr->domain, ".", 0);
+            val.reserve(buf_len(part));
+            for (int i = strarray_size(sa) - 1; i >= 0; i--) {
+                val.append(strarray_nth(sa, i));
+                if (i > 0) {
+                    val.append(1, '.');
+                }
+            }
+            strarray_free(sa);
+            dbw->document->add_boolean_term(prefix + "@" + val);
+            // index individual terms
+            dbw->term_generator->set_stemmer(Xapian::Stem());
+            dbw->term_generator->set_stopper(NULL);
+            dbw->term_generator->index_text(Xapian::Utf8Iterator(addr->domain,
+                        strlen(addr->domain)), 1, prefix);
+        }
+    }
+
+    buf_free(&mypart);
+    address_itr_fini(&itr);
+    return 0;
+}
+
+int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+{
+    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
+    int r = 0;
+
+    // Index text.
+    Xapian::TermGenerator::stem_strategy stem_strategy =
+        get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
+    dbw->term_generator->set_stemming_strategy(stem_strategy);
+
+    if (stem_strategy != Xapian::TermGenerator::STEM_NONE) {
+        if (config_getswitch(IMAPOPT_SEARCH_INDEX_LANGUAGE)){
+            // Index by language.
+#ifndef HAVE_CLD2
+            syslog(LOG_ERR, "IOERROR: Xapian: language indexing requires CLD2 library");
+            return IMAP_IOERROR;
+#else
+
+            if (search_part_is_body(partnum)) {
+                const std::string iso_lang = detect_language(part);
+                if (!iso_lang.empty()) {
+                    if (iso_lang.compare("en")) {
+                        // Stem and index by non-default language.
+                        try {
+                            dbw->term_generator->set_stemmer(Xapian::Stem(iso_lang));
+                            dbw->term_generator->set_stopper(get_stopper(iso_lang));
+                            dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len),
+                                    1, lang_prefix(iso_lang, prefix));
+                        } catch (const Xapian::InvalidArgumentError &err) {
+                            syslog(LOG_DEBUG, "Xapian: no stemmer for language %s",
+                                    iso_lang.c_str());
+                        }
+                    }
+                    if (dbw->doctype == 'P') {
+                        // Keep track of stemmer language.
+                        std::string key = lang_doc_key(dbw->cyrusid);
+                        dbw->database->set_metadata(key, iso_lang);
+                        dbw->document->add_value(SLOT_DOCLANGS, iso_lang);
+                        // Update language counts for body parts.
+                        key = lang_count_key(iso_lang);
+                        const std::string val = dbw->database->get_metadata(key);
+                        dbw->database->set_metadata(key, val.empty() ?
+                                "1" : std::to_string(std::stoi(val) + 1));
+                    }
+                    // Store detected languages in document.
+                    dbw->doclangs->push_back(iso_lang.c_str());
+                    dbw->document->add_boolean_term(std::string("XI") + iso_lang);
+                }
+            }
+            else if (partnum == SEARCH_PART_SUBJECT) {
+                // Keep subject text to index by language later.
+                dbw->subjects->push_back(buf_cstring(part));
+            }
+#endif /* HAVE_CLD2 */
+        }
+
+        // Index with default stemmer.
+        dbw->term_generator->set_stemmer(*dbw->default_stemmer);
+        dbw->term_generator->set_stopper(dbw->default_stopper);
+    } else {
+        // Index with no stemming.
+        dbw->term_generator->set_stemmer(Xapian::Stem());
+        dbw->term_generator->set_stopper(NULL);
+    }
+    dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len), 1, prefix);
+
+    return r;
+}
+
+int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
     int r = 0;
 
-    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, num_part);
-    if (!prefix) {
-        syslog(LOG_ERR, "xapian_wrapper: no prefix for num_part %d", num_part);
+    if (!get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum)) {
+        syslog(LOG_ERR, "xapian_wrapper: no prefix for partnum %d", partnum);
         return IMAP_INTERNAL;
     }
 
     try {
-        // Handle special value search parts.
-        if (num_part == SEARCH_PART_LANGUAGE) {
-            return add_language_part(dbw, part);
+        // Handle search parts.
+        switch (partnum) {
+            case SEARCH_PART_PRIORITY:
+                r = add_priority_part(dbw, part, partnum);
+                break;
+            case SEARCH_PART_LISTID:
+                r = add_listid_part(dbw, part, partnum);
+                break;
+            case SEARCH_PART_LANGUAGE:
+                r = add_language_part(dbw, part, partnum);
+                break;
+            case SEARCH_PART_FROM:
+            case SEARCH_PART_TO:
+            case SEARCH_PART_CC:
+            case SEARCH_PART_BCC:
+            case SEARCH_PART_DELIVEREDTO:
+                r = add_email_part(dbw, part, partnum);
+                break;
+            default:
+                r = add_text_part(dbw, part, partnum);
         }
-        else if (num_part == SEARCH_PART_PRIORITY) {
-            return add_priority_part(dbw, part);
-        }
-        else if (num_part == SEARCH_PART_LISTID) {
-            return add_listid_part(dbw, part);
-        }
-
-        // Index text.
-        Xapian::TermGenerator::stem_strategy stem_strategy =
-            get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, num_part);
-        dbw->term_generator->set_stemming_strategy(stem_strategy);
-
-        if (stem_strategy != Xapian::TermGenerator::STEM_NONE) {
-            if (config_getswitch(IMAPOPT_SEARCH_INDEX_LANGUAGE)){
-                // Index by language.
-#ifndef HAVE_CLD2
-                syslog(LOG_ERR, "IOERROR: Xapian: language indexing requires CLD2 library");
-                return IMAP_IOERROR;
-#else
-
-                if (search_part_is_body(num_part)) {
-                    const std::string iso_lang = detect_language(part);
-                    if (!iso_lang.empty()) {
-                        if (iso_lang.compare("en")) {
-                            // Stem and index by non-default language.
-                            try {
-                                dbw->term_generator->set_stemmer(Xapian::Stem(iso_lang));
-                                dbw->term_generator->set_stopper(get_stopper(iso_lang));
-                                dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len),
-                                        1, lang_prefix(iso_lang, prefix));
-                            } catch (const Xapian::InvalidArgumentError &err) {
-                                syslog(LOG_DEBUG, "Xapian: no stemmer for language %s",
-                                        iso_lang.c_str());
-                            }
-                        }
-                        if (dbw->doctype == 'P') {
-                            // Keep track of stemmer language.
-                            std::string key = lang_doc_key(dbw->cyrusid);
-                            dbw->database->set_metadata(key, iso_lang);
-                            dbw->document->add_value(SLOT_DOCLANGS, iso_lang);
-                            // Update language counts for body parts.
-                            key = lang_count_key(iso_lang);
-                            const std::string val = dbw->database->get_metadata(key);
-                            dbw->database->set_metadata(key, val.empty() ?
-                                    "1" : std::to_string(std::stoi(val) + 1));
-                        }
-                        // Store detected languages in document.
-                        dbw->doclangs->push_back(iso_lang.c_str());
-                        dbw->document->add_boolean_term(std::string("XI") + iso_lang);
-                    }
-                }
-                else if (num_part == SEARCH_PART_SUBJECT) {
-                    // Keep subject text to index by language later.
-                    dbw->subjects->push_back(buf_cstring(part));
-                }
-#endif /* HAVE_CLD2 */
-            }
-
-            // Index with default stemmer.
-            dbw->term_generator->set_stemmer(*dbw->default_stemmer);
-            dbw->term_generator->set_stopper(dbw->default_stopper);
-        } else {
-            // Index with no stemming.
-            dbw->term_generator->set_stemmer(Xapian::Stem());
-            dbw->term_generator->set_stopper(NULL);
-        }
-        dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len), 1, prefix);
-
         // Finalize index.
         dbw->term_generator->increase_termpos();
     }
@@ -1348,7 +1432,7 @@ static Xapian::Query *query_new_listid(const xapian_db_t *db,
     }
 
     if (db->db_versions->lower_bound(11) != db->db_versions->begin()) {
-        // index in legacy format
+        // query in legacy format
         db->parser->set_stemmer(Xapian::Stem());
         db->parser->set_stopper(NULL);
         db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
@@ -1357,6 +1441,124 @@ static Xapian::Query *query_new_listid(const xapian_db_t *db,
     }
 
     return q;
+}
+
+static Xapian::Query *query_new_email(const xapian_db_t *db __attribute__((unused)),
+                                      const char *_prefix,
+                                      const char *str)
+{
+    std::string prefix(_prefix);
+
+    unsigned qpflags = Xapian::QueryParser::FLAG_PHRASE |
+                       Xapian::QueryParser::FLAG_WILDCARD;
+
+    db->parser->set_stemmer(Xapian::Stem());
+    db->parser->set_stopper(NULL);
+    db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
+
+    if (!strchr(str, '@')) {
+        // query free text
+        return new Xapian::Query{db->parser->parse_query(str, qpflags, prefix)};
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf, str);
+    buf_lcase(&buf);
+    str = buf_cstring(&buf);
+    const char *atsign = strchr(str, '@');
+    Xapian::Query q = Xapian::Query::MatchAll;
+
+    // query name and mailbox
+    if (atsign > str) {
+        std::string name(str, atsign - str);
+        if (name.find('<') != std::string::npos) {
+            // convert 'foo <bar@baz>' to 'foo <bar>'
+            name.append(1, '>');
+        }
+        struct address *addr = NULL;
+        parseaddr_list(name.c_str(), &addr);
+        if (addr->name) {
+            q &= db->parser->parse_query(addr->name, qpflags, prefix + 'N');
+        }
+        if (addr->mailbox) {
+            std::string mail(addr->mailbox);
+            mail.erase(std::remove_if(mail.begin(), mail.end(), isspace), mail.end());
+            int wildcard = mail[mail.size()-1] == '*';
+            if (wildcard) {
+                mail.resize(mail.size()-1);
+            }
+            if (!mail.empty()) {
+                std::string term(prefix + 'L' + mail);
+                Xapian::Query qq = wildcard ?
+                    Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
+                    Xapian::Query(term);
+                size_t pos = term.find('+');
+                if (pos != std::string::npos) {
+                    term.resize(pos);
+                    qq |= wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
+                                     Xapian::Query(term);
+                }
+                if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
+                    // query in legacy format
+                    qq |= db->parser->parse_query(mail, qpflags, prefix);
+                }
+                q &= qq;
+            }
+        }
+        parseaddr_free(addr);
+    }
+
+    // query domain
+    if (atsign[1]) {
+        std::string domain;
+        const char *dstart = atsign + 1;
+        int wildcard = *dstart == '*';
+        if (wildcard) dstart++;
+        const char *dend;
+        for (dend = dstart; *dend; dend++) {
+            char c = *dend;
+            if (Uisalnum(c) || c == '-' || c == '[' || c == ']' || c == ':') {
+                continue;
+            }
+            else if (c == '.' && (dend-1 == dstart || dend[-2] != '.')) {
+                continue;
+            }
+            else {
+                break;
+            }
+        }
+        if (dend > dstart) {
+            strarray_t *sa = strarray_nsplit(dstart, dend - dstart, ".", 0);
+            for (int i = strarray_size(sa) - 1; i >= 0; i--) {
+                domain.append(strarray_nth(sa, i));
+                if (i > 0) {
+                    domain.append(1, '.');
+                }
+            }
+            strarray_free(sa);
+            if (*dstart == '.') {
+                domain.append(1, '.');
+            }
+        }
+        if (!domain.empty()) {
+            std::transform(domain.begin(), domain.end(), domain.begin(), ::tolower);
+            std::string term(prefix + '@' + domain);
+            Xapian::Query qq = wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
+                                          Xapian::Query(term);
+            if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
+                // query in legacy format
+                qq |= db->parser->parse_query(domain, qpflags, prefix);
+            }
+            q &= qq;
+        }
+    }
+
+    if (q.get_type() == q.LEAF_MATCH_ALL) {
+        q = Xapian::Query::MatchNothing;
+    }
+
+    buf_free(&buf);
+    return new Xapian::Query(q);
 }
 
 xapian_query_t *
@@ -1388,6 +1590,13 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
         }
         else if (partnum == SEARCH_PART_LISTID) {
             return (xapian_query_t*) query_new_listid(db, prefix, str);
+        }
+        else if (partnum == SEARCH_PART_FROM ||
+                 partnum == SEARCH_PART_TO ||
+                 partnum == SEARCH_PART_CC ||
+                 partnum == SEARCH_PART_BCC ||
+                 partnum == SEARCH_PART_DELIVEREDTO) {
+            return (xapian_query_t*) query_new_email(db, prefix, str);
         }
 
         // Don't stem queries for Thaana codepage (0780) or higher.
