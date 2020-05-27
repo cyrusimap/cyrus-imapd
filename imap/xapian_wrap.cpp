@@ -808,9 +808,9 @@ static int add_language_part(xapian_dbw_t *dbw, const struct buf *part, int part
     std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
     std::string val = parse_langcode(buf_cstring(part));
     if (val.empty()) {
-        syslog(LOG_ERR, "IOERROR: Xapian: not a valid ISO 639 code: %s",
+        syslog(LOG_INFO, "Xapian: not a valid ISO 639 code: %s",
                 buf_cstring(part));
-        return IMAP_IOERROR;
+        return 0;
     }
     dbw->document->add_boolean_term(prefix + val);
     return 0;
@@ -832,9 +832,9 @@ static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part, int part
     if (buf_len(part)) {
         std::string val = parse_priority(buf_cstring(part));
         if (val.empty()) {
-            syslog(LOG_ERR, "IOERROR: Xapian: not a valid priority: %s",
+            syslog(LOG_DEBUG, "Xapian: not a valid priority: %s",
                     buf_cstring(part));
-            return IMAP_IOERROR;
+            return 0;
         }
         dbw->document->add_boolean_term(prefix + val);
     }
@@ -870,9 +870,9 @@ static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnu
     val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
     std::transform(val.begin(), val.end(), val.begin(), ::tolower);
     if (val.empty()) {
-        syslog(LOG_ERR, "IOERROR: Xapian: not a valid list-id: %s",
+        syslog(LOG_WARNING, "Xapian: not a valid list-id: %s",
                 buf_cstring(part));
-        return IMAP_IOERROR;
+        return 0;
     }
 
     dbw->document->add_boolean_term(prefix + val);
