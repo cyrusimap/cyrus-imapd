@@ -19178,4 +19178,158 @@ sub test_email_query_listid
     $self->assert_deep_equals([$ids[0]], $res->[4][1]{ids});
 }
 
+sub test_email_query_emailaddress
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Append emails";
+    $self->make_message("msg1",
+        from => Cassandane::Address->new(
+            localpart => 'from',
+            domain => 'local',
+        ),
+        to => Cassandane::Address->new(
+            name => "Jon Doe",
+            localpart => "foo.bar",
+            domain => "xxx.example.com"
+        ),
+        body => "msg1"
+    ) || die;
+    $self->make_message("msg2",
+        from => Cassandane::Address->new(
+            localpart => 'from',
+            domain => 'local',
+        ),
+        to => Cassandane::Address->new(
+            name => "Jane Doe",
+            localpart => "foo.baz+bla",
+            domain => "yyy.example.com"
+        ),
+        body => "msg2"
+    ) || die;
+    $self->make_message("msg3",
+        from => Cassandane::Address->new(
+            localpart => 'from',
+            domain => 'local',
+        ),
+        to => Cassandane::Address->new(
+            localpart => 't"u "x',
+            domain => "example.com"
+        ),
+        body => "msg3"
+    ) || die;
+    my $raw = <<'EOF';
+From: <from@local>
+To: toa@example.com, RecipientB <tob@example.com>
+Subject: msg4
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+msg4
+EOF
+    $raw =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $raw) || die $@;
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-Z');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{
+                property => 'subject',
+            }],
+        }, 'R1'],
+
+    ], $using);
+    my @ids = @{$res->[0][1]{ids}};
+    $self->assert_num_equals(4, scalar @ids);
+
+    my @tests = ({
+        to => '@xxx.example.com',
+        wantIds => [$ids[0]],
+    }, {
+        to => '@*.example.com',
+        wantIds => [$ids[0], $ids[1]],
+    }, {
+        to => '@*example.com',
+        wantIds => [$ids[0], $ids[1], $ids[2], $ids[3]],
+    }, {
+        to => 'foo*@*example.com',
+        wantIds => [$ids[0], $ids[1]],
+    }, {
+        to => 'foo.baz@yyy.example.com',
+        wantIds => [$ids[1]],
+    }, {
+        to => 'foo.baz+bla@yyy.example.com',
+        wantIds => [$ids[1]],
+    }, {
+        to => 'foo*@*example.com',
+        wantIds => [$ids[0], $ids[1]],
+    }, {
+        to => 'foo.bar@',
+        wantIds => [$ids[0]],
+    }, {
+        to => 'foo.ba*@',
+        wantIds => [$ids[0], $ids[1]],
+    }, {
+        to => 'doe',
+        wantIds => [$ids[0], $ids[1]],
+    }, {
+        to => 'jane doe',
+        wantIds => [$ids[1]],
+    }, {
+        to => 'foo* example',
+        wantIds => [$ids[0], $ids[1]],
+    }, {
+        to => 'foo* yyy',
+        wantIds => [$ids[1]],
+    }, {
+        to => 'example.com',
+        wantIds => [$ids[0], $ids[1], $ids[2], $ids[3]],
+    }, {
+        to => 't"u "x@example.com',
+        wantIds => [$ids[2]],
+    }, {
+        to => 'tux@example.com',
+        wantIds => [$ids[2]],
+    }, {
+        to => 'Jane Doe <foo.baz@yyy.example.com>',
+        wantIds => [$ids[1]],
+    }, {
+        to => 'Doe <foo*@*example.com>',
+        wantIds => [$ids[0], $ids[1]],
+    }, {
+        to => 'tob@example.com',
+        wantIds => [$ids[3]],
+    });
+
+    foreach (@tests) {
+        $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => {
+                    to => $_->{to},
+                },
+                sort => [{
+                    property => 'subject',
+                }],
+            }, 'R1'],
+        ]);
+        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
+    }
+}
+
 1;
