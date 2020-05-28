@@ -1156,6 +1156,3 @@ sub test_emailsubmission_onsuccess_not_using
 
 
 1;
-
-
-1;
