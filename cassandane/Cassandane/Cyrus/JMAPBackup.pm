@@ -1007,6 +1007,97 @@ sub test_restore_mail_simple
     $self->assert_null($res->[1][1]{list}[0]{mailboxIds}->{$inboxId});
 }
 
+sub test_restore_mail_draft_sent
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                '1' => { name => 'Drafts', parentId => undef },
+                '2' => { name => 'Sent', parentId => undef  }
+            }
+         }, "R1"]
+    ]);
+
+    my $draftsId = $res->[0][1]{created}{1}{id};
+    my $sentId = $res->[0][1]{created}{2}{id};
+
+    xlog "create draft email";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        $draftsId => JSON::true
+                    },
+                    keywords => {
+                        '$draft' => JSON::true
+                    },
+                    from => [{ email => q{foo1@bar} }],
+                    to => [{ email => q{bar1@foo} }],
+                    subject => "email1"
+                }
+            },
+        }, 'R2']
+    ]);
+
+    my $emailId = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($emailId);
+
+    xlog "move email from Drafts to Sent";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "mailboxIds/$draftsId" => undef,
+                "mailboxIds/$sentId" => JSON::true,
+                'keywords/$draft' => undef
+                } }
+         }, "R5"]
+    ]);
+
+    sleep 1;
+    xlog "destroy 'Sent' email";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            destroy => ["$emailId"]
+         }, "R6"],
+    ]);
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{destroyed}}));
+    $self->assert_str_equals($emailId, $res->[0][1]{destroyed}[0]);
+
+    xlog "restore mail prior to most recent changes";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreMail', {
+            restoreDrafts => JSON::true,
+            restoreNonDrafts => JSON::true,
+            undoPeriod => "PT1H"
+         }, "R7"],
+        ['Email/get', {
+            ids => ["$emailId"],
+            properties => ['subject', 'keywords', 'mailboxIds', 'receivedAt']
+         }, "R8"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreMail', $res->[0][0]);
+    $self->assert_str_equals('R7', $res->[0][2]);
+    $self->assert_num_equals(0, $res->[0][1]{numDraftsRestored});
+    $self->assert_num_equals(1, $res->[0][1]{numNonDraftsRestored});
+
+    $self->assert_str_equals('Email/get', $res->[1][0]);
+    $self->assert_str_equals('R8', $res->[1][2]);
+    $self->assert_num_equals(1, scalar(@{$res->[1][1]{list}}));
+    $self->assert_str_equals("$emailId", $res->[1][1]{list}[0]{id});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{keywords}->{'$restored'});
+    $self->assert_null($res->[1][1]{list}[0]{keywords}->{'$draft'});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mailboxIds}{$sentId});
+    $self->assert_null($res->[1][1]{list}[0]{mailboxIds}->{$draftsId});
+}
+
 sub test_restore_mail_submailbox
     :min_version_3_3 :needs_component_jmap
 {
