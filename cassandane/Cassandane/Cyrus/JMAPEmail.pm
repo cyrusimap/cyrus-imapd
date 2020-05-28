@@ -19247,7 +19247,7 @@ EOF
         to => 'foo*@*example.com',
         wantIds => [$ids[0], $ids[1]],
     }, {
-        to => 'foo.baz@yyy.example.com',
+        to => 'foo.baz+*@yyy.example.com',
         wantIds => [$ids[1]],
     }, {
         to => 'foo.baz+bla@yyy.example.com',
@@ -19283,7 +19283,7 @@ EOF
         to => 'tux@example.com',
         wantIds => [$ids[2]],
     }, {
-        to => 'Jane Doe <foo.baz@yyy.example.com>',
+        to => 'Jane Doe <foo.baz+bla@yyy.example.com>',
         wantIds => [$ids[1]],
     }, {
         to => 'Doe <foo*@*example.com>',
