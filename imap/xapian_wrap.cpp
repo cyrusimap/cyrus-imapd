@@ -908,11 +908,6 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
             // ignore whitespace (as seen in quoted mailboxes)
             val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
             dbw->document->add_boolean_term(prefix + 'L' + val);
-            size_t pos = val.find('+');
-            if (pos != std::string::npos) {
-                // index also without label
-                dbw->document->add_boolean_term(prefix + 'L' + val.substr(0, pos));
-            }
             // index individual terms
             dbw->term_generator->set_stemmer(Xapian::Stem());
             dbw->term_generator->set_stopper(NULL);
@@ -1492,12 +1487,6 @@ static Xapian::Query *query_new_email(const xapian_db_t *db __attribute__((unuse
                 Xapian::Query qq = wildcard ?
                     Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
                     Xapian::Query(term);
-                size_t pos = term.find('+');
-                if (pos != std::string::npos) {
-                    term.resize(pos);
-                    qq |= wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
-                                     Xapian::Query(term);
-                }
                 if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
                     // query in legacy format
                     qq |= db->parser->parse_query(mail, qpflags, prefix);
