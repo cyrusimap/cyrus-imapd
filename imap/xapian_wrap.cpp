@@ -56,81 +56,6 @@ static void make_cyrusid(struct buf *dst, const struct message_guid *guid, char 
 
 /* ====================================================================== */
 
-// Process-scoped, thread-unsafe cache of stoppers by ISO 639 code.
-static std::map<const std::string, std::unique_ptr<Xapian::Stopper>> stoppers;
-
-static const Xapian::Stopper* get_stopper(const std::string& iso)
-{
-    // Lookup cached entry.
-    try {
-        stoppers.at(iso).get();
-    } catch (const std::out_of_range&) {};
-
-    // Lookup language name by ISO code.
-    std::string lang_name;
-    icu::Locale loc(iso.c_str());
-    if (loc.isBogus()) return NULL;
-    icu::UnicodeString ulang_name;
-    loc.getDisplayLanguage(icu::Locale("en"), ulang_name);
-    ulang_name.toLower();
-    ulang_name.toUTF8String(lang_name);
-
-    // Read stopper file and add to cache.
-    const char *swpath = config_getstring(IMAPOPT_SEARCH_STOPWORD_PATH);
-    if (!swpath) return NULL;
-
-    // Open stopword file
-    // XXX doesn't play nice with WIN32 paths
-    std::string fname(std::string(swpath) + "/" + lang_name + ".txt");
-    errno = 0;
-    std::ifstream inFile (fname);
-    if (inFile.fail()) {
-        syslog(LOG_DEBUG, "Xapian: could not open stopword file %s: %s",
-                fname.c_str(), errno ? strerror(errno) : "unknown error");
-        return NULL;
-    }
-
-    // Create and store the Xapian stopper
-    stoppers[iso].reset(new Xapian::SimpleStopper(
-                std::istream_iterator<std::string>(inFile),
-                std::istream_iterator<std::string>()));
-    return stoppers[iso].get();
-}
-
-/* ====================================================================== */
-
-class CyrusSearchStemmer : public Xapian::StemImplementation
-{
-    charset_t utf8 {charset_lookupname("utf-8")};
-    std::map<const std::string, std::string> cache;
-    Xapian::Stem stem {"en"};
-
-    public:
-    virtual ~CyrusSearchStemmer() { charset_free(&utf8); }
-
-    virtual std::string operator() (const std::string &word) override {
-        // Is this word already in the cache?
-        try {
-            return cache.at(word);
-        } catch (const std::out_of_range&) {}
-
-        // Convert the word to search form
-        std::unique_ptr<char, decltype(std::free)*> q {charset_convert(word.c_str(), utf8, charset_flags), std::free};
-        if (!q) {
-            return stem(word);
-        }
-
-        // Store the normalized word in the cache
-        return cache[word] = stem(Xapian::Unicode::tolower(q.get()));
-    }
-
-    virtual std::string get_description () const override {
-        return "Cyrus";
-    }
-};
-
-/* ====================================================================== */
-
 /*
  * A brief history of Xapian db versions:
  * Version 0: uses STEM_ALL for all terms, term prefixes don't start with 'X'
@@ -330,6 +255,130 @@ static std::string parse_langcode(const char *str)
         return std::string();
     }
     return lstr;
+}
+
+// Process-scoped, thread-unsafe cache of stoppers by ISO 639 code.
+static std::map<const std::string, std::unique_ptr<Xapian::Stopper>> stoppers;
+
+static const Xapian::Stopper* get_stopper(const std::string& iso)
+{
+    // Lookup cached entry.
+    try {
+        stoppers.at(iso).get();
+    } catch (const std::out_of_range&) {};
+
+    // Lookup language name by ISO code.
+    std::string lang_name;
+    icu::Locale loc(iso.c_str());
+    if (loc.isBogus()) return NULL;
+    icu::UnicodeString ulang_name;
+    loc.getDisplayLanguage(icu::Locale("en"), ulang_name);
+    ulang_name.toLower();
+    ulang_name.toUTF8String(lang_name);
+
+    // Read stopper file and add to cache.
+    const char *swpath = config_getstring(IMAPOPT_SEARCH_STOPWORD_PATH);
+    if (!swpath) return NULL;
+
+    // Open stopword file
+    // XXX doesn't play nice with WIN32 paths
+    std::string fname(std::string(swpath) + "/" + lang_name + ".txt");
+    errno = 0;
+    std::ifstream inFile (fname);
+    if (inFile.fail()) {
+        syslog(LOG_DEBUG, "Xapian: could not open stopword file %s: %s",
+                fname.c_str(), errno ? strerror(errno) : "unknown error");
+        return NULL;
+    }
+
+    // Create and store the Xapian stopper
+    stoppers[iso].reset(new Xapian::SimpleStopper(
+                std::istream_iterator<std::string>(inFile),
+                std::istream_iterator<std::string>()));
+    return stoppers[iso].get();
+}
+
+class CyrusSearchStemmer : public Xapian::StemImplementation
+{
+    charset_t utf8 {charset_lookupname("utf-8")};
+    std::map<const std::string, std::string> cache;
+    Xapian::Stem stem {"en"};
+
+    public:
+    virtual ~CyrusSearchStemmer() { charset_free(&utf8); }
+
+    virtual std::string operator() (const std::string &word) override {
+        // Is this word already in the cache?
+        try {
+            return cache.at(word);
+        } catch (const std::out_of_range&) {}
+
+        // Convert the word to search form
+        std::unique_ptr<char, decltype(std::free)*> q {charset_convert(word.c_str(), utf8, charset_flags), std::free};
+        if (!q) {
+            return stem(word);
+        }
+
+        // Store the normalized word in the cache
+        return cache[word] = stem(Xapian::Unicode::tolower(q.get()));
+    }
+
+    virtual std::string get_description () const override {
+        return "Cyrus";
+    }
+};
+
+
+class FrenchContractionStemmer : public Xapian::StemImplementation
+{
+    Xapian::Stem stem {"fr"};
+
+    public:
+
+    virtual std::string operator() (const std::string &word) override {
+
+        size_t pos = 0;
+        switch (word[0]) {
+            case 'q':
+                if (word.length() <= 3 || word[1] != 'u') {
+                    break;
+                }
+                pos++;
+                // fall through
+            case 'c':
+            case 'd':
+            case 'j':
+            case 'l':
+            case 'm':
+            case 'n':
+            case 's':
+            case 't':
+                // APOSTROPHE (U+0027)
+                if (word.length() > pos + 2 && word[pos+1] == 0x27) {
+                    return stem(word.substr(pos + 2));
+                }
+                // RIGHT SINGLE QUOTATION MARK (U+2019)
+                // FULLWIDTH APOSTROPHE (U+FF07)
+                else if (!word.compare(pos + 1, 3, "\xe2\x80\x99") ||
+                         !word.compare(pos + 1, 3, "\xef\xbc\x87")) {
+                    return stem(word.substr(pos + 4));
+                }
+                // fall through
+        }
+        // not a contraction
+        return stem(word);
+    }
+
+    virtual std::string get_description () const override {
+        return "fr-contraction";
+    }
+};
+
+static Xapian::Stem get_stemmer(const std::string& iso_lang)
+{
+    return iso_lang == "fr" ?
+        Xapian::Stem{new FrenchContractionStemmer} :
+        Xapian::Stem{iso_lang};
 }
 
 #ifdef HAVE_CLD2
@@ -963,7 +1012,7 @@ int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
                     if (iso_lang.compare("en")) {
                         // Stem and index by non-default language.
                         try {
-                            dbw->term_generator->set_stemmer(Xapian::Stem(iso_lang));
+                            dbw->term_generator->set_stemmer(get_stemmer(iso_lang));
                             dbw->term_generator->set_stopper(get_stopper(iso_lang));
                             dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len),
                                     1, lang_prefix(iso_lang, prefix));
@@ -1071,7 +1120,7 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
                         try {
                             const char *prefix =
                                 get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_SUBJECT);
-                            dbw->term_generator->set_stemmer(Xapian::Stem(iso_lang));
+                            dbw->term_generator->set_stemmer(get_stemmer(iso_lang));
                             dbw->term_generator->set_stopper(get_stopper(iso_lang));
                             dbw->term_generator->index_text(Xapian::Utf8Iterator(subject), 1,
                                     lang_prefix(iso_lang, prefix));
@@ -1366,7 +1415,7 @@ static Xapian::Query* query_new_textmatch(const xapian_db_t *db,
         for (const std::string& iso_lang : *db->stem_languages) {
             try {
                 const Xapian::Stopper *stopper = get_stopper(iso_lang);
-                db->parser->set_stemmer(Xapian::Stem(iso_lang));
+                db->parser->set_stemmer(get_stemmer(iso_lang));
                 db->parser->set_stopper(stopper);
                 db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
                 if (!stopper || !(*stopper)(lmatch)) {
@@ -1956,7 +2005,7 @@ int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part,
             const std::string& iso_lang = doclangs[i];
             if (iso_lang.compare("en")) {
                 try {
-                    Xapian::Stem stemmer{iso_lang};
+                    Xapian::Stem stemmer = get_stemmer(iso_lang);
                     int r = xapian_snipgen_make_snippet(snipgen, part, &stemmer);
                     if (!r && prev_size != buf_len(snipgen->buf)) {
                         return 0;
