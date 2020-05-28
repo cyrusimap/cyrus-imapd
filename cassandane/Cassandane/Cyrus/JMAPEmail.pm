@@ -17817,9 +17817,6 @@ sub test_email_query_language
         'https://cyrusimap.org/ns/jmap/performance',
     ];
 
-    xlog $self, "run squatter";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
-
 use utf8;
 
     my @testEmailBodies = ({
@@ -18013,6 +18010,89 @@ no utf8;
 
     # xxxx
     $self->assert_str_equals('invalidArguments', $res->[6][1]{type});
+}
+
+sub test_email_query_language_french_contractions
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :SearchLanguage :needs_dependency_cld2
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+use utf8;
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    subject => "fr",
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => <<'EOF'
+C'est dadaïste d'Amérique j’aime je l'aime Je m’appelle
+n’est pas là qu’il s’escrit Je t’aime.
+EOF
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $emailId = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($emailId);
+
+no utf8;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @tests = ({
+        body => "c'est",
+        wantIds => [$emailId],
+    }, {
+        body => "est",
+        wantIds => [$emailId],
+    }, {
+        body => "p'est",
+        wantIds => [],
+    }, {
+        body => "amerique",
+        wantIds => [$emailId],
+    }, {
+        body => "s'appelle",
+        wantIds => [$emailId],
+    }, {
+        body => "il",
+        wantIds => [$emailId],
+    });
+
+    foreach (@tests) {
+        $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => {
+                    body => $_->{body},
+                },
+            }, 'R1'],
+        ]);
+        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
+    }
 }
 
 sub test_email_query_findallinthread
