@@ -1385,7 +1385,7 @@ struct removed_mail {
 
 struct message_t {
     ptrarray_t deleted;
-    unsigned undeleted : 1;
+    unsigned ignore : 1;
 };
 
 static void message_t_free(void *data)
@@ -1462,16 +1462,19 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         const char *guid = message_guid_encode(&record->guid);
         conversation_id_t msgid = 0;
         int isdestroyed_msg = isdestroyed_mbox;
+        int ignore_draft = 0;
 
         syslog(LOG_DEBUG,
-               "UID %u: expunged: %x, intdate: %ld, updated: %ld",
+               "UID %u: expunged: %x, draft: %x, intdate: %ld, updated: %ld",
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
+               (record->system_flags & FLAG_DRAFT),
                record->internaldate, record->last_updated);
 
         /* Suppress fetching of Message-ID if not restoring drafts */
         if (rrock->jrestore->mode & UNDO_DRAFTS) {
             /* XXX  conversation ID is faster to lookup than Message-ID */
             msgid = conversations_guid_cid_lookup(rrock->req->cstate, guid);
+            syslog(LOG_DEBUG, "UID: %u, msgid = %llu", record->uid, msgid);
         }
 
         /* Remove $restored flag from message */
@@ -1489,6 +1492,17 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
             }
         }
 
+        /* See if we already have this message GUID */
+        struct message_t *message = hash_lookup(guid, mrock->emailids);
+
+        if (message && message->ignore) {
+            /* An undeleted copy of this message exists */
+            syslog(LOG_DEBUG, "skipping UID %u: undeleted copy exists",
+                   record->uid);
+
+            continue;
+        }
+
         if ((record->system_flags & FLAG_DELETED) ||
             (record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
             /* Destroyed message */
@@ -1502,14 +1516,6 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
             }
 
             isdestroyed_msg = 1;
-        }
-
-        /* See if we already have this message GUID */
-        struct message_t *message = hash_lookup(guid, mrock->emailids);
-
-        if (message && message->undeleted) {
-            /* An undeleted copy of this message exists */
-            isdestroyed_msg = 0;
         }
 
         if (isdestroyed_msg) {
@@ -1529,18 +1535,25 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                     message = xzmalloc(sizeof(struct message_t));
                     hashu64_insert(msgid, message, mrock->msgids);
                 }
-                else if (message->undeleted) {
-                    /* An undeleted copy of this draft exists */
-                    syslog(LOG_DEBUG, "skipping UID %u: undeleted draft exists",
+                else if (message->ignore) {
+                    /* An undeleted copy of this draft exists OR
+                       this Message-Id exists as a non-draft */
+                    syslog(LOG_DEBUG,
+                           "skipping UID %u: non-draft / undeleted draft exists",
                            record->uid);
 
                     continue;
                 }
             }
-            else if (!message && (rrock->jrestore->mode & UNDO_NONDRAFTS)) {
-                /* Create message for this GUID */
-                message = xzmalloc(sizeof(struct message_t));
-                hash_insert(guid, message, mrock->emailids);
+            else {
+                /* Destroyed non-draft */
+                ignore_draft = 1;
+
+                if (!message && (rrock->jrestore->mode & UNDO_NONDRAFTS)) {
+                    /* Create message for this GUID */
+                    message = xzmalloc(sizeof(struct message_t));
+                    hash_insert(guid, message, mrock->emailids);
+                }
             }
 
             if (message) {
@@ -1558,24 +1571,27 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
             }
         }
         else {
+            /* Active message - ignore both Message-ID and GUID */
+            ignore_draft = 1;
+
             if (!message) {
                 /* Create message for this GUID */
                 message = xzmalloc(sizeof(struct message_t));
                 hash_insert(guid, message, mrock->emailids);
             }
-            message->undeleted = 1;
+            message->ignore = 1;
+        }
 
-            if (msgid) {
-                /* Mark this Message-ID as undeleted */
-                message = hashu64_lookup(msgid, mrock->msgids);
-                if (!message) {
-                    /* Create message for this Message-ID */
-                    message = xzmalloc(sizeof(struct message_t));
-                    hashu64_insert(msgid, message, mrock->msgids);
-                }
-
-                message->undeleted = 1;
+        if (ignore_draft && msgid) {
+            /* Mark this Message-ID as undeleted */
+            message = hashu64_lookup(msgid, mrock->msgids);
+            if (!message) {
+                /* Create message for this Message-ID */
+                message = xzmalloc(sizeof(struct message_t));
+                hashu64_insert(msgid, message, mrock->msgids);
             }
+
+            message->ignore = 1;
         }
     }
 
@@ -1603,12 +1619,12 @@ static void restore_mailbox_plan_cb(const char *guid __attribute__((unused)),
     time_t last_removed;
     int i;
 
-    if (!message->undeleted) ptrarray_sort(deleted, &rmail_cmp);
+    if (!message->ignore) ptrarray_sort(deleted, &rmail_cmp);
 
     for (i = 0; i < ptrarray_size(deleted); i++) {
         struct removed_mail *rmail = ptrarray_nth(deleted, i);
 
-        if (!message->undeleted) {
+        if (!message->ignore) {
             /* Add the last removed copies of the message to the plan */
             if (i == 0) last_removed = rmail->removed;
 
@@ -1637,7 +1653,7 @@ static void restore_choose_draft_cb(uint64_t cid __attribute__((unused)),
     int i = 0, num_last = 0;
 
     /* Add the largest of the last 5 drafts to the plan */
-    if (!message->undeleted) {
+    if (!message->ignore) {
         ptrarray_sort(drafts, &rmail_cmp);
         num_last = 5;
     }
@@ -1649,7 +1665,7 @@ static void restore_choose_draft_cb(uint64_t cid __attribute__((unused)),
             struct message_t *emailid =
                 hash_lookup(rmail->guid, mrock->emailids);
 
-            if (!(emailid && emailid->undeleted)) {
+            if (!(emailid && emailid->ignore)) {
                 if (!maxdraft || rmail->size > maxdraft->size) {
                     maxdraft = rmail;
                 }
