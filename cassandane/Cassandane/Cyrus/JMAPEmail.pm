@@ -14290,7 +14290,7 @@ sub test_searchsnippet_get_attachment
     my $res = $jmap->CallMethods([
         ['Email/query', {
             filter => $filter,
-            wantPartIds => JSON::true,
+            findMatchingParts => JSON::true,
         }, "R1"],
     ], $using);
     my $emailIds = $res->[0][1]{ids};
@@ -14339,23 +14339,23 @@ sub test_searchsnippet_get_attachment
     $res = $jmap->CallMethods([
         ['Email/query', {
             filter => $filter,
-            wantPartIds => JSON::true,
+            findMatchingParts => JSON::true,
         }, "R1"],
     ], $using);
     $emailIds = $res->[0][1]{ids};
     $self->assert_num_equals(1, scalar @{$emailIds});
     $partIds = $res->[0][1]{partIds};
-    my $wantPartIds = {
+    my $findMatchingParts = {
         $emailIds->[0] => undef
     };
-    $self->assert_deep_equals($wantPartIds, $partIds);
+    $self->assert_deep_equals($findMatchingParts, $partIds);
 
     # Test 5: query text
     $filter = { text => "cat" };
     $res = $jmap->CallMethods([
         ['Email/query', {
             filter => $filter,
-            wantPartIds => JSON::true,
+            findMatchingParts => JSON::true,
         }, "R1"],
     ], $using);
     $emailIds = $res->[0][1]{ids};
@@ -14681,7 +14681,7 @@ sub test_search_sharedpart
     my $res = $jmap->CallMethods([
         ['Email/query', {
             filter => {text => "foobar"},
-            wantPartIds => JSON::true,
+            findMatchingParts => JSON::true,
         },"R1"],
     ], $using);
     my $emailIds = $res->[0][1]{ids};
@@ -14697,7 +14697,7 @@ sub test_search_sharedpart
     $res = $jmap->CallMethods([
         ['Email/query', {
             filter => {text => "lady"},
-            wantPartIds => JSON::true,
+            findMatchingParts => JSON::true,
         }, "R1"],
     ], $using);
     $emailIds = $res->[0][1]{ids};
