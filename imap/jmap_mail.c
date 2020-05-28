@@ -4182,7 +4182,7 @@ static int _email_queryargs_parse(jmap_req_t *req,
         free(addrbookname);
         return is_valid;
     }
-    else if (!strcmp(key, "wantPartIds") && json_is_boolean(arg) &&
+    else if (!strcmp(key, "findMatchingParts") && json_is_boolean(arg) &&
             jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
         query->want_partids = json_boolean_value(arg);
     }
