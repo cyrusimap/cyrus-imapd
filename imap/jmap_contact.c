@@ -1827,7 +1827,7 @@ static int jmap_contact_getblob(jmap_req_t *req,
             vparse_get_entry(vcard->objects, NULL, "VERSION");
         if (entry) {
             content_type =
-                strconcat("text/calendar; version=", entry->v.value, NULL);
+                strconcat("text/vcard; version=", entry->v.value, NULL);
             req->txn->resp_body.type = content_type;
         }
     }
