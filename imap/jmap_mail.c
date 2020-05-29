@@ -3131,55 +3131,24 @@ static struct guidsearch_expr *guidsearch_expr_build(search_expr_t *parent,
     return ge;
 }
 
-static int rank_guidsearch_expr(search_expr_t *parent, search_expr_t *e)
+static int rank_guidsearch_clause(const search_expr_t *e)
 {
-    if (!e) return 0;
+    assert(e->op != SEOP_OR);
 
-    /* Ranks are:
-     * 0x0: expr is not supported
-     * 0x1: expr is supported but does not require Xapian
-     * 0x2: expr requires Xapian
-     *
-     * Keep this in sync with guidsearch_expr_build or there be dragons.
-     */
     switch (e->op) {
         case SEOP_AND:
-        case SEOP_OR:
         case SEOP_NOT:
             {
                 int rank = 0;
-                int seen_rank3 = 0;
                 search_expr_t *child;
                 for (child = e->children ; child ; child = child->next) {
-                    int childrank = rank_guidsearch_expr(e, child);
-                    if (childrank == 0) return 0;
-                    if (childrank == 3) {
-                        if (e->op == SEOP_OR && seen_rank3) {
-                            /*
-                             * TODO We currently reject any disjunctions where
-                             * more than one child filters by both Xapian and
-                             * non-Xapian criteria. That's overly restrictive
-                             * but allows to err on the safe side.
-                             *
-                             * The following filter is an example that would
-                             * produce bogus results if we evaluate it on the
-                             * current GUID implementation:
-                             *
-                             * OR(AND(text:foo inMailbox:A),
-                             *    AND(text:Bar inMailbox:B))
-                             *
-                             * It ANDs Xapian with non-Xapian criteria. GUID
-                             * search would evaluate it by first searching for
-                             * all GUIDs that match the 'text' filter criteria,
-                             * then evaluate the inMailbox filters on these
-                             * GUIDs. This would produce a bogus result if a
-                             * message with text:bar also exists in mailbox A!
-                             * */
-                            return 0;
-                        }
-                        else seen_rank3 = 1;
+                    int childrank = rank_guidsearch_clause(child);
+                    if (childrank == -1) {
+                        return -1;
                     }
-                    rank |= childrank;
+                    else {
+                        rank |= childrank;
+                    }
                 }
                 return rank;
             }
@@ -3188,7 +3157,7 @@ static int rank_guidsearch_expr(search_expr_t *parent, search_expr_t *e)
         case SEOP_GT:
         case SEOP_GE:
             // TODO support receivedAt?
-            return 0;
+            return -1;
         case SEOP_MATCH:
             if (e->attr == search_attr_find("folder") ||
                 e->attr == &_emailsearch_folders_attr ||
@@ -3204,14 +3173,49 @@ static int rank_guidsearch_expr(search_expr_t *parent, search_expr_t *e)
             else return 0;
         case SEOP_TRUE:
         case SEOP_FALSE:
-            return parent != NULL ? 1 : 0;
+            return 0;
         case SEOP_FUZZYMATCH:
             return 2;
         default:
-            return 0;
+            return -1;
     }
 
-    return 0;
+    return -1;
+}
+
+
+static int rank_guidsearch_expr(const search_expr_t *_e)
+{
+    if (!_e) return 0;
+
+    /*
+     * Returns -1 for unsupported expressions or a bitmask of:
+     *  0x0  trivial expression
+     *  0x1  supported but does not require Xapian
+     *  0x2  requires Xapian
+     */
+
+    search_expr_t *e = search_expr_duplicate(_e);
+    if (search_expr_normalise(&e) == -1) {
+        return -1;
+    }
+    int rank = 0;
+    if (e->op == SEOP_OR) {
+        search_expr_t *child;
+        for (child = e->children ; child ; child = child->next) {
+            int childrank = rank_guidsearch_clause(child);
+            if (childrank == 1 || childrank == -1) {
+                rank = -1;
+                goto done;
+            }
+            rank |= childrank;
+        }
+    }
+    else rank = rank_guidsearch_clause(e);
+
+done:
+    search_expr_free(e);
+    return rank;
 }
 
 static int is_guidsearch_sort(struct sortcrit *sort)
@@ -3351,7 +3355,7 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
                                    struct emailsearch *search,
                                    json_t **err __attribute__((unused)))
 {
-    int exprrank = rank_guidsearch_expr(NULL, search->expr);
+    int exprrank = rank_guidsearch_expr(search->expr);
     if (exprrank < 2 || !is_guidsearch_sort(search->sort)) {
         return IMAP_SEARCH_NOT_SUPPORTED;
     }
