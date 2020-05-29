@@ -74,12 +74,6 @@ jmap_method_t jmap_core_methods_standard[] = {
         0/*flags*/
     },
     {
-        "Blob/get",
-        JMAP_URN_CORE,
-        &jmap_blob_get,
-        JMAP_SHARED_CSTATE
-    },
-    {
         "Core/echo",
         JMAP_URN_CORE,
         &jmap_core_echo,
@@ -89,6 +83,12 @@ jmap_method_t jmap_core_methods_standard[] = {
 };
 
 jmap_method_t jmap_core_methods_nonstandard[] = {
+    {
+        "Blob/get",
+        JMAP_URN_CORE,  /* XXX  This should be changed to JMAP_BLOB_EXTENSION */
+        &jmap_blob_get,
+        JMAP_SHARED_CSTATE
+    },
     {
         "Quota/get",
         JMAP_QUOTA_EXTENSION,
