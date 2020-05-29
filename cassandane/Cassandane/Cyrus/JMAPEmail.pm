@@ -13939,7 +13939,7 @@ sub test_email_set_encode_plain_text_attachment
 }
 
 sub test_blob_get
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
