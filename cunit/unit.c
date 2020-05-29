@@ -80,7 +80,7 @@ int timeouts_flag = 1;
 
 jmp_buf fatal_jbuf;
 int fatal_expected;
-const char *fatal_string;
+char *fatal_string = NULL;
 int fatal_code;
 
 EXPORTED void fatal(const char *s, int code)
@@ -88,7 +88,7 @@ EXPORTED void fatal(const char *s, int code)
     log1("fatal(%s)", s);
     if (fatal_expected) {
         fatal_expected = 0;
-        fatal_string = s;
+        fatal_string = xstrdupnull(s);
         fatal_code = code;
         longjmp(fatal_jbuf, code);
     }
