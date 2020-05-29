@@ -788,7 +788,6 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
                      Xapian::QueryParser::FLAG_WILDCARD;
 
     if (tg_stem_strategy != Xapian::TermGenerator::STEM_NONE) {
-        Xapian::Query* q = new Xapian::Query;
 
         // STEM_SOME doesn't work for terms starting with upper case,
         // which will break for languages such as German. We also can't use
@@ -797,28 +796,28 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
         std::string lmatch(match);
         std::transform(lmatch.begin(), lmatch.end(), lmatch.begin(), ::tolower);
 
-        // Query with default stemmer.
-        db->parser->set_stemmer(*db->default_stemmer);
-        db->parser->set_stopper(db->default_stopper);
-        if (db->default_stopper && (*db->default_stopper)(lmatch)) {
-            // Don't stem stopwords.
-            db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
-        }
-        else {
-            db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
-        }
-        *q |= db->parser->parse_query(lmatch, flags, prefix);
+        // Query without any stemmer.
+        db->parser->set_stemmer(Xapian::Stem());
+        db->parser->set_stopper(NULL);
+        db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
+        Xapian::Query q = db->parser->parse_query(lmatch, flags, prefix);
 
-        return q;
+        // Query with default stemmer. But don't stem stopwords.
+        if (!db->default_stopper || !(*db->default_stopper)(lmatch)) {
+            db->parser->set_stemmer(*db->default_stemmer);
+            db->parser->set_stopper(db->default_stopper);
+            db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
+            q |= db->parser->parse_query(lmatch, flags, prefix);
+        }
+
+        return new Xapian::Query(q);
     }
     else {
-        // Query without any stemmer.
         db->parser->set_stemmer(Xapian::Stem());
         db->parser->set_stopper(NULL);
         db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
         return new Xapian::Query {db->parser->parse_query(match, flags, prefix)};
     }
-
 }
 
 xapian_query_t *
