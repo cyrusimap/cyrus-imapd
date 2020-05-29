@@ -1177,6 +1177,7 @@ struct findblob_data {
     struct mailbox *mbox;
     msgrecord_t *mr;
     char *part_id;
+    unsigned exact : 1;
 };
 
 static int findblob_cb(const conv_guidrec_t *rec, void *rock)
@@ -1184,6 +1185,11 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     struct findblob_data *d = (struct findblob_data*) rock;
     jmap_req_t *req = d->req;
     int r = 0;
+
+    if (d->exact) {
+        // we only want top-level blobs
+        if (rec->part) return 0;
+    }
 
     /* Check ACL */
     if (d->is_shared_account) {
@@ -1214,11 +1220,11 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     return IMAP_OK_COMPLETED;
 }
 
-HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
-                         const char *blobid,
-                         struct mailbox **mbox, msgrecord_t **mr,
-                         struct body **body, const struct body **part,
-                         struct buf *blob)
+static int _jmap_findblob(jmap_req_t *req, const char *from_accountid,
+                          const char *blobid, unsigned exact,
+                          struct mailbox **mbox, msgrecord_t **mr,
+                          struct body **body, const struct body **part,
+                          struct buf *blob)
 {
     const char *accountid = from_accountid ? from_accountid : req->accountid;
     struct findblob_data data = {
@@ -1232,7 +1238,8 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
         /* mr */
         NULL,
         /* part_id */
-        NULL
+        NULL,
+        exact
     };
     struct body *mybody = NULL;
     const struct body *mypart = NULL;
@@ -1306,8 +1313,8 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
 
     *mbox = data.mbox;
     *mr = data.mr;
-    *part = mypart;
-    *body = mybody;
+    if (part) *part = mypart;
+    if (body) *body = mybody;
     r = 0;
 
 done:
@@ -1322,41 +1329,14 @@ done:
     return r;
 }
 
-static int findblob_exact_cb(const conv_guidrec_t *rec, void *rock)
+HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
+                         const char *blobid,
+                         struct mailbox **mbox, msgrecord_t **mr,
+                         struct body **body, const struct body **part,
+                         struct buf *blob)
 {
-    struct findblob_data *d = (struct findblob_data*) rock;
-    jmap_req_t *req = d->req;
-    int r = 0;
-
-    // we only want top-level blobs
-    if (rec->part) return 0;
-
-    /* Check ACL */
-    if (d->is_shared_account) {
-        mbentry_t *mbentry = NULL;
-        r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
-        if (r) {
-            syslog(LOG_ERR, "jmap_findblob: no mbentry for %s", rec->mboxname);
-            return r;
-        }
-        int rights = jmap_myrights_mbentry(req, mbentry);
-        mboxlist_entry_free(&mbentry);
-        if ((rights & JACL_READITEMS) != JACL_READITEMS) {
-            return 0;
-        }
-    }
-
-    r = jmap_openmbox(req, rec->mboxname, &d->mbox, 0);
-    if (r) return r;
-
-    r = msgrecord_find(d->mbox, rec->uid, &d->mr);
-    if (r) {
-        jmap_closembox(req, &d->mbox);
-        d->mr = NULL;
-        return r;
-    }
-
-    return IMAP_OK_COMPLETED;
+    return _jmap_findblob(req, from_accountid, blobid, 0 /*exact*/,
+                          mbox, mr, body, part, blob);
 }
 
 // we need to pass mbox so we can keep it open until the file has been used
@@ -1364,57 +1344,8 @@ HIDDEN int jmap_findblob_exact(jmap_req_t *req, const char *from_accountid,
                                const char *blobid,
                                struct mailbox **mbox, msgrecord_t **mr)
 {
-    const char *accountid = from_accountid ? from_accountid : req->accountid;
-    struct findblob_data data = {
-        req,
-        /* from_accountid */
-        accountid,
-        /* is_shared_account */
-        strcmp(req->userid, accountid),
-        /* mbox */
-        NULL,
-        /* mr */
-        NULL,
-        /* part_id */
-        NULL,
-    };
-    int r;
-    struct conversations_state *cstate, *mycstate = NULL;
-
-    if (blobid[0] != 'G')
-        return IMAP_NOTFOUND;
-
-    if (strcmp(req->accountid, accountid)) {
-        cstate = conversations_get_user(accountid);
-        if (!cstate) {
-            r = conversations_open_user(accountid, 1/*shared*/, &mycstate);
-            if (r) goto done;
-
-            cstate = mycstate;
-        }
-    }
-    else {
-        cstate = req->cstate;
-    }
-
-    r = conversations_guid_foreach(cstate, blobid+1, findblob_exact_cb, &data);
-    if (r != IMAP_OK_COMPLETED) {
-        if (!r) r = IMAP_NOTFOUND;
-        goto done;
-    }
-
-    *mbox = data.mbox;
-    *mr = data.mr;
-    r = 0;
-
-done:
-    if (mycstate) {
-        conversations_commit(&mycstate);
-    }
-    if (r) {
-        if (data.mbox) jmap_closembox(req, &data.mbox);
-    }
-    return r;
+    return _jmap_findblob(req, from_accountid, blobid, 1 /*exact*/,
+                          mbox, mr, NULL /*body*/, NULL /*part*/, NULL /*blob*/);
 }
 
 HIDDEN int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
