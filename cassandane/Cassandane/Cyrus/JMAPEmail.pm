@@ -13965,6 +13965,10 @@ sub test_blob_get
         $res->[1][1]{list}[0]{threadId} => JSON::true
     };
 
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/blob';
+    $jmap->DefaultUsing(\@using);
+
     $res = $jmap->CallMethods([
         ['Blob/get', { ids => [$blobId]}, "R1"],
     ]);
