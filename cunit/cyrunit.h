@@ -232,12 +232,13 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
 
 extern jmp_buf fatal_jbuf;
 extern int fatal_expected;
-extern const char *fatal_string;
+extern char *fatal_string;
 extern int fatal_code;
 
 #define CU_EXPECT_CYRFATAL_BEGIN                                \
 do {                                                            \
     fatal_expected = 1;                                         \
+    if (fatal_string) free(fatal_string);                       \
     fatal_string = NULL;                                        \
     fatal_code = 0;                                             \
     if (!setjmp(fatal_jbuf)) {                                  \
@@ -250,6 +251,8 @@ do {                                                            \
         const char *_es = (expected_string);                    \
         CU_ASSERT_EQUAL(fatal_code, _ec);                       \
         if (_es) CU_ASSERT_STRING_EQUAL(fatal_string, _es);     \
+        if (fatal_string) free(fatal_string);                   \
+        fatal_string = NULL;                                    \
 }   } while (0)
 
 
