@@ -11595,7 +11595,7 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
                         if (!seqset_ismember(del_seenseq, uid))
                             seqset_add(new_seenseq, uid, 1);
                 }
-                else {
+                else if (plan->old_seenseq) {
                     seqset_join(new_seenseq, plan->old_seenseq);
                 }
                 if (add_seenseq->len)
