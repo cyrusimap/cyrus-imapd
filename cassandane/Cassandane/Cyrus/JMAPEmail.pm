@@ -16465,9 +16465,7 @@ sub test_email_query_guidsearch_mixedfilter
                 operator => 'OR',
                 conditions => [{
                     subject => 'foo',
-                    inMailbox => $mboxIdA,
                 }, {
-                    subject => 'bar',
                     inMailbox => $mboxIdB,
                 }],
             },
@@ -16479,12 +16477,9 @@ sub test_email_query_guidsearch_mixedfilter
     ], $using);
 
     # Current Cyrus implementation of GUID search does not support
-    # disjunctions of conjuncted Xapian and non-Xapian filters. If
-    # the following assert breaks, it might mean that this support
-    # got added to the codebase, in which case: great!
+    # disjunctions of Xapian and non-Xapian filters. This might change.
     $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
-
-    @wantIds = sort ($emailIdAfoo, $emailIdBbar);
+    @wantIds = sort ($emailIdAfoo, $emailIdBfoo, $emailIdBbar);
     $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
 }
 
