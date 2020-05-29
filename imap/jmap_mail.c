@@ -12263,9 +12263,8 @@ static void _email_import(jmap_req_t *req,
 
     /* see if we can get a direct email! */
     int r = jmap_findblob_exact(req, NULL/*accountid*/, blob_id,
-                                &mbox, &mr);
+                                &mbox, &mr, &content.buf);
     if (!r) r = msgrecord_get_fname(mr, &sourcefile);
-    if (!r) r = msgrecord_get_body(mr, &content.buf);
     if (!r) goto gotrecord;
 
     /* better clean up before we go the slow path */

@@ -1342,10 +1342,11 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
 // we need to pass mbox so we can keep it open until the file has been used
 HIDDEN int jmap_findblob_exact(jmap_req_t *req, const char *from_accountid,
                                const char *blobid,
-                               struct mailbox **mbox, msgrecord_t **mr)
+                               struct mailbox **mbox, msgrecord_t **mr,
+                               struct buf *blob)
 {
     return _jmap_findblob(req, from_accountid, blobid, 1 /*exact*/,
-                          mbox, mr, NULL /*body*/, NULL /*part*/, NULL /*blob*/);
+                          mbox, mr, NULL /*body*/, NULL /*part*/, blob);
 }
 
 HIDDEN int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
