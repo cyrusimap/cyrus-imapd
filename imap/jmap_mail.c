@@ -6172,19 +6172,19 @@ static int _email_get_meta(jmap_req_t *req,
                             rock.snoozed ? rock.snoozed : json_null());
     }
 
-    if (jmap_wantprop(props, "bimiIndicatorBlobId")) {
+    if (jmap_wantprop(props, "bimiBlobId")) {
         int r = 0;
+        const char *hdrname = "bimi-indicator";
         struct buf buf = BUF_INITIALIZER;
         json_t *jval = json_null();
         if (!msg->_m) r = msgrecord_get_message(msg->mr, &msg->_m);
-        if (!r) r = message_get_field(msg->_m, "bimi-indicator",
-                                      MESSAGE_RAW, &buf);
+        if (!r) r = message_get_field(msg->_m, hdrname, MESSAGE_RAW, &buf);
         if (!r && buf_len(&buf)) {
             const char *blobid =
-                _encode_email_header_blobid(email_id, "bimi-indicator", &buf);
+                _encode_email_header_blobid(email_id, hdrname, &buf);
             if (*blobid) jval = json_string(blobid);
         }
-        json_object_set_new(email, "bimiIndicatorBlobId", jval);
+        json_object_set_new(email, "bimiBlobId", jval);
         buf_free(&buf);
     }
 
@@ -7291,9 +7291,9 @@ static const jmap_property_t email_props[] = {
         0
     },
     {
-        "bimiIndicatorBlobId",
+        "bimiBlobId",
         JMAP_MAIL_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
     },
     { NULL, NULL, 0 }
 };
