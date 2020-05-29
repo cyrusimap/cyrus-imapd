@@ -2532,8 +2532,6 @@ static int _emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *searc
     free(inboxname);
     if (r) {
         syslog(LOG_ERR, "jmap: %s: %s", __func__, error_message(r));
-        freesearchargs(search->args);
-        free(search);
         goto done;
     }
 
