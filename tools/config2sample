@@ -64,7 +64,7 @@ our $spaces = 0;
 our $inl = 0;
 our $section = 0;
 
-my $blank = "rst";
+my $blank = "";
 # XXX get rid of cvs id cruft
 my $version = "\$Revision: 1.6 $blank";
 
