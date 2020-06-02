@@ -9599,29 +9599,18 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     char *encbuf = NULL;
     int r = 0;
 
-    struct buf *inmem = hash_lookup(emailpart->blob_id, req->inmemory_blobs);
-    if (inmem) {
-        content = buf_base(inmem);
-        content_size = buf_len(inmem);
-    }
-    else {
-        /* Find body part containing blob */
-        r = jmap_findblob(req, NULL/*accountid*/, emailpart->blob_id,
-                           &mbox, &mr, &body, &part, &blob_buf);
-        if (r) goto done;
+    /* Find body part containing blob */
+    r = jmap_findblob(req, NULL/*accountid*/, emailpart->blob_id,
+                      &mbox, &mr, &body, &part, &blob_buf);
+    if (r) goto done;
 
-        uint32_t size;
-        r = msgrecord_get_size(mr, &size);
-        if (r) goto done;
-
-        /* Fetch blob contents and headers */
-        content = blob_buf.s;
-        content_size = blob_buf.len;
-        if (part) {
-            content += part->content_offset;
-            content_size = part->content_size;
-            src_encoding = part->encoding;
-        }
+    /* Fetch blob contents and headers */
+    content = blob_buf.s;
+    content_size = blob_buf.len;
+    if (part) {
+        content += part->content_offset;
+        content_size = part->content_size;
+        src_encoding = part->encoding;
     }
 
     /* Determine target encoding */
@@ -12255,16 +12244,10 @@ static void _email_import(jmap_req_t *req,
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
 
-    struct buf *inmem = hash_lookup(blob_id, req->inmemory_blobs);
-    if (inmem) {
-        buf_init_ro(&content.buf, buf_base(inmem), buf_len(inmem));
-        goto gotrecord;
-    }
-
     /* see if we can get a direct email! */
     int r = jmap_findblob_exact(req, NULL/*accountid*/, blob_id,
                                 &mbox, &mr, &content.buf);
-    if (!r) r = msgrecord_get_fname(mr, &sourcefile);
+    if (!r && mr) r = msgrecord_get_fname(mr, &sourcefile);
     if (!r) goto gotrecord;
 
     /* better clean up before we go the slow path */

@@ -1248,6 +1248,15 @@ static int _jmap_findblob(jmap_req_t *req, const char *from_accountid,
 
     syslog(LOG_DEBUG, "jmap_findblob (%s, %s)", from_accountid, blobid);
 
+    if (blob && req->inmemory_blobs) {
+        const struct buf *inmem = hash_lookup(blobid, req->inmemory_blobs);
+        if (inmem) {
+            buf_init_ro(blob, buf_base(inmem), buf_len(inmem));
+            r = 0;
+            goto done;
+        }
+    }
+
     if (blobid[0] != 'G')
         return IMAP_NOTFOUND;
 
@@ -1311,10 +1320,6 @@ static int _jmap_findblob(jmap_req_t *req, const char *from_accountid,
         if (r) goto done;
     }
 
-    *mbox = data.mbox;
-    *mr = data.mr;
-    if (part) *part = mypart;
-    if (body) *body = mybody;
     r = 0;
 
 done:
@@ -1324,6 +1329,12 @@ done:
     if (r) {
         if (data.mbox) jmap_closembox(req, &data.mbox);
         if (mybody) message_free_body(mybody);
+    }
+    else {
+        *mbox = data.mbox;
+        *mr = data.mr;
+        if (part) *part = mypart;
+        if (body) *body = mybody;
     }
     if (data.part_id) free(data.part_id);
     return r;
