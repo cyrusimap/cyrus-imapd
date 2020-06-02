@@ -2130,6 +2130,54 @@ sub test_contact_set
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 }
 
+sub test_contact_set_avatar_singlecommand
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $contact = {
+        firstName => "first",
+        lastName => "last",
+        avatar => {
+            blobId => "#img",
+            size => 10,
+            type => "image/jpeg",
+            name => JSON::null
+        }
+    };
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/contacts',
+        'https://cyrusimap.org/ns/jmap/blob',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Blob/set', { create => {
+            "img" => { content => 'some photo',
+                       type => 'image/jpeg' } } }, 'R0'],
+        ['Contact/set', {create => {"1" => $contact }}, "R1"],
+        ['Contact/get', {}, "R2"]],
+        $using);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('R0', $res->[0][2]);
+
+    $contact->{avatar}{blobId} = $res->[0][1]{created}{"img"}{blobId};
+
+    $self->assert_str_equals('Contact/set', $res->[1][0]);
+    $self->assert_str_equals('R1', $res->[1][2]);
+    my $id = $res->[1][1]{created}{"1"}{id};
+
+    $self->assert_str_equals('Contact/get', $res->[2][0]);
+    $self->assert_str_equals('R2', $res->[2][2]);
+    $self->assert_str_equals($id, $res->[2][1]{list}[0]{id});
+    $self->assert_deep_equals($contact->{avatar}, $res->[2][1]{list}[0]{avatar});
+    $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{"x-hasPhoto"});
+}
+
 sub test_contact_set_uid
     :min_version_3_1 :needs_component_jmap
 {
