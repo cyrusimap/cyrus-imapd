@@ -5992,9 +5992,12 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
     return conv(json_string_value(jheaderval), want_form);
 }
 
-static const char *blob_headers[] = {
-    "bimi-indicator",
-    NULL
+static const struct blob_header_t {
+    const char *name;
+    const char *type;
+} blob_headers[] = {
+    { "bimi-indicator", "image/svg+xml" },
+    { NULL, NULL }
 };
 
 static const char *_encode_email_header_blobid(const char *emailid,
@@ -6003,11 +6006,13 @@ static const char *_encode_email_header_blobid(const char *emailid,
 {
     /* Get the index of the header */
     unsigned n;
-    for (n = 0; blob_headers[n] && strcasecmp(blob_headers[n], hdrname); n++);
+    for (n = 0;
+         blob_headers[n].name && strcasecmp(blob_headers[n].name, hdrname);
+         n++);
 
     /* Smart blob prefix, emailid, hdrname index */
     buf_reset(dst);
-    if (blob_headers[n]) buf_printf(dst, "H%s-%u", emailid, n);
+    if (blob_headers[n].name) buf_printf(dst, "H%s-%u", emailid, n);
 
     return buf_cstring(dst);
 }
@@ -12970,7 +12975,8 @@ static int jmap_email_matchmime_method(jmap_req_t *req)
 
 static int _decode_emailheader_blobid(const char *blobid,
                                       char **emailidptr,
-                                      const char **hdrnameptr)
+                                      const char **hdrnameptr,
+                                      const char **mimetypeptr)
 {
     char *emailid = NULL;
     int is_valid = 0;
@@ -12995,7 +13001,8 @@ static int _decode_emailheader_blobid(const char *blobid,
 
     /* All done */
     *emailidptr = emailid;
-    *hdrnameptr = blob_headers[index];
+    *hdrnameptr = blob_headers[index].name;
+    *mimetypeptr = blob_headers[index].type;
     is_valid = 1;
 
 done:
@@ -13012,6 +13019,7 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
     struct mailbox *mailbox = NULL;
     char *emailid = NULL;
     const char *hdrname = NULL;
+    const char *mimetype = NULL;
     char *mboxname = NULL;
     uid_t uid = 0;
     struct buf buf = BUF_INITIALIZER;
@@ -13020,7 +13028,7 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
 
     if (*blobid != 'H') return 0;
 
-    if (!_decode_emailheader_blobid(blobid, &emailid, &hdrname)) {
+    if (!_decode_emailheader_blobid(blobid, &emailid, &hdrname, &mimetype)) {
         res = HTTP_BAD_REQUEST;
         goto done;
     }
@@ -13049,8 +13057,8 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
 
     /* Make sure client can handle blob type. */
     if (accept_mime) {
-        if (strcmp(accept_mime, "application/octet-stream")/* &&
-            strcmp(accept_mime, "text/vcard")*/) {
+        if (strcmp(accept_mime, "application/octet-stream") &&
+            strcmpnull(accept_mime, mimetype)) {
             res = HTTP_NOT_ACCEPTABLE;
             goto done;
         }
