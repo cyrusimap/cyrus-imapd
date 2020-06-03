@@ -135,7 +135,7 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
                          const char *buf, unsigned len)
 {
     z_stream *zstrm = txn->zstrm;
-    unsigned flush;
+    unsigned flush, pending;
 
     if (flags & COMPRESS_START) deflateReset(zstrm);
 
@@ -155,19 +155,6 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
     do {
         int zr;
 
-        if (!zstrm->avail_out) {
-            unsigned pending;
-
-            zr = deflatePending(zstrm, &pending, Z_NULL);
-            if (zr != Z_OK) {
-                /* something went wrong */
-                syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
-                return -1;
-            }
-
-            buf_ensure(&txn->zbuf, pending);
-        }
-
         zstrm->next_out = (Bytef *) txn->zbuf.s + txn->zbuf.len;
         zstrm->avail_out = txn->zbuf.alloc - txn->zbuf.len;
 
@@ -180,7 +167,34 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
 
         txn->zbuf.len = txn->zbuf.alloc - zstrm->avail_out;
 
-    } while (!zstrm->avail_out);
+        if (zstrm->avail_out) {
+            pending = 0;
+        }
+        else {
+            /* http://www.zlib.net/manual.html says:
+             * If deflate returns with avail_out == 0, this function must be
+             * called again with the same value of the flush parameter and
+             * more output space (updated avail_out), until the flush is
+             * complete (deflate returns with non-zero avail_out).
+             * In the case of a Z_FULL_FLUSH or Z_SYNC_FLUSH, make sure
+             * that avail_out is greater than six to avoid repeated
+             * flush markers due to avail_out == 0 on return.
+             */
+#ifdef HAVE_DEFLATE_PENDING
+            zr = deflatePending(zstrm, &pending, Z_NULL);
+            if (zr != Z_OK) {
+                /* something went wrong */
+                syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
+                return -1;
+            }
+#else
+            pending = 7;
+#endif
+
+            buf_ensure(&txn->zbuf, pending);
+        }
+
+    } while (pending);
 
     return 0;
 }
