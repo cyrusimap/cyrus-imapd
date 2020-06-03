@@ -156,6 +156,8 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                 JMAP_PERFORMANCE_EXTENSION, json_object());
         json_object_set_new(settings->server_capabilities,
                 JMAP_DEBUG_EXTENSION, json_object());
+        json_object_set_new(settings->server_capabilities,
+                JMAP_BLOB_EXTENSION, json_object());
 
         for (mp = jmap_core_methods_nonstandard; mp->name; mp++) {
             hash_insert(mp->name, mp, &settings->methods);
@@ -178,6 +180,9 @@ HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
 
         json_object_set_new(account_capabilities,
                 JMAP_DEBUG_EXTENSION, json_object());
+
+        json_object_set_new(account_capabilities,
+                JMAP_BLOB_EXTENSION, json_object());
     }
 }
 
