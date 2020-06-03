@@ -3113,9 +3113,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         comma_list_body(logbuf, te, txn->flags.te, 0, noargs);
         sep = "; ";
     }
-    if (txn->resp_body.enc.proc) {
+    if (resp_body->enc.proc && (resp_body->len || txn->flags.te)) {
         buf_printf(logbuf, "%scnt-encoding=", sep);
-        comma_list_body(logbuf, ce, txn->resp_body.enc.type, 0, noargs);
+        comma_list_body(logbuf, ce, resp_body->enc.type, 0, noargs);
         sep = "; ";
     }
     if (txn->location) {
