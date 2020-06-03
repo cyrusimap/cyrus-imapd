@@ -149,8 +149,8 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
     zstrm->next_in = (Bytef *) buf;
     zstrm->avail_in = len;
 
-    buf_ensure(&txn->zbuf, deflateBound(zstrm, zstrm->avail_in));
     buf_reset(&txn->zbuf);
+    buf_ensure(&txn->zbuf, deflateBound(zstrm, zstrm->avail_in));
 
     do {
         int zr;
@@ -240,8 +240,8 @@ static int brotli_compress(struct transaction_t *txn,
     const uint8_t *next_in = (const uint8_t *) buf;
     size_t avail_in = (size_t) len;
 
-    buf_ensure(&txn->zbuf, BrotliEncoderMaxCompressedSize(avail_in));
     buf_reset(&txn->zbuf);
+    buf_ensure(&txn->zbuf, BrotliEncoderMaxCompressedSize(avail_in));
 
     do {
         uint8_t *next_out = (uint8_t *) txn->zbuf.s + txn->zbuf.len;
@@ -315,8 +315,8 @@ static int zstd_compress(struct transaction_t *txn,
 
     if (flags & COMPRESS_START) ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
 
-    buf_ensure(&txn->zbuf, ZSTD_compressBound(len));
     buf_reset(&txn->zbuf);
+    buf_ensure(&txn->zbuf, ZSTD_compressBound(len));
 
     ZSTD_outBuffer output = { txn->zbuf.s, txn->zbuf.alloc, 0 };
     do {
