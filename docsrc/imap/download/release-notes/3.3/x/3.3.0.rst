@@ -1,0 +1,82 @@
+:tocdepth: 3
+
+==========================
+Cyrus IMAP 3.3.0 Tag Notes
+==========================
+
+Unavailable for download as this is a development branch only.
+
+Access is via git.
+
+.. warning::
+
+    This should be considered for
+    **testing purposes** and **bleeding-edge features** only. We will try to tag these
+    snapshots at coherent development points, but there will generally be **large
+    breaking changes** occurring between releases in this series.
+
+.. _relnotes-3.3.0-changes:
+
+Major changes since the 3.2 series
+==================================
+
+* DAV improvements
+* Improved performance for users with large folders
+* LITERAL- maximum size is now honoured (:rfc:`7888`)
+* Support for the ESORT (but not CONTEXT) extension from :rfc:`5267`
+* Experimental :draft:`JMAP for Sieve Scripts <draft-murchison-jmap-sieve>` support
+  (requires `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental :draft:`Handling Message Disposition Notification with JMAP
+  <draft-ietf-jmap-mdn>` support
+  (requires `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental JMAP Backup extension (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental JMAP Notes extension (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental JMAP Blob extension (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental JMAP Mail extension (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* New cyrus.index format v17 adds changes_epoch field, needed by JMAP Backups
+  extension
+* New `reverseuniqueids` :cyrusman:`imapd.conf(5)` option (default on), which
+  improves performance for users with large mailboxes
+* Further improvements to the `reverseacls` :cyrusman:`imapd.conf(5)` performance
+  option
+* Improvements to replication reliability and performance
+* Experimental vnd.cyrus.log, vnd.cyrus.jmapquery, and vnd.cyrus.snooze
+  Sieve extensions
+* Improvements to conversations
+* New `mailbox_maxmessages_addressbook`, `mailbox_maxmessages_calendar`, and
+  `mailbox_maxmessages_email` :cyrusman:`imapd.conf(5)` options for providing
+  server-wide limits on the amount of objects in any one mailbox, independently
+  of quotas.  These default to `0` (unlimited) for backward compatibility, but
+  are highly recommended for protecting your server from misbehaving clients.
+* New IMAP create/delete behaviour based on
+  :draft:`draft-ietf-extra-imap4rev2`: mailboxes containing child mailboxes
+  can no longer be deleted; and when creating mailboxes, ancestors will be
+  created as needed.
+* CRC32 optimisations
+
+Updates to default configuration
+================================
+
+The :cyrusman:`cyr_info(8)` `conf`, `conf-all` and `conf-default` subcommands
+accept an `-s <version>` argument to highlight :cyrusman:`imapd.conf(5)`
+options that are new or whose behaviour has changed since the specified
+version.  We recommend using this when evaluating a new Cyrus version to
+check which configuration options you will need to examine and maybe set or
+change during the process.
+
+* None so far
+
+Security fixes
+==============
+
+* None so far
+
+Significant bugfixes
+====================
+
+* Fixed: Sieve Editheader Extension (:rfc:`5293`) now works correctly with
+  respect to section 7, Interaction with Other Sieve Extensions.
