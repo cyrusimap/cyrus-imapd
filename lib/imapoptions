@@ -376,7 +376,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 # Commented out - there's no single setting "autocreate_acl",
 # but we need this for the man page
-# { "autocreate_acl", NULL, STRING, "3.1.10" }
+# { "autocreate_acl", NULL, STRING, "3.3.0" }
 /* If folders are to be created by \fIautocreate_inbox_folders\R, this
    setting can be used to apply additional ACLs to the autocreated
    folders.  The syntax is "autocreate_acl folder identifier rights",
@@ -1531,7 +1531,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Notifyd(8) method to use for "MAIL" notifications.  If not set, "MAIL"
    notifications are disabled. */
 
-{ "master_bind_errors_fatal", 0, SWITCH, "3.1.10" }
+{ "master_bind_errors_fatal", 0, SWITCH, "3.3.0" }
 /* If enabled, failure to bind a port during startup is treated as a fatal
    error, causing master to shut down immediately.  The default is to keep
    running, with the affected service disabled until the next SIGHUP causes
@@ -2057,7 +2057,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* At startup time, ctl_cyrusdb -r will check this value and it
    will either add or remove reverse ACL pointers from mailboxes.db */
 
-{ "reverseuniqueids", 1, SWITCH, "3.1.10" }
+{ "reverseuniqueids", 1, SWITCH, "3.3.0" }
 /* At startup time, ctl_cyrusdb -r will check this value and it
    will either add or remove reverse UNIQUEID pointers from mailboxes.db */
 
