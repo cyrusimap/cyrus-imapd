@@ -114,6 +114,8 @@ static int have_racl = 0;
 static int mboxlist_opensubs(const char *userid, struct db **ret);
 static void mboxlist_closesubs(struct db *sub);
 
+static int mboxlist_upgrade_subs(const char *subsfname, struct db **ret);
+
 static int mboxlist_rmquota(const mbentry_t *mbentry, void *rock);
 static int mboxlist_changequota(const mbentry_t *mbentry, void *rock);
 
@@ -4674,6 +4676,9 @@ mboxlist_opensubs(const char *userid,
     flags = CYRUSDB_CREATE;
 
     r = cyrusdb_open(SUBDB, subsfname, flags, ret);
+    if (r == CYRUSDB_OK) {
+        r = mboxlist_upgrade_subs(subsfname, ret);
+    }
     if (r != CYRUSDB_OK) {
         r = IMAP_IOERROR;
     }
@@ -5186,6 +5191,7 @@ static int _check_rec_cb(void *rock,
 
 struct upgrade_rock {
     struct buf *namebuf;
+    struct db *db;
     struct txn **tid;
 };
 
@@ -5222,7 +5228,7 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     struct buf buf = BUF_INITIALIZER;
     struct db *backup = NULL;
     struct txn *tid = NULL;
-    struct upgrade_rock urock = { &buf, &tid };
+    struct upgrade_rock urock = { &buf, NULL, &tid };
     char *fname;
 
     if (upgraded) *upgraded = 0;
@@ -5285,6 +5291,123 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     if (!r && upgraded) *upgraded = 1;
 
   done:
+    buf_free(&buf);
+
+    return r;
+}
+
+
+static int _check_subs_cb(void *rock, const char *key, size_t keylen,
+                          const char *data __attribute__((unused)),
+                          size_t datalen __attribute__((unused)))
+{
+    int *do_upgrade = (int *) rock;
+
+    /* check for version record */
+    if (keylen == 5 && !strncmp(key, DB_HIERSEP_STR "VER" DB_HIERSEP_STR, 5)) {
+        *do_upgrade = 0;
+    }
+
+    return CYRUSDB_DONE;
+}
+
+static int _upgrade_subs_cb(void *rock, const char *key, size_t keylen,
+                            const char *data __attribute__((unused)),
+                            size_t datalen __attribute__((unused)))
+{
+    struct upgrade_rock *urock = (struct upgrade_rock *) rock;
+    struct buf *namebuf = urock->namebuf;
+    char *dbname = NULL;
+    int r;
+
+    buf_setmap(namebuf, key, keylen);
+    dbname = mboxname_to_dbname(buf_cstring(namebuf));
+    mboxlist_dbname_to_key(dbname, strlen(dbname), namebuf);
+    free(dbname);
+
+    r = cyrusdb_store(urock->db,
+                      buf_base(namebuf), buf_len(namebuf), "", 0, urock->tid);
+
+    return (r == CYRUSDB_OK ? 0 : IMAP_IOERROR);
+}
+
+static int mboxlist_upgrade_subs(const char *subsfname, struct db **subs)
+{
+    int r, r2 = 0, do_upgrade = 1;
+    char *newsubsfname = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    struct db *newsubs = NULL;
+    struct txn *tid = NULL;
+    struct upgrade_rock urock = { &buf, NULL, &tid };
+
+    /* check if we need to upgrade */
+    r = cyrusdb_foreach(*subs, "", 0, NULL, _check_subs_cb, &do_upgrade, NULL);
+
+    if (r != CYRUSDB_DONE) return r;
+    if (!do_upgrade) return 0;
+
+    /* create new db file name */
+    buf_setcstr(&buf, subsfname);
+    buf_appendcstr(&buf, ".NEW");
+    newsubsfname = buf_release(&buf);
+
+    /* open new db file */
+    r = cyrusdb_open(SUBDB, newsubsfname, CYRUSDB_CREATE, &newsubs);
+    if (!r) {
+        /* add version record */
+        r = cyrusdb_store(newsubs,
+                          DB_HIERSEP_STR "VER" DB_HIERSEP_STR, 5, "2", 1, &tid);
+    }
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", newsubsfname,
+               cyrusdb_strerror(r));
+        fatal("can't open new subscriptions file", EX_TEMPFAIL);
+    }
+
+    /* perform upgrade from old to new db */
+    urock.db = newsubs;
+    r = cyrusdb_foreach(*subs, "", 0, NULL, _upgrade_subs_cb, &urock, NULL);
+
+    r2 = cyrusdb_close(*subs);
+    if (r2) {
+        syslog(LOG_ERR, "DBERROR: error closing %s: %s", subsfname,
+               cyrusdb_strerror(r2));
+        if (!r) r = r2;
+    }
+    *subs = NULL;
+
+    /* complete txn on new db */
+    if (tid) {
+        if (r) {
+            r2 = cyrusdb_abort(newsubs, tid);
+        } else {
+            r2 = cyrusdb_commit(newsubs, tid);
+        }
+
+        if (r2) {
+            syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_upgrade_subs: %s",
+                   r ? "aborting" : "committing", cyrusdb_strerror(r2));
+        }
+    }
+
+    r2 = cyrusdb_close(newsubs);
+    if (r2) {
+        syslog(LOG_ERR, "DBERROR: error closing %s: %s", newsubsfname,
+               cyrusdb_strerror(r2));
+        if (!r) r = r2;
+    }
+
+    if (!r) {
+        /* rename new db file */
+        r = rename(newsubsfname, subsfname);
+        if (!r) {
+            /* reopen upgraded db under regular name */
+            r = cyrusdb_open(SUBDB, subsfname, 0, subs);
+        }
+    }
+
+    unlink(newsubsfname);
+    free(newsubsfname);
     buf_free(&buf);
 
     return r;
