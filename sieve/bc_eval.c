@@ -2098,7 +2098,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 from = parse_string(from, variables);
                 handle = parse_string(handle, variables);
                 message = parse_string(message, variables);
-                subject = xstrdupnull(parse_string(subject, variables));
+                subject = parse_string(subject, variables);
 
                 fcc.mailbox = parse_string(fcc.mailbox, variables);
                 fcc.specialuse = parse_string(fcc.specialuse, variables);
@@ -2107,6 +2107,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             unwrap_flaglist(cmd.u.v.fcc.flags, &fcc.imapflags,
                             (requires & BFE_VARIABLES) ? variables : NULL);
 
+            subject = xstrdupnull(subject);
             if (!subject) {
                 /* we have to generate a subject */
                 struct buf buf = BUF_INITIALIZER;
