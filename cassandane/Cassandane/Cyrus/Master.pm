@@ -671,11 +671,13 @@ sub test_service_dup_port
     # and struggle on.
     $self->start();
 
-    # check syslog for the expected error
-    my @lines = grep { m/unable to create (?:A|B) listener socket:/ }
-                    $self->{instance}->getsyslog();
-    $self->assert_num_equals(1, scalar @lines);
-    $self->assert_matches(qr/Address already in use/, $lines[0]);
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # check syslog for the expected error
+        my @lines = grep { m/unable to create (?:A|B) listener socket:/ }
+                        $self->{instance}->getsyslog();
+        $self->assert_num_equals(1, scalar @lines);
+        $self->assert_matches(qr/Address already in use/, $lines[0]);
+    }
 
     xlog $self, "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},

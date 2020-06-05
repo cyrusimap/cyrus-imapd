@@ -12798,8 +12798,6 @@ sub test_email_set_update_too_many_mailboxes_lowlimit
     }, 'R1']]);
     $self->assert_str_equals('tooManyMailboxes', $res->[0][1]{notUpdated}{$emailId}{type});
 
-    # XXX should skip this entire test if we don't have the syslog hook,
-    # XXX since we'd never see the line we're looking for
     if ($self->{instance}->{have_syslog_replacement}) {
         my @lines = $self->{instance}->getsyslog();
         $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);

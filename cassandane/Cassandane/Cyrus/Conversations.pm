@@ -935,8 +935,10 @@ sub test_guid_duplicate_same_folder
     $self->assert_null($r3);
     $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
 
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+    }
 
     $talk->select("INBOX.dest");
     my $data = $talk->fetch("1:*", "(emailid threadid uid)");
@@ -979,8 +981,10 @@ sub test_guid_duplicate_total_count
     $self->assert_null($r5);
     $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
 
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+    }
 }
 
 #
@@ -1015,8 +1019,10 @@ sub test_guid_duplicate_expunges
     $self->assert_null($r);
     $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
 
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+    }
 }
 
 1;

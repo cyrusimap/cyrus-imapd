@@ -467,9 +467,11 @@ sub test_bz3781
 
     $self->check_folder_not_ondisk($subfolder);
 
-    # We should have generated an IOERROR
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/IOERROR: bogus filename/, "@lines");
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # We should have generated an IOERROR
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/IOERROR: bogus filename/, "@lines");
+    }
 }
 
 sub test_cyr_expire_delete

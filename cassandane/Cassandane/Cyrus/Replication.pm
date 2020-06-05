@@ -143,10 +143,14 @@ sub test_splitbrain
     $self->check_messages(\%rexp, store => $replica_store);
 
     $self->run_replication();
-    # replication will generate a couple of SYNCERRORS in syslog
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/\bSYNCERROR: guid mismatch user.cassandane 5\b/,
-                          "@syslog");
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # replication will generate a couple of SYNCERRORS in syslog
+        my @syslog = $self->{instance}->getsyslog();
+        $self->assert_matches(
+            qr/\bSYNCERROR: guid mismatch user.cassandane 5\b/,
+            "@syslog"
+        );
+    }
     $self->check_replication('cassandane');
 
 
@@ -189,11 +193,15 @@ sub test_splitbrain_mailbox
     xlog $self, "try replicating just the mailbox by name fails due to duplicate uniqueid";
     eval { $self->run_replication(mailbox => 'user.cassandane.dest-name') };
     $self->assert_matches(qr/exited with code 1/, "$@");
-    my @mastersyslog = $self->{instance}->getsyslog();
-    my @replicasyslog = $self->{replica}->getsyslog();
 
-    $self->assert(grep { m/MAILBOX received NO response: IMAP_MAILBOX_MOVED/ } @mastersyslog);
-    $self->assert(grep { m/SYNCNOTICE: failed to create mailbox user.cassandane.dest-name/ } @replicasyslog);
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @mastersyslog = $self->{instance}->getsyslog();
+        my @replicasyslog = $self->{replica}->getsyslog();
+
+        # XXX can we use assert_matches here?
+        $self->assert(grep { m/MAILBOX received NO response: IMAP_MAILBOX_MOVED/ } @mastersyslog);
+        $self->assert(grep { m/SYNCNOTICE: failed to create mailbox user.cassandane.dest-name/ } @replicasyslog);
+    }
 
     xlog $self, "Run a full user replication to repair";
     $self->run_replication();
@@ -211,13 +219,19 @@ sub test_splitbrain_mailbox
     $self->{replica}->getsyslog();
     xlog $self, "Run replication from a file with just the mailbox name in it";
     $self->run_replication(inputfile => $file, rolling => 1);
-    @mastersyslog = $self->{instance}->getsyslog();
-    @replicasyslog = $self->{replica}->getsyslog();
-    # initial failures
-    $self->assert(grep { m/do_folders\(\): update failed: user.cassandane.foo/ } @mastersyslog);
-    $self->assert(grep { m/SYNCNOTICE: failed to create mailbox user.cassandane.foo/ } @replicasyslog);
-    # later success
-    $self->assert(grep { m/Rename: user.cassandane.dest-name -> user.cassandane.foo/ } @replicasyslog);
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @mastersyslog = $self->{instance}->getsyslog();
+        my @replicasyslog = $self->{replica}->getsyslog();
+
+        # XXX assert_matches?
+        # initial failures
+        $self->assert(grep { m/do_folders\(\): update failed: user.cassandane.foo/ } @mastersyslog);
+        $self->assert(grep { m/SYNCNOTICE: failed to create mailbox user.cassandane.foo/ } @replicasyslog);
+        # later success
+        $self->assert(grep { m/Rename: user.cassandane.dest-name -> user.cassandane.foo/ } @replicasyslog);
+    }
+
     # replication fixes itself
     $self->check_replication('cassandane');
 }
@@ -287,11 +301,15 @@ sub test_splitbrain_masterexpunge
     xlog $self, "After replication, the replica should have the same 5 messages";
     $self->check_messages(\%exp, store => $replica_store);
 
-    # We should have generated a SYNCERROR/SYNCNOTICE or two
-    my @master_lines = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/SYNC(?:ERROR|NOTICE): guid mismatch/, "@master_lines");
-    my @replica_lines = $self->{replica}->getsyslog();
-    $self->assert_matches(qr/SYNC(?:ERROR|NOTICE): guid mismatch/, "@replica_lines");
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # We should have generated a SYNCERROR/SYNCNOTICE or two
+        my @master_lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/SYNC(?:ERROR|NOTICE): guid mismatch/,
+                              "@master_lines");
+        my @replica_lines = $self->{replica}->getsyslog();
+        $self->assert_matches(qr/SYNC(?:ERROR|NOTICE): guid mismatch/,
+                              "@replica_lines");
+    }
 }
 
 #
@@ -359,9 +377,11 @@ sub test_splitbrain_replicaexpunge
     xlog $self, "After replication, the replica should have the same 5 messages";
     $self->check_messages(\%exp, store => $replica_store);
 
-    # We should have generated a SYNCERROR or two
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/SYNCERROR: guid mismatch/, "@lines");
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # We should have generated a SYNCERROR or two
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/SYNCERROR: guid mismatch/, "@lines");
+    }
 }
 
 #
@@ -1574,8 +1594,12 @@ sub test_reset_on_master
     $self->{replica}->getsyslog();
     xlog $self, "Run replication from a file with just the mailbox name in it";
     $self->run_replication(inputfile => $file, rolling => 1);
-    my @mastersyslog = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/SYNCNOTICE: attempt to UNMAILBOX without a tombstone user.user2.no/, "@mastersyslog");
+
+    # XXX is this test useless if we can't check syslog?
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @mastersyslog = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/SYNCNOTICE: attempt to UNMAILBOX without a tombstone user.user2.no/, "@mastersyslog");
+    }
 }
 
 # this is testing a bug where sync_client would abort on zero-length file
