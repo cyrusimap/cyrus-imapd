@@ -5113,52 +5113,6 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
     return r;
 }
 
-EXPORTED int mboxlist_addsubs(strarray_t *names, const char *userid)
-{
-    struct buf key = BUF_INITIALIZER;
-    struct subs_db *subs;
-    struct txn *tid = NULL;
-    int i, r = 0, r2 = 0;
-
-    if (!names) return 0;
-
-    init_internal();
-
-    if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
-        return r;
-    }
-
-    for (i = 0; i < strarray_size(names); i++) {
-        const char *name = strarray_nth(names, i);
-
-        mboxlist_dbname_to_key(name, strlen(name), 1, userid, &key);
-        r = cyrusdb_store(subs->db, buf_base(&key), buf_len(&key), "", 0, &tid);
-
-        if (r != CYRUSDB_OK) {
-            r = IMAP_IOERROR;
-            break;
-        }
-    }
-
-    if (tid) {
-        if (r) {
-            r2 = cyrusdb_abort(subs->db, tid);
-        } else {
-            r2 = cyrusdb_commit(subs->db, tid);
-        }
-    }
-
-    if (r2) {
-        syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_setsubs: %s",
-               r ? "aborting" : "committing", cyrusdb_strerror(r2));
-    }
-
-    mboxlist_closesubs(subs);
-    buf_free(&key);
-
-    return r;
-}
-
 /* Transaction Handlers */
 EXPORTED int mboxlist_commit(struct txn *tid)
 {

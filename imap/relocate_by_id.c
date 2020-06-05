@@ -174,7 +174,7 @@ int main(int argc, char **argv)
             const char *uniqueid = mbentry->uniqueid;
             const char *name = mbentry->name;
             const char *path = NULL;
-            char *userid = NULL, *newsubs_fname = NULL;
+            char *userid = NULL;
             strarray_t *oldpaths = strarray_new();
             strarray_t *newpaths = strarray_new();
             strarray_t *subs = NULL;
@@ -332,25 +332,13 @@ int main(int argc, char **argv)
                                 extname, error_message(r));
                     }
                     else if (userid) {
-                        /* Rewrite sub.db */
-                        if (subs) {
-                            unlink(newsubs_fname);
-                            r = mboxlist_addsubs(subs, userid);
-                            if (r) {
-                                fprintf(stderr,
-                                        "Failed to rewrite sub.db for %s: %s\n",
-                                        userid, error_message(r));
-                            }
-                        }
 #ifdef WITH_DAV
                         /* Rewrite dav.db */
-                        if (!r) {
-                            r = dav_reconstruct_user(userid, NULL);
-                            if (r) {
-                                fprintf(stderr,
-                                        "Failed to rewrite dav.db for %s: %s\n",
-                                        userid, error_message(r));
-                            }
+                        r = dav_reconstruct_user(userid, NULL);
+                        if (r) {
+                            fprintf(stderr,
+                                    "Failed to rewrite dav.db for %s: %s\n",
+                                    userid, error_message(r));
                         }
 #endif
                     }
