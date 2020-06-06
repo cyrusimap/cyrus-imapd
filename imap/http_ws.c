@@ -370,6 +370,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     uint8_t rsv = WSLAY_RSV_NONE;
     double cmdtime, nettime;
     const char *err_msg;
+    const char *pmce_str = NULL;
     int r, err_code = 0;
 
     /* Place client request into a buf */
@@ -378,6 +379,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     /* Decompress request, if necessary */
     if (wslay_get_rsv1(arg->rsv)) {
         if (ctx->ext & EXT_PMCE_DEFLATE) {
+            pmce_str = "deflate";
+
             /* Add trailing 4 bytes */
             buf_appendmap(&inbuf, "\x00\x00\xff\xff", 4);
 
@@ -409,6 +412,10 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     }
     buf_printf(&ctx->log, "opcode=%s; rsv=0x%x; length=%ld",
                wslay_str_opcode(arg->opcode), arg->rsv, arg->msg_length);
+    if (pmce_str) {
+        buf_printf(&ctx->log, " [%ld]; pmce=%s", buf_len(&inbuf), pmce_str);
+        pmce_str = NULL;
+    }
 
     switch (arg->opcode) {
     case WSLAY_CONNECTION_CLOSE:
@@ -436,7 +443,6 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         /* Process the request */
         r = ctx->data_cb(&inbuf, &outbuf, &ctx->log, &ctx->cb_rock);
         if (r) {
-
             err_code = (r == HTTP_SERVER_ERROR ?
                         WSLAY_CODE_INTERNAL_SERVER_ERROR :
                         WSLAY_CODE_INVALID_FRAME_PAYLOAD_DATA);
@@ -459,6 +465,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         }
 
         /* Compress the server response, if supported by the client */
+        size_t orig_len = buf_len(&outbuf);
         if (ctx->ext & EXT_PMCE_DEFLATE) {
             r = zlib_compress(txn,
                               ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
@@ -476,6 +483,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             buf_move(&outbuf, &txn->zbuf);
 
             rsv |= WSLAY_RSV1_BIT;
+            pmce_str = "deflate";
         }
 
         /* Queue the server response */
@@ -487,6 +495,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         buf_printf(&ctx->log,
                    ") => \"Success\" (opcode=%s; rsv=0x%x; length=%ld",
                    wslay_str_opcode(msgarg.opcode), rsv, msgarg.msg_length);
+        if (pmce_str) {
+            buf_printf(&ctx->log, " [%ld]; pmce=%s", orig_len, pmce_str);
+        }
 
         session_new_id();
         break;
