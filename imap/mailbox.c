@@ -1160,10 +1160,23 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
         mailbox_unlock_index(mailbox, NULL);
     }
 
+    int need_cleanup = 0;
+    if (mailbox->i.options & OPT_MAILBOX_DELETED) {
+        // we ALWAYS cleanup deleted
+        need_cleanup = 1;
+    }
+    else if (!was_ro && !in_shutdown && (mailbox->i.options & MAILBOX_CLEANUP_MASK)) {
+        need_cleanup = 1;
+    }
+
     /* do we need to try and clean up? (not if doing a shutdown,
      * speed is probably more important!) */
-    if (!was_ro && !in_shutdown && (mailbox->i.options & MAILBOX_CLEANUP_MASK)) {
-        int r = mailbox_mboxlock_reopen(listitem, LOCK_NONBLOCKING);
+    if (need_cleanup) {
+        int locktype = LOCK_NONBLOCKING;
+        /* if we deleted the mailbox we MUST clean it up or the files will leak,
+         * so wait until the other locks are cleared */
+        if (mailbox->i.options & OPT_MAILBOX_DELETED) locktype = LOCK_EXCLUSIVE;
+        int r = mailbox_mboxlock_reopen(listitem, locktype);
         /* we need to re-open the index because we dropped the mboxname lock,
          * so the file may have changed */
         if (!r) r = mailbox_open_index(mailbox);
