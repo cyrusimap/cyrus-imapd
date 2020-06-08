@@ -586,6 +586,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             }
         }
         else if (ctx->ext & EXT_PMCE_ZSTD) {
+            pmce_str = "zstd";
+
             r = zstd_decompress(txn, buf_base(&inbuf), buf_len(&inbuf));
             if (r) {
                 syslog(LOG_ERR, "on_msg_recv_cb(): zstd_decompress() failed");
@@ -713,7 +715,10 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                 goto err;
             }
 
+            buf_move(&outbuf, &txn->zbuf);
+
             rsv |= WSLAY_RSV1_BIT;
+            pmce_str = "zstd";
         }
 
         /* Queue the server response */
