@@ -870,11 +870,7 @@ int caldav_create_defaultcalendars(const char *userid)
         /* Default calendar */
         unsigned long comp_types = config_types_to_caldav_types();
 
-        if (config_getswitch(IMAPOPT_CALDAV_CREATE_SCHED))
-            mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
-        else
-            mailboxname = caldav_mboxname(userid, makeuuid());
-
+        mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
         r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, comp_types,
                             ACL_ALL | DACL_READFB, DACL_READFB,
                             config_getstring(IMAPOPT_CALENDAR_DEFAULT_DISPLAYNAME),
