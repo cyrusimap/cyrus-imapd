@@ -3741,7 +3741,7 @@ EOF
 }
 
 sub test_supports_event
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1 :needs_component_httpd :needs_component_jmap
 {
     my ($self) = @_;
 
