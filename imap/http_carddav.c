@@ -739,6 +739,7 @@ static int export_addressbook(struct transaction_t *txn)
         txn->resp_body.lastmod = mailbox->index_mtime;
         txn->resp_body.maxage = 3600;  /* 1 hr */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;  /* don't use stale data */
+        if (httpd_userid) txn->flags.cc |= CC_PRIVATE;
 
         if (precond != HTTP_NOT_MODIFIED) break;
 
