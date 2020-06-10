@@ -59,11 +59,11 @@
 
 
 /* JMAP Core API Methods */
-static int jmap_blob_get(jmap_req_t *req);
 static int jmap_blob_copy(jmap_req_t *req);
 static int jmap_core_echo(jmap_req_t *req);
 
 /* JMAP extension methods */
+static int jmap_blob_get(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
 
 jmap_method_t jmap_core_methods_standard[] = {
@@ -72,12 +72,6 @@ jmap_method_t jmap_core_methods_standard[] = {
         JMAP_URN_CORE,
         &jmap_blob_copy,
         0/*flags*/
-    },
-    {
-        "Blob/get",
-        JMAP_URN_CORE,
-        &jmap_blob_get,
-        JMAP_SHARED_CSTATE
     },
     {
         "Core/echo",
@@ -89,6 +83,12 @@ jmap_method_t jmap_core_methods_standard[] = {
 };
 
 jmap_method_t jmap_core_methods_nonstandard[] = {
+    {
+        "Blob/get",
+        JMAP_BLOB_EXTENSION,
+        &jmap_blob_get,
+        JMAP_SHARED_CSTATE
+    },
     {
         "Quota/get",
         JMAP_QUOTA_EXTENSION,
@@ -156,6 +156,8 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                 JMAP_PERFORMANCE_EXTENSION, json_object());
         json_object_set_new(settings->server_capabilities,
                 JMAP_DEBUG_EXTENSION, json_object());
+        json_object_set_new(settings->server_capabilities,
+                JMAP_BLOB_EXTENSION, json_object());
 
         for (mp = jmap_core_methods_nonstandard; mp->name; mp++) {
             hash_insert(mp->name, mp, &settings->methods);
@@ -178,6 +180,9 @@ HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
 
         json_object_set_new(account_capabilities,
                 JMAP_DEBUG_EXTENSION, json_object());
+
+        json_object_set_new(account_capabilities,
+                JMAP_BLOB_EXTENSION, json_object());
     }
 }
 

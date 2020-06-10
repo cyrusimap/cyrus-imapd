@@ -169,12 +169,6 @@ static jmap_method_t jmap_mail_methods_standard[] = {
         /*flags*/ 0
     },
     {
-        "Email/matchMime",
-        JMAP_MAIL_EXTENSION,
-        &jmap_email_matchmime_method,
-        JMAP_SHARED_CSTATE
-    },
-    {
         "SearchSnippet/get",
         JMAP_URN_MAIL,
         &jmap_searchsnippet_get,
@@ -196,6 +190,12 @@ static jmap_method_t jmap_mail_methods_standard[] = {
 };
 
 static jmap_method_t jmap_mail_methods_nonstandard[] = {
+    {
+        "Email/matchMime",
+        JMAP_MAIL_EXTENSION,
+        &jmap_email_matchmime_method,
+        JMAP_SHARED_CSTATE
+    },
     { NULL, NULL, NULL, 0}
 };
 
