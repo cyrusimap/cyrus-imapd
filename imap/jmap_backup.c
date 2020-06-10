@@ -353,7 +353,8 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         return r;
     }
 
-    if (rrock->jrestore->cutoff < mailbox->i.changes_epoch) {
+    if ((rrock->jrestore->mode & UNDO_ALL) &&
+        rrock->jrestore->cutoff < mailbox->i.changes_epoch) {
         syslog(LOG_DEBUG,
                "skipping '%s': cutoff (%ld) prior to mailbox history (%ld)",
                mailbox->name, rrock->jrestore->cutoff, mailbox->i.changes_epoch);
