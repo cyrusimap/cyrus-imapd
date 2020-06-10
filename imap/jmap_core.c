@@ -60,11 +60,11 @@
 
 
 /* JMAP Core API Methods */
+static int jmap_blob_get(jmap_req_t *req);
 static int jmap_blob_copy(jmap_req_t *req);
 static int jmap_core_echo(jmap_req_t *req);
 
 /* JMAP extension methods */
-static int jmap_blob_get(jmap_req_t *req);
 static int jmap_blob_set(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
 
@@ -87,7 +87,7 @@ jmap_method_t jmap_core_methods_standard[] = {
 jmap_method_t jmap_core_methods_nonstandard[] = {
     {
         "Blob/get",
-        JMAP_BLOB_EXTENSION,
+        JMAP_URN_CORE,  /* XXX  This should be changed to JMAP_BLOB_EXTENSION */
         &jmap_blob_get,
         JMAP_SHARED_CSTATE
     },
