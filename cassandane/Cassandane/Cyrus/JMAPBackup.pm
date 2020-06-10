@@ -119,6 +119,19 @@ sub test_restore_contacts
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R1.5', $res->[0][2]);
 
+    xlog "dry-run restore contacts prior to most recent changes";
+    $res = $jmap->CallMethods([['Backup/restoreContacts', {
+                    undoPeriod => "P1D",
+                    performDryRun => JSON::true,
+                    undoAll => JSON::false
+                }, "R1.7"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreContacts', $res->[0][0]);
+    $self->assert_str_equals('R1.7', $res->[0][2]);
+    $self->assert_num_equals(0, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
+    $self->assert_num_equals(1, $res->[0][1]{numDestroysUndone});
+
     sleep 2;
     xlog "destroy contact A, update contact B, create contact D";
     $res = $jmap->CallMethods([['Contact/set', {
