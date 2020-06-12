@@ -449,7 +449,7 @@ static int send_rejection(const char *userid,
     smtpclient_t *sm = NULL;
 
     /* Initialize SMTP envelope */
-    smtp_envelope_set_from(&sm_env, "<>");
+    smtp_envelope_set_from(&sm_env, "");
     smtp_envelope_add_rcpt(&sm_env, rejto);
 
     /* Build message */
@@ -772,7 +772,7 @@ static int send_forward(sieve_redirect_context_t *rc,
         smtp_envelope_set_from(&sm_env, return_path);
     }
     else {
-        smtp_envelope_set_from(&sm_env, "<>");
+        smtp_envelope_set_from(&sm_env, "");
     }
 
     if (rc->is_ext_list) {
@@ -1546,7 +1546,7 @@ static int send_response(void *ac, void *ic,
     smtp_envelope_t sm_env = SMTP_ENVELOPE_INITIALIZER;
     smtpclient_t *sm = NULL;
 
-    smtp_envelope_set_from(&sm_env, "<>");
+    smtp_envelope_set_from(&sm_env, "");
     smtp_envelope_add_rcpt(&sm_env, src->addr);
 
     t = time(NULL);

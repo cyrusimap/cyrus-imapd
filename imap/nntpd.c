@@ -3784,7 +3784,7 @@ static void news2mail(message_data_t *msg)
     char buf[4096], to[1024] = "";
 
     smtp_envelope_t sm_env = SMTP_ENVELOPE_INITIALIZER;
-    smtp_envelope_set_from(&sm_env, "<>");
+    smtp_envelope_set_from(&sm_env, "");
 
     for (n = 0; n < msg->rcpt.count ; n++) {
         /* see if we want to send this to a mailing list */
