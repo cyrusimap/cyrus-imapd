@@ -59,6 +59,10 @@ sub mail_from {
     my ($Self, $From, @FromExtra) = @_;
     $Self->mylog("SMTP: MAIL FROM $From @FromExtra");
     return if $Self->override('from');
+    # don't just quietly accept garbage!
+    if ($From =~ m/[<>]/ || grep { m/[<>]/ } @FromExtra) {
+        $Self->send_client_resp(501, "Junk in parameters");
+    }
     $Self->send_client_resp(250, "ok");
 }
 
