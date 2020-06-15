@@ -69,12 +69,14 @@ sub new
                  altnamespace => 'no',
                  anyoneuseracl => 'no',
                  archive_enabled => 'yes',
-                 caldav_allowattach => 'off',
+                 autoexpunge => 'yes',
+                 caldav_allowattach => 'yes',
                  caldav_allowscheduling => 'yes',
-                 caldav_create_attach => 'no',
+                 caldav_create_attach => 'yes',
                  caldav_create_default => 'no',
                  caldav_create_sched => 'yes',
                  caldav_realm => 'FastMail',
+                 calendar_component_set => 'VEVENT',
                  crossdomains => 'yes',
                  crossdomains_onlyother => 'yes',
                  annotation_allow_undefined => 'yes',
@@ -96,8 +98,10 @@ sub new
                  implicit_owner_rights => 'lkn',
                  internaldate_heuristic => 'receivedheader',
                  jmap_preview_annot => '/shared/vendor/messagingengine.com/preview',
+                 jmap_nonstandard_extensions => 'yes',
                  jmapauth_allowsasl => 'yes',
                  lmtp_fuzzy_mailbox_match => 'yes',
+                 lmtp_exclude_specialuse => '\XChats \XTemplates \XNotes \Drafts \Snoozed',
                  lmtp_over_quota_perm_failure => 'yes',
                  maxheaderlines => '4096',
                  maxword => '8388608',
@@ -108,10 +112,12 @@ sub new
                  popuseacl => 'yes',
                  postmaster => 'postmaster@example.com',
                  quota_db => 'quotalegacy',
+                 quota_use_conversations => 'yes',
                  quotawarn => '98',
                  reverseacls => 'yes',
                  rfc3028_strict => 'no',
-                 sieve_extensions => 'fileinto reject vacation imap4flags notify envelope body relational regex subaddress copy mailbox mboxmetadata servermetadata date index variables imap4flags editheader duplicate vacation-seconds',
+                 savedate => 'yes',
+                 sieve_extensions => 'fileinto reject vacation imapflags notify envelope body relational regex subaddress copy mailbox mboxmetadata servermetadata date index variables imap4flags editheader duplicate vacation-seconds fcc x-cyrus-jmapquery x-cyrus-snooze x-cyrus-log mailboxid special-use',
                  sieve_utf8fileinto => 'yes',
                  sieve_use_lmtp_reject => 'no',
                  sievenotifier => 'mailto',
@@ -132,13 +138,15 @@ sub new
                  search_batchsize => '8192',
                  search_maxtime => '30',
                  search_snippet_length => '160',
+                 search_query_language => 'yes',
+                 search_index_language => 'yes',
                  telemetry_bysessionid => 'yes',
                  delete_mode => 'delayed',
                  pop3alt_uidl_format => 'dovecot',
                  event_content_inclusion_mode => 'standard',
                  event_content_size => '1',
                  event_exclude_specialuse => '\\Junk',
-                 event_extra_params => 'modseq vnd.fastmail.clientId service uidnext vnd.fastmail.sessionId vnd.cmu.envelope vnd.fastmail.convUnseen vnd.fastmail.convExists vnd.fastmail.cid vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.cmu.mailboxACL vnd.fastmail.counters messages vnd.cmu.unseenMessages flagNames',
+                 event_extra_params => 'modseq vnd.fastmail.clientId service uidnext vnd.fastmail.sessionId vnd.cmu.envelope vnd.fastmail.convUnseen vnd.fastmail.convExists vnd.fastmail.cid vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.cmu.mailboxACL vnd.fastmail.counters messages vnd.cmu.unseenMessages flagNames vnd.cmu.emailid vnd.cmu.threadid',
                  event_groups => 'mailbox message flags calendar applepushservice',
                  event_notifier => 'pusher',
     );
@@ -165,6 +173,7 @@ my @default_using = qw(
     urn:ietf:params:jmap:mail
     urn:ietf:params:jmap:submission
     urn:ietf:params:jmap:vacationresponse
+    https://cyrusimap.org/ns/jmap/blob
     https://cyrusimap.org/ns/jmap/contacts
     https://cyrusimap.org/ns/jmap/calendars
     https://cyrusimap.org/ns/jmap/mail
