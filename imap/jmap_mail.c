@@ -3397,7 +3397,7 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
                                    json_t **err __attribute__((unused)))
 {
     int exprrank = rank_guidsearch_expr(search->expr);
-    if (exprrank < 2 || !is_guidsearch_sort(search->sort)) {
+    if (exprrank != 2 || !is_guidsearch_sort(search->sort)) {
         return IMAP_SEARCH_NOT_SUPPORTED;
     }
 
