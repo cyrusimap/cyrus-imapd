@@ -149,13 +149,15 @@ sub new
                  event_extra_params => 'modseq vnd.fastmail.clientId service uidnext vnd.fastmail.sessionId vnd.cmu.envelope vnd.fastmail.convUnseen vnd.fastmail.convExists vnd.fastmail.cid vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.cmu.mailboxACL vnd.fastmail.counters messages vnd.cmu.unseenMessages flagNames vnd.cmu.emailid vnd.cmu.threadid',
                  event_groups => 'mailbox message flags calendar applepushservice',
                  event_notifier => 'pusher',
+                 sync_log => 'yes',
     );
 
     return $class->SUPER::new({
         config => $config,
         jmap => 1,
+        deliver => 1,
         adminstore => 1,
-        services => [ 'imap', 'http' ]
+        services => [ 'imap', 'http', 'sieve' ]
     }, @args);
 }
 
@@ -163,6 +165,11 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
+    $self->{jmap}->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+    ]);
 }
 
 # XXX Cheating and just passing in all the using strings that cyrus
@@ -180,7 +187,6 @@ my @default_using = qw(
     https://cyrusimap.org/ns/jmap/performance
     https://cyrusimap.org/ns/jmap/debug
     https://cyrusimap.org/ns/jmap/quota
-    https://cyrusimap.org/ns/jmap/search
 );
 
 # XXX This is here as documentation -- these ones are supported by
@@ -427,6 +433,7 @@ sub test_mailbox_query
 
     my $jmap = $self->{jmap};
 
+
     my $res = $jmap->CallMethods([
         ['Mailbox/set', {
             create => {
@@ -489,6 +496,73 @@ sub test_mailbox_query
         $self->assert_num_equals($expected[$_][1], $mailboxes{$list->[$_]}{sortOrder});
     }
 }
+
+sub test_rename_deepuser_standardfolders
+    :AllowMoves :Replication :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    $self->_fmjmap_ok('Calendar/set',
+        create => {
+            "1" => { name => "A calendar" },
+        },
+    );
+
+    $self->_fmjmap_ok('Contact/set',
+        create => {
+            "1" => {firstName => "first", lastName => "last"},
+            "2" => {firstName => "second", lastName => "last"},
+        },
+    );
+
+    $self->_fmjmap_ok('Mailbox/set',
+        create => {
+            "1" => { name => 'Archive', parentId => undef, role => 'archive' },
+            "2" => { name => 'Drafts', parentId => undef, role => 'drafts' },
+            "3" => { name => 'Junk', parentId => undef, role => 'junk' },
+            "4" => { name => 'Sent', parentId => undef, role => 'sent' },
+            "5" => { name => 'Trash', parentId => undef, role => 'trash' },
+            "6" => { name => 'bar', parentId => undef, role => undef },
+            "7" => { name => 'sub', parentId => "#6", role => undef },
+        },
+    );
+    xlog $self, "Test user rename";
+
+    # replicate and check initial state
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('cassandane');
+    unlink($synclogfname);
+
+    # n.b. run_replication dropped all our store connections...
+    $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->getsyslog();
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert(not $admintalk->get_last_error());
+
+    xlog $self, "Make sure we didn't create intermediates in the process!";
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
+    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+
+    $res = $admintalk->select("user.newuser.bar.sub");
+    $self->assert(not $admintalk->get_last_error());
+
+    # replicate and check the renames
+    $self->{replica}->getsyslog();
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    @syslog = $self->{replica}->getsyslog();
+
+    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
+    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+
+    # check replication is clean
+    $self->check_replication('newuser');
+}
+
 
 
 1;
