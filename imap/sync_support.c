@@ -3095,7 +3095,7 @@ struct mbox_rock {
     struct sync_name_list *qrl;
 };
 
-static int sync_mailbox_byname(const char *name, void *rock)
+static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
 {
     struct mbox_rock *mrock = (struct mbox_rock *) rock;
     struct sync_name_list *qrl = mrock->qrl;
@@ -3104,7 +3104,7 @@ static int sync_mailbox_byname(const char *name, void *rock)
     annotate_state_t *astate = NULL;
     int r;
 
-    r = mailbox_open_irl(name, &mailbox);
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT ||
@@ -3141,14 +3141,12 @@ out:
 static int sync_mailbox_byuniqueid(const char *uniqueid, void *rock)
 {
     char *name = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
-    int r = sync_mailbox_byname(name, rock);
+    mbentry_t *mbentry = NULL;
+    int r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+    if (!r) r = sync_mailbox_byentry(mbentry, rock);
+    mboxlist_entry_free(&mbentry);
     free(name);
     return r;
-}
-
-static int mailbox_cb(const mbentry_t *mbentry, void *rock)
-{
-    return sync_mailbox_byname(mbentry->name, rock);
 }
 
 int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
@@ -3178,8 +3176,12 @@ int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
     struct dlist *ki;
     struct mbox_rock mrock = { sstate->pout, NULL };
 
-    for (ki = kin->head; ki; ki = ki->next)
-        sync_mailbox_byname(ki->sval, &mrock);
+    for (ki = kin->head; ki; ki = ki->next) {
+        mbentry_t *mbentry = NULL;
+        int r = mboxlist_lookup_allow_all(ki->sval, &mbentry, NULL);
+        if (!r) sync_mailbox_byentry(mbentry, &mrock);
+        mboxlist_entry_free(&mbentry);
+    }
 
     return 0;
 }
@@ -3299,7 +3301,7 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     mrock.qrl = quotaroots;
     mrock.pout = sstate->pout;
 
-    r = mboxlist_usermboxtree(userid, NULL, mailbox_cb, &mrock, MBOXTREE_DELETED);
+    r = mboxlist_usermboxtree(userid, NULL, sync_mailbox_byentry, &mrock, MBOXTREE_DELETED);
     if (r) goto bail;
 
     for (qr = quotaroots->head; qr; qr = qr->next) {
