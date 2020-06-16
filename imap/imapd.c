@@ -4175,7 +4175,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
                 r = append_fromstage(&appendstate, &body, curstage->stage,
                                      curstage->internaldate, /*createdmodseq*/0,
                                      &curstage->flags, 0,
-                                     curstage->annotations);
+                                     &curstage->annotations);
             }
             if (body) {
                 /* Note: either the calls to message_parse_binary_file()

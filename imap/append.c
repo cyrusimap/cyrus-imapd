@@ -877,13 +877,14 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
                                    time_t internaldate, time_t savedate,
                                    modseq_t createdmodseq,
                                    const strarray_t *flags, int nolink,
-                                   struct entryattlist *user_annots)
+                                   struct entryattlist **user_annotsp)
 {
     struct mailbox *mailbox = as->mailbox;
     msgrecord_t *msgrec = NULL;
     const char *fname;
     int i, r;
     strarray_t *newflags = NULL;
+    struct entryattlist *user_annots = user_annotsp ? *user_annotsp : NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
 #if defined ENABLE_OBJECTSTORE
@@ -1029,6 +1030,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             r = 0;
         }
         flags = newflags;
+        user_annotsp = &user_annots;
     }
 
     /* straight to archive? */

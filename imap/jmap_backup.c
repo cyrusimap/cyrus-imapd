@@ -519,7 +519,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
         /* append the message to the mailbox. */
         r = append_fromstage(&as, &body, stage, record->internaldate,
                              is_update ? record->createdmodseq : 0,
-                             flags, /*nolink*/0, annots);
+                             flags, /*nolink*/0, &annots);
 
         freeentryatts(annots);
         strarray_free(flags);

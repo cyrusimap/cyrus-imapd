@@ -1074,7 +1074,7 @@ static void process_snoozed(struct mailbox *mailbox,
 
     /* Append the message to the mailbox */
     r = append_fromstage_full(&as, &body, stage, record->internaldate,
-                              savedate, 0, flags, 0, annots);
+                              savedate, 0, flags, 0, &annots);
     if (r) {
         append_abort(&as);
         goto done;

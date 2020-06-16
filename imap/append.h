@@ -123,7 +123,7 @@ extern int append_fromstage_full(struct appendstate *mailbox, struct body **body
                                  time_t internaldate, time_t savedate,
                                  modseq_t createdmodseq,
                                  const strarray_t *flags, int nolink,
-                                 struct entryattlist *annotations);
+                                 struct entryattlist **annotations);
 #define append_fromstage(m, b, s, i, c, f, n, a) \
   append_fromstage_full((m), (b), (s), (i), 0, (c), (f), (n), (a))
 

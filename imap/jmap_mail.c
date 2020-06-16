@@ -7899,7 +7899,7 @@ static void _email_append(jmap_req_t *req,
                           &savedate);
     }
     r = append_fromstage_full(&as, &body, stage, internaldate, savedate, 0,
-                         flags.count ? &flags : NULL, 0, annots);
+                         flags.count ? &flags : NULL, 0, &annots);
     freeentryatts(annots);
     if (r) {
         append_abort(&as);

@@ -614,7 +614,7 @@ int deliver_mailbox(FILE *f,
 
         r = append_fromstage_full(&as, &content->body, stage,
                                   internaldate, savedate, /*createdmodseq*/0,
-                                  flags, !singleinstance, annotations);
+                                  flags, !singleinstance, &annotations);
 
         if (r) {
             append_abort(&as);

@@ -1099,7 +1099,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                    kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                    req->accountid, resource);
             r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource,
-                              record.createdmodseq, flags, annots, req->accountid,
+                              record.createdmodseq, flags, &annots, req->accountid,
                               req->authstate, ignorequota);
             if (!r)
                 r = carddav_remove(mailbox, olduid,
@@ -3999,7 +3999,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     }
 
     syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name);
-    r = carddav_store(*mailbox, card, resourcename, 0, flags, annots,
+    r = carddav_store(*mailbox, card, resourcename, 0, flags, &annots,
                       req->accountid, req->authstate, ignorequota);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "carddav_store failed for user %s: %s",

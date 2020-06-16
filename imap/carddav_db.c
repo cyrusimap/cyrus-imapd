@@ -1094,7 +1094,7 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
 
 EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
                            const char *resource, modseq_t createdmodseq,
-                           strarray_t *flags, struct entryattlist *annots,
+                           strarray_t *flags, struct entryattlist **annots,
                            const char *userid, struct auth_state *authstate,
                            int ignorequota)
 {

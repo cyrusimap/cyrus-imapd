@@ -8512,7 +8512,7 @@ int dav_store_resource(struct transaction_t *txn,
         }
 
         /* Append the message to the mailbox */
-        if ((r = append_fromstage(&as, &body, stage, now, createdmodseq, flaglist, 0, annots))) {
+        if ((r = append_fromstage(&as, &body, stage, now, createdmodseq, flaglist, 0, &annots))) {
             syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
                    mailbox->name, error_message(r));
             ret = HTTP_SERVER_ERROR;
