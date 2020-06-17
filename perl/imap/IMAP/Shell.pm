@@ -57,7 +57,7 @@ use strict;
 
 use IO::File;
 use Cyrus::IMAP::Admin;
-use Getopt::Long;
+use Getopt::Long qw(:config no_ignore_case);
 use Exporter;
 use POSIX ();
 use Carp qw(confess);
@@ -716,23 +716,6 @@ sub _sc_listacl {
   }
   if (!$cyrref || !$$cyrref) {
     die "listaclmailbox: no connection to server\n";
-  }
-
-  sub showacl($@) {
-    my $spaces = shift;
-    my @nargv = shift;
-    my %acl = $$cyrref->listaclmailbox(@nargv);
-    if (defined $$cyrref->error) {
-      $lfh->[2]->print($$cyrref->error, "\n");
-      return 1;
-    }
-    foreach my $acl (keys %acl) {
-      for(my $i = 0; $i < $spaces; $i++) {
-        $lfh->[1]->print(" ");
-      }
-      $lfh->[1]->print($acl, " ", $acl{$acl}, "\n");
-    }
-    return 0;
   }
 
   if($nargv[0] =~ /(\*|%)/) {
