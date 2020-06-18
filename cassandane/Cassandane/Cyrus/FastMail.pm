@@ -198,7 +198,7 @@ my @non_default_using = qw(
 sub _fmjmap_req
 {
     my ($self, $cmd, %args) = @_;
-    my $jmap = $self->{jmap};
+    my $jmap = delete $args{jmap} || $self->{jmap};
 
     my $rnum = "R" . $RNUM++;
     my $res = $jmap->Request({methodCalls => [[$cmd, \%args, $rnum]],
@@ -504,6 +504,16 @@ sub test_rename_deepuser_standardfolders
 
     my $admintalk = $self->{adminstore}->get_client();
 
+    my $rhttp = $self->{replica}->get_service('http');
+    my $rjmap = Mail::JMAPTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $rhttp->host(),
+        port => $rhttp->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
 
     $self->_fmjmap_ok('Calendar/set',
@@ -530,12 +540,23 @@ sub test_rename_deepuser_standardfolders
             "7" => { name => 'sub', parentId => "#6", role => undef },
         },
     );
-    xlog $self, "Test user rename";
 
+    xlog $self, "Create a folder with intermediates";
+    $admintalk->create("user.cassandane.folderA.folderB.folderC");
+
+    my $data = $self->_fmjmap_ok('Mailbox/get', properties => ['name']);
+    my %byname = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    xlog $self, "Test user rename";
     # replicate and check initial state
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
     $self->check_replication('cassandane');
     unlink($synclogfname);
+
+    $data = $self->_fmjmap_ok('Mailbox/get', jmap => $rjmap, properties => ['name']);
+    my %byname_repl = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    $self->assert_deep_equals(\%byname, \%byname_repl);
 
     # n.b. run_replication dropped all our store connections...
     $admintalk = $self->{adminstore}->get_client();
@@ -551,6 +572,12 @@ sub test_rename_deepuser_standardfolders
     $res = $admintalk->select("user.newuser.bar.sub");
     $self->assert(not $admintalk->get_last_error());
 
+    $self->{jmap}->{user} = 'newuser';
+    $data = $self->_fmjmap_ok('Mailbox/get', properties => ['name']);
+    my %byname_new = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    $self->assert_deep_equals(\%byname, \%byname_new);
+
     # replicate and check the renames
     $self->{replica}->getsyslog();
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
@@ -561,8 +588,12 @@ sub test_rename_deepuser_standardfolders
 
     # check replication is clean
     $self->check_replication('newuser');
+
+    $rjmap->{user} = 'newuser';
+    $data = $self->_fmjmap_ok('Mailbox/get', jmap => $rjmap, properties => ['name']);
+    my %byname_newrepl = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    $self->assert_deep_equals(\%byname, \%byname_newrepl);
 }
-
-
 
 1;
