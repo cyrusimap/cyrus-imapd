@@ -3102,7 +3102,35 @@ static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
     annotate_state_t *astate = NULL;
-    int r;
+    int r = 0;
+
+    if (!mbentry) goto out;
+    if (mbentry->mbtype & MBTYPE_DELETED) goto out;
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
+        dlist_setatom(kl, "MBOXNAME", mbentry->name);
+        dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mbentry->mbtype));
+        dlist_setnum32(kl, "SYNC_CRC", 0);
+        // this stuff should be optional, but old sync_client will barf without it
+        dlist_setnum32(kl, "LAST_UID", 0);
+        dlist_setnum64(kl, "HIGHESTMODSEQ", 0);
+        dlist_setnum32(kl, "RECENTUID", 0);
+        dlist_setdate(kl, "RECENTTIME", 0);
+        dlist_setdate(kl, "LAST_APPENDDATE", 0);
+        dlist_setdate(kl, "POP3_LAST_LOGIN", 0);
+        dlist_setdate(kl, "POP3_SHOW_AFTER", 0);
+        // standard fields
+        dlist_setnum32(kl, "UIDVALIDITY", mbentry->uidvalidity);
+        dlist_setatom(kl, "PARTITION", mbentry->partition);
+        dlist_setatom(kl, "ACL", mbentry->acl);
+        dlist_setatom(kl, "OPTIONS", sync_encode_options(0));
+        dlist_setnum64(kl, "CREATEDMODSEQ", mbentry->createdmodseq);
+        dlist_setnum64(kl, "FOLDERMODSEQ", mbentry->foldermodseq);
+
+        // send the intermediate response
+        sync_send_response(kl, mrock->pout);
+        goto out;
+    }
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
