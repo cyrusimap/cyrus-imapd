@@ -1030,7 +1030,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             r = 0;
         }
         flags = newflags;
-        *user_annotsp = user_annots;
+        if (user_annotsp) *user_annotsp = user_annots;
     }
 
     /* straight to archive? */
