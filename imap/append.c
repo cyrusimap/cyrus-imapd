@@ -884,7 +884,6 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     const char *fname;
     int i, r;
     strarray_t *newflags = NULL;
-    struct entryattlist *user_annots = user_annotsp ? *user_annotsp : NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
 #if defined ENABLE_OBJECTSTORE
@@ -1024,13 +1023,12 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             newflags = strarray_dup(flags);
         else
             newflags = strarray_new();
-        r = callout_run(fname, *body, &user_annots, &system_annots, newflags);
+        r = callout_run(fname, *body, user_annotsp, &system_annots, newflags);
         if (r) {
             syslog(LOG_ERR, "Annotation callout failed, ignoring\n");
             r = 0;
         }
         flags = newflags;
-        *user_annotsp = user_annots;
     }
 
     /* straight to archive? */
