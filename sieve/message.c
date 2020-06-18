@@ -147,7 +147,7 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
     a->u.snz.removeflags = removeflags;
     a->u.snz.days = days;
     a->u.snz.times = times;
-    a->u.snz.is_mboxid = is_mboxid;
+    a->u.snz.is_mboxid = !!is_mboxid;
 
     b->next = a;
 
