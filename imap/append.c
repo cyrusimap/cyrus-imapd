@@ -884,7 +884,6 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     const char *fname;
     int i, r;
     strarray_t *newflags = NULL;
-    struct entryattlist *user_annots = NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
 #if defined ENABLE_OBJECTSTORE
@@ -893,8 +892,6 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
-
-    if (!user_annotsp) user_annotsp = &user_annots;
 
     assert(stage != NULL && stage->parts.count);
 
