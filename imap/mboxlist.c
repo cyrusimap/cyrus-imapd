@@ -2437,6 +2437,12 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             mailbox_delete_cleanup(NULL, newpartition, newname, oldmailbox->uniqueid);
         mailbox_close(&oldmailbox);
     } else {
+        /* log the rename before we close either mailbox, so that
+         * we never nuke the mailbox from the replica before realising
+         * that it has been renamed.  This can be moved later again when
+         * we sync mailboxes by uniqueid rather than name... */
+        sync_log_rename(oldname, newname);
+
         if (newmailbox) {
             /* prepare the event notification */
             if (mboxevent) {
@@ -2451,12 +2457,6 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
                 mboxevent_set_access(mboxevent, NULL, NULL, userid, newmailbox->name, 1);
             }
-
-            /* log the rename before we close either mailbox, so that
-             * we never nuke the mailbox from the replica before realising
-             * that it has been renamed.  This can be moved later again when
-             * we sync mailboxes by uniqueid rather than name... */
-            sync_log_rename(oldname, newname);
 
             mailbox_rename_cleanup(&oldmailbox, isusermbox);
 
