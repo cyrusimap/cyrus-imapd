@@ -699,14 +699,17 @@ dnl see if we're compiling with SRS
 dnl
 AC_MSG_CHECKING([whether to use SRS])
 AC_ARG_ENABLE(srs,
-    [AS_HELP_STRING([--enable-srs], [enable SRS support])],,
+    [AS_HELP_STRING([--enable-srs], [enable Sender Rewriting Scheme support])],,
     [enable_srs=no])
+AC_MSG_RESULT($enable_srs)
 if test "x$enable_srs" != xno; then
     AC_CHECK_HEADER([srs2.h],,
         [AC_MSG_ERROR([cannot find SRS headers])])
     AC_CHECK_LIB(srs2, srs_forward,,
         [AC_MSG_ERROR([cannot find SRS lib])])
     LIBS="$LIBS -lsrs2"
+else
+    AC_MSG_NOTICE([Outgoing messages will not support the Sender Rewriting Scheme.  Consider installing libsrs2 and --enable-srs])
 fi
 AM_CONDITIONAL([USE_SRS], [test "${enable_srs}" != "no"])
 
