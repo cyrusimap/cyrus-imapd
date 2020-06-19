@@ -200,7 +200,7 @@ sync\_log\_channels: *channel*
     means livelier backups but more network I/O. Larger value reduces I/O.
 
 Update :cyrusman:`cyrus.conf(5)` to add a :cyrusman:`sync_client(8)` invocation
-to the SERVICES section specifying (at least) the ``-r`` and ``-n channel``
+to the DAEMON section specifying (at least) the ``-r`` and ``-n channel``
 options.
 
 See :cyrusman:`imapd.conf(5)` for additional *sync\_* settings that can
