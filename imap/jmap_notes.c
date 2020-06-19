@@ -1,6 +1,6 @@
 /* jmap_notes.c -- Routines for handling JMAP notes
  *
- * Copyright (c) 1994-2019 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2020 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -90,7 +90,7 @@ static jmap_method_t jmap_notes_methods_nonstandard[] = {
         "Notes/set",
         JMAP_NOTES_EXTENSION,
         &jmap_notes_set,
-       /*flags*/0
+        /*flags*/0
     },
     {
         "Notes/changes",
@@ -305,11 +305,9 @@ static int _note_get(message_t *msg, json_t *note, hash_table *props,
         int encoding = 0;
         const char *charset_id = NULL;
         charset_t charset = CHARSET_UNKNOWN_CHARSET;
-//        const struct body *body = NULL;
 
         buf_reset(buf);
         r = message_get_body(msg, buf);
-//        if (!r) r = message_get_cachebody(msg, &body);
         if (!r) r = message_get_encoding(msg, &encoding);
         if (!r) r = message_get_charset_id(msg, &charset_id);
         if (r) return r;
