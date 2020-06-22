@@ -1487,7 +1487,7 @@ static Xapian::Query *query_new_listid(const xapian_db_t *db,
     return q;
 }
 
-static Xapian::Query *query_new_email(const xapian_db_t *db __attribute__((unused)),
+static Xapian::Query *query_new_email(const xapian_db_t *db,
                                       const char *_prefix,
                                       const char *str)
 {
@@ -1512,19 +1512,15 @@ static Xapian::Query *query_new_email(const xapian_db_t *db __attribute__((unuse
     const char *atsign = strchr(str, '@');
     Xapian::Query q = Xapian::Query::MatchAll;
 
-    // query name and mailbox
+    // query name and mailbox (unless just searching for '@domain')
     if (atsign > str) {
-        std::string name(str, atsign - str);
-        if (name.find('<') != std::string::npos) {
-            // convert 'foo <bar@baz>' to 'foo <bar>'
-            name.append(1, '>');
-        }
         struct address *addr = NULL;
-        parseaddr_list(name.c_str(), &addr);
-        if (addr->name) {
+        parseaddr_list(str, &addr);
+        if (addr && addr->name) {
             q &= db->parser->parse_query(addr->name, qpflags, prefix + 'N');
         }
-        if (addr->mailbox) {
+        if (addr && addr->mailbox) {
+            // strip the domain from the mailbox
             std::string mail(addr->mailbox);
             mail.erase(std::remove_if(mail.begin(), mail.end(), isspace), mail.end());
             int wildcard = mail[mail.size()-1] == '*';
@@ -1536,14 +1532,11 @@ static Xapian::Query *query_new_email(const xapian_db_t *db __attribute__((unuse
                 Xapian::Query qq = wildcard ?
                     Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
                     Xapian::Query(term);
-                if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
-                    // query in legacy format
-                    qq |= db->parser->parse_query(mail, qpflags, prefix);
-                }
                 q &= qq;
             }
         }
-        parseaddr_free(addr);
+        // ignore @domain - it's being handled below
+        if (addr) parseaddr_free(addr);
     }
 
     // query domain
@@ -1583,16 +1576,17 @@ static Xapian::Query *query_new_email(const xapian_db_t *db __attribute__((unuse
             std::string term(prefix + '@' + domain);
             Xapian::Query qq = wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
                                           Xapian::Query(term);
-            if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
-                // query in legacy format
-                qq |= db->parser->parse_query(domain, qpflags, prefix);
-            }
             q &= qq;
         }
     }
 
     if (q.get_type() == q.LEAF_MATCH_ALL) {
         q = Xapian::Query::MatchNothing;
+    }
+
+    // query in legacy format as well!
+    if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
+        q |= db->parser->parse_query(str, qpflags, prefix);
     }
 
     buf_free(&buf);
