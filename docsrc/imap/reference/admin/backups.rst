@@ -142,6 +142,11 @@ Cyrus Backups server
    :cyrusman:`imapd.conf(5)`
 #. Set up a :cyrusman:`cyrus.conf(5)` file for it::
 
+    START {
+        # this is required
+        recover cmd="ctl_cyrusdb -r"
+    }
+
     SERVICES {
         # backupd is probably the only service entry your backup server needs
         backupd cmd="backupd" listen="csync" prefork=0
