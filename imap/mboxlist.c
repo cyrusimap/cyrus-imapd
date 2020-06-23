@@ -5212,8 +5212,7 @@ static int _upgrade_cb(void *rock,
     r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
     if (r) return r;
 
-    buf_setmap(urock->namebuf, key, keylen);
-    mbentry->name = mboxname_to_dbname(buf_cstring(urock->namebuf));
+    mbentry->name = xstrndup(key, keylen);
     mbentry->mbtype |= MBTYPE_LEGACY_DIRS;
     r = mboxlist_update_entry(mbentry->name, mbentry, urock->tid);
 
