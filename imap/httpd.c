@@ -3629,7 +3629,7 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
     }
 
     if (txn->error.desc) {
-        const char **hdr, *host = "";
+        const char **hdr, *host = config_servername;
         char *port = NULL;
         unsigned level = 0;
 
@@ -3639,9 +3639,7 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
             host = (char *) hdr[0];
             if ((port = strchr(host, ':'))) *port++ = '\0';
         }
-        else if (config_serverinfo != IMAP_ENUM_SERVERINFO_OFF) {
-            host = config_servername;
-        }
+
         if (!port) {
             port = (buf_len(&saslprops.iplocalport)) ?
                 strchr(buf_cstring(&saslprops.iplocalport), ';')+1 : "";
@@ -3656,10 +3654,14 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
         buf_printf_markup(html, level++, "<body>");
         buf_printf_markup(html, level, "<h1>%s</h1>", error_message(code)+4);
         buf_printf_markup(html, level, "<p>%s</p>", txn->error.desc);
-        buf_printf_markup(html, level, "<hr>");
-        buf_printf_markup(html, level,
-                          "<address>%s Server at %s Port %s</address>",
-                          buf_cstring(&serverinfo), host, port);
+        if (config_serverinfo) {
+            buf_printf_markup(html, level, "<hr>");
+            buf_printf_markup(html, level,
+                              "<address>%s Server at %s Port %s</address>",
+                              (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) ?
+                              buf_cstring(&serverinfo) : "HTTP",
+                              host, port);
+        }
         buf_printf_markup(html, --level, "</body>");
         buf_printf_markup(html, --level, "</html>");
 
