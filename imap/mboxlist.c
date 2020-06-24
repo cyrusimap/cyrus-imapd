@@ -5198,9 +5198,9 @@ static int _upgrade_cb(void *rock,
     mbentry_t *mbentry = NULL;
     int r;
 
-    /* skip $RACL$ or $RUNQ$ keys */
-    if (keylen >= 6 &&
-        (!strncmp(key, "$RACL$", 6) || !strncmp(key, "$RUNQ$", 6))) {
+    /* skip $RACL and $RUNQ keys */
+    if (keylen >= 5 &&
+        (!strncmp(key, "$RACL", 5) || !strncmp(key, "$RUNQ", 5))) {
         return CYRUSDB_OK;
     }
 
