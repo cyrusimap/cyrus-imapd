@@ -5342,7 +5342,7 @@ static int mboxlist_upgrade_subs(const char *subsfname, struct db **subs)
     /* check if we need to upgrade */
     r = cyrusdb_foreach(*subs, "", 0, NULL, _check_subs_cb, &do_upgrade, NULL);
 
-    if (r != CYRUSDB_DONE) return r;
+    if (r != CYRUSDB_OK && r != CYRUSDB_DONE) return r;
     if (!do_upgrade) return 0;
 
     /* create new db file name */
