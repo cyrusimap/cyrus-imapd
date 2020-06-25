@@ -804,6 +804,14 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
             continue;
         }
 
+        if (config_getswitch(IMAPOPT_READONLY) && (mp->flags & JMAP_SHARED_CSTATE) == 0) {
+            if (!err) err = json_pack("{s:s}", "type", "accountReadOnly");
+
+            json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
+            json_decref(args);
+            continue;
+        }
+
         struct conversations_state *cstate = NULL;
         r = conversations_open_user(accountid, mp->flags & JMAP_SHARED_CSTATE, &cstate);
 
@@ -945,6 +953,8 @@ static void findaccounts_add(struct findaccounts_rock *rock)
     const char *accountid = buf_cstring(&rock->current_accountid);
     int is_rw = rock->current_rights & JACL_WRITE;
     int is_primary = !strcmp(rock->authuserid, accountid);
+
+    if (config_getswitch(IMAPOPT_READONLY)) is_rw = 0;
 
     json_t *account = json_object();
     json_object_set_new(account, "name", json_string(accountid));
