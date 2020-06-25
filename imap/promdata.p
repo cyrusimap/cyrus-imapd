@@ -132,6 +132,8 @@ metric counter cyrus_http_put_total               The total number of HTTP PUTs
     label cyrus_http_put_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive cgi
 metric counter cyrus_http_report_total            The total number of HTTP REPORTs
     label cyrus_http_report_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive cgi
+metric counter cyrus_http_search_total            The total number of HTTP SEARCH
+    label cyrus_http_search_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive cgi
 metric counter cyrus_http_trace_total             The total number of HTTP TRACEs
     label cyrus_http_trace_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive cgi
 metric counter cyrus_http_unbind_total            The total number of HTTP UNBINDs

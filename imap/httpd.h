@@ -113,6 +113,7 @@ extern struct namespace_t *http_namespaces[];
 /* Flags for known methods*/
 enum {
     METH_NOBODY =       (1<<0), /* Method does not expect a body */
+    METH_SAFE =         (1<<1), /* Method is "safe" */
 };
 
 
