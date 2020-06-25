@@ -329,6 +329,9 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
                                                     state->userid);
     }
 
+    if (config_getswitch(IMAPOPT_READONLY))
+        state->examining = 1;
+
     if (state->mailbox->mbtype & MBTYPES_NONIMAP) {
         if (state->want_dav) {
             /* User logged in using imapmagicplus token "dav" */
