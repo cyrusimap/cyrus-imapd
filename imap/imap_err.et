@@ -170,6 +170,9 @@ ec IMAP_ZERO_LENGTH_LITERAL,
 ec IMAP_DISABLED,
    "Command is disabled by configuration"
 
+ec IMAP_CONNECTION_READONLY,
+   "This connection is configured for read-only access"
+
 # following used only proxy/db operations
 ec IMAP_BAD_SERVER,
    "Invalid server requested"

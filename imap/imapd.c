@@ -2598,7 +2598,8 @@ static void cmdloop(void)
         continue;
 
     noreadonly:
-        prot_printf(imapd_out, "%s NO connection is readonly\r\n", tag.s);
+        prot_printf(imapd_out, "%s NO %s\r\n", tag.s,
+                    error_message(IMAP_CONNECTION_READONLY));
         eatline(imapd_in, c);
         continue;
 

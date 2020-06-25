@@ -1067,7 +1067,7 @@ done:
             }
             else if (config_getint(IMAPOPT_READONLY)) {
                 prot_printf(popd_out, "-ERR [SYS/PERM] %s\r\n",
-                            error_message(IMAP_PERMISSION_DENIED));
+                            error_message(IMAP_CONNECTION_READONLY));
             }
             else {
                 msgno = parse_msgno(&arg);
