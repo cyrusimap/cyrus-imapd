@@ -87,7 +87,7 @@ jmap_method_t jmap_sieve_methods_nonstandard[] = {
         "SieveScript/set",
         JMAP_SIEVE_EXTENSION,
         &jmap_sieve_set,
-        JMAP_SHARED_CSTATE
+        /*flags*/0
     },
     {
         "SieveScript/validate",
