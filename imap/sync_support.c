@@ -691,10 +691,10 @@ struct sync_rename *sync_rename_list_add(struct sync_rename_list *l,
     l->count++;
 
     result->next = NULL;
-    result->uniqueid = xstrdup(uniqueid);
-    result->oldname = xstrdup(oldname);
-    result->newname = xstrdup(newname);
-    result->part = xstrdup(partition);
+    result->uniqueid = xstrdupnull(uniqueid);
+    result->oldname = xstrdupnull(oldname);
+    result->newname = xstrdupnull(newname);
+    result->part = xstrdupnull(partition);
     result->uidvalidity = uidvalidity;
     result->done = 0;
 
@@ -3399,7 +3399,7 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
         oldlock = mboxname_usernamespacelock(oldmboxname);
     }
 
-    r = mboxlist_lookup(oldmboxname, &mbentry, 0);
+    r = mboxlist_lookup_allow_all(oldmboxname, &mbentry, 0);
 
     if (!r) r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
                                        uidvalidity, 1, sstate->userid,
@@ -4173,6 +4173,28 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
     /* Find messages we want to upload that are available on server */
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
+        mbentry_t *mbentry = NULL;
+
+        if (mboxlist_lookup_allow_all(mbox->name, &mbentry, NULL))
+            continue;
+
+        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            struct synccrcs synccrcs = {0, 0};
+            sync_folder_list_add(master_folders, mbentry->uniqueid, mbentry->name,
+                                 mbentry->mbtype,
+                                 mbentry->partition, mbentry->acl, 0,
+                                 mbentry->uidvalidity, 0,
+                                 0, synccrcs,
+                                 0, 0,
+                                 0, 0,
+                                 NULL, 0,
+                                 0, mbentry->foldermodseq, 0);
+            mboxlist_entry_free(&mbentry);
+            continue;
+        }
+
+        mboxlist_entry_free(&mbentry);
+
         r = mailbox_open_irl(mbox->name, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
 
@@ -5710,7 +5732,35 @@ int sync_update_mailbox(struct sync_folder *local,
                         struct backend *sync_be,
                         unsigned flags)
 {
-    int r = update_mailbox_once(local, remote, topart,
+    mbentry_t *mbentry = NULL;
+
+    // it should exist!  Guess we lost a race, force it to retry
+    int r = mboxlist_lookup_allow_all(local->name, &mbentry, NULL);
+    if (r) return r;
+
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
+
+        dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
+        dlist_setatom(kl, "MBOXNAME", mbentry->name);
+        dlist_setatom(kl, "MBOXTYPE",
+                      mboxlist_mbtype_to_string(mbentry->mbtype));
+        dlist_setnum64(kl, "HIGHESTMODSEQ", mbentry->foldermodseq);
+        dlist_setnum64(kl, "CREATEDMODSEQ", mbentry->createdmodseq);
+        dlist_setnum64(kl, "FOLDERMODSEQ", mbentry->foldermodseq);
+
+        sync_send_apply(kl, sync_be->out);
+        r = sync_parse_response("MAILBOX", sync_be->in, NULL);
+
+        dlist_free(&kl);
+        mboxlist_entry_free(&mbentry);
+
+        return 0;
+    }
+
+    mboxlist_entry_free(&mbentry);
+
+    r = update_mailbox_once(local, remote, topart,
                                 reserve_list, sync_be, flags);
 
     flags |= SYNC_FLAG_ISREPEAT;
@@ -5983,40 +6033,6 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
     struct sync_folder *mfolder, *rfolder;
     const char *part;
     uint32_t batchsize = 0;
-    struct sync_name *mbox;
-
-    /* Look for intermediate mailboxes */
-    for (mbox = mboxname_list->head; !r && mbox; mbox = mbox->next) {
-        mbentry_t *mbentry = NULL;
-
-        if (mboxlist_lookup_allow_all(mbox->name, &mbentry, NULL))
-            continue;
-
-        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-            struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
-
-            dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
-            dlist_setatom(kl, "MBOXNAME", mbentry->name);
-            dlist_setatom(kl, "MBOXTYPE",
-                          mboxlist_mbtype_to_string(mbentry->mbtype));
-            dlist_setnum64(kl, "HIGHESTMODSEQ", mbentry->foldermodseq);
-            dlist_setnum64(kl, "CREATEDMODSEQ", mbentry->createdmodseq);
-            dlist_setnum64(kl, "FOLDERMODSEQ", mbentry->foldermodseq);
-
-            sync_send_apply(kl, sync_be->out);
-            r = sync_parse_response("MAILBOX", sync_be->in, NULL);
-
-            dlist_free(&kl);
-        }
-
-        mboxlist_entry_free(&mbentry);
-
-        if (r) {
-            syslog(LOG_ERR, "apply intermediates: failed: %s", error_message(r));
-            goto bail;
-        }
-    }
-
 
     if (flags & SYNC_FLAG_BATCH) {
         batchsize = config_getint(IMAPOPT_SYNC_BATCHSIZE);
@@ -6044,7 +6060,7 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
 
         /* does it need a rename? partition change is a rename too */
         part = topart ? topart : mfolder->part;
-        if (strcmp(mfolder->name, rfolder->name) || strcmp(part, rfolder->part)) {
+        if (strcmp(mfolder->name, rfolder->name) || strcmpsafe(part, rfolder->part)) {
             sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
                                  mfolder->name, part, mfolder->uidvalidity);
         }
