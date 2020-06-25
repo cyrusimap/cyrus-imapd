@@ -4593,7 +4593,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     init.userid = imapd_userid;
     init.authstate = imapd_authstate;
     init.out = imapd_out;
-    init.examine_mode = cmd[0] == 'E';
+    init.examine_mode = (cmd[0] == 'E') || config_getswitch(IMAPOPT_READONLY);
     init.select = 1;
     if (!strcasecmpsafe(imapd_magicplus, "+dav")) init.want_dav = 1;
 
