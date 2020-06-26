@@ -13048,13 +13048,6 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
         goto done;
     }
 
-    /* Open mailbox, we need it now */
-    if ((r = jmap_openmbox(req, mboxname, &mailbox, 0))) {
-        req->txn->error.desc = error_message(r);
-        res = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
     /* Make sure client can handle blob type. */
     if (accept_mime) {
         if (strcmp(accept_mime, "application/octet-stream") &&
@@ -13062,6 +13055,17 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
             res = HTTP_NOT_ACCEPTABLE;
             goto done;
         }
+
+        req->txn->resp_body.type = accept_mime;
+    }
+    else if (mimetype) req->txn->resp_body.type = mimetype;
+    else req->txn->resp_body.type = "application/octet-stream";
+
+    /* Open mailbox, we need it now */
+    if ((r = jmap_openmbox(req, mboxname, &mailbox, 0))) {
+        req->txn->error.desc = error_message(r);
+        res = HTTP_SERVER_ERROR;
+        goto done;
     }
 
     /* Load the message */
@@ -13095,16 +13099,6 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
     msgrecord_unref(&mr);
 
     if (res) goto done;
-
-    /* Write blob to socket */
-    const char *content_type = NULL;
-    if (!accept_mime || !strcmp(accept_mime, "application/octet-stream")) {
-        content_type = "application/octet-stream";
-        req->txn->resp_body.type = content_type;
-    }
-    if (!req->txn->resp_body.type) {
-        req->txn->resp_body.type = accept_mime;
-    }
 
     /* Write body */
     req->txn->resp_body.len = buf_len(&buf);
