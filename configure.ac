@@ -1343,6 +1343,9 @@ if test "$with_zlib" != "no"; then
     AC_DEFINE(HAVE_ZLIB,[],[Do we have zlib?])
     ZLIB="-lz"
     HAVE_ZLIB=1
+
+    AC_CHECK_LIB(z, deflatePending,
+            AC_DEFINE(HAVE_DEFLATE_PENDING,[], [Do we have deflatePending()?]))
 else
     CPPFLAGS=$save_CPPFLAGS
     LDFLAGS=$save_LDFLAGS
