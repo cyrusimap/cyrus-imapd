@@ -1252,6 +1252,7 @@ static void cmdloop(void)
     struct sync_reserve_list *reserve_list =
         sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
     struct applepushserviceargs applepushserviceargs;
+    int readonly = config_getswitch(IMAPOPT_READONLY);
 
     prot_printf(imapd_out, "* OK [CAPABILITY ");
     capa_response(CAPA_PREAUTH);
@@ -1394,6 +1395,7 @@ static void cmdloop(void)
             }
             else if (!imapd_userid) goto nologin;
             else if (!strcmp(cmd.s, "Append")) {
+                if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
@@ -1441,6 +1443,7 @@ static void cmdloop(void)
                 snmp_increment(CHECK_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Copy")) {
+                if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
@@ -1459,6 +1462,7 @@ static void cmdloop(void)
                 snmp_increment(COPY_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Create")) {
+                if (readonly) goto noreadonly;
                 struct dlist *extargs = NULL;
 
                 if (c != ' ') goto missingargs;
@@ -1491,6 +1495,7 @@ static void cmdloop(void)
 
         case 'D':
             if (!strcmp(cmd.s, "Delete")) {
+                if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c == EOF) goto missingargs;
@@ -1502,6 +1507,7 @@ static void cmdloop(void)
                 snmp_increment(DELETE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Deleteacl")) {
+                if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
@@ -1515,6 +1521,7 @@ static void cmdloop(void)
                 snmp_increment(DELETEACL_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Dump")) {
+                if (readonly) goto noreadonly;
                 int uid_start = 0;
 
                 if(c != ' ') goto missingargs;
@@ -1543,6 +1550,7 @@ static void cmdloop(void)
                 cmd_enable(tag.s);
             }
             else if (!strcmp(cmd.s, "Expunge")) {
+                if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
                 if (c == '\r') c = prot_getc(imapd_in);
                 if (c != '\n') goto extraargs;
@@ -1748,6 +1756,7 @@ static void cmdloop(void)
                 snmp_increment(LISTRIGHTS_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Localappend")) {
+                if (readonly) goto noreadonly;
                 /* create a local-only mailbox */
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
@@ -1761,6 +1770,7 @@ static void cmdloop(void)
                 snmp_increment(APPEND_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Localcreate")) {
+                if (readonly) goto noreadonly;
                 /* create a local-only mailbox */
                 struct dlist *extargs = NULL;
 
@@ -1780,6 +1790,7 @@ static void cmdloop(void)
                 /* xxxx snmp_increment(CREATE_COUNT, 1); */
             }
             else if (!strcmp(cmd.s, "Localdelete")) {
+                if (readonly) goto noreadonly;
                 /* delete a mailbox locally only */
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
@@ -1807,6 +1818,7 @@ static void cmdloop(void)
                 /* xxxx snmp_increment(MYRIGHTS_COUNT, 1); */
             }
             else if (!strcmp(cmd.s, "Mupdatepush")) {
+                if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if(c == EOF) goto missingargs;
@@ -1818,6 +1830,7 @@ static void cmdloop(void)
                 /* xxxx snmp_increment(MUPDATEPUSH_COUNT, 1); */
             }
             else if (!strcmp(cmd.s, "Move")) {
+                if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
@@ -1861,6 +1874,7 @@ static void cmdloop(void)
 
         case 'R':
             if (!strcmp(cmd.s, "Rename")) {
+                if (readonly) goto noreadonly;
                 havepartition = 0;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
@@ -1879,6 +1893,7 @@ static void cmdloop(void)
                 /* XXX prometheus_increment(CYRUS_IMAP_RENAME_TOTAL); */
                 /* xxxx snmp_increment(RENAME_COUNT, 1); */
             } else if(!strcmp(cmd.s, "Reconstruct")) {
+                if (readonly) goto noreadonly;
                 recursive = 0;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
@@ -2007,6 +2022,7 @@ static void cmdloop(void)
             if (!imapd_userid) {
                 goto nologin;
             } else if (!strcmp(cmd.s, "Store")) {
+                if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
@@ -2042,6 +2058,7 @@ static void cmdloop(void)
                 snmp_increment(SEARCH_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Subscribe")) {
+                if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 havenamespace = 0;
                 c = getastring(imapd_in, imapd_out, &arg1);
@@ -2062,6 +2079,7 @@ static void cmdloop(void)
                 snmp_increment(SUBSCRIBE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Setacl")) {
+                if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
@@ -2077,6 +2095,7 @@ static void cmdloop(void)
                 snmp_increment(SETACL_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Setannotation")) {
+                if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
@@ -2087,6 +2106,7 @@ static void cmdloop(void)
                 snmp_increment(SETANNOTATION_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Setmetadata")) {
+                if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
@@ -2097,6 +2117,7 @@ static void cmdloop(void)
                 snmp_increment(SETMETADATA_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Setquota")) {
+                if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
@@ -2217,6 +2238,7 @@ static void cmdloop(void)
                     goto fetch;
                 }
                 else if (!strcmp(arg1.s, "store")) {
+                    if (readonly) goto noreadonly;
                     goto store;
                 }
                 else if (!strcmp(arg1.s, "search")) {
@@ -2229,15 +2251,19 @@ static void cmdloop(void)
                     goto thread;
                 }
                 else if (!strcmp(arg1.s, "copy")) {
+                    if (readonly) goto noreadonly;
                     goto copy;
                 }
                 else if (!strcmp(arg1.s, "move")) {
+                    if (readonly) goto noreadonly;
                     goto move;
                 }
                 else if (!strcmp(arg1.s, "xmove")) {
+                    if (readonly) goto noreadonly;
                     goto move;
                 }
                 else if (!strcmp(arg1.s, "expunge")) {
+                    if (readonly) goto noreadonly;
                     c = getword(imapd_in, &arg1);
                     if (!imparse_issequence(arg1.s)) goto badsequence;
                     if (c == '\r') c = prot_getc(imapd_in);
@@ -2248,6 +2274,7 @@ static void cmdloop(void)
                     snmp_increment(EXPUNGE_COUNT, 1);
                 }
                 else if (!strcmp(arg1.s, "xrunannotator")) {
+                    if (readonly) goto noreadonly;
                     goto xrunannotator;
                 }
                 else {
@@ -2267,6 +2294,7 @@ static void cmdloop(void)
                 snmp_increment(UNAUTHENTICATE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Unsubscribe")) {
+                if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 havenamespace = 0;
                 c = getastring(imapd_in, imapd_out, &arg1);
@@ -2298,6 +2326,7 @@ static void cmdloop(void)
                 snmp_increment(UNSELECT_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Undump")) {
+                if (readonly) goto noreadonly;
                 if(c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
 
@@ -2322,6 +2351,7 @@ static void cmdloop(void)
 
         case 'X':
             if (!strcmp(cmd.s, "Xbackup")) {
+                if (readonly) goto noreadonly;
                 int havechannel = 0;
 
                 if (!config_getswitch(IMAPOPT_XBACKUP_ENABLED))
@@ -2377,6 +2407,7 @@ static void cmdloop(void)
 //              snmp_increment(XCONVUPDATES_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xfer")) {
+                if (readonly) goto noreadonly;
                 int havepartition = 0;
 
                 /* Mailbox */
@@ -2420,12 +2451,14 @@ static void cmdloop(void)
                 snmp_increment(LIST_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xmove")) {
+                if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
                 goto move;
             }
             else if (!strcmp(cmd.s, "Xrunannotator")) {
+                if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
@@ -2561,6 +2594,12 @@ static void cmdloop(void)
     nomailbox:
         prot_printf(imapd_out,
                     "%s BAD Please select a mailbox first\r\n", tag.s);
+        eatline(imapd_in, c);
+        continue;
+
+    noreadonly:
+        prot_printf(imapd_out, "%s NO %s\r\n", tag.s,
+                    error_message(IMAP_CONNECTION_READONLY));
         eatline(imapd_in, c);
         continue;
 
@@ -4554,7 +4593,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     init.userid = imapd_userid;
     init.authstate = imapd_authstate;
     init.out = imapd_out;
-    init.examine_mode = cmd[0] == 'E';
+    init.examine_mode = (cmd[0] == 'E') || config_getswitch(IMAPOPT_READONLY);
     init.select = 1;
     if (!strcasecmpsafe(imapd_magicplus, "+dav")) init.want_dav = 1;
 
