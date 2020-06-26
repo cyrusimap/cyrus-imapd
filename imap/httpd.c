@@ -1496,6 +1496,12 @@ static int check_namespace(struct transaction_t *txn)
         meth_t = &namespace->methods[txn->meth];
         if (!meth_t->proc) return HTTP_NOT_ALLOWED;
 
+        if (config_getswitch(IMAPOPT_READONLY) &&
+              !(http_methods[txn->meth].flags & METH_SAFE) &&
+              !(namespace->allow & ALLOW_READONLY)) {
+            return HTTP_NOT_ALLOWED;
+        }
+
         /* Check if method expects a body */
         else if ((http_methods[txn->meth].flags & METH_NOBODY) &&
                  (txn->req_body.framing != FRAMING_LENGTH ||

@@ -109,7 +109,7 @@ struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "jmap", JMAP_ROOT, "/.well-known/jmap",
     jmap_need_auth, /*authschemes*/0,
     /*mbtype*/0, 
-    (ALLOW_READ | ALLOW_POST),
+    (ALLOW_READ | ALLOW_POST | ALLOW_READONLY),
     &jmap_init, &jmap_auth, NULL, &jmap_shutdown, NULL, /*bearer*/NULL,
     {
         { NULL,                 NULL },                 /* ACL          */

@@ -164,6 +164,8 @@ enum {
 
     ALLOW_CARD =        (1<<24),/* CardDAV specific methods/features */
 
+    ALLOW_READONLY =    (1<<30),/* Allow "unsafe" methods when readonly */
+
     ALLOW_ISCHEDULE =   (1<<31) /* iSchedule specific methods/features */
 };
 
