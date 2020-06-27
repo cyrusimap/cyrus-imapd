@@ -5457,7 +5457,8 @@ static int extract_attachment(const char *type, const char *subtype,
                               const struct message_guid *content_guid,
                               struct getsearchtext_rock *str)
 {
-    struct extractor_ctx *ext = str->ext;
+    const char *exturl =
+         config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
     struct backend *be;
     struct backend_ctx *ctx;
     struct buf buf = BUF_INITIALIZER;
@@ -5467,7 +5468,24 @@ static int extract_attachment(const char *type, const char *subtype,
     size_t hostlen;
     int r = 0;
 
-    if (!ext) return 0;
+    if (!str->ext) {
+        if (!exturl) return 0;
+        if (!index_text_extractor) {
+            /* This is a legitimate case for sieve and lmtpd (so we don't need
+             * to spam the logs! */
+            syslog(LOG_DEBUG, "%s: ignoring uninitialized extractor for url %s",
+                    __func__, exturl);
+            return 0;
+        }
+
+        /* cache the connection for all the attachments in this message, but only
+         * if the connection succeeds */
+        r = extractor_connect(exturl, index_text_extractor);
+        if (r) return r;
+        str->ext = index_text_extractor;
+    }
+
+    struct extractor_ctx *ext = str->ext;
 
     be = ext->be;
     ctx = (struct backend_ctx *) be->context;
@@ -5877,8 +5895,6 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
                                  search_text_receiver_t *receiver,
                                  int flags)
 {
-    const char *exturl =
-        config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
     struct getsearchtext_rock str;
     struct buf buf = BUF_INITIALIZER;
     int format = MESSAGE_SEARCH;
@@ -5905,17 +5921,6 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     str.snippet_iteration = 0;
     str.flags = flags;
     str.indexlevel = SEARCH_INDEXLEVEL_ATTACH; // may get downgraded in callback
-    if (exturl) {
-        if (index_text_extractor) {
-            str.ext = index_text_extractor;
-            r = extractor_connect(exturl, str.ext);
-            if (r) return r;
-        } else {
-            /* This is a legitimate case for sieve and lmtpd */
-            syslog(LOG_INFO, "%s: ignoring uninitialized extractor for url %s",
-                    __func__, exturl);
-        }
-    }
 
     /* Search receiver can override text conversion */
     if (receiver->index_charset_flags) {
