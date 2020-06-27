@@ -101,6 +101,8 @@
 
 EXPORTED unsigned client_capa;
 
+static struct extractor_ctx *index_text_extractor = NULL;
+
 /* Forward declarations */
 static void index_refresh_locked(struct index_state *state);
 static void index_tellexists(struct index_state *state);
@@ -5625,8 +5627,6 @@ done:
     buf_free(&buf);
     return r;
 }
-
-static struct extractor_ctx *index_text_extractor = NULL;
 
 EXPORTED void index_text_extractor_init(struct protstream *clientin)
 {
