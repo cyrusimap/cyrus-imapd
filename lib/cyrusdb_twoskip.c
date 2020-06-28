@@ -528,7 +528,6 @@ static int read_header(struct dbengine *db)
 static int write_header(struct dbengine *db)
 {
     char *buf = scratchspace.s;
-    int n;
 
     /* format one buffer */
     memcpy(buf, HEADER_MAGIC, HEADER_MAGIC_SIZE);
@@ -541,8 +540,8 @@ static int write_header(struct dbengine *db)
     *((uint32_t *)(buf + OFFSET_CRC32)) = htonl(crc32_map(buf, OFFSET_CRC32));
 
     /* write it out */
-    n = mappedfile_pwrite(db->mf, buf, HEADER_SIZE, 0);
-    if (n < 0) return CYRUSDB_IOERROR;
+    if (mappedfile_pwrite(db->mf, buf, HEADER_SIZE, 0) < 0)
+        return CYRUSDB_IOERROR;
 
     return 0;
 }
@@ -724,7 +723,6 @@ static int rewrite_record(struct dbengine *db, struct skiprecord *record)
 {
     char *buf = scratchspace.s;
     size_t len;
-    int n;
 
     /* we must already be in a transaction before updating records */
     assert(db->header.flags & DIRTY);
@@ -732,8 +730,8 @@ static int rewrite_record(struct dbengine *db, struct skiprecord *record)
 
     prepare_record(record, buf, &len);
 
-    n = mappedfile_pwrite(db->mf, buf, len, record->offset);
-    if (n < 0) return CYRUSDB_IOERROR;
+    if (mappedfile_pwrite(db->mf, buf, len, record->offset) < 0)
+        return CYRUSDB_IOERROR;
 
     return 0;
 }
@@ -861,14 +859,13 @@ static size_t _getloc(struct dbengine *db, struct skiprecord *record,
     /* if one is past, must be the other */
     if (record->nextloc[0] >= db->end)
         return record->nextloc[1];
-    else if (record->nextloc[1] >= db->end)
+    if (record->nextloc[1] >= db->end)
         return record->nextloc[0];
 
     /* highest remaining */
-    else if (record->nextloc[0] > record->nextloc[1])
+    if (record->nextloc[0] > record->nextloc[1])
         return record->nextloc[0];
-    else
-        return record->nextloc[1];
+    return record->nextloc[1];
 }
 
 /* set the next record at a given level, encapsulating the
@@ -1036,10 +1033,7 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
                     loc->forwardloc[i] = _getloc(db, &newrecord, i);
 
                 /* make sure this record is complete */
-                r = check_tailcrc(db, &loc->record);
-                if (r) return r;
-
-                return 0;
+                return check_tailcrc(db, &loc->record);
             }
 
             /* or in the gap */
@@ -1548,7 +1542,7 @@ static int myfetch(struct dbengine *db,
     if (foundkey) *foundkey = db->loc.keybuf.s;
     if (foundkeylen) *foundkeylen = db->loc.keybuf.len;
 
-    if (!r && db->loc.is_exactmatch) {
+    if (db->loc.is_exactmatch) {
         if (data) *data = VAL(db, &db->loc.record);
         if (datalen) *datalen = db->loc.record.vallen;
     }
@@ -1830,7 +1824,6 @@ static int mystore(struct dbengine *db,
 {
     struct txn *localtid = NULL;
     int r = 0;
-    int r2 = 0;
 
     assert(db);
     assert(key && keylen);
@@ -1852,15 +1845,16 @@ static int mystore(struct dbengine *db,
     r = skipwrite(db, key, keylen, data, datalen, force);
 
     if (r) {
-        r2 = myabort(db, *tidptr);
+        int r2 = myabort(db, *tidptr);
         *tidptr = NULL;
+        return r2 ? r2 : r;
     }
-    else if (localtid) {
+    if (localtid) {
         /* commit the store, which releases the write lock */
         r = mycommit(db, localtid);
     }
 
-    return r2 ? r2 : r;
+    return r;
 }
 
 /* compress 'db', closing at the end.  Uses foreach to copy into a new
@@ -2178,10 +2172,7 @@ static int _copy_commit(struct dbengine *db, struct dbengine *newdb,
         }
     }
 
-    if (tid) r = mycommit(newdb, tid);
-    if (r) return r;
-
-    return 0;
+    return tid ? mycommit(newdb, tid) : 0;
 
 err:
     if (tid) myabort(newdb, tid);
