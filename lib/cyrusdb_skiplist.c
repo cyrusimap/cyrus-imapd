@@ -386,7 +386,7 @@ static unsigned LEVEL_safe(struct dbengine *db, const char *ptr)
         if (!is_safe(db, (const char *)p))
             return 0;
     }
-    return (p - q);
+    return p - q;
 }
 
 /* how big is this record? */
@@ -506,7 +506,6 @@ static unsigned PADDING_safe(struct dbengine *db, const char *ptr)
 static int read_header(struct dbengine *db)
 {
     const char *dptr;
-    int r;
 
     assert(db && db->map_len && db->fname && db->map_base
               && db->is_open && db->lock_status);
@@ -554,30 +553,29 @@ static int read_header(struct dbengine *db)
 
     /* verify dummy node */
     dptr = DUMMY_PTR(db);
-    r = 0;
 
-    if (!r && TYPE(dptr) != DUMMY) {
+    if (TYPE(dptr) != DUMMY) {
         syslog(LOG_ERR, "DBERROR: %s: first node not type DUMMY",
                db->fname);
-        r = CYRUSDB_IOERROR;
+        return CYRUSDB_IOERROR;
     }
-    if (!r && KEYLEN(dptr) != 0) {
+    if (KEYLEN(dptr) != 0) {
         syslog(LOG_ERR, "DBERROR: %s: DUMMY has non-zero KEYLEN",
                db->fname);
-        r = CYRUSDB_IOERROR;
+        return CYRUSDB_IOERROR;
     }
-    if (!r && DATALEN(dptr) != 0) {
+    if (DATALEN(dptr) != 0) {
         syslog(LOG_ERR, "DBERROR: %s: DUMMY has non-zero DATALEN",
                db->fname);
-        r = CYRUSDB_IOERROR;
+        return CYRUSDB_IOERROR;
     }
-    if (!r && LEVEL_safe(db, dptr) != db->maxlevel) {
+    if (LEVEL_safe(db, dptr) != db->maxlevel) {
         syslog(LOG_ERR, "DBERROR: %s: DUMMY level(%d) != db->maxlevel(%d)",
                db->fname, LEVEL_safe(db, dptr), db->maxlevel);
-        r = CYRUSDB_IOERROR;
+        return CYRUSDB_IOERROR;
     }
 
-    return r;
+    return 0;
 }
 
 /* given an open, mapped db, locked db,
@@ -585,7 +583,6 @@ static int read_header(struct dbengine *db)
 static int write_header(struct dbengine *db)
 {
     char buf[HEADER_SIZE];
-    int n;
 
     assert (db->lock_status == WRITELOCKED);
     memcpy(buf + 0, HEADER_MAGIC, HEADER_MAGIC_SIZE);
@@ -599,8 +596,7 @@ static int write_header(struct dbengine *db)
 
     /* write it out */
     lseek(db->fd, 0, SEEK_SET);
-    n = retry_write(db->fd, buf, HEADER_SIZE);
-    if (n != HEADER_SIZE) {
+    if (retry_write(db->fd, buf, HEADER_SIZE) != HEADER_SIZE) {
         syslog(LOG_ERR, "DBERROR: writing skiplist header for %s: %m",
                db->fname);
         return CYRUSDB_IOERROR;
@@ -753,7 +749,7 @@ static int lock_or_refresh(struct dbengine *db, struct txn **tidptr)
         return 0;
     }
 
-    else if (*tidptr) {
+    if (*tidptr) {
         /* check that the DB agrees that we're in this transaction */
         assert(db->current_txn == *tidptr);
 
@@ -814,13 +810,10 @@ static int compare_signed(const char *s1, int l1, const char *s2, int l2)
         s1++;
         s2++;
     }
-    if (min >= 0) {
-        return cmp;
-    } else {
-        if (l1 > l2) return 1;
-        else if (l2 > l1) return -1;
-        else return 0;
-    }
+    if (min >= 0) return cmp;
+    if (l1 > l2) return 1;
+    if (l2 > l1) return -1;
+    return 0;
 }
 
 static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
@@ -974,12 +967,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     list_ent->refcount = 1;
     open_db = list_ent;
 
-    if (mytid) {
-        r = lock_or_refresh(db, mytid);
-        if (r) return r;
-    }
-
-    return 0;
+    return mytid ? lock_or_refresh(db, mytid) : 0;
 }
 
 static int myclose(struct dbengine *db)
@@ -1088,21 +1076,6 @@ static int myfetch(struct dbengine *db,
     }
 
     return r;
-}
-
-static int fetch(struct dbengine *mydb,
-                 const char *key, size_t keylen,
-                 const char **data, size_t *datalen,
-                 struct txn **tidptr)
-{
-    return myfetch(mydb, key, keylen, data, datalen, tidptr);
-}
-static int fetchlock(struct dbengine *db,
-                     const char *key, size_t keylen,
-                     const char **data, size_t *datalen,
-                     struct txn **tidptr)
-{
-    return myfetch(db, key, keylen, data, datalen, tidptr);
 }
 
 /* foreach allows for subsidiary mailbox operations in 'cb'.
@@ -1296,22 +1269,21 @@ static int mystore(struct dbengine *db,
         if (!overwrite) {
             myabort(db, tid);   /* releases lock */
             return CYRUSDB_EXISTS;
-        } else {
-            /* replace with an equal height node */
-            lvl = LEVEL_safe(db, ptr);
+        }
+        /* replace with an equal height node */
+        lvl = LEVEL_safe(db, ptr);
 
-            /* log a removal */
-            WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &delrectype, 4);
-            todelete = htonl(ptr - db->map_base);
-            WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &todelete, 4);
+        /* log a removal */
+        WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &delrectype, 4);
+        todelete = htonl(ptr - db->map_base);
+        WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &todelete, 4);
 
-            /* now we write at newoffset */
-            newoffset += 8;
+        /* now we write at newoffset */
+        newoffset += 8;
 
-            /* our pointers are whatever the old node pointed to */
-            for (i = 0; i < lvl; i++) {
-                newoffsets[i] = htonl(FORWARD(ptr, i));
-            }
+        /* our pointers are whatever the old node pointed to */
+        for (i = 0; i < lvl; i++) {
+            newoffsets[i] = htonl(FORWARD(ptr, i));
         }
     } else {
         /* pick a size for the new node */
@@ -2459,8 +2431,8 @@ EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
     &myopen,
     &myclose,
 
-    &fetch,
-    &fetchlock,
+    &myfetch,
+    &myfetch,
     NULL,
 
     &myforeach,
