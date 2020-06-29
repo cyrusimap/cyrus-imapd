@@ -42,12 +42,23 @@ use strict;
 use warnings;
 use base qw(Test::Unit::TestRunner);
 use Test::Unit::Result;
+use IO::File;
+
+use lib '.';
+use Cassandane::Cassini;
 
 sub new
 {
     my $class = shift;
     my $self = $class->SUPER::new(@_);
     $self->{remove_me_in_cassandane_child} = 1;
+
+    my $cassini = Cassandane::Cassini::instance();
+    my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+    my $failed_file = "$rootdir/failed";
+    $self->{failed_fh} = IO::File->new($failed_file, 'w');
+    # if we can't write there, we just won't record failed tests!
+
     return $self;
 }
 
@@ -58,5 +69,32 @@ sub create_test_result
     return $self->{_result};
 }
 
+sub record_failed
+{
+    my ($self, $test) = @_;
+    return if not $self->{failed_fh};
+
+    my $suite = ref($test);
+    $suite =~ s/^Cassandane:://;
+
+    my $testname = $test->{"Test::Unit::TestCase_name"};
+    $testname =~ s/^test_//;
+
+    $self->{failed_fh}->print("$suite.$testname\n");
+}
+
+sub add_error
+{
+    my ($self, $test) = @_;
+    $self->record_failed($test);
+    $self->SUPER::add_error($test);
+}
+
+sub add_failure
+{
+    my ($self, $test) = @_;
+    $self->record_failed($test);
+    $self->SUPER::add_failure($test);
+}
 
 1;

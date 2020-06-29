@@ -47,6 +47,7 @@ use POSIX qw(strftime);
 use strict;
 use warnings;
 use vars qw($VERSION);
+# XXX should this inherit from our own Cassandane::Unit::Runner?
 use base qw(Test::Unit::Runner);
 
 # $Id: XML.pm 27 2004-08-24 11:22:24Z andrew $

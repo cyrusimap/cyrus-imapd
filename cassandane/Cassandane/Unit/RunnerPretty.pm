@@ -84,6 +84,7 @@ sub add_error
 {
     my $self = shift;
     my $test = shift;
+    $self->record_failed($test);
     $self->_print(_getpaddedname($test) . "[" . $self->ansi([31], 'ERROR') . " ]\n");
 }
 
@@ -91,6 +92,7 @@ sub add_failure
 {
     my $self = shift;
     my $test = shift;
+    $self->record_failed($test);
     $self->_print(_getpaddedname($test) . "[" . $self->ansi([33], 'FAILED') . "]\n");
 }
 
