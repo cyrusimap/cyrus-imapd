@@ -41,6 +41,8 @@
 
 use strict;
 use warnings;
+use File::Slurp;
+
 use lib '.';
 use Cassandane::Util::Setup;
 use Cassandane::Unit::Runner;
@@ -269,6 +271,28 @@ while (my $a = shift)
     elsif ($a eq '--slow')
     {
         $skip_slow = 0;
+    }
+    elsif ($a eq '--rerun')
+    {
+        my $cassini = Cassandane::Cassini::instance();
+        my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+        my $failed_file = "$rootdir/failed";
+
+        my @failed = eval { read_file($failed_file, { chomp => 1 }) };
+        if ($@) {
+            print STDERR "Cannot --rerun without an existing failed file.\n";
+            exit 1;
+        }
+
+        if (scalar @failed) {
+            push @names, @failed;
+        }
+        else {
+            # prevent accidentally running everything by default!
+            print STDERR "The failed file is empty; there is nothing to ",
+                         "re-run.\n";
+            exit 0;
+        }
     }
     elsif ($a =~ m/^-/)
     {
