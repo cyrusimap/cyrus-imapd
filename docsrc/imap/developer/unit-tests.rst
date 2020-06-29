@@ -425,7 +425,7 @@ You need to add the filename of your new test to the definition of the
         cunit/binhex.testc \
         cunit/bitvector.testc \
         cunit/buf.testc \
-        cunit/byteorder64.testc \
+        cunit/byteorder.testc \
         cunit/charset.testc \
         cunit/crc32.testc \
         cunit/dlist.testc \
