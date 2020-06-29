@@ -1,4 +1,4 @@
-/* byteorder64.h -- convert 64-bit values between host and network byte order
+/* byteorder.c -- convert 32 and 64-bit values between host and network byte order
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -40,47 +40,72 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef _BYTEORDER64_H
-#define _BYTEORDER64_H
-
 #include <config.h>
+#include "byteorder.h"
 
-/* http://stackoverflow.com/a/4410728/94253 */
+#ifdef CYRUS_BYTESWAP
 
-#if defined(__linux__)
-#  include <endian.h>
-#elif defined(__FreeBSD__) || defined(__NetBSD__)
-#  include <sys/endian.h>
-#elif defined(__OpenBSD__)
-#  include <sys/types.h>
-#  define be16toh(x) betoh16(x)
-#  define be32toh(x) betoh32(x)
-#  define be64toh(x) betoh64(x)
-#endif
+#include <netinet/in.h>
 
-/* 64-bit host/network byte-order swap macros */
+/* Structure used to swap the bytes in a 64-bit uint64_t. */
+union byteswap_64_u {
+    uint64_t a;
+    uint32_t b[2];
+};
 
-#if defined (WORDS_BIGENDIAN)
-#  define htonll(x) (x)
-#  define ntohll(x) (x)
-#else
-#  if defined (be64toh) && defined(htobe64)
-#    define htonll(x) htobe64(x)
-#    define ntohll(x) be64toh(x)
-#  else
-/* little-endian 64-bit host/network byte-order swap functions */
-#    define CYRUS_BYTESWAP
-extern unsigned long long _htonll(unsigned long long);
-extern unsigned long long _ntohll(unsigned long long);
-#    define htonll(x) _htonll(x)
-#    define ntohll(x) _ntohll(x)
-#  endif
-#endif
+/* Function to byteswap 64bit unsigned integers on
+ * little endian machines to big endian network order.
+ * On big endian machines this will be a null macro.
+ * The macro htonll() is defined in byteorder.h,
+ * and if needed refers to _htonll() here.
+ */
+EXPORTED uint64_t _htonll(uint64_t x)
+{
+    union byteswap_64_u u1;
+    union byteswap_64_u u2;
+
+    u1.a = x;
+
+    u2.b[0] = htonl(u1.b[1]);
+    u2.b[1] = htonl(u1.b[0]);
+
+    return u2.a;
+}
 
 
+/* Function to byteswap big endian 64bit unsigned integers
+ * back to little endian host order on little endian machines.
+ * As above, on big endian machines this will be a null macro.
+ * The macro ntohll() is defined in byteorder.h, and if needed,
+ * refers to _ntohll() here.
+ */
+EXPORTED uint64_t _ntohll(uint64_t x)
+{
+    union byteswap_64_u u1;
+    union byteswap_64_u u2;
 
-/* 64-bit host/network byte-order swap functions to/from non-aligned buffers */
-extern void *align_htonll(void *dst, unsigned long long src);
-extern unsigned long long align_ntohll(const void *src);
+    u1.a = x;
 
-#endif /* _BYTEORDER64_H */
+    u2.b[1] = ntohl(u1.b[0]);
+    u2.b[0] = ntohl(u1.b[1]);
+
+    return u2.a;
+}
+
+#endif /* CYRUS_BYTESWAP */
+
+#include <string.h>
+
+EXPORTED void *align_htonll(void *dst, uint64_t src)
+{
+    uint64_t tmp = htonll(src);
+    return memcpy(dst, (void *) &tmp, sizeof(uint64_t));
+}
+
+EXPORTED uint64_t align_ntohll(const void *src)
+{
+    uint64_t dst;
+
+    memcpy((void *) &dst, src, sizeof(uint64_t));
+    return ntohll(dst);
+}

@@ -1,5 +1,5 @@
 #include "cunit/cyrunit.h"
-#include "byteorder64.h"
+#include "byteorder.h"
 
 static void test_byteorder(void)
 {

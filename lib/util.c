@@ -71,7 +71,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-#include "byteorder64.h"
+#include "byteorder.h"
 #include "libconfig.h"
 #include "map.h"
 #include "retry.h"

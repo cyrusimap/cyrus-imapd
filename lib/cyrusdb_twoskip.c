@@ -54,7 +54,7 @@
 
 #include "assert.h"
 #include "bsearch.h"
-#include "byteorder64.h"
+#include "byteorder.h"
 #include "cyrusdb.h"
 #include "crc32.h"
 #include "libcyr_cfg.h"

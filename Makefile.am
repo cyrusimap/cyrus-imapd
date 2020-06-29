@@ -639,7 +639,7 @@ cunit_TESTS = \
 	cunit/binhex.testc \
 	cunit/bitvector.testc \
 	cunit/buf.testc \
-	cunit/byteorder64.testc \
+	cunit/byteorder.testc \
 	cunit/charset.testc \
 	cunit/command.testc \
 	cunit/conversations.testc \
@@ -795,7 +795,7 @@ nobase_include_HEADERS = sieve/sieve_interface.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
 noinst_HEADERS += \
-	lib/byteorder64.h \
+	lib/byteorder.h \
 	lib/gai.h \
 	lib/libconfig.h \
 	lib/md5.h \
@@ -1507,7 +1507,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/arrayu64.c \
 	lib/assert.c \
 	lib/bufarray.c \
-	lib/byteorder64.c \
+	lib/byteorder.c \
 	lib/hash.c \
 	lib/hashset.c \
 	lib/hashu64.c \
