@@ -624,7 +624,7 @@ if test "x$enable_xapian" != xno ; then
             AC_DEFINE([USE_XAPIAN_CJK_WORDS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
             xapian_cjk_tokens=words
         else
-            AC_MSG_NOTICE([Your Xapian does not support CJK word tokenization. Consider installing a recent Xapian >= 1.4.11])
+            AC_MSG_NOTICE([Your Xapian does not support CJK word tokenization. CJK ngram tokenization will be used instead.])
             xapian_cjk_tokens=ngrams
         fi
         LDFLAGS=$ORIG_LDFLAGS
