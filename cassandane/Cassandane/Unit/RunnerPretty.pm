@@ -48,7 +48,18 @@ sub new
 {
     my ($class, $params, @args) = @_;
     my $self = $class->SUPER::new(@args);
-    $self->{_quiet} = 1 if $params->{quiet};
+    if ($params->{quiet}) {
+        # if we're in quiet ("prettier") mode, write detailed error/failure
+        # reports to $rootdir/reports (if we can) rather than terminal
+        $self->{_quiet} = 1;
+
+        my $cassini = Cassandane::Cassini::instance();
+        my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+        my $quiet_report_file = "$rootdir/reports";
+
+        $self->{_quiet_report_fh} = IO::File->new($quiet_report_file, 'w');
+        # if we can't write there, just don't do it
+    }
     return $self;
 }
 
@@ -129,7 +140,17 @@ sub _prettytest
 sub print_errors
 {
     my $self = shift;
-    return if $self->{_quiet};
+
+    my $saved_output_stream;
+    if ($self->{_quiet}) {
+        if ($self->{_quiet_report_fh}) {
+            $saved_output_stream = $self->{_Print_stream};
+            $self->{_Print_stream} = $self->{_quiet_report_fh};
+        }
+        else {
+            return;
+        }
+    }
 
     my ($result) = @_;
     return unless my $error_count = $result->error_count();
@@ -150,12 +171,26 @@ sub print_errors
         $self->_print("\nAnnotations:\n", $e->object->annotations())
           if $e->object->annotations();
     }
+
+    if ($saved_output_stream) {
+        $self->{_Print_stream} = $saved_output_stream;
+    }
 }
 
 sub print_failures
 {
     my $self = shift;
-    return if $self->{_quiet};
+
+    my $saved_output_stream;
+    if ($self->{_quiet}) {
+        if ($self->{_quiet_report_fh}) {
+            $saved_output_stream = $self->{_Print_stream};
+            $self->{_Print_stream} = $self->{_quiet_report_fh};
+        }
+        else {
+            return;
+        }
+    }
 
     my ($result) = @_;
     return unless my $failure_count = $result->failure_count;
@@ -175,6 +210,10 @@ sub print_failures
         $self->_print($self->ansi([33], "$i) $prettytest") . "\n$failures\n");
         $self->_print("\nAnnotations:\n", $f->object->annotations())
           if $f->object->annotations();
+    }
+
+    if ($saved_output_stream) {
+        $self->{_Print_stream} = $saved_output_stream;
     }
 }
 
