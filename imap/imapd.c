@@ -358,8 +358,11 @@ static struct capa_struct base_capabilities[] = {
     { "UIDPLUS",               2 }, /* RFC 4315 */
     /* UNAUTHENTICATE   RFC 8437 is implemented */
     { "UNSELECT",              2 }, /* RFC 3691 */
-    /* URLFETCH=BINARY  RFC 5524 . This RFC talks interchangably about URLFETCH=BINARY and URLAUTH=BINARY capabilities, Cyrus IMAP announces the latter */
     /* URL-PARTIAL      RFC 5550 is not implemented */
+#ifdef HAVE_SSL
+    { "URLAUTH",               2 }, /* RFC 4467 */
+    { "URLAUTH=BINARY",        2 }, /* RFC 5524 */
+#endif
     /* UTF8=ACCEPT      RFC 6855 is not implemented */
     /* UTF8=ONLY        RFC 6855 is not implemented */
     { "WITHIN",                2 }, /* RFC 5032 */
@@ -377,11 +380,6 @@ static struct capa_struct base_capabilities[] = {
     { "X-REPLICATION",         2 }, /* Cyrus custom */
     { "XLIST",                 2 }, /* not standard */
     { "XMOVE",                 2 }, /* not standard */
-
-#ifdef HAVE_SSL
-    { "URLAUTH",               2 }, /* RFC 4467 */
-    { "URLAUTH=BINARY",        2 }, /* RFC 5524 */
-#endif
 
 /* keep this to mark the end of the list */
     { 0,                       0 }

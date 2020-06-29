@@ -523,10 +523,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Extended URLFETCH for Binary and Converted Parts
 
-    .. NOTE::
-
-       The RFC defines two capabilities URLFETCH=BINARY and URLAUTH=BINARY that mean the same.  Cyrus IMAP announces only URLAUTH=BINARY.
-
 :rfc:`5536`
 
     Netnews Article Format
