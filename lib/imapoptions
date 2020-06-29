@@ -1307,6 +1307,9 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    If no unit is specified, seconds is assumed. */
 
+{ "jmap_relaxedids", 0, SWITCH, "3.6.0" }
+/* If enabled, allow invalid characters in JMAP ids */
+
 { "jmap_set_has_attachment", 1, SWITCH, "3.1.5" }
 /* If enabled, the $hasAttachment flag is determined and set for new messages
    created with the JMAP Email/set or Email/import methods. This option should
