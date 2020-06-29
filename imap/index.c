@@ -5773,7 +5773,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         /* Only generate snippets from named attachmend parts */
         if (str->snippet_iteration >= 2 && !str->partids) goto done;
 
-        if (!str->ext) {
+        if (!config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL)) {
             /* Message has attachment, but no extractor is configured */
             str->indexlevel = 1;
             goto done;
