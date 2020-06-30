@@ -3200,6 +3200,7 @@ static int rank_guidsearch_clause(const search_expr_t *e)
             // TODO support receivedAt?
             return -1;
         case SEOP_MATCH:
+            // check for supported MATCH expressions
             if (e->attr == search_attr_find("folder") ||
                 e->attr == &_emailsearch_folders_attr ||
                 e->attr == &_emailsearch_folders_otherthan_attr) {
@@ -3211,7 +3212,8 @@ static int rank_guidsearch_clause(const search_expr_t *e)
                 // hasKeyword or notKeyword
                 return 1;
             }
-            else return 0;
+            // any other MATCH is unsupported
+            else return -1;
         case SEOP_TRUE:
         case SEOP_FALSE:
             return 0;
