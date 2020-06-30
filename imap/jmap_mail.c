@@ -2148,9 +2148,6 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         }
 
         if (JNOTNULL((val = json_object_get(filter, "allInThreadHaveKeyword")))) {
-            /* This shouldn't happen, validate_sort should have reported
-             * allInThreadHaveKeyword as unsupported. Let's ignore this
-             * filter and return false positives. */
             _email_search_threadkeyword(this, json_string_value(val), 1, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "someInThreadHaveKeyword")))) {
