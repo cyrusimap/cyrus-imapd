@@ -781,7 +781,6 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
                                             Xapian::TermGenerator::stem_strategy tg_stem_strategy)
 {
     unsigned flags = Xapian::QueryParser::FLAG_PHRASE |
-                     Xapian::QueryParser::FLAG_LOVEHATE |
                      Xapian::QueryParser::FLAG_WILDCARD;
 
     if (tg_stem_strategy != Xapian::TermGenerator::STEM_NONE) {
@@ -852,7 +851,13 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
         // Regular codepage.
         Xapian::TermGenerator::stem_strategy stem_strategy =
             get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
-        return (xapian_query_t *) make_stem_match_query(db, str, prefix, stem_strategy);
+
+        Xapian::Query *qq = make_stem_match_query(db, str, prefix, stem_strategy);
+        if (qq->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
+            delete qq;
+            qq = NULL;
+        }
+        return (xapian_query_t*) qq;
 
     } catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception match_internal: %s: %s",

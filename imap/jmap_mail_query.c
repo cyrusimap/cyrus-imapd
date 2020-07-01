@@ -637,6 +637,9 @@ static int _email_matchmime_evaluate(json_t *filter,
     int need_matches = json_object_size(filter);
     int have_matches = 0;
 
+#define MATCHMIME_XQ_OR_MATCHALL(_xq) \
+    ((_xq) ? _xq : xapian_query_new_matchall(db))
+
     /* Xapian-backed criteria */
     ptrarray_t xqs = PTRARRAY_INITIALIZER;
     const char *match;
@@ -652,77 +655,79 @@ static int _email_matchmime_evaluate(json_t *filter,
         xapian_query_t *xq = xapian_query_new_compound(db, /*is_or*/1,
                                        (xapian_query_t **)childqueries.data,
                                        childqueries.count);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
         ptrarray_fini(&childqueries);
     }
     if ((match = json_string_value(json_object_get(filter, "from")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_FROM, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "to")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_TO, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "cc")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_CC, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "bcc")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_BCC, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "deliveredTo")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_DELIVEREDTO, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "subject")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_SUBJECT, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "body")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_BODY, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "fromContactGroupId")))) {
         xapian_query_t *xq = _email_matchmime_contactgroup(match, SEARCH_PART_FROM, db, cfilter);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "toContactGroupId")))) {
         xapian_query_t *xq = _email_matchmime_contactgroup(match, SEARCH_PART_TO, db, cfilter);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "ccContactGroupId")))) {
         xapian_query_t *xq = _email_matchmime_contactgroup(match, SEARCH_PART_CC, db, cfilter);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "bccContactGroupId")))) {
         xapian_query_t *xq = _email_matchmime_contactgroup(match, SEARCH_PART_BCC, db, cfilter);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((json_is_true(json_object_get(filter, "fromAnyContact")))) {
         xapian_query_t *xq = _email_matchmime_contactgroup("", SEARCH_PART_FROM, db, cfilter);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((json_is_true(json_object_get(filter, "toAnyContact")))) {
         xapian_query_t *xq = _email_matchmime_contactgroup("", SEARCH_PART_TO, db, cfilter);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((json_is_true(json_object_get(filter, "ccAnyContact")))) {
         xapian_query_t *xq = _email_matchmime_contactgroup("", SEARCH_PART_CC, db, cfilter);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((json_is_true(json_object_get(filter, "bccAnyContact")))) {
         xapian_query_t *xq = _email_matchmime_contactgroup("", SEARCH_PART_BCC, db, cfilter);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "attachmentName")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_ATTACHMENTNAME, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "attachmentType")))) {
         xapian_query_t *xq = build_type_query(db, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
+
+#undef MATCHMIME_XQ_OR_MATCHALL
 
     if (xqs.count) {
         int matches = 0;
