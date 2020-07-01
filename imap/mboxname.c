@@ -398,16 +398,17 @@ EXPORTED mbname_t *mbname_from_recipient(const char *recipient, const struct nam
         char sep[2];
         sep[0] = ns->hier_sep;
         sep[1] = '\0';
-        *plus++ = '\0';
+        *plus = '\0';
 
         /* Encode mailbox name in IMAP UTF-7 */
         charset_t cs = charset_lookupname("utf-8");
-        plus = charset_to_imaputf7(plus, strlen(plus), cs, ENCODING_NONE);
+        char *detail =
+            charset_to_imaputf7(plus+1, strlen(plus+1), cs, ENCODING_NONE);
 
-        mbname->boxes = strarray_split(plus, sep, /*flags*/0);
+        mbname->boxes = strarray_split(detail, sep, /*flags*/0);
 
         charset_free(&cs);
-        free(plus);
+        free(detail);
     }
     else
         mbname->boxes = strarray_new();
