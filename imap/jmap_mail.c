@@ -2809,7 +2809,9 @@ enum guidsearch_op {
     GSEOP_FALSE,
     GSEOP_INMAILBOX,
     GSEOP_INMAILBOX_OTHERTHAN,
-    GSEOP_KEYWORD,
+    GSEOP_FLAGS,
+    GSEOP_CONVFLAGS,
+    GSEOP_ALLCONVFLAGS,
     GSEOP_AND,
     GSEOP_OR,
     GSEOP_NOT
@@ -2897,8 +2899,14 @@ static void guidsearch_expr_serialise(struct buf *buf, struct guidsearch_expr *e
         case GSEOP_INMAILBOX_OTHERTHAN:
             buf_appendcstr(buf, "INMAILBOX_OTHERTHAN");
             break;
-        case GSEOP_KEYWORD:
-            buf_appendcstr(buf, "KEYWORD");
+        case GSEOP_FLAGS:
+            buf_appendcstr(buf, "FLAGS");
+            break;
+        case GSEOP_CONVFLAGS:
+            buf_appendcstr(buf, "CONVFLAGS");
+            break;
+        case GSEOP_ALLCONVFLAGS:
+            buf_appendcstr(buf, "ALLCONVFLAGS");
             break;
         case GSEOP_AND:
             buf_appendcstr(buf, "AND");
@@ -2928,7 +2936,8 @@ static void guidsearch_expr_serialise(struct buf *buf, struct guidsearch_expr *e
     }
 }
 
-static int guidsearch_expr_eval(struct guidsearch_expr *e,
+static int guidsearch_expr_eval(struct conversations_state *cstate,
+                                struct guidsearch_expr *e,
                                 struct guidsearch_msg *msg)
 {
     if (!e) return 1;
@@ -2938,7 +2947,7 @@ static int guidsearch_expr_eval(struct guidsearch_expr *e,
             {
                 int i;
                 for (i = 0; i < ptrarray_size(&e->children); i++) {
-                    if (!guidsearch_expr_eval(ptrarray_nth(&e->children, i), msg)) {
+                    if (!guidsearch_expr_eval(cstate, ptrarray_nth(&e->children, i), msg)) {
                         return 0;
                     }
                 }
@@ -2948,7 +2957,7 @@ static int guidsearch_expr_eval(struct guidsearch_expr *e,
             {
                 int i;
                 for (i = 0; i < ptrarray_size(&e->children); i++) {
-                    if (guidsearch_expr_eval(ptrarray_nth(&e->children, i), msg)) {
+                    if (guidsearch_expr_eval(cstate, ptrarray_nth(&e->children, i), msg)) {
                         return 1;
                     }
                 }
@@ -2958,7 +2967,7 @@ static int guidsearch_expr_eval(struct guidsearch_expr *e,
             {
                 int i;
                 for (i = 0; i < ptrarray_size(&e->children); i++) {
-                    if (guidsearch_expr_eval(ptrarray_nth(&e->children, i), msg)) {
+                    if (guidsearch_expr_eval(cstate, ptrarray_nth(&e->children, i), msg)) {
                         return 0;
                     }
                 }
@@ -2979,14 +2988,41 @@ static int guidsearch_expr_eval(struct guidsearch_expr *e,
                 }
                 return 0;
             }
-        case GSEOP_KEYWORD:
+        case GSEOP_FLAGS:
             return (msg->system_flags & e->v.num) != 0;
+        case GSEOP_CONVFLAGS:
+        case GSEOP_ALLCONVFLAGS:
+            {
+                conversation_t conv = CONVERSATION_INIT;
+                if (conversation_load_advanced(cstate, msg->cid, &conv, 0)) {
+                    syslog(LOG_ERR, "%s: can't load cid %llx",
+                            __func__, msg->cid);
+                    return 1;
+                }
+
+                int ret = 0;
+                if (conv.exists) {
+                    if (e->v.num == 0) {
+                        // check \Seen
+                        ret = e->op == GSEOP_ALLCONVFLAGS ?
+                            !conv.unseen : conv.unseen != conv.exists;
+                    }
+                    else {
+                        ret = e->op == GSEOP_ALLCONVFLAGS ?
+                            conv.counts[e->v.num-1] == conv.exists :
+                            conv.counts[e->v.num-1] > 0;
+                    }
+                }
+                conversation_fini(&conv);
+                return ret;
+            }
         default:
             return 1;
     }
 }
 
-static struct guidsearch_expr *guidsearch_expr_build(search_expr_t *parent,
+static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state *cstate,
+                                                     search_expr_t *parent,
                                                      search_expr_t *e,
                                                      hash_table *foldernum_by_mboxname)
 {
@@ -3002,7 +3038,7 @@ static struct guidsearch_expr *guidsearch_expr_build(search_expr_t *parent,
                 search_expr_t *c;
                 for (c = e->children ; c; c = c->next) {
                     struct guidsearch_expr *gc =
-                        guidsearch_expr_build(e, c, foldernum_by_mboxname);
+                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname);
                     if (!gc || gc->op == GSEOP_TRUE) {
                         guidsearch_expr_free(gc);
                         continue;
@@ -3033,7 +3069,7 @@ static struct guidsearch_expr *guidsearch_expr_build(search_expr_t *parent,
                 search_expr_t *c;
                 for (c = e->children ; c; c = c->next) {
                     struct guidsearch_expr *gc =
-                        guidsearch_expr_build(e, c, foldernum_by_mboxname);
+                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname);
                     if (!gc || gc->op == GSEOP_FALSE) {
                         guidsearch_expr_free(gc);
                         continue;
@@ -3064,7 +3100,7 @@ static struct guidsearch_expr *guidsearch_expr_build(search_expr_t *parent,
                 search_expr_t *c;
                 for (c = e->children ; c; c = c->next) {
                     struct guidsearch_expr *gc =
-                        guidsearch_expr_build(e, c, foldernum_by_mboxname);
+                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname);
                     if (!gc || gc->op == GSEOP_FALSE) {
                         guidsearch_expr_free(gc);
                         continue;
@@ -3153,12 +3189,50 @@ static struct guidsearch_expr *guidsearch_expr_build(search_expr_t *parent,
                         }
                     }
                 }
-                else if (e->attr == search_attr_find("systemflags") &&
-                        (e->value.u & (FLAG_DRAFT|FLAG_FLAGGED|FLAG_ANSWERED))) {
-                    // hasKeyword or notKeyword
+                else if (e->attr == search_attr_find("systemflags")) {
+                    if (e->value.u & (FLAG_DRAFT|FLAG_FLAGGED|FLAG_ANSWERED)) {
+                        // hasKeyword or notKeyword
+                        ge = xzmalloc(sizeof(struct guidsearch_expr));
+                        ge->op = GSEOP_FLAGS;
+                        ge->v.num = e->value.u;
+                    }
+                    else {
+                        // most likely rank_guidsearch_clause must be
+                        // updated to reject this unsupported flag
+                        syslog(LOG_ERR, "%s: ignoring unsupported flag: %0lx",
+                                __func__, e->value.u);
+                    }
+                }
+                else if (e->attr == search_attr_find("allconvflags") ||
+                         e->attr == search_attr_find("convflags")) {
                     ge = xzmalloc(sizeof(struct guidsearch_expr));
-                    ge->op = GSEOP_KEYWORD;
-                    ge->v.num = e->value.u;
+                    ge->op = e->attr == search_attr_find("allconvflags") ?
+                        GSEOP_ALLCONVFLAGS : GSEOP_CONVFLAGS;
+                    // set num: 0 for \Seen or index in counted_flags + 1
+                    if (!strcasecmp(e->value.s, "\\Seen")) {
+                        ge->v.num = 0;
+                    }
+                    else {
+                        // Determine maximum number of counted flags
+                        conversation_t conv = CONVERSATION_INIT;
+                        size_t ncounts = sizeof(conv.counts) / sizeof(conv.counts[0]);
+                        assert(ncounts < UINT32_MAX-1); // must fit ge->v.num
+
+                        int idx = 0;
+                        if (cstate->counted_flags) {
+                            idx = strarray_find_case(cstate->counted_flags, e->value.s, 0);
+
+                        }
+                        if (idx >= 0 && idx + 1 <= (int) ncounts) {
+                            ge->v.num = (uint32_t) idx + 1;
+                        }
+                        else {
+                            syslog(LOG_ERR, "%s: ignoring unsupported convflag: %s",
+                                    __func__, e->value.s);
+                            free(ge);
+                            ge = NULL;
+                        }
+                    }
                 }
             }
             break;
@@ -3169,7 +3243,8 @@ static struct guidsearch_expr *guidsearch_expr_build(search_expr_t *parent,
     return ge;
 }
 
-static int rank_guidsearch_clause(const search_expr_t *e)
+static int rank_guidsearch_clause(struct conversations_state *cstate,
+                                  const search_expr_t *e)
 {
     assert(e->op != SEOP_OR);
 
@@ -3180,7 +3255,7 @@ static int rank_guidsearch_clause(const search_expr_t *e)
                 int rank = 0;
                 search_expr_t *child;
                 for (child = e->children ; child ; child = child->next) {
-                    int childrank = rank_guidsearch_clause(child);
+                    int childrank = rank_guidsearch_clause(cstate, child);
                     if (childrank == -1) {
                         return -1;
                     }
@@ -3201,13 +3276,35 @@ static int rank_guidsearch_clause(const search_expr_t *e)
             if (e->attr == search_attr_find("folder") ||
                 e->attr == &_emailsearch_folders_attr ||
                 e->attr == &_emailsearch_folders_otherthan_attr) {
-                // inMailbox or inMailboxOtherThan
+                /* inMailbox
+                 * inMailboxOtherThan */
                 return 1;
             }
             else if (e->attr == search_attr_find("systemflags") &&
                     (e->value.u & (FLAG_DRAFT|FLAG_FLAGGED|FLAG_ANSWERED))) {
-                // hasKeyword or notKeyword
+                /* hasKeyword
+                 * notKeyword */
                 return 1;
+            }
+            else if (e->attr == search_attr_find("convflags") ||
+                     e->attr == search_attr_find("allconvflags")) {
+                /* allInThreadHaveKeyword
+                 * someInThreadHaveKeyword
+                 * noneInThreadHaveKeyword */
+                if (!strcasecmp(e->value.s, "\\Seen")) {
+                    // always supported
+                    return 1;
+                }
+                else  {
+                    // check if conversation flag is counted
+                    if (cstate->counted_flags &&
+                        strarray_find_case(cstate->counted_flags, e->value.s, 0) >= 0) {
+                        return 1;
+                    }
+                    else {
+                        return -1;
+                    }
+                }
             }
             // any other MATCH is unsupported
             else return -1;
@@ -3224,7 +3321,8 @@ static int rank_guidsearch_clause(const search_expr_t *e)
 }
 
 
-static int rank_guidsearch_expr(const search_expr_t *_e)
+static int rank_guidsearch_expr(struct conversations_state *cstate,
+                                const search_expr_t *_e)
 {
     if (!_e) return 0;
 
@@ -3243,7 +3341,7 @@ static int rank_guidsearch_expr(const search_expr_t *_e)
     if (e->op == SEOP_OR) {
         search_expr_t *child;
         for (child = e->children ; child ; child = child->next) {
-            int childrank = rank_guidsearch_clause(child);
+            int childrank = rank_guidsearch_clause(cstate, child);
             if (childrank == 1 || childrank == -1) {
                 rank = -1;
                 goto done;
@@ -3251,7 +3349,7 @@ static int rank_guidsearch_expr(const search_expr_t *_e)
             rank |= childrank;
         }
     }
-    else rank = rank_guidsearch_clause(e);
+    else rank = rank_guidsearch_clause(cstate, e);
 
 done:
     search_expr_free(e);
@@ -3290,7 +3388,7 @@ static void _query_guidsearch_postprocess_match(struct guidsearch_rock *rock)
 {
     if (rock->msgexpr) {
         /* Evaluate non-Xapian filter conditions */
-        if (!guidsearch_expr_eval(rock->msgexpr, &rock->msg)) {
+        if (!guidsearch_expr_eval(rock->req->cstate, rock->msgexpr, &rock->msg)) {
             return;
         }
     }
@@ -3395,7 +3493,7 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
                                    struct emailsearch *search,
                                    json_t **err __attribute__((unused)))
 {
-    int exprrank = rank_guidsearch_expr(search->expr);
+    int exprrank = rank_guidsearch_expr(req->cstate, search->expr);
     if (exprrank < 2 || !is_guidsearch_sort(search->sort)) {
         return IMAP_SEARCH_NOT_SUPPORTED;
     }
@@ -3484,7 +3582,7 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
             hash_insert(inboxname, (void*)((uintptr_t)num+1), &foldernum_by_mboxname);
         }
         free(inboxname);
-        rock.msgexpr = guidsearch_expr_build(NULL, search->expr,
+        rock.msgexpr = guidsearch_expr_build(cstate, NULL, search->expr,
                                             &foldernum_by_mboxname);
 
         free_hash_table(&foldernum_by_mboxname, NULL);
