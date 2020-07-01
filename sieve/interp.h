@@ -165,11 +165,11 @@ enum sieve_capa_flag {
     SIEVE_CAPA_SERVERMETA   = 1LL<<28,
 
     /* MIME Part Handling - RFC 5703 */
-    SIEVE_CAPA_ENCLOSE      = 0LL<<29, /* currently unsupported */
-    SIEVE_CAPA_EXTRACT      = 0LL<<30, /* currently unsupported */
-    SIEVE_CAPA_FOREVERYPART = 0LL<<31, /* currently unsupported */
-    SIEVE_CAPA_MIME         = 0LL<<32, /* currently unsupported */
-    SIEVE_CAPA_REPLACE      = 0LL<<33, /* currently unsupported */
+    SIEVE_CAPA_FOREVERYPART = 1LL<<29,
+    SIEVE_CAPA_MIME         = 0LL<<30, /* currently unsupported */
+    SIEVE_CAPA_REPLACE      = 0LL<<31, /* currently unsupported */
+    SIEVE_CAPA_ENCLOSE      = 0LL<<32, /* currently unsupported */
+    SIEVE_CAPA_EXTRACT      = 0LL<<33, /* currently unsupported */
 
     /* DSN & Deliver-By - RFC 6009 */
     SIEVE_CAPA_ENV_DELBY    = 0LL<<34, /* currently unsupported */
@@ -247,11 +247,11 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_MAILBOX      \
                         | SIEVE_CAPA_MBOXMETA     \
                         | SIEVE_CAPA_SERVERMETA   \
-                        | SIEVE_CAPA_ENCLOSE      \
-                        | SIEVE_CAPA_EXTRACT      \
                         | SIEVE_CAPA_FOREVERYPART \
                         | SIEVE_CAPA_MIME         \
                         | SIEVE_CAPA_REPLACE      \
+                        | SIEVE_CAPA_ENCLOSE      \
+                        | SIEVE_CAPA_EXTRACT      \
                         | SIEVE_CAPA_ENV_DELBY    \
                         | SIEVE_CAPA_ENV_DSN      \
                         | SIEVE_CAPA_REDIR_DELBY  \

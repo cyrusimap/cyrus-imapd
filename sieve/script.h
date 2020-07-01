@@ -58,6 +58,7 @@ struct sieve_script {
 
     void *script_context;
     commandlist_t *cmds;
+    const commandlist_t *loop_list; /* list of nested loops (youngest first) */
 
     int err;
     int ignore_err;

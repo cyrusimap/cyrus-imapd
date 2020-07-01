@@ -172,13 +172,19 @@ struct Commandlist {
     unsigned type;
     union {
         int jump; /* bytecode parsing/eval only */
-        char *str; /* its a reject or error action */
+        char *str; /* its a reject, error, or break action */
         struct { /* it's an if statement */
             test_t *t;
             int testend; /* offset to end of test (bytecode parsing/eval only) */
             commandlist_t *do_then;
             commandlist_t *do_else;
         } i;
+        struct { /* it's a foreverypart loop */
+            char *name;
+            commandlist_t *cmds;
+            int end; /* offset to end of cmds (bytecode parsing/eval only) */
+            const struct Commandlist *parent; /* for tracking nested loops */
+        } loop;
         struct { /* it's an include action */
             int location;
             int once;

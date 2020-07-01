@@ -142,8 +142,9 @@ typedef union
  * version 0x1C scripts added :tzid argument to vnd.cyrus.snooze
  * version 0x1D scripts re-implemented Snooze per draft-ietf-extra-sieve-snooze-00
  *                      and Fcc per draft-ietf-extra-sieve-mailboxid-01
+ * version 0x1E scripts implemented Iteration (RFC 5703)
  */
-#define BYTECODE_VERSION 0x1D
+#define BYTECODE_VERSION 0x1E
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -396,7 +397,6 @@ enum bytecode {
                                    <weekdays/is_id-bitmask: int>
                                    <times: value-list>                         */
 
-
     B_SNOOZE,                   /* require ["vnd.cyrus.snooze", "imap4flags"
                                             "mailbox", "specialuse", "mailboxid"]
 
@@ -421,6 +421,16 @@ enum bytecode {
                                    IF (fcc-mailbox != NIL):
                                      <create: int> <flag-list: string-list>
                                      <special-use: string> <mailboxid: string> */
+
+    B_FOREVERYPART,             /* require "foreverypart"
+
+                                   <name: string>
+                                   <jump-end-block: int>
+                                   <block: command-list>                       */
+
+    B_BREAK,                    /* require "foreverypart"
+
+                                   <name: string>                              */
 
     /*****  insert new actions above this line  *****/
     B_ILLEGAL_VALUE             /* any value >= this code is illegal */

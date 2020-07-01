@@ -287,6 +287,12 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         supported = parse_script->support & SIEVE_CAPA_IHAVE;
         break;
 
+    case B_FOREVERYPART:
+    case B_BREAK:
+        capability = "foreverypart";
+        supported = parse_script->support & SIEVE_CAPA_FOREVERYPART;
+        break;
+
     case B_INCLUDE:
         p->u.inc.once = p->u.inc.location = p->u.inc.optional = -1;
         GCC_FALLTHROUGH
@@ -451,6 +457,11 @@ void free_tree(commandlist_t *cl)
             free_tree(cl->u.i.do_else);
             break;
 
+        case B_FOREVERYPART:
+            free(cl->u.loop.name);
+            free_tree(cl->u.loop.cmds);
+            break;
+
         case B_INCLUDE:
             free(cl->u.inc.script);
             break;
@@ -477,6 +488,7 @@ void free_tree(commandlist_t *cl)
         case B_REJECT:
         case B_EREJECT:
         case B_ERROR:
+        case B_BREAK:
             free(cl->u.str);
             break;
 

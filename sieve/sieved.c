@@ -507,6 +507,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 {
     int i;
     int version, requires;
+    commandlist_t *loop_list = NULL;
 
     if (!d) return;
 
@@ -830,12 +831,45 @@ static void dump2(bytecode_input_t *d, int bc_len)
         }
 
 
+        case B_FOREVERYPART: {
+            commandlist_t *l = (commandlist_t *) xzmalloc(sizeof(commandlist_t));
+
+            l->u.loop.name = cmd.u.loop.name;
+            l->u.loop.end = cmd.u.loop.end;
+            l->u.loop.parent = loop_list;
+            loop_list = l;
+
+            print_string("FOREVERYPART NAME", cmd.u.loop.name);
+            printf(" (ends at %d)", cmd.u.loop.end);
+            break;
+        }
+
+
+        case B_BREAK: {
+            const commandlist_t *l = loop_list;
+
+            while (l && cmd.u.str && strcmpnull(cmd.u.str, l->u.loop.name))
+                l = l->u.loop.parent;
+
+            print_string("BREAK NAME", cmd.u.str);
+            printf(" (jump to %d)", l->u.loop.end);
+            break;
+        }
+
+
         default:
             printf("%d (NOT AN OP)\n", cmd.type);
             exit(1);
         }
 
         printf("\n");
+
+        if (loop_list && (loop_list->u.loop.end == i)) {
+            commandlist_t *l = loop_list;
+
+            loop_list = (commandlist_t *) l->u.loop.parent;
+            free(l);
+        }
     }
 
     printf("full len is: %d\n", bc_len);
@@ -1609,6 +1643,22 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             }
             generate_string(":tzid", cmd.u.sn.tzid, buf);
             generate_valuelist(NULL, cmd.u.sn.times, &generate_time, buf);
+            break;
+
+        case B_FOREVERYPART:
+            *requires |= SIEVE_CAPA_FOREVERYPART;
+            generate_token("foreverypart", indent, buf);
+            if (cmd.u.loop.name) generate_string(":name", cmd.u.loop.name, buf);
+            buf_appendcstr(buf, " {\n");
+
+            pos = generate_block(bc, pos, cmd.u.loop.end,
+                                 version, 0, indent + 4, requires, buf);
+            generate_token("}\n", indent, buf);
+            continue;
+
+        case B_BREAK:
+            generate_token("break", indent, buf);
+            if (cmd.u.str) generate_string(":name", cmd.u.str, buf);
             break;
 
         default:

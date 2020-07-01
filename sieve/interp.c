@@ -101,6 +101,8 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         /* add comparators */
         buf_appendcstr(&buf, " comparator-i;ascii-numeric");
 
+        buf_appendcstr(&buf, " foreverypart");
+
         /* add actions */
         if (i->fileinto &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))
@@ -494,11 +496,11 @@ static const struct sieve_capa_t {
     { "servermetadata", SIEVE_CAPA_SERVERMETA },
 
     /* MIME Part Handling - RFC 5703 */
-    { "enclose",      SIEVE_CAPA_ENCLOSE },
-    { "extracttest",  SIEVE_CAPA_EXTRACT },
     { "foreverypart", SIEVE_CAPA_FOREVERYPART },
     { "mime",         SIEVE_CAPA_MIME },
     { "replace",      SIEVE_CAPA_REPLACE },
+    { "enclose",      SIEVE_CAPA_ENCLOSE },
+    { "extracttext",  SIEVE_CAPA_EXTRACT },
 
     /* DSN & Deliver-By - RFC 6009 */
     { "envelope-deliverby", SIEVE_CAPA_ENV_DELBY },
@@ -660,6 +662,10 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 
     case SIEVE_CAPA_IHAVE:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_FOREVERYPART:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FOREVERYPART)) capa = 0;
         break;
 
     case SIEVE_CAPA_MAILBOX:

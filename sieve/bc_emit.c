@@ -502,6 +502,45 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             break;
         }
 
+        case B_FOREVERYPART:
+        {
+            /* FOREVERYPART
+             *  string: name
+             *  jump (end)
+             *  block
+             */
+
+            int ret;
+            int jumpEndLoc = -1;
+            int jumpto = -1;
+
+            /* spew the name */
+            ret = bc_string_emit(fd, &codep, bc);
+            if (ret == -1) return -1;
+            filelen += ret;
+
+            /* leave space to store the location of end of the block */
+            ret = lseek(fd, sizeof(int), SEEK_CUR);
+            if (ret == -1) return ret;
+
+            jumpEndLoc = filelen;
+            filelen += sizeof(int);
+
+            /* spew the block */
+            ret = bc_action_emit(fd, codep+1, bc->data[codep].u.jump, bc, filelen);
+            if (ret == -1) return -1;
+            filelen += ret;
+
+            /* store the location for the end of the block */
+            jumpto = filelen/4;
+            if (lseek(fd, jumpEndLoc, SEEK_SET) == -1) return -1;
+            if (write_int(fd, jumpto) == -1) return -1;
+            if (lseek(fd, filelen, SEEK_SET) == -1) return -1;
+
+            codep = bc->data[codep].u.jump;
+            break;
+        }
+
         case B_KEEP:
         case B_FILEINTO:
         case B_REDIRECT:
@@ -527,6 +566,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         case B_UNMARK:
         case B_RETURN:
         case B_SNOOZE:
+        case B_BREAK:
             /* Spew the action parameters */
             ret = bc_params_emit(fd, &codep, stopcodep, bc);
             if (ret < 0) return -1;

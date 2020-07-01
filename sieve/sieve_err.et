@@ -95,4 +95,7 @@ ec SIEVE_IHAVE_INCOMPAT,
 ec SIEVE_MATCH_INCOMPAT,
    "\"%s\" match-type MUST NOT be used with \"%s\" comparator"
 
+ec SIEVE_BAD_BREAK,
+   "no matching \"foreverypart\" command for \"break\" command"
+
 end

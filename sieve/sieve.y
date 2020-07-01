@@ -111,6 +111,9 @@ static commandlist_t *build_flag(sieve_script_t*,
 static commandlist_t *build_notify(sieve_script_t*, int t,
                                    commandlist_t *c, char *method);
 static commandlist_t *build_denotify(sieve_script_t*, commandlist_t *c);
+static commandlist_t *build_foreverypart(sieve_script_t*,
+                                         char *name, commandlist_t *cmds);
+static commandlist_t *build_break(sieve_script_t*, char *name);
 static commandlist_t *build_include(sieve_script_t*, commandlist_t *c, char*);
 static commandlist_t *build_set(sieve_script_t*, commandlist_t *c,
                                 char *variable, char *value);
@@ -310,6 +313,10 @@ extern void sieverestart(FILE *f);
 %token <nval> SERVERMETADATA
 %token SERVERMETADATAEXISTS
 
+/* foreverypart - RFC 5703 */
+%token FOREVERYPART BREAK NAME
+%type <sval> name
+
 /* redirect-deliverby - RFC 6009 */
 %token BYTIMEREL BYTIMEABS BYMODE BYTRACE
 
@@ -431,6 +438,11 @@ require: REQUIRE stringlist ';'  { check_reqs(sscript, $2); }
 control:  IF thenelse            { $$ = $2; }
         | STOP ';'               { $$ = new_command(B_STOP, sscript); }
         | ERROR string ';'       { $$ = build_rej_err(sscript, B_ERROR, $2); }
+
+        | FOREVERYPART name { build_foreverypart(sscript, $2, NULL); } block
+                                 { $$ = build_foreverypart(sscript, $2, $4); }
+        | BREAK name ';'         { $$ = build_break(sscript, $2); }
+
         | INCLUDE itags string ';'
                                  { $$ = build_include(sscript, $2, $3); }
         | RETURN ';'             { $$ = new_command(B_RETURN, sscript); }
@@ -456,6 +468,12 @@ elsif: /* empty */               { $$ = NULL; }
 
 block: '{' commands '}'          { $$ = $2; }
         | '{' '}'                { $$ = NULL; }
+        ;
+
+
+/* :name */
+name: /* empty */                { $$ = NULL; }
+        | NAME string            { $$ = $2; }
         ;
 
 
@@ -2781,6 +2799,45 @@ static commandlist_t *build_denotify(sieve_script_t *sscript,
                              t->u.d.pattern);
 
     return t;
+}
+
+static commandlist_t *build_foreverypart(sieve_script_t *sscript,
+                                         char *name, commandlist_t *cmds)
+{
+    commandlist_t *c;
+
+    if (cmds) {
+        /* end of current loop - revert to parent */
+        c = (commandlist_t *) sscript->loop_list;
+        c->u.loop.cmds = cmds;
+        sscript->loop_list = c->u.loop.parent;
+    }
+    else {
+        /* start of new loop */
+        c = new_command(B_FOREVERYPART, sscript);
+        c->u.loop.name = name;
+        c->u.loop.parent = sscript->loop_list;
+        sscript->loop_list = c;
+    }
+
+    return c;
+}
+
+static commandlist_t *build_break(sieve_script_t *sscript, char *name)
+{
+    /* look for a matching loop */
+    const commandlist_t *l = sscript->loop_list;
+
+    while (l && name && strcmpnull(name, l->u.loop.name)) l = l->u.loop.parent;
+    if (!l) {
+        sieveerror_c(sscript, SIEVE_BAD_BREAK);
+    }
+
+    commandlist_t *c = new_command(B_BREAK, sscript);
+    c->u.str = name;
+    c->nargs = bc_precompile(c->args, "s", c->u.str);
+
+    return c;
 }
 
 static commandlist_t *build_include(sieve_script_t *sscript,
