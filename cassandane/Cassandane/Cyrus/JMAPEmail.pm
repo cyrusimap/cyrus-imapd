@@ -18215,4 +18215,103 @@ EOF
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 }
 
+sub test_email_query_dash_sieve
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions :needs_component_sieve
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Running query in sieve";
+    $imap->create("INBOX.matches") or die;
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+     "operator" : "AND",
+     "conditions" : [
+        {
+           "subject" : "something"
+        },
+        {
+           "subject" : "-"
+        },
+        {
+           "subject" : "otherthing"
+        }
+     ]
+  }
+.
+  )
+{
+  fileinto "INBOX.matches";
+}
+EOF
+    );
+
+    my $msg1 = $self->{gen}->generate(
+		subject => 'something - otherthing', body => ''
+    );
+    $self->{instance}->deliver($msg1);
+    my $msg2 = $self->{gen}->generate(
+		subject => 'something', body => ''
+    );
+    my $msg3 = $self->{gen}->generate(
+		subject => 'otherthing', body => ''
+    );
+    $self->{instance}->deliver($msg1);
+    $self->{store}->set_fetch_attributes('uid');
+    $self->{store}->set_folder('INBOX.matches');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
+sub test_email_query_dash
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message("something - otherthing", body => 'test') || die;
+    $self->make_message("something", body => 'test') || die;
+    $self->make_message("otherthing", body => 'test') || die;
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/search',
+    ];
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Running query with guidsearch";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                "operator" => "AND",
+                "conditions" => [
+                    {
+                        "subject" => "something"
+                    },
+                    {
+                        "subject" => "-"
+                    },
+                    {
+                        "subject" => "otherthing"
+                    }
+                ],
+            },
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+}
+
 1;
