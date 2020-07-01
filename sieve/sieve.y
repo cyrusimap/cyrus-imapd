@@ -431,6 +431,9 @@ require: REQUIRE stringlist ';'  { check_reqs(sscript, $2); }
 control:  IF thenelse            { $$ = $2; }
         | STOP ';'               { $$ = new_command(B_STOP, sscript); }
         | ERROR string ';'       { $$ = build_rej_err(sscript, B_ERROR, $2); }
+        | INCLUDE itags string ';'
+                                 { $$ = build_include(sscript, $2, $3); }
+        | RETURN ';'             { $$ = new_command(B_RETURN, sscript); }
         ;
 
 
@@ -453,6 +456,44 @@ elsif: /* empty */               { $$ = NULL; }
 
 block: '{' commands '}'          { $$ = $2; }
         | '{' '}'                { $$ = NULL; }
+        ;
+
+
+/* INCLUDE tagged arguments */
+itags: /* empty */               { $$ = new_command(B_INCLUDE, sscript); }
+        | itags location         {
+                                     if ($$->u.inc.location != -1) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "location");
+                                     }
+
+                                     $$->u.inc.location = $2;
+                                 }
+        | itags ONCE             {
+                                     if ($$->u.inc.once != -1) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":once");
+                                     }
+
+                                     $$->u.inc.once = 1;
+                                 }
+        | itags OPTIONAL         {
+                                     if ($$->u.inc.optional != -1) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":optional");
+                                     }
+
+                                     $$->u.inc.optional = 1;
+                                 }
+        ;
+
+
+/* location tags */
+location: PERSONAL               { $$ = B_PERSONAL; }
+        | GLOBAL                 { $$ = B_GLOBAL;   }
         ;
 
 
@@ -492,10 +533,8 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
                                                      B_NOTIFY, $2, NULL); }
 
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
-        | INCLUDE itags string   { $$ = build_include(sscript, $2, $3); }
         | LOG string             { $$ = build_log(sscript, $2); }
         | SNOOZE sntags timelist { $$ = build_snooze(sscript, $2, $3); }
-        | RETURN                 { $$ = new_command(B_RETURN, sscript); }
         ;
 
 
@@ -1119,44 +1158,6 @@ dtags: /* empty */               {
                                      if ($$->u.d.pattern) free($$->u.d.pattern);
                                      $$->u.d.pattern = $3;
                                  }
-        ;
-
-
-/* INCLUDE tagged arguments */
-itags: /* empty */               { $$ = new_command(B_INCLUDE, sscript); }
-        | itags location         {
-                                     if ($$->u.inc.location != -1) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      "location");
-                                     }
-
-                                     $$->u.inc.location = $2;
-                                 }
-        | itags ONCE             {
-                                     if ($$->u.inc.once != -1) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":once");
-                                     }
-
-                                     $$->u.inc.once = 1;
-                                 }
-        | itags OPTIONAL         {
-                                     if ($$->u.inc.optional != -1) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":optional");
-                                     }
-
-                                     $$->u.inc.optional = 1;
-                                 }
-        ;
-
-
-/* location tags */
-location: PERSONAL               { $$ = B_PERSONAL; }
-        | GLOBAL                 { $$ = B_GLOBAL;   }
         ;
 
 
