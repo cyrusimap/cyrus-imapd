@@ -310,7 +310,7 @@ extern void sieverestart(FILE *f);
 %token <nval> SERVERMETADATA
 %token SERVERMETADATAEXISTS
 
-/* redirect-deliveryby - RFC 6009 */
+/* redirect-deliverby - RFC 6009 */
 %token BYTIMEREL BYTIMEABS BYMODE BYTRACE
 
 /* redirect-dsn - RFC 6009 */
