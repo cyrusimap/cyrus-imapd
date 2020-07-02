@@ -1367,7 +1367,7 @@ static int sieve_snooze(void *ac,
     const char *annot = IMAP_ANNOT_NS "snoozed";
     const char *attrib = "value.shared";
     struct buf buf = BUF_INITIALIZER;
-    char *json = json_dumps(snoozed, JSON_COMPACT);
+    char *json = json_dumps(snoozed, JSON_COMPACT|JSON_SORT_KEYS);
 
     json_decref(snoozed);
     buf_initm(&buf, json, strlen(json));
