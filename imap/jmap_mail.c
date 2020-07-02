@@ -13078,6 +13078,10 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
     if (!r && buf_len(&buf)) {
         unsigned outlen;
 
+        /* trim and leading/trailing whitespace */
+        buf_trim(&buf);
+
+        /* base64-decode the data */
         r = sasl_decode64(buf_base(&buf), buf_len(&buf),
                           (char *) buf_base(&buf), buf_len(&buf), &outlen);
         if (r == SASL_OK) {
