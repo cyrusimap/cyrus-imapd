@@ -814,7 +814,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     return 0;
 }
 
-static void process_valarms(struct mailbox *mailbox,
+static int process_valarms(struct mailbox *mailbox,
                             struct index_record *record,
                             icaltimezone *floatingtz, time_t runtime)
 {
@@ -824,7 +824,7 @@ static void process_valarms(struct mailbox *mailbox,
         syslog(LOG_ERR, "error parsing ical string mailbox %s uid %u",
                mailbox->name, record->uid);
         caldav_alarm_delete_record(mailbox->name, record->uid);
-        return;
+        return 0;
     }
 
     /* check for bogus lastalarm data on record
@@ -868,11 +868,12 @@ static void process_valarms(struct mailbox *mailbox,
 
 done_item:
     if (ical) icalcomponent_free(ical);
+    return 0;
 }
 
 #ifdef WITH_JMAP
-static void process_futurerelease(struct mailbox *mailbox,
-                                  struct index_record *record)
+static int process_futurerelease(struct mailbox *mailbox,
+                                 struct index_record *record)
 {
     message_t *m = message_new_from_record(mailbox, record);
     struct buf buf = BUF_INITIALIZER;
@@ -951,19 +952,23 @@ static void process_futurerelease(struct mailbox *mailbox,
     }
     r = mailbox_rewrite_index_record(mailbox, record);
     if (r) {
-        syslog(LOG_ERR, "marking emailsubmission as sent (%s:%u) failed: %s",
+        syslog(LOG_ERR, "IOERROR: marking emailsubmission as sent (%s:%u) failed: %s",
                mailbox->name, record->uid, error_message(r));
+        // email is already sent, so we don't want to try to send it again!
+        // go ahead and delete the record still...
     }
+
+    caldav_alarm_delete_record(mailbox->name, record->uid);
 
   done:
     if (submission) json_decref(submission);
     if (m) message_unref(&m);
     buf_free(&buf);
 
-    return;
+    return r;
 }
 
-static void process_snoozed(struct mailbox *mailbox,
+static int process_snoozed(struct mailbox *mailbox,
                             struct index_record *record, time_t runtime)
 {
     struct buf buf = BUF_INITIALIZER;
@@ -1063,6 +1068,11 @@ static void process_snoozed(struct mailbox *mailbox,
     r = mailbox_open_iwl(destname, &destmbox);
     if (r) goto done;
 
+    /* XXX: should we look for an existing record with that GUID in the target folder
+     * first and just remove this copy if so?  Otherwise we could duplicate if the
+     * update fails between the append to the new mailbox and the expunge from Snoozed
+     */
+
     r = append_setup_mbox(&as, destmbox, userid, authstate,
                           ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
@@ -1094,8 +1104,9 @@ static void process_snoozed(struct mailbox *mailbox,
 
   done:
     if (r) {
-        /* XXX  Error handling */
-        caldav_alarm_delete_record(mailbox->name, record->uid);
+        syslog(LOG_ERR, "IOERROR: failed to unsnooze %s:%u (%s)",
+               mailbox->name, record->uid, error_message(r));
+        update_alarmdb(mailbox->name, record->uid, runtime + 300); // try again in 5 minutes
     }
 
     if (body) {
@@ -1113,103 +1124,89 @@ static void process_snoozed(struct mailbox *mailbox,
     if (snoozed) json_decref(snoozed);
     buf_free(&buf);
     free(destname);
+
+    return r;
 }
 #endif /* WITH_JMAP */
 
-static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
-                               icaltimezone *floatingtz, time_t runtime)
+static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
 {
-    int rc;
+    int r;
+    struct mailbox *mailbox = NULL;
 
     syslog(LOG_DEBUG, "processing alarms for mailbox %s uid %u",
-           mailbox->name, imap_uid);
+           data->mboxname, data->imap_uid);
+
+    r = mailbox_open_iwl(data->mboxname, &mailbox);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        syslog(LOG_ERR, "not found mailbox %s", data->mboxname);
+        /* no record, no worries */
+        caldav_alarm_delete_record(mailbox->name, data->imap_uid);
+        return;
+    }
+    else if (r) {
+        /* Temporary error - skip over this message for now and try again in 5 minutes */
+        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for uid %u (%s)",
+               data->mboxname, data->imap_uid, error_message(r));
+        update_alarmdb(data->mboxname, data->imap_uid, runtime + 300);
+        return;
+    }
 
     struct index_record record;
     memset(&record, 0, sizeof(struct index_record));
-    rc = mailbox_find_index_record(mailbox, imap_uid, &record);
-    if (rc == IMAP_NOTFOUND) {
-        syslog(LOG_ERR, "not found mailbox %s uid %u",
-               mailbox->name, imap_uid);
+    r = mailbox_find_index_record(mailbox, data->imap_uid, &record);
+    if (r == IMAP_NOTFOUND) {
+        syslog(LOG_NOTICE, "not found mailbox %s uid %u",
+               mailbox->name, data->imap_uid);
         /* no record, no worries */
-        caldav_alarm_delete_record(mailbox->name, imap_uid);
-        return;
+        caldav_alarm_delete_record(mailbox->name, data->imap_uid);
+        goto done;
     }
-    if (rc) {
-        syslog(LOG_ERR, "error reading mailbox %s uid %u (%s)",
-               mailbox->name, imap_uid, error_message(rc));
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: error reading mailbox %s uid %u (%s)",
+               mailbox->name, data->imap_uid, error_message(r));
         /* XXX no index record? item deleted or transient error? */
-        caldav_alarm_delete_record(mailbox->name, imap_uid);
-        return;
+        update_alarmdb(data->mboxname, data->imap_uid, runtime + 300);
+        goto done;
     }
+
     if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        syslog(LOG_ERR, "already expunged mailbox %s uid %u",
-               mailbox->name, imap_uid);
+        syslog(LOG_NOTICE, "already expunged mailbox %s uid %u",
+               mailbox->name, data->imap_uid);
         /* no longer exists?  nothing to do */
-        caldav_alarm_delete_record(mailbox->name, imap_uid);
-        return;
+        caldav_alarm_delete_record(mailbox->name, data->imap_uid);
+        goto done;
     }
 
     if (mailbox->mbtype == MBTYPE_CALENDAR) {
-        process_valarms(mailbox, &record, floatingtz, runtime);
+        icaltimezone *floatingtz = get_floatingtz(mailbox->name, "");
+        r = process_valarms(mailbox, &record, floatingtz, runtime);
+        if (floatingtz) icaltimezone_free(floatingtz, 1);
     }
 #ifdef WITH_JMAP
     else if (mailbox->mbtype == MBTYPE_SUBMISSION) {
         if (record.internaldate > runtime) {
-            update_alarmdb(mailbox->name, imap_uid, record.internaldate);
-            return;
+            update_alarmdb(mailbox->name, data->imap_uid, record.internaldate);
+            goto done;
         }
-        process_futurerelease(mailbox, &record);
+        r = process_futurerelease(mailbox, &record);
     }
     else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
         /* XXX  Check special-use flag on mailbox */
-        process_snoozed(mailbox, &record, runtime);
+        r = process_snoozed(mailbox, &record, runtime);
     }
 #endif
     else {
         /* XXX  Should never get here */
         syslog(LOG_ERR, "Unknown/unsupported alarm triggered for"
-               " mailbox %s of type %d with options 0x%02x",
-               mailbox->name, mailbox->mbtype, mailbox->i.options);
-        caldav_alarm_delete_record(mailbox->name, imap_uid);
-    }
-}
-
-static void process_records(ptrarray_t *list, time_t runtime)
-{
-    struct mailbox *mailbox = NULL;
-    int rc;
-    int i;
-    icaltimezone *floatingtz = NULL;
-
-    syslog(LOG_DEBUG, "processing records");
-
-    for (i = 0; i < list->count; i++) {
-        struct caldav_alarm_data *data = ptrarray_nth(list, i);
-
-        if (mailbox && !strcmp(mailbox->name, data->mboxname)) {
-            /* woot, reuse mailbox */
-        }
-        else {
-            if (floatingtz) icaltimezone_free(floatingtz, 1);
-            floatingtz = NULL;
-            mailbox_close(&mailbox);
-            rc = mailbox_open_iwl(data->mboxname, &mailbox);
-            if (rc == IMAP_MAILBOX_NONEXISTENT) {
-                /* mailbox was deleted or something, nothing we can do */
-                data->nextcheck = 0;
-                continue;
-            }
-            if (rc) {
-                /* transient open error, don't delete this alarm */
-                continue;
-            }
-            if (mailbox->mbtype == MBTYPE_CALENDAR)
-                floatingtz = get_floatingtz(mailbox->name, "");
-        }
-        process_one_record(mailbox, data->imap_uid, floatingtz, runtime);
+               " mailbox %s uid %u of type %d with options 0x%02x",
+               mailbox->name, data->imap_uid,
+               mailbox->mbtype, mailbox->i.options);
+        caldav_alarm_delete_record(mailbox->name, data->imap_uid);
     }
 
-    if (floatingtz) icaltimezone_free(floatingtz, 1);
+done:
+    if (r) mailbox_abort(mailbox);
     mailbox_close(&mailbox);
 }
 
@@ -1239,11 +1236,10 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp)
 
     caldav_alarm_close(alarmdb);
 
-    process_records(&rock.list, runtime);
-
     int i;
     for (i = 0; i < rock.list.count; i++) {
         struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
+        process_one_record(data, runtime);
         caldav_alarm_fini(data);
         free(data);
     }
