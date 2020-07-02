@@ -11735,7 +11735,7 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
 
                 if (uidrec->is_snoozed) {
                     /* Set/update annotation */
-                    char *json = json_dumps(update->snoozed, JSON_COMPACT);
+                    char *json = json_dumps(update->snoozed, JSON_COMPACT|JSON_SORT_KEYS);
 
                     buf_initm(&val, json, strlen(json));
 
