@@ -50,6 +50,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
+#include <errno.h>
 #include <sys/mman.h>
 
 #include <sasl/saslutil.h>
@@ -110,6 +111,9 @@ static int jmap_email_matchmime_method(jmap_req_t *req);
 static int jmap_searchsnippet_get(jmap_req_t *req);
 static int jmap_thread_get(jmap_req_t *req);
 static int jmap_thread_changes(jmap_req_t *req);
+
+static int jmap_emailheader_getblob(jmap_req_t *req, const char *blobid,
+                                    const char *accept);
 
 /*
  * Possibly to be implemented:
@@ -291,6 +295,8 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
             hash_insert(mp->name, mp, &settings->methods);
         }
     }
+
+    ptrarray_append(&settings->getblob_handlers, jmap_emailheader_getblob);
 
     jmap_emailsubmission_init(settings);
     jmap_mailbox_init(settings);
@@ -5986,6 +5992,29 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
     return conv(json_string_value(jheaderval), want_form);
 }
 
+static const struct blob_header_t {
+    const char *name;
+    const char *type;
+} blob_headers[] = {
+    { "bimi-indicator", "image/svg+xml" },
+    { NULL, NULL }
+};
+
+static const char *_encode_emailheader_blobid(const char *emailid,
+                                              const char *hdr,
+                                              struct buf *dst)
+{
+    /* Get the index of the header */
+    unsigned n = 0;
+    while (blob_headers[n].name && strcasecmp(blob_headers[n].name, hdr)) n++;
+
+    /* Smart blob prefix, emailid, hdrname index */
+    buf_reset(dst);
+    if (blob_headers[n].name) buf_printf(dst, "H%s-%u", emailid, n);
+
+    return buf_cstring(dst);
+}
+
 static int _email_get_meta(jmap_req_t *req,
                            struct email_getargs *args,
                            struct cyrusmsg *msg,
@@ -6144,6 +6173,23 @@ static int _email_get_meta(jmap_req_t *req,
 
         json_object_set_new(email, "snoozed",
                             rock.snoozed ? rock.snoozed : json_null());
+    }
+
+    if (jmap_wantprop(props, "bimiBlobId")) {
+        int r = 0;
+        const char *hdrname = "bimi-indicator";
+        struct buf buf = BUF_INITIALIZER;
+        json_t *jval = json_null();
+
+        if (!msg->_m) r = msgrecord_get_message(msg->mr, &msg->_m);
+        if (!r) r = message_get_field(msg->_m, hdrname, MESSAGE_RAW, &buf);
+        if (!r && buf_len(&buf)) {
+            const char *blobid =
+                _encode_emailheader_blobid(email_id, hdrname, &buf);
+            if (*blobid) jval = json_string(blobid);
+        }
+        json_object_set_new(email, "bimiBlobId", jval);
+        buf_free(&buf);
     }
 
 done:
@@ -7247,6 +7293,11 @@ static const jmap_property_t email_props[] = {
         "snoozed",
         JMAP_MAIL_EXTENSION,
         0
+    },
+    {
+        "bimiBlobId",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
     },
     { NULL, NULL, 0 }
 };
@@ -12919,4 +12970,157 @@ static int jmap_email_matchmime_method(jmap_req_t *req)
     }
 
     return 0;
+}
+
+static int _decode_emailheader_blobid(const char *blobid,
+                                      char **emailidptr,
+                                      const char **hdrnameptr,
+                                      const char **mimetypeptr)
+{
+    char *emailid = NULL;
+    int is_valid = 0;
+
+    /* Decode emailid */
+    const char *base = blobid+1;
+    const char *p = strchr(base, '-');
+    if (!p || p-base != JMAP_EMAILID_SIZE-1) goto done;
+    emailid = xstrndup(base, p-base);
+    base = p + 1;
+
+    /* Decode hdrname */
+    if (*base == '\0') goto done;
+    unsigned index;
+    char *endptr = NULL;
+    errno = 0;
+    index = strtoul(base, &endptr, 10);
+    if (errno == ERANGE || *endptr) goto done;
+    base = endptr;
+
+    /* All done */
+    *emailidptr = emailid;
+    *hdrnameptr = blob_headers[index].name;
+    *mimetypeptr = blob_headers[index].type;
+    is_valid = 1;
+
+done:
+    if (!is_valid) free(emailid);
+
+    return is_valid;
+}
+
+static int jmap_emailheader_getblob(jmap_req_t *req,
+                                    const char *blobid,
+                                    const char *accept_mime)
+{
+    struct mailbox *mailbox = NULL;
+    char *emailid = NULL;
+    const char *hdrname = NULL;
+    const char *mimetype = NULL;
+    char *mboxname = NULL;
+    uid_t uid = 0;
+    struct buf buf = BUF_INITIALIZER;
+    int res = 0;
+    int r;
+
+    if (*blobid != 'H') return 0;
+
+    if (!_decode_emailheader_blobid(blobid, &emailid, &hdrname, &mimetype)) {
+        res = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    /* Lookup emailid */
+    r = jmap_email_find(req, emailid, &mboxname, &uid);
+    if (r) {
+        if (r == IMAP_NOTFOUND) res = HTTP_NOT_FOUND;
+        else {
+            req->txn->error.desc = error_message(r);
+            res = HTTP_SERVER_ERROR;
+        }
+        goto done;
+    }
+    if (!jmap_hasrights(req, mboxname, JACL_READITEMS)) {
+        res = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    /* Make sure client can handle blob type. */
+    if (accept_mime) {
+        if (strcmp(accept_mime, "application/octet-stream") &&
+            strcmpnull(accept_mime, mimetype)) {
+            res = HTTP_NOT_ACCEPTABLE;
+            goto done;
+        }
+
+        req->txn->resp_body.type = accept_mime;
+    }
+    else if (mimetype) req->txn->resp_body.type = mimetype;
+    else req->txn->resp_body.type = "application/octet-stream";
+
+    /* Open mailbox, we need it now */
+    if ((r = jmap_openmbox(req, mboxname, &mailbox, 0))) {
+        req->txn->error.desc = error_message(r);
+        res = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Load the message */
+    msgrecord_t *mr = msgrecord_from_uid(mailbox, uid);
+    if (!mr) {
+        req->txn->error.desc = "failed to load message";
+        res = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    message_t *msg;
+    r = msgrecord_get_message(mr, &msg);
+    if (!r) r = message_get_field(msg, hdrname, MESSAGE_RAW, &buf);
+    if (!r && buf_len(&buf)) {
+        unsigned outlen;
+
+        /* trim and leading/trailing whitespace */
+        buf_trim(&buf);
+
+        /* base64-decode the data */
+        r = sasl_decode64(buf_base(&buf), buf_len(&buf),
+                          (char *) buf_base(&buf), buf_len(&buf), &outlen);
+        if (r == SASL_OK) {
+            buf_truncate(&buf, outlen);
+        }
+        else {
+            req->txn->error.desc = "failed to decode blob";
+            res = HTTP_SERVER_ERROR;
+        }
+    }
+    else {
+        res = HTTP_NOT_FOUND;
+    }
+    msgrecord_unref(&mr);
+
+    if (res) goto done;
+
+    /* Write body */
+    req->txn->resp_body.len = buf_len(&buf);
+    write_body(HTTP_OK, req->txn, buf_base(&buf), buf_len(&buf));
+    res = HTTP_OK;
+
+done:
+    if (res != HTTP_OK && !req->txn->error.desc) {
+        const char *desc = NULL;
+        switch (res) {
+            case HTTP_BAD_REQUEST:
+                desc = "invalid header blobid";
+                break;
+            case HTTP_NOT_FOUND:
+                desc = "failed to find blob by header blobid";
+                break;
+            default:
+                desc = error_message(res);
+        }
+        req->txn->error.desc = desc;
+    }
+    if (mailbox) jmap_closembox(req, &mailbox);
+    buf_free(&buf);
+    free(emailid);
+    return res;
 }
