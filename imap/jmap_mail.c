@@ -6001,14 +6001,12 @@ static const struct blob_header_t {
 };
 
 static const char *_encode_email_header_blobid(const char *emailid,
-                                               const char *hdrname,
+                                               const char *hdr,
                                                struct buf *dst)
 {
     /* Get the index of the header */
-    unsigned n;
-    for (n = 0;
-         blob_headers[n].name && strcasecmp(blob_headers[n].name, hdrname);
-         n++);
+    unsigned n = 0;
+    while (blob_headers[n].name && strcasecmp(blob_headers[n].name, hdr)) n++;
 
     /* Smart blob prefix, emailid, hdrname index */
     buf_reset(dst);
@@ -6182,6 +6180,7 @@ static int _email_get_meta(jmap_req_t *req,
         const char *hdrname = "bimi-indicator";
         struct buf buf = BUF_INITIALIZER;
         json_t *jval = json_null();
+
         if (!msg->_m) r = msgrecord_get_message(msg->mr, &msg->_m);
         if (!r) r = message_get_field(msg->_m, hdrname, MESSAGE_RAW, &buf);
         if (!r && buf_len(&buf)) {
@@ -12973,10 +12972,10 @@ static int jmap_email_matchmime_method(jmap_req_t *req)
     return 0;
 }
 
-static int _decode_emailheader_blobid(const char *blobid,
-                                      char **emailidptr,
-                                      const char **hdrnameptr,
-                                      const char **mimetypeptr)
+static int _decode_email_header_blobid(const char *blobid,
+                                       char **emailidptr,
+                                       const char **hdrnameptr,
+                                       const char **mimetypeptr)
 {
     char *emailid = NULL;
     int is_valid = 0;
@@ -12994,9 +12993,7 @@ static int _decode_emailheader_blobid(const char *blobid,
     char *endptr = NULL;
     errno = 0;
     index = strtoul(base, &endptr, 10);
-    if (errno == ERANGE || *endptr) {
-        goto done;
-    }
+    if (errno == ERANGE || *endptr) goto done;
     base = endptr;
 
     /* All done */
@@ -13006,9 +13003,8 @@ static int _decode_emailheader_blobid(const char *blobid,
     is_valid = 1;
 
 done:
-    if (!is_valid) {
-        free(emailid);
-    }
+    if (!is_valid) free(emailid);
+
     return is_valid;
 }
 
@@ -13028,7 +13024,7 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
 
     if (*blobid != 'H') return 0;
 
-    if (!_decode_emailheader_blobid(blobid, &emailid, &hdrname, &mimetype)) {
+    if (!_decode_email_header_blobid(blobid, &emailid, &hdrname, &mimetype)) {
         res = HTTP_BAD_REQUEST;
         goto done;
     }
@@ -13091,7 +13087,6 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
             req->txn->error.desc = "failed to decode blob";
             res = HTTP_SERVER_ERROR;
         }
-
     }
     else {
         res = HTTP_NOT_FOUND;
