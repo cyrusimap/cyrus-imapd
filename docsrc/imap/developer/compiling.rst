@@ -129,27 +129,27 @@ CalDAV, CardDAV, or JMAP (httpd sybsystem)
     :widths: 20,15,15,5,5,45
 
     `libbrotli`_, libbrotli-dev, brotli-devel, "no", "no", "It provides Brotli
-    compression support for httpd communications (otherwise only `deflate` and
-    `gzip` (optionally) would be available)."
+    compression support for http communications (otherwise only ``deflate`` and
+    ``gzip`` (optionally) would be available)."
     `libchardet`_, libchardet-dev, libchardet-devel, "yes/no", "no", "It is used
-    by the JMAP module of httpd to detect the character set of untagged 8-bit
-    headers. Without it, cyrus-imapd will not do character-set detection. If
-    some piece of data has no character set coming in, it will have no character
-    set. Required for JMAP, but otherwise is not needed."
+    by the **JMAP** module of httpd to detect the character set of untagged
+    8-bit headers. Without it, cyrus-imapd will not do character-set detection.
+    If some piece of data has no character set coming in, it will have no
+    character set. Required for JMAP, but otherwise is not needed."
     `libical`_, libical-dev, libical-devel, "yes", "no", "It provides
-    calendaring functionality for CalDAV, it can't be used without this lib.
+    calendaring functionality for CalDAV, which can't be used without this lib.
     Version 3.0.0 or higher is required."
     `libxml`_, libxml2-dev, libxml2-devel, "yes", "no", "A fundamental lib for
     all \*DAV functionality."
-    `nghttp2`_, libnghttp2-dev, libnghttp2-devel, "no", "no", "HTTP/2 support for the
-    entire httpd subsystem (\*DAV & JMAP)."
+    `nghttp2`_, libnghttp2-dev, libnghttp2-devel, "no", "no", "HTTP/2 support
+    for the entire **httpd** subsystem (\*DAV & JMAP)."
     `shapelib`_, shapelib, shapelib, "yes/no", "no", "It is required for
     **tzdist** service to have geolocation support. Otherwise it is not needed.
     Version 1.3.0 or higher is required when using it."
     `wslay`_, libwslay-dev, wslay-devel, "no", "no", "It provides WebSockets
-    support in httpd. Only used with JMAP, otherwise not needed."
+    support in httpd. Only used with **JMAP**, otherwise not needed."
     `zlib`_, zlib1g-dev, zlib-devel, "no", "no", "It provides gzip compression
-    support for httpd."
+    support for http communications."
 
 Other
 #####
@@ -158,8 +158,8 @@ Other
     :header: "Package", "Debian", "RedHat", "Required", "Required for ``make check``?", "Notes"
     :widths: 20,15,15,5,5,45
 
-     SSL certificates, ssl-cert-dev, mod_ssl, "no", "no", "Used if you're
-     installing SSL certificates"
+    SSL certificates, ssl-cert-dev, mod_ssl, "no", "no", "Used if you're
+    installing SSL certificates."
     `ClamAV`_, libclamav-dev, clamav-devel, "no", "no", "It is used by
     **cyr_virusscan**, otherwise not needed."
     `openldap`_, libldap2-dev, openldap-devel, "no", "no", "Development headers
