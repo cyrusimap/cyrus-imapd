@@ -16960,7 +16960,6 @@ sub test_email_query_guidsearch_inmailboxotherthan
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog $self, "create mailboxes";
@@ -18866,7 +18865,6 @@ sub test_email_query_dash
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     xlog $self, "run squatter";
