@@ -4065,6 +4065,16 @@ EXPORTED int mboxlist_setquotas(const char *root,
 
     quota_commit(&tid);
 
+    if (config_auditlog) {
+        struct buf item = BUF_INITIALIZER;
+        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+            buf_printf(&item, " new%s=<%lld>",
+                       quota_names[res], newquotas[res]);
+        }
+        syslog(LOG_NOTICE, "auditlog: newquota root=<%s>%s", root, buf_cstring(&item));
+        buf_free(&item);
+    }
+
     /* recurse through mailboxes, setting the quota and finding
      * out the usage */
     struct changequota_rock crock = { root, silent };
