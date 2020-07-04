@@ -3950,9 +3950,11 @@ EXPORTED int mboxlist_setquotas(const char *root,
     if (!r) {
         int changed = 0;
         int underquota;
+        quota_t oldquotas[QUOTA_NUMRESOURCES];
 
         /* has it changed? */
         for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+            oldquotas[res] = q.limits[res];
             if (q.limits[res] != newquotas[res]) {
                 underquota = 0;
 
@@ -3994,6 +3996,17 @@ EXPORTED int mboxlist_setquotas(const char *root,
 
             for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
                 mboxevent_extract_quota(quotachange_event, &q, res);
+            }
+
+            if (config_auditlog) {
+                struct buf item = BUF_INITIALIZER;
+                for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+                    buf_printf(&item, " old%s=<%lld> new%s=<%lld>",
+                               quota_names[res], oldquotas[res],
+                               quota_names[res], newquotas[res]);
+                }
+                syslog(LOG_NOTICE, "auditlog: setquota root=<%s>%s", root, buf_cstring(&item));
+                buf_free(&item);
             }
         }
 
@@ -4103,6 +4116,16 @@ EXPORTED int mboxlist_unsetquota(const char *root)
      * Have to remove it from all affected mailboxes
      */
     mboxlist_mboxtree(root, mboxlist_rmquota, (void *)root, /*flags*/0);
+
+    if (config_auditlog) {
+        struct buf item = BUF_INITIALIZER;
+        int res;
+        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+            buf_printf(&item, " old%s=<%lld>", quota_names[res], q.limits[res]);
+        }
+        syslog(LOG_NOTICE, "auditlog: rmquota root=<%s>%s", root, buf_cstring(&item));
+        buf_free(&item);
+    }
 
     r = quota_deleteroot(root, 0);
     quota_changelockrelease();
