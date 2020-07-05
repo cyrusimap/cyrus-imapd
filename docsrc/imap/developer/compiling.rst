@@ -133,7 +133,8 @@ Alternate database formats
     `mysql`_ or `mariadb`_, "libmysqlclient-dev or libmariadb-dev", "mysql-devel
     or mariadb-devel", "yes/no", "MariaDB or MySQL development headers, required
     to allow Cyrus IMAP to use it as the backend for its databases. Configure
-    option: ``--with-mysql``, ``--with-mysql-incdir``, ``--with-mysql-libdir``."
+    options: ``--with-mysql``, ``--with-mysql-incdir``,
+    ``--with-mysql-libdir``."
     `postgresql`_, postgresql-dev, postgresql-devel, "yes/no", "PostgreSQL
     development headers, required to allow Cyrus IMAP to use it as the backend
     for its databases. Configure option: ``--with-pgsql``."
@@ -187,7 +188,7 @@ Other
     `pcre`_, libpcre3-dev, pcre-devel, "yes", "PCRE 1 (8.x) - for utf-8/unicode
     regular expression matching. Could be replaced by something else in the
     future. See `issues/1731`_ for more information."
-    `perl(Term::ReadLine)`_,,, "no", "Perl library needed by **cyradm**"
+    `perl(Term::ReadLine)`_,,, "no", "Perl library needed by **cyradm**."
     `libsrs2`_, *no package*, *no package*, "no", "It is used for
     implementing Sender Rewriting Scheme (SRS) functionality for messages
     forwarded by sieve scripts. Without it, messages forwarded by sieve scripts
@@ -275,7 +276,7 @@ via configure.
 
 Sieve is enabled by default.
 
-CalDAV, CardDAV, JMAP
+CalDAV, CardDAV, WebDAV, JMAP
 #####################
 
     ``./configure --enable-http --enable-calalarmd --enable-jmap``
