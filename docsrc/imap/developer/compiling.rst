@@ -4,9 +4,14 @@
 Compiling
 =========
 
-These instructions are based on Debian 8.0 because it has to be based on something. Other Linux distributions will be similar in the broad ideas but may differ in the specifics. If you already have a preferred distro, use that (we assume you know how to use its package management system). If you don't already have a preferred distro, maybe consider using Debian.
+These instructions are based on Debian 8.0 because it has to be based on
+something. Other Linux distributions will be similar in the broad ideas but may
+differ in the specifics. If you already have a preferred distro, use that (we
+assume you know how to use its package management system). If you don't already
+have a preferred distro, maybe consider using Debian.
 
-First make sure you have a :ref:`copy of the source <getcyrus>`. You can either fetch the latest source from git, or download one of our release tarballs.
+First make sure you have a :ref:`copy of the source <getcyrus>`. You can either
+fetch the latest source from git, or download one of our release tarballs.
 
 Setting up dependencies
 =======================
@@ -14,9 +19,10 @@ Setting up dependencies
 Required Build Dependencies
 ---------------------------
 
-Building a basic Cyrus that can send and receive email: the minimum libraries required to build a functional cyrus-imapd.
+Building a basic Cyrus that can send and receive email: the minimum libraries
+required to build a functional cyrus-imapd.
 
-.. csv-table:: Build Dependencies
+.. csv-table::
     :header: "Package", "Debian", "RedHat", "Notes"
 
     `autoconf`_, "autoconf", "autoconf"
@@ -65,20 +71,27 @@ Developers only
 ###############
 
 .. csv-table::
-    :header: "Package", "Debian", "RedHat", "Required for ``make check``?", "Notes"
+    :header: "Package", "Debian", "RedHat", "Required", "Notes"
     :widths: 20,15,15,5,45
 
-    `CUnit`_, libcunit1-dev, cunit-devel, "yes", "Development headers for compiling Cyrus IMAP's unit tests."
-    `libdb-dev`_, libdb-dev, libdb-devel, "no", "The -dev package must match the version of libdb you already have installed (assuming it's probably already installed). On Debian 8.0, ``libdb5.3-dev`` is needed, but ``libdb5.1-dev`` on 7.8."
-    `perl-devel`_, perl-dev, perl-devel, "no", "Perl development headers to allow building binary perl libraries. Needs version 5+.
-
-    Configure option: ``--with-perl``"
-    `perl(ExtUtils::MakeMaker)`_,,, "no", "Perl library to assist in building extensions to Perl.
-
-    Configure option: ``--with-perl``"
-    `perl(Pod::POM::View::Restructured)`_,,, "no", "Perl library to generate man pages.  This has to be available to the system-wide perl interpreter, found by ``which``:  ``./configure --with-perl`` is not honoured."
-    `python(GitPython)`_,,, "no", "Python library needed for building the documentation"
-    `python(Sphinx)`_,,, "no", "Python library needed for building the documentation"
+    `CUnit`_, libcunit1-dev, cunit-devel, "no", "Development headers for
+    compiling Cyrus IMAP's unit tests. Required to run ``make check``."
+    `libdb-dev`_, libdb-dev, libdb-devel, "no", "The -dev package must match the
+    version of libdb you already have installed (assuming it's probably already
+    installed). On Debian 8.0, ``libdb5.3-dev`` is needed, but ``libdb5.1-dev``
+    on 7.8."
+    `perl-devel`_, perl-dev, perl-devel, "no", "Perl development headers to
+    allow building binary perl libraries. Needs version 5+. Configure option:
+    ``--with-perl``"
+    `perl(ExtUtils::MakeMaker)`_,,, "no", "Perl library to assist in building
+    extensions to Perl. Configure option: ``--with-perl``"
+    `perl(Pod::POM::View::Restructured)`_,,, "no", "Perl library to generate man
+    pages. This has to be available to the system-wide perl interpreter, found
+    by ``which``, i.e. ``./configure --with-perl`` is not honoured."
+    `python(GitPython)`_,,, "no", "Python library needed for building the
+    documentation."
+    `python(Sphinx)`_,,, "no", "Python library needed for building the
+    documentation."
     `transfig`_, transfig, transfig, "no", "Also known as fig2dev, transfig is
     an artifact from the old days, and is only used for generation of a couple
     of png files in the legacy documentation (doc/legacy/murder.png and
@@ -87,91 +100,95 @@ Developers only
     rather than just building the software). Those files are pre-built in the
     release tarballs, so additionally you would only need this when building
     from git. One day this legacy documentation should be merged into the
-    current documentation, cause then we can get rid of it: `issues/1769`_"
+    current documentation, cause then we can get rid of it: `issues/1769`_."
     `valgrind`_, valgrind, valgrind, "no", "Performance and memory testing."
-    `xxd`_,vim-common,vim-common, "no", "For rebuilding the _js.h files, for CalDAV and CardDAV support."
+    `xxd`_,vim-common,vim-common, "no", "For rebuilding the _js.h files, for
+    CalDAV and CardDAV support."
 
 SASL Authentication
 ###################
 
 .. csv-table::
-    :header: "Package", "Debian", "RedHat", "Required for ``make check``?", "Notes"
+    :header: "Package", "Debian", "RedHat", "Required", "Notes"
     :widths: 20,15,15,5,45
 
-    `Cyrus SASL Plain`_, libsasl2-modules, cyrus-sasl-plain, "yes", "Cyrus SASL package that ships the \
-    library required to pass Cyrus IMAP's PLAIN authentication unit tests."
-    `Cyrus SASL MD5`_, libsasl2-modules, cyrus-sasl-md5, "yes", "Cyrus SASL library required to pass Cyrus IMAP's DIGEST-MD5
-    authentication unit tests"
-    `sasl binaries`_, sasl2-bin, sasl2-bin, "no", "Administration tools for managing SASL"
-    `Kerberos`_, libsasl2-modules-gssapi-mit, krb5-devel, "no", "Development headers required to enable Kerberos v5 authentication
-    capabilities. Otherwise also known as the authentication mechanism *GSSAPI*.
-
-    Configure option: ``--with-krbimpl=mit`` "
+    `Cyrus SASL Plain`_, libsasl2-modules, cyrus-sasl-plain, "yes/no", "Required
+    to pass Cyrus IMAP's PLAIN authentication unit tests."
+    `Cyrus SASL MD5`_, libsasl2-modules, cyrus-sasl-md5, "yes/no", "Required to
+    pass Cyrus IMAP's DIGEST-MD5 authentication unit tests."
+    `sasl binaries`_, sasl2-bin, sasl2-bin, "no", "Administration tools for
+    managing SASL."
+    `Kerberos`_, libsasl2-modules-gssapi-mit, krb5-devel, "yes/no", "Development
+    headers required to enable Kerberos v5 authentication capabilities, also
+    known as the authentication mechanism *GSSAPI*. Configure option:
+    ``--with-krbimpl=mit``."
 
 Alternate database formats
 ##########################
 
 .. csv-table::
-    :header: "Package", "Debian", "RedHat", "Required for ``make check``?", "Notes"
+    :header: "Package", "Debian", "RedHat", "Required", "Notes"
     :widths: 20,15,15,5,45
 
-    `mysql`_ or `mariadb`_, libmysqlclient-dev or libmariadb-dev, mysql-devel or mariadb-devel, "no", "MariaDB or MySQL development headers, to allow Cyrus IMAP to use
-    it as the backend for its databases.
-
-    Configure option: ``--with-mysql``, ``--with-mysql-incdir``, ``--with-mysql-libdir``"
-    `postgresql`_, postgresql-dev, postgresql-devel, "no"
+    `mysql`_ or `mariadb`_, "libmysqlclient-dev or libmariadb-dev", "mysql-devel
+    or mariadb-devel", "yes/no", "MariaDB or MySQL development headers, required
+    to allow Cyrus IMAP to use it as the backend for its databases. Configure
+    option: ``--with-mysql``, ``--with-mysql-incdir``, ``--with-mysql-libdir``."
+    `postgresql`_, postgresql-dev, postgresql-devel, "yes/no", "PostgreSQL
+    development headers, required to allow Cyrus IMAP to use it as the backend
+    for its databases. Configure option: ``--with-pgsql``."
 
 CalDAV, CardDAV, or JMAP (httpd sybsystem)
 ##########################################
 
 .. csv-table::
-    :header: "Package", "Debian", "RedHat", "Required", "Required for ``make check``?", "Notes"
-    :widths: 20,15,15,5,5,45
+    :header: "Package", "Debian", "RedHat", "Required", "Notes"
+    :widths: 20,15,15,5,45
 
-    `libbrotli`_, libbrotli-dev, brotli-devel, "no", "no", "It provides Brotli
+    `libbrotli`_, libbrotli-dev, brotli-devel, "no", "It provides Brotli
     compression support for http communications (otherwise only ``deflate`` and
     ``gzip`` (optionally) would be available)."
-    `libchardet`_, libchardet-dev, libchardet-devel, "yes/no", "no", "It is used
+    `libchardet`_, libchardet-dev, libchardet-devel, "yes/no", "It is used
     by the **JMAP** module of httpd to detect the character set of untagged
     8-bit headers. Without it, cyrus-imapd will not do character-set detection.
     If some piece of data has no character set coming in, it will have no
     character set. Required for JMAP, but otherwise is not needed."
-    `libical`_, libical-dev, libical-devel, "yes", "no", "It provides
+    `libical`_, libical-dev, libical-devel, "yes", "It provides
     calendaring functionality for CalDAV, which can't be used without this lib.
     Version 3.0.0 or higher is required."
-    `libxml`_, libxml2-dev, libxml2-devel, "yes", "no", "A fundamental lib for
+    `libxml`_, libxml2-dev, libxml2-devel, "yes", "A fundamental lib for
     all \*DAV functionality."
-    `nghttp2`_, libnghttp2-dev, libnghttp2-devel, "no", "no", "HTTP/2 support
+    `nghttp2`_, libnghttp2-dev, libnghttp2-devel, "no", "HTTP/2 support
     for the entire **httpd** subsystem (\*DAV & JMAP)."
-    `shapelib`_, shapelib, shapelib, "yes/no", "no", "It is required for
+    `shapelib`_, shapelib, shapelib, "yes/no", "It is required for
     **tzdist** service to have geolocation support. Otherwise it is not needed.
     Version 1.3.0 or higher is required when using it."
-    `wslay`_, libwslay-dev, wslay-devel, "no", "no", "It provides WebSockets
-    support in httpd. Only used with **JMAP**, otherwise not needed."
-    `zlib`_, zlib1g-dev, zlib-devel, "no", "no", "It provides gzip compression
+    `wslay`_, libwslay-dev, wslay-devel, "no", "It provides WebSockets support
+    in httpd. Only used with **JMAP**, otherwise not needed. Version 1.1.1 or
+    higher is required when using it."
+    `zlib`_, zlib1g-dev, zlib-devel, "no", "It provides gzip compression
     support for http communications."
 
 Other
 #####
 
 .. csv-table::
-    :header: "Package", "Debian", "RedHat", "Required", "Required for ``make check``?", "Notes"
-    :widths: 20,15,15,5,5,45
+    :header: "Package", "Debian", "RedHat", "Required", "Notes"
+    :widths: 20,15,15,5,45
 
-    SSL certificates, ssl-cert-dev, mod_ssl, "no", "no", "Used if you're
+    SSL certificates, ssl-cert-dev, mod_ssl, "no", "Used if you're
     installing SSL certificates."
-    `ClamAV`_, libclamav-dev, clamav-devel, "no", "no", "It is used by
+    `ClamAV`_, libclamav-dev, clamav-devel, "no", "It is used by
     **cyr_virusscan**, otherwise not needed."
-    `openldap`_, libldap2-dev, openldap-devel, "no", "no", "Development headers
+    `openldap`_, libldap2-dev, openldap-devel, "no", "Development headers
     to enable **ptloader** to interface with LDAP directly, for canonification
     of login usernames to mailbox names, and verification of login usernames,
-    ACL subjects and group membership.
-
-    Configure option: ``--with-ldap``"
-    `pcre`_, libpcre3-dev, pcre-devel, "yes", "no", "PCRE 1 (8.x) - for utf-8/unicode regular expression
-    matching. Also see `issues/1731`_."
-    `perl(Term::ReadLine)`_,,, "no", "no", "Perl library needed by **cyradm**"
-    `libsrs2`_, *no package*, *no package*, "no", "no", "It is used for
+    ACL subjects and group membership. Configure option: ``--with-ldap``."
+    `pcre`_, libpcre3-dev, pcre-devel, "yes", "PCRE 1 (8.x) - for utf-8/unicode
+    regular expression matching. Could be replaced by something else in the
+    future. See `issues/1731`_ for more information."
+    `perl(Term::ReadLine)`_,,, "no", "Perl library needed by **cyradm**"
+    `libsrs2`_, *no package*, *no package*, "no", "It is used for
     implementing Sender Rewriting Scheme (SRS) functionality for messages
     forwarded by sieve scripts. Without it, messages forwarded by sieve scripts
     will not have this functionality and might have difficulty delivering to
@@ -223,8 +240,9 @@ Optionally install dependencies for :ref:`building the docs <contribute-docs>`.
 Compile Cyrus
 =============
 
-There are additional :ref:`compile and installation steps<imapinstall-xapian>` if you are using Xapian for searching,
-or if you are :ref:`using jmap <developer-jmap>`.
+There are additional :ref:`compile and installation steps<imapinstall-xapian>`
+if you are using Xapian for searching, or if you are :ref:`using jmap
+<developer-jmap>`.
 
 Default build: mail only
 ------------------------
@@ -245,10 +263,9 @@ please see:
     # :command:`./configure --help`
 
 .. tip::
-    Passing environment variables as an argument to configure,
-    rather than setting them in the environment before running configure,
-    allows their values to be logged in config.log.  This is useful for diagnosing
-    problems.
+    Passing environment variables as an argument to configure, rather than
+    setting them in the environment before running configure, allows their
+    values to be logged in config.log.  This is useful for diagnosing problems.
 
 Optional dependencies
 ---------------------
@@ -294,16 +311,21 @@ Compile
 
 The ``--prefix`` option sets where Cyrus is installed to.
 
-It may be of use to also add ``--std=gnu99`` to the ``CFLAGS``.  That generates TONS of warnings.
+It may be of use to also add ``--std=gnu99`` to the ``CFLAGS``. That generates
+TONS of warnings.
 
 Having problems with :ref:`compilation <compilationerrors>` or
 :ref:`linking <linker-warnings>`?
 
-If you're running on Debian, and you install to ``/usr/local``, you may need to update your library loader. Edit ``/etc/ld.so.conf.d/x86_64-linux-gnu.conf`` so it includes the following additional line::
+If you're running on Debian, and you install to ``/usr/local``, you may need to
+update your library loader. Edit ``/etc/ld.so.conf.d/x86_64-linux-gnu.conf`` so
+it includes the following additional line::
 
     /usr/local/lib/x86_64-linux-gnu
 
-Without this, when you attempt to start Cyrus, it reports ``error while loading shared libraries: libcyrus_imap.so.0: cannot open shared object file: No such file or directory`` because it can't find the Cyrus library in /usr/local/lib.
+Without this, when you attempt to start Cyrus, it reports ``error while loading
+shared libraries: libcyrus_imap.so.0: cannot open shared object file: No such
+file or directory`` because it can't find the Cyrus library in /usr/local/lib.
 
 Check
 -----
