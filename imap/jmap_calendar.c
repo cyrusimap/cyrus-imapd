@@ -1154,6 +1154,7 @@ static int jmap_calendar_set(struct jmap_req *req)
                 json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
                 json_object_set_new(set.not_created, key, err);
             }
+            free(uid);
             free(mboxname);
             goto done;
         }
