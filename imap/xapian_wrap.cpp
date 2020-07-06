@@ -974,7 +974,7 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
                 }
             }
             strarray_free(sa);
-            dbw->document->add_boolean_term(prefix + "@" + val);
+            dbw->document->add_boolean_term(prefix + "D" + val);
             // index individual terms
             dbw->term_generator->set_stemmer(Xapian::Stem());
             dbw->term_generator->set_stopper(NULL);
@@ -1573,7 +1573,7 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
         }
         if (!domain.empty()) {
             std::transform(domain.begin(), domain.end(), domain.begin(), ::tolower);
-            std::string term(prefix + '@' + domain);
+            std::string term(prefix + 'D' + domain);
             Xapian::Query qq = wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
                                           Xapian::Query(term);
             q &= qq;
