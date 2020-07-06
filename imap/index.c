@@ -5797,16 +5797,6 @@ done:
     return r;
 }
 
-static void append_alnum(struct buf *buf, const char *ss)
-{
-    const unsigned char *s = (const unsigned char *)ss;
-
-    for ( ; *s ; ++s) {
-        if (Uisalnum(*s))
-            buf_putc(buf, *s);
-    }
-}
-
 static int find_striphtml_parts(message_t *msg, strarray_t *striphtml)
 {
     const struct body *root;
@@ -5986,32 +5976,14 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
             stuff_part(receiver, SEARCH_PART_PRIORITY, NULL, &buf);
 
         if (!message_get_leaf_types(msg, &types) && types.count) {
-            /* We add three search terms: the type, subtype, and a combined
-             * type+subtype string.  We carefully control punctuation to
-             * ensure that each word in indexed as a single term.  For
-             * example if the original message has "application/x-pdf" then
-             * we index "APPLICATION" "XPDF" "APPLICATION_XPDF".  */
-
-            receiver->begin_part(receiver, SEARCH_PART_TYPE, NULL);
             for (i = 0 ; i < types.count ; i+= 2) {
-                buf_reset(&buf);
-
-                if (i) buf_putc(&buf, ' ');
-
-                /* type */
-                append_alnum(&buf, types.data[i]);
-                buf_putc(&buf, ' ');
-                /* subtype */
-                append_alnum(&buf, types.data[i+1]);
-                buf_putc(&buf, ' ');
-                /* combined type_subtype */
-                append_alnum(&buf, types.data[i]);
-                buf_putc(&buf, '_');
-                append_alnum(&buf, types.data[i+1]);
-
+                receiver->begin_part(receiver, SEARCH_PART_TYPE, NULL);
+                buf_setcstr(&buf, types.data[i]);
+                buf_putc(&buf, '/');
+                buf_appendcstr(&buf, types.data[i+1]);
                 receiver->append_text(receiver, &buf);
+                receiver->end_part(receiver, SEARCH_PART_TYPE);
             }
-            receiver->end_part(receiver, SEARCH_PART_TYPE);
         }
 
         /* A regular message. */

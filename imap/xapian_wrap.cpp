@@ -71,8 +71,9 @@ static void make_cyrusid(struct buf *dst, const struct message_guid *guid, char 
  * Version 10: indexes new PRIORITY search part
  * Version 11: indexes LIST-ID as single value
  * Version 12: indexes email domains as single values. Supports subdomain search.
+ * Version 13: indexes content-type and subtype separately
  */
-#define XAPIAN_DB_CURRENT_VERSION 12
+#define XAPIAN_DB_CURRENT_VERSION 13
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
 
 static std::set<int> get_db_versions(const Xapian::Database &database)
@@ -988,6 +989,52 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
     return 0;
 }
 
+static std::pair<std::string, std::string> parse_content_type(const char *str)
+{
+    std::pair<std::string, std::string> ret;
+    struct buf buf = BUF_INITIALIZER;
+
+    const char *sep = strchr(str, '/');
+    if (sep) {
+        /* type */
+        buf_setmap(&buf, str, sep - str);
+        buf_lcase(&buf);
+        buf_trim(&buf);
+        ret.first = std::string(buf_cstring(&buf));
+        /* subtype */
+        buf_setcstr(&buf, sep + 1);
+        buf_lcase(&buf);
+        buf_trim(&buf);
+        ret.second = std::string(buf_cstring(&buf));
+    }
+    else {
+        /* type or subtype */
+        buf_setcstr(&buf, str);
+        buf_lcase(&buf);
+        buf_trim(&buf);
+        ret.first = std::string(buf_cstring(&buf));
+    }
+
+    buf_free(&buf);
+    return ret;
+}
+
+static int add_type_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+{
+    std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
+    std::pair<std::string, std::string> ct = parse_content_type(buf_cstring(part));
+    if (!ct.first.empty()) {
+        dbw->document->add_boolean_term(prefix + "T" + ct.first);
+    }
+    if (!ct.second.empty()) {
+        dbw->document->add_boolean_term(prefix + "S" + ct.second);
+    }
+    if (!ct.first.empty() && !ct.second.empty()) {
+        dbw->document->add_boolean_term(prefix + ct.first + '/' + ct.second);
+    }
+    return 0;
+}
+
 int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
     const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
@@ -1084,6 +1131,9 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
             case SEARCH_PART_BCC:
             case SEARCH_PART_DELIVEREDTO:
                 r = add_email_part(dbw, part, partnum);
+                break;
+            case SEARCH_PART_TYPE:
+                r = add_type_part(dbw, part, partnum);
                 break;
             default:
                 r = add_text_part(dbw, part, partnum);
@@ -1543,7 +1593,7 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
     if (atsign[1]) {
         std::string domain;
         const char *dstart = atsign + 1;
-        int wildcard = *dstart == '*';
+        bool wildcard = *dstart == '*';
         if (wildcard) dstart++;
         const char *dend;
         for (dend = dstart; *dend; dend++) {
@@ -1572,7 +1622,6 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
             }
         }
         if (!domain.empty()) {
-            std::transform(domain.begin(), domain.end(), domain.begin(), ::tolower);
             std::string term(prefix + 'D' + domain);
             Xapian::Query qq = wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
                                           Xapian::Query(term);
@@ -1587,6 +1636,76 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
     // query in legacy format as well!
     if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
         q |= db->parser->parse_query(str, qpflags, prefix);
+    }
+
+    buf_free(&buf);
+    return new Xapian::Query(q);
+}
+
+static void append_alnum(struct buf *buf, const char *ss)
+{
+    const unsigned char *s = (const unsigned char *)ss;
+
+    for ( ; *s ; ++s) {
+        if (Uisalnum(*s))
+            buf_putc(buf, *s);
+    }
+}
+
+static Xapian::Query *query_new_type(const xapian_db_t *db __attribute__((unused)),
+                                     const char *_prefix,
+                                     const char *str)
+{
+
+    std::pair<std::string, std::string> ct = parse_content_type(str);
+    std::string prefix(_prefix);
+    Xapian::Query q = Xapian::Query::MatchAll;
+
+    bool query_legacy = db->db_versions->lower_bound(13) != db->db_versions->begin();
+    struct buf buf = BUF_INITIALIZER;
+    unsigned qpflags = Xapian::QueryParser::FLAG_PHRASE |
+                       Xapian::QueryParser::FLAG_WILDCARD;
+
+    if (!ct.first.empty() && ct.second.empty()) {
+        /* Match either type or subtype */
+        if (ct.first != "*") {
+            q = Xapian::Query(Xapian::Query::OP_OR,
+                    Xapian::Query(prefix + 'T' + ct.first),
+                    Xapian::Query(prefix + 'S' + ct.first));
+            if (query_legacy) {
+                append_alnum(&buf, ct.first.c_str());
+                q |= db->parser->parse_query(buf_cstring(&buf), qpflags, prefix);
+            }
+        }
+    }
+    else if (ct.first == "*" || ct.second == "*") {
+        /* Wildcard query */
+        if (!ct.first.empty() && ct.first != "*") {
+            /* Match type */
+            q = Xapian::Query(prefix + 'T' + ct.first);
+            if (query_legacy) {
+                append_alnum(&buf, ct.first.c_str());
+                q |= db->parser->parse_query(buf_cstring(&buf), qpflags, prefix);
+            }
+        }
+        if (!ct.second.empty() && ct.second != "*") {
+            /* Match subtype */
+            q = Xapian::Query(prefix + 'S' + ct.second);
+            if (query_legacy) {
+                append_alnum(&buf, ct.second.c_str());
+                q |= db->parser->parse_query(buf_cstring(&buf), qpflags, prefix);
+            }
+        }
+    }
+    else if (!ct.first.empty() && !ct.second.empty()) {
+        /* Verbatim search */
+        q = Xapian::Query(prefix + ct.first + '/' + ct.second);
+        if (query_legacy) {
+            append_alnum(&buf, ct.first.c_str());
+            buf_putc(&buf, '_');
+            append_alnum(&buf, ct.second.c_str());
+            q |= db->parser->parse_query(buf_cstring(&buf), qpflags, prefix);
+        }
     }
 
     buf_free(&buf);
@@ -1629,6 +1748,9 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
                  partnum == SEARCH_PART_BCC ||
                  partnum == SEARCH_PART_DELIVEREDTO) {
             return (xapian_query_t*) query_new_email(db, prefix, str);
+        }
+        else if (partnum == SEARCH_PART_TYPE) {
+            return (xapian_query_t*) query_new_type(db, prefix, str);
         }
 
         // Don't stem queries for Thaana codepage (0780) or higher.

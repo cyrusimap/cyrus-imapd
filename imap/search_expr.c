@@ -1420,7 +1420,7 @@ static int search_contenttype_match(message_t *m, const union search_value *v,
             if (r) goto out;    // success
 
             /* match against combined type_subtype */
-            snprintf(combined, sizeof(combined), "%s_%s", type, subtype);
+            snprintf(combined, sizeof(combined), "%s/%s", type, subtype);
             r = charset_searchstring(v->s, pat, combined, strlen(combined), charset_flags);
             if (r) goto out;    // success
         }
