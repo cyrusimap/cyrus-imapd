@@ -198,15 +198,6 @@ recreate these for you automatically:
     or whatever suitable tmpfs is provided on your distro.  It will place
     less IO load on your disks and run faster.
 
-.. warning::
-    Please be warned that some packages place tasks such as ``tlsprune``
-    (:cyrusman:`tls_prune(8)`) in the ``START{}`` stanza of
-    :cyrusman:`cyrus.conf(5)`.  This will cause a startup problem if the
-    ``tls_sessions_db`` is not present.  The solution to this is to
-    remove the ``tlsprune`` task from ``START{}`` and schedule it in
-    ``EVENTS{}``, further down.
-
-
 5. Copy config files and update
 -------------------------------
 
