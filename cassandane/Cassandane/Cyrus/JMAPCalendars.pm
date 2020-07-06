@@ -4725,14 +4725,14 @@ sub test_calendarevent_query_sort
             create => {
                 '1' => {
                     'calendarId' => $calid,
-                    'uid' => 'event1uid@local',
+                    'uid' => 'event1uid',
                     'title' => 'event1',
                     'start' => '2019-10-01T10:00:00',
                     'timeZone' => 'Etc/UTC',
                 },
                 '2' => {
                     'calendarId' => $calid,
-                    'uid' => 'event2uid@local',
+                    'uid' => 'event2uid',
                     'title' => 'event2',
                     'start' => '2018-10-01T12:00:00',
                     'timeZone' => 'Etc/UTC',
@@ -4782,21 +4782,21 @@ sub test_calendarevent_query_anchor
             create => {
                 '1' => {
                     'calendarId' => $calid,
-                    'uid' => 'event1uid@local',
+                    'uid' => 'event1uid',
                     'title' => 'event1',
                     'start' => '2019-10-01T10:00:00',
                     'timeZone' => 'Etc/UTC',
                 },
                 '2' => {
                     'calendarId' => $calid,
-                    'uid' => 'event2uid@local',
+                    'uid' => 'event2uid',
                     'title' => 'event2',
                     'start' => '2019-10-02T10:00:00',
                     'timeZone' => 'Etc/UTC',
                 },
                 '3' => {
                     'calendarId' => $calid,
-                    'uid' => 'event3uid@local',
+                    'uid' => 'event3uid',
                     'title' => 'event3',
                     'start' => '2019-10-03T10:00:00',
                     'timeZone' => 'Etc/UTC',
@@ -5351,7 +5351,22 @@ sub test_calendarevent_set_uid
     # A non-pathsafe UID maps to the JMAP id but not the DAV resource.
     $event->{uid} = "a/bogus/path#uid";
     delete $event->{id};
-    $ret = $self->createandget_event($event);
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => $event,
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+    $jmap->{CreatedIds} = undef;
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+        }, 'R1'],
+    ]);
+    $ret = $res->[0][1]{list}[0];
     ($filename, $dirs, $suffix) = fileparse($ret->{"x-href"}, ".ics");
     $self->assert_not_null($filename);
     $self->assert_str_not_equals($event->{uid}, $filename);
@@ -6033,7 +6048,7 @@ sub test_calendarevent_query_expandrecurrences
             create => {
                 "1" => {
                     calendarId => $calid,
-                    uid => 'event1uid@local',
+                    uid => 'event1uid',
                     title => "event1",
                     description => "",
                     freeBusyStatus => "busy",
@@ -6055,7 +6070,7 @@ sub test_calendarevent_query_expandrecurrences
                 },
                 "2" => {
                     calendarId => $calid,
-                    uid => 'event2uid@local',
+                    uid => 'event2uid',
                     title => "event2",
                     description => "",
                     freeBusyStatus => "busy",
@@ -6084,11 +6099,11 @@ sub test_calendarevent_query_expandrecurrences
     ]);
     $self->assert_num_equals(5, $res->[0][1]{total});
     $self->assert_deep_equals([
-            'event1uid@local;2019-01-15T09:00:00.123',
-            'event1uid@local;2019-01-08T09:00:00.123',
-            'event1uid@local;2019-01-03T13:00:00.789',
-            'event2uid@local',
-            'event1uid@local;2019-01-01T09:00:00.123',
+            'event1uid;2019-01-15T09:00:00.123',
+            'event1uid;2019-01-08T09:00:00.123',
+            'event1uid;2019-01-03T13:00:00.789',
+            'event2uid',
+            'event1uid;2019-01-01T09:00:00.123',
     ], $res->[0][1]{ids});
 }
 
@@ -6107,7 +6122,7 @@ sub test_calendarevent_get_recurrenceinstances
             create => {
                 "1" => {
                     calendarId => $calid,
-                    uid => 'event1uid@local',
+                    uid => 'event1uid',
                     title => "event1",
                     description => "",
                     freeBusyStatus => "busy",
@@ -6140,11 +6155,11 @@ sub test_calendarevent_get_recurrenceinstances
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
                 ids => [
-                    'event1uid@local;2019-01-08T09:00:00',
-                    'event1uid@local;2019-01-15T09:00:00',
-                    'event1uid@local;2019-01-10T12:00:00',
-                    'event1uid@local;2019-01-22T09:00:00', # is excluded
-                    'event1uid@local;2019-12-01T09:00:00', # does not exist
+                    'event1uid;2019-01-08T09:00:00',
+                    'event1uid;2019-01-15T09:00:00',
+                    'event1uid;2019-01-10T12:00:00',
+                    'event1uid;2019-01-22T09:00:00', # is excluded
+                    'event1uid;2019-12-01T09:00:00', # does not exist
 
                 ],
                 properties => ['start', 'title', 'recurrenceId'],
@@ -6152,22 +6167,22 @@ sub test_calendarevent_get_recurrenceinstances
     ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{list}});
 
-    $self->assert_str_equals('event1uid@local;2019-01-08T09:00:00', $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals('event1uid;2019-01-08T09:00:00', $res->[0][1]{list}[0]{id});
     $self->assert_str_equals('2019-01-08T09:00:00', $res->[0][1]{list}[0]{start});
     $self->assert_str_equals('2019-01-08T09:00:00', $res->[0][1]{list}[0]{recurrenceId});
 
-    $self->assert_str_equals('event1uid@local;2019-01-15T09:00:00', $res->[0][1]{list}[1]{id});
+    $self->assert_str_equals('event1uid;2019-01-15T09:00:00', $res->[0][1]{list}[1]{id});
     $self->assert_str_equals('override1', $res->[0][1]{list}[1]{title});
     $self->assert_str_equals('2019-01-15T09:00:00', $res->[0][1]{list}[1]{start});
     $self->assert_str_equals('2019-01-15T09:00:00', $res->[0][1]{list}[1]{recurrenceId});
 
-    $self->assert_str_equals('event1uid@local;2019-01-10T12:00:00', $res->[0][1]{list}[2]{id});
+    $self->assert_str_equals('event1uid;2019-01-10T12:00:00', $res->[0][1]{list}[2]{id});
     $self->assert_str_equals('2019-01-10T12:00:00', $res->[0][1]{list}[2]{start});
     $self->assert_str_equals('2019-01-10T12:00:00', $res->[0][1]{list}[2]{recurrenceId});
 
     $self->assert_num_equals(2, scalar @{$res->[0][1]{notFound}});
-    $self->assert_str_equals('event1uid@local;2019-01-22T09:00:00', $res->[0][1]{notFound}[0]);
-    $self->assert_str_equals('event1uid@local;2019-12-01T09:00:00', $res->[0][1]{notFound}[1]);
+    $self->assert_str_equals('event1uid;2019-01-22T09:00:00', $res->[0][1]{notFound}[0]);
+    $self->assert_str_equals('event1uid;2019-12-01T09:00:00', $res->[0][1]{notFound}[1]);
 }
 
 sub test_calendarevent_set_recurrenceinstances
@@ -6185,7 +6200,7 @@ sub test_calendarevent_set_recurrenceinstances
             create => {
                 "1" => {
                     calendarId => $calid,
-                    uid => 'event1uid@local',
+                    uid => 'event1uid',
                     title => "event1",
                     description => "",
                     freeBusyStatus => "busy",
@@ -6209,17 +6224,17 @@ sub test_calendarevent_set_recurrenceinstances
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid@local;2019-01-15T09:00:00' => {
+                'event1uid;2019-01-15T09:00:00' => {
                     title => "override1",
                 },
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid@local'],
+            ids => ['event1uid'],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid@local;2019-01-15T09:00:00'});
+    $self->assert(exists $res->[0][1]{updated}{'event1uid;2019-01-15T09:00:00'});
     $self->assert_deep_equals({
             '2019-01-15T09:00:00' => {
                 title => "override1",
@@ -6231,17 +6246,17 @@ sub test_calendarevent_set_recurrenceinstances
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid@local;2019-01-15T09:00:00' => {
+                'event1uid;2019-01-15T09:00:00' => {
                     title => "override1_updated",
                 },
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid@local'],
+            ids => ['event1uid'],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid@local;2019-01-15T09:00:00'});
+    $self->assert(exists $res->[0][1]{updated}{'event1uid;2019-01-15T09:00:00'});
     $self->assert_deep_equals({
             '2019-01-15T09:00:00' => {
                 title => "override1_updated",
@@ -6253,34 +6268,34 @@ sub test_calendarevent_set_recurrenceinstances
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid@local;2019-01-15T09:00:00' => {
+                'event1uid;2019-01-15T09:00:00' => {
                     title => "event1", # original title
                 },
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid@local'],
+            ids => ['event1uid'],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid@local;2019-01-15T09:00:00'});
+    $self->assert(exists $res->[0][1]{updated}{'event1uid;2019-01-15T09:00:00'});
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
     xlog $self, "Set regular recurrence excluded";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid@local;2019-01-08T09:00:00' => {
+                'event1uid;2019-01-08T09:00:00' => {
                     excluded => JSON::true,
                 }
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid@local'],
+            ids => ['event1uid'],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid@local;2019-01-08T09:00:00'});
+    $self->assert(exists $res->[0][1]{updated}{'event1uid;2019-01-08T09:00:00'});
     $self->assert_deep_equals({
         '2019-01-08T09:00:00' => {
             excluded => JSON::true,
@@ -6291,30 +6306,30 @@ sub test_calendarevent_set_recurrenceinstances
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid@local' => {
+                'event1uid' => {
                     recurrenceOverrides => undef,
                 }
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid@local'],
+            ids => ['event1uid'],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid@local'});
+    $self->assert(exists $res->[0][1]{updated}{'event1uid'});
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
     xlog $self, "Destroy regular recurrence instance";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
-            destroy => ['event1uid@local;2019-01-08T09:00:00'],
+            destroy => ['event1uid;2019-01-08T09:00:00'],
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid@local'],
+            ids => ['event1uid'],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert_str_equals('event1uid@local;2019-01-08T09:00:00', $res->[0][1]{destroyed}[0]);
+    $self->assert_str_equals('event1uid;2019-01-08T09:00:00', $res->[0][1]{destroyed}[0]);
     $self->assert_deep_equals({
         '2019-01-08T09:00:00' => {
             excluded => JSON::true,
@@ -6337,7 +6352,7 @@ sub test_calendarevent_set_recurrenceinstances_rdate
             create => {
                 "1" => {
                     calendarId => $calid,
-                    uid => 'event1uid@local',
+                    uid => 'event1uid',
                     title => "event1",
                     description => "",
                     freeBusyStatus => "busy",
@@ -6364,24 +6379,24 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid@local;2019-01-10T14:00:00' => {
+                'event1uid;2019-01-10T14:00:00' => {
                     excluded => JSON::true,
                 }
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid@local'],
+            ids => ['event1uid'],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid@local;2019-01-10T14:00:00'});
+    $self->assert(exists $res->[0][1]{updated}{'event1uid;2019-01-10T14:00:00'});
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
     xlog $self, "Recreate RDATE";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid@local' => {
+                'event1uid' => {
                     recurrenceOverrides => {
                         '2019-01-10T14:00:00' => {}
                     },
@@ -6389,11 +6404,11 @@ sub test_calendarevent_set_recurrenceinstances_rdate
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid@local'],
+            ids => ['event1uid'],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid@local'});
+    $self->assert(exists $res->[0][1]{updated}{'event1uid'});
     $self->assert_deep_equals({
             '2019-01-10T14:00:00' => { },
         },
@@ -6403,14 +6418,14 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     xlog $self, "Destroy RDATE";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
-            destroy => ['event1uid@local;2019-01-10T14:00:00'],
+            destroy => ['event1uid;2019-01-10T14:00:00'],
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid@local'],
+            ids => ['event1uid'],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert_str_equals('event1uid@local;2019-01-10T14:00:00', $res->[0][1]{destroyed}[0]);
+    $self->assert_str_equals('event1uid;2019-01-10T14:00:00', $res->[0][1]{destroyed}[0]);
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 }
 
@@ -6425,7 +6440,7 @@ sub test_calendarevent_set_invalidpatch
             create => {
                 "1" => {
                     calendarId => 'Default',
-                    uid => 'event1uid@local',
+                    uid => 'event1uid',
                     title => "event1",
                     description => "",
                     freeBusyStatus => "busy",
@@ -6486,7 +6501,7 @@ sub test_calendarevent_blobid
             create => {
                 "1" => {
                     calendarId => 'Default',
-                    uid => 'event1uid@local1',
+                    uid => 'event1uid1',
                     title => "event1",
                     description => "",
                     freeBusyStatus => "busy",
@@ -6605,7 +6620,7 @@ sub test_calendarevent_debugblobid
             create => {
                 "1" => {
                     calendarId => 'Default',
-                    uid => 'event1uid@local1',
+                    uid => 'event1uid1',
                     title => "event1",
                     description => "",
                     freeBusyStatus => "busy",
