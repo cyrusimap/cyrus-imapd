@@ -377,7 +377,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 # Commented out - there's no single setting "autocreate_acl",
 # but we need this for the man page
 # { "autocreate_acl", NULL, STRING, "3.3.0" }
-/* If folders are to be created by \fIautocreate_inbox_folders\R, this
+/* If folders are to be created by \fIautocreate_inbox_folders\fR, this
    setting can be used to apply additional ACLs to the autocreated
    folders.  The syntax is "autocreate_acl folder identifier rights",
    where \fIfolder\fR must match one of the \fIautocreate_inbox_folders\fR
