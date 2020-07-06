@@ -233,10 +233,6 @@ below.
 * unixhierarchysep: on
 * altnamespace: on
 
-.. note::
-    If your installation is using groups, don't turn ``reverseacls:`` on. Reverseacl support
-    only works well for sites without groups.
-
 In :cyrusman:`cyrus.conf(5)` move idled from the START section to the
 DAEMON section.
 
