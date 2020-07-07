@@ -41,6 +41,7 @@ extern int charset_flags;
 #define SLOT_CYRUSID        0
 #define SLOT_DOCLANGS       1
 #define SLOT_INDEXLEVEL     2
+#define SLOT_INDEXVERSION   3
 
 /* ====================================================================== */
 
@@ -72,11 +73,12 @@ static void make_cyrusid(struct buf *dst, const struct message_guid *guid, char 
  * Version 11: indexes LIST-ID as single value
  * Version 12: indexes email domains as single values. Supports subdomain search.
  * Version 13: indexes content-type and subtype separately
+ * Version 14: adds SLOT_INDEXVERSION to documents
  */
-#define XAPIAN_DB_CURRENT_VERSION 13
+#define XAPIAN_DB_CURRENT_VERSION 14
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
 
-static std::set<int> get_db_versions(const Xapian::Database &database)
+static std::set<int> read_db_versions(const Xapian::Database &database)
 {
     std::set<int> versions;
 
@@ -99,7 +101,7 @@ static std::set<int> get_db_versions(const Xapian::Database &database)
     return versions;
 }
 
-static void set_db_versions(Xapian::WritableDatabase &database, std::set<int> &versions)
+static void write_db_versions(Xapian::WritableDatabase &database, std::set<int> &versions)
 {
     std::ostringstream val;
     for (std::set<int>::iterator it = versions.begin(); it != versions.end(); ++it) {
@@ -138,7 +140,7 @@ static std::string lang_count_key(const std::string& iso_lang)
 static int calculate_language_counts(const Xapian::Database& db,
                                      std::map<const std::string, unsigned>& lang_counts)
 {
-    std::set<int> db_versions = get_db_versions(db);
+    std::set<int> db_versions = read_db_versions(db);
 
     if (db_versions.lower_bound(8) == db_versions.begin()) {
         // count all indexed body parts
@@ -209,7 +211,7 @@ static void write_language_counts(Xapian::WritableDatabase& db,
 static void read_language_counts(const Xapian::Database& db,
                                  std::map<const std::string, unsigned>& lang_counts)
 {
-    std::set<int> db_versions = get_db_versions(db);
+    std::set<int> db_versions = read_db_versions(db);
 
     if (db_versions.lower_bound(8) == db_versions.begin()) {
         const std::string prefix(XAPIAN_LANG_COUNT_KEYPREFIX ".");
@@ -484,13 +486,32 @@ int xapian_compact_dbs(const char *dest, const char **sources)
             subdbs.push_back(subdb);
 
             // Aggregate db versions.
-            std::set<int> subdb_versions = get_db_versions(subdb);
-            db_versions.insert(subdb_versions.begin(), subdb_versions.end());
+            bool need_metadata = false;
+            for (Xapian::docid docid = 1; docid <= subdb.get_lastdocid(); ++docid) {
+                try {
+                    Xapian::Document doc = subdb.get_document(docid);
+                    const std::string& val = doc.get_value(SLOT_INDEXVERSION);
+                    if (!val.empty()) {
+                        int version = std::atoi(val.c_str());
+                        if (version) db_versions.insert(version);
+                    }
+                    else need_metadata = true;
+                }
+                catch (Xapian::DocNotFoundError e) {
+                    // ignore
+                }
+            }
+            if (need_metadata) {
+                /* At least one document didn't have its index version set.
+                 * Read the legacy version from the metadata. */
+                std::set<int> md_versions = read_db_versions(subdb);
+                db_versions.insert(md_versions.begin(), md_versions.lower_bound(14));
+            }
 
             // Aggregate language counts.
             r = calculate_language_counts(subdb, lang_counts);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: Xapian: compact %s: corrupt metadata", thispath);
+                syslog(LOG_ERR, "IOERROR: Xapian: compact %s: corrupt language metadata", thispath);
                 return r;
             }
         }
@@ -502,7 +523,7 @@ int xapian_compact_dbs(const char *dest, const char **sources)
         db.compact(dest, Xapian::Compactor::FULLER | Xapian::DBCOMPACT_MULTIPASS, 0, comp);
 
         Xapian::WritableDatabase newdb(dest);
-        set_db_versions(newdb, db_versions);
+        write_db_versions(newdb, db_versions);
 
         // Clean metadata.
         remove_legacy_metadata(newdb);
@@ -652,7 +673,7 @@ void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *torein
     for (int i = 0; i < sources->count; i++) {
         const char *thispath = strarray_nth(sources, i);
         try {
-            for (const int& it: get_db_versions(Xapian::Database{thispath})) {
+            for (const int& it: read_db_versions(Xapian::Database{thispath})) {
                 if (it < XAPIAN_DB_MIN_SUPPORTED_VERSION ||
                         (always_upgrade && (it != XAPIAN_DB_CURRENT_VERSION))) {
                     strarray_add(toreindex, thispath);
@@ -712,7 +733,7 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
     try {
         try {
             dbw->database = new Xapian::WritableDatabase{thispath, Xapian::DB_OPEN};
-            db_versions = get_db_versions(*dbw->database);
+            db_versions = read_db_versions(*dbw->database);
         } catch (Xapian::DatabaseOpeningError &e) {
             /* It's OK not to atomically create or open, since we can assume
              * the xapianactive file items to be locked. */
@@ -721,7 +742,7 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
         if (db_versions.find(XAPIAN_DB_CURRENT_VERSION) == db_versions.end()) {
             // Always index using latest database version.
             db_versions.insert(XAPIAN_DB_CURRENT_VERSION);
-            set_db_versions(*dbw->database, db_versions);
+            write_db_versions(*dbw->database, db_versions);
         }
 
         r = xapian_dbw_init(dbw);
@@ -1181,6 +1202,8 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
             }
         }
         dbw->document->add_value(SLOT_INDEXLEVEL, format_indexlevel(indexlevel));
+        dbw->document->add_value(SLOT_INDEXVERSION,
+                std::to_string(XAPIAN_DB_CURRENT_VERSION));
         dbw->database->add_document(*dbw->document);
         dbw->database->set_metadata("cyrusid." + std::string(dbw->cyrusid),
                                     format_indexlevel(indexlevel));
@@ -1293,7 +1316,7 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
         while (paths && *paths) {
             thispath = *paths++;
             Xapian::Database subdb {thispath};
-            std::set<int> db_versions = get_db_versions(subdb);
+            std::set<int> db_versions = read_db_versions(subdb);
             if (db_versions.empty()) {
                 syslog(LOG_ERR, "xapian_wrapper: invalid db version in %s", thispath);
                 r = IMAP_INTERNAL;
@@ -1351,7 +1374,7 @@ int xapian_db_opendbw(struct xapian_dbw *dbw, xapian_db_t **dbp)
     db->dbw = dbw;
     db->database = dbw->database;
     db->db_versions = new std::set<int>();
-    std::set<int> dbw_versions = get_db_versions(*dbw->database);
+    std::set<int> dbw_versions = read_db_versions(*dbw->database);
     db->db_versions->insert(dbw_versions.begin(), dbw_versions.end());
     db->subdbs = new std::vector<Xapian::Database>;
     db->subdbs->push_back(*dbw->database);
@@ -2167,7 +2190,6 @@ int xapian_filter(const char *dest, const char **sources,
 {
     int r = 0;
     const char *thispath = "(unknown path)";
-    std::set<int> db_versions;
 
     try {
         /* create a destination database */
@@ -2185,16 +2207,15 @@ int xapian_filter(const char *dest, const char **sources,
             thispath = *sources++;
             const Xapian::Database srcdb {thispath};
             srcdbs.push_back(srcdb);
-
-            // Aggregate db versions.
-            std::set<int> srcdb_versions = get_db_versions(srcdb);
-            db_versions.insert(srcdb_versions.begin(), srcdb_versions.end());
         }
 
         // Copy all matching documents.
+        std::set<int> db_versions;
 
         for (size_t i = 0; i < srcdbs.size(); ++i) {
             const Xapian::Database& srcdb = srcdbs.at(i);
+            bool need_md_versions = false;
+            std::set<int> md_versions = read_db_versions(srcdb);
 
             /* copy all matching documents to the new DB */
             for (Xapian::ValueIterator it = srcdb.valuestream_begin(SLOT_CYRUSID);
@@ -2225,31 +2246,44 @@ int xapian_filter(const char *dest, const char **sources,
                     }
                 }
 
-
                 // add document
                 Xapian::Document srcdoc = srcdb.get_document(it.get_docid());
                 Xapian::docid docid = destdb.add_document(srcdoc);
                 destdb.set_metadata(idkey, format_indexlevel(indexlevel));
 
                 // copy document language metadata
-                std::string langkey = lang_doc_key(cyrusid.c_str());
+                const std::string& langkey = lang_doc_key(cyrusid.c_str());
                 if (destdb.get_metadata(langkey).empty()) {
                     std::string val = srcdb.get_metadata(langkey);
                     if (!val.empty() && isalpha(val[0])) {
                         destdb.set_metadata(langkey, val);
                     }
                 }
-                std::string val = srcdoc.get_value(SLOT_DOCLANGS);
-                if (!val.empty() && !isalpha(val[0])) {
+                const std::string& langval = srcdoc.get_value(SLOT_DOCLANGS);
+                if (!langval.empty() && !isalpha(langval[0])) {
                     destdb.get_document(docid).remove_value(SLOT_DOCLANGS);
                 }
+                // add document index version
+                const std::string& verval = srcdoc.get_value(SLOT_INDEXVERSION);
+                if (!verval.empty()) {
+                    int version = std::atoi(verval.c_str());
+                    if (version) db_versions.insert(version);
+                }
+                else need_md_versions = true;
+            }
+
+            if (need_md_versions) {
+                /* At least one added document didn't have its index
+                 * version slot set in this subdb. Read legacy versions. */
+                std::set<int> md_versions = read_db_versions(srcdb);
+                db_versions.insert(md_versions.begin(), md_versions.lower_bound(14));
             }
         }
 
         thispath = "(unknown path)";
 
-        // set the versions to match the source databases
-        set_db_versions(destdb, db_versions);
+        // set the versions
+        write_db_versions(destdb, db_versions);
 
         // recalculate language counts
         std::map<const std::string, unsigned> lang_counts;
