@@ -4203,6 +4203,11 @@ sub test_calendarevent_query_shared
         my $calidB = $res->[0][1]{created}{"2"}{id};
         my $state = $res->[0][1]{newState};
 
+        if ($account == 'manifold') {
+            $admintalk->setacl("user.manifold.#calendars.$calidA", cassandane => 'lrswipkxtecdn');
+            $admintalk->setacl("user.manifold.#calendars.$calidB", cassandane => 'lrswipkxtecdn');
+        }
+
         xlog $self, "create event #1 in calendar $calidA and event #2 in calendar $calidB";
         $res = $jmap->CallMethods([['CalendarEvent/set', {
                         accountId => $account,
