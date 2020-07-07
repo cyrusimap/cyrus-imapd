@@ -1135,18 +1135,54 @@ static int jmap_calendar_set(struct jmap_req *req)
             mboxlist_entry_free(&mbparent);
             continue;
         }
+        char *newacl = xstrdup("");
+        char *acl = xstrdup(mbparent->acl);
         mboxlist_entry_free(&mbparent);
+
+        /* keep just the owner and admin parts of the new ACL!  Everything
+         * else will be added from share.With.  All this crap should be
+         * modularised some more rather than open-coded, but here we go */
+        char *userid;
+        char *nextid = NULL;
+        for (userid = acl; userid; userid = nextid) {
+            char *rightstr;
+            int access;
+
+            rightstr = strchr(userid, '\t');
+            if (!rightstr) break;
+            *rightstr++ = '\0';
+
+            nextid = strchr(rightstr, '\t');
+            if (!nextid) break;
+            *nextid++ = '\0';
+
+            if (!strcmp(userid, req->accountid) || is_system_user(userid)) {
+                /* owner or system */
+                cyrus_acl_strtomask(rightstr, &access);
+                r = cyrus_acl_set(&newacl, userid,
+                                  ACL_MODE_SET, access, NULL, NULL);
+                if (r) {
+                    free(acl);
+                    free(newacl);
+                    syslog(LOG_ERR, "IOERROR: failed to set_acl for calendar create (%s, %s) %s",
+                                    userid, req->accountid, error_message(r));
+                    goto done;
+                }
+            }
+        }
+        free(acl);
 
         /* Create the calendar */
         char *uid = xstrdup(makeuuid());
         char *mboxname = caldav_mboxname(req->accountid, uid);
-        r = mboxlist_createmailbox(mboxname, MBTYPE_CALENDAR,
-                                   NULL /* partition */,
-                                   httpd_userisadmin || httpd_userisproxyadmin,
-                                   httpd_userid, httpd_authstate,
-                                   /*localonly*/0, /*forceuser*/0,
-                                   /*dbonly*/0, /*notify*/0,
-                                   /*mailboxptr*/NULL);
+        r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
+                                NULL /* partition */,
+                                httpd_userid, httpd_authstate,
+                                /*options*/0, /*uidvalidity*/0,
+                                0, 0, 0, newacl, /*uniqueid*/NULL,
+                                /*localonly*/0, /*keep_intermediaries*/0,
+                                /*mailboxptr*/NULL);
+        free(newacl);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                    mboxname, error_message(r));
@@ -1154,6 +1190,7 @@ static int jmap_calendar_set(struct jmap_req *req)
                 json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
                 json_object_set_new(set.not_created, key, err);
             }
+            free(uid);
             free(mboxname);
             goto done;
         }
