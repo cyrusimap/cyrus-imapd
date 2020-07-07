@@ -1248,7 +1248,7 @@ static int _jmap_findblob(jmap_req_t *req, const char *from_accountid,
 
     syslog(LOG_DEBUG, "jmap_findblob (%s, %s)", from_accountid, blobid);
 
-    if (blob && req->inmemory_blobs) {
+    if (!exact && blob && req->inmemory_blobs) {
         const struct buf *inmem = hash_lookup(blobid, req->inmemory_blobs);
         if (inmem) {
             buf_init_ro(blob, buf_base(inmem), buf_len(inmem));
