@@ -8729,7 +8729,9 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         /* Make Content-Disposition header */
         part->disposition = xstrdup("attachment");
         buf_printf(&buf, "attachment");
-        _mime_write_xparam(&buf, "filename", part->filename);
+        if (part->filename) {
+            _mime_write_xparam(&buf, "filename", part->filename);
+        }
         _headers_add_new(&part->headers,
                 _header_make("Content-Disposition", "name", &buf));
     }
