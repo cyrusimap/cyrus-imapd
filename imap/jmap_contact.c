@@ -985,6 +985,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         struct entryattlist *annots = NULL;
         strarray_t *flags = NULL;
 
+        json_t *invalid = json_pack("[]");
+
         /* Load message containing the resource and parse vcard data */
         struct vparse_card *vcard = record_to_vcard(mailbox, &record);
         if (!vcard || !vcard->objects) {
@@ -999,8 +1001,6 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         struct vparse_card *card = vcard->objects;
         vparse_replace_entry(card, NULL, "VERSION", "3.0");
         vparse_replace_entry(card, NULL, "PRODID", _prodid);
-
-        json_t *invalid = json_pack("[]");
 
         if (kind == CARDDAV_KIND_GROUP) {
             json_t *namep = NULL;
