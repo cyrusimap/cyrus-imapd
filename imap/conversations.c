@@ -696,68 +696,32 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
 /*
  * Normalise a subject string, to a form which can be used for deciding
  * whether a message belongs in the same conversation as it's antecedent
- * messages.  What we're doing here is the same idea as the "base
- * subject" algorithm described in RFC 5256 but slightly adapted from
- * experience.  Differences are:
- *
- *  - We eliminate all whitespace; RFC 5256 normalises any sequence
- *    of whitespace characters to a single SP.  We do this because
- *    we have observed combinations of buggy client software both
- *    add and remove whitespace around folding points.
- *
- *  - We include the Unicode U+00A0 (non-breaking space) codepoint in our
- *    determination of whitespace (as the UTF-8 sequence \xC2\xA0) because
- *    we have seen it in the wild, but do not currently generalise this to
- *    other Unicode "whitespace" codepoints. (XXX)
- *
- *  - Because we eliminate whitespace entirely, and whitespace helps
- *    delimit some of our other replacements, we do that whitespace
- *    step last instead of first.
- *
- *  - We eliminate leading tokens like Re: and Fwd: using a simpler
- *    and more generic rule than RFC 5256's; this rule catches a number
- *    of semantically identical prefixes in other human languages, but
- *    unfortunately also catches lots of other things.  We think we can
- *    get away with this because the normalised subject is never directly
- *    seen by human eyes, so some information loss is acceptable as long
- *    as the subjects in different messages match correctly.
- *
- *  - We eliminate trailing tokens like [SEC=UNCLASSIFIED],
- *    [DLM=Sensitive], etc which are automatically added by Australian
- *    Government department email systems.  In theory there should be no
- *    more than one of these on an email subject but in practice multiple
- *    have been seen.
- *    http://www.finance.gov.au/files/2012/04/EPMS2012.3.pdf
+ * messages.
  */
 EXPORTED void conversation_normalise_subject(struct buf *s)
 {
     static int initialised_res = 0;
     static regex_t whitespace_re;
+    static regex_t bracket_re;
     static regex_t relike_token_re;
-    static regex_t blob_start_re;
-    static regex_t blob_end_re;
     int r;
 
     if (!initialised_res) {
         r = regcomp(&whitespace_re, "([ \t\r\n]+|\xC2\xA0)", REG_EXTENDED);
         assert(r == 0);
-        r = regcomp(&relike_token_re, "^[ \t]*[A-Za-z0-9]+(\\[[0-9]+\\])?:", REG_EXTENDED);
+        r = regcomp(&bracket_re, "(\\[[^\\[\\]]*\\])|(^[^\\[]*\\])|(\\[[^\\]]*$)", REG_EXTENDED);
         assert(r == 0);
-        r = regcomp(&blob_start_re, "^[ \t]*\\[[^]]+\\]", REG_EXTENDED);
-        assert(r == 0);
-        r = regcomp(&blob_end_re, "\\[(SEC|DLM)=[^]]+\\][ \t]*$", REG_EXTENDED);
+        r = regcomp(&relike_token_re, "^[ \\t]*[^\\s]+:", REG_EXTENDED);
         assert(r == 0);
         initialised_res = 1;
     }
 
-    /* step 1 is to decode any RFC 2047 MIME encoding of the header
-     * field, but we assume that has already happened */
+    /* step 1 is to remove anything within (maybe unmatched) square brackets */
+    while (buf_replace_one_re(s, &bracket_re, NULL))
+        ;
 
-    /* step 2 is to eliminate all "Re:"-like tokens and [] blobs
-     * at the start, and AusGov [] blobs at the end */
-    while (buf_replace_one_re(s, &relike_token_re, NULL) ||
-           buf_replace_one_re(s, &blob_start_re, NULL) ||
-           buf_replace_one_re(s, &blob_end_re, NULL))
+    /* step 2 is to eliminate all "Re:"-like tokens */
+    while (buf_replace_one_re(s, &relike_token_re, NULL))
         ;
 
     /* step 3 is eliminating whitespace. */
