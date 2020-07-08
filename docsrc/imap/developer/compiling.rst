@@ -134,7 +134,7 @@ Alternate database formats
     development headers, required to allow Cyrus IMAP to use it as the backend
     for its databases. Configure option: ``--with-pgsql``."
 
-CalDAV, CardDAV, or JMAP (httpd sybsystem)
+CalDAV, CardDAV, or JMAP (httpd subsystem)
 ##########################################
 
 .. csv-table::
