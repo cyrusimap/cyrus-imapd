@@ -1346,15 +1346,21 @@ static void test_subject_normalise(void)
     TESTCASE("subj gets long fast [SEC=UNCLASSIFIED] [DLM=Sensitive:Personal]",
              "subjgetslongfast");
     TESTCASE("inter[SEC=UNCLASSIFIED]jection",
-             "inter[SEC=UNCLASSIFIED]jection");
+             "interjection");
     TESTCASE("walks, talks, doesn't quack [SEC=UN",
-             "walks,talks,doesn'tquack[SEC=UN");
+             "walks,talks,doesn'tquack");
     TESTCASE("Re[2]: another reply",
              "anotherreply");
     TESTCASE("Re[peat]: another reply",
-             "Re[peat]:anotherreply");
+             "anotherreply");
     TESTCASE("non" "\xC2\xA0" "breaking space",
              "nonbreakingspace");
+    TESTCASE("回复: test no ascii",
+             "testnoascii");
+    TESTCASE("unmatched left] foobar",
+             "foobar");
+    TESTCASE("unmatched left] foobar [unmatched=[matched]",
+             "foobar");
 }
 
 #undef TESTCASE
