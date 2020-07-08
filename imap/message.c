@@ -3450,13 +3450,98 @@ static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
     return r;
 }
 
+/*
+ * This is the legacy code version to generate conversation subjects.
+ * We keep it here to allow matching messages to conversations that
+ * already got that oldstyle subject set.
+ */
+/*
+ * Normalise a subject string, to a form which can be used for deciding
+ * whether a message belongs in the same conversation as it's antecedent
+ * messages.  What we're doing here is the same idea as the "base
+ * subject" algorithm described in RFC 5256 but slightly adapted from
+ * experience.  Differences are:
+ *
+ *  - We eliminate all whitespace; RFC 5256 normalises any sequence
+ *    of whitespace characters to a single SP.  We do this because
+ *    we have observed combinations of buggy client software both
+ *    add and remove whitespace around folding points.
+ *
+ *  - We include the Unicode U+00A0 (non-breaking space) codepoint in our
+ *    determination of whitespace (as the UTF-8 sequence \xC2\xA0) because
+ *    we have seen it in the wild, but do not currently generalise this to
+ *    other Unicode "whitespace" codepoints. (XXX)
+ *
+ *  - Because we eliminate whitespace entirely, and whitespace helps
+ *    delimit some of our other replacements, we do that whitespace
+ *    step last instead of first.
+ *
+ *  - We eliminate leading tokens like Re: and Fwd: using a simpler
+ *    and more generic rule than RFC 5256's; this rule catches a number
+ *    of semantically identical prefixes in other human languages, but
+ *    unfortunately also catches lots of other things.  We think we can
+ *    get away with this because the normalised subject is never directly
+ *    seen by human eyes, so some information loss is acceptable as long
+ *    as the subjects in different messages match correctly.
+ *
+ *  - We eliminate trailing tokens like [SEC=UNCLASSIFIED],
+ *    [DLM=Sensitive], etc which are automatically added by Australian
+ *    Government department email systems.  In theory there should be no
+ *    more than one of these on an email subject but in practice multiple
+ *    have been seen.
+ *    http://www.finance.gov.au/files/2012/04/EPMS2012.3.pdf
+ */
+static void oldstyle_normalise_subject(struct buf *s)
+{
+    static int initialised_res = 0;
+    static regex_t whitespace_re;
+    static regex_t relike_token_re;
+    static regex_t blob_start_re;
+    static regex_t blob_end_re;
+    int r;
+
+    if (!initialised_res) {
+        r = regcomp(&whitespace_re, "([ \t\r\n]+|\xC2\xA0)", REG_EXTENDED);
+        assert(r == 0);
+        r = regcomp(&relike_token_re, "^[ \t]*[A-Za-z0-9]+(\\[[0-9]+\\])?:", REG_EXTENDED);
+        assert(r == 0);
+        r = regcomp(&blob_start_re, "^[ \t]*\\[[^]]+\\]", REG_EXTENDED);
+        assert(r == 0);
+        r = regcomp(&blob_end_re, "\\[(SEC|DLM)=[^]]+\\][ \t]*$", REG_EXTENDED);
+        assert(r == 0);
+        initialised_res = 1;
+    }
+
+    /* step 1 is to decode any RFC 2047 MIME encoding of the header
+     * field, but we assume that has already happened */
+
+    /* step 2 is to eliminate all "Re:"-like tokens and [] blobs
+     * at the start, and AusGov [] blobs at the end */
+    while (buf_replace_one_re(s, &relike_token_re, NULL) ||
+           buf_replace_one_re(s, &blob_start_re, NULL) ||
+           buf_replace_one_re(s, &blob_end_re, NULL))
+        ;
+
+    /* step 3 is eliminating whitespace. */
+    buf_replace_all_re(s, &whitespace_re, NULL);
+}
+
+static void extract_convsubject(const struct index_record *record,
+                                struct buf *msubject,
+                                void (*normalise)(struct buf*))
+{
+    if (cacheitem_base(record, CACHE_HEADERS)) {
+        message1_get_subject(record, msubject);
+        normalise(msubject);
+    }
+}
+
 EXPORTED char *message_extract_convsubject(const struct index_record *record)
 {
     char *msubj = NULL;
     if (cacheitem_base(record, CACHE_HEADERS)) {
         struct buf msubject = BUF_INITIALIZER;
-        message1_get_subject(record, &msubject);
-        conversation_normalise_subject(&msubject);
+        extract_convsubject(record, &msubject, conversation_normalise_subject);
         msubj = buf_release(&msubject);
         buf_free(&msubject);
     }
@@ -3482,6 +3567,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     int mustkeep = 0;
     conversation_t *conv = NULL;
     char *msubj = NULL;
+    char *msubj_oldstyle = NULL;
     int i;
     int j;
     int r = 0;
@@ -3542,7 +3628,14 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 
     /* Note that a NULL subject, e.g. due to a missing Subject: header
      * field in the original message, is normalised to "" not NULL */
-    msubj = message_extract_convsubject(record);
+    if (cacheitem_base(record, CACHE_HEADERS)) {
+        struct buf msubject = BUF_INITIALIZER;
+        extract_convsubject(record, &msubject, conversation_normalise_subject);
+        msubj = xstrdup(buf_cstring(&msubject));
+        buf_reset(&msubject);
+        extract_convsubject(record, &msubject, oldstyle_normalise_subject);
+        msubj_oldstyle = buf_release(&msubject);
+    }
 
     for (i = 0 ; i < 4 ; i++) {
         int hcount = 0;
@@ -3592,8 +3685,11 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
                 if (r) goto out;
                 /* [IRIS-1576] if X-ME-Message-ID says the messages are
                 * linked, ignore any difference in Subject: header fields. */
-                if (!conv || i == 3 || !conv->subject || !strcmpsafe(conv->subject, msubj))
+                if (!conv || i == 3 || !conv->subject ||
+                        !strcmpsafe(conv->subject, msubj) ||
+                        !strcmpsafe(conv->subject, msubj_oldstyle)) {
                     arrayu64_add(&matchlist, cid);
+                }
             }
 
             conversation_free(conv);
@@ -3710,6 +3806,7 @@ out:
     free(c_env);
     free(c_me_msgid);
     free(msubj);
+    free(msubj_oldstyle);
     if (local_mailbox)
         mailbox_close(&local_mailbox);
 
