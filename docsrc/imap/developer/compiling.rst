@@ -70,40 +70,35 @@ code maintenance tasks or are required for building the documentation.
 Developers only
 ###############
 
+The developer dependencies are required if you are building from git sources,
+have modified certain source files from the release tarball, or have configured
+with ``--enable-maintainer-mode`` in order to build a new package.
+
+If you are building normally from a pure release tarball, then you don't need
+these dependencies. The files, these dependencies produce, have been pre-built
+and included in the release, and do not normally need to be re-built.
+
 .. csv-table::
     :header: "Package", "Debian", "RedHat", "Required", "Notes"
     :widths: 20,15,15,5,45
 
-    `CUnit`_, libcunit1-dev, cunit-devel, "no", "Development headers for
-    compiling Cyrus IMAP's unit tests. Required to run ``make check``."
-    `libdb-dev`_, libdb-dev, libdb-devel, "no", "The -dev package must match the
-    version of libdb you already have installed (assuming it's probably already
-    installed). On Debian 8.0, ``libdb5.3-dev`` is needed, but ``libdb5.1-dev``
-    on 7.8."
-    `perl-devel`_, perl-dev, perl-devel, "no", "Perl development headers to
-    allow building binary perl libraries. Needs version 5+. Configure option:
-    ``--with-perl``"
-    `perl(ExtUtils::MakeMaker)`_,,, "no", "Perl library to assist in building
-    extensions to Perl. Configure option: ``--with-perl``"
-    `perl(Pod::POM::View::Restructured)`_,,, "no", "Perl library to generate man
+    `perl-devel`_, perl-dev, perl-devel, "no", "Needed for building binary perl
+    libraries, version 5+."
+    `perl(ExtUtils::MakeMaker)`_,,, "no", "Needed for building extensions to
+    Perl."
+    `perl(Pod::POM::View::Restructured)`_,,, "no", "Needed to generate man
     pages. This has to be available to the system-wide perl interpreter, found
-    by ``which``, i.e. ``./configure --with-perl`` is not honoured."
-    `python(GitPython)`_,,, "no", "Python library needed for building the
-    documentation."
-    `python(Sphinx)`_,,, "no", "Python library needed for building the
-    documentation."
+    by ``which``."
+    `python(GitPython)`_,,, "no", "Needed for building the documentation."
+    `python(Sphinx)`_,,, "no", "Needed for building the documentation."
     `transfig`_, transfig, transfig, "no", "Also known as fig2dev, transfig is
     an artifact from the old days, and is only used for generation of a couple
     of png files in the legacy documentation (doc/legacy/murder.png and
-    doc/legacy/netnews.png). It's only needed when configure is run with
-    ``--enable-maintainer-mode`` (i.e. if you're building a release or package,
-    rather than just building the software). Those files are pre-built in the
-    release tarballs, so additionally you would only need this when building
-    from git. One day this legacy documentation should be merged into the
-    current documentation, cause then we can get rid of it: `issues/1769`_."
+    doc/legacy/netnews.png). One day it should be merged into the current
+    documentation, cause then we can get rid of it: `issues/1769`_."
     `valgrind`_, valgrind, valgrind, "no", "Performance and memory testing."
-    `xxd`_,vim-common,vim-common, "no", "For rebuilding the _js.h files, for
-    CalDAV and CardDAV support."
+    `xxd`_,vim-common,vim-common, "no", "Needed for the _js.h files, for CalDAV
+    and CardDAV support."
 
 SASL Authentication
 ###################
@@ -177,6 +172,8 @@ Other
     :header: "Package", "Debian", "RedHat", "Required", "Notes"
     :widths: 20,15,15,5,45
 
+    `CUnit`_, libcunit1-dev, cunit-devel, "no", "Development headers for
+    compiling Cyrus IMAP's unit tests. Required to run ``make check``."
     SSL certificates, ssl-cert-dev, mod_ssl, "no", "Used if you're
     installing SSL certificates."
     `ClamAV`_, libclamav-dev, clamav-devel, "no", "It is used by
@@ -197,7 +194,6 @@ Other
 
 .. _ClamAV: https://www.clamav.net/
 .. _CUnit: http://cunit.sourceforge.net/
-.. _libdb-dev: https://github.com/berkeleydb/libdb
 .. _Cyrus SASL Plain: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
 .. _Cyrus SASL MD5: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
 .. _sasl binaries: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
@@ -277,7 +273,7 @@ via configure.
 Sieve is enabled by default.
 
 CalDAV, CardDAV, WebDAV, JMAP
-#####################
+#############################
 
     ``./configure --enable-http --enable-calalarmd --enable-jmap``
 
