@@ -1066,6 +1066,7 @@ void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
      * request. If a creation id is reused, the server MUST map the creation
      * id to the most recently created item with that id."
      */
+    free(hash_del(creation_id, req->created_ids));
     hash_insert(creation_id, xstrdup(id), req->created_ids);
 }
 
