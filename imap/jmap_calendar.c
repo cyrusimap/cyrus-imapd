@@ -1554,6 +1554,47 @@ done:
     buf_free(&buf);
 }
 
+static char *setcalendars_create_rewriteacl(jmap_req_t *req, const char *parentacl)
+{
+
+    /* keep just the owner and admin parts of the new ACL!  Everything
+     * else will be added from share.With.  */
+    char *newacl = xstrdup("");
+    char *acl = xstrdup(parentacl);
+    char *userid;
+    char *nextid = NULL;
+    for (userid = acl; userid; userid = nextid) {
+        char *rightstr;
+        int access;
+
+        rightstr = strchr(userid, '\t');
+        if (!rightstr) break;
+        *rightstr++ = '\0';
+
+        nextid = strchr(rightstr, '\t');
+        if (!nextid) break;
+        *nextid++ = '\0';
+
+        if (!strcmp(userid, req->accountid) || is_system_user(userid)) {
+            /* owner or system */
+            cyrus_acl_strtomask(rightstr, &access);
+            int r = cyrus_acl_set(&newacl, userid,
+                    ACL_MODE_SET, access, NULL, NULL);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to set_acl for calendar create (%s, %s) %s",
+                        userid, req->accountid, error_message(r));
+                free(newacl);
+                newacl = NULL;
+                goto done;
+            }
+        }
+    }
+
+done:
+    free(acl);
+    return newacl;
+}
+
 static void setcalendars_create(struct jmap_req *req,
                                 const char *creation_id,
                                 json_t *arg,
@@ -1591,64 +1632,29 @@ static void setcalendars_create(struct jmap_req *req,
         *err = json_pack("{s:s}", "type", "accountReadOnly");
         goto done;
     }
-    char *newacl = xstrdup("");
-    char *acl = xstrdup(mbparent->acl);
-    mboxlist_entry_free(&mbparent);
-
-    /* keep just the owner and admin parts of the new ACL!  Everything
-     * else will be added from share.With.  All this crap should be
-     * modularised some more rather than open-coded, but here we go */
-    char *userid;
-    char *nextid = NULL;
-    for (userid = acl; userid; userid = nextid) {
-        char *rightstr;
-        int access;
-
-        rightstr = strchr(userid, '\t');
-        if (!rightstr) break;
-        *rightstr++ = '\0';
-
-        nextid = strchr(rightstr, '\t');
-        if (!nextid) break;
-        *nextid++ = '\0';
-
-        if (!strcmp(userid, req->accountid) || is_system_user(userid)) {
-            /* owner or system */
-            cyrus_acl_strtomask(rightstr, &access);
-            r = cyrus_acl_set(&newacl, userid,
-                    ACL_MODE_SET, access, NULL, NULL);
-            if (r) {
-                free(acl);
-                free(newacl);
-                syslog(LOG_ERR, "IOERROR: failed to set_acl for calendar create (%s, %s) %s",
-                        userid, req->accountid, error_message(r));
-                goto done;
-            }
-        }
-    }
-    free(acl);
 
     /* Create the calendar */
+    char *acl = setcalendars_create_rewriteacl(req, mbparent->acl);
+    if (!acl || acl[0] == '\0') {
+        r = IMAP_INTERNAL;
+        free(acl);
+        goto done;
+    }
     r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
             NULL /* partition */,
-            httpd_userid, httpd_authstate,
+            req->userid, httpd_authstate,
             /*options*/0, /*uidvalidity*/0,
-            0, 0, 0, newacl, /*uniqueid*/NULL,
+            0, 0, 0, acl, /*uniqueid*/NULL,
             /*localonly*/0, /*keep_intermediaries*/0,
             /*mailboxptr*/NULL);
-    free(newacl);
+    free(acl);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                 mboxname, error_message(r));
-        if (r == IMAP_PERMISSION_DENIED) {
-            *err = json_pack("{s:s}", "type", "accountReadOnly");
-            goto done;
-        }
         goto done;
     }
     r = setcalendar_writeprops(req, mboxname, &props, /*ignore_acl*/1);
     if (r) {
-        free(uid);
         int rr = mboxlist_delete(mboxname);
         if (rr) {
             syslog(LOG_ERR, "could not delete mailbox %s: %s",
