@@ -779,14 +779,15 @@ struct setcalendar_props {
  * NULL values and negative integers are ignored. Return 0 on success. */
 static int setcalendars_update(jmap_req_t *req,
                                const char *mboxname,
-                               struct setcalendar_props *props)
+                               struct setcalendar_props *props,
+                               int ignore_acl)
 {
     struct mailbox *mbox = NULL;
     annotate_state_t *astate = NULL;
     struct buf val = BUF_INITIALIZER;
     int r;
 
-    if (!jmap_hasrights(req, mboxname, JACL_READITEMS))
+    if (!jmap_hasrights(req, mboxname, JACL_READITEMS) && !ignore_acl)
         return IMAP_MAILBOX_NONEXISTENT;
 
     r = jmap_openmbox(req, mboxname, &mbox, 1);
@@ -1198,7 +1199,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             name, color, sortOrder, isVisible, isSubscribed, scheduleAddressSet,
             { shareWith, /*overwrite_acl*/ 1}, config_types_to_caldav_types()
         };
-        r = setcalendars_update(req, mboxname, &props);
+        r = setcalendars_update(req, mboxname, &props, /*ignore_acl*/1);
         if (r) {
             free(uid);
             int rr = mboxlist_delete(mboxname);
@@ -1347,7 +1348,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             name, color, sortOrder, isVisible, isSubscribed, scheduleAddressSet,
             { shareWith, overwrite_acl}, /*comp_types*/ -1
         };
-        r = setcalendars_update(req, mboxname, &props);
+        r = setcalendars_update(req, mboxname, &props, /*ignore_acl*/0);
         free(mboxname);
         if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
