@@ -18495,12 +18495,12 @@ sub test_email_query_guidsearch_threadkeywords
     ], $using);
 
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
-    my @wantIds = sort ($emails{allthread1}{id}, $emails{allthread2}{id});
+    my @wantIds = sort $emails{allthread1}{id}, $emails{allthread2}{id};
     $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
 
     $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isGuidSearch});
-    @wantIds = sort ($emails{somethread1}{id}, $emails{somethread2}{id},
-                     $emails{allthread1}{id}, $emails{allthread2}{id});
+    @wantIds = sort $emails{somethread1}{id}, $emails{somethread2}{id},
+                    $emails{allthread1}{id}, $emails{allthread2}{id};
     $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
 
     $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
