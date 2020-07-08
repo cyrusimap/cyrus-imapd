@@ -1618,4 +1618,70 @@ sub test_sync_empty_file
     $self->run_replication(inputfile => $file, rolling => 1);
 }
 
+sub test_sync_log_mailbox_with_spaces
+    :DelayedDelete :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $channel = 'eggplant'; # look it's gotta be called something
+
+    # make sure we get a sync log file in a predictable location
+    $self->{instance}->{config}->set('sync_log' => 'yes');
+    $self->{instance}->{config}->set('sync_log_channels' => $channel);
+    $self->_start_instances();
+
+    # make some folders with and without spaces
+    my $master_store = $self->{master_store};
+    my $mastertalk = $master_store->get_client();
+
+    $mastertalk->create("INBOX.2nd level with spaces");
+    $self->assert_str_equals('ok',
+                             $mastertalk->get_last_completion_response());
+
+    $mastertalk->create("INBOX.foo");
+    $self->assert_str_equals('ok',
+                             $mastertalk->get_last_completion_response());
+
+    $mastertalk->create("INBOX.foo.3rd level with spaces");
+    $self->assert_str_equals('ok',
+                             $mastertalk->get_last_completion_response());
+
+    # make sure the contents of the sync log file are correctly quoted
+    my $sync_log_fname = $self->{instance}->get_basedir()
+                       . "/conf/sync/$channel/log";
+
+    open my $fh, '<', $sync_log_fname or die "open $sync_log_fname: $!";
+    while (<$fh>) {
+		# We can take some shortcuts here because we're only testing
+	    # for correct quoting of mailbox names with/without SPACES,
+        # and not other non-atom characters.
+        # We're also only acting on mailboxes, so we don't need this
+        # parser to consider any other log entries.
+        # An exhaustive test would be more complicated!
+        chomp;
+
+        if (m/^MAILBOX "(.*)"$/) {
+            # Argument is quoted!
+            # We expect that we only added quotes where the single
+            # mboxname contained spaces, so assert that it contains
+            # spaces
+            $self->assert_matches(qr/\s/, $1);
+        }
+        elsif (m/^MAILBOX ([^"].*[^"])$/) {
+            # Argument is not quoted!
+            # We expect that if there were spaces, it would have been
+            # quoted, so assert that there are no spaces.
+            $self->assert_does_not_match(qr/\s/, $1);
+        }
+        else {
+            # something weird here! always assert
+            $self->assert(undef, "found unrecognised line in sync_log: $_");
+        }
+    }
+    close $fh;
+
+    # no need to even replicate anything; everything we cared about was
+    # in the sync log :)
+}
+
 1;
