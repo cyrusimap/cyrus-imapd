@@ -48,7 +48,7 @@
 #include <limits.h>
 #include <config.h>
 
-#include "byteorder64.h"
+#include "byteorder.h"
 #include "conversations.h"
 #include "message_guid.h"
 #include "message.h"

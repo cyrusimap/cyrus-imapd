@@ -52,7 +52,7 @@
 #endif
 
 #include "assert.h"
-#include "byteorder64.h"
+#include "byteorder.h"
 #include "crc32.h"
 #include "glob.h"
 #include "global.h"

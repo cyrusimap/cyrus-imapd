@@ -613,29 +613,29 @@ static const uint32_t crc32_lookup[16][256] =
 
 #if BYTE_ORDER != LITTLE_ENDIAN
 /* swap endianness */
-#ifdef HAVE_DECLARE_OPTIMIZE
+# if defined(__GNUC__) && __GNUC_PREREQ(4, 3)
+#  define swap(x) __builtin_bswap32(x)
+# else
+#  ifdef HAVE_DECLARE_OPTIMIZE
 static uint32_t swap(uint32_t x)
     __attribute__((pure, always_inline, optimize("-O3")));
-#endif
+#  endif
 static uint32_t swap(uint32_t x)
 {
-#if defined(__builtin_bswap32)
-    return __builtin_bswap32(x);
-#else
     return (x >> 24) |
             ((x >>  8) & 0x0000FF00) |
             ((x <<  8) & 0x00FF0000) |
             (x << 24);
-#endif
 }
+# endif
 #endif
 
-/* compute CRC32 (Slicing-by-8 algorithm) */
+/* compute CRC32 */
 #ifdef HAVE_DECLARE_OPTIMIZE
-static uint32_t crc32_slice8(uint32_t prev, const void *data, size_t length)
+static uint32_t crc32(uint32_t prev, const void *data, size_t length)
     __attribute__((pure, optimize("-O3")));
 #endif
-static uint32_t crc32_slice8(uint32_t prev, const void *data, size_t length)
+static uint32_t crc32(uint32_t prev, const void *data, size_t length)
 {
     uint32_t crc = ~prev;
     unsigned unaligned;
@@ -645,71 +645,14 @@ static uint32_t crc32_slice8(uint32_t prev, const void *data, size_t length)
     unaligned = ALIGNOF_UINT32_T - ((uintptr_t) data % ALIGNOF_UINT32_T);
     if (unaligned == ALIGNOF_UINT32_T) unaligned = 0;
 
-    /* process a byte at a time until we hit an alignment boundary */
+    /* process a byte at a time until we hit an alignment boundary (max 3) */
     current_char = (const uint8_t *) data;
     for (; unaligned && length; unaligned--, length--)
         crc = (crc >> 8) ^ crc32_lookup[0][(crc & 0xFF) ^ *current_char++];
 
     current = (const uint32_t *) current_char;
 
-    /* process eight bytes at once (Slicing-by-8) */
-    while (length >= 8) {
-#if BYTE_ORDER == LITTLE_ENDIAN
-        uint32_t one = *current++ ^ crc;
-        uint32_t two = *current++;
-        crc = crc32_lookup[0][(two>>24) & 0xFF] ^
-              crc32_lookup[1][(two>>16) & 0xFF] ^
-              crc32_lookup[2][(two>> 8) & 0xFF] ^
-              crc32_lookup[3][ two      & 0xFF] ^
-              crc32_lookup[4][(one>>24) & 0xFF] ^
-              crc32_lookup[5][(one>>16) & 0xFF] ^
-              crc32_lookup[6][(one>> 8) & 0xFF] ^
-              crc32_lookup[7][ one      & 0xFF];
-#else
-        uint32_t one = *current++ ^ swap(crc);
-        uint32_t two = *current++;
-        crc = crc32_lookup[0][ two      & 0xFF] ^
-              crc32_lookup[1][(two>> 8) & 0xFF] ^
-              crc32_lookup[2][(two>>16) & 0xFF] ^
-              crc32_lookup[3][(two>>24) & 0xFF] ^
-              crc32_lookup[4][ one      & 0xFF] ^
-              crc32_lookup[5][(one>> 8) & 0xFF] ^
-              crc32_lookup[6][(one>>16) & 0xFF] ^
-              crc32_lookup[7][(one>>24) & 0xFF];
-#endif
-
-        length -= 8;
-    }
-
-    current_char = (const uint8_t*) current;
-    /* remaining 1 to 7 bytes (standard algorithm) */
-    while (length-- != 0)
-        crc = (crc >> 8) ^ crc32_lookup[0][(crc & 0xFF) ^ *current_char++];
-
-    return ~crc;
-}
-
-/* compute CRC32 (Slicing-by-16 algorithm) */
-#ifdef HAVE_DECLARE_OPTIMIZE
-static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
-    __attribute__((pure, optimize("-O3")));
-#endif
-static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
-{
-    uint32_t crc = ~prev;
-    unsigned unaligned;
-    const uint8_t *current_char;
-    const uint32_t *current;
-
-    unaligned = ALIGNOF_UINT32_T - ((uintptr_t) data % ALIGNOF_UINT32_T);
-    if (unaligned == ALIGNOF_UINT32_T) unaligned = 0;
-
-    /* process a byte at a time until we hit an alignment boundary */
-    current_char = (const uint8_t *) data;
-    for (; unaligned && length; unaligned--, length--)
-        crc = (crc >> 8) ^ crc32_lookup[0][(crc & 0xFF) ^ *current_char++];
-
-    current = (const uint32_t *) current_char;
+    /* process 64 bytes at once (Slicing-by-16) */
 
     /* enabling optimization (at least -O2) automatically unrolls the inner for-loop */
     const size_t unroll = 4;
@@ -766,19 +709,62 @@ static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
         length -= bytes_at_once;
     }
 
+    /* process eight bytes at once (Slicing-by-8) */
+
+    while (length >= 8) {
+#if BYTE_ORDER == LITTLE_ENDIAN
+        uint32_t one = *current++ ^ crc;
+        uint32_t two = *current++;
+        crc = crc32_lookup[0][(two>>24) & 0xFF] ^
+              crc32_lookup[1][(two>>16) & 0xFF] ^
+              crc32_lookup[2][(two>> 8) & 0xFF] ^
+              crc32_lookup[3][ two      & 0xFF] ^
+              crc32_lookup[4][(one>>24) & 0xFF] ^
+              crc32_lookup[5][(one>>16) & 0xFF] ^
+              crc32_lookup[6][(one>> 8) & 0xFF] ^
+              crc32_lookup[7][ one      & 0xFF];
+#else
+        uint32_t one = *current++ ^ swap(crc);
+        uint32_t two = *current++;
+        crc = crc32_lookup[0][ two      & 0xFF] ^
+              crc32_lookup[1][(two>> 8) & 0xFF] ^
+              crc32_lookup[2][(two>>16) & 0xFF] ^
+              crc32_lookup[3][(two>>24) & 0xFF] ^
+              crc32_lookup[4][ one      & 0xFF] ^
+              crc32_lookup[5][(one>> 8) & 0xFF] ^
+              crc32_lookup[6][(one>>16) & 0xFF] ^
+              crc32_lookup[7][(one>>24) & 0xFF];
+#endif
+
+        length -= 8;
+    }
+
+    if (length >= 4) {
+#if BYTE_ORDER == LITTLE_ENDIAN
+        uint32_t one = *current++ ^ crc;
+        crc = crc32_lookup[0][(one>>24) & 0xFF] ^
+              crc32_lookup[1][(one>>16) & 0xFF] ^
+              crc32_lookup[2][(one>> 8) & 0xFF] ^
+              crc32_lookup[3][ one      & 0xFF];
+#else
+        uint32_t one = *current++ ^ swap(crc);
+        crc = crc32_lookup[0][ one      & 0xFF] ^
+              crc32_lookup[1][(one>> 8) & 0xFF] ^
+              crc32_lookup[2][(one>>16) & 0xFF] ^
+              crc32_lookup[3][(one>>24) & 0xFF];
+#endif
+
+        length -= 4;
+    }
+
+    /* Finish with any remaining bytes one by one */
+
     current_char = (const uint8_t*) current;
-    /* remaining 1 to 63 bytes (standard algorithm) */
+    /* remaining 1 to 3 bytes (standard algorithm) */
     while (length-- != 0)
         crc = (crc >> 8) ^ crc32_lookup[0][(crc & 0xFF) ^ *current_char++];
 
     return ~crc;
-}
-
-static uint32_t crc32(uint32_t prev, const void *data, size_t length)
-{
-    if (length < 64)
-        return crc32_slice8(prev, data, length);
-    return crc32_slice16(prev, data, length);
 }
 
 EXPORTED uint32_t crc32_map(const char *base, unsigned len)
