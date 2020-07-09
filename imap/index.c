@@ -8052,7 +8052,8 @@ EXPORTED int index_hasrights(const struct index_state *state, int rights)
 static struct seqset *_parse_sequence(struct index_state *state,
                                       const char *sequence, int usinguid)
 {
-    unsigned maxval = usinguid ? state->last_uid : state->exists;
+    unsigned maxval = (usinguid && state->exists) ?
+        index_getuid(state, state->exists) : state->exists;
     return seqset_parse(sequence, NULL, maxval);
 }
 
