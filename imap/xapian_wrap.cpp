@@ -688,6 +688,17 @@ void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *torein
 
 /* ====================================================================== */
 
+static const unsigned XAPIAN_MAX_TERM_LENGTH = 200;
+
+static inline void add_boolean_nterm(Xapian::Document& doc,
+                                     const std::string& term,
+                                     size_t n = XAPIAN_MAX_TERM_LENGTH)
+{
+    if (term.size() && term.size() < n) {
+        doc.add_boolean_term(term);
+    }
+}
+
 struct xapian_dbw
 {
     // Database context.
@@ -710,6 +721,7 @@ static int xapian_dbw_init(xapian_dbw_t *dbw)
     dbw->default_stemmer = new Xapian::Stem(new CyrusSearchStemmer);
     dbw->default_stopper = get_stopper("en");
     dbw->term_generator = new Xapian::TermGenerator;
+    dbw->term_generator->set_max_word_length(XAPIAN_MAX_TERM_LENGTH);
     /* Always enable CJK word tokenization */
 #ifdef USE_XAPIAN_CJK_WORDS
     dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
@@ -861,7 +873,7 @@ int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, cha
         make_cyrusid(&buf, guid, doctype);
         dbw->document->add_value(SLOT_CYRUSID, buf_cstring(&buf));
         dbw->cyrusid = buf_release(&buf);
-        dbw->document->add_boolean_term(std::string("XE") + doctype);
+        add_boolean_nterm(*dbw->document, std::string("XE") + doctype);
         /* Initialize term generator */
         dbw->term_generator->set_document(*dbw->document);
         dbw->term_generator->set_termpos(1);
@@ -883,7 +895,7 @@ static int add_language_part(xapian_dbw_t *dbw, const struct buf *part, int part
                 buf_cstring(part));
         return 0;
     }
-    dbw->document->add_boolean_term(prefix + val);
+    add_boolean_nterm(*dbw->document, prefix + val);
     return 0;
 }
 
@@ -907,7 +919,7 @@ static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part, int part
                     buf_cstring(part));
             return 0;
         }
-        dbw->document->add_boolean_term(prefix + val);
+        add_boolean_nterm(*dbw->document, prefix + val);
     }
     return 0;
 }
@@ -946,7 +958,7 @@ static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnu
         return 0;
     }
 
-    dbw->document->add_boolean_term(prefix + val);
+    add_boolean_nterm(*dbw->document, prefix + val);
     return 0;
 }
 
@@ -978,7 +990,7 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
             std::string val(addr->mailbox);
             // ignore whitespace (as seen in quoted mailboxes)
             val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
-            dbw->document->add_boolean_term(prefix + 'L' + val);
+            add_boolean_nterm(*dbw->document, prefix + 'L' + val);
             // index individual terms
             dbw->term_generator->set_stemmer(Xapian::Stem());
             dbw->term_generator->set_stopper(NULL);
@@ -996,7 +1008,7 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
                 }
             }
             strarray_free(sa);
-            dbw->document->add_boolean_term(prefix + "D" + val);
+            add_boolean_nterm(*dbw->document, prefix + "D" + val);
             // index individual terms
             dbw->term_generator->set_stemmer(Xapian::Stem());
             dbw->term_generator->set_stopper(NULL);
@@ -1045,13 +1057,13 @@ static int add_type_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
     std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
     std::pair<std::string, std::string> ct = parse_content_type(buf_cstring(part));
     if (!ct.first.empty()) {
-        dbw->document->add_boolean_term(prefix + "T" + ct.first);
+        add_boolean_nterm(*dbw->document, prefix + "T" + ct.first);
     }
     if (!ct.second.empty()) {
-        dbw->document->add_boolean_term(prefix + "S" + ct.second);
+        add_boolean_nterm(*dbw->document, prefix + "S" + ct.second);
     }
     if (!ct.first.empty() && !ct.second.empty()) {
-        dbw->document->add_boolean_term(prefix + ct.first + '/' + ct.second);
+        add_boolean_nterm(*dbw->document, prefix + ct.first + '/' + ct.second);
     }
     return 0;
 }
@@ -1102,7 +1114,7 @@ int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
                     }
                     // Store detected languages in document.
                     dbw->doclangs->push_back(iso_lang.c_str());
-                    dbw->document->add_boolean_term(std::string("XI") + iso_lang);
+                    add_boolean_nterm(*dbw->document, std::string("XI") + iso_lang);
                 }
             }
             else if (partnum == SEARCH_PART_SUBJECT) {
