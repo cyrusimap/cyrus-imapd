@@ -1718,6 +1718,7 @@ static void setcalendars_update(jmap_req_t *req,
             if (!json_equal(jcurr_identities, props.participant_identities)) {
                 jmap_parser_invalid(&parser, "participantIdentities");
             }
+            json_decref(jcurr_identities);
         }
     }
     if (json_array_size(parser.invalid)) {
