@@ -3724,6 +3724,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
             /* XXX - allow return values? */
             proc(pctx);
         }
+        ptrarray_fini(&pctx->postprocs);
     }
 
     return 0;
