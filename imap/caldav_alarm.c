@@ -1141,7 +1141,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         syslog(LOG_ERR, "not found mailbox %s", data->mboxname);
         /* no record, no worries */
-        caldav_alarm_delete_record(mailbox->name, data->imap_uid);
+        caldav_alarm_delete_record(data->mboxname, data->imap_uid);
         return;
     }
     else if (r) {
@@ -1157,14 +1157,14 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
     r = mailbox_find_index_record(mailbox, data->imap_uid, &record);
     if (r == IMAP_NOTFOUND) {
         syslog(LOG_NOTICE, "not found mailbox %s uid %u",
-               mailbox->name, data->imap_uid);
+               data->mboxname, data->imap_uid);
         /* no record, no worries */
-        caldav_alarm_delete_record(mailbox->name, data->imap_uid);
+        caldav_alarm_delete_record(data->mboxname, data->imap_uid);
         goto done;
     }
     if (r) {
         syslog(LOG_ERR, "IOERROR: error reading mailbox %s uid %u (%s)",
-               mailbox->name, data->imap_uid, error_message(r));
+               data->mboxname, data->imap_uid, error_message(r));
         /* XXX no index record? item deleted or transient error? */
         update_alarmdb(data->mboxname, data->imap_uid, runtime + 300);
         goto done;
@@ -1172,9 +1172,9 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
 
     if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) {
         syslog(LOG_NOTICE, "already expunged mailbox %s uid %u",
-               mailbox->name, data->imap_uid);
+               data->mboxname, data->imap_uid);
         /* no longer exists?  nothing to do */
-        caldav_alarm_delete_record(mailbox->name, data->imap_uid);
+        caldav_alarm_delete_record(data->mboxname, data->imap_uid);
         goto done;
     }
 
@@ -1186,7 +1186,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
 #ifdef WITH_JMAP
     else if (mailbox->mbtype == MBTYPE_SUBMISSION) {
         if (record.internaldate > runtime) {
-            update_alarmdb(mailbox->name, data->imap_uid, record.internaldate);
+            update_alarmdb(data->mboxname, data->imap_uid, record.internaldate);
             goto done;
         }
         r = process_futurerelease(mailbox, &record);
@@ -1200,9 +1200,9 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
         /* XXX  Should never get here */
         syslog(LOG_ERR, "Unknown/unsupported alarm triggered for"
                " mailbox %s uid %u of type %d with options 0x%02x",
-               mailbox->name, data->imap_uid,
+               data->mboxname, data->imap_uid,
                mailbox->mbtype, mailbox->i.options);
-        caldav_alarm_delete_record(mailbox->name, data->imap_uid);
+        caldav_alarm_delete_record(data->mboxname, data->imap_uid);
     }
 
 done:
