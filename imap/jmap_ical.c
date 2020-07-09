@@ -2243,9 +2243,9 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     }
 
     /* Handle bogus mix of floating and time zoned types */
-    const char *tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
+    char *tzid_start = xstrdupnull(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
     if (!tzid_start) {
-        tzid_start = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
+        tzid_start = xstrdupnull(tzid_from_ical(comp, ICAL_DTEND_PROPERTY));
     }
 
     /* start */
@@ -2254,11 +2254,6 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
         if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
             icaltimetype dtstart = dtstart_from_ical(comp);
             jmapical_datetime_from_icaltime(dtstart, &start);
-            /* Reread tzid since dtstart_from_ical has freed its memory */
-            tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
-            if (!tzid_start) {
-                tzid_start = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
-            }
         }
         jmapical_localdatetime_as_string(&start, &buf);
         json_object_set_new(event, "start", json_string(buf_cstring(&buf)));
@@ -2536,6 +2531,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
         jmap_filterprops(event, wantprops);
     }
 
+    free(tzid_start);
     buf_free(&buf);
     return event;
 }
