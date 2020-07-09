@@ -1648,6 +1648,13 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
             std::string term(prefix + 'D' + domain);
             Xapian::Query qq = wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
                                           Xapian::Query(term);
+            {
+                // FIXME - temporarily also search for '@' prefix
+                std::string term2(prefix + '@' + domain);
+                Xapian::Query qq2 = wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term2) :
+                                               Xapian::Query(term2);
+                qq |= qq2;
+            }
             q &= qq;
         }
     }
