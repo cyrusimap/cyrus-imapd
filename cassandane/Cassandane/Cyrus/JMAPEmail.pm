@@ -19077,7 +19077,6 @@ sub test_email_query_guidsearch_threadkeywords
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
-        'https://cyrusimap.org/ns/jmap/search',
     ];
 
     my $res = $jmap->CallMethods([
