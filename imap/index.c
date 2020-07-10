@@ -8052,8 +8052,22 @@ EXPORTED int index_hasrights(const struct index_state *state, int rights)
 static struct seqset *_parse_sequence(struct index_state *state,
                                       const char *sequence, int usinguid)
 {
-    unsigned maxval = (usinguid && state->exists) ?
-        index_getuid(state, state->exists) : state->exists;
+    unsigned maxval;
+
+    /* Per RFC 3501, seq-number ABNF:
+       "*" represents the largest number in use.
+       In the case of message sequence numbers,
+       it is the number of messages in a non-empty mailbox.
+       In the case of unique identifiers,
+       it is the unique identifier of the last message in the mailbox
+       or, if the mailbox is empty, the mailbox's current UIDNEXT value.
+    */
+    if (usinguid) {
+        if (state->exists) maxval = index_getuid(state, state->exists);
+        else maxval = state->last_uid + 1;
+    }
+    else maxval = state->exists;
+
     return seqset_parse(sequence, NULL, maxval);
 }
 
