@@ -554,7 +554,6 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
-    # Accept version ' 3.0' but do not repair it on-disk.
     my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
     my $path = $CardDAV->NewContact($Id, $VCard);
     my $res = $CardDAV->GetContact($path);
