@@ -207,22 +207,23 @@ static int _emailsubmission_address_parse(json_t *addr,
     }
 
     const char *key;
-    json_t *val;
+    json_t *jval;
     json_t *parameters = json_object_get(addr, "parameters");
     jmap_parser_push(parser, "parameters");
-    json_object_foreach(parameters, key, val) {
+    json_object_foreach(parameters, key, jval) {
         if (!smtp_is_valid_esmtp_keyword(key)) {
             jmap_parser_invalid(parser, key);
         }
-        else if (JNOTNULL(val) && !json_is_string(val)) {
+        else if (JNOTNULL(jval) && !json_is_string(jval)) {
             /* We'll xtext-encode any non-esmtp values later */
             jmap_parser_invalid(parser, key);
         }
-        if (holduntil) {
+        else if (holduntil) {
+            const char *val = json_string_value(jval);
+
             if (!strcasecmp(key, "HOLDFOR")) {
-                const char *nptr = json_string_value(val);
                 char *endptr = NULL;
-                unsigned long interval = strtoul(nptr, &endptr, 10);
+                ulong interval = val ? strtoul(val, &endptr, 10) : ULONG_MAX;
                 time_t now = time(0);
 
                 if (*endptr != '\0' || interval > 99999999 /* per RFC 4865 */) {
@@ -231,7 +232,7 @@ static int _emailsubmission_address_parse(json_t *addr,
                 else *holduntil = now + interval;
             }
             else if (!strcasecmp(key, "HOLDUNTIL")) {
-                if (time_from_iso8601(json_string_value(val), holduntil) < 0) {
+                if (!val || time_from_iso8601(val, holduntil) < 0) {
                     jmap_parser_invalid(parser, key);
                 }
             }
