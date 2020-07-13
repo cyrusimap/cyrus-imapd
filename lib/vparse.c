@@ -606,7 +606,27 @@ static int _parse_vcard(struct vparse_state *state, struct vparse_card *card, in
             *subp = sub;
             subp = &sub->next;
             r = _parse_vcard(state, sub, /*only_one*/0);
+
+            /* repair critical property values */
+            struct vparse_entry *version = vparse_get_entry(sub, NULL, "version");
+            if (version) {
+                const char *val;
+                for (val = version->v.value; *val; val++) {
+                    if (isspace(*val)) {
+                        /* rewrite property value */
+                        struct buf buf = BUF_INITIALIZER;
+                        buf_setcstr(&buf, version->v.value);
+                        buf_trim(&buf);
+                        free(version->v.value);
+                        version->v.value = buf_release(&buf);
+                        break;
+                    }
+                }
+            }
+
             if (r) return r;
+
+
             if (only_one) return 0;
         }
         else if (!strcasecmp(state->entry->name, "end")) {
