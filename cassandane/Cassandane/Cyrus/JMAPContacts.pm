@@ -2198,6 +2198,7 @@ sub test_contact_set_uid
         ['Contact/get', { ids => ['#1'] }, 'R2'],
     ]);
     $self->assert_not_null($res->[1][1]{list}[0]{uid});
+    $jmap->{CreatedIds} = {};
 
     # A sane UID maps to both the JMAP id and the DAV resource.
     $res = $jmap->CallMethods([
@@ -2217,6 +2218,7 @@ sub test_contact_set_uid
     $self->assert_not_null($res->[1][1]{list}[0]->{id});
     $self->assert_str_equals($res->[1][1]{list}[0]->{uid}, $res->[1][1]{list}[0]->{id});
     $self->assert_str_equals($filename, $res->[1][1]{list}[0]->{id});
+    $jmap->{CreatedIds} = {};
 
     # A non-pathsafe UID maps to uid but not the DAV resource.
     $res = $jmap->CallMethods([
@@ -2236,6 +2238,7 @@ sub test_contact_set_uid
     $self->assert_not_null($res->[1][1]{list}[0]->{id});
     $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $res->[1][1]{list}[0]->{uid});
     $self->assert_str_not_equals('path#uid', $filename);
+    $jmap->{CreatedIds} = {};
 
     # Can't change an UID
     my $contactId = $res->[0][1]{created}{3}{id};
@@ -2250,6 +2253,7 @@ sub test_contact_set_uid
         }, "R1"],
     ]);
     $self->assert_str_equals('uid', $res->[0][1]{notUpdated}{$contactId}{properties}[0]);
+    $jmap->{CreatedIds} = {};
 
 }
 
@@ -2272,6 +2276,7 @@ sub test_contactgroup_set_uid
         ['ContactGroup/get', { ids => ['#1'] }, 'R2'],
     ]);
     $self->assert_not_null($res->[1][1]{list}[0]{uid});
+    $jmap->{CreatedIds} = {};
 
     # A sane UID maps to both the JMAP id and the DAV resource.
     $res = $jmap->CallMethods([
@@ -2290,6 +2295,7 @@ sub test_contactgroup_set_uid
     $self->assert_not_null($res->[1][1]{list}[0]->{id});
     $self->assert_str_equals($res->[1][1]{list}[0]->{uid}, $res->[1][1]{list}[0]->{id});
     $self->assert_str_equals($filename, $res->[1][1]{list}[0]->{id});
+    $jmap->{CreatedIds} = {};
 
     # A non-pathsafe UID maps to uid but not the DAV resource.
     $res = $jmap->CallMethods([
@@ -2308,6 +2314,7 @@ sub test_contactgroup_set_uid
     $self->assert_not_null($res->[1][1]{list}[0]->{id});
     $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $res->[1][1]{list}[0]->{uid});
     $self->assert_str_not_equals('path#uid', $filename);
+    $jmap->{CreatedIds} = {};
 
     # Can't change an UID
     my $contactId = $res->[0][1]{created}{3}{id};
@@ -2322,6 +2329,7 @@ sub test_contactgroup_set_uid
         }, "R1"],
     ]);
     $self->assert_str_equals('uid', $res->[0][1]{notUpdated}{$contactId}{properties}[0]);
+    $jmap->{CreatedIds} = {};
 
 }
 
