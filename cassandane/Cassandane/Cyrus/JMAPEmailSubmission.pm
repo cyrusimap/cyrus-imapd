@@ -366,6 +366,87 @@ sub test_emailsubmission_set_futurerelease
     $self->assert_not_null($res->[0][1]{notUpdated});
 }
 
+sub test_emailsubmission_set_bad_futurerelease
+    :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog $self, "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
+
+    xlog $self, "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    xlog $self, "create email submissions";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                        parameters => {
+                            "holdfor" => JSON::null
+                        }
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }],
+                },
+            },
+            '2' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                        parameters => {
+                            "holduntil" => undef
+                        }
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }],
+                },
+            },
+            '3' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                        parameters => {
+                            "holduntil" => []
+                        }
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }],
+                },
+            }
+       }
+    }, "R1" ] ] );
+    my $errType = $res->[0][1]->{notCreated}{1}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $errType = $res->[0][1]->{notCreated}{2}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $errType = $res->[0][1]->{notCreated}{3}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+}
+
 sub test_replication_emailsubmission_set_futurerelease
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
 {
