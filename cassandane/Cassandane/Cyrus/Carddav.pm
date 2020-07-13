@@ -532,4 +532,33 @@ EOF
     }
 }
 
+sub test_version_ignore_whitespace
+    :min_version_3_3 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+    my $href = "$Id/bar.vcf";
+
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION: 3.0
+UID:123456789
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    # Accept version ' 3.0' but do not repair it on-disk.
+    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
+    my $path = $CardDAV->NewContact($Id, $VCard);
+    my $res = $CardDAV->GetContact($path);
+    $self->assert_str_equals($res->{properties}{version}[0]{value}, '3.0');
+}
+
 1;
