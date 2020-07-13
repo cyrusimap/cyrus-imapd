@@ -15834,7 +15834,7 @@ sub test_email_query_guidsearch_sort
 }
 
 sub test_email_query_guidsearch_inmailbox
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16656,7 +16656,7 @@ sub test_email_query_guidsearch_only_email_mailboxes
 }
 
 sub test_email_query_guidsearch_inmailboxotherthan
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -18363,7 +18363,7 @@ sub test_email_bimi_blob
 }
 
 sub test_email_query_guidsearch_threadkeywords
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
