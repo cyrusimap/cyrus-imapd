@@ -77,7 +77,7 @@ static void make_cyrusid(struct buf *dst, const struct message_guid *guid, char 
  * Version 15: receives indexed header fields and text in original format (rather than search form)
  */
 #define XAPIAN_DB_CURRENT_VERSION 15
-#define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
+#define XAPIAN_DB_MIN_SUPPORTED_VERSION 5
 
 static std::set<int> read_db_versions(const Xapian::Database &database)
 {
