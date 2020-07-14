@@ -789,8 +789,7 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
         // which will break for languages such as German. We also can't use
         // STEM_ALL_Z, as this would force-stem phrase queries. Best guess
         // is to lower case the query and risk stemming proper nouns.
-        std::string lmatch(match);
-        std::transform(lmatch.begin(), lmatch.end(), lmatch.begin(), ::tolower);
+        std::string lmatch = Xapian::Unicode::tolower(match);
 
         // Query without any stemmer.
         db->parser->set_stemmer(Xapian::Stem());
