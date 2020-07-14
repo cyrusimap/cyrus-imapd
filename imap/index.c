@@ -142,8 +142,7 @@ static void index_fetchcacheheader(struct index_state *state, struct index_recor
                                    const strarray_t *headers, unsigned start_octet,
                                    unsigned octet_count);
 static void index_listflags(struct index_state *state);
-static void index_fetchflags(struct index_state *state, uint32_t msgno,
-                             int include_internal);
+static void index_fetchflags(struct index_state *state, uint32_t msgno);
 
 static int index_copysetup(struct index_state *state, uint32_t msgno,
                            struct copyargs *copyargs);
@@ -4001,7 +4000,7 @@ static int index_fetchmailboxids(struct index_state *state,
  * Also sends preceeding * FLAGS if necessary.
  */
 static void index_fetchflags(struct index_state *state,
-                             uint32_t msgno, int include_internal)
+                             uint32_t msgno)
 {
     int sepchar = '(';
     unsigned flag;
@@ -4030,18 +4029,7 @@ static void index_fetchflags(struct index_state *state,
         prot_printf(state->out, "%c\\Deleted", sepchar);
         sepchar = ' ';
     }
-    if (include_internal) {
-        if (im->internal_flags & FLAG_INTERNAL_EXPUNGED) {
-            prot_printf(state->out, "%c\\Expunged", sepchar);
-            sepchar = ' ';
-        }
-        if (im->internal_flags & FLAG_INTERNAL_SNOOZED) {
-            prot_printf(state->out, "%c\\Snoozed", sepchar);
-            sepchar = ' ';
-        }
-    }
-    else if (state->want_expunged &&
-             (im->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+    if (state->want_expunged && (im->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         prot_printf(state->out, "%c\\Expunged", sepchar);
         sepchar = ' ';
     }
@@ -4069,7 +4057,7 @@ static void index_printflags(struct index_state *state,
 {
     struct index_map *im = &state->map[msgno-1];
 
-    index_fetchflags(state, msgno, /*include_internal*/0);
+    index_fetchflags(state, msgno);
     /* http://www.rfc-editor.org/errata_search.php?rfc=5162
      * Errata ID: 1807 - MUST send UID and MODSEQ to all
      * untagged FETCH unsolicited responses */
@@ -4156,13 +4144,9 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
     int ischanged = im->told_modseq < record.modseq;
 
-    if (fetchitems & FETCH_INTERNALFLAGS) {
-        index_fetchflags(state, msgno, /*include_internal*/1);
-        sepchar = ' ';
-    }
     /* display flags if asked _OR_ if they've changed */
-    else if (fetchitems & FETCH_FLAGS || ischanged) {
-        index_fetchflags(state, msgno, /*include_internal*/0);
+    if (fetchitems & FETCH_FLAGS || ischanged) {
+        index_fetchflags(state, msgno);
         sepchar = ' ';
     }
     else if ((fetchitems & ~FETCH_SETSEEN) || fetchargs->fsections ||
