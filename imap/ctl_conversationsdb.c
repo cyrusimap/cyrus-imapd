@@ -33,7 +33,8 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, ENABLE_COMPACTIDS };
+enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ,
+       ENABLE_COMPACTIDS, SHOWMISMATCHES, FIXMISMATCHES };
 
 static int recalc_repair  = 0;
 static int recalc_upgrade = 0;
@@ -343,6 +344,76 @@ static int do_build(const char *userid)
     if (r) return r;
 
     r = mboxlist_usermboxtree(userid, NULL, build_cid_cb, state, 0);
+
+    conversations_commit(&state);
+    return r;
+}
+
+struct fixthread_rock {
+    const char *userid;
+    struct conversations_state *state;
+    int foldernum;
+    uint32_t uid;
+    char *guid;
+    conversation_id_t cid;
+    int really;
+};
+
+static int fixthread_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct fixthread_rock *frock = (struct fixthread_rock *)rock;
+
+    if (rec->part) return 0;
+
+    // yeah, 24 - that's the length of EmailId in JMAPLand
+    if (!frock->guid || strncmp(rec->guidrep, frock->guid, 24)) {
+        free(frock->guid);
+        frock->foldernum = rec->foldernum;
+        frock->uid = rec->uid;
+        frock->guid = xstrndup(rec->guidrep, 40);
+        frock->cid = rec->cid;
+        return 0;
+    }
+
+    // OK, so same EmailId, is the CID the same?
+    if (!rec->cid) return 0;
+    if (!frock->cid) return 0;
+    if (rec->cid == frock->cid) return 0;
+
+    // same GUID, different CID!
+    printf("CID change! (%40s/%40s) " CONV_FMT "/" CONV_FMT " (%d:%u/%d:%u)\n",
+           frock->guid, rec->guidrep, frock->cid, rec->cid,
+           frock->foldernum, frock->uid, rec->foldernum, rec->uid);
+
+    if (!frock->really) return 0;
+
+    struct mailbox *mailbox = NULL;
+    struct index_record record;
+    int r = mailbox_open_iwl(conv_guidrec_mboxname(rec), &mailbox);
+    if (!r) r = mailbox_find_index_record(mailbox, rec->uid, &record);
+    if (!r) {
+        // match later records to match the first CID!
+        record.cid = frock->cid;
+        r = mailbox_rewrite_index_record(mailbox, &record);
+    }
+    if (r) {
+        printf("Failed to rewrite! %s - this may need a full rebuild\n", error_message(r));
+    }
+    mailbox_close(&mailbox);
+
+    return 0;  // keep going
+}
+
+static int do_fixthread(const char *userid, int really)
+{
+    struct conversations_state *state = NULL;
+    int r;
+
+    r = conversations_open_user(userid, 0/*shared*/, &state);
+    if (r) return r;
+
+    struct fixthread_rock rock = { userid, state, 0, 0, NULL, 0, really };
+    r = conversations_guid_foreach(state, "", fixthread_cb, &rock);
 
     conversations_commit(&state);
     return r;
@@ -1031,6 +1102,16 @@ static int do_user(const char *userid, void *rock)
             r = EX_NOINPUT;
         break;
 
+    case SHOWMISMATCHES:
+        if (do_fixthread(userid, 0))
+            r = EX_NOINPUT;
+        break;
+
+    case FIXMISMATCHES:
+        if (do_fixthread(userid, 1))
+            r = EX_NOINPUT;
+        break;
+
     case CHECKFOLDERS:
         if (do_checkfolders(userid))
             r = EX_NOINPUT;
@@ -1073,7 +1154,7 @@ int main(int argc, char **argv)
     int r = 0;
 
     /* keep in alphabetical order */
-    static const char short_options[] = "AC:FMRST:bdruUvzZ:I:";
+    static const char short_options[] = "AC:FMRST:bdfmruUvzZ:I:";
 
     static const struct option long_options[] = {
         { "audit", no_argument, NULL, 'A' },
@@ -1085,6 +1166,8 @@ int main(int argc, char **argv)
         { "audit-temp-directory", required_argument, NULL, 'T' },
         { "rebuild", no_argument, NULL, 'b' },
         { "dump", no_argument, NULL, 'd' },
+        { "fix-mismatches", no_argument, NULL, 'f' },
+        { "show-mismatches", no_argument, NULL, 'm' },
         { "recursive", no_argument, NULL, 'r' },
         { "undump", no_argument, NULL, 'u' },
         { "upgrade", no_argument, NULL, 'U' },
@@ -1172,6 +1255,18 @@ int main(int argc, char **argv)
             mode = CHECKFOLDERS;
             break;
 
+        case 'm':
+            if (mode != UNKNOWN)
+                usage(argv[0]);
+            mode = SHOWMISMATCHES;
+            break;
+
+        case 'f':
+            if (mode != UNKNOWN)
+                usage(argv[0]);
+            mode = FIXMISMATCHES;
+            break;
+
         case 'U':
             if (mode != UNKNOWN && mode != RECALC)
                 usage(argv[0]);
@@ -1257,6 +1352,8 @@ static int usage(const char *name)
     fprintf(stderr, "    -U             upgrade to latest version of conversations.db\n");
     fprintf(stderr, "    -A             audit conversations DB counts\n");
     fprintf(stderr, "    -F             check folder names\n");
+    fprintf(stderr, "    -m             show thread mismatches\n");
+    fprintf(stderr, "    -f             fix thread mismatches\n");
     fprintf(stderr, "    -I switch      enable/disable compact emailids.  1/on/yes to enable\n");
     fprintf(stderr, "    -T dir         store temporary data for audit in dir\n");
     fprintf(stderr, "\n");
