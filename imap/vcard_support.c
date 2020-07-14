@@ -48,7 +48,7 @@
 
 #include "global.h"
 
-EXPORTED struct vparse_card *vcard_parse_string(const char *str, int repair)
+EXPORTED struct vparse_card *vcard_parse_string(const char *str)
 {
     struct vparse_state vparser;
     struct vparse_card *vcard = NULL;
@@ -63,7 +63,6 @@ EXPORTED struct vparse_card *vcard_parse_string(const char *str, int repair)
     vparse_set_multival(&vparser, "nickname", ',');
     vparse_set_multival(&vparser, "categories", ',');
     vparse_set_multiparam(&vparser, "type");
-    vparser.ctrl = repair ? VPARSE_CTRL_SKIP : VPARSE_CTRL_REJECT;
     vr = vparse_parse(&vparser, 0);
     if (vr) {
         struct vparse_errorpos pos;
@@ -100,8 +99,7 @@ EXPORTED struct vparse_card *vcard_parse_string(const char *str, int repair)
 
 EXPORTED struct vparse_card *vcard_parse_buf(const struct buf *buf)
 {
-    int repair = config_getswitch(IMAPOPT_CARDDAV_REPAIR_VCARD);
-    return vcard_parse_string(buf_cstring(buf), repair);
+    return vcard_parse_string(buf_cstring(buf));
 }
 
 EXPORTED struct buf *vcard_as_buf(struct vparse_card *vcard)
@@ -121,7 +119,7 @@ EXPORTED struct vparse_card *record_to_vcard(struct mailbox *mailbox,
 
     /* Load message containing the resource and parse vcard data */
     if (!mailbox_map_record(mailbox, record, &buf)) {
-        vcard = vcard_parse_string(buf_cstring(&buf) + record->header_size, 1);
+        vcard = vcard_parse_string(buf_cstring(&buf) + record->header_size);
         buf_free(&buf);
     }
 

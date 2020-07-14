@@ -5210,7 +5210,7 @@ static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
         vcardbuf = raw;
     }
 
-    vcard = vcard_parse_string(buf_cstring(vcardbuf), /*repair*/1);
+    vcard = vcard_parse_string(buf_cstring(vcardbuf));
     if (!vcard || !vcard->objects) {
         r = IMAP_INTERNAL;
         goto done;
