@@ -222,11 +222,12 @@ static int _emailsubmission_address_parse(json_t *addr,
             const char *val = json_string_value(jval);
 
             if (!strcasecmp(key, "HOLDFOR")) {
-                char *endptr = NULL;
+                char *endptr = (char *) val;
                 ulong interval = val ? strtoul(val, &endptr, 10) : ULONG_MAX;
                 time_t now = time(0);
 
-                if (*endptr != '\0' || interval > 99999999 /* per RFC 4865 */) {
+                if (endptr == val || *endptr != '\0' ||
+                    interval > 99999999 /* per RFC 4865 */) {
                     jmap_parser_invalid(parser, key);
                 }
                 else *holduntil = now + interval;
