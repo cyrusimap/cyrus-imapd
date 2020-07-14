@@ -1756,6 +1756,8 @@ void sync_print_flags(struct dlist *kl,
         dlist_setflag(fl, "FLAG", "\\Draft");
     if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
         dlist_setflag(fl, "FLAG", "\\Expunged");
+    if (record->internal_flags & FLAG_INTERNAL_SNOOZED)
+        dlist_setflag(fl, "FLAG", "\\Snoozed");
     if (record->system_flags & FLAG_SEEN)
         dlist_setflag(fl, "FLAG", "\\Seen");
 
@@ -1786,6 +1788,8 @@ int sync_getflags(struct dlist *kl,
                 record->system_flags |= FLAG_SEEN;
             } else if (!strcmp(s, "\\expunged")) {
                 record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
+            } else if (!strcmp(s, "\\snoozed")) {
+                record->internal_flags |= FLAG_INTERNAL_SNOOZED;
             } else if (!strcmp(s, "\\answered")) {
                 record->system_flags |= FLAG_ANSWERED;
             } else if (!strcmp(s, "\\flagged")) {
