@@ -691,6 +691,21 @@ sub test_rename_deepfolder_intermediates
     my %byname_newrepl = map { $_->{name} => $_->{id} } @{$data->{list}};
 
     $self->assert_deep_equals(\%byname, \%byname_newrepl);
+
+    # n.b. run_replication dropped all our store connections...
+    $admintalk = $self->{adminstore}->get_client();
+    $admintalk->delete("user.cassandane");
+
+    xlog $self, "Make sure we didn't create intermediates in the process!";
+    @syslog = $self->{instance}->getsyslog();
+    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
+    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+
+    # replicate and check the renames
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    @syslog = $self->{replica}->getsyslog();
+    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
+    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
 }
 
 1;
