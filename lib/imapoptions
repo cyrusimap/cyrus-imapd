@@ -636,7 +636,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    If not set (the default), the value of the "servername" option will
    be used.*/
 
-{ "carddav_repair_vcard", 0, SWITCH, "3.0.0" }
+{ "carddav_repair_vcard", 0, SWITCH, "3.0.0", "3.3.1" }
 /* If enabled, VCARDs with invalid content are attempted to be repaired
    during creation. */
 

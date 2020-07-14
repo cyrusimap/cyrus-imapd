@@ -25,12 +25,6 @@ PE_ILLEGAL_CHAR,
 PE_NUMERR /* last */
 };
 
-enum parse_ctrl {
-    VPARSE_CTRL_IGNORE = 0,
-    VPARSE_CTRL_SKIP,
-    VPARSE_CTRL_REJECT
-};
-
 struct vparse_state {
     struct buf buf;
     const char *base;
@@ -40,7 +34,6 @@ struct vparse_state {
     strarray_t *multivalcomma;
     strarray_t *multiparam;
     int barekeys;
-    int ctrl;
 
     /* current items */
     struct vparse_card *card;
