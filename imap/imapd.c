@@ -5010,6 +5010,9 @@ badannotation:
             else if (!inlist && !strcmp(fetchatt.s, "FULL")) {
                 fa->fetchitems |= FETCH_FULL;
             }
+            else if (!strcmp(fetchatt.s, "FLAGS+")) {
+                fa->fetchitems |= FETCH_FLAGS | FETCH_INTERNALFLAGS;
+            }
             else if (!strcmp(fetchatt.s, "FLAGS")) {
                 fa->fetchitems |= FETCH_FLAGS;
             }
