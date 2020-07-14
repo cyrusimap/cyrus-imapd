@@ -280,9 +280,9 @@ static int fixthread_cb(const conv_guidrec_t *rec, void *rock)
 
     // yeah, 24 - that's the length of EmailId in JMAPLand
     if (!frock->guid || strncmp(rec->guidrep, frock->guid, 24)) {
-        free(frock->guid);
         frock->foldernum = rec->foldernum;
         frock->uid = rec->uid;
+        free(frock->guid);
         frock->guid = xstrndup(rec->guidrep, 40);
         frock->cid = rec->cid;
         return 0;
@@ -293,9 +293,13 @@ static int fixthread_cb(const conv_guidrec_t *rec, void *rock)
     if (!frock->cid) return 0;
     if (rec->cid == frock->cid) return 0;
 
+    if (strncmp(rec->guidrep, frock->guid, 40)) {
+        printf("%s EMAILID DISASTER! %s / %.*s\n", frock->userid, frock->guid, 40, rec->guidrep);
+    }
+
     // same GUID, different CID!
-    printf("CID change! (%40s/%40s) %08llx/%08llx (%d:%u/%d:%u)\n",
-           frock->guid, rec->guidrep, frock->cid, rec->cid,
+    printf("%s CID change! M%.*s %08llx/%08llx (%d:%u/%d:%u)\n",
+           frock->userid, 24, rec->guidrep, frock->cid, rec->cid,
            frock->foldernum, frock->uid, rec->foldernum, rec->uid);
 
     if (!frock->really) return 0;
@@ -327,6 +331,7 @@ static int do_fixthread(const char *userid, int really)
 
     struct fixthread_rock rock = { userid, state, 0, 0, NULL, 0, really };
     r = conversations_guid_foreach(state, "", fixthread_cb, &rock);
+    free(rock.guid);
 
     conversations_commit(&state);
     return r;
