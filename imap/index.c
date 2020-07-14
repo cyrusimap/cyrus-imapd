@@ -5698,7 +5698,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             /* Look for "Content-Disposition: attachment;filename=" header */
             for (param = disposition_params; param; param = param->next) {
                 if (!strcmp(param->attribute, "FILENAME")) {
-                    char *tmp = charset_decode_mimeheader(param->value, charset_flags);
+                    char *tmp = charset_decode_mimeheader(param->value, str->charset_flags);
                     buf_init_ro_cstr(&text, tmp);
                     stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, NULL, &text);
                     buf_free(&text);
@@ -5708,7 +5708,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                     char *xval = charset_parse_mimexvalue(param->value, NULL);
                     if (!xval) xval = xstrdup(param->value);
                     if (xval) {
-                        char *tmp = charset_decode_mimeheader(xval, charset_flags|CHARSET_MIME_UTF8);
+                        char *tmp = charset_decode_mimeheader(xval, str->charset_flags|CHARSET_MIME_UTF8);
                         buf_init_ro_cstr(&text, tmp);
                         stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, NULL, &text);
                         buf_free(&text);
@@ -5722,7 +5722,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             /* Look for "Content-Type: foo;name=" header */
             if (strcmp(param->attribute, "NAME"))
                 continue;
-            char *tmp = charset_decode_mimeheader(param->value, charset_flags);
+            char *tmp = charset_decode_mimeheader(param->value, str->charset_flags);
             buf_init_ro_cstr(&text, tmp);
             stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, NULL, &text);
             buf_free(&text);
@@ -5920,6 +5920,12 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     if (flags & INDEX_GETSEARCHTEXT_SNIPPET) {
         str.charset_flags |= CHARSET_KEEPCASE;
         format = MESSAGE_SNIPPET;
+    }
+
+    /* Search receiver can override message field conversion */
+    if (receiver->index_message_format) {
+        format = receiver->index_message_format(format,
+                flags & INDEX_GETSEARCHTEXT_SNIPPET);
     }
 
     /* Choose index scheme for Content=Type */

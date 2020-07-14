@@ -457,6 +457,12 @@ static int _matchmime_tr_index_charset_flags(int base_flags)
     return base_flags | CHARSET_KEEPCASE;
 }
 
+static int _matchmime_tr_index_message_format(int format __attribute__((unused)),
+                                              int is_snippet __attribute__((unused)))
+{
+    return MESSAGE_SNIPPET;
+}
+
 static int _email_matchmime_evaluate_xcb(void *data __attribute__((unused)),
                                          size_t n, void *rock)
 {
@@ -1024,6 +1030,7 @@ HIDDEN int jmap_email_matchmime(struct buf *mime,
             _matchmime_tr_flush,
             _matchmime_tr_audit_mailbox,
             _matchmime_tr_index_charset_flags,
+            _matchmime_tr_index_message_format
         },
         dbw, BUF_INITIALIZER
     };

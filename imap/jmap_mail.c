@@ -1677,7 +1677,6 @@ static void _email_search_string(search_expr_t *parent,
                                  const char *name,
                                  strarray_t *perf_filters)
 {
-    charset_t utf8 = charset_lookupname("utf-8");
     search_expr_t *e;
     const search_attr_t *attr = search_attr_find(name);
     enum search_op op;
@@ -1685,17 +1684,10 @@ static void _email_search_string(search_expr_t *parent,
     assert(attr);
 
     op = search_attr_is_fuzzable(attr) ? SEOP_FUZZYMATCH : SEOP_MATCH;
-
     e = search_expr_new(parent, op);
     e->attr = attr;
-    e->value.s = charset_convert(s, utf8, charset_flags);
-    if (!e->value.s) {
-        e->op = SEOP_FALSE;
-        e->attr = NULL;
-    }
-
+    e->value.s = xstrdup(s);
     _email_search_perf_attr(attr, perf_filters);
-    charset_free(&utf8);
 }
 
 static void _email_search_type(search_expr_t *parent, const char *s, strarray_t *perf_filters)
@@ -1833,7 +1825,7 @@ static void _email_search_contactgroup(search_expr_t *parent,
     for (i = 0; i < strarray_size(members); i++) {
         const char *member = strarray_nth(members, i);
         if (!strchr(member, '@')) continue;
-        strarray_appendm(val, charset_convert(member, utf8, charset_flags));
+        strarray_append(val, member);
     }
     charset_free(&utf8);
     if (!strarray_size(val)) {
@@ -2088,11 +2080,8 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
 
             e = search_expr_new(this, SEOP_MATCH);
             e->attr = search_attr_find_field(k);
-            e->value.s = charset_convert(v, utf8, charset_flags);
-            if (!e->value.s) {
-                e->op = SEOP_FALSE;
-                e->attr = NULL;
-            }
+            e->value.s = xstrdup(v);
+
             _email_search_perf_attr(e->attr, perf_filters);
             charset_free(&utf8);
         }

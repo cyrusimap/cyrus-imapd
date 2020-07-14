@@ -2813,7 +2813,13 @@ static int end_mailbox_update(search_text_receiver_t *rx,
 
 static int xapian_charset_flags(int flags)
 {
-    return flags | CHARSET_KEEPCASE;
+    return (flags|CHARSET_KEEPCASE|CHARSET_MIME_UTF8) & ~CHARSET_SKIPDIACRIT;
+}
+
+static int xapian_message_format(int format __attribute__((unused)),
+                                 int is_snippet __attribute__((unused)))
+{
+    return MESSAGE_SNIPPET;
 }
 
 static search_text_receiver_t *begin_update(int verbose)
@@ -2835,6 +2841,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.flush = flush;
     tr->super.super.audit_mailbox = audit_mailbox;
     tr->super.super.index_charset_flags = xapian_charset_flags;
+    tr->super.super.index_message_format = xapian_message_format;
 
     tr->super.verbose = verbose;
 
