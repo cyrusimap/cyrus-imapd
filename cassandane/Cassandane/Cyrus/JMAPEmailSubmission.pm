@@ -410,7 +410,7 @@ sub test_emailsubmission_set_bad_futurerelease
                     mailFrom => {
                         email => 'from@localhost',
                         parameters => {
-                            "holduntil" => undef
+                            "holdfor" => ""
                         }
                     },
                     rcptTo => [{
@@ -427,7 +427,75 @@ sub test_emailsubmission_set_bad_futurerelease
                     mailFrom => {
                         email => 'from@localhost',
                         parameters => {
+                            "holdfor" => " "
+                        }
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }],
+                },
+            },
+            '4' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                        parameters => {
+                            "holdfor" => "30a"
+                        }
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }],
+                },
+            },
+            '5' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                        parameters => {
+                            "holduntil" => undef
+                        }
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }],
+                },
+            },
+            '6' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                        parameters => {
                             "holduntil" => []
+                        }
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }],
+                },
+            },
+            '7' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                        parameters => {
+                            "holduntil" => ""
                         }
                     },
                     rcptTo => [{
@@ -444,6 +512,14 @@ sub test_emailsubmission_set_bad_futurerelease
     $errType = $res->[0][1]->{notCreated}{2}{type};
     $self->assert_str_equals("invalidProperties", $errType);
     $errType = $res->[0][1]->{notCreated}{3}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $errType = $res->[0][1]->{notCreated}{4}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $errType = $res->[0][1]->{notCreated}{5}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $errType = $res->[0][1]->{notCreated}{6}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $errType = $res->[0][1]->{notCreated}{7}{type};
     $self->assert_str_equals("invalidProperties", $errType);
 }
 
