@@ -519,11 +519,17 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
-    # that \b should have been repaired out
-    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
-    my $path = $CardDAV->NewContact($Id, $VCard);
-    my $res = $CardDAV->GetContact($path);
-    $self->assert_str_equals($res->{properties}{fn}[0]{value}, 'Forrest Gump');
+    my $repair = $self->{instance}->{config}->get('carddav_repair_vcard');
+    if ($repair ne 'yes') {
+        eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
+        my $Err = $@;
+        $self->assert_matches(qr/valid-address-data/, $Err);
+    } else {
+        my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
+        my $path = $CardDAV->NewContact($Id, $VCard);
+        my $res = $CardDAV->GetContact($path);
+        $self->assert_str_equals($res->{properties}{fn}[0]{value}, 'Forrest Gump');
+    }
 }
 
 sub test_version_ignore_whitespace
