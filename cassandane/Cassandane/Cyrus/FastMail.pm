@@ -718,6 +718,9 @@ sub test_rename_deepfolder_intermediates
     $self->assert_null(glob "$self->{replica}{basedir}/conf/user/c/cassandane.*");
     $self->assert(not -d "$self->{replica}{basedir}/data/c/user/cassandane");
     $self->assert(not -f "$self->{replica}{basedir}/conf/quota/c/user.cassandane");
+
+    xlog $self, "Now clean up all the deleted mailboxes";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
 }
 
 1;
