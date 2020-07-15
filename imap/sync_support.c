@@ -1650,7 +1650,7 @@ int apply_annotations(struct mailbox *mailbox,
                       const struct index_record *record,
                       const struct sync_annot_list *local_annots,
                       const struct sync_annot_list *remote_annots,
-                      int local_wins)
+                      int local_wins, int *hadsnoozed)
 {
     const struct sync_annot *local = (local_annots ? local_annots->head : NULL);
     const struct sync_annot *remote = (remote_annots ? remote_annots->head : NULL);
@@ -1693,6 +1693,8 @@ int apply_annotations(struct mailbox *mailbox,
         else {
             chosen = remote;
             value = (local_wins ? &local->value : &remote->value);
+            if (hadsnoozed && !strcmpsafe(chosen->entry, IMAP_ANNOT_NS "snoozed") && buf_len(value))
+                *hadsnoozed = 1;
             diff = buf_cmp(&local->value, &remote->value);
             local = local->next;
             remote = remote->next;
@@ -2275,11 +2277,18 @@ int sync_append_copyfile(struct mailbox *mailbox,
     r = mailbox_append_index_record(mailbox, record);
     if (r) return r;
 
+    int hadsnoozed = 0;
     /* apply the remote annotations */
-    r = apply_annotations(mailbox, record, NULL, annots, 0);
+    r = apply_annotations(mailbox, record, NULL, annots, 0, &hadsnoozed);
     if (r) {
         syslog(LOG_ERR, "Failed to apply annotations: %s",
                error_message(r));
+    }
+
+    if (!r && hadsnoozed) {
+        record->silentupdate = 1;
+        record->internal_flags |= FLAG_INTERNAL_SNOOZED;
+        r = mailbox_rewrite_index_record(mailbox, record);
     }
 
     return r;
@@ -2616,13 +2625,16 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
                 goto out;
             }
 
-            r = apply_annotations(mailbox, &copy, rannots, mannots, 0);
+            int hadsnoozed = 0;
+            r = apply_annotations(mailbox, &copy, rannots, mannots, 0, &hadsnoozed);
             if (r) {
                 syslog(LOG_ERR, "Failed to write merged annotations %s %u: %s",
                        mailbox->name, rrecord->recno, error_message(r));
                 goto out;
             }
 
+            if (hadsnoozed) copy.internal_flags |= FLAG_INTERNAL_SNOOZED;
+            else copy.internal_flags &= ~FLAG_INTERNAL_SNOOZED;
             copy.silentupdate = 1;
             copy.ignorelimits = 1;
             r = mailbox_rewrite_index_record(mailbox, &copy);
@@ -2966,7 +2978,7 @@ int sync_apply_mailbox(struct dlist *kin,
         decode_annotations(ka, &mannots, mailbox, NULL);
 
     r = read_annotations(mailbox, NULL, &rannots, 0, 0);
-    if (!r) r = apply_annotations(mailbox, NULL, rannots, mannots, 0);
+    if (!r) r = apply_annotations(mailbox, NULL, rannots, mannots, 0, NULL);
 
     if (r) {
         syslog(LOG_ERR, "syncerror: annotations failed to apply to %s",
@@ -3978,7 +3990,7 @@ int sync_restore_mailbox(struct dlist *kin,
 
         if (!r) r = apply_annotations(mailbox, NULL,
                                       mailbox_annots, restore_annots,
-                                      !is_new_mailbox);
+                                      !is_new_mailbox, NULL);
         if (r)
             syslog(LOG_WARNING,
                    "restore mailbox %s: unable to apply mailbox annotations: %s",
@@ -5188,9 +5200,13 @@ static int compare_one_record(struct mailbox *mailbox,
     /* are we making changes yet? */
     if (!kaction) return 0;
 
+    int hadsnoozed = 0;
     /* even expunged messages get annotations synced */
-    r = apply_annotations(mailbox, mp, mannots, rannots, 0);
+    r = apply_annotations(mailbox, mp, mannots, rannots, 0, &hadsnoozed);
     if (r) return r;
+
+    if (hadsnoozed) mp->internal_flags |= FLAG_INTERNAL_SNOOZED;
+    else mp->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
 
     /* this will bump the modseq and force a resync either way :) */
     return mailbox_rewrite_index_record(mailbox, mp);
@@ -5476,7 +5492,7 @@ static int mailbox_full_update(struct sync_folder *local,
     r = read_annotations(mailbox, NULL, &mannots, 0, 0);
     if (r) goto cleanup;
     r = apply_annotations(mailbox, NULL, mannots, rannots,
-                          !remote_modseq_was_higher);
+                          !remote_modseq_was_higher, NULL);
     if (r) goto cleanup;
 
     /* blatant reuse 'r' us */
