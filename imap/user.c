@@ -79,6 +79,7 @@
 #include "quota.h"
 #include "search_engines.h"
 #include "seen.h"
+#include "sync_log.h"
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -241,6 +242,9 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
 #endif /* WITH_DAV */
 
     proc_killuser(userid);
+
+    // make sure it gets removed everywhere else
+    sync_log_unuser(userid);
 
     return 0;
 }
