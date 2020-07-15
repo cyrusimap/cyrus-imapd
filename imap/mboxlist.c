@@ -1716,12 +1716,12 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
         if (r) goto done;
     }
 
-    r = mboxlist_lookup(name, &mbentry, NULL);
+    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) goto done;
 
     /* check if user has Delete right (we've already excluded non-admins
      * from deleting a user mailbox) */
-    if (checkacl) {
+    if (checkacl && !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
         myrights = cyrus_acl_myrights(auth_state, mbentry->acl);
         if (!(myrights & ACL_DELETEMBOX)) {
             /* User has admin rights over their own mailbox namespace */
@@ -1829,6 +1829,19 @@ EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
 
     r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) goto done;
+
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        // make it deleted and mark it done!
+        mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
+        newmbentry->mbtype = MBTYPE_DELETED;
+        if (!silent) {
+            newmbentry->foldermodseq = mboxname_nextmodseq(newmbentry->name, newmbentry->foldermodseq,
+                                                           newmbentry->mbtype, 1);
+        }
+        r = mboxlist_update(newmbentry, /*localonly*/1);
+        mboxlist_entry_free(&newmbentry);
+        goto done;
+    }
 
     isremote = mbentry->mbtype & MBTYPE_REMOTE;
 

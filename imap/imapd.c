@@ -7380,18 +7380,18 @@ static int delmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
         r = mboxlist_deletemailbox(mbentry->name,
                                    imapd_userisadmin || imapd_userisproxyadmin,
                                    imapd_userid, imapd_authstate, NULL,
-                                   0, 0, 0, 0);
+                                   0, 0, 0, 1);
     } else if ((imapd_userisadmin || imapd_userisproxyadmin) &&
                mboxname_isdeletedmailbox(mbentry->name, NULL)) {
         r = mboxlist_deletemailbox(mbentry->name,
                                    imapd_userisadmin || imapd_userisproxyadmin,
                                    imapd_userid, imapd_authstate, NULL,
-                                   0, 0, 0, 0);
+                                   0, 0, 0, 1);
     } else {
         r = mboxlist_delayed_deletemailbox(mbentry->name,
                                            imapd_userisadmin || imapd_userisproxyadmin,
                                            imapd_userid, imapd_authstate, NULL,
-                                           0, 0, 0, 0);
+                                           0, 0, 0, 1);
     }
 
     if (r) {
@@ -7507,7 +7507,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     if (!r && !localonly && delete_user) {
         const char *userid = mbname_userid(mbname);
         if (userid) {
-            r = mboxlist_usermboxtree(userid, NULL, delmbox, NULL, 0);
+            r = mboxlist_usermboxtree(userid, NULL, delmbox, NULL, MBOXTREE_INTERMEDIATES);
             if (!r) r = user_deletedata(userid, 1);
         }
     }
@@ -8011,12 +8011,11 @@ submboxes:
 
     /* take care of deleting old ACLs, subscriptions, seen state and quotas */
     if (!r && rename_user) {
+        /* user_deletedata takes care of logging the unuser */
         user_deletedata(olduser, 1);
         /* allow the replica to get the correct new quotaroot
          * and acls copied across */
         sync_log_user(newuser);
-        /* allow the replica to clean up the old meta files */
-        sync_log_unuser(olduser);
     }
 
     /* take care of intermediaries */
