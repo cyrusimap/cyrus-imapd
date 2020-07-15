@@ -1683,11 +1683,15 @@ int apply_annotations(struct mailbox *mailbox,
         if (diff < 0) {
             chosen = local;
             value = (local_wins ? &local->value : &novalue);
+            if (hadsnoozed && !strcmpsafe(chosen->entry, IMAP_ANNOT_NS "snoozed") && buf_len(value))
+                *hadsnoozed = 1;
             local = local->next;
         }
         else if (diff > 0) {
             chosen = remote;
             value = (local_wins ? &novalue : &remote->value);
+            if (hadsnoozed && !strcmpsafe(chosen->entry, IMAP_ANNOT_NS "snoozed") && buf_len(value))
+                *hadsnoozed = 1;
             remote = remote->next;
         }
         else {
