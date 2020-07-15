@@ -423,6 +423,7 @@ static const struct precond_t {
     { "same-organizer-in-all-components", NS_CALDAV },
     { "allowed-organizer-scheduling-object-change", NS_CALDAV },
     { "allowed-attendee-scheduling-object-change", NS_CALDAV },
+    { "default-calendar-needed", NS_CALDAV },
 
     /* iSchedule (draft-desruisseaux-ischedule) preconditions */
     { "version-not-supported", NS_ISCHED },
@@ -4974,18 +4975,35 @@ int meth_delete(struct transaction_t *txn, void *params)
     if (!txn->req_tgt.resource) {
         /* DELETE collection */
 
+        /* Open mailbox for reading */
+        r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
+        if (r) {
+            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+                    txn->req_tgt.mbentry->name, error_message(r));
+            txn->error.desc = error_message(r);
+            ret = HTTP_SERVER_ERROR;
+            goto done;
+        }
+
+        /* Check any preconditions */
+        ret = dparams->check_precond(txn, params, mailbox, NULL, NULL, 0);
+
+        switch (ret) {
+            case HTTP_OK:
+                break;
+            case HTTP_LOCKED:
+                txn->error.precond = DAV_NEED_LOCK_TOKEN;
+                txn->error.resource = txn->req_tgt.path;
+                GCC_FALLTHROUGH
+            default:
+                /* We failed a precondition - don't perform the request */
+                r = ret ? ret : HTTP_SERVER_ERROR;
+                goto done;
+        }
+
         if (dparams->delete) {
             /* Do special processing on all resources */
             struct delete_rock drock = { txn, NULL, dparams->delete };
-
-            /* Open mailbox for reading */
-            r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
-            if (r) {
-                syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-                       txn->req_tgt.mbentry->name, error_message(r));
-                txn->error.desc = error_message(r);
-                return HTTP_SERVER_ERROR;
-            }
 
             /* Open the DAV DB corresponding to the mailbox */
             davdb = dparams->davdb.open_db(mailbox);
@@ -4993,13 +5011,15 @@ int meth_delete(struct transaction_t *txn, void *params)
             drock.mailbox = mailbox;
             r = dparams->davdb.foreach_resource(davdb, mailbox->name,
                                                   &delete_cb, &drock);
-            /* we need the mailbox closed before we delete it */
-            mailbox_close(&mailbox);
             if (r) {
                 txn->error.desc = error_message(r);
-                return HTTP_SERVER_ERROR;
+                ret = HTTP_SERVER_ERROR;
+                goto done;
             }
         }
+
+        /* we need the mailbox closed before we delete it */
+        mailbox_close(&mailbox);
 
         mbname_t *mbname = mbname_from_intname(txn->req_tgt.mbentry->name);
         struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));

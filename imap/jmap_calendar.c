@@ -1404,29 +1404,21 @@ static int jmap_calendar_set(struct jmap_req *req)
             uid = newuid;
         }
 
+        char *mboxname = caldav_mboxname(req->accountid, uid);
+
         /* Do not allow to remove the default calendar. */
-        char *mboxname = caldav_mboxname(req->accountid, NULL);
-        static const char *defaultcal_annot =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
-        struct buf attrib = BUF_INITIALIZER;
-        r = annotatemore_lookupmask(mboxname, defaultcal_annot,
-                                    req->accountid, &attrib);
-        free(mboxname);
-        const char *defaultcal = "Default";
-        if (!r && attrib.len) {
-            defaultcal = buf_cstring(&attrib);
-        }
-        if (!strcmp(uid, defaultcal)) {
+        char *defaultname = caldav_scheddefault(req->accountid);
+        if (!strcmp(mboxname, defaultname)) {
             /* XXX - The isDefault set error is not documented in the spec. */
             json_t *err = json_pack("{s:s}", "type", "isDefault");
             json_object_set_new(set.not_destroyed, uid, err);
-            buf_free(&attrib);
+            free(mboxname);
+            free(defaultname);
             continue;
         }
-        buf_free(&attrib);
+        free(defaultname);
 
         /* Make sure we don't delete special calendars */
-        mboxname = caldav_mboxname(req->accountid, uid);
         mbname_t *mbname = mbname_from_intname(mboxname);
         if (!mbname || jmap_calendar_isspecial(mbname)) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
