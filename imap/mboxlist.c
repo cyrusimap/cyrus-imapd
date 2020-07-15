@@ -1183,8 +1183,8 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
     mbname_t *mbname = mbname_from_intname(frommboxname);
     int r = 0;
 
-    /* only use intermediates for non-deleted user mailboxes */
-    if (mbname_isdeleted(mbname) || !mbname_userid(mbname))
+    /* only use intermediates for user mailboxes */
+    if (!mbname_userid(mbname))
         goto out;
 
     for (; strarray_size(mbname_boxes(mbname)); free(mbname_pop_boxes(mbname))) {
