@@ -603,6 +603,8 @@ sub test_rename_deepfolder_intermediates
 
     my $admintalk = $self->{adminstore}->get_client();
 
+    $admintalk->setquota('user.cassandane', ['STORAGE', 500000]);
+
     my $rhttp = $self->{replica}->get_service('http');
     my $rjmap = Mail::JMAPTalk->new(
         user => 'cassandane',
@@ -701,11 +703,21 @@ sub test_rename_deepfolder_intermediates
     $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
     $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
 
+    xlog $self, "Make sure there are no files left with cassandane in the name";
+    $self->assert_null(glob "$self->{instance}{basedir}/conf/user/c/cassandane.*");
+    $self->assert(not -d "$self->{instance}{basedir}/data/c/user/cassandane");
+    $self->assert(not -f "$self->{instance}{basedir}/conf/quota/c/user.cassandane");
+
     # replicate and check the renames
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
     @syslog = $self->{replica}->getsyslog();
     $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
     $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+
+    xlog $self, "Make sure there are no files left with cassandane in the on the replica";
+    $self->assert_null(glob "$self->{replica}{basedir}/conf/user/c/cassandane.*");
+    $self->assert(not -d "$self->{replica}{basedir}/data/c/user/cassandane");
+    $self->assert(not -f "$self->{replica}{basedir}/conf/quota/c/user.cassandane");
 }
 
 1;
