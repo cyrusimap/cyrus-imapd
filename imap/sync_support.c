@@ -3681,7 +3681,7 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     }
 
     strarray_truncate(list, 0);
-    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, MBOXTREE_DELETED);
+    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, 0);
     if (r) goto done;
 
     /* delete in reverse so INBOX is last */
