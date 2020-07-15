@@ -220,7 +220,18 @@ static const char *_synclock_name(const char *hostname, const char *userid)
     if (!userid) userid = ""; // no userid == global lock
 
     buf_setcstr(&buf, "*S*");
-    if (hostname) buf_appendcstr(&buf, hostname);
+
+    for (p = hostname; *p; p++) {
+        switch(*p) {
+            case '.':
+                buf_putc(&buf, '^');
+                break;
+            default:
+                buf_putc(&buf, *p);
+                break;
+        }
+    }
+
     buf_putc(&buf, '*');
 
     for (p = userid; *p; p++) {
