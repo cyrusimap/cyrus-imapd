@@ -679,20 +679,23 @@ if test "$enable_pcre" != "no"; then
         fi
 fi
 
+LIB_REGEX=
 if test "$cyrus_cv_pcre_utf8" = "yes"; then
-        LIBS="$LIBS -lpcre -lpcreposix";
+        LIB_REGEX="-lpcre -lpcreposix";
         AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
         AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
 else
         AC_CHECK_HEADERS(rxposix.h)
         if test "$ac_cv_header_rxposix_h" = "yes"; then
-            LIBS="$LIBS -lrx"
+            LIB_REGEX="-lrx"
             AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
         else
             AC_SEARCH_LIBS(regcomp, regex,
                            AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?]), [])
         fi
 fi
+AC_SUBST(LIB_REGEX)
+LIBS="$LIBS $LIB_REGEX"
 
 dnl
 dnl see if we're compiling with SRS
