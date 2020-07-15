@@ -1832,14 +1832,27 @@ EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
 
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
         // make it deleted and mark it done!
-        mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
-        newmbentry->mbtype = MBTYPE_DELETED;
-        if (!silent) {
-            newmbentry->foldermodseq = mboxname_nextmodseq(newmbentry->name, newmbentry->foldermodseq,
-                                                           newmbentry->mbtype, 1);
+        if (!mboxname_isdeletedmailbox(name, NULL)) {
+            mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
+            newmbentry->mbtype = MBTYPE_DELETED;
+            if (!silent) {
+                newmbentry->foldermodseq = mboxname_nextmodseq(newmbentry->name, newmbentry->foldermodseq,
+                                                               newmbentry->mbtype, 1);
+            }
+            r = mboxlist_update(newmbentry, /*localonly*/1);
+            if (r) {
+                syslog(LOG_ERR, "DBERROR: error marking deleted %s: %s",
+                       name, cyrusdb_strerror(r));
+            }
+            mboxlist_entry_free(&newmbentry);
         }
-        r = mboxlist_update(newmbentry, /*localonly*/1);
-        mboxlist_entry_free(&newmbentry);
+        else {
+            r = mboxlist_update_entry(name, NULL, 0);
+            if (r) {
+                syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
+                       name, cyrusdb_strerror(r));
+            }
+        }
         goto done;
     }
 
