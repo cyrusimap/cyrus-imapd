@@ -65,4 +65,6 @@ extern int caldav_is_personalized(struct mailbox *mailbox,
                                   const char *userid,
                                   struct buf *userdata);
 
+extern char *caldav_scheddefault(const char *userid);
+
 #endif /* HTTP_CALDAV_H */

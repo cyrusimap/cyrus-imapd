@@ -1190,6 +1190,25 @@ static modseq_t caldav_get_modseq(struct mailbox *mailbox,
     return modseq;
 }
 
+HIDDEN char *caldav_scheddefault(const char *userid)
+{
+    const char *annotname =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+
+    char *calhomename = caldav_mboxname(userid, NULL);
+    char *defaultname = NULL;
+    struct buf attrib = BUF_INITIALIZER;
+
+    int r = annotatemore_lookupmask(calhomename, annotname, userid, &attrib);
+    if (!r && attrib.len) {
+        defaultname = caldav_mboxname(userid, buf_cstring(&attrib));
+    }
+    else defaultname = caldav_mboxname(userid, SCHED_DEFAULT);
+
+    buf_free(&attrib);
+    free(calhomename);
+    return defaultname;
+}
 
 /* Check headers for any preconditions */
 static int caldav_check_precond(struct transaction_t *txn,
@@ -1200,7 +1219,18 @@ static int caldav_check_precond(struct transaction_t *txn,
     const struct caldav_data *cdata = (const struct caldav_data *) data;
     const char *stag = cdata && cdata->organizer ? cdata->sched_tag : NULL;
     const char **hdr;
-    int precond;
+    int precond = 0;
+
+    if (txn->meth == METH_DELETE && !cdata) {
+        /* Must not delete default scheduling calendar */
+        char *defaultname = caldav_scheddefault(httpd_userid);
+        if (!strcmp(mailbox->name, defaultname)) {
+            precond = HTTP_FORBIDDEN;
+            txn->error.precond = CALDAV_DEFAULT_NEEDED;
+        }
+        free(defaultname);
+        if (precond) return precond;
+    }
 
     /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
     precond = dav_check_precond(txn, params, mailbox, data, etag, lastmod);

@@ -235,6 +235,7 @@ enum {
     CALDAV_SAME_ORGANIZER,
     CALDAV_ALLOWED_ORG_CHANGE,
     CALDAV_ALLOWED_ATT_CHANGE,
+    CALDAV_DEFAULT_NEEDED,
 
     /* iSchedule (draft-desruisseaux-ischedule) preconditions */
     ISCHED_UNSUPP_VERSION,
