@@ -376,8 +376,8 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 # Commented out - there's no single setting "autocreate_acl",
 # but we need this for the man page
-# { "autocreate_acl", NULL, STRING, "3.1.10" }
-/* If folders are to be created by \fIautocreate_inbox_folders\R, this
+# { "autocreate_acl", NULL, STRING, "3.2.0" }
+/* If folders are to be created by \fIautocreate_inbox_folders\fR, this
    setting can be used to apply additional ACLs to the autocreated
    folders.  The syntax is "autocreate_acl folder identifier rights",
    where \fIfolder\fR must match one of the \fIautocreate_inbox_folders\fR
@@ -1485,7 +1485,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Notifyd(8) method to use for "MAIL" notifications.  If not set, "MAIL"
    notifications are disabled. */
 
-{ "master_bind_errors_fatal", 0, SWITCH, "3.1.10" }
+{ "master_bind_errors_fatal", 0, SWITCH, "3.2.0" }
 /* If enabled, failure to bind a port during startup is treated as a fatal
    error, causing master to shut down immediately.  The default is to keep
    running, with the affected service disabled until the next SIGHUP causes
