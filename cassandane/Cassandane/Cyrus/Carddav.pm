@@ -71,17 +71,23 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-    my $service = $self->{instance}->get_service("http");
-    $ENV{DEBUGDAV} = 1;
-    $self->{carddav} = Net::CardDAVTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+
+    # set up a carddav object, if we already have instances running
+    # N.B. if your test uses :NoStartInstances magic, you will need to
+    # do this bit yourself!
+    if ($self->{_want}->{start_instances}) {
+        my $service = $self->{instance}->get_service("http");
+        $ENV{DEBUGDAV} = 1;
+        $self->{carddav} = Net::CardDAVTalk->new(
+            user => 'cassandane',
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+    }
 }
 
 sub tear_down
@@ -496,10 +502,31 @@ EOF
     }
 }
 
-sub test_control_chars
-    :min_version_3_0 :needs_component_httpd
+sub test_control_chars_repaired
+    :min_version_3_0 :needs_component_httpd :NoStartInstances
 {
     my ($self) = @_;
+
+    # from 3.0-3.2, this behaviour was optional and required the
+    # carddav_repair_vcard switch to be set
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj == 3 && ($min >= 0 && $min <= 2)) {
+        $self->{instance}->{config}->set('carddav_repair_vcard' => 'yes');
+    }
+    $self->_start_instances();
+
+    # :NoStartInstances magic means set_up() didn't do this bit for us
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    $self->{carddav} = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
 
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');
@@ -519,17 +546,58 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
-    my $repair = $self->{instance}->{config}->get('carddav_repair_vcard');
-    if ($repair ne 'yes') {
-        eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
-        my $Err = $@;
-        $self->assert_matches(qr/valid-address-data/, $Err);
-    } else {
-        my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
-        my $path = $CardDAV->NewContact($Id, $VCard);
-        my $res = $CardDAV->GetContact($path);
-        $self->assert_str_equals($res->{properties}{fn}[0]{value}, 'Forrest Gump');
-    }
+    # the \b should be repaired out
+    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
+    my $path = $CardDAV->NewContact($Id, $VCard);
+    my $res = $CardDAV->GetContact($path);
+    $self->assert_str_equals($res->{properties}{fn}[0]{value}, 'Forrest Gump');
+}
+
+sub test_control_chars_unrepaired
+    :min_version_3_0 :max_version_3_2 :needs_component_httpd
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    # make sure we don't try to repair by default
+    $self->{instance}->{config}->set('carddav_repair_vcard' => 'no');
+    $self->_start_instances();
+
+    # :NoStartInstances magic means set_up() didn't do this bit for us
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    $self->{carddav} = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+    my $href = "$Id/bar.vcf";
+
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:123456789
+N:Gump;Forrest;;Mr.
+FN:Forrest\b Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    # vcard containing control character should be rejected
+    eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
+    my $Err = $@;
+    $self->assert_matches(qr/valid-address-data/, $Err);
 }
 
 sub test_version_ignore_whitespace
