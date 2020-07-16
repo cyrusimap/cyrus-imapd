@@ -927,19 +927,34 @@ static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part, int part
 
 static std::string parse_listid(const char *str)
 {
+    std::string val;
+
     /* Extract list-id */
     const char *start = strchr(str, '<');
-    const char *end = NULL;
     if (start) {
-        end = strchr(++start, '>');
-        if (end) end++;
+        /* RFC2919 list-id header */
+        const char *end = strchr(++start, '>');
+        if (!end || end - start < 2) {
+            return std::string();
+        }
+        val = std::string(start, end - start);
     }
-    if (!end || !start || end - start < 1) {
-        return std::string();
+    else {
+        /* Groups-style header: 'list list-id[; contact list-contact]'
+         * As seen at Google Group, Yahoo, et al. */
+        for (start = str; isspace(*start); start++) {}
+        if (!strncasecmp("list", start, 4) && isspace(start[4])) {
+            for (start = start + 4; isspace(*start); start++) {}
+            if (*start) {
+                const char *end = strchr(start, ';');
+                if (!end || end - start) {
+                    val = end ? std::string(start, end - start) : std::string{start};
+                }
+            }
+        }
     }
 
     /* Normalize list-id */
-    std::string val(start, end - start - 1);
     val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
     std::transform(val.begin(), val.end(), val.begin(), ::tolower);
     return val;
