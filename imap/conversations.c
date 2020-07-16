@@ -709,9 +709,9 @@ EXPORTED void conversation_normalise_subject(struct buf *s)
     if (!initialised_res) {
         r = regcomp(&whitespace_re, "([ \t\r\n]+|\xC2\xA0)", REG_EXTENDED);
         assert(r == 0);
-        r = regcomp(&bracket_re, "(\\[[^\\[\\]]*\\])|(^[^\\[]*\\])|(\\[[^\\]]*$)", REG_EXTENDED);
+        r = regcomp(&bracket_re, "(\\[[^]\\[]*])|(^[^\\[]*])|(\\[[^]]*$)", REG_EXTENDED);
         assert(r == 0);
-        r = regcomp(&relike_token_re, "^[ \\t]*[^\\s]+:", REG_EXTENDED);
+        r = regcomp(&relike_token_re, "^[ \\t]*[^ \\t\\r\\n\\f]+:", REG_EXTENDED);
         assert(r == 0);
         initialised_res = 1;
     }
