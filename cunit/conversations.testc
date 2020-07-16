@@ -1361,6 +1361,8 @@ static void test_subject_normalise(void)
              "foobar");
     TESTCASE("unmatched left] foobar [unmatched=[matched]",
              "foobar");
+    TESTCASE("no re: foobar", "nore:foobar");
+    TESTCASE("re: no re: foobar", "nore:foobar");
 }
 
 #undef TESTCASE
