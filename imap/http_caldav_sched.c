@@ -1791,7 +1791,9 @@ static void sched_deliver_local(const char *sender, const char *recipient,
     }
     else {
         /* Can't find object belonging to attendee - use default calendar */
-        mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
+        char *scheddefault = caldav_scheddefault(userid);
+        mailboxname = caldav_mboxname(userid, scheddefault);
+        free(scheddefault);
         buf_reset(&resource);
         /* XXX - sanitize the uid? */
         buf_printf(&resource, "%s.ics",

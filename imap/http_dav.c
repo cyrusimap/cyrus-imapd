@@ -424,6 +424,7 @@ static const struct precond_t {
     { "allowed-organizer-scheduling-object-change", NS_CALDAV },
     { "allowed-attendee-scheduling-object-change", NS_CALDAV },
     { "default-calendar-needed", NS_CALDAV },
+    { "valid-schedule-default-calendar-URL", NS_CALDAV },
 
     /* iSchedule (draft-desruisseaux-ischedule) preconditions */
     { "version-not-supported", NS_ISCHED },

@@ -228,6 +228,10 @@ static int propfind_scheddefault(const xmlChar *name, xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop, xmlNodePtr resp,
                                  struct propstat propstat[], void *rock);
+static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
+                                  struct proppatch_ctx *pctx,
+                                  struct propstat propstat[],
+                                  void *rock __attribute__((unused)));
 static int propfind_schedtag(const xmlChar *name, xmlNsPtr ns,
                              struct propfind_ctx *fctx,
                              xmlNodePtr prop, xmlNodePtr resp,
@@ -498,7 +502,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_schedtag, NULL, NULL },
     { "schedule-default-calendar-URL", NS_CALDAV,
       PROP_COLLECTION,
-      propfind_scheddefault, NULL, NULL },
+      propfind_scheddefault, proppatch_scheddefault, NULL },
     { "schedule-calendar-transp", NS_CALDAV,
       PROP_COLLECTION | PROP_PERUSER,
       propfind_fromdb, proppatch_caltransp, NULL },
@@ -1190,6 +1194,9 @@ static modseq_t caldav_get_modseq(struct mailbox *mailbox,
     return modseq;
 }
 
+/* Returns the calendar collection name to use as scheduling default.
+ * This is just the *last* part of the complete path without trailing
+ * path separator, e.g. 'Default' */
 HIDDEN char *caldav_scheddefault(const char *userid)
 {
     const char *annotname =
@@ -1201,13 +1208,111 @@ HIDDEN char *caldav_scheddefault(const char *userid)
 
     int r = annotatemore_lookupmask(calhomename, annotname, userid, &attrib);
     if (!r && attrib.len) {
-        defaultname = caldav_mboxname(userid, buf_cstring(&attrib));
+        defaultname = buf_release(&attrib);
     }
-    else defaultname = caldav_mboxname(userid, SCHED_DEFAULT);
+    else defaultname = xstrdup(SCHED_DEFAULT);
+
+    size_t len = strlen(defaultname);
+    if (defaultname[len-1] == '/') defaultname[len-1] = '\0';
 
     buf_free(&attrib);
     free(calhomename);
     return defaultname;
+}
+
+static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
+                                  struct proppatch_ctx *pctx,
+                                  struct propstat propstat[],
+                                  void *rock __attribute__((unused)))
+{
+    /* Only allow PROPPATCH on CALDAV:schedule-inbox-URL */
+    if ((pctx->txn->req_tgt.flags != TGT_SCHED_INBOX) || !set) {
+        xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV], &propstat[PROPSTAT_FORBID],
+                prop->name, prop->ns, NULL, DAV_PROT_PROP);
+        *pctx->ret = HTTP_FORBIDDEN;
+        return HTTP_FORBIDDEN;
+    }
+
+    /* Validate property value */
+    int precond = CALDAV_VALID_DEFAULT;
+    char *href = NULL;
+    mbname_t *mbname = NULL;
+
+    if (prop->children && !prop->children->next) {
+        xmlNodePtr cur = prop->children;
+        if (cur->type == XML_ELEMENT_NODE) {
+            if (!xmlStrcmp(cur->name, BAD_CAST "href")) {
+                href = (char*) xmlNodeGetContent(cur);
+                if (href && *href) {
+                    /* Strip trailing '/' character */
+                    size_t len = strlen(href);
+                    if (len > 1 && href[len-1] == '/') {
+                        href[len-1] = '\0';
+                    }
+                }
+            }
+        }
+    }
+
+    if (href) {
+        buf_reset(&pctx->buf);
+        if (strchr(httpd_userid, '@') || !httpd_extradomain) {
+            buf_printf(&pctx->buf, "%s/%s/%s/", namespace_calendar.prefix,
+                    USER_COLLECTION_PREFIX, httpd_userid);
+        }
+        else {
+            buf_printf(&pctx->buf, "%s/%s/%s@%s/", namespace_calendar.prefix,
+                    USER_COLLECTION_PREFIX, httpd_userid, httpd_extradomain);
+        }
+        if (!strncmp(href, buf_cstring(&pctx->buf), buf_len(&pctx->buf))) {
+            const char *cal = href + buf_len(&pctx->buf);
+            if (cal) {
+                char *mboxname = caldav_mboxname(httpd_userid, cal);
+                if (mboxname_iscalendarmailbox(mboxname, 0) &&
+                     mboxname_policycheck(mboxname) == 0) {
+                    mbname = mbname_from_intname(mboxname);
+                }
+                free(mboxname);
+            }
+        }
+    }
+
+    if (mbname) {
+        char *calhomename = caldav_mboxname(httpd_userid, NULL);
+        struct mailbox *calhome = NULL;
+        struct mailbox *mailbox = NULL;
+        int r = mailbox_open_iwl(calhomename, &calhome);
+        if (!r) r = mailbox_open_iwl(mbname_intname(mbname), &mailbox);
+        if (!r) {
+            annotate_state_t *astate = NULL;
+            r = mailbox_get_annotate_state(calhome, 0, &astate);
+            if (!r) {
+                const char *annotname =
+                    DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+
+                const strarray_t *boxes = mbname_boxes(mbname);
+                buf_setcstr(&pctx->buf, strarray_nth(boxes, strarray_size(boxes)-1));
+                r = annotate_state_writemask(astate, annotname, httpd_userid, &pctx->buf);
+            }
+        }
+        mailbox_close(&mailbox);
+        mailbox_close(&calhome);
+        free(calhomename);
+        if (!r) precond = 0;
+    }
+
+    if (precond) {
+        xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV], &propstat[PROPSTAT_FORBID],
+                     prop->name, prop->ns, NULL, precond);
+    }
+    else {
+        xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                     prop->name, prop->ns, NULL, 0);
+    }
+
+    mbname_free(&mbname);
+    free(href);
+    return precond ? HTTP_FORBIDDEN : 0;
 }
 
 /* Check headers for any preconditions */
@@ -1224,10 +1329,12 @@ static int caldav_check_precond(struct transaction_t *txn,
     if (txn->meth == METH_DELETE && !cdata) {
         /* Must not delete default scheduling calendar */
         char *defaultname = caldav_scheddefault(httpd_userid);
-        if (!strcmp(mailbox->name, defaultname)) {
+        char *defaultmboxname = caldav_mboxname(httpd_userid, defaultname);
+        if (!strcmp(mailbox->name, defaultmboxname)) {
             precond = HTTP_FORBIDDEN;
             txn->error.precond = CALDAV_DEFAULT_NEEDED;
         }
+        free(defaultmboxname);
         free(defaultname);
         if (precond) return precond;
     }
@@ -2074,6 +2181,8 @@ struct list_cal_rock {
     struct cal_info *cal;
     unsigned len;
     unsigned alloc;
+    char *scheddefault;
+    size_t defaultlen;
 };
 
 static int list_cal_cb(const mbentry_t *mbentry, void *rock)
@@ -2082,7 +2191,6 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     struct cal_info *cal;
     static size_t inboxlen = 0;
     static size_t outboxlen = 0;
-    static size_t defaultlen = 0;
     char *shortname;
     size_t len;
     int r, rights, any_rights = 0;
@@ -2097,7 +2205,6 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
 
     if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
-    if (!defaultlen) defaultlen = strlen(SCHED_DEFAULT) - 1;
 
     /* Make sure its a calendar */
     if (mbentry->mbtype != MBTYPE_CALENDAR) goto done;
@@ -2134,7 +2241,8 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     cal->flags = 0;
 
     /* Is this the default calendar? */
-    if (len == defaultlen && !strncmp(shortname, SCHED_DEFAULT, defaultlen)) {
+    if (len == lrock->defaultlen &&
+            !strncmp(shortname, lrock->scheddefault, lrock->defaultlen)) {
         cal->flags |= CAL_IS_DEFAULT;
     }
 
@@ -2374,8 +2482,12 @@ static int list_calendars(struct transaction_t *txn)
     buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
 
     memset(&lrock, 0, sizeof(struct list_cal_rock));
+    lrock.scheddefault = caldav_scheddefault(httpd_userid);
+    lrock.defaultlen = strlen(lrock.scheddefault);
     mboxlist_mboxtree(txn->req_tgt.mbentry->name,
                       list_cal_cb, &lrock, MBOXTREE_SKIP_ROOT);
+    free(lrock.scheddefault);
+    lrock.scheddefault = NULL;
 
     /* Sort calendars by displayname */
     qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);

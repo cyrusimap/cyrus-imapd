@@ -1604,7 +1604,7 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
  *    !"%&/;<>\`{|}
  */
 #define GOODCHARS " #$'()*+,-.0123456789:=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz~"
-HIDDEN int mboxname_policycheck(const char *name)
+EXPORTED int mboxname_policycheck(const char *name)
 {
     const char *p;
     int sawutf7 = 0;
