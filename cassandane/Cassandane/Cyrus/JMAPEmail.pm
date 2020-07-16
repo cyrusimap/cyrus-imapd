@@ -19292,8 +19292,12 @@ sub test_email_query_listid
     my $imap = $self->{store}->get_client();
 
     xlog "Append emails with list-id";
-    $self->make_message("msg1",
+    $self->make_message("msg1", # RFC 2919
         extra_headers => [['list-id', "Foo <xxx.y\tyy. ZZZ>"]],
+        body => "msg1"
+    ) || die;
+    $self->make_message("msg2", # as seen at Yahoo, Google, et al
+        extra_headers => [['list-id', 'list aaa@bbb.ccc; contact aaa-contact@bbb.ccc']],
         body => "msg1"
     ) || die;
 
@@ -19317,7 +19321,7 @@ sub test_email_query_listid
         }, 'R1'],
     ], $using);
     my @ids = @{$res->[0][1]{ids}};
-    $self->assert_num_equals(1, scalar @ids);
+    $self->assert_num_equals(2, scalar @ids);
 
     xlog "Query listId";
     $res = $jmap->CallMethods([
@@ -19346,12 +19350,36 @@ sub test_email_query_listid
                 listId => 'xxx . yyy . zzz',
             },
         }, 'R5'],
+        ['Email/query', {
+            filter => {
+                listId => 'aaa@bbb.ccc',
+            },
+        }, 'R6'],
+        ['Email/query', {
+            filter => {
+                listId => 'aaa-contact@bbb.ccc',
+            },
+        }, 'R7'],
+        ['Email/query', {
+            filter => {
+                listId => 'aaa @ bbb . ccc',
+            },
+        }, 'R8'],
+        ['Email/query', {
+            filter => {
+                listId => 'aaa',
+            },
+        }, 'R9'],
     ], $using);
     $self->assert_deep_equals([$ids[0]], $res->[0][1]{ids});
     $self->assert_deep_equals([], $res->[1][1]{ids});
     $self->assert_deep_equals([], $res->[2][1]{ids});
     $self->assert_deep_equals([], $res->[3][1]{ids});
     $self->assert_deep_equals([$ids[0]], $res->[4][1]{ids});
+    $self->assert_deep_equals([$ids[1]], $res->[5][1]{ids});
+    $self->assert_deep_equals([], $res->[6][1]{ids});
+    $self->assert_deep_equals([$ids[1]], $res->[7][1]{ids});
+    $self->assert_deep_equals([], $res->[8][1]{ids});
 }
 
 sub test_email_query_emailaddress
