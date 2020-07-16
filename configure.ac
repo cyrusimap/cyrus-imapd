@@ -1484,22 +1484,6 @@ AC_SUBST([LIBCHARDET_CFLAGS])
 AM_CONDITIONAL([USE_LIBCHARDET], [test "x$with_chardet" = xyes])
 
 dnl
-dnl Check for cld2 library
-dnl
-AC_ARG_WITH([cld2],
-	[AS_HELP_STRING([--without-cld2], [ignore presence of cld2 library and disable it])],
-    [],
-    [with_cld2=yes])
-AS_IF([test "x$with_cld2" = "xyes"],
-	[ PKG_CHECK_MODULES([CLD2], [cld2],
-		[ AC_DEFINE(HAVE_CLD2, [], [Build with cld2 library support])
-		  with_cld2=yes ],
-          with_cld2=no)])
-AC_SUBST([CLD2_LIBS])
-AC_SUBST([CLD2_CFLAGS])
-AM_CONDITIONAL([HAVE_CLD2], [test "x$with_cld2" = xyes])
-
-dnl
 dnl Set pidfile location
 dnl
 AC_ARG_WITH(pidfile,
@@ -2476,7 +2460,6 @@ External dependencies:
    icu4c:              $with_icu4c
    shapelib:           $with_shapelib
    chardet:            $with_chardet
-   cld2:               $with_cld2
 
 Database support:
    mysql:              $with_mysql
