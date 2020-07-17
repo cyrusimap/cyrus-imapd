@@ -448,7 +448,6 @@ int putscript(struct protstream *conn, const struct buf *name,
       }
 
       sieve_free_bytecode(&bc);
-      sieve_script_free(&s);
 
       close(fd);
 
@@ -459,6 +458,8 @@ int putscript(struct protstream *conn, const struct buf *name,
       rename(bc_path, bc_p2);
 
   }
+
+  sieve_script_free(&s);
 
   prot_printf(conn, "OK\r\n");
   sync_log_sieve(sieved_userid);
