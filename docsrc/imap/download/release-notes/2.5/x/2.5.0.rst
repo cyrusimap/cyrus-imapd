@@ -587,5 +587,3 @@ The GIT repository for the documentation is at
 .. [#]
 
     http://opera.brong.fastmail.fm.user.fm/talks/twoskip/twoskip-yapc12.pdf
-
-.. _RFC 5464: http://tools.ietf.org/html/rfc5464>

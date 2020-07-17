@@ -219,7 +219,7 @@ Cyrus supports a subset of these:
 * Relational Tests :rfc:`5231`
 * Subaddress Extension :rfc:`5233`
 * Copying Without Side Effects :rfc:`3894`
-* Regular Expression Extension `Draft regex RFC <http://tools.ietf.org/html/draft-ietf-sieve-regex-01>`_
+* Regular Expression Extension :draft:`draft-ietf-sieve-regex`
 * Checking Mailbox Status and Accessing Mailbox Metadata :rfc:`5490`
 * Notify Extension :rfc:`5435`
 * Include :rfc:`6609`
@@ -231,8 +231,8 @@ Cyrus supports a subset of these:
 * Externally Stored Lists :rfc:`6134`
 * Duplicate Extension :rfc:`7352`
 * Ihave Extension :rfc:`5463`
-* Delivering to Special-Use Mailboxes `Draft special-use RFC <http://tools.ietf.org/html/draft-bosch-sieve-special-use-01>`_
-* IMAP flag Extension `Draft imap flags RFC <http://tools.ietf.org/html/draft-ietf-sieve-imapflags-05>`_
+* Delivering to Special-Use Mailboxes :rfc:`8579`
+* IMAP flag Extension :rfc:`5232`
 * Body Extension :rfc:`5173`
 
 Note that the final RFCs of these last sieve extensions have significant

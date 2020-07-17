@@ -53,8 +53,7 @@ Idled Support
 """""""""""""
 
 To enable near real-time client updates through IMAP IDLE (as described in
-`RFC 2177 <http://tools.ietf.org/html/rfc2177>`__), configure Cyrus IMAP with
-the ``--enable-idled`` option.
+:rfc:`2177`), configure Cyrus IMAP with the ``--enable-idled`` option.
 
 Murder Support
 """"""""""""""

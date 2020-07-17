@@ -3,9 +3,7 @@
 What annotations are available?
 -------------------------------
 
-Cyrus annotations are based on a draft
-(http://tools.ietf.org/html/draft-daboo-imap-annotatemore-08) version of
-:rfc:`5464`.
+Cyrus annotations are based on :rfc:`5464`.
 
 * **/admin** - Sets the administrator email address for the server. (See
   :cyrusman:`cyradm(8)`)

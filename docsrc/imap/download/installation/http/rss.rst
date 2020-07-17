@@ -32,8 +32,7 @@ List of mailboxes: rss_feeds
 The list of available RSS feeds can be obtained by clients by accessing the
 ``/rss/`` URL on the Cyrus server.
 
-The rss_feeds option uses the
-`wildmat <https://tools.ietf.org/html/rfc3977#section-4>`_ format to specify
+The rss_feeds option uses the "wildmat" (:rfc:`3977#section-4`) format to specify
 which mailboxes/folders will be made available via RSS. This list is further
 limited to only those mailboxes and folders that the authenticated user has
 permissions to see.

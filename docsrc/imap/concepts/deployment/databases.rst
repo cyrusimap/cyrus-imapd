@@ -197,11 +197,11 @@ User Access (user_deny.db)
 
 This database contains a list of users that are denied access to Cyrus
 services. The database is indexed by userid and each data record contains the
-database version number (currently 2), a list of
-`wildmat <https://tools.ietf.org/html/rfc3977#section-4>`_ patterns specifying
-Cyrus services to be denied, and a text message to be displayed to the user
-upon denial. The service names to be matched are those as used in
-:cyrusman:`cyrus.conf(5)`. The format of each record is as follows::
+database version number (currently 2), a list of "wildmat" patterns (per
+:rfc:`3977#section-4`) specifying Cyrus services to be denied, and a text
+message to be displayed to the user upon denial. The service names to be
+matched are those as used in :cyrusman:`cyrus.conf(5)`. The format of each
+record is as follows::
 
     Key: <Userid>
 

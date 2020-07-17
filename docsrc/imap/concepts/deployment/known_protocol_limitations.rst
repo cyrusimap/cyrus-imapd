@@ -7,8 +7,8 @@ may impact your deployment.
 POP3 and Mailbox Locking
 ------------------------
 
-POP3, as described in `RFC 1939 <http://tools.ietf.org/html/rfc1939>`__,
-requires a mailbox to be locked by a POP3 session.
+POP3, as described in :rfc:`1939`, requires a mailbox to be locked by a POP3
+session.
 
 As such, when POP3 is used simultaneously across multiple clients, and a common
 set of mailboxes, an error similar to the following would occur::

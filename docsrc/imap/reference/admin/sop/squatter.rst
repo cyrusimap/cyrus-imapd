@@ -1,7 +1,7 @@
 Using Squatter for Faster IMAP SEARCH
 =====================================
 
-IMAP SEARCH, as described in `RFC 3501`_, is a IMAP4 (Rev1) command issued by
+IMAP SEARCH, as described in :rfc:`3501`, is a IMAP4 (Rev1) command issued by
 the client, but executed on the server. The Cyrus IMAP server will search the
 mailbox for the content matching the search command issued. This may be an
 intensive operation if executed on large mailboxes, and may therefor delay the
@@ -34,5 +34,3 @@ coming in.
 
 .. todo:: So how does the search index get updated? Do you run squatter on a
           daily basis from the EVENTS section of /etc/cyrus.conf
-
-.. _RFC 3501: http://tools.ietf.org/html/rfc3501

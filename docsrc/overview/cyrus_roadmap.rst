@@ -38,24 +38,18 @@ Future
 2.5.x
 -----
 
-* Support ANNOTATE (`RFC 5257`_)
-* Support some of ESORT/ESEARCH (`RFC 5256`_)
-* Support LIST-EXT STATUS (`RFC 5819`_)
-* Support SORT=DISPLAY (`RFC 5957`_)
-* Support SpecialUse (`RFC 6154`_)
+* Support ANNOTATE (:rfc:`5257`)
+* Support some of ESORT/ESEARCH (:rfc:`5256`)
+* Support LIST-EXT STATUS (:rfc:`5819`)
+* Support SORT=DISPLAY (:rfc:`5957`)
+* Support SpecialUse (:rfc:`6154`)
 * Autocreate/autosieve (needs to be -enabled in config)
 * Complete compliance with all tests from ImapTest_ (integrated with Cassandane)
 * cyr_info utility - configuration 'lint' and dumping tool.
-* MESSAGE quota support (`RFC 2087`_)
+* MESSAGE quota support (:rfc:`2087`)
 * Some CalDAV calendaring support.
 * Some CardDAV contact support.
 
-.. _RFC 5257: http://tools.ietf.org/html/rfc5257
-.. _RFC 5256: http://tools.ietf.org/html/rfc5256
-.. _RFC 5819: http://tools.ietf.org/html/rfc5819
-.. _RFC 5957: http://tools.ietf.org/html/rfc5959
-.. _RFC 6154: http://tools.ietf.org/html/rfc6154
-.. _RFC 2087: http://tools.ietf.org/html/rfc2087
 .. _ImapTest: http://www.imapwiki.org/ImapTest
 
 2.4.x
