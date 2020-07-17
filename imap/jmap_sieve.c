@@ -456,8 +456,37 @@ done:
     return 0;
 }
 
-static sieve_script_t *parsescript(FILE *f, const char *content, char **errors)
+static int putscript(const char *name, const char *content,
+                     const char *sievedir, json_t **err)
 {
+    char new_path[PATH_MAX];
+    FILE *f;
+
+    /* parse the script */
+    char *errors = NULL;
+    sieve_script_t *s = NULL;
+    (void) sieve_script_parse_string(NULL, content, &errors, &s);
+    if (!s) {
+        *err = json_pack("{s:s, s:s}", "type", "invalidScript",
+                         "description", errors);
+        free(errors);
+        return 0;
+    }
+
+    /* open a new file for the script */
+    snprintf(new_path, sizeof(new_path),
+             "%s/%s%s.NEW", sievedir, name, SCRIPT_SUFFIX);
+
+    f = fopen(new_path, "w+");
+
+    if (f == NULL) {
+        syslog(LOG_ERR, "fopen(%s): %m", new_path);
+        sieve_script_free(&s);
+        *err = json_pack("{s:s, s:s}", "type", "serverFail",
+                         "description", "couldn't create script file");
+        return 0;
+    }
+
     size_t i, content_len = strlen(content);
     int saw_cr = 0;
 
@@ -475,42 +504,8 @@ static sieve_script_t *parsescript(FILE *f, const char *content, char **errors)
     }
     if (saw_cr) putc('\n', f);
 
-    /* parse the script */
-    sieve_script_t *s = NULL;
-    (void) sieve_script_parse_only(f, errors, &s);
     fflush(f);
     fclose(f);
-
-    return s;
-}
-
-static int putscript(const char *name, const char *content,
-                     const char *sievedir, json_t **err)
-{
-    char new_path[PATH_MAX];
-    FILE *f;
-
-    /* open a new file for the script */
-    snprintf(new_path, sizeof(new_path),
-             "%s/%s%s.NEW", sievedir, name, SCRIPT_SUFFIX);
-
-    f = fopen(new_path, "w+");
-
-    if (f == NULL) {
-        syslog(LOG_ERR, "fopen(%s): %m", new_path);
-        return -1;
-    }
-
-    /* verify the script */
-    char *errors = NULL;
-    sieve_script_t *s = parsescript(f, content, &errors);
-    if (!s) {
-        *err = json_pack("{s:s, s:s}", "type", "invalidScript",
-                         "description", errors);
-        free(errors);
-        unlink(new_path);
-        return 0;
-    }
 
     /* generate the bytecode */
     bytecode_info_t *bc = NULL;
@@ -522,7 +517,7 @@ static int putscript(const char *name, const char *content,
         return 0;
     }
 
-    /* open the new file */
+    /* open the new bytecode file */
     char new_bcpath[PATH_MAX];
     snprintf(new_bcpath, sizeof(new_bcpath),
              "%s/%s%s.NEW", sievedir, name, BYTECODE_SUFFIX);
@@ -532,7 +527,7 @@ static int putscript(const char *name, const char *content,
         sieve_free_bytecode(&bc);
         sieve_script_free(&s);
         *err = json_pack("{s:s, s:s}", "type", "serverFail",
-                         "description", "couldn't open bytecode file");
+                         "description", "couldn't create bytecode file");
         return 0;
     }
 
