@@ -265,6 +265,11 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 int sieve_script_parse_only(FILE *stream, char **out_errors,
                             sieve_script_t **ret);
 
+/* Parse (but not compile or execute) a script in a string buffer.
+ * If interp is NULL, a disposable single-use interpreter will be used. */
+int sieve_script_parse_string(sieve_interp_t *interp, const char *s,
+                              char **errors, sieve_script_t **script);
+
 /* given a path to a bytecode file, load it into the sieve_execute_t */
 int sieve_script_load(const char *fpath, sieve_execute_t **ret);
 
