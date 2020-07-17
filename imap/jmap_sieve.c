@@ -938,7 +938,8 @@ static int jmap_sieve_validate(struct jmap_req *req)
 
     /* parse the script */
     char *errors = NULL;
-    sieve_script_t *s = parsescript(f, content, &errors);
+    sieve_script_t *s = NULL;
+    (void) sieve_script_parse_string(NULL, content, &errors, &s);
     if (s) {
         sieve_script_free(&s);
         err = json_null();
