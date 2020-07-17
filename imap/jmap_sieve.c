@@ -896,7 +896,6 @@ static int jmap_sieve_validate(struct jmap_req *req)
     const char *key, *content = NULL;
     json_t *arg, *err = NULL;
     int is_valid = 0;
-    FILE *f = NULL;
 
     /* Parse request */
     json_object_foreach(req->args, key, arg) {
@@ -920,18 +919,6 @@ static int jmap_sieve_validate(struct jmap_req *req)
     if (json_array_size(parser.invalid)) {
         err = json_pack("{s:s s:O}", "type", "invalidArguments",
                         "arguments", parser.invalid);
-    }
-    else {
-        /* open a temp file for the script */
-        f = tmpfile();
-        if (f == NULL) {
-            syslog(LOG_ERR, "tmpfile(): %m");
-            err = json_pack("{s:s, s:s}", "type", "serverFail",
-                            "description", strerror(errno));
-        }
-    }
-
-    if (err) {
         jmap_error(req, err);
         goto done;
     }
