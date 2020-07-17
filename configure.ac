@@ -2138,25 +2138,6 @@ if test "$cyrus_cv_declare_optimize" = "yes"; then
 fi
 
 
-dnl CRC32 optimisations
-
-dnl if the compiler has support for SSE4.2 then we can compile a hardware
-dnl implementation of CRC32C
-AC_MSG_CHECKING(for compiler support for SSE4.2 instruction)
-AC_CACHE_VAL(cyrus_cv_sse42, AC_TRY_COMPILE([
-    #include <stdint.h>
-],[
-    uint64_t a = 0, b = 1;
-    __asm__("crc32q\t" "(%1), %0"
-            : "=r"(b)
-            : "r"(b), "0"(a));
-    return b;
-], cyrus_cv_sse42=yes, cyrus_cv_sse42=no))
-if test "$cyrus_cv_sse42" = "yes" ; then
-    AC_DEFINE(HAVE_SSE42,1,"Compiler has support for SSE4.2 extensions")
-fi
-AC_MSG_RESULT($cyrus_cv_sse42)
-
 dnl documentation generation (sphinx, perl2rst, gitpython)
 AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
 AC_ARG_WITH([sphinx-build],
@@ -2472,9 +2453,6 @@ Search engine:
    squat:              $enable_squat
    xapian:             $enable_xapian
    xapian_cjk_tokens:  $xapian_cjk_tokens
-
-Hardware support:
-   SSE4.2:             $cyrus_cv_sse42
 
 Documentation dependencies:
    sphinx-build:       $SPHINX_BUILD
