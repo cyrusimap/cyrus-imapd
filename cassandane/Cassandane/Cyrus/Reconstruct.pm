@@ -47,6 +47,7 @@ use Cassandane::Util::Log;
 use Cassandane::Instance;
 use Cyrus::IndexFile;
 use IO::File;
+use JSON;
 
 sub new
 {
@@ -209,6 +210,107 @@ sub test_reconstruct_removedfile
     @records = $imaptalk->search("all");
     $self->assert_num_equals(9, scalar @records);
     $self->assert(not grep { $_ == 6 } @records);
+}
+
+#
+# Test snoozed annotation fixup
+#
+sub test_reconstruct_snoozed
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    for (1..10) {
+        my $msg = $self->{gen}->generate(subject => "subject $_");
+        $self->{store}->write_message($msg, flags => ["\\Seen", "\$NotJunk"]);
+    }
+    $self->{store}->write_end();
+    $imaptalk->select("INBOX") || die;
+
+    my @records = $imaptalk->search("all");
+    $self->assert_num_equals(10, scalar @records);
+    $self->assert(grep { $_ == 6 } @records);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
+
+    @records = $imaptalk->search("all");
+    $self->assert_num_equals(10, scalar @records);
+    $self->assert(grep { $_ == 6 } @records);
+
+    $imaptalk->store('5', 'annotation', ["/vendor/cmu/cyrus-imapd/snoozed",
+        ['value.shared', { Quote => encode_json({until => '2020-01-01T00:00:00'}) }],
+    ]);
+
+    # this needs a bit of magic to know where to write... so
+    # we do some hard-coded cyrus.index handling
+    my $basedir = $self->{instance}->{basedir};
+    my $file = "$basedir/data/user/cassandane/cyrus.index";
+    my $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    my $index = Cyrus::IndexFile->new($fh);
+
+    while (my $record = $index->next_record_hash()) {
+        if ($record->{Uid} == 5) {
+            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '1');
+        }
+        else {
+            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
+        }
+    }
+    close($fh);
+
+    # the reconstruct shouldn't change anything
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert_does_not_match(qr/mismatch/, "@lines");
+
+    xlog $self, "update some \\Snoozed flags";
+    $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    $index = Cyrus::IndexFile->new($fh);
+
+    while (my $record = $index->next_record_hash()) {
+        if ($record->{Uid} == 5) {
+            # nuke the Snoozed flag
+            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '1');
+            substr($record->{SystemFlags}, 5, 1) = '0';
+            $index->rewrite_record($record);
+        }
+        elsif ($record->{Uid} == 6) {
+            # add the Snoozed flag
+            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
+            substr($record->{SystemFlags}, 5, 1) = '1';
+            $index->rewrite_record($record);
+        }
+        else {
+            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
+        }
+    }
+    close($fh);
+
+    # this reconstruct should change things back!
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
+    @lines = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/uid 5 snoozed mismatch/, "@lines");
+    $self->assert_matches(qr/uid 6 snoozed mismatch/, "@lines");
+
+    xlog $self, "check that the values are changed back";
+    $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    $index = Cyrus::IndexFile->new($fh);
+
+    while (my $record = $index->next_record_hash()) {
+        if ($record->{Uid} == 5) {
+            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '1');
+        }
+        else {
+            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
+        }
+    }
+    close($fh);
 }
 
 1;
