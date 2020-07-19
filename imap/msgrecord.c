@@ -527,9 +527,14 @@ EXPORTED int msgrecord_annot_write(msgrecord_t *mr,
                                    const char *userid,
                                    const struct buf *value)
 {
-    int r = msgrecord_need(mr, M_ANNOTATIONS);
+    int r = msgrecord_need(mr, M_ANNOTATIONS|M_RECORD);
     if (r) return r;
     annotate_state_begin(mr->annot_state);
+
+    if (!strcmpsafe(userid, "") && !strcmp(entry, IMAP_ANNOT_NS "snoozed")) {
+        if (buf_len(value)) mr->record.internal_flags |= FLAG_INTERNAL_SNOOZED;
+        else mr->record.internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+    }
 
     return annotate_state_write(mr->annot_state, entry, userid, value);
 }
@@ -539,6 +544,17 @@ EXPORTED int msgrecord_annot_writeall(msgrecord_t *mr, struct entryattlist *l)
     int r = msgrecord_need(mr, M_ANNOTATIONS);
     if (r) return r;
     annotate_state_begin(mr->annot_state);
+
+    struct entryattlist *e;
+    struct attvaluelist *av;
+    for (e = l; e; e = e->next) {
+        if (strcmp(e->entry, IMAP_ANNOT_NS "snoozed")) continue;
+        for (av = e->attvalues; av; av = av->next) {
+            if (strcmp(av->attrib, "value.shared")) continue;
+            if (buf_len(&av->value)) mr->record.internal_flags |= FLAG_INTERNAL_SNOOZED;
+            else mr->record.internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+        }
+    }
 
     return annotate_state_store(mr->annot_state, l);
 }

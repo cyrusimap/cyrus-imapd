@@ -1884,34 +1884,6 @@ static void annotation_get_fromdb(annotate_state_t *state,
     }
 }
 
-static int annotation_set_snoozed(annotate_state_t *state,
-                                  struct annotate_entry_list *entry,
-                                  int maywrite)
-{
-    struct index_record record;
-    int r = mailbox_find_index_record(state->mailbox, state->uid, &record);
-    if (r) return r;
-
-    if (entry->have_shared && buf_len(&entry->shared) && !(record.internal_flags & FLAG_INTERNAL_SNOOZED)) {
-        // need to mark it snoozed
-        if (!maywrite) return IMAP_PERMISSION_DENIED;
-        record.silentupdate = 1;
-        record.internal_flags |= FLAG_INTERNAL_SNOOZED;
-        r = mailbox_rewrite_index_record(state->mailbox, &record);
-        if (r) return r;
-    }
-    else if (entry->have_shared && !buf_len(&entry->shared) && (record.internal_flags & FLAG_INTERNAL_SNOOZED)) {
-        // need to remove the snoozed
-        if (!maywrite) return IMAP_PERMISSION_DENIED;
-        record.silentupdate = 1;
-        record.internal_flags |= FLAG_INTERNAL_SNOOZED;
-        r = mailbox_rewrite_index_record(state->mailbox, &record);
-        if (r) return r;
-    }
-
-    return annotation_set_todb(state, entry, maywrite);
-}
-
 /* TODO: need to handle /<section-part>/ somehow */
 static const annotate_entrydesc_t message_builtin_entries[] =
 {
@@ -1999,7 +1971,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         ATTRIB_VALUE_SHARED,
         0,
         annotation_get_fromdb,
-        annotation_set_snoozed,
+        annotation_set_todb,
         NULL
     },
     { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
