@@ -5935,6 +5935,7 @@ EXPORTED int mailbox_copyfile(const char *from, const char *to, int nolink)
 struct found_uid {
     uint32_t uid;
     unsigned isarchive:1;
+    unsigned issnoozed:1;
 };
 
 struct found_uids {
@@ -6328,6 +6329,11 @@ static int records_match(const char *mboxname,
                mboxname, new->uid);
         match = 0;
     }
+    if (old->internal_flags != new->internal_flags) {
+        printf("%s uid %u mismatch: internalflags\n",
+               mboxname, new->uid);
+        match = 0;
+    }
     for (i = 0; i < MAX_USER_FLAGS/32; i++) {
         if (old->user_flags[i] != new->user_flags[i])
             userflags_dirty = 1;
@@ -6371,6 +6377,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
                                               struct index_record *record,
                                               bit32 *valid_user_flags,
                                               int flags, int have_file,
+                                              int has_snoozedannot,
                                               struct found_uids *discovered)
 {
     const char *fname = mailbox_record_fname(mailbox, record);
@@ -6563,6 +6570,15 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         record->user_flags[i] &= valid_user_flags[i];
     }
 
+    /* check if the snoozed status matches */
+    if (!!(record->internal_flags & FLAG_INTERNAL_SNOOZED) != !!has_snoozedannot) {
+        printf("%s uid %u snoozed mismatch\n", mailbox->name, record->uid);
+        syslog(LOG_ERR, "%s uid %u snoozed mismatch", mailbox->name, record->uid);
+        if (has_snoozedannot) record->internal_flags |= FLAG_INTERNAL_SNOOZED;
+        else record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+    }
+
+
     /* after all this - if it still matches in every respect, we don't need
      * to rewrite the record - just return */
     if (records_match(mailbox->name, &copy, record)) {
@@ -6605,7 +6621,7 @@ out:
 
 
 static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int isarchive,
-                                      int flags)
+                                      int has_snoozedannot, int flags)
 {
     /* XXX - support archived */
     const char *fname;
@@ -6675,6 +6691,9 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
 
     if (isarchive)
         record.internal_flags |= FLAG_INTERNAL_ARCHIVED;
+
+    if (has_snoozedannot)
+        record.internal_flags |= FLAG_INTERNAL_SNOOZED;
 
     /* copy the timestamp from the file if not calculated */
     if (!record.internaldate)
@@ -6838,9 +6857,9 @@ static int mailbox_wipe_index_record(struct mailbox *mailbox,
 
 static int addannot_uid(const char *mailbox __attribute__((unused)),
                         uint32_t uid,
-                        const char *entry __attribute__((unused)),
-                        const char *userid __attribute__((unused)),
-                        const struct buf *value __attribute__((unused)),
+                        const char *entry,
+                        const char *userid,
+                        const struct buf *value,
                         const struct annotate_metadata *mdata __attribute__((unused)),
                         void *rock)
 {
@@ -6851,6 +6870,12 @@ static int addannot_uid(const char *mailbox __attribute__((unused)),
     if (!annots->nused || annots->found[annots->nused-1].uid != uid) {
         /* we don't support an archive annotations DB yet */
         add_found(annots, uid, /*isarchive*/0);
+    }
+
+    /* the last item will be for this UID regardless, check if we have the snoozed annotation */
+    if (!strcmpsafe(userid, "") && buf_len(value) &&
+        !strcmp(entry, IMAP_ANNOT_NS "snoozed")) {
+        annots->found[annots->nused-1].issnoozed = 1;
     }
 
     return 0;
@@ -6996,14 +7021,16 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 
         last_seen_uid = record.uid;
 
-        /* bogus annotations? */
+        /* bogus annotations? XXX: should we try to keep them if we found a file? */
         while (annots.pos < annots.nused && annots.found[annots.pos].uid < record.uid) {
             add_found(&delannots, annots.found[annots.pos].uid, /*isarchive*/0);
             annots.pos++;
         }
 
         /* skip over current */
+        int has_snoozedannot = 0;
         while (annots.pos < annots.nused && annots.found[annots.pos].uid == record.uid) {
+            if (annots.found[annots.pos].issnoozed) has_snoozedannot = 1;
             annots.pos++;
         }
 
@@ -7048,6 +7075,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
         r = mailbox_reconstruct_compare_update(mailbox, &record,
                                                valid_user_flags,
                                                flags, have_file,
+                                               has_snoozedannot,
                                                &discovered);
         if (r) goto close;
 
@@ -7101,12 +7129,6 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
      * from lost .index file) - so don't bother moving those */
     while (files.pos < files.nused) {
         uint32_t uid = files.found[files.pos].uid;
-        r = mailbox_reconstruct_append(mailbox, files.found[files.pos].uid,
-                                       files.found[files.pos].isarchive, flags);
-        if (r) goto close;
-        files.pos++;
-
-        /* we can keep this annotation too... */
 
         /* bogus annotations? */
         while (annots.pos < annots.nused && annots.found[annots.pos].uid < uid) {
@@ -7114,10 +7136,20 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
             annots.pos++;
         }
 
-        /* skip over current */
+        int has_snoozedannot = 0;
+        /* we can keep this annotation too... */
         while (annots.pos < annots.nused && annots.found[annots.pos].uid == uid) {
+            if (annots.found[annots.pos].issnoozed) has_snoozedannot = 1;
             annots.pos++;
         }
+
+
+        r = mailbox_reconstruct_append(mailbox, files.found[files.pos].uid,
+                                       files.found[files.pos].isarchive,
+                                       has_snoozedannot, flags);
+        if (r) goto close;
+        files.pos++;
+
     }
 
     /* bogus annotations after the end? */
@@ -7129,7 +7161,8 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     /* handle new list - note, we don't copy annotations for these */
     while (discovered.pos < discovered.nused) {
         r = mailbox_reconstruct_append(mailbox, discovered.found[discovered.pos].uid,
-                                       discovered.found[discovered.pos].isarchive, flags);
+                                       discovered.found[discovered.pos].isarchive,
+                                       /*has_snoozedannot*/0, flags);
         if (r) goto close;
         discovered.pos++;
     }
