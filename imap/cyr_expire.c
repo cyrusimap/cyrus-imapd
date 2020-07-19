@@ -746,9 +746,9 @@ static int do_delete(struct cyr_expire_ctx *ctx)
 
         if (ctx->args.userid)
             mboxlist_usermboxtree(ctx->args.userid, NULL, delete,
-                                  &ctx->drock, MBOXTREE_DELETED);
+                                  &ctx->drock, MBOXTREE_DELETED|MBOXTREE_INTERMEDIATES);
         else
-            mboxlist_allmbox(ctx->args.mbox_prefix, delete, &ctx->drock, 0);
+            mboxlist_allmbox(ctx->args.mbox_prefix, delete, &ctx->drock, MBOXTREE_INTERMEDIATES);
 
         for (i = 0 ; i < ctx->drock.to_delete.count ; i++) {
             char *name = ctx->drock.to_delete.data[i];
@@ -758,7 +758,7 @@ static int do_delete(struct cyr_expire_ctx *ctx)
 
             verbosep("Removing: %s\n", name);
 
-            ret = mboxlist_deletemailboxlock(name, 1, NULL, NULL, NULL, 0, 0, 0, 0);
+            ret = mboxlist_deletemailboxlock(name, 1, NULL, NULL, NULL, 0, 0, 0, 1);
             /* XXX: Ignoring the return from mboxlist_deletemailbox() ??? */
             count++;
         }
