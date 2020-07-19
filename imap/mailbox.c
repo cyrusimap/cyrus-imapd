@@ -5965,6 +5965,7 @@ static void add_found(struct found_uids *ff, uint32_t uid, int isarchive)
     }
     ff->found[ff->nused].uid = uid;
     ff->found[ff->nused].isarchive = !!isarchive;
+    ff->found[ff->nused].issnoozed = 0;
     ff->nused++;
 }
 
