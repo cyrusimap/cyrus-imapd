@@ -1057,18 +1057,26 @@ static int is_folder_or_indexed(search_expr_t *e, void *rock __attribute__((unus
 }
 
 /* given an expression tree, return the name of the first mailbox that
- * is mentioned in it (if any) */
+ * is mentioned in it (if any).  This is depth-first, but normally that
+ * won't matter.  It does explicitly skip "not in this mailbox" type
+ * queries because we won't want to open those mailboxes! */
 EXPORTED char *search_expr_firstmailbox(const search_expr_t *e)
 {
-    const search_expr_t *child;
-    char *res = NULL;
+    // don't descend into "NOT" because we won't want to open those mailboxes
+    if (e->op == SEOP_NOT) return NULL;
+
     if (is_folder_node(e)) {
-        res = xstrdupnull(e->value.s);
+        char *res = xstrdupnull(e->value.s);
+        if (res) return res;
     }
-    for (child = e->children; child && !res; child = child->next) {
-        res = search_expr_firstmailbox(child);
+
+    const search_expr_t *child;
+    for (child = e->children; child; child = child->next) {
+        char *res = search_expr_firstmailbox(child);
+        if (res) return res;
     }
-    return res;
+
+    return NULL;
 }
 
 /*
