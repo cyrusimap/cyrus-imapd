@@ -4953,7 +4953,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     init.examine_mode = 1;
 
     char *qmboxname = search_expr_firstmailbox(searchargs->root);
-    if (!qmboxname) mboxname = mboxname_user_mbox(req->accountid, NULL);
+    if (!qmboxname) qmboxname = mboxname_user_mbox(req->accountid, NULL);
     r = index_open(qmboxname, &init, &state);
     free(qmboxname);
     if (r) goto done;
