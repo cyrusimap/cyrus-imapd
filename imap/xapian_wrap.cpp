@@ -952,6 +952,12 @@ static std::string parse_listid(const char *str)
                 }
             }
         }
+        /* just raw value, that's OK too, like sentry creates.  Parse up to first whitespace */
+        else {
+            const char *end;
+            for (end = start; *end && !isspace(*end); end++) {}
+            val = std::string(start, end - start);
+        }
     }
 
     /* Normalize list-id */
