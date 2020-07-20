@@ -1611,14 +1611,18 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
     }
 
     const char *atsign = strchr(str, '@');
-    Xapian::Query q = Xapian::Query::MatchAll;
+    Xapian::Query q = Xapian::Query::MatchNothing;
 
     // query name and mailbox (unless just searching for '@domain')
     if (atsign > str) {
         struct address *addr = NULL;
         parseaddr_list(str, &addr);
         if (addr && addr->name) {
-            q &= db->parser->parse_query(addr->name, qpflags, prefix + 'N');
+            Xapian::Query qq = db->parser->parse_query(addr->name, qpflags, prefix + 'N');
+            if (q.get_type() != q.LEAF_MATCH_NOTHING) {
+                q &= qq;
+            }
+            else q = qq;
         }
         if (addr && addr->mailbox) {
             // strip the domain from the mailbox
@@ -1633,7 +1637,10 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
                 Xapian::Query qq = wildcard ?
                     Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
                     Xapian::Query(term);
-                q &= qq;
+                if (q.get_type() != q.LEAF_MATCH_NOTHING) {
+                    q &= qq;
+                }
+                else q = qq;
             }
         }
         // ignore @domain - it's being handled below
@@ -1683,7 +1690,10 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
                                                Xapian::Query(term2);
                 qq |= qq2;
             }
-            q &= qq;
+            if (q.get_type() != q.LEAF_MATCH_NOTHING) {
+                q &= qq;
+            }
+            else q = qq;
         }
     }
 
@@ -1716,7 +1726,7 @@ static Xapian::Query *query_new_type(const xapian_db_t *db __attribute__((unused
 
     std::pair<std::string, std::string> ct = parse_content_type(str);
     std::string prefix(_prefix);
-    Xapian::Query q = Xapian::Query::MatchAll;
+    Xapian::Query q = Xapian::Query::MatchNothing;
 
     bool query_legacy = db->db_versions->lower_bound(13) != db->db_versions->begin();
     struct buf buf = BUF_INITIALIZER;
