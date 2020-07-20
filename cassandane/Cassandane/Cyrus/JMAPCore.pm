@@ -44,10 +44,11 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk 0.13;
+use Mail::JMAPTalk 0.15;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
+use Encode qw(decode_utf8);
 use Cwd qw(abs_path getcwd);
 
 use lib '.';
@@ -303,7 +304,7 @@ sub test_blob_download_name
     $self->assert_str_equals('attachment; filename="foo"',
         $resp->{headers}{'content-disposition'});
 
-    $resp = $jmap->Download('cassandane', $data->{blobId}, '%D1%82%D0%B5%D1%81%D1%82.txt');
+    $resp = $jmap->Download('cassandane', $data->{blobId}, decode_utf8('тест.txt'));
     $self->assert_str_equals("attachment; filename*=utf-8''%D1%82%D0%B5%D1%81%D1%82.txt",
         $resp->{headers}{'content-disposition'});
 }
