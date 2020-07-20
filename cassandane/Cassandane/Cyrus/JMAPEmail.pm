@@ -19298,7 +19298,11 @@ sub test_email_query_listid
     ) || die;
     $self->make_message("msg2", # as seen at Yahoo, Google, et al
         extra_headers => [['list-id', 'list aaa@bbb.ccc; contact aaa-contact@bbb.ccc']],
-        body => "msg1"
+        body => "msg2"
+    ) || die;
+    $self->make_message("msg3", # as seen from sentry, just plain text
+        extra_headers => [['list-id', 'sub3.sub2.sub1.top']],
+        body => "msg3"
     ) || die;
 
     xlog "Run squatter";
@@ -19321,7 +19325,7 @@ sub test_email_query_listid
         }, 'R1'],
     ], $using);
     my @ids = @{$res->[0][1]{ids}};
-    $self->assert_num_equals(2, scalar @ids);
+    $self->assert_num_equals(3, scalar @ids);
 
     xlog "Query listId";
     $res = $jmap->CallMethods([
@@ -19370,6 +19374,11 @@ sub test_email_query_listid
                 listId => 'aaa',
             },
         }, 'R9'],
+        ['Email/query', {
+            filter => {
+                listId => 'sub3.sub2.sub1.top',
+            },
+        }, 'R10'],
     ], $using);
     $self->assert_deep_equals([$ids[0]], $res->[0][1]{ids});
     $self->assert_deep_equals([], $res->[1][1]{ids});
@@ -19380,6 +19389,7 @@ sub test_email_query_listid
     $self->assert_deep_equals([], $res->[6][1]{ids});
     $self->assert_deep_equals([$ids[1]], $res->[7][1]{ids});
     $self->assert_deep_equals([], $res->[8][1]{ids});
+    $self->assert_deep_equals([$ids[2]], $res->[9][1]{ids});
 }
 
 sub test_email_query_emailaddress
