@@ -215,7 +215,9 @@ sub test_reconstruct_removedfile
 #
 # Test snoozed annotation fixup
 #
+# XXX need to downgrade min version if this is backported to 3.2
 sub test_reconstruct_snoozed
+    :min_version_3_3
 {
     my ($self) = @_;
 
