@@ -2565,13 +2565,17 @@ static int _emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *searc
     search->init.want_expunged = search->want_expunged;
     search->init.examine_mode = 1;
 
-    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-    r = index_open(inboxname, &search->init, &search->state);
-    free(inboxname);
+    // try to find a mailbox listed in the search expression if any
+    char *mboxname = search_expr_firstmailbox(search->args->root);
+    if (!mboxname) mboxname = mboxname_user_mbox(req->accountid, NULL);
+    r = index_open(mboxname, &search->init, &search->state);
     if (r) {
-        syslog(LOG_ERR, "jmap: %s: %s", __func__, error_message(r));
+        syslog(LOG_ERR, "jmap: %s: (%s) %s", __func__,
+               mboxname, error_message(r));
+        free(mboxname);
         goto done;
     }
+    free(mboxname);
 
     /* Build query */
     search->query = search_query_new(search->state, search->args);
@@ -4948,9 +4952,10 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     init.authstate = req->authstate;
     init.examine_mode = 1;
 
-    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-    r = index_open(inboxname, &init, &state);
-    free(inboxname);
+    char *mboxname = search_expr_firstmailbox(searchargs->root);
+    if (!mboxname) mboxname = mboxname_user_mbox(req->accountid, NULL);
+    r = index_open(mboxname, &init, &state);
+    free(mboxname);
     if (r) goto done;
 
     bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE);

@@ -4117,9 +4117,9 @@ static int eventquery_search_run(jmap_req_t *req,
     init.want_mbtype = MBTYPE_CALENDAR;
     init.examine_mode = 1;
 
-    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-    r = index_open(inboxname, &init, &state);
-    free(inboxname);
+    char *mboxname = mboxname_user_mbox(req->accountid, "#calendars");
+    r = index_open(mboxname, &init, &state);
+    free(mboxname);
     if (r) goto done;
 
     query = search_query_new(state, searchargs);

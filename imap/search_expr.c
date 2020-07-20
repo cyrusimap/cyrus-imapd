@@ -302,21 +302,6 @@ EXPORTED char *search_expr_serialise(const search_expr_t *e)
     return buf_release(&buf);
 }
 
-/* given an expression tree, return the name of the first mailbox that
- * is mentioned in it (if any) */
-EXPORTED char *search_expr_firstmailbox(const search_expr_t *e)
-{
-    const search_expr_t *child;
-    const char *res = NULL;
-    if (is_folder_node(e)) {
-        res = xstrdupnull(e->value.s);
-    }
-    for (child = e->children; child && !res; child = child->next) {
-        res = search_expr_firstmailbox(child);
-    }
-    return res;
-}
-
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 static int getseword(struct protstream *prot, char *buf, int maxlen)
@@ -1069,6 +1054,21 @@ static int is_indexed_node(const search_expr_t *e)
 static int is_folder_or_indexed(search_expr_t *e, void *rock __attribute__((unused)))
 {
     return (is_folder_node(e) || is_indexed_node(e));
+}
+
+/* given an expression tree, return the name of the first mailbox that
+ * is mentioned in it (if any) */
+EXPORTED char *search_expr_firstmailbox(const search_expr_t *e)
+{
+    const search_expr_t *child;
+    char *res = NULL;
+    if (is_folder_node(e)) {
+        res = xstrdupnull(e->value.s);
+    }
+    for (child = e->children; child && !res; child = child->next) {
+        res = search_expr_firstmailbox(child);
+    }
+    return res;
 }
 
 /*
