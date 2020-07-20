@@ -6171,6 +6171,8 @@ MsgData **index_msgdata_load(struct index_state *state,
                 assert(cstate);
                 if (conversation_load_advanced(cstate, record.cid, &conv, /*flags*/0))
                     continue;
+                // useful to have for mutable sorts
+                cur->convmodseq = conv.modseq;
                 did_conv++;
             }
 
