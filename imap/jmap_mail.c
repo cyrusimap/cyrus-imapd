@@ -4339,8 +4339,8 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         // for this phase, we only care that it has a change
         if (md->modseq <= since_modseq) {
             if (search->is_mutable) {
-                modseq_t modseq = 0;
-                conversation_get_modseq(req->cstate, md->cid, &modseq);
+                modseq_t modseq = md->convmodseq;
+                if (!modseq) conversation_get_modseq(req->cstate, md->cid, &modseq);
                 if (modseq > since_modseq)
                     hashu64_insert(md->cid, (void*)1, &touched_cids);
             }
