@@ -4952,10 +4952,10 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     init.authstate = req->authstate;
     init.examine_mode = 1;
 
-    char *mboxname = search_expr_firstmailbox(searchargs->root);
-    if (!mboxname) mboxname = mboxname_user_mbox(req->accountid, NULL);
-    r = index_open(mboxname, &init, &state);
-    free(mboxname);
+    char *qmboxname = search_expr_firstmailbox(searchargs->root);
+    if (!qmboxname) mboxname = mboxname_user_mbox(req->accountid, NULL);
+    r = index_open(qmboxname, &init, &state);
+    free(qmboxname);
     if (r) goto done;
 
     bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE);
