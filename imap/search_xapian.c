@@ -1275,9 +1275,17 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
          * field"; instead we fake it by explicitly searching for
           * all of the available prefixes */
         for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-            if (i == SEARCH_PART_ATTACHMENTBODY &&
-                !(opts & SEARCH_ATTACHMENTS_IN_ANY)) {
-                continue;
+            switch (i) {
+                case SEARCH_PART_LISTID:
+                case SEARCH_PART_TYPE:
+                case SEARCH_PART_LANGUAGE:
+                case SEARCH_PART_PRIORITY:
+                    continue;
+                case SEARCH_PART_ATTACHMENTBODY:
+                    if (!(opts & SEARCH_ATTACHMENTS_IN_ANY)) {
+                        continue;
+                    }
+                    // fallthrough
             }
             for (j = 0; j < strarray_size(on->items); j++) {
                 void *q = xapian_query_new_match(db, i, strarray_nth(on->items, j));
