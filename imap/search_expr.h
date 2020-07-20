@@ -151,6 +151,7 @@ extern void search_expr_split_by_folder_and_index(search_expr_t *e,
                                                    search_expr_t *scan,
                                                    void *rock),
                                         void *rock);
+extern char *search_expr_firstmailbox(const search_expr_t *);
 
 enum search_cost {
     SEARCH_COST_NONE = 0,

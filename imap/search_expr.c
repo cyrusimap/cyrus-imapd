@@ -302,6 +302,21 @@ EXPORTED char *search_expr_serialise(const search_expr_t *e)
     return buf_release(&buf);
 }
 
+/* given an expression tree, return the name of the first mailbox that
+ * is mentioned in it (if any) */
+EXPORTED char *search_expr_firstmailbox(const search_expr_t *e)
+{
+    const search_expr_t *child;
+    const char *res = NULL;
+    if (is_folder_node(e)) {
+        res = xstrdupnull(e->value.s);
+    }
+    for (child = e->children; child && !res; child = child->next) {
+        res = search_expr_firstmailbox(child);
+    }
+    return res;
+}
+
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 static int getseword(struct protstream *prot, char *buf, int maxlen)
