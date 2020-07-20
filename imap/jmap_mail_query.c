@@ -646,8 +646,14 @@ static int _email_matchmime_evaluate(json_t *filter,
         ptrarray_t childqueries = PTRARRAY_INITIALIZER;
         int i;
         for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-            if (i == SEARCH_PART_ATTACHMENTBODY)
-                continue;
+            switch (i) {
+                case SEARCH_PART_LISTID:
+                case SEARCH_PART_TYPE:
+                case SEARCH_PART_LANGUAGE:
+                case SEARCH_PART_PRIORITY:
+                case SEARCH_PART_ATTACHMENTBODY:
+                    continue;
+            }
             void *xq = xapian_query_new_match(db, i, match);
             if (xq) ptrarray_push(&childqueries, xq);
         }
