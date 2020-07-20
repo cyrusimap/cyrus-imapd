@@ -85,10 +85,6 @@
 /* Name of columns */
 #define COL_CYRUSID     "cyrusid"
 
-/* Document types */
-#define SEARCH_XAPIAN_DOCTYPE_MSG  'G'
-#define SEARCH_XAPIAN_DOCTYPE_PART 'P'
-
 struct segment
 {
     int part;
@@ -1279,8 +1275,9 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
          * field"; instead we fake it by explicitly searching for
           * all of the available prefixes */
         for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-            if (i == SEARCH_PART_ATTACHMENTBODY) {
-                continue; // experimental
+            if (i == SEARCH_PART_ATTACHMENTBODY &&
+                !(opts & SEARCH_ATTACHMENTS_IN_ANY)) {
+                continue;
             }
             for (j = 0; j < strarray_size(on->items); j++) {
                 void *q = xapian_query_new_match(db, i, strarray_nth(on->items, j));
@@ -1511,13 +1508,13 @@ static int split_legacyv4_query(xapian_builder_t *bb,
     if (qguid->children) {
         optimise_nodes(NULL, qguid);
         xapian_query_t *xq = opnode_to_query(bb->lock.db, qguid, bb->opts);
-        if (xq) xq = xapian_query_new_has_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_MSG, xq);
+        if (xq) xq = xapian_query_new_has_doctype(bb->lock.db, XAPIAN_WRAP_DOCTYPE_MSG, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
     if (qpart->children) {
         optimise_nodes(NULL, qpart);
         xapian_query_t *xq = opnode_to_query(bb->lock.db, qpart, bb->opts);
-        if (xq) xq = xapian_query_new_has_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
+        if (xq) xq = xapian_query_new_has_doctype(bb->lock.db, XAPIAN_WRAP_DOCTYPE_PART, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
 
@@ -1910,6 +1907,22 @@ out:
     return r;
 }
 
+static void add_stemmers(xapian_db_t *db, struct opnode *on)
+{
+    if (!on) return;
+
+    if (on->op == SEARCH_PART_LANGUAGE) {
+        int i;
+        for (i = 0; i < strarray_size(on->items); i++) {
+            xapian_query_add_stemmer(db, strarray_nth(on->items, i));
+        }
+    }
+    struct opnode *child;
+    for (child = on->children ; child ; child = child->next) {
+        add_stemmers(db, child);
+    }
+}
+
 static int run_internal(xapian_builder_t *bb)
 {
     int r = 0;
@@ -1924,6 +1937,9 @@ static int run_internal(xapian_builder_t *bb)
     if (r) return r;
 
     if (bb->root) optimise_nodes(NULL, bb->root);
+
+    /* Stem using any languages explicitly requested by the user. */
+    add_stemmers(bb->lock.db, bb->root);
 
     /* A database can contain sub-databases of multiple versions */
     if (xapian_db_has_otherthan_v4_index(bb->lock.db)) {
@@ -2306,8 +2322,8 @@ static int audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
         r = message_get_guid((message_t*) msg, &guid);
         if (r) goto done;
 
-        // XXX check for all parts of that message?
-        if (!xapian_dbw_is_indexed(tr->dbw, guid, SEARCH_XAPIAN_DOCTYPE_MSG)) {
+        uint8_t indexlevel = xapian_dbw_is_indexed(tr->dbw, guid, XAPIAN_WRAP_DOCTYPE_MSG);
+        if (indexlevel == 0 || (indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) {
             bv_set(unindexed, uid);
         }
     }
@@ -2382,10 +2398,10 @@ static void append_text(search_text_receiver_t *rx,
                 seg->part = tr->part;
                 if (tr->part_guid) {
                     message_guid_copy(&seg->guid, tr->part_guid);
-                    seg->doctype = SEARCH_XAPIAN_DOCTYPE_PART;
+                    seg->doctype = XAPIAN_WRAP_DOCTYPE_PART;
                 } else {
                     message_guid_copy(&seg->guid, &tr->guid);
-                    seg->doctype = SEARCH_XAPIAN_DOCTYPE_MSG;
+                    seg->doctype = XAPIAN_WRAP_DOCTYPE_MSG;
                 }
                 ptrarray_append(&tr->segs, seg);
             }
@@ -2414,11 +2430,11 @@ static void end_part(search_text_receiver_t *rx,
 
 static int doctype_cmp(char doctype1, char doctype2)
 {
-    if (doctype1 == SEARCH_XAPIAN_DOCTYPE_MSG &&
-        doctype2 != SEARCH_XAPIAN_DOCTYPE_MSG) return -1;
+    if (doctype1 == XAPIAN_WRAP_DOCTYPE_MSG &&
+        doctype2 != XAPIAN_WRAP_DOCTYPE_MSG) return -1;
 
-    if (doctype1 != SEARCH_XAPIAN_DOCTYPE_MSG &&
-        doctype2 == SEARCH_XAPIAN_DOCTYPE_MSG) return 1;
+    if (doctype1 != XAPIAN_WRAP_DOCTYPE_MSG &&
+        doctype2 == XAPIAN_WRAP_DOCTYPE_MSG) return 1;
 
     return doctype1 - doctype2;
 }
@@ -2439,7 +2455,7 @@ static int compare_segs(const void **v1, const void **v2)
     return r;
 }
 
-static int end_message_update(search_text_receiver_t *rx)
+static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int i;
@@ -2460,14 +2476,14 @@ static int end_message_update(search_text_receiver_t *rx)
         r = xapian_dbw_begin_txn(tr->dbw);
         if (r) goto out;
     }
-    r = xapian_dbw_begin_doc(tr->dbw, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
+    r = xapian_dbw_begin_doc(tr->dbw, &tr->super.guid, XAPIAN_WRAP_DOCTYPE_MSG);
     if (r) goto out;
     for (i = 0 ; i < tr->super.segs.count ; i++) {
         seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
         r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
         if (r) goto out;
     }
-    r = xapian_dbw_end_doc(tr->dbw);
+    r = xapian_dbw_end_doc(tr->dbw, indexlevel);
     if (r) goto out;
     ++tr->uncommitted;
 
@@ -2475,11 +2491,12 @@ static int end_message_update(search_text_receiver_t *rx)
     const struct message_guid *last_guid = NULL;
     for (i = 0 ; i < tr->super.segs.count ; i++) {
         seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
-        if (seg->doctype == SEARCH_XAPIAN_DOCTYPE_MSG) continue;
+        if (seg->doctype == XAPIAN_WRAP_DOCTYPE_MSG) continue;
 
         if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
             if (last_guid) {
-                r = xapian_dbw_end_doc(tr->dbw);
+                // body parts have no index level
+                r = xapian_dbw_end_doc(tr->dbw, SEARCH_INDEXLEVEL_BASIC);
                 if (r) goto out;
                 ++tr->uncommitted;
             }
@@ -2493,7 +2510,8 @@ static int end_message_update(search_text_receiver_t *rx)
         if (r) goto out;
     }
     if (last_guid) {
-        r = xapian_dbw_end_doc(tr->dbw);
+        // body parts have no index level
+        r = xapian_dbw_end_doc(tr->dbw, SEARCH_INDEXLEVEL_BASIC);
         if (r) goto out;
         ++tr->uncommitted;
     }
@@ -2686,7 +2704,7 @@ out:
     return seqset_ismember(seq, rec->uid) ? CYRUSDB_DONE : 0;
 }
 
-static int is_indexed(search_text_receiver_t *rx, message_t *msg)
+static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
 {
     /* XXX caveat: this function returns non-zero if msg already
      * has been indexed _and marks msg as indexed in any case_.
@@ -2701,7 +2719,7 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
     if (seqset_ismember(tr->indexed, uid))
         return 1;
 
-    int ret = 0;
+    uint8_t ret = 0;
 
     const struct message_guid *guid = NULL;
     message_get_guid(msg, &guid);
@@ -2717,7 +2735,7 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
 
         char *guidrep = xstrdup(message_guid_encode(guid));
         int r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, tr);
-        if (r == CYRUSDB_DONE) ret = 1;
+        if (r == CYRUSDB_DONE) ret = SEARCH_INDEXLEVEL_BASIC;
         else if (r) {
             syslog(LOG_ERR, "is_indexed %s:%d: unexpected return code: %d (%s)",
                    tr->super.mailbox->name, uid, r, cyrusdb_strerror(r));
@@ -2726,8 +2744,7 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
     }
     else if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
         // XXX check for all parts of that message?
-        if (xapian_dbw_is_indexed(tr->dbw, guid, SEARCH_XAPIAN_DOCTYPE_MSG))
-            ret = 1;
+        ret = xapian_dbw_is_indexed(tr->dbw, guid, XAPIAN_WRAP_DOCTYPE_MSG);
     }
 
     /* start the range back at the first unindexed if necessary */
@@ -2796,7 +2813,13 @@ static int end_mailbox_update(search_text_receiver_t *rx,
 
 static int xapian_charset_flags(int flags)
 {
-    return flags | CHARSET_KEEPCASE;
+    return (flags|CHARSET_KEEPCASE|CHARSET_MIME_UTF8) & ~CHARSET_SKIPDIACRIT;
+}
+
+static int xapian_message_format(int format __attribute__((unused)),
+                                 int is_snippet __attribute__((unused)))
+{
+    return MESSAGE_SNIPPET;
 }
 
 static search_text_receiver_t *begin_update(int verbose)
@@ -2818,6 +2841,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.flush = flush;
     tr->super.super.audit_mailbox = audit_mailbox;
     tr->super.super.index_charset_flags = xapian_charset_flags;
+    tr->super.super.index_message_format = xapian_message_format;
 
     tr->super.verbose = verbose;
 
@@ -2944,7 +2968,14 @@ static int flush_snippets(search_text_receiver_t *rx)
                 r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
             if (r) goto out;
 
-            r = xapian_snipgen_begin_doc(tr->snipgen, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
+            if (search_part_is_body(seg->part)) {
+                r = xapian_snipgen_begin_doc(tr->snipgen, &seg->guid,
+                        XAPIAN_WRAP_DOCTYPE_PART);
+            }
+            else {
+                r = xapian_snipgen_begin_doc(tr->snipgen, &tr->super.guid,
+                        XAPIAN_WRAP_DOCTYPE_MSG);
+            }
             if (r) break;
             generate_snippet_terms(tr->snipgen, seg->part, tr->root);
 
@@ -2970,7 +3001,8 @@ out:
     return r;
 }
 
-static int end_message_snippets(search_text_receiver_t *rx)
+static int end_message_snippets(search_text_receiver_t *rx,
+                                uint8_t indexlevel __attribute__((unused)))
 {
     return flush_snippets(rx);
 }
@@ -3314,6 +3346,8 @@ static int reindex_mb(void *rock,
      * from oldindexed in is_indexed */
     tr->indexed = seqset_init(0, SEQ_MERGE);
 
+    int allow_partials = SEARCH_COMPACT_ALLOW_PARTIALS;
+
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
@@ -3324,7 +3358,8 @@ static int reindex_mb(void *rock,
         message_t *msg = message_new_from_record(mailbox, record);
 
         /* add the record to the list */
-        if (!is_indexed((search_text_receiver_t *)tr, msg))
+        uint8_t indexlevel = is_indexed((search_text_receiver_t *)tr, msg);
+        if (indexlevel == 0 || ((indexlevel & SEARCH_INDEXLEVEL_PARTIAL) && !allow_partials))
             ptrarray_append(&batch, msg);
         else
             message_unref(&msg);
@@ -3354,9 +3389,13 @@ static int reindex_mb(void *rock,
         }
 
         /* index the messages */
+        int getsearchtext_flags = 0;
+        if (filter->flags & SEARCH_COMPACT_ALLOW_PARTIALS) {
+            getsearchtext_flags |= INDEX_GETSEARCHTEXT_PARTIALS;
+        }
         for (i = 0 ; i < batch.count ; i++) {
             message_t *msg = ptrarray_nth(&batch, i);
-            r = index_getsearchtext(msg, NULL, &tr->super.super, 0);
+            r = index_getsearchtext(msg, NULL, &tr->super.super, getsearchtext_flags);
             if (r) goto done;
             message_unref(&msg);
         }
@@ -3928,6 +3967,27 @@ out:
     return r;
 }
 
+static int langstats(const char *userid, ptrarray_t *lstats, size_t *total_docs)
+{
+    struct mailbox *mailbox = NULL;
+    char *inboxname = mboxname_user_mbox(userid, NULL);
+    struct xapiandb_lock lock = XAPIANDB_LOCK_INITIALIZER;
+
+    int r = mailbox_open_irl(inboxname, &mailbox);
+    if (r) goto out;
+
+    r = xapiandb_lock_open(mailbox, &lock);
+    if (r || lock.db == NULL) goto out;
+
+    r = xapian_db_langstats(lock.db, lstats, total_docs);
+
+out:
+    xapiandb_lock_release(&lock);
+    mailbox_close(&mailbox);
+    free(inboxname);
+    return r;
+}
+
 const struct search_engine xapian_search_engine = {
     "Xapian",
     SEARCH_FLAG_CAN_BATCH | SEARCH_FLAG_CAN_GUIDSEARCH,
@@ -3942,6 +4002,7 @@ const struct search_engine xapian_search_engine = {
     list_files,
     compact_dbs,
     delete_user,  /* XXX: fixme */
-    check_config
+    check_config,
+    langstats
 };
 

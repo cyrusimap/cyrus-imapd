@@ -187,9 +187,21 @@ Options
     it to the destination rather than compacting.
     |v3-new-feature|
 
-.. option:: -P
+.. option:: -p
 
-    Missing documentation, reindex parts mode.
+    When indexing, allow messages to be partially indexed. This may
+    occur if attachment indexing is enabled but indexing failed for
+    one or more attachment body parts. If this flag is set, the
+    message is partially indexed and squatter continues. Otherwise
+    squatter aborts with an error. Also see **-P**.
+    Xapian only.
+    |master-new-feature|
+
+ .. option:: -P
+
+    When reindexing, then attempt to reindex any partially indexed
+    messages (see **-p**). Setting this flag implies **-Z**.
+    Xapian only.
     |master-new-feature|
 
 .. option:: -R

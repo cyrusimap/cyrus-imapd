@@ -717,14 +717,18 @@ static void string_match(search_expr_t *parent, const char *val,
     search_expr_t *e;
     const search_attr_t *attr = search_attr_find(aname);
     enum search_op op = SEOP_MATCH;
+    char *searchval;
 
     if (base->fuzzy_depth > 0 &&
-        search_attr_is_fuzzable(attr))
+        search_attr_is_fuzzable(attr)) {
         op = SEOP_FUZZYMATCH;
+        searchval = xstrdup(val); // keep search value as-is
+    }
+    else searchval = charset_convert(val, base->charset, charset_flags|CHARSET_KEEPCASE);
 
     e = search_expr_new(parent, op);
     e->attr = attr;
-    e->value.s = charset_convert(val, base->charset, charset_flags|CHARSET_KEEPCASE);
+    e->value.s = searchval;
     if (!e->value.s) {
         e->op = SEOP_FALSE;
         e->attr = NULL;
@@ -1317,6 +1321,12 @@ static int get_search_criterion(struct protstream *pin,
             c = getastring(pin, pout, &arg);
             if (c == EOF) goto missingarg;
             string_match(parent, arg.s, "attachmentname", base);
+        }
+        else if (!strcmp(criteria.s, "xattachmentbody")) {  /* nonstandard */
+            if (c != ' ') goto missingarg;
+            c = getastring(pin, pout, &arg);
+            if (c == EOF) goto missingarg;
+            string_match(parent, arg.s, "attachmentbody", base);
         }
         else if (!strcmp(criteria.s, "xlistid")) {           /* nonstandard */
             if (c != ' ') goto missingarg;

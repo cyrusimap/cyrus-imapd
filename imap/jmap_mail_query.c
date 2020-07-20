@@ -62,9 +62,6 @@
 #ifndef JMAP_MAIL_EXTENSION
 #define JMAP_MAIL_EXTENSION          "https://cyrusimap.org/ns/jmap/mail"
 #endif
-#ifndef JMAP_SEARCH_EXTENSION
-#define JMAP_SEARCH_EXTENSION        "https://cyrusimap.org/ns/jmap/search"
-#endif
 
 static int _email_threadkeyword_is_valid(const char *keyword)
 {
@@ -389,8 +386,8 @@ static uint32_t _matchmime_tr_first_unindexed_uid(search_text_receiver_t *rx __a
     return 1;
 }
 
-static int _matchmime_tr_is_indexed(search_text_receiver_t *rx __attribute__((unused)),
-                                    message_t *msg __attribute__((unused)))
+static uint8_t _matchmime_tr_is_indexed(search_text_receiver_t *rx __attribute__((unused)),
+                                        message_t *msg __attribute__((unused)))
 {
     return 0;
 }
@@ -432,10 +429,10 @@ static void _matchmime_tr_end_part(search_text_receiver_t *rx, int part)
     buf_reset(&tr->buf);
 }
 
-static int _matchmime_tr_end_message(search_text_receiver_t *rx)
+static int _matchmime_tr_end_message(search_text_receiver_t *rx, uint8_t indexlevel)
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
-    return xapian_dbw_end_doc(tr->dbw);
+    return xapian_dbw_end_doc(tr->dbw, indexlevel);
 }
 
 static int _matchmime_tr_end_mailbox(search_text_receiver_t *rx __attribute__((unused)),
@@ -458,6 +455,12 @@ static int _matchmime_tr_audit_mailbox(search_text_receiver_t *rx __attribute__(
 static int _matchmime_tr_index_charset_flags(int base_flags)
 {
     return base_flags | CHARSET_KEEPCASE;
+}
+
+static int _matchmime_tr_index_message_format(int format __attribute__((unused)),
+                                              int is_snippet __attribute__((unused)))
+{
+    return MESSAGE_SNIPPET;
 }
 
 static int _email_matchmime_evaluate_xcb(void *data __attribute__((unused)),
@@ -508,61 +511,56 @@ static xapian_query_t *build_type_query(xapian_db_t *db, const char *type)
 
     /* Handle type wildcards */
     if (!strcasecmp(type, "image")) {
-        strarray_append(&types, "image_gif");
-        strarray_append(&types, "image_jpeg");
-        strarray_append(&types, "image_pjpeg");
-        strarray_append(&types, "image_jpg");
-        strarray_append(&types, "image_png");
-        strarray_append(&types, "image_bmp");
-        strarray_append(&types, "image_tiff");
+        strarray_append(&types, "image/gif");
+        strarray_append(&types, "image/jpeg");
+        strarray_append(&types, "image/pjpeg");
+        strarray_append(&types, "image/jpg");
+        strarray_append(&types, "image/png");
+        strarray_append(&types, "image/bmp");
+        strarray_append(&types, "image/tiff");
     }
     else if (!strcasecmp(type, "document")) {
-        strarray_append(&types, "application_msword");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.wordprocessingml.document");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.wordprocessingml.template");
-        strarray_append(&types, "application_vnd.sun.xml.writer");
-        strarray_append(&types, "application_vnd.sun.xml.writer.template");
-        strarray_append(&types, "application_vnd.oasis.opendocument.text");
-        strarray_append(&types, "application_vnd.oasis.opendocument.text-template");
-        strarray_append(&types, "application_x-iwork-pages-sffpages");
-        strarray_append(&types, "application_vnd.apple.pages");
+        strarray_append(&types, "application/msword");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.wordprocessingml.template");
+        strarray_append(&types, "application/vnd.sun.xml.writer");
+        strarray_append(&types, "application/vnd.sun.xml.writer.template");
+        strarray_append(&types, "application/vnd.oasis.opendocument.text");
+        strarray_append(&types, "application/vnd.oasis.opendocument.text-template");
+        strarray_append(&types, "application/x-iwork-pages-sffpages");
+        strarray_append(&types, "application/vnd.apple.pages");
     }
     else if (!strcasecmp(type, "spreadsheet")) {
-        strarray_append(&types, "application_vnd.ms-excel");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.spreadsheetml.template");
-        strarray_append(&types, "application_vnd.sun.xml.calc");
-        strarray_append(&types, "application_vnd.sun.xml.calc.template");
-        strarray_append(&types, "application_vnd.oasis.opendocument.spreadsheet");
-        strarray_append(&types, "application_vnd.oasis.opendocument.spreadsheet-template");
-        strarray_append(&types, "application_x-iwork-numbers-sffnumbers");
-        strarray_append(&types, "application_vnd.apple.numbers");
+        strarray_append(&types, "application/vnd.ms-excel");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.spreadsheetml.template");
+        strarray_append(&types, "application/vnd.sun.xml.calc");
+        strarray_append(&types, "application/vnd.sun.xml.calc.template");
+        strarray_append(&types, "application/vnd.oasis.opendocument.spreadsheet");
+        strarray_append(&types, "application/vnd.oasis.opendocument.spreadsheet-template");
+        strarray_append(&types, "application/x-iwork-numbers-sffnumbers");
+        strarray_append(&types, "application/vnd.apple.numbers");
     }
     else if (!strcasecmp(type, "presentation")) {
-        strarray_append(&types, "application_vnd.ms-powerpoint");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.presentation");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.template");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.slideshow");
-        strarray_append(&types, "application_vnd.sun.xml.impress");
-        strarray_append(&types, "application_vnd.sun.xml.impress.template");
-        strarray_append(&types, "application_vnd.oasis.opendocument.presentation");
-        strarray_append(&types, "application_vnd.oasis.opendocument.presentation-template");
-        strarray_append(&types, "application_x-iwork-keynote-sffkey");
-        strarray_append(&types, "application_vnd.apple.keynote");
+        strarray_append(&types, "application/vnd.ms-powerpoint");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.presentationml.template");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.presentationml.slideshow");
+        strarray_append(&types, "application/vnd.sun.xml.impress");
+        strarray_append(&types, "application/vnd.sun.xml.impress.template");
+        strarray_append(&types, "application/vnd.oasis.opendocument.presentation");
+        strarray_append(&types, "application/vnd.oasis.opendocument.presentation-template");
+        strarray_append(&types, "application/x-iwork-keynote-sffkey");
+        strarray_append(&types, "application/vnd.apple.keynote");
     }
     else if (!strcasecmp(type, "email")) {
-        strarray_append(&types, "message_rfc822");
+        strarray_append(&types, "message/rfc822");
     }
     else if (!strcasecmp(type, "pdf")) {
-        strarray_append(&types, "application_pdf");
+        strarray_append(&types, "application/pdf");
     }
     else {
-        /* FUZZY contenttype is indexed as `type_subtype` */
-        char *tmp = xstrdup(type);
-        char *p = strchr(tmp, '/');
-        if (p) *p = '_';
-        strarray_append(&types, tmp);
-        free(tmp);
+        strarray_append(&types, type);
     }
 
     /* Build expression */
@@ -636,6 +634,7 @@ static int _email_matchmime_evaluate(json_t *filter,
 
     int need_matches = json_object_size(filter);
     int have_matches = 0;
+    json_t *jval;
 
 #define MATCHMIME_XQ_OR_MATCHALL(_xq) \
     ((_xq) ? _xq : xapian_query_new_matchall(db))
@@ -726,6 +725,18 @@ static int _email_matchmime_evaluate(json_t *filter,
         xapian_query_t *xq = build_type_query(db, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
+    if ((match = json_string_value(json_object_get(filter, "listId")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_LISTID, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if (JNOTNULL(jval = json_object_get(filter, "isHighPriority"))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_PRIORITY, "1");
+        if (xq && !json_boolean_value(jval)) {
+            xq = xapian_query_new_not(db, xq);
+        }
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    // ignore attachmentBody
 
 #undef MATCHMIME_XQ_OR_MATCHALL
 
@@ -762,8 +773,6 @@ static int _email_matchmime_evaluate(json_t *filter,
             }
         }
     }
-
-    json_t *jval;
 
     /* hasAttachment */
     if (JNOTNULL(jval = json_object_get(filter, "hasAttachment"))) {
@@ -1021,10 +1030,11 @@ HIDDEN int jmap_email_matchmime(struct buf *mime,
             _matchmime_tr_flush,
             _matchmime_tr_audit_mailbox,
             _matchmime_tr_index_charset_flags,
+            _matchmime_tr_index_message_format
         },
         dbw, BUF_INITIALIZER
     };
-    r = index_getsearchtext(m, NULL, (struct search_text_receiver*) &tr, /*snippet*/0);
+    r = index_getsearchtext(m, NULL, (struct search_text_receiver*) &tr, 0);
     if (r) {
         syslog(LOG_ERR, "jmap_matchmime: can't index MIME message: %s",
                 error_message(r));

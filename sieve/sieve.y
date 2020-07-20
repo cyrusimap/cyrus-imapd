@@ -3231,7 +3231,6 @@ static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
 
         strarray_append(&capabilities, JMAP_URN_MAIL);
         strarray_append(&capabilities, JMAP_MAIL_EXTENSION);
-        strarray_append(&capabilities, JMAP_SEARCH_EXTENSION);
 
         jmap_email_filter_parse(jquery, &parse_ctx);
 

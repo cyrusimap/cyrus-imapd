@@ -1443,7 +1443,7 @@ static int search_contenttype_match(message_t *m, const union search_value *v,
             if (r) goto out;    // success
 
             /* match against combined type_subtype */
-            snprintf(combined, sizeof(combined), "%s_%s", type, subtype);
+            snprintf(combined, sizeof(combined), "%s/%s", type, subtype);
             r = charset_searchstring(v->s, pat, combined, strlen(combined), charset_flags);
             if (r) goto out;    // success
         }
@@ -2309,6 +2309,16 @@ static int search_text_match(message_t *m,
     return sr.result;
 }
 
+static int search_language_match(message_t *m __attribute__((unused)),
+                                 const union search_value *v __attribute__((unused)),
+                                 void *internalised __attribute__((unused)),
+                                 void *data1 __attribute__((unused)))
+{
+    /* language matching must be done in the backend */
+    syslog(LOG_DEBUG, "%s: ignoring language search attribute", __func__);
+    return 1;
+}
+
 /* ====================================================================== */
 
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
@@ -2881,6 +2891,34 @@ EXPORTED void search_attr_init(void)
             search_string_duplicate,
             search_string_free,
             (void *)0       /* skipheader flag */
+        },{
+            "language",
+            SEA_FUZZABLE,
+            SEARCH_PART_LANGUAGE,
+            SEARCH_COST_BODY,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_language_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)0
+        }, {
+            "priority",
+            SEA_FUZZABLE,
+            SEARCH_PART_PRIORITY,
+            SEARCH_COST_BODY,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_string_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)message_get_priority
         }
     };
 

@@ -102,6 +102,8 @@ static int xapindexed_mode = 0;
 static int recursive_flag = 0;
 static int annotation_flag = 0;
 static int sleepmicroseconds = 0;
+static int allow_partials = 0;
+static int reindex_partials = 0;
 static const char *temp_root_dir = NULL;
 static search_text_receiver_t *rx = NULL;
 
@@ -125,6 +127,8 @@ __attribute__((noreturn)) static int usage(const char *name)
             "\n"
             "Index mode options:\n"
             "  -i          index incrementally\n"
+            "  -p          allow partially indexed messages\n"
+            "  -P          reindex partially indexed messages (implies -Z)\n"
             "  -N name     index mailbox names starting with name\n"
             "  -S seconds  sleep seconds between indexing mailboxes\n"
             "  -Z          Xapian: use internal index rather than cyrus.indexed.db\n"
@@ -240,6 +244,10 @@ static int index_one(const char *name, int blocking)
         flags |= SEARCH_UPDATE_BATCH;
     if (xapindexed_mode)
         flags |= SEARCH_UPDATE_XAPINDEXED;
+    if (allow_partials)
+        flags |= SEARCH_UPDATE_ALLOW_PARTIALS;
+    if (reindex_partials)
+        flags |= SEARCH_UPDATE_REINDEX_PARTIALS;
 
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &squat_namespace, NULL);
@@ -841,7 +849,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:N:RUXZT:S:Fde:f:mn:riavAz:t:ouhl")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:N:RUXZT:S:Fde:f:mn:riavpPAz:t:ouhl")) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
@@ -860,11 +868,19 @@ int main(int argc, char **argv)
             compact_flags |= SEARCH_COMPACT_REINDEX;
             break;
 
+        case 'P':
+            reindex_partials = 1;
+            // fallthrough
+
         case 'Z':
             /* we have two different flag types for the two different modes,
              * set both of them even though only one will be used */
             xapindexed_mode = 1;
             compact_flags |= SEARCH_COMPACT_XAPINDEXED;
+            break;
+
+        case 'p':
+            allow_partials = 1;
             break;
 
         case 'N':

@@ -695,7 +695,8 @@ static void end_part(search_text_receiver_t *rx,
     buf_reset(&d->pending_text);
 }
 
-static int end_message(search_text_receiver_t *rx)
+static int end_message(search_text_receiver_t *rx,
+                       uint8_t indexlevel __attribute__((unused)))
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
 
@@ -894,7 +895,7 @@ static uint32_t first_unindexed_uid(search_text_receiver_t *rx
     return 1;
 }
 
-static int is_indexed(search_text_receiver_t *rx, message_t *msg)
+static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
 {
     SquatReceiverData *d = (SquatReceiverData *)rx;
     uint32_t uid = 0;
@@ -1026,6 +1027,7 @@ const struct search_engine squat_search_engine = {
     /* list_files */NULL,
     /* compact */NULL,
     /* deluser */NULL,
-    /* check_config */NULL
+    /* check_config */NULL,
+    /* langstats */NULL
 };
 

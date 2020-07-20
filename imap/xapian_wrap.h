@@ -54,6 +54,10 @@ typedef struct xapian_query xapian_query_t;
 typedef struct xapian_snipgen xapian_snipgen_t;
 typedef struct xapian_doc xapian_doc_t;
 
+/* Document types */
+#define XAPIAN_WRAP_DOCTYPE_MSG  'G'
+#define XAPIAN_WRAP_DOCTYPE_PART 'P'
+
 /* compaction interface */
 extern int xapian_compact_dbs(const char *dest, const char **sources);
 extern void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex, int always_upgrade);
@@ -68,14 +72,14 @@ extern int xapian_dbw_commit_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_cancel_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
 extern int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part);
-extern int xapian_dbw_end_doc(xapian_dbw_t *dbw);
-extern int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
-
+extern int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel);
+extern uint8_t xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
 
 /* query-side interface */
 extern int xapian_db_open(const char **paths, xapian_db_t **dbp);
 extern int xapian_db_opendbw(struct xapian_dbw *dbw, xapian_db_t **dbp);
 extern void xapian_db_close(xapian_db_t *);
+extern void xapian_query_add_stemmer(xapian_db_t *, const char *iso_lang);
 extern xapian_query_t *xapian_query_new_match(const xapian_db_t *, int num_part, const char *term);
 extern xapian_query_t *xapian_query_new_compound(const xapian_db_t *, int is_or, xapian_query_t **children, int n);
 extern xapian_query_t *xapian_query_new_matchall(const xapian_db_t *);
@@ -99,6 +103,9 @@ extern int xapian_filter(const char *dest, const char **sources,
 /* XXX legacy version 4 DB support */
 extern int xapian_db_has_legacy_v4_index(const xapian_db_t *);
 extern int xapian_db_has_otherthan_v4_index(const xapian_db_t *);
+
+/* Language indexing support */
+extern int xapian_db_langstats(xapian_db_t*, ptrarray_t*, size_t*);
 
 /* Document interface */
 extern xapian_doc_t *xapian_doc_new(void);

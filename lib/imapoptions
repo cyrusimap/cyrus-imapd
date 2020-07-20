@@ -2154,14 +2154,43 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The number of messages to be indexed in one batch (default 20).
    Note that long batches may delay user commands or mail delivery. */
 
-{ "search_attachment_extractor_url", NULL, STRING, "3.2.1", "3.2.1" }
-/*
-  Reserved for future use.
+{ "search_attachment_extractor_url", NULL, STRING, "3.3.0" }
+/* A HTTP or HTTPS URL to extract search text from rich text attachments
+   and other media during search indexing. The server at this URL must
+   implement the following protocol:
+
+   1. For each attachment of an email, Cyrus sends a GET request to the
+   URL <extractor-url>/<cyrus-id>, where <extractor-url> is the
+   configured URL and <cyrus-id> is a Cyrus-chosen path segment that
+   uniquely identifies this attachment.
+
+   2. If the extractor already has a cached plain text extract of the
+   attachment identified by <cyrus-id> then it may return HTTP status
+   code 200 (OK) and the plain text extract with a Content-Type
+   "text/plain" header. Otherwise it must return HTTP status 404 (Not Found).
+
+   3. If Cyrus receives the HTTP status code 404 (Not Found), then it sends
+   a PUT request to the same URL as previously. The PUT request body
+   contains the decoded, binary body of the attachment. The Content-Type
+   request header has the same value as declared in the MIME part
+   headers, including any type parameters.
+
+   4. The extractor must return the plain text extract with either HTTP status
+   200 (OK) or 201 (Created) and a Content-Type "text/plain" header.
+   If no text can be extracted, then the extractor may return any return code
+   in the range 4xx, or 200 and an empty response body.
+
+   Any other HTTP status code is treated as an error. For performance
+   reasons, the Cyrus indexer attempts to keep-alive the TCP connection
+   to the extractor.
+   Xapian only.
  */
 
-{ "search_index_language", 0, SWITCH, "3.2.1", "3.2.1" }
+{ "search_index_language", 0, SWITCH, "3.3.0" }
 /*
-  Reserved for future use.
+  If enabled, then messages bodies are stemmed by detected language
+  in addition to the default English stemmer.
+  Xapian only.
  */
 
 { "search_index_parts", 0, SWITCH, "3.2.1", "3.2.1" }
@@ -2169,9 +2198,9 @@ If all partitions are over that limit, this feature is not used anymore.
   Deprecated. No longer used.
  */
 
-{ "search_query_language", 0, SWITCH, "3.2.1", "3.2.1" }
+{ "search_query_language", 0, SWITCH, "3.3.0", "3.3.0" }
 /*
-  Reserved for future use.
+  Deprecated. No longer used.
  */
 
 { "search_normalisation_max", 1000, INT, "3.0.0" }

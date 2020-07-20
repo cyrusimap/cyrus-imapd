@@ -287,8 +287,6 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
-                JMAP_SEARCH_EXTENSION, json_object());
-        json_object_set_new(settings->server_capabilities,
                 JMAP_MAIL_EXTENSION, json_object());
 
         for (mp = jmap_mail_methods_nonstandard; mp->name; mp++) {
@@ -334,7 +332,6 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTo
     json_object_set_new(account_capabilities, JMAP_URN_MAIL, email_capabilities);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        json_object_set_new(account_capabilities, JMAP_SEARCH_EXTENSION, json_object());
         json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION, json_object());
     }
 
@@ -1680,7 +1677,6 @@ static void _email_search_string(search_expr_t *parent,
                                  const char *name,
                                  strarray_t *perf_filters)
 {
-    charset_t utf8 = charset_lookupname("utf-8");
     search_expr_t *e;
     const search_attr_t *attr = search_attr_find(name);
     enum search_op op;
@@ -1688,17 +1684,10 @@ static void _email_search_string(search_expr_t *parent,
     assert(attr);
 
     op = search_attr_is_fuzzable(attr) ? SEOP_FUZZYMATCH : SEOP_MATCH;
-
     e = search_expr_new(parent, op);
     e->attr = attr;
-    e->value.s = charset_convert(s, utf8, charset_flags);
-    if (!e->value.s) {
-        e->op = SEOP_FALSE;
-        e->attr = NULL;
-    }
-
+    e->value.s = xstrdup(s);
     _email_search_perf_attr(attr, perf_filters);
-    charset_free(&utf8);
 }
 
 static void _email_search_type(search_expr_t *parent, const char *s, strarray_t *perf_filters)
@@ -1706,83 +1695,68 @@ static void _email_search_type(search_expr_t *parent, const char *s, strarray_t 
     strarray_t types = STRARRAY_INITIALIZER;
 
     /* Handle type wildcards */
-    // XXX: due to Xapian's 64 character indexing limitation, we're not prefixing application_
-    // to the Microsoft types
     if (!strcasecmp(s, "image")) {
-        strarray_append(&types, "image_gif");
-        strarray_append(&types, "image_jpeg");
-        strarray_append(&types, "image_pjpeg");
-        strarray_append(&types, "image_jpg");
-        strarray_append(&types, "image_png");
-        strarray_append(&types, "image_bmp");
-        strarray_append(&types, "image_tiff");
+        strarray_append(&types, "image/gif");
+        strarray_append(&types, "image/jpeg");
+        strarray_append(&types, "image/pjpeg");
+        strarray_append(&types, "image/jpg");
+        strarray_append(&types, "image/png");
+        strarray_append(&types, "image/bmp");
+        strarray_append(&types, "image/tiff");
     }
     else if (!strcasecmp(s, "document")) {
-        strarray_append(&types, "application_msword");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.wordprocessingml.document");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.wordprocessingml.template");
-        strarray_append(&types, "application_vnd.sun.xml.writer");
-        strarray_append(&types, "application_vnd.sun.xml.writer.template");
-        strarray_append(&types, "application_vnd.oasis.opendocument.text");
-        strarray_append(&types, "application_vnd.oasis.opendocument.text-template");
-        strarray_append(&types, "application_x-iwork-pages-sffpages");
-        strarray_append(&types, "application_vnd.apple.pages");
+        strarray_append(&types, "application/msword");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.wordprocessingml.template");
+        strarray_append(&types, "application/vnd.sun.xml.writer");
+        strarray_append(&types, "application/vnd.sun.xml.writer.template");
+        strarray_append(&types, "application/vnd.oasis.opendocument.text");
+        strarray_append(&types, "application/vnd.oasis.opendocument.text-template");
+        strarray_append(&types, "application/x-iwork-pages-sffpages");
+        strarray_append(&types, "application/vnd.apple.pages");
     }
     else if (!strcasecmp(s, "spreadsheet")) {
-        strarray_append(&types, "application_vnd.ms-excel");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.spreadsheetml.template");
-        strarray_append(&types, "application_vnd.sun.xml.calc");
-        strarray_append(&types, "application_vnd.sun.xml.calc.template");
-        strarray_append(&types, "application_vnd.oasis.opendocument.spreadsheet");
-        strarray_append(&types, "application_vnd.oasis.opendocument.spreadsheet-template");
-        strarray_append(&types, "application_x-iwork-numbers-sffnumbers");
-        strarray_append(&types, "application_vnd.apple.numbers");
+        strarray_append(&types, "application/vnd.ms-excel");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.spreadsheetml.template");
+        strarray_append(&types, "application/vnd.sun.xml.calc");
+        strarray_append(&types, "application/vnd.sun.xml.calc.template");
+        strarray_append(&types, "application/vnd.oasis.opendocument.spreadsheet");
+        strarray_append(&types, "application/vnd.oasis.opendocument.spreadsheet-template");
+        strarray_append(&types, "application/x-iwork-numbers-sffnumbers");
+        strarray_append(&types, "application/vnd.apple.numbers");
     }
     else if (!strcasecmp(s, "presentation")) {
-        strarray_append(&types, "application_vnd.ms-powerpoint");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.presentation");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.template");
-        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.slideshow");
-        strarray_append(&types, "application_vnd.sun.xml.impress");
-        strarray_append(&types, "application_vnd.sun.xml.impress.template");
-        strarray_append(&types, "application_vnd.oasis.opendocument.presentation");
-        strarray_append(&types, "application_vnd.oasis.opendocument.presentation-template");
-        strarray_append(&types, "application_x-iwork-keynote-sffkey");
-        strarray_append(&types, "application_vnd.apple.keynote");
+        strarray_append(&types, "application/vnd.ms-powerpoint");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.presentationml.template");
+        strarray_append(&types, "application/vnd.openxmlformats-officedocument.presentationml.slideshow");
+        strarray_append(&types, "application/vnd.sun.xml.impress");
+        strarray_append(&types, "application/vnd.sun.xml.impress.template");
+        strarray_append(&types, "application/vnd.oasis.opendocument.presentation");
+        strarray_append(&types, "application/vnd.oasis.opendocument.presentation-template");
+        strarray_append(&types, "application/x-iwork-keynote-sffkey");
+        strarray_append(&types, "application/vnd.apple.keynote");
     }
     else if (!strcasecmp(s, "email")) {
-        strarray_append(&types, "message_rfc822");
+        strarray_append(&types, "message/rfc822");
     }
     else if (!strcasecmp(s, "pdf")) {
-        strarray_append(&types, "application_pdf");
+        strarray_append(&types, "application/pdf");
     }
     else {
-        /* FUZZY contenttype is indexed as `type_subtype` */
-        char *tmp = xstrdup(s);
-        char *p = strchr(tmp, '/');
-        if (p) *p = '_';
-        strarray_append(&types, tmp);
-        free(tmp);
+        strarray_append(&types, s);
     }
 
     /* Build expression */
-    search_expr_t *p = (types.count > 1) ? search_expr_new(parent, SEOP_OR) : parent;
     const search_attr_t *attr = search_attr_find("contenttype");
-    do {
+    search_expr_t *p = (types.count > 1) ? search_expr_new(parent, SEOP_OR) : parent;
+    char *val;
+    while ((val = strarray_pop(&types))) {
         search_expr_t *e = search_expr_new(p, SEOP_FUZZYMATCH);
         e->attr = attr;
-        struct buf buf = BUF_INITIALIZER;
-        char *orig = strarray_pop(&types);
-        const unsigned char *s = (const unsigned char *)orig;
-        for ( ; *s ; ++s) {
-            if (Uisalnum(*s) || *s == '_')
-                buf_putc(&buf, *s);
-        }
-        e->value.s = buf_release(&buf);
-        free(orig);
-        buf_free(&buf);
-    } while (types.count);
+        e->value.s = val;
+    }
     _email_search_perf_attr(attr, perf_filters);
 
     strarray_fini(&types);
@@ -1851,7 +1825,7 @@ static void _email_search_contactgroup(search_expr_t *parent,
     for (i = 0; i < strarray_size(members); i++) {
         const char *member = strarray_nth(members, i);
         if (!strchr(member, '@')) continue;
-        strarray_appendm(val, charset_convert(member, utf8, charset_flags));
+        strarray_append(val, member);
     }
     charset_free(&utf8);
     if (!strarray_size(val)) {
@@ -2106,11 +2080,8 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
 
             e = search_expr_new(this, SEOP_MATCH);
             e->attr = search_attr_find_field(k);
-            e->value.s = charset_convert(v, utf8, charset_flags);
-            if (!e->value.s) {
-                e->op = SEOP_FALSE;
-                e->attr = NULL;
-            }
+            e->value.s = xstrdup(v);
+
             _email_search_perf_attr(e->attr, perf_filters);
             charset_free(&utf8);
         }
@@ -2202,6 +2173,35 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         }
         if ((s = json_string_value(json_object_get(filter, "to")))) {
             _email_search_string(this, s, "to", perf_filters);
+        }
+        if ((s = json_string_value(json_object_get(filter, "language")))) {
+            /* non-standard */
+            search_expr_t *e = search_expr_new(this, SEOP_FUZZYMATCH);
+            e->attr = search_attr_find("language");
+            e->value.s = xstrdup(s);
+            _email_search_perf_attr(e->attr, perf_filters);
+        }
+        if (JNOTNULL(val = json_object_get(filter, "isHighPriority"))) {
+            /* non-standard */
+            search_expr_t *parent = val != json_true() ?
+                                    search_expr_new(this, SEOP_NOT) : this;
+            search_expr_t *e = search_expr_new(parent, SEOP_FUZZYMATCH);
+            e->attr = search_attr_find("priority");
+            e->value.s = xstrdup("1");
+            _email_search_perf_attr(e->attr, perf_filters);
+        }
+        if ((s = json_string_value(json_object_get(filter, "listId")))) {
+            /* non-standard */
+            struct buf buf = BUF_INITIALIZER;
+            const char *val = s;
+            if (!strchr(s, '<')) {
+                buf_putc(&buf, '<');
+                buf_appendcstr(&buf, s);
+                buf_putc(&buf, '>');
+                val = buf_cstring(&buf);
+            }
+            _email_search_string(this, val, "listid", perf_filters);
+            buf_free(&buf);
         }
     }
 
@@ -2434,6 +2434,7 @@ static void _email_querychanges_destroyed(struct jmap_querychanges *query,
 
 struct emailsearch {
     int want_expunged;
+    int want_partids;
     int ignore_timer;
     int is_mutable;
     search_expr_t *expr;
@@ -2520,6 +2521,7 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
                                             json_t *jsort,
                                             hash_table *contactgroups,
                                             int want_expunged,
+                                            int want_partids,
                                             int ignore_timer)
 {
     struct emailsearch* search = xzmalloc(sizeof(struct emailsearch));
@@ -2544,6 +2546,7 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
     search->hash = _emailsearch_hash(search->expr, search->sort);
     search->is_mutable = search_is_mutable(search->sort, search->expr);
     search->want_expunged = want_expunged;
+    search->want_partids = want_partids;
     search->ignore_timer = ignore_timer;
 
     return search;
@@ -2587,6 +2590,7 @@ static int _emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *searc
     search->query->ignore_timer = search->ignore_timer;
     search->query->checkfolder = _jmap_checkfolder;
     search->query->checkfolderrock = req;
+    search->query->attachments_in_any = search->want_partids;
     r = search_query_run(search->query);
     if (r) {
         syslog(LOG_ERR, "jmap: %s: %s", __func__, error_message(r));
@@ -2638,7 +2642,7 @@ static void jmap_emailquery_init(struct jmap_emailquery *q)
 static json_t *jmap_emailquery_reply(jmap_req_t *req, struct jmap_emailquery *q)
 {
     json_t *res = jmap_query_reply(&q->super);
-    if (jmap_is_using(req, JMAP_SEARCH_EXTENSION)) {
+    if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
         if (q->want_partids) {
             json_object_set(res, "partIds",
                     json_object_size(q->partids) ?  q->partids : json_null());
@@ -4075,7 +4079,8 @@ static void _email_query(jmap_req_t *req, struct jmap_emailquery *q,
 {
     struct emailsearch *search = _emailsearch_new(req, q->super.filter,
                                                   q->super.sort,
-                                                  contactgroups, 0, 0);
+                                                  contactgroups, 0,
+                                                  q->want_partids, 0);
     int r = 0;
 
     if (!search) {
@@ -4155,8 +4160,8 @@ static int _email_queryargs_parse(jmap_req_t *req,
         free(addrbookname);
         return is_valid;
     }
-    else if (!strcmp(key, "wantPartIds") && json_is_boolean(arg) &&
-            jmap_is_using(req, JMAP_SEARCH_EXTENSION)) {
+    else if (!strcmp(key, "findMatchingParts") && json_is_boolean(arg) &&
+            jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
         query->want_partids = json_boolean_value(arg);
     }
     else if (!strcmp(key, "disableGuidSearch") && json_is_boolean(arg) &&
@@ -4214,6 +4219,28 @@ static int jmap_email_query(jmap_req_t *req)
     /* Build response */
     json_t *res = jmap_emailquery_reply(req, &query);
     json_object_set(res, "collapseThreads", json_boolean(query.collapse_threads));
+    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+        /* List language stats */
+        const struct search_engine *engine = search_engine();
+        if (engine->langstats) {
+            size_t nolang = 0;
+            ptrarray_t lstats = PTRARRAY_INITIALIZER;
+            int r = engine->langstats(req->accountid, &lstats, &nolang);
+            if (!r) {
+                json_t *jstats = json_object();
+                struct search_langstat *lstat;
+                while ((lstat = ptrarray_pop(&lstats))) {
+                    json_object_set_new(jstats, lstat->iso_lang,
+                            json_integer(lstat->count));
+                    free(lstat->iso_lang);
+                    free(lstat);
+                }
+                json_object_set_new(res, "languageStats",
+                        json_pack("{s:o s:I}", "iso", jstats, "unknown", nolang));
+            }
+            ptrarray_fini(&lstats);
+        }
+    }
     jmap_ok(req, res);
 
 done:
@@ -4251,7 +4278,9 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
                                                   &contactfilter->contactgroups,
-                                                  /*want_expunged*/1, /*ignore_timer*/0);
+                                                  /*want_expunged*/1,
+                                                  /*want_partids*/0,
+                                                  /*ignore_timer*/0);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
@@ -4468,7 +4497,9 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
                                                   &contactfilter->contactgroups,
-                                                  /*want_expunged*/1, /*ignore_timer*/0);
+                                                  /*want_expunged*/1,
+                                                  /*want_partids*/0,
+                                                  /*ignore_timer*/0);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
@@ -4668,6 +4699,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     struct emailsearch *search = _emailsearch_new(req, filter, sort,
                                                   /*contactgroups*/NULL,
                                                   /*want_expunged*/1,
+                                                  /*want_partids*/0,
                                                   /*ignore_timer*/1);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
@@ -4794,6 +4826,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     struct emailsearch *search = _emailsearch_new(req, filter, sort,
                                                   /*contactgroups*/NULL,
                                                   /*want_expunged*/1,
+                                                  /*want_partids*/0,
                                                   /*ignore_timer*/1);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
@@ -5023,7 +5056,8 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
         json_object_set_new(snippet, "preview", json_null());
 
         r = rx->begin_mailbox(rx, mbox, /*incremental*/0);
-        r = index_getsearchtext(msg, jpartids ? &partids : NULL, rx, 1);
+        r = index_getsearchtext(msg, jpartids ? &partids : NULL, rx,
+                                INDEX_GETSEARCHTEXT_SNIPPET);
         if (!r || r == IMAP_OK_COMPLETED) {
             json_array_append_new(*snippets, json_deep_copy(snippet));
             r = 0;
@@ -5155,7 +5189,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
         }
 
         /* partIds */
-        else if (jmap_is_using(req, JMAP_SEARCH_EXTENSION) && !strcmp(key, "partIds")) {
+        else if (jmap_is_using(req, JMAP_MAIL_EXTENSION) && !strcmp(key, "partIds")) {
             jemailpartids = arg;
             int is_valid = 1;
             if (json_is_object(jemailpartids)) {
