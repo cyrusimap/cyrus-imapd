@@ -68,7 +68,6 @@
 #include "json_support.h"
 #include "jmap_ical.h"
 #include "search_query.h"
-#include "stristr.h"
 #include "times.h"
 #include "user.h"
 #include "util.h"

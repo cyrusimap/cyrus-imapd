@@ -73,7 +73,6 @@
 #include "search_engines.h"
 #include "seen.h"
 #include "strhash.h"
-#include "stristr.h"
 #include "sync_log.h"
 #include "syslog.h"
 #include "util.h"

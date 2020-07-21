@@ -89,7 +89,6 @@
 #include "times.h"
 #include "spool.h"
 #include "strhash.h"
-#include "stristr.h"
 #include "tok.h"
 #include "user.h"
 #include "util.h"

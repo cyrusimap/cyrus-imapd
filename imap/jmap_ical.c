@@ -74,7 +74,6 @@
 #include "parseaddr.h"
 #include "seen.h"
 #include "statuscache.h"
-#include "stristr.h"
 #include "times.h"
 #include "util.h"
 #include "vcard_support.h"

@@ -86,7 +86,6 @@
 #include "seen.h"
 #include "smtpclient.h"
 #include "statuscache.h"
-#include "stristr.h"
 #include "sync_log.h"
 #include "times.h"
 #include "util.h"
