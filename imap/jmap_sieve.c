@@ -193,7 +193,7 @@ static int script_isactive(const char *name, const char *sievedir)
             ret = 1;
         }
         else if (tgt_len == -1 && errno != ENOENT) {
-            syslog(LOG_ERR, "readlink(%s): %m", link);
+            syslog(LOG_ERR, "IOERROR: readlink(%s): %m", link);
         }
     }
 
@@ -480,7 +480,7 @@ static int putscript(const char *name, const char *content,
     f = fopen(new_path, "w+");
 
     if (f == NULL) {
-        syslog(LOG_ERR, "fopen(%s): %m", new_path);
+        syslog(LOG_ERR, "IOERROR: fopen(%s): %m", new_path);
         sieve_script_free(&s);
         *err = json_pack("{s:s, s:s}", "type", "serverFail",
                          "description", "couldn't create script file");
@@ -523,6 +523,7 @@ static int putscript(const char *name, const char *content,
              "%s/%s%s.NEW", sievedir, name, BYTECODE_SUFFIX);
     int fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
     if (fd < 0) {
+        syslog(LOG_ERR, "IOERROR: open(%s): %m", new_bcpath);
         unlink(new_path);
         sieve_free_bytecode(&bc);
         sieve_script_free(&s);
@@ -552,9 +553,11 @@ static int putscript(const char *name, const char *content,
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
     int r = rename(new_path, path);
-    if (!r) {
+    if (r) syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", new_path, path);
+    else {
         snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
         r = rename(new_bcpath, path);
+        if (r) syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", new_bcpath, path);
     }
 
     return r;
@@ -569,9 +572,11 @@ static int script_setactive(const char *name, int isactive, const char *sievedir
     r = unlink(link);
     if (r && errno == ENOENT) r = 0;
 
-    if (!r && isactive == 1) {
+    if (r) syslog(LOG_ERR, "IOERROR: unlink(%s): %m", link);
+    else if (isactive == 1) {
         snprintf(target, sizeof(target), "%s%s", name, BYTECODE_SUFFIX);
         r = symlink(target, link);
+        if (r) syslog(LOG_ERR, "IOERROR: symlink(%s, %s): %m", target, link);
     }
 
     return r;
@@ -640,7 +645,8 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
         snprintf(path, sizeof(path), "%s%s", name, SCRIPT_SUFFIX);
         r = symlink(path, link);
 
-        if (!r) {
+        if (r) syslog(LOG_ERR, "IOERROR: symlink(%s, %s): %m", path, link);
+        else {
             /* Report script as created */
             json_t *new_sieve = json_pack("{s:s}", "id", id);
 
