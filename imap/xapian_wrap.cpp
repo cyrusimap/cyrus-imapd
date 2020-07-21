@@ -2004,8 +2004,9 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
         }
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception query_run: %s: %s",
-                    err.get_context().c_str(), err.get_description().c_str());
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception query_run: %s: %s [query=%s]",
+                    err.get_context().c_str(), err.get_description().c_str(),
+                    query ? query->get_description().c_str() : "<null>");
         free(data);
         return IMAP_IOERROR;
     }
