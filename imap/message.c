@@ -1875,7 +1875,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
                 body->content_lines--;
                 body->boundary_lines++;
             }
-            if (body->content_size) {
+            if (body->content_size > 1) {
                 body->content_size -= 2;
                 body->boundary_size += 2;
             }
