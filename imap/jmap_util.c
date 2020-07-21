@@ -349,7 +349,7 @@ EXPORTED json_t *jmap_fetch_snoozed(const char *mbox, uint32_t uid)
         else {
             json_error_t jerr;
 
-            snooze = json_loads(buf_cstring(&value), 0, &jerr);
+            snooze = json_loadb(buf_base(&value), buf_len(&value), 0, &jerr);
         }
     }
 

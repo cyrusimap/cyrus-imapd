@@ -1435,7 +1435,7 @@ static json_t *_email_read_jannot(const jmap_req_t *req, msgrecord_t *mr,
     if (buf_len(&buf)) {
         if (structured) {
             json_error_t jerr;
-            annotvalue = json_loads(buf_cstring(&buf), JSON_DECODE_ANY, &jerr);
+            annotvalue = json_loadb(buf_base(&buf), buf_len(&buf), JSON_DECODE_ANY, &jerr);
             /* XXX - log error? */
         }
         else {
