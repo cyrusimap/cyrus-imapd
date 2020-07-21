@@ -287,13 +287,6 @@ static json_t *buildinfo()
 #endif
     json_object_set_new(search, "xapian_cjk_tokens", json_string(XAPIAN_CJK_TOKENS));
 
-    /* Supported hardware features */
-#ifdef HAVE_SSE42
-    json_object_set_new(hardware, "sse42", json_true());
-#else
-    json_object_set_new(hardware, "sse42", json_false());
-#endif
-
     return buildconf;
 }
 
