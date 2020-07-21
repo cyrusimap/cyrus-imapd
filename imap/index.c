@@ -422,12 +422,20 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
         oldmodseq = im->modseq;
 
         if (!im->isseen) {
-            state->numunseen--;
+            if (state->numunseen)
+                state->numunseen--;
+            else
+                syslog(LOG_ERR, "IOERROR: numunseen underflow in expunge: %s %u",
+                       state->mboxname, im->uid);
             im->isseen = 1;
         }
 
         if (im->isrecent) {
-            state->numrecent--;
+            if (state->numrecent)
+                state->numrecent--;
+            else
+                syslog(LOG_ERR, "IOERROR: numrecent underflow in expunge: %s %u",
+                       state->mboxname, im->uid);
             im->isrecent = 0;
         }
 
@@ -1044,7 +1052,11 @@ static int _fetch_setseen(struct index_state *state,
     if (r) return r;
 
     /* track changes internally */
-    state->numunseen--;
+    if (state->numunseen)
+        state->numunseen--;
+    else
+        syslog(LOG_ERR, "IOERROR: unseen underflow on setseen: %s %u",
+               state->mboxname, im->uid);
     state->seen_dirty = 1;
     im->isseen = 1;
 
@@ -4713,7 +4725,11 @@ static int index_storeflag(struct index_state *state,
             new = (storeargs->operation == STORE_ADD_FLAGS) ? 1 : 0;
 
         if (new != old) {
-            state->numunseen += (old - new);
+            if (state->numunseen || new < old)
+                state->numunseen += (old - new);
+            else
+                syslog(LOG_ERR, "IOERROR: numunseen underflow in storeflag: %s %u",
+                       state->mboxname, im->uid);
             im->isseen = new;
             state->seen_dirty = 1;
             dirty++;
