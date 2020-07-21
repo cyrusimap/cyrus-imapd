@@ -49,7 +49,6 @@
 #include "assert.h"
 #include "libcyr_cfg.h"
 #include "cyrusdb.h"
-#include "crc32c.h"
 
 #if defined(__GNUC__) && __GNUC__ > 1
 /* We can use the GCC union constructor extension */

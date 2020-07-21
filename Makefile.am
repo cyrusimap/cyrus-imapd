@@ -752,7 +752,6 @@ include_HEADERS = \
 	lib/chartable.h \
 	lib/command.h \
 	lib/crc32.h \
-	lib/crc32c.h \
 	lib/cyr_lock.h \
 	lib/cyr_qsort_r.h \
 	lib/cyrusdb.h \
@@ -1497,7 +1496,7 @@ AM_CPPFLAGS += $(ZEROSKIP_CFLAGS)
 endif
 
 noinst_LTLIBRARIES += libcrc32.la
-libcrc32_la_SOURCES = lib/crc32.c lib/crc32c.c
+libcrc32_la_SOURCES = lib/crc32.c
 libcrc32_la_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 nodist_lib_libcyrus_min_la_SOURCES = \
