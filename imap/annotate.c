@@ -1961,7 +1961,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         ATTRIB_VALUE_SHARED,
         0,
         annotation_get_fromdb,
-        NULL,
+        annotation_set_todb,
         NULL
     },
     {
