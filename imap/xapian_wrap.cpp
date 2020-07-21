@@ -2058,6 +2058,7 @@ xapian_snipgen_t *xapian_snipgen_new(xapian_db_t *db,
 
 void xapian_snipgen_free(xapian_snipgen_t *snipgen)
 {
+    if (!snipgen) return;
     delete snipgen->default_stemmer;
     delete snipgen->loose_terms;
     delete snipgen->queries;

@@ -5056,8 +5056,8 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
         json_object_set_new(snippet, "preview", json_null());
 
         r = rx->begin_mailbox(rx, mbox, /*incremental*/0);
-        r = index_getsearchtext(msg, jpartids ? &partids : NULL, rx,
-                                INDEX_GETSEARCHTEXT_SNIPPET);
+        if (!r) r = index_getsearchtext(msg, jpartids ? &partids : NULL, rx,
+                                        INDEX_GETSEARCHTEXT_SNIPPET);
         if (!r || r == IMAP_OK_COMPLETED) {
             json_array_append_new(*snippets, json_deep_copy(snippet));
             r = 0;

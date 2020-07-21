@@ -3063,7 +3063,7 @@ static int end_snippets(search_text_receiver_t *rx)
 {
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
 
-    if (tr->snipgen) xapian_snipgen_free(tr->snipgen);
+    xapian_snipgen_free(tr->snipgen);
 
     free_receiver(&tr->super);
 
