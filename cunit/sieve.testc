@@ -594,9 +594,8 @@ static void context_setup(sieve_test_context_t *ctx,
         &autorespond,           /* autorespond() */
         &send_response          /* send_response() */
     };
-    int len = strlen(script);
+    char *errors = NULL;
     int fd;
-    FILE *fp;
     sieve_script_t *scr = NULL;
     bytecode_info_t *bytecode = NULL;
     char tempfile[32];
@@ -622,12 +621,9 @@ static void context_setup(sieve_test_context_t *ctx,
     sieve_register_parse_error(ctx->interp, mysieve_error);
     sieve_register_execute_error(ctx->interp, mysieve_execute_error);
 
-    /* Here we pretend to be the sieve compiler, and generate
-     * a file of compiled bytecode from the script string */
-    fp = fmemopen((void *)script, len, "r");
-    r = sieve_script_parse(ctx->interp, fp, ctx, &scr);
+    r = sieve_script_parse_string(ctx->interp, script, &errors, &scr);
     CU_ASSERT_EQUAL(r, SIEVE_OK);
-    fclose(fp);
+    free(errors);
 
     r = sieve_generate_bytecode(&bytecode, scr);
     CU_ASSERT(r > 0);
