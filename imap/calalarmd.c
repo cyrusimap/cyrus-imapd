@@ -167,6 +167,8 @@ int main(int argc, char **argv)
         tosleep = interval - (int) (totaltime + 0.5); /* round to nearest int */
         if (tosleep > 0)
             sleep(tosleep);
+
+        session_new_id();  // so we know which actions happened in the same run
     }
 
     /* NOTREACHED */
