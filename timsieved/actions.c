@@ -340,9 +340,11 @@ int putscript(struct protstream *conn, const struct buf *name,
       return result;
   }
 
-  if (verify_only)
-      stream = tmpfile();
-
+  if (verify_only) {
+      char *err = NULL;
+      result = sieve_script_parse_string(interp, buf_cstring(data), &err, &s);
+      if (err) buf_initm(&errors, err, strlen(err));
+  }
   else {
       /* see if this would put the user over quota */
       maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
@@ -358,40 +360,42 @@ int putscript(struct protstream *conn, const struct buf *name,
       snprintf(path, 1023, "%s.script.NEW", name->s);
 
       stream = fopen(path, "w+");
-  }
 
-
-  if (stream == NULL) {
-      prot_printf(conn, "NO \"Unable to open script for writing (%s)\"\r\n",
-                  path);
-      return TIMSIEVE_NOEXIST;
-  }
-
-  dataptr = data->s;
-
-  /* copy data to file - replacing any lone \r or \n with the
-   * \r\n pair so notify messages are SMTP compatible */
-  for (i = 0; i < data->len; i++) {
-      if (last_was_r) {
-          if (dataptr[i] != '\n')
-              putc('\n', stream);
+      if (stream == NULL) {
+          prot_printf(conn, "NO \"Unable to open script for writing (%s)\"\r\n",
+                      path);
+          return TIMSIEVE_NOEXIST;
       }
-      else {
-          if (dataptr[i] == '\n')
-              putc('\r', stream);
+
+      dataptr = data->s;
+
+      /* copy data to file - replacing any lone \r or \n with the
+       * \r\n pair so notify messages are SMTP compatible */
+      for (i = 0; i < data->len; i++) {
+          if (last_was_r) {
+              if (dataptr[i] != '\n')
+                  putc('\n', stream);
+          }
+          else {
+              if (dataptr[i] == '\n')
+                  putc('\r', stream);
+          }
+          putc(dataptr[i], stream);
+          last_was_r = (dataptr[i] == '\r');
       }
-      putc(dataptr[i], stream);
-      last_was_r = (dataptr[i] == '\r');
+      if (last_was_r)
+          putc('\n', stream);
+
+      rewind(stream);
+
+      /* let's make sure this is a valid script
+         (no parse errors)
+      */
+      result = sieve_script_parse(interp, stream, &errors, &s);
+
+      fflush(stream);
+      fclose(stream);
   }
-  if (last_was_r)
-      putc('\n', stream);
-
-  rewind(stream);
-
-  /* let's make sure this is a valid script
-     (no parse errors)
-  */
-  result = sieve_script_parse(interp, stream, &errors, &s);
 
   if (result != SIEVE_OK) {
       if (buf_len(&errors)) {
@@ -403,15 +407,11 @@ int putscript(struct protstream *conn, const struct buf *name,
       }
       sieve_script_free(&s);
       buf_free(&errors);
-      fclose(stream);
       unlink(path);
       return TIMSIEVE_FAIL;
   }
 
   buf_free(&errors);
-
-  fflush(stream);
-  fclose(stream);
 
   if (!verify_only) {
       int fd;
@@ -448,7 +448,6 @@ int putscript(struct protstream *conn, const struct buf *name,
       }
 
       sieve_free_bytecode(&bc);
-      sieve_script_free(&s);
 
       close(fd);
 
@@ -459,6 +458,8 @@ int putscript(struct protstream *conn, const struct buf *name,
       rename(bc_path, bc_p2);
 
   }
+
+  sieve_script_free(&s);
 
   prot_printf(conn, "OK\r\n");
   sync_log_sieve(sieved_userid);
