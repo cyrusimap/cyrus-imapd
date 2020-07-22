@@ -1827,7 +1827,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             strarray_t *folders = strarray_new();
             const char *mboxid = json_string_value(val);
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
-            if (mbentry && mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL &&
+            if (mbentry && mbentry->mbtype == MBTYPE_EMAIL &&
                     jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                 strarray_append(folders, mbentry->name);
             }
