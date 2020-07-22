@@ -171,4 +171,44 @@ sub test_info_lint_channels
     );
 }
 
+sub test_info_lint_partitions
+    :min_version_3_0 :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->config_set(
+        # metapartition-, archivepartition- and searchpartition- must
+        # correspond with an extant partition-
+        #
+        # backuppartition- is independent
+        'partition-good' => '/tmp/pgood',
+        'metapartition-good' => '/tmp/mgood',
+        'archivepartition-good' => '/tmp/agood',
+        'foosearchpartition-good' => '/tmp/sgood',
+        'backuppartition-good' => '/tmp/bgood',
+
+        'metapartition-bad' => '/tmp/mbad',
+        'archivepartition-bad' => '/tmp/abad',
+        'foosearchpartition-bad' => '/tmp/sbad',
+
+        # not actually bad
+        'backuppartition-bad' => '/tmp/bbad',
+    );
+
+    $self->_start_instances();
+
+    xlog $self, "test 'cyr_info conf-lint' with partitions configured";
+
+    my @output = $self->run_cyr_info('conf-lint');
+
+    $self->assert_deep_equals(
+        [ sort(
+            "archivepartition-bad: /tmp/abad\n",
+            "foosearchpartition-bad: /tmp/sbad\n",
+            "metapartition-bad: /tmp/mbad\n",
+        ) ],
+        [ sort @output ]
+    );
+}
+
 1;
