@@ -159,11 +159,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "backup", json_false());
 #endif
-#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
-    json_object_set_new(component, "snmp", json_true());
-#else
-    json_object_set_new(component, "snmp", json_false());
-#endif
 
     /* Build dependencies */
 #ifdef HAVE_LDAP
@@ -195,16 +190,6 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "clamav", json_true());
 #else
     json_object_set_new(dependency, "clamav", json_false());
-#endif
-#ifdef HAVE_UCDSNMP
-    json_object_set_new(dependency, "ucdsnmp", json_true());
-#else
-    json_object_set_new(dependency, "ucdsnmp", json_false());
-#endif
-#ifdef HAVE_NETSNMP
-    json_object_set_new(dependency, "netsnmp", json_true());
-#else
-    json_object_set_new(dependency, "netsnmp", json_false());
 #endif
 #ifdef WITH_OPENIO
     json_object_set_new(dependency, "openio", json_true());

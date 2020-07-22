@@ -102,7 +102,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 #include "imap/lmtp_err.h"
-#include "imap/lmtpstats.h"
 
 #include "lmtpd.h"
 #include "lmtpengine.h"
@@ -244,10 +243,6 @@ int service_init(int argc __attribute__((unused)),
 
     mboxevent_setnamespace(&lmtpd_namespace);
 
-    /* create connection to the SNMP listener, if available. */
-    snmp_connect(); /* ignore return code */
-    snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
-
     prometheus_increment(CYRUS_LMTP_READY_LISTENERS);
 
     return 0;
@@ -267,7 +262,6 @@ int service_main(int argc, char **argv,
     /* fatal/shut_down will adjust these, so we need to set them early */
     prometheus_decrement(CYRUS_LMTP_READY_LISTENERS);
     prometheus_increment(CYRUS_LMTP_ACTIVE_CONNECTIONS);
-    snmp_increment(ACTIVE_CONNECTIONS, 1);
 
     if (config_iolog) {
         io_count_start = xmalloc (sizeof (struct io_count));
@@ -293,12 +287,10 @@ int service_main(int argc, char **argv,
 
     /* count the connection, now that it's established */
     prometheus_increment(CYRUS_LMTP_CONNECTIONS_TOTAL);
-    snmp_increment(TOTAL_CONNECTIONS, 1);
 
     lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
 
     prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
-    snmp_increment(ACTIVE_CONNECTIONS, -1);
 
     /* free session state */
     if (deliver_in) prot_free(deliver_in);
@@ -338,7 +330,6 @@ static void usage(void)
     if (deliver_out) {
         /* one less active connection */
         prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
-        snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
     else {
         /* one less ready listener */
@@ -973,7 +964,6 @@ EXPORTED void fatal(const char* s, int code)
         if (deliver_out) {
             /* one less active connection */
             prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
-            snmp_increment(ACTIVE_CONNECTIONS, -1);
         }
         else {
             /* one less ready listener */
@@ -1035,7 +1025,6 @@ void shut_down(int code)
 
         /* one less active connection */
         prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
-        snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
     else {
         /* one less ready listener */

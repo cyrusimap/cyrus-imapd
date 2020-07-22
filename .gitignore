@@ -105,8 +105,6 @@ imap/jmap_err.h
 imap/lmtp_err.c
 imap/lmtp_err.h
 imap/lmtpd
-imap/lmtpstats.c
-imap/lmtpstats.h
 imap/mbexamine
 imap/mbpath
 imap/mbtool
@@ -121,8 +119,6 @@ imap/pop3d
 imap/promdata.c
 imap/promdata.h
 imap/promstatsd
-imap/pushstats.c
-imap/pushstats.h
 imap/quota
 imap/reconstruct
 imap/search_test

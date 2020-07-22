@@ -104,16 +104,12 @@ DISTCLEANFILES = \
 	imap/jmap_err.h \
 	imap/lmtp_err.c \
 	imap/lmtp_err.h \
-	imap/lmtpstats.c \
-	imap/lmtpstats.h \
 	imap/mupdate_err.c \
 	imap/mupdate_err.h \
 	imap/nntp_err.c \
 	imap/nntp_err.h \
 	imap/promdata.c \
 	imap/promdata.h \
-	imap/pushstats.c \
-	imap/pushstats.h \
 	imap/tz_err.c \
 	imap/tz_err.h \
 	perl/sieve/scripts/installsieve \
@@ -156,12 +152,8 @@ BUILT_SOURCES += \
 	imap/imap_err.h \
 	imap/lmtp_err.c \
 	imap/lmtp_err.h \
-	imap/lmtpstats.c \
-	imap/lmtpstats.h \
 	imap/mupdate_err.c \
 	imap/mupdate_err.h \
-	imap/pushstats.c \
-	imap/pushstats.h \
 	imap/promdata.c \
 	imap/promdata.h \
 	lib/htmlchar.c \
@@ -519,8 +511,6 @@ TEXINFO_TEX = com_err/et/texinfo.tex
 dist_noinst_SCRIPTS = \
 	com_err/et/compile_et.sh \
 	com_err/et/config_script \
-	imap/lmtpstats.snmp \
-	imap/pushstats.snmp \
 	imap/promdatagen \
 	lib/mkchartable.pl \
 	lib/test/run \
@@ -539,8 +529,7 @@ dist_noinst_SCRIPTS = \
 	tools/mknewsgroups \
 	tools/perl2rst \
 	tools/rehash \
-	tools/translatesieve \
-	snmp/snmpgen
+	tools/translatesieve
 noinst_MAN = \
 	com_err/et/com_err.3 \
 	com_err/et/compile_et.1
@@ -917,7 +906,7 @@ imap_deliver_SOURCES = \
 	imap/proxy.c \
 	imap/spool.c
 
-nodist_imap_deliver_SOURCES = imap/lmtp_err.c imap/lmtpstats.c
+nodist_imap_deliver_SOURCES = imap/lmtp_err.c
 
 imap_deliver_LDADD = $(LD_UTILITY_ADD)
 
@@ -944,8 +933,6 @@ imap_imapd_SOURCES = \
 	imap/sync_support.c \
 	imap/sync_support.h \
 	master/service.c
-
-nodist_imap_imapd_SOURCES = imap/pushstats.c
 
 if AUTOCREATE
 imap_imapd_SOURCES += \
@@ -1161,7 +1148,7 @@ imap_lmtpd_SOURCES = \
 	imap/spool.c \
 	master/service.c
 
-nodist_imap_lmtpd_SOURCES = imap/lmtp_err.c imap/lmtpstats.c
+nodist_imap_lmtpd_SOURCES = imap/lmtp_err.c
 
 if AUTOCREATE
 imap_lmtpd_SOURCES += \
@@ -1180,11 +1167,6 @@ endif # JMAP
 endif # SIEVE
 
 imap_lmtpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
-
-SNMPGEN = $(abs_top_srcdir)/snmp/snmpgen
-
-imap/%stats.h imap/%stats.c: imap/%stats.snmp $(SNMPGEN)
-	$(AM_V_GEN)(cd $(@D) && $(SNMPGEN) $(realpath $<))
 
 imap_mbexamine_SOURCES = imap/cli_fatal.c imap/mbexamine.c imap/mutex_fake.c
 imap_mbexamine_LDADD = $(LD_UTILITY_ADD)
@@ -1656,14 +1638,12 @@ dist_man8_MANS += \
 endif
 
 master_master_SOURCES = \
-	master/cyrusMasterMIB.c \
-	master/cyrusMasterMIB.h \
 	master/master.c \
 	master/master.h \
 	master/masterconf.c \
 	master/masterconf.h \
 	master/service.h
-master_master_LDADD = lib/libcyrus_min.la $(LIB_UCDSNMP) $(LIBS) $(GCOV_LIBS) -lm
+master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) -lm
 
 
 netnews_remotepurge_SOURCES = \

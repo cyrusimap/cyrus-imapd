@@ -84,7 +84,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 #include "imap/lmtp_err.h"
-#include "imap/lmtpstats.h"
 
 static int sieve_usehomedir = 0;
 static const char *sieve_dir = NULL;
@@ -904,7 +903,6 @@ static int sieve_redirect(void *ac, void *ic,
         if (sievedb) duplicate_mark(&dkey, time(NULL), 0);
 
         prometheus_increment(CYRUS_LMTP_SIEVE_REDIRECT_TOTAL);
-        snmp_increment(SIEVE_REDIRECT, 1);
         syslog(LOG_INFO, "sieve redirected: %s to: %s",
                m->id ? m->id : "<nomsgid>", rc->addr);
         if (config_auditlog)
@@ -931,7 +929,6 @@ static int sieve_discard(void *ac __attribute__((unused)),
     message_data_t *md = ((deliver_data_t *) mc)->m;
 
     prometheus_increment(CYRUS_LMTP_SIEVE_DISCARD_TOTAL);
-    snmp_increment(SIEVE_DISCARD, 1);
 
     /* ok, we won't file it, but log it */
     syslog(LOG_INFO, "sieve discarded: %s",
@@ -985,7 +982,6 @@ static int sieve_reject(void *ac, void *ic,
         msg_setrcpt_status(md, mydata->cur_rcpt, LMTP_MESSAGE_REJECTED, resp);
 
         prometheus_increment(CYRUS_LMTP_SIEVE_REJECT_TOTAL);
-        snmp_increment(SIEVE_REJECT, 1);
         syslog(LOG_INFO, "sieve LMTP rejected: %s",
                md->id ? md->id : "<nomsgid>");
         if (config_auditlog)
@@ -1018,7 +1014,6 @@ static int sieve_reject(void *ac, void *ic,
                               origreceip, mbname_recipient(sd->mbname, ((deliver_data_t *) mc)->ns),
                               rc->msg, md->data)) == 0) {
         prometheus_increment(CYRUS_LMTP_SIEVE_REJECT_TOTAL);
-        snmp_increment(SIEVE_REJECT, 1);
         syslog(LOG_INFO, "sieve rejected: %s to: %s",
                md->id ? md->id : "<nomsgid>", md->return_path);
         if (config_auditlog)
@@ -1202,7 +1197,6 @@ static int sieve_fileinto(void *ac,
 done:
     if (!ret) {
         prometheus_increment(CYRUS_LMTP_SIEVE_FILEINTO_TOTAL);
-        snmp_increment(SIEVE_FILEINTO, 1);
         ret = SIEVE_OK;
     } else {
         *errmsg = error_message(ret);
@@ -1392,7 +1386,6 @@ done:
 
     if (!ret) {
         prometheus_increment(CYRUS_LMTP_SIEVE_SNOOZE_TOTAL);
-        snmp_increment(SIEVE_SNOOZE, 1);
         ret = SIEVE_OK;
     } else {
         *errmsg = error_message(ret);
@@ -1495,7 +1488,6 @@ static int sieve_keep(void *ac,
   done:
     if (!ret) {
         prometheus_increment(CYRUS_LMTP_SIEVE_KEEP_TOTAL);
-        snmp_increment(SIEVE_KEEP, 1);
         ret = SIEVE_OK;
     } else {
         *errmsg = error_message(ret);
@@ -1521,7 +1513,6 @@ static int sieve_notify(void *ac,
         int nopt = 0;
 
         prometheus_increment(CYRUS_LMTP_SIEVE_NOTIFY_TOTAL);
-        snmp_increment(SIEVE_NOTIFY, 1);
 
         /* count options */
         while (nc->options[nopt]) nopt++;
@@ -1552,7 +1543,6 @@ static int autorespond(void *ac,
     char *id;
 
     prometheus_increment(CYRUS_LMTP_SIEVE_AUTORESPOND_TOTAL);
-    snmp_increment(SIEVE_VACATION_TOTAL, 1);
 
     now = time(NULL);
 
@@ -1748,7 +1738,6 @@ static int send_response(void *ac, void *ic,
         }
 
         prometheus_increment(CYRUS_LMTP_SIEVE_AUTORESPOND_SENT_TOTAL);
-        snmp_increment(SIEVE_VACATION_REPLIED, 1);
 
         ret = SIEVE_OK;
     } else {

@@ -16,9 +16,8 @@ Synopsis
 .. parsed-literal::
 
     **master** [ **-C** *config-file* ] [ **-M** *alternate cyrus.conf* ]
-        [ **-l** *listen queue* ] [ **-p** *pidfile* ] [ **-P** *snmp agentx ping interval* ]
+        [ **-l** *listen queue* ] [ **-p** *pidfile* ]
         [ **-j** *janitor period* ] [ **-d** | **-D** ] [ **-L** *logfile* ]
-        [ **-x** *snmp agentx socket* ]
 
 Description
 ===========
@@ -67,12 +66,6 @@ Options
     Use *pidfile* as the pidfile.  If not specified, defaults to
     ``/var/run/master.pid``
 
-.. option:: -P  snmp agentx ping interval
-
-    Sets the amount on time in seconds the subagent will try and
-    reconnect to the master agent (snmpd) if it ever becomes (or
-    starts) disconnected.  Requires net-snmp 5.0 or higher.
-
 .. option:: -d
 
     Start in daemon mode (run in background and disconnect from
@@ -87,11 +80,6 @@ Options
 .. option:: -L  logfile
 
     Redirect stdout and stderr to the given *logfile*.
-
-.. option:: -x  snmp agentx socket
-
-    Address the master agent (most likely snmpd) listens on.
-    Requires net-snmp 5.0 or higher.
 
 Configuration
 =============

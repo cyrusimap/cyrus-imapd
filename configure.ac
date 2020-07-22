@@ -1975,11 +1975,6 @@ dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleas
 fi
 
 CMU_LIBWRAP
-CMU_UCDSNMP
-AS_IF([test "x$with_snmp" != "xno"],
-      [ AC_MSG_WARN([SNMP support is deprecated and will be removed in the future.])
-        AC_MSG_WARN([Consider using Prometheus instead.])
-      ])
 
 # Figure out what directories we're linking against.
 # Lots of fun for the whole family.
@@ -2443,7 +2438,6 @@ External dependencies:
    jansson:            $with_jansson
    pcre:               $cyrus_cv_pcre_utf8
    clamav:             $with_clamav
-   snmp:               $with_snmp
    -----------------------
    caringo:            $with_caringo
    openio:             $with_openio

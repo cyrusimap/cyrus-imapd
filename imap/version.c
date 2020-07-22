@@ -47,9 +47,6 @@
 #ifdef HAVE_KRB
 #include <krb.h>
 #endif
-#ifdef HAVE_UCDSNMP
-#include <ucd-snmp/version.h>
-#endif
 
 #include <string.h>
 #include "version.h"
@@ -154,14 +151,6 @@ EXPORTED void id_response(struct protstream *pout)
 #ifdef HAVE_LIBWRAP
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
              "; TCP Wrappers");
-#endif
-#ifdef HAVE_UCDSNMP
-    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-             "; UCD-SNMP %s", VersionInfo);
-#endif
-#ifdef HAVE_NETSNMP
-    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-             "; NET-SNMP");
 #endif
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
              "; mmap = %s", map_method_desc);

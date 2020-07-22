@@ -88,32 +88,6 @@
 #define IPV6_V6ONLY     IPV6_BINDV6ONLY
 #endif
 
-#if defined(HAVE_NETSNMP)
-  #include <net-snmp/net-snmp-config.h>
-  #include <net-snmp/net-snmp-includes.h>
-  #include <net-snmp/agent/net-snmp-agent-includes.h>
-#if defined(HAVE_NET_SNMP_AGENT_AGENT_MODULE_CONFIG_H)
-    #include <net-snmp/agent/agent_module_config.h>
-#endif
-
-  #include "cyrusMasterMIB.h"
-
-
-  /* Use our own definitions for these */
-  #undef TOUPPER
-  #undef TOLOWER
-
-#elif defined(HAVE_UCDSNMP)
-  #include <ucd-snmp/ucd-snmp-config.h>
-  #include <ucd-snmp/ucd-snmp-includes.h>
-  #include <ucd-snmp/ucd-snmp-agent-includes.h>
-
-  #include "cyrusMasterMIB.h"
-
-  int allow_severity = LOG_DEBUG;
-  int deny_severity = LOG_ERR;
-#endif
-
 #include "masterconf.h"
 
 #include "master.h"
@@ -1294,11 +1268,6 @@ static void begin_shutdown(void)
     in_shutdown = 1;
     syslog(LOG_INFO, "attempting clean shutdown on signal");
 
-#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
-    /* tell master agent we're exiting */
-    snmp_shutdown("cyrusMaster");
-#endif
-
     /* send our process group a SIGTERM */
     if (kill(0, SIGTERM) < 0) {
         syslog(LOG_ERR, "begin_shutdown: kill(0, SIGTERM): %m");
@@ -2290,20 +2259,11 @@ int main(int argc, char **argv)
     char *p = NULL;
     int r = 0;
 
-#ifdef HAVE_NETSNMP
-    char *agentxsocket = NULL;
-    int agentxpinginterval = -1;
-#endif
-
     struct timeval now;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
-#ifdef HAVE_NETSNMP
-    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:vVP:x:")) != EOF) {
-#else
     while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:vV")) != EOF) {
-#endif
         switch (opt) {
         case 'C': /* alt imapd.conf file */
             alt_config = optarg;
@@ -2337,14 +2297,6 @@ int main(int argc, char **argv)
             if(janitor_frequency < 1)
                 fatal("The janitor period must be at least 1 second", EX_CONFIG);
             break;
-#ifdef HAVE_NETSNMP
-        case 'P': /* snmp AgentXPingInterval */
-            agentxpinginterval = atoi(optarg);
-            break;
-        case 'x': /* snmp AgentXSocket */
-            agentxsocket = optarg;
-            break;
-#endif
         case 'v':
             verbose++;
             break;
@@ -2555,34 +2507,6 @@ int main(int argc, char **argv)
 
     syslog(LOG_DEBUG, "process started");
 
-#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
-    /* initialize SNMP agent */
-
-    /* make us a agentx client. */
-#ifdef HAVE_NETSNMP
-    netsnmp_enable_subagent();
-
-    netsnmp_ds_set_boolean(NETSNMP_DS_LIBRARY_ID,
-                           NETSNMP_DS_LIB_ALARM_DONT_USE_SIG, 1);
-    if (agentxpinginterval >= 0)
-        netsnmp_ds_set_int(NETSNMP_DS_APPLICATION_ID,
-                           NETSNMP_DS_AGENT_AGENTX_PING_INTERVAL, agentxpinginterval);
-
-    if (agentxsocket != NULL)
-        netsnmp_ds_set_string(NETSNMP_DS_APPLICATION_ID,
-                              NETSNMP_DS_AGENT_X_SOCKET, agentxsocket);
-#else
-    ds_set_boolean(DS_APPLICATION_ID, DS_AGENT_ROLE, 1);
-#endif
-
-    /* initialize the agent library */
-    init_agent("cyrusMaster");
-
-    init_cyrusMasterMIB();
-
-    init_snmp("cyrusMaster");
-#endif
-
 #if defined(__linux__) && defined(HAVE_LIBCAP)
     if (become_cyrus(/*is_master*/1) != 0) {
         syslog(LOG_ERR, "can't change to the cyrus user: %m");
@@ -2629,9 +2553,7 @@ int main(int argc, char **argv)
         int i, maxfd, ready_fds, total_children = 0;
         struct timeval tv, *tvptr;
         struct notify_message msg;
-#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
-        int blockp = 0;
-#endif
+
         if (gotsigquit) {
             gotsigquit = 0;
             begin_shutdown();
@@ -2763,10 +2685,6 @@ int main(int argc, char **argv)
                 tvptr = &tv;
             }
 
-#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
-            if (tvptr == NULL) blockp = 1;
-            snmp_select_info(&maxfd, &rfds, tvptr, &blockp);
-#endif
             errno = 0;
             ready_fds = myselect(maxfd, &rfds, NULL, NULL, tvptr);
 
@@ -2791,14 +2709,6 @@ int main(int argc, char **argv)
                 }
             }
         } while (!in_shutdown && ready_fds < 0);
-
-#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
-        /* check for SNMP queries */
-        if (ready_fds > 0)
-            snmp_read(&rfds);
-        if (ready_fds == 0)
-            snmp_timeout();
-#endif
 
         if (ready_fds > 0) {
             for (i = 0; i < nservices; i++) {
@@ -2835,11 +2745,6 @@ int main(int argc, char **argv)
         gettimeofday(&now, 0);
         child_janitor(now);
         do_prom_report(now);
-
-#ifdef HAVE_NETSNMP
-        if (ready_fds == 0)
-            run_alarms();
-#endif
     }
 
     /* never reached */
