@@ -14344,7 +14344,7 @@ sub test_email_get_cid
 }
 
 sub test_searchsnippet_get_attachment
-    :min_version_3_1 :needs_component_jmap :needs_search_xapian
+    :min_version_3_3 :needs_component_jmap :needs_search_xapian
     :SearchAttachmentExtractor :JMAPExtensions
 {
     my ($self) = @_;
@@ -14745,7 +14745,7 @@ sub test_searchsnippet_get_regression
 }
 
 sub test_search_sharedpart
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19208,7 +19208,7 @@ sub test_email_query_guidsearch_threadkeywords
 }
 
 sub test_email_query_highpriority
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19285,7 +19285,7 @@ sub test_email_query_highpriority
 }
 
 sub test_email_query_listid
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19393,7 +19393,7 @@ sub test_email_query_listid
 }
 
 sub test_email_query_emailaddress
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
