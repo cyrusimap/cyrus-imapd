@@ -512,12 +512,20 @@ static void commitstatus_cb(const char *key, void *data, void *rock)
 {
     conv_status_t *status = (conv_status_t *)data;
     struct conversations_state *state = (struct conversations_state *)rock;
+    const char *folder = key+1; /* skip the leading F */
+    mbentry_t *mbentry = NULL;
 
     conversation_storestatus(state, key, strlen(key), status);
     /* just in case convdb has a higher modseq for any reason (aka deleted and
      * recreated while a replica was still valid with the old user) */
-    mboxname_setmodseq(key+1, status->threadmodseq, /*mbtype */0, /*flags*/0);
-    sync_log_mailbox(key+1); /* skip the leading F */
+    if (!state->folders_byname) {
+        mboxlist_lookup_by_uniqueid(folder, &mbentry, NULL);
+        folder = mbentry ? mbentry->name : "";
+    }
+    mboxname_setmodseq(folder, status->threadmodseq, /*mbtype */0, /*flags*/0);
+    sync_log_mailbox(folder);
+
+    mboxlist_entry_free(&mbentry);
 }
 
 static void conversations_commitcache(struct conversations_state *state)
