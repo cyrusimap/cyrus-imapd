@@ -18347,6 +18347,10 @@ sub test_email_query_findallinthread
         $threadId3 => \@emailIdsThread3,
     };
 
+    my $gotThreadIdToEmailIds = map {
+        $_ => \sort @{$res->[0][1]{threadIdToEmailIds}{$_}}
+    } keys %{$res->[0][1]{threadIdToEmailIds}};
+
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
     $self->assert_deep_equals($wantThreadIdToEmailIds, $res->[0][1]{threadIdToEmailIds});
 
