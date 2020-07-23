@@ -49,16 +49,21 @@
 
 typedef struct bitvector bitvector_t;
 
+#define BV_NOALLOCSIZE 8
+
 struct bitvector
 {
     unsigned int length;
     unsigned int alloc;
     /* TODO: should use natural word size, uint32_t or uint64_t,
      * for faster searching in bv_next_set() */
-    unsigned char *bits;
+    union {
+        unsigned char *alloced;
+        unsigned char _noalloc[BV_NOALLOCSIZE];
+    } bits;
 };
 
-#define BV_INITIALIZER  { 0, 0, NULL }
+#define BV_INITIALIZER  { 0, 0, {0} }
 
 extern void bv_init(bitvector_t *);
 extern void bv_setsize(bitvector_t *, unsigned int i);
