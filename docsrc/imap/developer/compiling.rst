@@ -178,6 +178,10 @@ Other
     installing SSL certificates."
     `ClamAV`_, libclamav-dev, clamav-devel, "no", "It is used by
     **cyr_virusscan**, otherwise not needed."
+    `CLD2`_, libcld2-dev, cld2-devel, "yes/no", "Compact Language Detector 2
+    (probabilistically detects over 80 languages in Unicode UTF-8 text, either
+    plain text or HTML/XML). Required for **Xapian** (``--enable-xapian``),
+    otherwise not needed."
     `openldap`_, libldap2-dev, openldap-devel, "no", "Development headers
     to enable **ptloader** to interface with LDAP directly, for canonification
     of login usernames to mailbox names, and verification of login usernames,
@@ -221,6 +225,7 @@ Other
 .. _wslay: https://tatsuhiro-t.github.io/wslay/
 .. _zlib: http://zlib.net/
 .. _xxd: https://github.com/ConorOG/xxd/
+.. _CLD2: https://github.com/CLD2Owners/cld2
 .. _issues/1769: https://github.com/cyrusimap/cyrus-imapd/issues/1769
 .. _issues/1731: https://github.com/cyrusimap/cyrus-imapd/issues/1731#issuecomment-273064554
 
