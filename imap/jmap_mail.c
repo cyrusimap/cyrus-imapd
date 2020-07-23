@@ -2816,7 +2816,61 @@ static int _email_query_can_calculate_changes(struct emailsearch *search)
 
 // GUID search
 
-enum guidsearch_op {
+struct guidsearch_match {
+    char guidrep[MESSAGE_GUID_SIZE*2+1];
+    uint32_t system_flags;
+    uint32_t internaldate;
+    conversation_id_t cid;
+    bitvector_t folders; // only set if numfolders > 0
+};
+
+static void guidsearch_match_init(struct guidsearch_match *match,
+                                  uint32_t numfolders)
+{
+    memset(match, 0, sizeof(struct guidsearch_match));
+    if (numfolders) {
+        bv_init(&match->folders);
+        bv_setsize(&match->folders, numfolders);
+    }
+}
+
+static int guidsearch_match_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                                     const void *vb,
+                                                     void *rock)
+{
+    const struct guidsearch_match *a = va;
+    const struct guidsearch_match *b = vb;
+    const struct sortcrit *sort = rock;
+
+    while (sort->key != SORT_SEQUENCE) {
+        int ret;
+        switch (sort->key) {
+            case SORT_ARRIVAL:
+                ret = a->internaldate < b->internaldate ? -1 :
+                      a->internaldate > b->internaldate ?  1 : 0;
+                break;
+            case SORT_GUID:
+                ret = memcmp(a->guidrep, b->guidrep, MESSAGE_GUID_SIZE*2);
+                break;
+            default:
+                syslog(LOG_ERR, "%s: ignoring unexpected sort %d", __func__, sort->key);
+                ret = 0;
+        }
+        if (ret) {
+            return (sort->flags & SORT_REVERSE) ? -ret : ret;
+        }
+        sort++;
+    }
+
+    return 0;
+}
+
+static void guidsearch_match_fini(struct guidsearch_match *match)
+{
+    bv_fini(&match->folders);
+}
+
+enum guidsearch_expr_op {
     GSEOP_NONE = 0,
     GSEOP_TRUE,
     GSEOP_FALSE,
@@ -2830,49 +2884,16 @@ enum guidsearch_op {
     GSEOP_NOT
 };
 
-union guidsearch_value {
+union guidsearch_expr_value {
     uint32_t num;
     bitvector_t nums;
 };
 
 struct guidsearch_expr {
-    enum guidsearch_op op;
+    enum guidsearch_expr_op op;
     ptrarray_t children;
-    union guidsearch_value v;
+    union guidsearch_expr_value v;
 };
-
-struct guidsearch_msg {
-    bitvector_t folders;
-    uint32_t system_flags;
-    uint32_t internaldate;
-    conversation_id_t cid;
-};
-
-#define GUIDSEARCH_MSG_INTIIALIZER { \
-    BV_INITIALIZER, 0, 0, 0 \
-}
-
-static void guidsearch_msg_init(struct guidsearch_msg *msg,
-                                uint32_t numfolders)
-{
-    bv_init(&msg->folders);
-    bv_setsize(&msg->folders, numfolders);
-    msg->system_flags = 0;
-    msg->cid = 0;
-}
-
-static void guidsearch_msg_reset(struct guidsearch_msg *msg)
-{
-    bv_clearall(&msg->folders);
-    msg->system_flags = 0;
-    msg->internaldate = 0;
-    msg->cid = 0;
-}
-
-static void guidsearch_msg_fini(struct guidsearch_msg *msg)
-{
-    bv_fini(&msg->folders);
-}
 
 static void guidsearch_expr_free(struct guidsearch_expr *e)
 {
@@ -2889,6 +2910,232 @@ static void guidsearch_expr_free(struct guidsearch_expr *e)
     }
 
     free(e);
+}
+
+static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state *cstate,
+                                                     search_expr_t *parent,
+                                                     search_expr_t *e,
+                                                     hash_table *foldernum_by_mboxname,
+                                                     int *need_folders)
+{
+    if (!e) return NULL;
+
+    struct guidsearch_expr *ge = NULL;
+
+    switch (e->op) {
+        case SEOP_AND:
+            {
+                ge = xzmalloc(sizeof(struct guidsearch_expr));
+                ge->op = GSEOP_AND;
+                search_expr_t *c;
+                for (c = e->children ; c; c = c->next) {
+                    struct guidsearch_expr *gc =
+                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname, need_folders);
+                    if (!gc || gc->op == GSEOP_TRUE) {
+                        guidsearch_expr_free(gc);
+                        continue;
+                    }
+                    else if (gc->op == GSEOP_FALSE) {
+                        guidsearch_expr_free(ge);
+                        return gc;
+                    }
+                    else {
+                        ptrarray_append(&ge->children, gc);
+                    }
+                }
+                if (ptrarray_size(&ge->children) == 1) {
+                    struct guidsearch_expr *gc = ptrarray_pop(&ge->children);
+                    guidsearch_expr_free(ge);
+                    ge = gc;
+                }
+                else if (!ptrarray_size(&ge->children)) {
+                    guidsearch_expr_free(ge);
+                    ge = NULL;
+                }
+            }
+            break;
+        case SEOP_OR:
+            {
+                ge = xzmalloc(sizeof(struct guidsearch_expr));
+                ge->op = GSEOP_OR;
+                search_expr_t *c;
+                for (c = e->children ; c; c = c->next) {
+                    struct guidsearch_expr *gc =
+                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname, need_folders);
+                    if (!gc || gc->op == GSEOP_FALSE) {
+                        guidsearch_expr_free(gc);
+                        continue;
+                    }
+                    else if (gc->op == GSEOP_TRUE) {
+                        guidsearch_expr_free(ge);
+                        return gc;
+                    }
+                    else {
+                        ptrarray_append(&ge->children, gc);
+                    }
+                }
+                if (ptrarray_size(&ge->children) == 1) {
+                    struct guidsearch_expr *gc = ptrarray_pop(&ge->children);
+                    guidsearch_expr_free(ge);
+                    ge = gc;
+                }
+                else if (!ptrarray_size(&ge->children)) {
+                    guidsearch_expr_free(ge);
+                    ge = NULL;
+                }
+            }
+            break;
+        case SEOP_NOT:
+            {
+                ge = xzmalloc(sizeof(struct guidsearch_expr));
+                ge->op = GSEOP_NOT;
+                search_expr_t *c;
+                for (c = e->children ; c; c = c->next) {
+                    struct guidsearch_expr *gc =
+                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname, need_folders);
+                    if (!gc || gc->op == GSEOP_FALSE) {
+                        guidsearch_expr_free(gc);
+                        continue;
+                    }
+                    else if (gc->op == GSEOP_TRUE) {
+                        guidsearch_expr_free(ge);
+                        gc->op = GSEOP_FALSE;
+                        return gc;
+                    }
+                    else {
+                        ptrarray_append(&ge->children, gc);
+                    }
+                }
+                if (!ptrarray_size(&ge->children)) {
+                    guidsearch_expr_free(ge);
+                    ge = NULL;
+                }
+            }
+            break;
+        case SEOP_TRUE:
+        case SEOP_FALSE:
+            {
+                if (parent) {
+                    ge = xzmalloc(sizeof(struct guidsearch_expr));
+                    ge->op = e->op == SEOP_TRUE ? GSEOP_TRUE : GSEOP_FALSE;
+                }
+            }
+            break;
+        case SEOP_MATCH:
+            {
+                if (e->attr == search_attr_find("folder")) {
+                    // inMailbox filter, IMAP-style
+                    ge = xzmalloc(sizeof(struct guidsearch_expr));
+                    ge->op = GSEOP_INMAILBOX;
+                    void *vv = hash_lookup(e->value.s, foldernum_by_mboxname);
+                    if (vv) {
+                        ge->v.num = (uint32_t)((uintptr_t)vv - 1);
+                    }
+                    else {
+                        free(ge);
+                        ge = NULL;
+                    }
+                    *need_folders = 1;
+                }
+                else if (e->attr == &_emailsearch_folders_attr) {
+                    // inMailbox filter, JMAP-style
+                    ge = xzmalloc(sizeof(struct guidsearch_expr));
+                    // jmap_folders attribute supports multiple mailboxes,
+                    // even if inMailbox JMAP argument is single-valued.
+                    ge->op = GSEOP_AND;
+                    int i;
+                    for (i = 0; i < strarray_size(e->value.list); i++) {
+                        struct guidsearch_expr *gc =
+                            xzmalloc(sizeof(struct guidsearch_expr));
+                        gc->op = GSEOP_INMAILBOX;
+                        const char *mboxname = strarray_nth(e->value.list, i);
+                        void *vv = hash_lookup(mboxname, foldernum_by_mboxname);
+                        if (vv) {
+                            gc->v.num = (uint32_t)((uintptr_t)vv - 1);
+                            ptrarray_append(&ge->children, gc);
+                        }
+                        else free(gc);
+                    }
+                    if (ptrarray_size(&ge->children) == 1) {
+                        struct guidsearch_expr *gc =
+                            ptrarray_nth(&ge->children, 0);
+                        ptrarray_fini(&ge->children);
+                        free(ge);
+                        ge = gc;
+                    }
+                    else if (!ptrarray_size(&ge->children)) {
+                        ge->op = GSEOP_FALSE;
+                    }
+                    *need_folders = 1;
+                }
+                else if (e->attr == &_emailsearch_folders_otherthan_attr) {
+                    // inMailboxOtherThan filter
+                    ge = xzmalloc(sizeof(struct guidsearch_expr));
+                    ge->op = GSEOP_INMAILBOX_OTHERTHAN;
+                    bv_init(&ge->v.nums);
+                    bv_setsize(&ge->v.nums, hash_numrecords(foldernum_by_mboxname));
+                    int i;
+                    for (i = 0; i < strarray_size(e->value.list); i++) {
+                        const char *mboxname = strarray_nth(e->value.list, i);
+                        void *vv = hash_lookup(mboxname, foldernum_by_mboxname);
+                        if (vv) {
+                            bv_set(&ge->v.nums, (uint32_t)((uintptr_t)vv - 1));
+                        }
+                    }
+                    *need_folders = 1;
+                }
+                else if (e->attr == search_attr_find("systemflags")) {
+                    if (e->value.u & (FLAG_DRAFT|FLAG_FLAGGED|FLAG_ANSWERED)) {
+                        // hasKeyword or notKeyword
+                        ge = xzmalloc(sizeof(struct guidsearch_expr));
+                        ge->op = GSEOP_FLAGS;
+                        ge->v.num = e->value.u;
+                    }
+                    else {
+                        // most likely guidsearch_rank_clause must be
+                        // updated to reject this unsupported flag
+                        syslog(LOG_ERR, "%s: ignoring unsupported flag: %0lx",
+                                __func__, e->value.u);
+                    }
+                }
+                else if (e->attr == search_attr_find("allconvflags") ||
+                         e->attr == search_attr_find("convflags")) {
+                    ge = xzmalloc(sizeof(struct guidsearch_expr));
+                    ge->op = e->attr == search_attr_find("allconvflags") ?
+                        GSEOP_ALLCONVFLAGS : GSEOP_CONVFLAGS;
+                    // set num: 0 for \Seen or index in counted_flags + 1
+                    if (!strcasecmp(e->value.s, "\\Seen")) {
+                        ge->v.num = 0;
+                    }
+                    else {
+                        // Determine maximum number of counted flags
+                        conversation_t conv = CONVERSATION_INIT;
+                        size_t ncounts = sizeof(conv.counts) / sizeof(conv.counts[0]);
+                        assert(ncounts < UINT32_MAX-1); // must fit ge->v.num
+
+                        int idx = 0;
+                        if (cstate->counted_flags) {
+                            idx = strarray_find_case(cstate->counted_flags, e->value.s, 0);
+
+                        }
+                        if (idx >= 0 && idx + 1 <= (int) ncounts) {
+                            ge->v.num = (uint32_t) idx + 1;
+                        }
+                        else {
+                            syslog(LOG_ERR, "%s: ignoring unsupported convflag: %s",
+                                    __func__, e->value.s);
+                            free(ge);
+                            ge = NULL;
+                        }
+                    }
+                }
+            }
+            break;
+        default:
+            ;
+    }
+
+    return ge;
 }
 
 __attribute__((unused)) // used for debugging
@@ -2951,7 +3198,7 @@ static void guidsearch_expr_serialise(struct buf *buf, struct guidsearch_expr *e
 
 static int guidsearch_expr_eval(struct conversations_state *cstate,
                                 struct guidsearch_expr *e,
-                                struct guidsearch_msg *msg)
+                                struct guidsearch_match *match)
 {
     if (!e) return 1;
 
@@ -2960,7 +3207,7 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
             {
                 int i;
                 for (i = 0; i < ptrarray_size(&e->children); i++) {
-                    if (!guidsearch_expr_eval(cstate, ptrarray_nth(&e->children, i), msg)) {
+                    if (!guidsearch_expr_eval(cstate, ptrarray_nth(&e->children, i), match)) {
                         return 0;
                     }
                 }
@@ -2970,7 +3217,7 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
             {
                 int i;
                 for (i = 0; i < ptrarray_size(&e->children); i++) {
-                    if (guidsearch_expr_eval(cstate, ptrarray_nth(&e->children, i), msg)) {
+                    if (guidsearch_expr_eval(cstate, ptrarray_nth(&e->children, i), match)) {
                         return 1;
                     }
                 }
@@ -2980,7 +3227,7 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
             {
                 int i;
                 for (i = 0; i < ptrarray_size(&e->children); i++) {
-                    if (guidsearch_expr_eval(cstate, ptrarray_nth(&e->children, i), msg)) {
+                    if (guidsearch_expr_eval(cstate, ptrarray_nth(&e->children, i), match)) {
                         return 0;
                     }
                 }
@@ -2991,25 +3238,25 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
         case GSEOP_FALSE:
             return 0;
         case GSEOP_INMAILBOX:
-            return bv_isset(&msg->folders, e->v.num);
+            return bv_isset(&match->folders, e->v.num);
         case GSEOP_INMAILBOX_OTHERTHAN:
             {
                 int i;
-                for (i = bv_first_set(&msg->folders); i != -1;
-                     i = bv_next_set(&msg->folders, i+1)) {
+                for (i = bv_first_set(&match->folders); i != -1;
+                     i = bv_next_set(&match->folders, i+1)) {
                     if (!bv_isset(&e->v.nums, i)) return 1;
                 }
                 return 0;
             }
         case GSEOP_FLAGS:
-            return (msg->system_flags & e->v.num) != 0;
+            return (match->system_flags & e->v.num) != 0;
         case GSEOP_CONVFLAGS:
         case GSEOP_ALLCONVFLAGS:
             {
                 conversation_t conv = CONVERSATION_INIT;
-                if (conversation_load_advanced(cstate, msg->cid, &conv, 0)) {
+                if (conversation_load_advanced(cstate, match->cid, &conv, 0)) {
                     syslog(LOG_ERR, "%s: can't load cid %llx",
-                            __func__, msg->cid);
+                            __func__, match->cid);
                     return 1;
                 }
 
@@ -3034,229 +3281,7 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
     }
 }
 
-static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state *cstate,
-                                                     search_expr_t *parent,
-                                                     search_expr_t *e,
-                                                     hash_table *foldernum_by_mboxname)
-{
-    if (!e) return NULL;
-
-    struct guidsearch_expr *ge = NULL;
-
-    switch (e->op) {
-        case SEOP_AND:
-            {
-                ge = xzmalloc(sizeof(struct guidsearch_expr));
-                ge->op = GSEOP_AND;
-                search_expr_t *c;
-                for (c = e->children ; c; c = c->next) {
-                    struct guidsearch_expr *gc =
-                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname);
-                    if (!gc || gc->op == GSEOP_TRUE) {
-                        guidsearch_expr_free(gc);
-                        continue;
-                    }
-                    else if (gc->op == GSEOP_FALSE) {
-                        guidsearch_expr_free(ge);
-                        return gc;
-                    }
-                    else {
-                        ptrarray_append(&ge->children, gc);
-                    }
-                }
-                if (ptrarray_size(&ge->children) == 1) {
-                    struct guidsearch_expr *gc = ptrarray_pop(&ge->children);
-                    guidsearch_expr_free(ge);
-                    ge = gc;
-                }
-                else if (!ptrarray_size(&ge->children)) {
-                    guidsearch_expr_free(ge);
-                    ge = NULL;
-                }
-            }
-            break;
-        case SEOP_OR:
-            {
-                ge = xzmalloc(sizeof(struct guidsearch_expr));
-                ge->op = GSEOP_OR;
-                search_expr_t *c;
-                for (c = e->children ; c; c = c->next) {
-                    struct guidsearch_expr *gc =
-                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname);
-                    if (!gc || gc->op == GSEOP_FALSE) {
-                        guidsearch_expr_free(gc);
-                        continue;
-                    }
-                    else if (gc->op == GSEOP_TRUE) {
-                        guidsearch_expr_free(ge);
-                        return gc;
-                    }
-                    else {
-                        ptrarray_append(&ge->children, gc);
-                    }
-                }
-                if (ptrarray_size(&ge->children) == 1) {
-                    struct guidsearch_expr *gc = ptrarray_pop(&ge->children);
-                    guidsearch_expr_free(ge);
-                    ge = gc;
-                }
-                else if (!ptrarray_size(&ge->children)) {
-                    guidsearch_expr_free(ge);
-                    ge = NULL;
-                }
-            }
-            break;
-        case SEOP_NOT:
-            {
-                ge = xzmalloc(sizeof(struct guidsearch_expr));
-                ge->op = GSEOP_NOT;
-                search_expr_t *c;
-                for (c = e->children ; c; c = c->next) {
-                    struct guidsearch_expr *gc =
-                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname);
-                    if (!gc || gc->op == GSEOP_FALSE) {
-                        guidsearch_expr_free(gc);
-                        continue;
-                    }
-                    else if (gc->op == GSEOP_TRUE) {
-                        guidsearch_expr_free(ge);
-                        gc->op = GSEOP_FALSE;
-                        return gc;
-                    }
-                    else {
-                        ptrarray_append(&ge->children, gc);
-                    }
-                }
-                if (!ptrarray_size(&ge->children)) {
-                    guidsearch_expr_free(ge);
-                    ge = NULL;
-                }
-            }
-            break;
-        case SEOP_TRUE:
-        case SEOP_FALSE:
-            {
-                if (parent) {
-                    ge = xzmalloc(sizeof(struct guidsearch_expr));
-                    ge->op = e->op == SEOP_TRUE ? GSEOP_TRUE : GSEOP_FALSE;
-                }
-            }
-            break;
-        case SEOP_MATCH:
-            {
-                if (e->attr == search_attr_find("folder")) {
-                    // inMailbox filter, IMAP-style
-                    ge = xzmalloc(sizeof(struct guidsearch_expr));
-                    ge->op = GSEOP_INMAILBOX;
-                    void *vv = hash_lookup(e->value.s, foldernum_by_mboxname);
-                    if (vv) {
-                        ge->v.num = (uint32_t)((uintptr_t)vv - 1);
-                    }
-                    else {
-                        free(ge);
-                        ge = NULL;
-                    }
-                }
-                else if (e->attr == &_emailsearch_folders_attr) {
-                    // inMailbox filter, JMAP-style
-                    ge = xzmalloc(sizeof(struct guidsearch_expr));
-                    // jmap_folders attribute supports multiple mailboxes,
-                    // even if inMailbox JMAP argument is single-valued.
-                    ge->op = GSEOP_AND;
-                    int i;
-                    for (i = 0; i < strarray_size(e->value.list); i++) {
-                        struct guidsearch_expr *gc =
-                            xzmalloc(sizeof(struct guidsearch_expr));
-                        gc->op = GSEOP_INMAILBOX;
-                        const char *mboxname = strarray_nth(e->value.list, i);
-                        void *vv = hash_lookup(mboxname, foldernum_by_mboxname);
-                        if (vv) {
-                            gc->v.num = (uint32_t)((uintptr_t)vv - 1);
-                            ptrarray_append(&ge->children, gc);
-                        }
-                        else free(gc);
-                    }
-                    if (ptrarray_size(&ge->children) == 1) {
-                        struct guidsearch_expr *gc =
-                            ptrarray_nth(&ge->children, 0);
-                        ptrarray_fini(&ge->children);
-                        free(ge);
-                        ge = gc;
-                    }
-                    else if (!ptrarray_size(&ge->children)) {
-                        ge->op = GSEOP_FALSE;
-                    }
-                }
-                else if (e->attr == &_emailsearch_folders_otherthan_attr) {
-                    // inMailboxOtherThan filter
-                    ge = xzmalloc(sizeof(struct guidsearch_expr));
-                    ge->op = GSEOP_INMAILBOX_OTHERTHAN;
-                    bv_init(&ge->v.nums);
-                    bv_setsize(&ge->v.nums, hash_numrecords(foldernum_by_mboxname));
-                    int i;
-                    for (i = 0; i < strarray_size(e->value.list); i++) {
-                        const char *mboxname = strarray_nth(e->value.list, i);
-                        void *vv = hash_lookup(mboxname, foldernum_by_mboxname);
-                        if (vv) {
-                            bv_set(&ge->v.nums, (uint32_t)((uintptr_t)vv - 1));
-                        }
-                    }
-                }
-                else if (e->attr == search_attr_find("systemflags")) {
-                    if (e->value.u & (FLAG_DRAFT|FLAG_FLAGGED|FLAG_ANSWERED)) {
-                        // hasKeyword or notKeyword
-                        ge = xzmalloc(sizeof(struct guidsearch_expr));
-                        ge->op = GSEOP_FLAGS;
-                        ge->v.num = e->value.u;
-                    }
-                    else {
-                        // most likely rank_guidsearch_clause must be
-                        // updated to reject this unsupported flag
-                        syslog(LOG_ERR, "%s: ignoring unsupported flag: %0lx",
-                                __func__, e->value.u);
-                    }
-                }
-                else if (e->attr == search_attr_find("allconvflags") ||
-                         e->attr == search_attr_find("convflags")) {
-                    ge = xzmalloc(sizeof(struct guidsearch_expr));
-                    ge->op = e->attr == search_attr_find("allconvflags") ?
-                        GSEOP_ALLCONVFLAGS : GSEOP_CONVFLAGS;
-                    // set num: 0 for \Seen or index in counted_flags + 1
-                    if (!strcasecmp(e->value.s, "\\Seen")) {
-                        ge->v.num = 0;
-                    }
-                    else {
-                        // Determine maximum number of counted flags
-                        conversation_t conv = CONVERSATION_INIT;
-                        size_t ncounts = sizeof(conv.counts) / sizeof(conv.counts[0]);
-                        assert(ncounts < UINT32_MAX-1); // must fit ge->v.num
-
-                        int idx = 0;
-                        if (cstate->counted_flags) {
-                            idx = strarray_find_case(cstate->counted_flags, e->value.s, 0);
-
-                        }
-                        if (idx >= 0 && idx + 1 <= (int) ncounts) {
-                            ge->v.num = (uint32_t) idx + 1;
-                        }
-                        else {
-                            syslog(LOG_ERR, "%s: ignoring unsupported convflag: %s",
-                                    __func__, e->value.s);
-                            free(ge);
-                            ge = NULL;
-                        }
-                    }
-                }
-            }
-            break;
-        default:
-            ;
-    }
-
-    return ge;
-}
-
-static int rank_guidsearch_clause(struct conversations_state *cstate,
+static int guidsearch_rank_clause(struct conversations_state *cstate,
                                   const search_expr_t *e)
 {
     assert(e->op != SEOP_OR);
@@ -3268,7 +3293,7 @@ static int rank_guidsearch_clause(struct conversations_state *cstate,
                 int rank = 0;
                 search_expr_t *child;
                 for (child = e->children ; child ; child = child->next) {
-                    int childrank = rank_guidsearch_clause(cstate, child);
+                    int childrank = guidsearch_rank_clause(cstate, child);
                     if (childrank == -1) {
                         return -1;
                     }
@@ -3333,8 +3358,7 @@ static int rank_guidsearch_clause(struct conversations_state *cstate,
     return -1;
 }
 
-
-static int rank_guidsearch_expr(struct conversations_state *cstate,
+static int guidsearch_rank_expr(struct conversations_state *cstate,
                                 const search_expr_t *_e)
 {
     if (!_e) return 0;
@@ -3354,7 +3378,7 @@ static int rank_guidsearch_expr(struct conversations_state *cstate,
     if (e->op == SEOP_OR) {
         search_expr_t *child;
         for (child = e->children ; child ; child = child->next) {
-            int childrank = rank_guidsearch_clause(cstate, child);
+            int childrank = guidsearch_rank_clause(cstate, child);
             if (childrank == 1 || childrank == -1) {
                 rank = -1;
                 goto done;
@@ -3362,7 +3386,7 @@ static int rank_guidsearch_expr(struct conversations_state *cstate,
             rank |= childrank;
         }
     }
-    else rank = rank_guidsearch_clause(cstate, e);
+    else rank = guidsearch_rank_clause(cstate, e);
 
 done:
     search_expr_free(e);
@@ -3380,43 +3404,19 @@ static int is_guidsearch_sort(struct sortcrit *sort)
     return 1;
 }
 
-struct guidsearch_match {
-    char guidrep[MESSAGE_GUID_SIZE*2+1];
-    uint32_t internaldate;
-    conversation_id_t cid;
-};
-
-struct guidsearch_rock {
+struct guidsearch_query {
     jmap_req_t *req;
     bitvector_t readable_folders;
+    uint32_t numfolders;
     int want_expunged;
-    char prevguid[MESSAGE_GUID_SIZE*2+1];
-    struct guidsearch_msg msg;
-    struct guidsearch_expr *msgexpr;
+    struct guidsearch_expr *matchexpr;
     struct guidsearch_match *matches;
     size_t total;
+    size_t collapsed_total;
 };
 
-static void _query_guidsearch_postprocess_match(struct guidsearch_rock *rock)
-{
-    if (rock->msgexpr) {
-        /* Evaluate non-Xapian filter conditions */
-        if (!guidsearch_expr_eval(rock->req->cstate, rock->msgexpr, &rock->msg)) {
-            return;
-        }
-    }
-
-    /* Append match to result */
-    struct guidsearch_match *match = rock->matches + rock->total;
-    memcpy(match->guidrep, rock->prevguid, MESSAGE_GUID_SIZE*2);
-    match->guidrep[MESSAGE_GUID_SIZE*2] = '\0';
-    match->internaldate = rock->msg.internaldate;
-    match->cid = rock->msg.cid;
-    rock->total++;
-}
-
-static int _query_guidsearch_cb(const conv_guidrec_t *rec,
-                                size_t nguids, void *vrock)
+static int guidsearch_run_cb(const conv_guidrec_t *rec,
+                                    size_t nguids, void *rock)
 {
     if (!nguids) return 0; // not a single match!
 
@@ -3430,162 +3430,90 @@ static int _query_guidsearch_cb(const conv_guidrec_t *rec,
     /* Ignore parts */ // TODO could set partIds
     if (rec->part) return 0;
 
-    struct guidsearch_rock *rock = vrock;
+    struct guidsearch_query *gsq = rock;
 
     /* Filter ACL and expunged messages */
-    if (!bv_isset(&rock->readable_folders, rec->foldernum) ||
-       (!rock->want_expunged &&
+    if (!bv_isset(&gsq->readable_folders, rec->foldernum) ||
+       (!gsq->want_expunged &&
         ((rec->system_flags & FLAG_DELETED) ||
          (rec->internal_flags & FLAG_INTERNAL_EXPUNGED)))) {
             return 0;
     }
 
-    if (rock->matches == NULL) {
+    if (gsq->matches == NULL) {
         /* First time we see any match candidate */
-        rock->matches = xmalloc(nguids * sizeof(struct guidsearch_match));
+        gsq->matches = xmalloc(nguids * sizeof(struct guidsearch_match));
     }
 
-    if (!rock->prevguid[0] || memcmp(rec->guidrep, rock->prevguid, MESSAGE_GUID_SIZE*2)) {
-        /* Post-process previous match */
-        if (rock->prevguid[0]) {
-            _query_guidsearch_postprocess_match(rock);
-            guidsearch_msg_reset(&rock->msg);
-        }
-        /* Reset message state with this guid */
-        memcpy(rock->prevguid, rec->guidrep, MESSAGE_GUID_SIZE*2);
-        rock->prevguid[MESSAGE_GUID_SIZE*2] = '\0';
-        bv_set(&rock->msg.folders, rec->foldernum);
-        rock->msg.system_flags = rec->system_flags;
-        rock->msg.internaldate = rec->internaldate;
-        rock->msg.cid = rec->cid;
+    if (!gsq->total || memcmp(rec->guidrep, gsq->matches[gsq->total-1].guidrep, MESSAGE_GUID_SIZE*2)) {
+        /* Reset match for new guid */
+        struct guidsearch_match *match = gsq->matches + gsq->total++;
+        guidsearch_match_init(match, gsq->numfolders);
+        memcpy(match->guidrep, rec->guidrep, MESSAGE_GUID_SIZE*2);
+        match->guidrep[MESSAGE_GUID_SIZE*2] = '\0';
+        if (gsq->numfolders) bv_set(&match->folders, rec->foldernum);
+        match->system_flags = rec->system_flags;
+        match->internaldate = rec->internaldate;
+        match->cid = rec->cid;
     }
     else {
-        /* Update message state for same guid */
-        bv_set(&rock->msg.folders, rec->foldernum);
-        rock->msg.system_flags |= rec->system_flags;
-        if (rec->internaldate < rock->msg.internaldate) {
-            rock->msg.internaldate = rec->internaldate;
+        /* Update match for same guid */
+        struct guidsearch_match *match = gsq->matches + gsq->total - 1;
+        if (gsq->numfolders) bv_set(&match->folders, rec->foldernum);
+        match->system_flags |= rec->system_flags;
+        if (rec->internaldate < match->internaldate) {
+            match->internaldate = rec->internaldate;
         }
     }
 
     return 0;
 }
 
-static int _guidsearch_match_cmp QSORT_R_COMPAR_ARGS(const void *va,
-                                                     const void *vb,
-                                                     void *rock)
+static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
+                          struct guidsearch_query *gsq)
 {
-    const struct guidsearch_match *a = va;
-    const struct guidsearch_match *b = vb;
-    const struct sortcrit *sort = rock;
-
-    while (sort->key != SORT_SEQUENCE) {
-        int ret;
-        switch (sort->key) {
-            case SORT_ARRIVAL:
-                ret = a->internaldate < b->internaldate ? -1 :
-                      a->internaldate > b->internaldate ?  1 : 0;
-                break;
-            case SORT_GUID:
-                ret = memcmp(a->guidrep, b->guidrep, MESSAGE_GUID_SIZE*2);
-                break;
-            default:
-                syslog(LOG_ERR, "%s: ignoring unexpected sort %d", __func__, sort->key);
-                ret = 0;
-        }
-        if (ret) {
-            return (sort->flags & SORT_REVERSE) ? -ret : ret;
-        }
-        sort++;
-    }
-
-    return 0;
-}
-
-static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
-                                   struct emailsearch *search,
-                                   json_t **err __attribute__((unused)))
-{
-    int exprrank = rank_guidsearch_expr(req->cstate, search->expr);
+    int exprrank = guidsearch_rank_expr(req->cstate, search->expr);
     if (exprrank < 2 || !is_guidsearch_sort(search->sort)) {
         return IMAP_SEARCH_NOT_SUPPORTED;
     }
 
-    ptrarray_t result = PTRARRAY_INITIALIZER;
-    struct guidsearch_match *mymatches = NULL;
-    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-    struct mailbox *inbox = NULL;
-    search_builder_t *bx = NULL;
-    int r = 0;
-
-    /* Initialize callback state */
-    struct guidsearch_rock rock = {
-        req,
-        BV_INITIALIZER,
-        search->want_expunged,
-        { 0 },
-        GUIDSEARCH_MSG_INTIIALIZER,
-        NULL,
-        NULL,
-        0
-    };
-
-    // TODO cache guid search?
-
-    r = jmap_openmbox(req, inboxname, &inbox, 0); // XXX need write lock?
-    if (r) goto done;
-
-    bx = search_begin_search(inbox, 0);
-    if (!bx) {
-        syslog(LOG_ERR, "jmap: %s: can't begin search for %s",
-                        __func__,  inbox->name);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
-    struct conversations_state *cstate = mailbox_get_cstate(inbox);
-    if (!cstate) {
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
     /* Determine readable folders for userid */
-    uint32_t numfolders = conversations_num_folders(cstate);
-    bv_setsize(&rock.readable_folders, numfolders);
+    uint32_t numfolders = conversations_num_folders(req->cstate);
+    bv_setsize(&gsq->readable_folders, numfolders);
     if (strcmp(req->userid, req->accountid)) {
-        // Filter all folders that can't be read by userid
+        // filter all folders that can't be read by userid
         uint32_t num;
         for (num = 0; num < numfolders; num++) {
-            const char *mboxname = conversations_folder_name(cstate, num);
+            const char *mboxname = conversations_folder_name(req->cstate, num);
             if (jmap_hasrights(req, mboxname, ACL_READ|ACL_LOOKUP)) {
-                bv_set(&rock.readable_folders, num);
+                bv_set(&gsq->readable_folders, num);
             }
         }
     }
     else {
-        // All user-owned mailboxes are readable
-        bv_setall(&rock.readable_folders);
+        // all user-owned mailboxes are readable
+        bv_setall(&gsq->readable_folders);
     }
-
-    /* Filter all folders that aren't regular mailboxes */
+    // filter all folders that aren't regular mailboxes
     uint32_t num;
     for (num = 0; num < numfolders; num++) {
-        const char *mboxname = conversations_folder_name(cstate, num);
+        const char *mboxname = conversations_folder_name(req->cstate, num);
         mbentry_t *mbentry = NULL;
         if (mboxlist_lookup_allow_all(mboxname, &mbentry, NULL) ||
             mbentry->mbtype != MBTYPE_EMAIL) {
-            bv_clear(&rock.readable_folders, num);
+            bv_clear(&gsq->readable_folders, num);
         }
         mboxlist_entry_free(&mbentry);
     }
 
-    /* Prepare post-processing filter for guid callback */
+
+    /* Prepare filter for post-processing */
     if (exprrank & 0x1) {
         hash_table foldernum_by_mboxname = HASH_TABLE_INITIALIZER;
         construct_hash_table(&foldernum_by_mboxname, numfolders+2, 0);
         uint32_t num;
         for (num = 0; num < numfolders; num++) {
-            const char *mboxname = conversations_folder_name(cstate, num);
+            const char *mboxname = conversations_folder_name(req->cstate, num);
             if (!mboxname_isnonimapmailbox(mboxname, 0)) {
                 hash_insert(mboxname, (void*)((uintptr_t)num+1), &foldernum_by_mboxname);
             }
@@ -3594,84 +3522,140 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
         if (!hash_lookup(inboxname, &foldernum_by_mboxname)) {
             hash_insert(inboxname, (void*)((uintptr_t)num+1), &foldernum_by_mboxname);
         }
-        free(inboxname);
-        rock.msgexpr = guidsearch_expr_build(cstate, NULL, search->expr,
-                                            &foldernum_by_mboxname);
 
+        int need_folders = 0;
+        gsq->matchexpr = guidsearch_expr_build(req->cstate, NULL, search->expr,
+                                               &foldernum_by_mboxname,
+                                               &need_folders);
+        gsq->numfolders = need_folders ? numfolders : 0;
+        free(inboxname);
         free_hash_table(&foldernum_by_mboxname, NULL);
     }
 
     /* Run query */
+
+    search_builder_t *bx = NULL;
+    struct mailbox *mbox = NULL;
+    mbname_t *mbname = mbname_from_userid(req->accountid);
+
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_JMAPUPLOADFOLDER));
+    int r = jmap_openmbox(req, mbname_intname(mbname), &mbox, 0);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        free(mbname_pop_boxes(mbname));
+        r = jmap_openmbox(req, mbname_intname(mbname), &mbox, 0);
+    }
+    if (r) goto done;
+
+    bx = search_begin_search(mbox, 0);
+    if (!bx) {
+        syslog(LOG_ERR, "jmap: %s: can't begin search for %s",
+                __func__,  mbox->name);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
     search_build_query(bx, search->expr);
-    guidsearch_msg_init(&rock.msg, numfolders);
-    r = bx->run_guidsearch(bx, _query_guidsearch_cb, &rock);
-    if (rock.prevguid[0]) {
-        _query_guidsearch_postprocess_match(&rock);
-    }
-    guidsearch_msg_fini(&rock.msg);
-    guidsearch_expr_free(rock.msgexpr);
-    bv_fini(&rock.readable_folders);
-    if (r == IMAP_SEARCH_NOT_SUPPORTED) {
-        free(rock.matches);
-        goto done;
-    }
-    else if (r && r != IMAP_OK_COMPLETED) {
-        free(rock.matches);
-        goto done;
-    }
+    r = bx->run_guidsearch(bx, guidsearch_run_cb, gsq);
+    bv_fini(&gsq->readable_folders);
+    if (r && r != IMAP_OK_COMPLETED) goto done;
     r = 0;
 
-    /* Sort matches and collapse threads */
-    size_t matches_total = rock.total;
-    mymatches = rock.matches;
-    if (rock.total) {
-        cyr_qsort_r(rock.matches, rock.total, sizeof(struct guidsearch_match),
-                    _guidsearch_match_cmp, search->sort);
-        if (q->collapse_threads) {
-            if (q->findallthread) {
-                /* Can't collapse threads in-place if findAllInThread is requested */
-                mymatches = xmalloc(rock.total * sizeof(struct guidsearch_match));
+    gsq->collapsed_total = gsq->total;
+
+done:
+    if (bx) search_end_search(bx);
+    jmap_closembox(req, &mbox);
+    mbname_free(&mbname);
+    return r;
+}
+
+static void guidsearch_filter(jmap_req_t *req, struct guidsearch_query *gsq)
+{
+    if (!gsq->total) return;
+
+    size_t i, j;
+    for (i = 0, j = 0; i < gsq->total; i++) {
+        struct guidsearch_match *match = gsq->matches + i;
+        if (guidsearch_expr_eval(req->cstate, gsq->matchexpr, match)) {
+            if (i != j) {
+                // shallow-move match to its new slot
+                gsq->matches[j] = *match;
+                memset(match, 0, sizeof(struct guidsearch_match));
             }
-            struct hashset *seen_threads = hashset_new(sizeof(conversation_id_t));
-            size_t i, j;
-            for (i = 0, j = 0; i < rock.total; i++) {
-                struct guidsearch_match *match = rock.matches + i;
-                if (hashset_add(seen_threads, &match->cid)) {
-                    if (mymatches != rock.matches || i != j) {
-                        memcpy(mymatches + j, match, sizeof(struct guidsearch_match));
-                    }
-                    j++;
-                }
-            }
-            hashset_free(&seen_threads);
-            rock.total = j;
+            j++;
+        }
+        else {
+            guidsearch_match_fini(match);
         }
     }
+    gsq->total = gsq->collapsed_total = j;
+}
 
-    /* Build result */
+static void guidsearch_sort(jmap_req_t *req __attribute__((unused)),
+                            struct sortcrit *sort,
+                            struct guidsearch_query *gsq)
+{
+    if (!gsq->total) return;
+
+    cyr_qsort_r(gsq->matches, gsq->total, sizeof(struct guidsearch_match),
+                guidsearch_match_cmp, sort);
+}
+
+static void guidsearch_collapse(jmap_req_t *req __attribute__((unused)),
+                                struct guidsearch_query *gsq)
+{
+    if (!gsq->total) return;
+
+    struct hashset *seen_threads = hashset_new(sizeof(conversation_id_t));
+    size_t i, j;
+    for (i = 0, j = 0; i < gsq->total; i++) {
+        struct guidsearch_match *match = gsq->matches + i;
+        if (hashset_add(seen_threads, &match->cid)) {
+            if (i != j) {
+                // shallow-swap matches
+                struct guidsearch_match tmp = gsq->matches[j];
+                gsq->matches[j] = *match;
+                *match = tmp;
+            }
+            j++;
+        }
+    }
+    hashset_free(&seen_threads);
+    gsq->collapsed_total = j;
+}
+
+static void guidsearch_reply(jmap_req_t *req,
+                             struct jmap_emailquery *q,
+                             struct guidsearch_query *gsq)
+{
+    ptrarray_t result = PTRARRAY_INITIALIZER;
+
+    /* Apply windowing */
+
     char email_id[JMAP_EMAILID_SIZE];
     struct message_guid guid;
     size_t pos;
+    size_t total = q->collapse_threads ? gsq->collapsed_total : gsq->total;
     if (q->super.anchor) {
         pos = 0;
     }
     else if (q->super.position < 0) {
         size_t delta = (size_t) -q->super.position;
-        pos = delta < rock.total ? rock.total - delta : 0;
+        pos = delta < total ? total - delta : 0;
     }
-    else if ((size_t)q->super.position < rock.total) {
+    else if ((size_t)q->super.position < total) {
         pos = q->super.position;
     } else {
-        pos = rock.total;
+        pos = total;
     }
     int found_anchor = 0;
     size_t i;
-    for (i = pos; i < rock.total; i++) {
+    for (i = pos; i < total; i++) {
         if (q->super.have_limit &&
                 (size_t) ptrarray_size(&result) == q->super.limit) {
             break;
         }
-        struct guidsearch_match *match = mymatches + i;
+        struct guidsearch_match *match = gsq->matches + i;
         message_guid_decode(&guid, match->guidrep);
         jmap_set_emailid(&guid, email_id);
         if (q->super.anchor && !found_anchor) {
@@ -3688,7 +3672,7 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
                                 (size_t) ptrarray_size(&result) == q->super.limit) {
                             break;
                         }
-                        ptrarray_append(&result, mymatches + j);
+                        ptrarray_append(&result, gsq->matches + j);
                     }
                 }
                 else if (q->super.anchor_offset > 0) {
@@ -3707,9 +3691,10 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
         ptrarray_append(&result, match);
     }
     q->super.result_position = pos;
-    q->super.total = rock.total;
+    q->super.total = total;
 
     /* Convert result to JSON */
+
     struct hashset *want_threads = q->findallthread ? hashset_new(8) : NULL;
     for (i = 0; i < (size_t) ptrarray_size(&result); i++) {
         struct guidsearch_match *match = ptrarray_nth(&result, i);
@@ -3724,8 +3709,8 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
     if (want_threads) {
         q->thread_email_ids = json_object();
         char thread_id[JMAP_THREADID_SIZE];
-        for (i = 0; i < matches_total; i++) {
-            struct guidsearch_match *match = rock.matches + i;
+        for (i = 0; i < gsq->total; i++) {
+            struct guidsearch_match *match = gsq->matches + i;
             if (!hashset_exists(want_threads, &match->cid)) {
                 continue;
             }
@@ -3741,22 +3726,47 @@ static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
         }
         hashset_free(&want_threads);
     }
-
-    /* Set response fields */
     if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
         json_object_set_new(req->perf_details, "isCached", json_false());
         json_object_set_new(req->perf_details, "isGuidSearch", json_true());
     }
 
-done:
     ptrarray_fini(&result);
-    if (mymatches != rock.matches)
-        free(mymatches);
-    free(rock.matches);
-    if (bx) search_end_search(bx);
-    jmap_closembox(req, &inbox);
-    free(inboxname);
-    return r;
+}
+
+static int _email_query_guidsearch(jmap_req_t *req, struct jmap_emailquery *q,
+                                   struct emailsearch *search,
+                                   json_t **err __attribute__((unused)))
+{
+    struct guidsearch_query gsq = {
+        req,
+        BV_INITIALIZER,
+        0,
+        search->want_expunged,
+        NULL,
+        0,
+        0,
+        0
+    };
+
+    int r = guidsearch_run(req, search, &gsq);
+    if (r) return r;
+
+    guidsearch_filter(req, &gsq);
+    guidsearch_sort(req, search->sort, &gsq);
+    if (q->collapse_threads) {
+        guidsearch_collapse(req, &gsq);
+    }
+    guidsearch_reply(req, q, &gsq);
+
+    size_t i;
+    for (i = 0; i < gsq.total; i++) {
+        guidsearch_match_fini(&gsq.matches[i]);
+    }
+    free(gsq.matches);
+    guidsearch_expr_free(gsq.matchexpr);
+
+    return 0;
 }
 
 static int _email_query_uidsearch(jmap_req_t *req,
