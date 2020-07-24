@@ -4305,7 +4305,7 @@ EXPORTED int mboxlist_findone_withp(struct namespace *namespace,
     ptrarray_append(&cbrock.globs, g);
     mbname_free(&mbname);
 
-    mboxlist_dbname_to_key(dbname, strlen(dbname), &key);
+    mboxlist_dbname_to_key(dbname, strlen(dbname), NULL, &key);
     r = cyrusdb_forone(cbrock.db, buf_base(&key), buf_len(&key),
                        &find_p, &find_cb, &cbrock, NULL);
 
