@@ -111,7 +111,7 @@ static int mboxlist_initialized = 0;
 
 static int have_racl = 0;
 
-static int mboxlist_opensubs(const char *userid, struct db **ret);
+static int mboxlist_opensubs(const char *userid, int create, struct db **ret);
 static void mboxlist_closesubs(struct db *sub);
 
 static int mboxlist_upgrade_subs(const char *subsfname, struct db **ret);
@@ -4758,6 +4758,7 @@ EXPORTED void mboxlist_close(void)
  */
 static int
 mboxlist_opensubs(const char *userid,
+                  int create,
                   struct db **ret)
 {
     int r = 0, flags;
@@ -4766,14 +4767,14 @@ mboxlist_opensubs(const char *userid,
     /* Build subscription list filename */
     subsfname = user_hash_subs(userid);
 
-    flags = CYRUSDB_CREATE;
+    flags = create ? CYRUSDB_CREATE : 0;
 
     r = cyrusdb_open(SUBDB, subsfname, flags, ret);
     if (r == CYRUSDB_OK) {
         r = mboxlist_upgrade_subs(userid, ret);
     }
     if (r != CYRUSDB_OK) {
-        r = IMAP_IOERROR;
+        r = create ? IMAP_IOERROR : IMAP_NOTFOUND;
     }
     free(subsfname);
 
@@ -4824,8 +4825,8 @@ EXPORTED int mboxlist_findsubmulti_withp(struct namespace *namespace,
     /* open the subscription file that contains the mailboxes the
        user is subscribed to */
     struct db *subs = NULL;
-    r = mboxlist_opensubs(userid, &subs);
-    if (r) return r;
+    r = mboxlist_opensubs(userid, /*create*/0, &subs);
+    if (r) return (r == IMAP_NOTFOUND ? 0 : r);
 
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = !force;
@@ -4909,7 +4910,7 @@ EXPORTED strarray_t *mboxlist_sublist(const char *userid)
     init_internal();
 
     /* open subs DB */
-    r = mboxlist_opensubs(userid, &subs);
+    r = mboxlist_opensubs(userid, /*create*/0, &subs);
     if (r) goto done;
 
     /* faster to do it all in a single slurp! */
@@ -4990,8 +4991,8 @@ EXPORTED int mboxlist_usersubs(const char *userid, mboxlist_cb *proc,
     init_internal();
 
     /* open subs DB */
-    r = mboxlist_opensubs(userid, &subs);
-    if (r) return r;
+    r = mboxlist_opensubs(userid, /*create*/0, &subs);
+    if (r) return (r == IMAP_NOTFOUND ? 0 : r);
 
     /* faster to do it all in a single slurp! */
     mboxlist_dbname_to_key("", 0, NULL, &key);
@@ -5019,7 +5020,8 @@ EXPORTED int mboxlist_checksub(const char *name, const char *userid)
 
     init_internal();
 
-    r = mboxlist_opensubs(userid, &subs);
+    r = mboxlist_opensubs(userid, /*create*/0, &subs);
+    if (r) return (r == IMAP_NOTFOUND ? CYRUSDB_NOTFOUND : r);
 
     if (!r) {
         struct buf key = BUF_INITIALIZER;
@@ -5054,8 +5056,8 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
 
     init_internal();
 
-    if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
-        return r;
+    if ((r = mboxlist_opensubs(userid, add, &subs)) != 0) {
+        return (add || r != IMAP_NOTFOUND) ? r : 0;
     }
 
     char *dbname = mboxname_to_dbname(name);
