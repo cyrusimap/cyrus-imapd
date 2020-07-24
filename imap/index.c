@@ -5784,6 +5784,20 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
     }
     else if (isbody && !strcmp(type, "APPLICATION")) {
 
+        // application/ics is an alias for text/icalendar
+        if (!strcmp(subtype, "ICS")) {
+            extract_icalbuf(data, charset, encoding, content_guid, str);
+            goto done;
+        }
+
+        // these are encrypted fields which aren't worth indexing
+        if (!strcmp(subtype, "PKCS7-MIME")) goto done;
+        if (!strcmp(subtype, "PKCS7-ENCRYPTED")) goto done;
+        if (!strcmp(subtype, "PKCS7-SIGNATURE")) goto done;
+        if (!strcmp(subtype, "PGP-SIGNATURE")) goto done;
+        if (!strcmp(subtype, "PGP-KEYS")) goto done;
+        if (!strcmp(subtype, "PGP-ENCRYPTED")) goto done;
+
         /* Ignore attachments in first snippet generation pass */
         if (str->snippet_iteration == 1) goto done;
 
