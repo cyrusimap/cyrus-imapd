@@ -5626,6 +5626,7 @@ static int extract_attachment(const char *type, const char *subtype,
     }
     if (statuscode != 200 && statuscode != 201) {
         /* any other status code is an error */
+        syslog(LOG_ERR, "extract GOT STATUSCODE %d with timeout %d: %s", statuscode, ctx->timeout, errstr);
         r = IMAP_IOERROR;
         goto done;
     }
