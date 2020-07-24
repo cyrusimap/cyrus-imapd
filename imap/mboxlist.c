@@ -4921,10 +4921,6 @@ EXPORTED strarray_t *mboxlist_sublist(const char *userid)
     mboxlist_closesubs(subs);
 
 done:
-    if (r) {
-        strarray_free(list);
-        return NULL;
-    }
     buf_free(&key);
     return list;
 }
