@@ -261,7 +261,8 @@ extern int jmap_findblob(jmap_req_t *req, const char *accountid,
                          struct buf *blob);
 extern int jmap_findblob_exact(jmap_req_t *req, const char *accountid,
                                const char *blobid,
-                               struct mailbox **mbox, msgrecord_t **mr);
+                               struct mailbox **mbox, msgrecord_t **mr,
+                               struct buf *blob);
 
 extern const struct body *jmap_contact_findblob(struct message_guid *content_guid,
                                                 const char *part_id,

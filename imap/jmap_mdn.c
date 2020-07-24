@@ -625,17 +625,11 @@ static int jmap_mdn_parse(jmap_req_t *req)
         const struct body *part = NULL;
         struct buf buf = BUF_INITIALIZER;
 
-        struct buf *inmem = hash_lookup(blobid, req->inmemory_blobs);
-        if (inmem) {
-            buf_init_ro(&buf, buf_base(inmem), buf_len(inmem));
-        }
-        else {
-            int r = jmap_findblob(req, NULL/*accountid*/, blobid,
-                                  &mbox, &mr, &body, &part, &buf);
-            if (r) {
-                json_array_append_new(parse.not_found, json_string(blobid));
-                continue;
-            }
+        int r = jmap_findblob(req, NULL/*accountid*/, blobid,
+                              &mbox, &mr, &body, &part, &buf);
+        if (r) {
+            json_array_append_new(parse.not_found, json_string(blobid));
+            continue;
         }
 
         /* parse blob */
