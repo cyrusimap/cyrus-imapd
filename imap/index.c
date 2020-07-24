@@ -5801,7 +5801,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         /* Ignore attachments in first snippet generation pass */
         if (str->snippet_iteration == 1) goto done;
 
-        /* Only generate snippets from named attachmend parts */
+        /* Only generate snippets from named attachment parts */
         if (str->snippet_iteration >= 2 && !str->partids) goto done;
 
         if (!config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL)) {
