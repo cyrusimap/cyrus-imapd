@@ -1,0 +1,10 @@
+From: from1@server.example.int
+To: zhivko@mailtemi.com
+Message-ID: <msg10@guid1>
+Subject: message 1
+Date: Thu, 10 May 2018 4:11:45 +0000
+MIME-Version: 1.0
+Content-Type: text/plain
+Content-Transfer-Encoding: quoted-printable
+
+message 1 body
