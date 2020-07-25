@@ -851,11 +851,11 @@ static int message_parse_headers(struct msg *msg, struct body *body,
             /* check if we've hit a limit and flag it */
             if (maxlines && body->header_lines > maxlines) {
                 if (efname)
-                    syslog(LOG_ERR, "ERROR: message (%s) has more than %d header lines"
+                    syslog(LOG_ERR, "ERROR: message (%s) has more than %d header lines "
                                     "not caching any more",
                            efname, maxlines);
                 else
-                    syslog(LOG_ERR, "ERROR: message has more than %d header lines"
+                    syslog(LOG_ERR, "ERROR: message has more than %d header lines "
                                     "not caching any more",
                            maxlines);
                 have_max = 1;
