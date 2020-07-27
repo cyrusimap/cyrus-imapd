@@ -73,7 +73,11 @@
  * format changes are made to any mailbox files.  It is also important to
  * make sure all the mailbox upgrade and downgrade code in mailbox.c is
  * changed to be able to convert both backwards and forwards between the
- * new version and all supported previous versions */
+ * new version and all supported previous versions.
+ * If you change MAILBOX_MINOR_VERSION you MUST also make corresponding
+ * changes to backend_version() in imapd.c, AND backport those changes to
+ * all supported older versions, to avoid breaking XFER.
+ */
 #define MAILBOX_MINOR_VERSION   17
 #define MAILBOX_CACHE_MINOR_VERSION 10
 
