@@ -256,18 +256,6 @@ static void test_find(void)
 }
 
 
-static void config_read_string(const char *s)
-{
-    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
-    int fd = mkstemp(fname);
-    retry_write(fd, s, strlen(s));
-    config_reset();
-    config_read(fname, 0);
-    unlink(fname);
-    free(fname);
-    close(fd);
-}
-
 static int set_up(void)
 {
     int r;

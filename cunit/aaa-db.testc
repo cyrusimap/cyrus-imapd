@@ -23,18 +23,6 @@ static char *backend = CUNIT_PARAM("skiplist,flat,twoskip,zeroskip");
 static char *filename;
 static char *filename2;
 
-static void config_read_string(const char *s)
-{
-    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
-    int fd = mkstemp(fname);
-    retry_write(fd, s, strlen(s));
-    config_reset();
-    config_read(fname, 0);
-    unlink(fname);
-    free(fname);
-    close(fd);
-}
-
 static int fexists(const char *fname)
 {
     struct stat sb;
