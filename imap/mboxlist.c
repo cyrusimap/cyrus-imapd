@@ -2882,6 +2882,13 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
                 mboxevent_set_access(mboxevent, NULL, NULL, userid, newname, 1);
             }
+
+            /* log the rename before we close either mailbox, so that
+             * we never nuke the mailbox from the replica before realising
+             * that it has been renamed.  This can be moved later again when
+             * we sync mailboxes by uniqueid rather than name... */
+            sync_log_rename(oldname, newname);
+
             mailbox_close(&oldmailbox);
         }
     }
