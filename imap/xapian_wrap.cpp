@@ -43,6 +43,8 @@ extern int charset_flags;
 #define SLOT_INDEXLEVEL     2
 #define SLOT_INDEXVERSION   3
 
+static const unsigned XAPIAN_MAX_TERM_LENGTH = 200; /* in UTF-8 bytes */
+
 /* ====================================================================== */
 
 static void make_cyrusid(struct buf *dst, const struct message_guid *guid, char doctype)
@@ -318,13 +320,13 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
         } catch (const std::out_of_range&) {}
 
         // Convert the word to search form
-        std::unique_ptr<char, decltype(std::free)*> q {charset_convert(word.c_str(), utf8, charset_flags), std::free};
-        if (!q) {
-            return stem(word);
-        }
+        std::unique_ptr<char, decltype(std::free)*>
+            q {charset_convert(word.c_str(), utf8, charset_flags), std::free};
+        std::string s = q ? stem(Xapian::Unicode::tolower(q.get())) : stem(word);
+        if (s.size() > XAPIAN_MAX_TERM_LENGTH) return std::string{};
 
         // Store the normalized word in the cache
-        return cache[word] = stem(Xapian::Unicode::tolower(q.get()));
+        return cache[word] = s;
     }
 
     virtual std::string get_description () const override {
@@ -688,8 +690,6 @@ void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *torein
 }
 
 /* ====================================================================== */
-
-static const unsigned XAPIAN_MAX_TERM_LENGTH = 200;
 
 static inline void add_boolean_nterm(Xapian::Document& doc,
                                      const std::string& term,
