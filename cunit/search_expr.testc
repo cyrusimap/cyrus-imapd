@@ -1,4 +1,8 @@
 #include "config.h"
+
+#include "lib/libconfig.h"
+#include "lib/libcyr_cfg.h"
+
 #include "cunit/cyrunit.h"
 #include "prot.h"
 #include "xmalloc.h"
@@ -19,6 +23,8 @@ static int isadmin = 0;
 #define DATE1_MID       "1354928400"
 #define DATE1_END       "1354971600"
 #define DATE1_MID_TIME  1354928400
+
+#define DBDIR   "test-dbdir"
 
 static void test_get_search_program(void)
 {
@@ -1251,19 +1257,22 @@ static int set_up(void)
 
     search_attr_init();
 
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "conversations: yes\n"
+    );
+
     r = mboxname_init_namespace(&ns, isadmin);
     if (r) return r;
 
     push_tz(TZ_MELBOURNE);
-
-    imapopts[IMAPOPT_CONVERSATIONS].val.b = 1;
 
     return 0;
 }
 
 static int tear_down(void)
 {
-    imapopts[IMAPOPT_CONVERSATIONS].val.b = 0;
     restore_tz();
     time_restore();
     return 0;
