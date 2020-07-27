@@ -456,6 +456,7 @@ EXPORTED void config_reset(void)
 {
     enum imapopt opt;
 
+    /* XXX this gate should probably use config_loaded, not config_filename */
     if (!config_filename)
         return;
 
@@ -494,6 +495,9 @@ EXPORTED void config_reset(void)
 
     /* free the overflow table */
     free_hash_table(&confighash, free);
+
+    /* we no longer have loaded config */
+    config_loaded = 0;
 }
 
 static const unsigned char qos[] = {
