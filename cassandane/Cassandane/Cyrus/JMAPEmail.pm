@@ -18347,15 +18347,21 @@ sub test_email_query_findallinthread
         $threadId3 => \@emailIdsThread3,
     };
 
-    my $gotThreadIdToEmailIds = map {
-        $_ => \sort @{$res->[0][1]{threadIdToEmailIds}{$_}}
-    } keys %{$res->[0][1]{threadIdToEmailIds}};
-
+    my %gotThreadIdToEmailIds;
+    while (my ($threadId, $emailIds) = each %{$res->[0][1]{threadIdToEmailIds}}) {
+        my @emailIds = sort @{$emailIds};
+        $gotThreadIdToEmailIds{$threadId} = \@emailIds;
+    }
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals($wantThreadIdToEmailIds, $res->[0][1]{threadIdToEmailIds});
+    $self->assert_deep_equals($wantThreadIdToEmailIds, \%gotThreadIdToEmailIds);
 
+    %gotThreadIdToEmailIds = ();
+    while (my ($threadId, $emailIds) = each %{$res->[1][1]{threadIdToEmailIds}}) {
+        my @emailIds = sort @{$emailIds};
+        $gotThreadIdToEmailIds{$threadId} = \@emailIds;
+    }
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals($wantThreadIdToEmailIds, $res->[1][1]{threadIdToEmailIds});
+    $self->assert_deep_equals($wantThreadIdToEmailIds, \%gotThreadIdToEmailIds);
 
     xlog "Assert empty result";
     $res = $jmap->CallMethods([
