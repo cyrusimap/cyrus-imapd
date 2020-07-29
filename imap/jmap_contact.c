@@ -553,20 +553,39 @@ static void cachecards_cb(uint64_t rowid, void *payload, void *vrock)
                             JMAPCACHE_CONTACTVERSION, eventrep);
 }
 
+static int has_addressbooks_cb(const mbentry_t *mbentry, void *rock)
+{
+    jmap_req_t *req = rock;
+    if (mbentry->mbtype == MBTYPE_ADDRESSBOOK &&
+            jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+        return CYRUSDB_DONE;
+    }
+    return 0;
+}
+
+static int has_addressbooks(jmap_req_t *req)
+{
+    mbname_t *mbname = mbname_from_userid(req->accountid);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    int r = mboxlist_mboxtree(mbname_intname(mbname), has_addressbooks_cb,
+                              req, MBOXTREE_SKIP_ROOT);
+    mbname_free(&mbname);
+    return r == CYRUSDB_DONE;
+}
+
 static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
 {
+    if (!has_addressbooks(req)) {
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
+        return 0;
+    }
+
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
     json_t *err = NULL;
     struct carddav_db *db = NULL;
+    char *mboxname = NULL;
     int r = 0;
-
-    r = carddav_create_defaultaddressbook(req->accountid);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* The account exists but does not have a root mailbox. */
-        jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
-        return 0;
-    } else if (r) return r;
 
     /* Build callback data */
     struct cards_rock rock = { NULL, req, &get, NULL /*mailbox*/,
@@ -575,7 +594,6 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     construct_hashu64_table(&rock.jmapcache, 512, 0);
 
     /* Parse request */
-    char *mboxname = NULL;
     const char *addressbookId = NULL;
     jmap_get_parse(req, &parser,
                    kind == CARDDAV_KIND_GROUP ? group_props : contact_props,
@@ -585,7 +603,10 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
         jmap_error(req, err);
         goto done;
     }
+    mboxname = addressbookId ?
+        carddav_mboxname(req->accountid, addressbookId) : NULL;
 
+    /* Does the client request specific events? */
     rock.db = db = carddav_open_userid(req->accountid);
     if (!db) {
         syslog(LOG_ERR,
@@ -593,11 +614,6 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
         r = IMAP_INTERNAL;
         goto done;
     }
-
-    mboxname = addressbookId ?
-        carddav_mboxname(req->accountid, addressbookId) : NULL;
-
-    /* Does the client request specific events? */
     if (JNOTNULL(get.ids)) {
         size_t i;
         json_t *jval;
@@ -638,7 +654,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     free(mboxname);
     mailbox_close(&rock.mailbox);
     free_hashu64_table(&rock.jmapcache, free);
-    carddav_close(db);
+    if (db) carddav_close(db);
     return r;
 }
 
@@ -693,20 +709,17 @@ static int getchanges_cb(void *rock, struct carddav_data *cdata)
 
 static int _contacts_changes(struct jmap_req *req, int kind)
 {
+    if (!has_addressbooks(req)) {
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
+        return 0;
+    }
+
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
     json_t *err = NULL;
     struct carddav_db *db;
     char *mboxname = NULL;
     int r = 0;
-
-    db = carddav_open_userid(req->accountid);
-    if (!db) {
-        syslog(LOG_ERR,
-               "carddav_open_userid failed for user %s", req->accountid);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
 
     /* Parse request */
     const char *addressbookId = NULL;
@@ -716,14 +729,17 @@ static int _contacts_changes(struct jmap_req *req, int kind)
         jmap_error(req, err);
         goto done;
     }
-
     mboxname = addressbookId ?
         carddav_mboxname(req->accountid, addressbookId) : NULL;
 
-    r = carddav_create_defaultaddressbook(req->accountid);
-    if (r) goto done;
-
     /* Lookup updates. */
+    db = carddav_open_userid(req->accountid);
+    if (!db) {
+        syslog(LOG_ERR,
+               "carddav_open_userid failed for user %s", req->accountid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
     struct changes_rock rock = { req, &changes, 0 /*seen_records*/, 0 /*highestmodseq*/};
     r = carddav_get_updates(db, changes.since_modseq, mboxname, kind,
                             -1 /*max_records*/, &getchanges_cb, &rock);
@@ -744,7 +760,6 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     jmap_parser_fini(&parser);
     carddav_close(db);
     free(mboxname);
-
     return 0;
 }
 
@@ -2895,6 +2910,11 @@ static int _contactsquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
 
 static int _contactsquery(struct jmap_req *req, unsigned kind)
 {
+    if (!has_addressbooks(req)) {
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
+        return 0;
+    }
+
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
     struct carddav_db *db;
