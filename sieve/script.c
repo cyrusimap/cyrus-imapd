@@ -247,7 +247,6 @@ static int _sieve_script_parse_only(sieve_interp_t *interp, char **out_errors,
         if (!myinterp) return SIEVE_FAIL;
     }
 
-    buf_appendcstr(&errors, "script errors:\r\n");
     *out_errors = NULL;
 
     res = _sieve_script_parse(interp, &errors, &script);
@@ -275,7 +274,20 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
     rewind(stream);
     sieverestart(stream);
 
-    return _sieve_script_parse_only(NULL, out_errors, out_script);
+    int r = _sieve_script_parse_only(NULL, out_errors, out_script);
+
+    if (r && *out_errors) {
+        /* XXX  This is simply to replicate behavior before
+           sieve_script_parse_string() was added and shared the same internals */
+        struct buf errors = BUF_INITIALIZER;
+
+        buf_initm(&errors, *out_errors, strlen(*out_errors));
+        buf_insertcstr(&errors, 0, "script errors:\r\n");
+        *out_errors = buf_release(&errors);
+        buf_free(&errors);
+    }
+
+    return r;
 }
 
 EXPORTED int sieve_script_parse_string(sieve_interp_t *interp, const char *s,
