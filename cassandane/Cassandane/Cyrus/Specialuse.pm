@@ -66,6 +66,7 @@ sub tear_down
 
 # Test that you can rename a special use folder
 sub test_rename_toplevel
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -79,6 +80,7 @@ sub test_rename_toplevel
 }
 
 sub test_rename_tosub
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -96,6 +98,7 @@ sub test_rename_tosub
 }
 
 sub test_create_multiple
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -106,6 +109,7 @@ sub test_create_multiple
 }
 
 sub test_create_dupe
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -132,6 +136,7 @@ sub test_annot
 }
 
 sub test_annot_dupe
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -148,7 +153,7 @@ sub test_annot_dupe
 }
 
 sub test_delete_imm
-    :ImmediateDelete
+    :ImmediateDelete :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -162,7 +167,7 @@ sub test_delete_imm
 }
 
 sub test_delete_delay
-    :DelayedDelete
+    :DelayedDelete :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -176,7 +181,7 @@ sub test_delete_delay
 }
 
 sub test_delete_removed_imm
-    :ImmediateDelete
+    :ImmediateDelete :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -193,7 +198,7 @@ sub test_delete_removed_imm
 }
 
 sub test_delete_removed_delay
-    :DelayedDelete
+    :DelayedDelete :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -210,7 +215,7 @@ sub test_delete_removed_delay
 }
 
 sub test_important
-    :min_version_3_1
+    :min_version_3_1 :NoAltNameSpace
 {
     my ($self) = @_;
 

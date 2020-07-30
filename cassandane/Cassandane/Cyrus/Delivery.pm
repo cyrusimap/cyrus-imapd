@@ -77,7 +77,7 @@ sub tear_down
 }
 
 sub test_plus_address_exact
-    :FuzzyMatch
+    :FuzzyMatch :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -103,7 +103,7 @@ sub test_plus_address_exact
 }
 
 sub test_plus_address_underscore
-    :FuzzyMatch
+    :FuzzyMatch :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -129,7 +129,7 @@ sub test_plus_address_underscore
 }
 
 sub test_plus_address_case
-    :FuzzyMatch
+    :FuzzyMatch :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -155,7 +155,7 @@ sub test_plus_address_case
 }
 
 sub test_plus_address_case_defdomain
-    :FuzzyMatch :VirtDomains
+    :FuzzyMatch :VirtDomains :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -212,7 +212,7 @@ sub test_plus_address_case_bogusdomain
 }
 
 sub test_plus_address_bothupper
-    :FuzzyMatch
+    :FuzzyMatch :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -238,7 +238,7 @@ sub test_plus_address_bothupper
 }
 
 sub test_plus_address_partial
-    :FuzzyMatch
+    :FuzzyMatch :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -264,7 +264,7 @@ sub test_plus_address_partial
 }
 
 sub test_plus_address_partial_case
-    :FuzzyMatch
+    :FuzzyMatch :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -290,7 +290,7 @@ sub test_plus_address_partial_case
 }
 
 sub test_plus_address_partial_bothupper
-    :FuzzyMatch
+    :FuzzyMatch :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -316,7 +316,7 @@ sub test_plus_address_partial_bothupper
 }
 
 sub test_plus_address_partial_virtdom
-    :FuzzyMatch :VirtDomains
+    :FuzzyMatch :VirtDomains :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -349,7 +349,7 @@ sub test_plus_address_partial_virtdom
 
 
 sub test_duplicate_suppression_off
-    :DuplicateSuppressionOff
+    :DuplicateSuppressionOff :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -386,7 +386,7 @@ sub test_duplicate_suppression_off
 
 
 sub test_duplicate_suppression_on
-    :DuplicateSuppressionOn
+    :DuplicateSuppressionOn :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -433,7 +433,7 @@ sub test_duplicate_suppression_on
 }
 
 sub test_duplicate_suppression_on_delete
-    :DuplicateSuppressionOn
+    :DuplicateSuppressionOn :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -479,7 +479,7 @@ sub test_duplicate_suppression_on_delete
 }
 
 sub test_duplicate_suppression_on_badmbox
-    :DuplicateSuppressionOn
+    :DuplicateSuppressionOn :NoAltNameSpace
 {
     my ($self) = @_;
 

@@ -134,7 +134,7 @@ sub check_folder_not_ondisk
 }
 
 sub test_self_inbox_imm
-    :ImmediateDelete :SemidelayedExpunge
+    :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -202,7 +202,7 @@ sub test_self_inbox_imm
 }
 
 sub test_self_inbox_del
-    :DelayedDelete :SemidelayedExpunge
+    :DelayedDelete :SemidelayedExpunge :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -277,7 +277,7 @@ sub test_self_inbox_del
 }
 
 sub test_admin_inbox_imm
-    :ImmediateDelete :SemidelayedExpunge
+    :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -351,7 +351,7 @@ sub test_admin_inbox_imm
 }
 
 sub test_admin_inbox_del
-    :DelayedDelete :SemidelayedExpunge
+    :DelayedDelete :SemidelayedExpunge :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -432,7 +432,7 @@ sub test_admin_inbox_del
 }
 
 sub test_bz3781
-    :ImmediateDelete :SemidelayedExpunge
+    :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -475,7 +475,7 @@ sub test_bz3781
 }
 
 sub test_cyr_expire_delete
-    :DelayedDelete :min_version_3_0
+    :DelayedDelete :min_version_3_0 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -538,7 +538,7 @@ sub test_cyr_expire_delete
 }
 
 sub test_allowdeleted
-    :AllowDeleted :DelayedDelete :min_version_3_1
+    :AllowDeleted :DelayedDelete :min_version_3_1 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -580,7 +580,7 @@ sub test_allowdeleted
 }
 
 sub test_cyr_expire_delete_with_annotation
-    :DelayedDelete :min_version_3_1
+    :DelayedDelete :min_version_3_1 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -651,7 +651,7 @@ sub test_cyr_expire_delete_with_annotation
 
 # https://github.com/cyrusimap/cyrus-imapd/issues/2413
 sub test_cyr_expire_dont_resurrect_convdb
-    :Conversations :DelayedDelete :min_version_3_0
+    :Conversations :DelayedDelete :min_version_3_0 :NoAltNameSpace
 {
     my ($self) = @_;
 

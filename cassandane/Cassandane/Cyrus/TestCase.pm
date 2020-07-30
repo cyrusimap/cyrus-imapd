@@ -217,6 +217,9 @@ magic(VirtDomains => sub {
 magic(AltNamespace => sub {
     shift->config_set(altnamespace => 'yes');
 });
+magic(NoAltNamespace => sub {
+    shift->config_set(altnamespace => 'no');
+});
 magic(CrossDomains => sub {
     shift->config_set(crossdomains => 'yes');
 });

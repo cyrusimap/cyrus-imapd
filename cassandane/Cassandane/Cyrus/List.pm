@@ -567,7 +567,7 @@ sub test_folder_at_novirtdomains
 }
 
 sub test_crossdomains
-    :UnixHierarchySep :VirtDomains :CrossDomains :min_version_3_0
+    :UnixHierarchySep :VirtDomains :CrossDomains :min_version_3_0 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -672,6 +672,7 @@ sub test_inbox_altnamespace
 # mailbox name argument, matching levels of hierarchy
 # are also returned.
 sub test_percent
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1250,7 +1251,7 @@ sub test_virtdomains_return_subscribed_altns
 }
 
 sub test_virtdomains_return_subscribed_noaltns
-    :VirtDomains :UnixHierarchySep
+    :VirtDomains :UnixHierarchySep :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1474,6 +1475,7 @@ sub test_dotuser_gh1875_novirt_altns
 }
 
 sub test_otherusers_pattern
+    :NoAltNameSpace
 {
     my ($self) = @_;
     $self->{instance}->create_user("foo");
@@ -1521,7 +1523,7 @@ sub test_otherusers_pattern
 }
 
 sub test_otherusers_pattern_unixhs
-    :UnixHierarchySep
+    :UnixHierarchySep :NoAltNameSpace
 {
     my ($self) = @_;
     $self->{instance}->create_user("foo");

@@ -808,7 +808,7 @@ EOF
 }
 
 sub test_shared_invite_as_secretary
-    :VirtDomains :min_version_3_1 :needs_component_httpd
+    :VirtDomains :min_version_3_1 :needs_component_httpd :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -919,7 +919,7 @@ EOF
 }
 
 sub test_shared_reply_as_secretary
-    :VirtDomains :min_version_3_1 :needs_component_httpd
+    :VirtDomains :min_version_3_1 :needs_component_httpd :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1030,7 +1030,7 @@ EOF
 }
 
 sub test_shared_team_invite_sharee
-    :VirtDomains :min_version_3_1 :needs_component_httpd
+    :VirtDomains :min_version_3_1 :needs_component_httpd :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1137,7 +1137,7 @@ EOF
 }
 
 sub test_shared_team_invite_sharer
-    :VirtDomains :min_version_3_1 :needs_component_httpd
+    :VirtDomains :min_version_3_1 :needs_component_httpd :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1787,7 +1787,7 @@ EOF
 }
 
 sub test_imap_plusdav_novirt
-    :MagicPlus :min_version_3_0 :needs_component_httpd
+    :MagicPlus :min_version_3_0 :needs_component_httpd :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1805,7 +1805,7 @@ sub test_imap_plusdav_novirt
 }
 
 sub test_imap_plusdav
-    :MagicPlus :VirtDomains :min_version_3_0 :needs_component_httpd
+    :MagicPlus :VirtDomains :min_version_3_0 :needs_component_httpd :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1823,7 +1823,7 @@ sub test_imap_plusdav
 }
 
 sub test_imap_magicplus_withdomain
-    :MagicPlus :VirtDomains :min_version_3_0 :needs_component_httpd
+    :MagicPlus :VirtDomains :min_version_3_0 :needs_component_httpd :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -2096,7 +2096,7 @@ EOF
 }
 
 sub test_alarm_peruser
-    :MagicPlus :min_version_3_0 :needs_component_httpd
+    :MagicPlus :min_version_3_0 :needs_component_httpd :NoAltNameSpace
 {
     my ($self) = @_;
 

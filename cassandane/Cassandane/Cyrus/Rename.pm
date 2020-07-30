@@ -214,7 +214,7 @@ sub test_rename_user_bigconversation
 # Test big conversation rename
 #
 sub test_rename_user_midsizeconversation
-    :AllowMoves :Conversations :min_version_3_0
+    :AllowMoves :Conversations :min_version_3_0 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -598,7 +598,7 @@ sub test_rename_deepuser
 }
 
 sub test_rename_paths
-    :MetaPartition
+    :MetaPartition :NoAltNameSpace
 {
     my ($self) = @_;
     my $basedir = $self->{instance}->{basedir};
@@ -714,7 +714,7 @@ sub _dbset
 }
 
 sub test_intermediate_cleanup
-    :min_version_3_1
+    :min_version_3_1 :NoAltNameSpace :NoAltNameSpace
 {
     my ($self) = @_;
 

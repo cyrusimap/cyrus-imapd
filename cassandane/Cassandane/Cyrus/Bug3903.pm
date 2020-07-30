@@ -75,6 +75,7 @@ sub tear_down
 }
 
 sub test_create_under_wrong_user
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -97,6 +98,7 @@ sub test_create_under_wrong_user
 }
 
 sub test_create_under_user
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -110,6 +112,7 @@ sub test_create_under_user
 }
 
 sub test_create_under_shared
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -123,6 +126,7 @@ sub test_create_under_shared
 }
 
 sub test_create_at_top_level
+    :NoAltNameSpace
 {
     my ($self) = @_;
 

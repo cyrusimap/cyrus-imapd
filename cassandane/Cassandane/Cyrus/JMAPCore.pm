@@ -109,7 +109,7 @@ sub test_capabilities
 }
 
 sub test_get_session
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
 {
     my ($self) = @_;
 

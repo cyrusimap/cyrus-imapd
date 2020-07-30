@@ -1679,7 +1679,7 @@ EOF
 }
 
 sub test_simple_multiuser
-    :min_version_3_1 :needs_component_calalarmd
+    :min_version_3_1 :needs_component_calalarmd :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1831,7 +1831,7 @@ EOF
 }
 
 sub test_override_multiuser
-    :min_version_3_1 :needs_component_calalarmd
+    :min_version_3_1 :needs_component_calalarmd :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -2015,7 +2015,7 @@ EOF
 }
 
 sub test_simple_multiuser_sametime
-    :min_version_3_1 :needs_component_calalarmd
+    :min_version_3_1 :needs_component_calalarmd :NoAltNameSpace
 {
     my ($self) = @_;
 

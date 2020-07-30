@@ -103,7 +103,7 @@ sub getinbox
 
 
 sub test_mailbox_get
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -181,7 +181,7 @@ sub test_mailbox_get
 }
 
 sub test_mailbox_get_inbox_sub
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -259,7 +259,7 @@ sub test_mailbox_get_inbox_sub
 }
 
 sub test_mailbox_get_specialuse
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -424,7 +424,7 @@ sub test_mailbox_get_nocalendars
 }
 
 sub test_mailbox_get_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -499,7 +499,7 @@ sub test_mailbox_get_shared
 }
 
 sub test_mailbox_get_shared_inbox
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -713,7 +713,7 @@ sub test_mailbox_query
 }
 
 sub test_mailbox_query_sortastree
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -768,7 +768,7 @@ sub test_mailbox_query_sortastree
 }
 
 sub test_mailbox_query_filterastree
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -836,7 +836,7 @@ sub test_mailbox_query_limit_zero
 }
 
 sub test_mailbox_query_parentid_null
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -869,7 +869,7 @@ sub test_mailbox_query_parentid_null
 }
 
 sub test_mailbox_query_name
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1359,7 +1359,7 @@ sub test_mailbox_set_order
 }
 
 sub test_mailbox_set_inbox_children
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1870,7 +1870,7 @@ sub test_mailbox_set_name_unicode_nfc
 
 
 sub test_mailbox_set_role
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -2987,7 +2987,7 @@ sub test_mailbox_querychanges_intermediary_removed
 }
 
 sub test_mailbox_get_intermediate
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3028,7 +3028,7 @@ sub test_mailbox_get_intermediate
 }
 
 sub test_mailbox_get_inboxsub
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3070,7 +3070,7 @@ sub test_mailbox_get_inboxsub
 }
 
 sub test_mailbox_intermediary_imaprename_preservetree
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3122,7 +3122,7 @@ sub test_mailbox_intermediary_imaprename_preservetree
 }
 
 sub test_mailbox_set_intermediary_createchild
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3172,7 +3172,7 @@ sub test_mailbox_set_intermediary_createchild
 }
 
 sub test_mailbox_set_intermediary_rename
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3227,7 +3227,7 @@ sub test_mailbox_set_intermediary_rename
 }
 
 sub test_mailbox_set_intermediary_annotation
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3279,7 +3279,7 @@ sub test_mailbox_set_intermediary_annotation
 }
 
 sub test_mailbox_set_intermediary_destroy_child
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3332,7 +3332,7 @@ sub test_mailbox_set_intermediary_destroy_child
 }
 
 sub test_mailbox_set_intermediary_move_child
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3398,7 +3398,7 @@ sub test_mailbox_set_intermediary_move_child
 }
 
 sub test_mailbox_set_intermediary_destroy
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3443,7 +3443,7 @@ sub test_mailbox_set_intermediary_destroy
 }
 
 sub test_mailbox_set_subscriptions_destroy
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3479,7 +3479,7 @@ sub test_mailbox_set_subscriptions_destroy
 }
 
 sub test_mailbox_set_subscriptions_rename
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3514,7 +3514,7 @@ sub test_mailbox_set_subscriptions_rename
 }
 
 sub test_mailbox_set_subscriptions_rename_children
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -3744,7 +3744,7 @@ sub _check_counts
 }
 
 sub test_mailbox_counts
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3972,7 +3972,7 @@ EOF
 }
 
 sub test_mailbox_counts_add_remove
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4099,7 +4099,7 @@ EOF
 }
 
 sub test_mailbox_trash_counts_ondelete
-    :min_version_3_3 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

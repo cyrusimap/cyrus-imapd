@@ -81,6 +81,7 @@ sub tear_down
 # Test regular delete
 #
 sub test_delete
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -100,6 +101,7 @@ sub test_delete
 }
 
 sub test_many_users
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -120,6 +122,7 @@ sub test_many_users
 }
 
 sub test_move
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -139,6 +142,7 @@ sub test_move
 }
 
 sub test_setacl_badacl
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -153,6 +157,7 @@ sub test_setacl_badacl
 }
 
 sub test_setacl_addacl
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -168,6 +173,7 @@ sub test_setacl_addacl
 }
 
 sub test_setacl_rmacl
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -183,6 +189,7 @@ sub test_setacl_rmacl
 }
 
 sub test_setacl_addacl_exists
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -198,6 +205,7 @@ sub test_setacl_addacl_exists
 }
 
 sub test_setacl_rmacl_unexists
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -243,6 +251,7 @@ sub test_setacl_emptyid
 }
 
 sub test_setacl_badrights
+    :NoAltNameSpace
 {
     my ($self) = @_;
 

@@ -539,6 +539,7 @@ sub test_specialuse
 }
 
 sub test_createspecialuse
+    :NoAltNameSpace
 {
     my ($self) = @_;
 

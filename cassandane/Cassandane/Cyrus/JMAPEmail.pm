@@ -3338,7 +3338,7 @@ sub test_email_query_snooze
 }
 
 sub test_email_seen_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3407,7 +3407,7 @@ sub test_email_seen_shared
 }
 
 sub test_email_seen_shared_twofolder
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3482,7 +3482,7 @@ sub test_email_seen_shared_twofolder
 }
 
 sub test_email_seen_shared_twofolder_hidden
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3556,7 +3556,7 @@ sub test_email_seen_shared_twofolder_hidden
 }
 
 sub test_email_flagged_shared_twofolder_hidden
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3689,7 +3689,7 @@ sub test_email_set_move
 }
 
 sub test_email_set_move_keywords
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

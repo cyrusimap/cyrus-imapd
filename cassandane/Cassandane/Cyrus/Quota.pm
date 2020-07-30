@@ -1233,6 +1233,7 @@ sub test_quota_f
 
 # Test races between quota -f and updates to mailboxes
 sub test_quota_f_vs_update
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1300,6 +1301,7 @@ sub test_quota_f_vs_update
 }
 
 sub test_quota_f_nested_qr
+    :NoAltNameSpace
 {
     my ($self) = @_;
 

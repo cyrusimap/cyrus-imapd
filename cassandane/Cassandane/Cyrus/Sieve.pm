@@ -314,6 +314,7 @@ EOF
 sub test_deliver_specialuse
     :min_version_3_0
     :needs_component_sieve
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -530,7 +531,7 @@ EOF
 }
 
 sub test_deliver_fileinto_autocreate_globalshared
-    :needs_component_sieve :NoStartInstances
+    :needs_component_sieve :NoStartInstances :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -564,7 +565,7 @@ EOF
 }
 
 sub test_deliver_fileinto_autocreate_otheruser
-    :needs_component_sieve :NoStartInstances
+    :needs_component_sieve :NoStartInstances :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -601,7 +602,7 @@ EOF
 }
 
 sub test_deliver_fileinto_autocreate_newuser
-    :needs_component_sieve :NoStartInstances
+    :needs_component_sieve :NoStartInstances :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -634,7 +635,7 @@ EOF
 }
 
 sub test_deliver_fileinto_create_globalshared
-    :needs_component_sieve :min_version_3_0
+    :needs_component_sieve :min_version_3_0 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -665,7 +666,7 @@ EOF
 }
 
 sub test_deliver_fileinto_create_otheruser
-    :needs_component_sieve :min_version_3_0
+    :needs_component_sieve :min_version_3_0 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -699,7 +700,7 @@ EOF
 }
 
 sub test_deliver_fileinto_create_newuser
-    :needs_component_sieve :min_version_3_0
+    :needs_component_sieve :min_version_3_0 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1661,6 +1662,7 @@ EOF
 sub test_specialuse_exists
     :min_version_3_1
     :needs_component_sieve
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1718,6 +1720,7 @@ EOF
 sub test_specialuse
     :min_version_3_1
     :needs_component_sieve
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1778,6 +1781,7 @@ EOF
 sub test_vacation_with_fcc
     :min_version_3_1
     :needs_component_sieve
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1822,6 +1826,7 @@ EOF
 sub test_vacation_with_explicit_subject
     :min_version_3_1
     :needs_component_sieve
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1866,6 +1871,7 @@ EOF
 sub test_vacation_with_long_origsubject
     :min_version_3_1
     :needs_component_sieve
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -1932,6 +1938,7 @@ EOF
 sub test_vacation_with_long_encoded_origsubject
     :min_version_3_1
     :needs_component_sieve
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -2619,6 +2626,7 @@ sub test_snooze
     :needs_component_sieve :needs_component_calalarmd
     :needs_component_jmap
     :min_version_3_1
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -2677,6 +2685,7 @@ sub test_snooze_mailboxid
     :needs_component_sieve :needs_component_calalarmd
     :needs_component_jmap
     :min_version_3_1
+    :NoAltNameSpace
 {
     my ($self) = @_;
 

@@ -168,7 +168,7 @@ sub test_splitbrain
 # Test replication of mailbox only after a rename
 #
 sub test_splitbrain_mailbox
-    :min_version_3_1
+    :min_version_3_1 :NoAltNameSpace
 {
     my ($self) = @_;
 

@@ -176,6 +176,7 @@ sub test_allowdeleted
 
 # XXX this isn't really the right place for this test
 sub test_ipurge_mboxevent
+    :NoAltNameSpace
 {
     my ($self) = @_;
 

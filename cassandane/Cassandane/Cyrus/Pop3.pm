@@ -139,7 +139,7 @@ sub test_top_args
 }
 
 sub test_subfolder_login
-    :PopSubFolders
+    :PopSubFolders :NoAltNameSpace
 {
     my ($self) = @_;
 

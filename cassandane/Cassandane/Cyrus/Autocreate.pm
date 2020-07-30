@@ -83,7 +83,7 @@ sub tear_down
 }
 
 sub test_autocreate_specialuse
-     :min_version_3_0 :needs_component_autocreate
+     :min_version_3_0 :needs_component_autocreate :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -141,7 +141,7 @@ sub test_autocreate_sieve_script_generation
 }
 
 sub test_autocreate_acl
-    :min_version_3_1 :needs_component_autocreate :needs_component_sieve
+    :min_version_3_1 :needs_component_autocreate :needs_component_sieve :NoAltNameSpace
 {
     my ($self) = @_;
 

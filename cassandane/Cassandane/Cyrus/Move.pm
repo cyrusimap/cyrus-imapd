@@ -71,6 +71,7 @@ sub tear_down
 }
 
 sub test_move_new_user
+    :NoAltNameSpace
 {
     # test whether the imap_admins setting works correctly
     my ($self) = @_;

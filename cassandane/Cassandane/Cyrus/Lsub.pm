@@ -85,6 +85,7 @@ sub tear_down
 # Test LSUB behaviour
 #
 sub test_lsub_toplevel
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -172,6 +173,7 @@ sub test_lsub_delete
 }
 
 sub test_lsub_extrachild
+    :NoAltNameSpace
 {
     my ($self) = @_;
 

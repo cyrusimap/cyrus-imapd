@@ -75,6 +75,7 @@ sub tear_down
 # Test LSUB behaviour
 #
 sub test_thread_crash
+    :NoAltNameSpace
 {
     my ($self) = @_;
 
