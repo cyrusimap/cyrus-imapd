@@ -565,6 +565,26 @@ static const jmap_property_t calendar_props[] = {
     { NULL, NULL, 0 }
 };
 
+static int has_calendars_cb(const mbentry_t *mbentry, void *rock)
+{
+    jmap_req_t *req = rock;
+    if (mbentry->mbtype == MBTYPE_CALENDAR &&
+            jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+        return CYRUSDB_DONE;
+    }
+    return 0;
+}
+
+static int has_calendars(jmap_req_t *req)
+{
+    mbname_t *mbname = mbname_from_userid(req->accountid);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
+    int r = mboxlist_mboxtree(mbname_intname(mbname), has_calendars_cb,
+                              req, MBOXTREE_SKIP_ROOT);
+    mbname_free(&mbname);
+    return r == CYRUSDB_DONE;
+}
+
 static int jmap_calendar_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -572,12 +592,10 @@ static int jmap_calendar_get(struct jmap_req *req)
     json_t *err = NULL;
     int r = 0;
 
-    r = caldav_create_defaultcalendars(req->accountid);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* The account exists but does not have a root mailbox. */
+    if (!has_calendars(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
         return 0;
-    } else if (r) return r;
+    }
 
     /* Parse request */
     jmap_get_parse(req, &parser, calendar_props, /*allow_null_ids*/1,
@@ -714,12 +732,10 @@ static int jmap_calendar_changes(struct jmap_req *req)
     json_t *err = NULL;
     int r = 0;
 
-    r = caldav_create_defaultcalendars(req->accountid);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* The account exists but does not have a root mailbox. */
+    if (!has_calendars(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
         return 0;
-    } else if (r) goto done;
+    }
 
     /* Parse request */
     jmap_changes_parse(req, &parser, req->counters.caldavfoldersdeletedmodseq,
@@ -2364,12 +2380,10 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     json_t *err = NULL;
     int r = 0;
 
-    r = caldav_create_defaultcalendars(req->accountid);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* The account exists but does not have a root mailbox. */
+    if (!has_calendars(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
         return 0;
-    } else if (r) return r;
+    }
 
     /* Build callback data */
     int checkacl = strcmp(req->accountid, req->userid);
