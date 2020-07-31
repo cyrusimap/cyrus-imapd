@@ -309,7 +309,7 @@ sub test_messages
 }
 
 sub test_shared_mailbox
-    :min_version_3_0 :needs_component_backup
+    :min_version_3_0 :needs_component_backup :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -363,7 +363,7 @@ sub test_shared_mailbox
 }
 
 sub test_deleted_mailbox
-    :min_version_3_0 :needs_component_backup
+    :min_version_3_0 :needs_component_backup :NoAltNamespace
 {
     my ($self) = @_;
 

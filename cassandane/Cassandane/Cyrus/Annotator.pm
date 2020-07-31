@@ -117,6 +117,7 @@ sub test_add_annot_deliver
 }
 
 sub test_add_annot_deliver_tomailbox
+    :NoAltNamespace
 {
     my ($self) = @_;
 

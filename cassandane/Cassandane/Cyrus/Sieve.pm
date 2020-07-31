@@ -2747,6 +2747,7 @@ sub test_snooze_tzid
     :needs_component_sieve :needs_component_calalarmd
     :needs_component_jmap
     :min_version_3_3
+    :NoAltNamespace
 {
     my ($self) = @_;
 

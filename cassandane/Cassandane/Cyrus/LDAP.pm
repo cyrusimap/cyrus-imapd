@@ -185,7 +185,7 @@ sub test_setacl_groupid_spaces
 }
 
 sub test_list_groupaccess_noracl
-    :needs_dependency_ldap :min_version_3_0_8
+    :needs_dependency_ldap :min_version_3_0_8 :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -209,7 +209,7 @@ sub test_list_groupaccess_noracl
 }
 
 sub test_list_groupaccess_racl
-    :needs_dependency_ldap :ReverseACLs :min_version_3_1
+    :needs_dependency_ldap :ReverseACLs :min_version_3_1 :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -321,14 +321,14 @@ sub do_test_list_order
 }
 
 sub test_list_order_noracl
-    :needs_dependency_ldap :min_version_3_0_8
+    :needs_dependency_ldap :min_version_3_0_8 :NoAltNamespace
 {
     my $self = shift;
     return $self->do_test_list_order(@_);
 }
 
 sub test_list_order_racl
-    :needs_dependency_ldap :ReverseACLs :min_version_3_1
+    :needs_dependency_ldap :ReverseACLs :min_version_3_1 :NoAltNamespace
 {
     my $self = shift;
     return $self->do_test_list_order(@_);
