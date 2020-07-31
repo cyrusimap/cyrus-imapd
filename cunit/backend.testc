@@ -45,6 +45,7 @@ struct server_state {
 
     /* global state */
     int rend_sock;
+    char banner[32];
 
     /* per-connection state */
     int is_connected;
@@ -57,7 +58,6 @@ struct server_state {
     struct protstream *in;
     struct protstream *out;
 };
-
 
 #define HOST            "localhost"
 #define SASLSERVICE     "vorpal"
@@ -81,6 +81,7 @@ static const struct capa_t default_capa[] = {
     { "CCCOMPRESS=DEFLATE", CAPA_COMPRESS },
     { NULL, 0 }
 };
+static const char default_banner[] = "Toy Test server v0.0.1";
 static char default_service[32];
 
 static int init_sasl(int isclient);
@@ -138,6 +139,14 @@ static struct protocol_t test_prot =
     }
 };
 
+static void server_set_banner(struct server_state *state, const char *str)
+{
+    memset(state->banner, 0, sizeof(state->banner));
+    if (str)
+        snprintf(state->banner, sizeof(state->banner), "%s", str);
+    else
+        snprintf(state->banner, sizeof(state->banner), "%s", default_banner);
+}
 
 /*
  * Setup default test conditions, on both the client and server.
@@ -145,6 +154,7 @@ static struct protocol_t test_prot =
 static void default_conditions(void)
 {
     server_state->config = default_server_config;
+    server_set_banner(server_state, NULL);
 
     test_prot.service = default_service;
     memcpy(&test_prot.u.std.capa_cmd.capa, default_capa, sizeof(default_capa));
@@ -698,7 +708,6 @@ static void server_emit_caps(struct server_state *state)
                                  * NAME, VALUE, NULL,
                                  * NULL */
     char line[1024];
-    static const char banner[] = "Toy Test server v0.0.1";
 
     /*
      * The ccSASL cap reports a list of SASL mechanism names.
@@ -809,7 +818,7 @@ static void server_emit_caps(struct server_state *state)
             n++;
             server_printf(state, "* %s%s\r\n", name, line);
         }
-        server_printf(state, "OK %s\r\n", banner);
+        server_printf(state, "OK %s server ready\r\n", state->banner);
     } else {
         /* One-line, NAME=VALUE pairs inside IMAP-style response code */
         line[0] = '\0';
@@ -827,7 +836,8 @@ static void server_emit_caps(struct server_state *state)
             }
             n++;
         }
-        server_printf(state, "OK [CAPABILITY%s] %s\r\n", line, banner);
+        server_printf(state, "OK [CAPABILITY%s] %s server ready\r\n",
+                      line, state->banner);
     }
     server_flush(state);
 }
@@ -1198,8 +1208,10 @@ static int init_sasl(int isclient)
         }
 
         callbacks = mysasl_callbacks(USERID, USERID, NULL, PASSWORD);
-        if (!callbacks)
+        if (!callbacks) {
+            fprintf(stderr, "could not init sasl client callbacks\n");
             return -1;
+        }
     } else {
         static const struct sasl_callback server_cb[] = {
             { SASL_CB_SERVER_USERDB_CHECKPASS, (void *)&server_checkpass, NULL },
