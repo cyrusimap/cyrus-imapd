@@ -9029,6 +9029,7 @@ out:
 static void cmd_starttls(char *tag, int imaps)
 {
     int result;
+    char *localip, *remoteip;
 
     if (imapd_starttls_done == 1)
     {
@@ -9061,11 +9062,22 @@ static void cmd_starttls(char *tag, int imaps)
         prot_flush(imapd_out);
     }
 
+    /* tls_start_servertls is going to reset saslprops, discarding the
+     * iplocalport and ipremoteport fields.  Preserve them, then put them back
+     * after the call.
+     */
+    localip = buf_release(&saslprops.iplocalport);
+    remoteip = buf_release(&saslprops.ipremoteport);
+
     result=tls_start_servertls(0, /* read */
                                1, /* write */
                                imaps ? 180 : imapd_timeout,
                                &saslprops,
                                &tls_conn);
+
+    /* put the iplocalport and ipremoteport back */
+    if (localip)  buf_initm(&saslprops.iplocalport, localip, strlen(localip));
+    if (remoteip) buf_initm(&saslprops.ipremoteport, remoteip, strlen(remoteip));
 
     /* if error */
     if (result==-1) {
