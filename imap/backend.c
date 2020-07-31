@@ -1293,6 +1293,8 @@ EXPORTED int backend_version(struct backend *be)
      * Otherwise, old versions will be unable to recognise the new version,
      * assume it is ancient, and downgrade the index to the oldest version
      * supported (version 6, prior to v2.3).
+     *
+     * In 3.2 and earlier, this function lives in imapd.c
      */
 
     /* It's like looking in the mirror and not suffering from schizophrenia */
@@ -1300,7 +1302,24 @@ EXPORTED int backend_version(struct backend *be)
         return MAILBOX_MINOR_VERSION;
     }
 
-    /* master branch? */
+    /* unstable 3.3 series ranges from 17..?? */
+    if (strstr(be->banner, "Cyrus IMAP 3.3")) {
+        /* all versions of 3.3 support at least this version */
+        return 17;
+    }
+
+    /* version 3.2 is 16 */
+    if (strstr(be->banner, "Cyrus IMAP 3.2")) {
+        return 16;
+    }
+
+    /* unstable 3.1 series ranges from 13..16 */
+    if (strstr(be->banner, "Cyrus IMAP 3.1")) {
+        /* all versions of 3.1 support at least this version */
+        return 13;
+    }
+
+    /* version 3.0 is 13 */
     if (strstr(be->banner, "Cyrus IMAP 3.0")) {
         return 13;
     }
