@@ -41,6 +41,7 @@ package Cassandane::IMAPMessageStore;
 use strict;
 use warnings;
 use Mail::IMAPTalk;
+use Cwd qw(abs_path);
 
 use lib '.';
 use base qw(Cassandane::MessageStore);
@@ -70,6 +71,7 @@ sub new
         fetch_attrs => { uid => 1, 'body.peek[]' => 1 },
         # state for XCONVFETCH
         fetched => undef,
+        ssl => delete $params{ssl} || 0,
     );
     my $self = $class->SUPER::new(%params);
     map { $self->{$_} = $bits{$_}; } keys %bits;
@@ -88,18 +90,35 @@ sub connect
 
     $self->disconnect();
 
-    my $sock = create_client_socket(
-                    $self->{address_family},
-                    $self->{host}, $self->{port})
-        or die "Cannot create client socket: $@";
+    my $client;
 
-    my $client = Mail::IMAPTalk->new(
-                            Socket => $sock,
-                            Pedantic => 1,
-                            PreserveINBOX => 1,
-                            Uid => 0
-                        )
-        or die "Cannot connect to server: $@";
+    if ($self->{ssl}) {
+        my $ca_file = abs_path("data/certs/cacert.pem");
+        $client = Mail::IMAPTalk->new(
+                      Server => $self->{host},
+                      Port => $self->{port},
+                      UseSSL => $self->{ssl},
+                      SSL_ca_file => $ca_file,
+                      Pedantic => 1,
+                      PreserveINBOX => 1,
+                      Uid => 0,
+                  )
+            or die "Cannot connect to server: $@";
+    }
+    else {
+        my $sock = create_client_socket(
+                        $self->{address_family},
+                        $self->{host}, $self->{port})
+            or die "Cannot create client socket: $@";
+
+        $client = Mail::IMAPTalk->new(
+                      Socket => $sock,
+                      Pedantic => 1,
+                      PreserveINBOX => 1,
+                      Uid => 0,
+                  )
+            or die "Cannot connect to server: $@";
+    }
 
     $client->set_tracing(1)
         if $self->{verbose};

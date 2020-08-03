@@ -47,8 +47,10 @@ use Cassandane::Util::Log;
 
 sub new
 {
-    my $class = shift;
-    my $self = $class->SUPER::new(type => 'imap', @_);
+    my ($class, %params) = @_;
+    my $ssl = scalar grep { $_ eq '-s' } @{$params{argv}};
+    my $type = $ssl ? 'imaps' : 'imap';
+    my $self = $class->SUPER::new(type => $type, %params);
     return $self;
 }
 

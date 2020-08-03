@@ -59,6 +59,7 @@ our %fmethods =
     mbox => sub { return Cassandane::MboxMessageStore->new(@_); },
     maildir => sub { return Cassandane::MaildirMessageStore->new(@_); },
     imap => sub { return Cassandane::IMAPMessageStore->new(@_); },
+    imaps => sub { return Cassandane::IMAPMessageStore->new(@_, ssl => 1); },
     pop3 => sub { return Cassandane::POP3MessageStore->new(@_); },
 );
 
@@ -131,6 +132,7 @@ our %uriparsers =
             if (defined $uri->path() && $uri->path() ne "/");
         return 'imap';
     },
+    # XXX need to add a uriparser for imaps urls
     'pop' => sub
     {
         my ($uri, $params) = @_;

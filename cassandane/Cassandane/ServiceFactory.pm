@@ -60,7 +60,13 @@ sub create
     }
 
     # try and guess some service-specific defaults
-    if ($name =~ m/imap/)
+    if ($name =~ m/imaps/)
+    {
+        return Cassandane::IMAPService->new(
+                                argv => ['imapd', '-s'],
+                                %params);
+    }
+    elsif ($name =~ m/imap/)
     {
         return Cassandane::IMAPService->new(
                                 argv => ['imapd'],
