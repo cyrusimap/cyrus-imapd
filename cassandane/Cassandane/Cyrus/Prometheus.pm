@@ -406,21 +406,17 @@ sub slowtest_50000_users
 }
 
 sub test_connection_setup_failure_imapd
-    :min_version_3_2 :needs_component_httpd :TLS :NoStartInstances
+    :min_version_3_2 :needs_component_httpd :TLS
 {
     my ($self) = @_;
 
-    # let's set up an IMAPS instance
     my $instance = $self->{instance};
-    $instance->add_service(name => 'imaps',
-                           argv => ['imapd', '-s'],
-                           type => 'imap');
-    $self->_start_instances();
 
     my $svc = $instance->get_service('imaps');
     $self->assert_not_null($svc);
 
-    my $store = $svc->create_store();
+    # we're gonna try to connect to it unencrypted, so it fails
+    my $store = $svc->create_store('type' => 'imap');
     $self->assert_not_null($store);
 
     my $badconns = 2 + int(rand(4)); # between 2-5 tries

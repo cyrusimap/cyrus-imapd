@@ -43,6 +43,7 @@ use warnings;
 use attributes;
 use Data::Dumper;
 use Scalar::Util qw(refaddr);
+use List::Util qw(uniq);
 
 use lib '.';
 use base qw(Cassandane::Unit::TestCase);
@@ -163,6 +164,16 @@ sub want
     $value = 1 if !defined $value;
     $self->{_want}->{$name} = $value;
     xlog $self->_who_wants_it() .  " wants $name = $value";
+}
+
+sub want_services
+{
+    my ($self, @services) = @_;
+
+    @{$self->{_want}->{services}} = uniq(@{$self->{_want}->{services}},
+                                         @services);
+    xlog $self->_who_wants_it() . " wants services " . join(', ', @services);
+
 }
 
 sub config_set
@@ -302,6 +313,7 @@ magic(TLS => sub {
     $self->config_set(tls_server_cert => '@basedir@/conf/certs/cert.pem');
     $self->config_set(tls_server_key => '@basedir@/conf/certs/key.pem');
     $self->want('install_certificates');
+    $self->want_services('imaps');
 });
 magic(LowEmailLimits => sub {
     # these settings are new in 3.3.0 -- any test using this magic

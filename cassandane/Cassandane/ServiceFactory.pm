@@ -125,7 +125,7 @@ sub create
     }
     else
     {
-        die "No command specified and cannot guess a default";
+        die "$name: No command specified and cannot guess a default";
     }
 }
 
