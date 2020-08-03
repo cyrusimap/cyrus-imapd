@@ -5598,7 +5598,8 @@ EXPORTED void index_text_extractor_destroy(void)
 
     extractor_disconnect(ext);
     free(ext->be);
-    ext->be = NULL;
+    free(ext->hostname);
+    free(ext->path);
     free(ext);
 
     index_text_extractor = NULL;
