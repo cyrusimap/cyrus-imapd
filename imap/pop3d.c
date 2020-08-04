@@ -553,7 +553,8 @@ int service_main(int argc __attribute__((unused)),
     if ((mboxevent = mboxevent_new(EVENT_LOGOUT))) {
         mboxevent_set_access(mboxevent,
                              buf_cstringnull_ifempty(&saslprops.iplocalport),
-                             NULL, popd_userid, NULL, 1);
+                             buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                             popd_userid, NULL, 1);
 
         mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
