@@ -1103,6 +1103,23 @@ void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
     hash_insert(creation_id, xstrdup(id), req->created_ids);
 }
 
+HIDDEN json_t *jmap_dump_mboxcache(jmap_req_t *req)
+{
+    json_t *jarr = json_array();
+
+    int i;
+    for (i = 0; i < req->mboxes->count; i++) {
+        struct _mboxcache_rec *rec = ptrarray_nth(req->mboxes, i);
+        json_t *jval = json_array();
+        json_array_append_new(jval, json_string(rec->mbox->name));
+        json_array_append_new(jval, json_string(rec->rw ? "rw" : "r"));
+        json_array_append_new(jval, json_integer(rec->refcount));
+        json_array_append_new(jarr, jval);
+    }
+
+    return jarr;
+}
+
 HIDDEN int jmap_openmbox(jmap_req_t *req, const char *name,
                          struct mailbox **mboxp, int rw)
 {

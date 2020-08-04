@@ -246,6 +246,7 @@ extern int  jmap_openmbox(jmap_req_t *req, const char *name,
                           struct mailbox **mboxp, int rw);
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
+extern json_t *jmap_dump_mboxcache(jmap_req_t *req);
 
 extern int jmap_mboxlist_lookup(const char *name,
                                 mbentry_t **entryptr, struct txn **tid);
