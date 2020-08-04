@@ -5297,6 +5297,8 @@ static int logout(struct backend *s __attribute__((unused)))
 
 static void extractor_disconnect(struct extractor_ctx *ext)
 {
+    if (!ext) return;
+
     struct backend *be = ext->be;
     syslog(LOG_DEBUG, "extractor_disconnect(%p)", be);
 
@@ -5335,7 +5337,6 @@ static struct protocol_t http =
 static int extractor_connect(struct extractor_ctx *ext)
 {
     struct backend *be;
-    struct backend_ctx *ctx = NULL;
     time_t now = time(NULL);
 
     syslog(LOG_DEBUG, "extractor_connect()");
@@ -5363,7 +5364,7 @@ static int extractor_connect(struct extractor_ctx *ext)
         be->clientin = ext->clientin;
         be->timeout = prot_addwaitevent(ext->clientin,
                                         now + IDLE_TIMEOUT,
-                                        extractor_timeout, ctx);
+                                        extractor_timeout, ext);
     }
 
     return 0;
