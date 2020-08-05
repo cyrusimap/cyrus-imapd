@@ -1556,13 +1556,16 @@ sub test_squatter_partials
             $conn->send_response($res);
         } else {
             $nrequests++;
-            if ($nrequests == 1) {
+            if ($nrequests <= 4) {
+                # attach1: squatter sends GET and retries PUT 3 times
                 $conn->send_error(500);
-            } elsif ($nrequests == 2) {
+            } elsif ($nrequests == 5) {
+                # attach2: squatter sends GET
                 my $res = HTTP::Response->new(200);
                 $res->content("attach2");
                 $conn->send_response($res);
-            } elsif ($nrequests == 3) {
+            } elsif ($nrequests == 6) {
+                # attach1 retry: squatter sends GET
                 my $res = HTTP::Response->new(200);
                 $res->content("attach1");
                 $conn->send_response($res);
