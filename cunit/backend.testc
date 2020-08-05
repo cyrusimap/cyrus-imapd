@@ -197,6 +197,139 @@ static void test_badservice(void)
 }
 
 /*
+ * Test that backend_version detects the remote version correctly.
+ */
+struct backend_version_data {
+    char banner[32];
+    int version;
+};
+
+static void test_backend_version(void)
+{
+    size_t i, n_tests;
+    struct backend_version_data data[] = {
+        /* 2.3 changed index versions a few times */
+        { "Cyrus IMAP v2.3.0", 7 },
+        { "Cyrus IMAP v2.3.1", 7 },
+        { "Cyrus IMAP v2.3.2", 7 },
+        { "Cyrus IMAP v2.3.3", 7 },
+        { "Cyrus IMAP v2.3.4", 8 },
+        { "Cyrus IMAP v2.3.5", 8 },
+        { "Cyrus IMAP v2.3.6", 8 },
+        { "Cyrus IMAP v2.3.7", 9 },
+        { "Cyrus IMAP v2.3.8", 9 },
+        { "Cyrus IMAP v2.3.9", 9 },
+        { "Cyrus IMAP v2.3.10", 10 },
+        { "Cyrus IMAP v2.3.11", 10 },
+        { "Cyrus IMAP v2.3.12", 10 },
+        { "Cyrus IMAP v2.3.13", 10 },
+        { "Cyrus IMAP v2.3.14", 10 },
+        { "Cyrus IMAP v2.3.15", 10 },
+        { "Cyrus IMAP v2.3.16", 10 },
+        { "Cyrus IMAP v2.3.17", 10 },
+        { "Cyrus IMAP v2.3.18", 10 },
+        { "Cyrus IMAP v2.3.19", 10 },
+        { "Cyrus IMAP v2.3.20", 10 },
+
+        /* 2.4 only had a single index version */
+        { "Cyrus IMAP v2.4.0", 12 },
+        { "Cyrus IMAP v2.4.1", 12 },
+        { "Cyrus IMAP v2.4.2", 12 },
+        { "Cyrus IMAP v2.4.3", 12 },
+        { "Cyrus IMAP v2.4.4", 12 },
+        { "Cyrus IMAP v2.4.5", 12 },
+        { "Cyrus IMAP v2.4.6", 12 },
+        { "Cyrus IMAP v2.4.7", 12 },
+        { "Cyrus IMAP v2.4.8", 12 },
+        { "Cyrus IMAP v2.4.9", 12 },
+        { "Cyrus IMAP v2.4.10", 12 },
+        { "Cyrus IMAP v2.4.11", 12 },
+        { "Cyrus IMAP v2.4.12", 12 },
+        { "Cyrus IMAP v2.4.13", 12 },
+        { "Cyrus IMAP v2.4.14", 12 },
+        { "Cyrus IMAP v2.4.15", 12 },
+        { "Cyrus IMAP v2.4.16", 12 },
+        { "Cyrus IMAP v2.4.17", 12 },
+        { "Cyrus IMAP v2.4.18", 12 },
+        { "Cyrus IMAP v2.4.19", 12 },
+        { "Cyrus IMAP v2.4.20", 12 },
+
+        /* and a weirdly-named one, apparently? */
+        { "Cyrus IMAP git2.4.0", 12 },
+
+        /* 2.5 just had one */
+        { "Cyrus IMAP 2.5.0", 13 },
+        { "Cyrus IMAP 2.5.1", 13 },
+        { "Cyrus IMAP 2.5.2", 13 },
+        { "Cyrus IMAP 2.5.3", 13 },
+        { "Cyrus IMAP 2.5.4", 13 },
+        { "Cyrus IMAP 2.5.5", 13 },
+        { "Cyrus IMAP 2.5.6", 13 },
+        { "Cyrus IMAP 2.5.7", 13 },
+        { "Cyrus IMAP 2.5.8", 13 },
+        { "Cyrus IMAP 2.5.8", 13 },
+        { "Cyrus IMAP 2.5.10", 13 },
+        { "Cyrus IMAP 2.5.11", 13 },
+        { "Cyrus IMAP 2.5.12", 13 },
+        { "Cyrus IMAP 2.5.13", 13 },
+        { "Cyrus IMAP 2.5.14", 13 },
+        { "Cyrus IMAP 2.5.15", 13 },
+
+        /* and some weirdly named ones? */
+        { "Cyrus IMAP Murder 2.5.0", 13 },
+        { "Cyrus IMAP git2.5.0", 13 },
+
+        /* 3.0 had just one */
+        { "Cyrus IMAP 3.0.0", 13 },
+        { "Cyrus IMAP 3.0.1", 13 },
+        { "Cyrus IMAP 3.0.2", 13 },
+        { "Cyrus IMAP 3.0.3", 13 },
+        { "Cyrus IMAP 3.0.4", 13 },
+        { "Cyrus IMAP 3.0.5", 13 },
+        { "Cyrus IMAP 3.0.6", 13 },
+        { "Cyrus IMAP 3.0.7", 13 },
+        { "Cyrus IMAP 3.0.8", 13 },
+        { "Cyrus IMAP 3.0.8", 13 },
+        { "Cyrus IMAP 3.0.10", 13 },
+        { "Cyrus IMAP 3.0.11", 13 },
+        { "Cyrus IMAP 3.0.12", 13 },
+        { "Cyrus IMAP 3.0.13", 13 },
+    };
+
+    default_conditions();
+
+    /* XXX there's something wrong with the toy test server that results in
+     * XXX the banner not being set with auto_capa enabled???
+     */
+    test_prot.u.std.banner.auto_capa = 0;
+
+    n_tests = sizeof(data) / sizeof(data[0]);
+
+    CU_ASSERT_NOT_EQUAL_FATAL(n_tests, 0);
+
+    for (i = 0; i < n_tests; i++) {
+        struct backend *be;
+        const char *auth_status = NULL;
+        int got_version;
+
+        server_set_banner(server_state, data[i].banner);
+
+        be = backend_connect(NULL, HOST, &test_prot,
+                             USERID, callbacks, &auth_status, /*fd*/-1);
+        CU_ASSERT_PTR_NOT_NULL_FATAL(be);
+        CU_ASSERT_EQUAL(server_state->is_connected, 1);
+        CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
+        CU_ASSERT_EQUAL(server_state->is_tls, 0);
+
+        got_version = backend_version(be);
+        CU_ASSERT_EQUAL(got_version, data[i].version);
+
+        backend_disconnect(be);
+        free(be);
+    }
+}
+
+/*
  * Test authenticating with the PLAIN mechanism.
  */
 static void test_sasl_plain(void)
