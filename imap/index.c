@@ -5472,7 +5472,7 @@ static int extract_attachment(const char *type, const char *subtype,
             sleep(retry);
             extractor_disconnect(ext);
             r = extractor_connect(ext);
-            if (r) goto done;
+            if (r) continue;
             be = ext->be;
         }
 
