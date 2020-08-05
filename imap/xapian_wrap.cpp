@@ -32,7 +32,7 @@ extern "C" {
 #include <xapian.h>
 
 #ifdef HAVE_CLD2
-#include <cld2/compact_lang_det.h>
+#include <cld2/public/compact_lang_det.h>
 #endif
 
 // from global.h
