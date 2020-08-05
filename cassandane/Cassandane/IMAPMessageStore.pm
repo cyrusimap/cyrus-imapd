@@ -43,6 +43,9 @@ use warnings;
 use Mail::IMAPTalk;
 use Cwd qw(abs_path);
 
+# runtime dependency of Mail::IMAPTalk. make sure we have it!
+require IO::Socket::SSL;
+
 use lib '.';
 use base qw(Cassandane::MessageStore);
 use Cassandane::Util::Log;

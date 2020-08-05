@@ -90,6 +90,12 @@ Cassandane needs the following software to work:
     Ubuntu package libio-socket-inet6-perl
     RH/CentOS package perl-IO-Socket-INET6
 
+ * IO::Socket::SSL
+    Object interface for TLS sockets
+    CPAN package https://metacpan.org/pod/IO::Socket::SSL
+    Ubuntu package libio-socket-ssl-perl
+    RH/CentOS package perl-IO-Socket-SSL
+
  * Net::Server
     Extensible, general Perl server engine
     Ubuntu package libnet-server-perl
@@ -133,7 +139,7 @@ Debian/Ubuntu copypasta:
        libdatetime-perl libbsd-resource-perl libtest-unit-perl \
        libxml-generator-perl libxml-xpath-perl libclone-perl \
        libencode-imaputf7-perl libconfig-inifiles-perl \
-       libio-socket-inet6-perl libnet-server-perl \
+       libio-socket-inet6-perl libio-socket-ssl-perl libnet-server-perl \
        libunix-syslog-perl libnews-nntpclient-perl \
        libfile-chdir-perl libio-stringy-perl \
        libanyevent-perl libjson-perl libjson-xs-perl \
