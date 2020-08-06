@@ -1,0 +1,235 @@
+Delivered-To: someone@somewhere
+Received: by 2002:a0c:9ad8:0:0:0:0:0 with SMTP id k24csp5345793qvf;
+        Mon, 3 Aug 2020 00:32:14 -0700 (PDT)
+X-Received: by 2002:a2e:96d9:: with SMTP id d25mr1914690ljj.376.1596439933947;
+        Mon, 03 Aug 2020 00:32:13 -0700 (PDT)
+ARC-Seal: i=3; a=rsa-sha256; t=1596439933; cv=pass;
+        d=google.com; s=arc-20160816;
+        b=Sv0c//f+X9G3VqUKiQtGeitEUtGGvxFw1tudf3VN3o9N9m9DQRZRU2e6XnT9FKipp4
+         cEHoo6DIbn9tV7M4+M0xrMXuQdZC4yhunfdBzpcyEwCQQUdDh6j+1dwGZ7Uddr9d90f0
+         sYpmwvuSvvO5UlSU01WZD4snF9DYRytBaG2qODy7ynOnfMc6nkkk0KxkDGeH5FRwUT6b
+         HZdJIla/NOXYVNE1i5A3BzLttUPF3/rugMSASoD3TS0OULIhibMZcJUvAOT4r6+hLC+I
+         blWJWJU3eHETIwp9GdCAOV7ITwiVn7aZ6BWSceMB1fsQ1u0OJbNJq3NsHz6DH8HsN+/+
+         DGAQ==
+ARC-Message-Signature: i=3; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20160816;
+        h=list-unsubscribe:list-subscribe:list-archive:list-help:list-post
+         :list-id:mailing-list:precedence:reply-to:content-language
+         :mime-version:user-agent:date:message-id:subject:from:to:sender
+         :dkim-signature:dkim-signature;
+        bh=qObu7NHqaMlnIsmEMo7Wt6rbkE9Jnc4YH/739y4pvb4=;
+        b=KuWr1ABaO2YolfTfein6SzR1sw1xQKs9r9eZPGbMSPlIH1ZsV5IDQaGM9Y4iF+noLP
+         zCYSQJl0KfDS05SZ9ebQBCq5FQ0YAzJXjgCMh/c3zcaTxPt6/ucRtmau2GJn0vCfVj2M
+         uQQuAVEmYG3bLCey4fd1iojzsMjQqryyM82cqy/9CpLNKrFZdDbu0Cd99udwVIDRFe9A
+         35/9IhzhGJU6dPrTLU8qBYDf5TyVoMXMbIAH1SATAStnTOoSESiUICQZzJgRfd+JiVcJ
+         feE0qel7gn+BP3Znyo4mSFdFS8elp3CipIcXunDdSsYDo03pzkNb/nq8lSoGWeAEHf98
+         /daA==
+ARC-Authentication-Results: i=3; mx.google.com;
+       dkim=pass header.i=@googlegroups.com header.s=20161025 header.b=I3Fl1Io2;
+       dkim=pass header.i=@gmail.com header.s=20161025 header.b=JxtNVeWu;
+       arc=pass (i=2 spf=pass spfdomain=gmail.com dkim=pass dkdomain=gmail.com dmarc=pass fromdomain=gmail.com);
+       spf=pass (google.com: domain of django-announce+bncbcj7jtv5rilbb7h2t34qkgqeej54m7a@googlegroups.com designates 209.85.220.55 as permitted sender) smtp.mailfrom=django-announce+bncBCJ7JTV5RILBB7H2T34QKGQEEJ54M7A@googlegroups.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com
+Return-Path: <django-announce+bncBCJ7JTV5RILBB7H2T34QKGQEEJ54M7A@googlegroups.com>
+Received: from mail-sor-f55.google.com (mail-sor-f55.google.com. [209.85.220.55])
+        by mx.google.com with SMTPS id e30sor6554731ljp.66.2020.08.03.00.32.13
+        (Google Transport Security);
+        Mon, 03 Aug 2020 00:32:13 -0700 (PDT)
+Received-SPF: pass (google.com: domain of django-announce+bncbcj7jtv5rilbb7h2t34qkgqeej54m7a@googlegroups.com designates 209.85.220.55 as permitted sender) client-ip=209.85.220.55;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@googlegroups.com header.s=20161025 header.b=I3Fl1Io2;
+       dkim=pass header.i=@gmail.com header.s=20161025 header.b=JxtNVeWu;
+       arc=pass (i=2 spf=pass spfdomain=gmail.com dkim=pass dkdomain=gmail.com dmarc=pass fromdomain=gmail.com);
+       spf=pass (google.com: domain of django-announce+bncbcj7jtv5rilbb7h2t34qkgqeej54m7a@googlegroups.com designates 209.85.220.55 as permitted sender) smtp.mailfrom=django-announce+bncBCJ7JTV5RILBB7H2T34QKGQEEJ54M7A@googlegroups.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com
+ARC-Seal: i=2; a=rsa-sha256; t=1596439933; cv=pass;
+        d=google.com; s=arc-20160816;
+        b=c+WBH7FWwr4hh9S1wJ7w7SmcY7B4uZ8jGMQNjRnpAt3LktExIVQ1zj85KuFSbxu5ut
+         y8rOoSlHQ2CGaQP69DrIZFahFo9awKl7CzXrYpecAg+kjVf70IJSWXyLlD01A0JJhFj2
+         zvw2Kjn/0yaBaLjaTn6GEZspvM+cS3/L90W2L+Ripc2pML0r9rECBkmY5WRHQQfa5qgE
+         z9sURzLgoH2MTQ50vBKZhB/xAluf1Cx9+/jHurw1bCdHDEhHrQWbv6ddBXKlQElRwTg5
+         iPoQET+NFcbpD2ixkrW7SOcJ2z03rfHsL2rNX9JLX08c6QQQhO5Tx+qBClzY8vrGDTzx
+         U9aA==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20160816;
+        h=list-unsubscribe:list-subscribe:list-archive:list-help:list-post
+         :list-id:mailing-list:precedence:reply-to:content-language
+         :mime-version:user-agent:date:message-id:subject:from:to:sender
+         :dkim-signature:dkim-signature;
+        bh=qObu7NHqaMlnIsmEMo7Wt6rbkE9Jnc4YH/739y4pvb4=;
+        b=OK+wlPfMjxE0YklF8oq2/mcb2qwwki54AvLfVRbDSrMk5qgnRpY8swzmQnNICnltdw
+         WUO47d8e/JpbACF4zc2Cad9p3kiUqL7lZhMuXENOr3drATKSfjQMEIcgGZo0JjYk/5M0
+         y2YLzKwcMGJ2aU3cY6z8J5ThRAc7/r9TOIG5nkwYlm7eaRufGYuzRIHrMTVa4uMjuE/7
+         OrrGzBfEKfhh45RCi5Cq9Zc3ESXbrm4jKNRQJur6qw63a27/KWkpcZr5Kd9rJMRPWtM7
+         7HQgTS0Xjgxq6lX/DYNofE1bbIfjDKRsc5QpYC7XIXgKkbfy2UFGej/bzDDC0qDqRn+i
+         h2ow==
+ARC-Authentication-Results: i=2; gmr-mx.google.com;
+       dkim=pass header.i=@gmail.com header.s=20161025 header.b=epTlL0hH;
+       spf=pass (google.com: domain of felisiak.mariusz@gmail.com designates 2a00:1450:4864:20::136 as permitted sender) smtp.mailfrom=felisiak.mariusz@gmail.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=googlegroups.com; s=20161025;
+        h=sender:to:from:subject:message-id:date:user-agent:mime-version
+         :content-language:x-original-sender
+         :x-original-authentication-results:reply-to:precedence:mailing-list
+         :list-id:list-post:list-help:list-archive:list-subscribe
+         :list-unsubscribe;
+        bh=qObu7NHqaMlnIsmEMo7Wt6rbkE9Jnc4YH/739y4pvb4=;
+        b=I3Fl1Io2W2d5TtOkY76goqgEm4UHrimADOp9f80Amm1DGJNtPkRmC/EQn8Dlm8BYuz
+         w9QV9EJ1CU9xXSgTBkuDfJ3VN7sB5WFEv1eESTXatnV5+WoryxaCjx892/ucul4AVuZ3
+         gWXPgqW4qrtfzVjGnBd+yoOKvDs9Ik2tLmV8YkTiLyeQ2Mih8nPvkpKcnu6qPYcOmXRA
+         t3UO356Tu6KIZvssTRe7taS/XwtBdSk2wIXyH6WC3ixdh7dpdOiUbRKKNEcWd7gNknqK
+         gJKLeV1n6XXhe+crlBxJHQKFCLYri0v80eg/SCPT40KY6PMhFgjMaHeXdQMCKVemR+d4
+         qzfw==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20161025;
+        h=to:from:subject:message-id:date:user-agent:mime-version
+         :content-language:x-original-sender
+         :x-original-authentication-results:reply-to:precedence:mailing-list
+         :list-id:list-post:list-help:list-archive:list-subscribe
+         :list-unsubscribe;
+        bh=qObu7NHqaMlnIsmEMo7Wt6rbkE9Jnc4YH/739y4pvb4=;
+        b=JxtNVeWujGBCZWB5Pz6RcSPyS7H+7Sz5AzY3Kurn2E+BcPVNbmsXg37EVPYqDrVG5A
+         x4neBQa0hHfGglDkyZunsAbjYN3WBUOW2hvbtDoEW8AZ6IDQd/lSRJaXVMebqxQIYSJk
+         GJb6XubbbHWgtkFA9vhCdYwi2rMHQCC6Lw6al0n7ZipSUiXwCYbLGSBfygDqp5UekYO8
+         qWix6Jkt8sLB5h2ib6nm+jQh7nFsVT5vm3ykDvbqhpwjUrJ14phRMX5keLh9P01GvY3M
+         eZYq0DAU2sMjELYRhIdOqpbYFqP8ihtZEu44U74WRolD5wMlpUPrCnwoj+zTx+MJ8AOZ
+         jpOQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20161025;
+        h=sender:x-gm-message-state:to:from:subject:message-id:date
+         :user-agent:mime-version:content-language:x-original-sender
+         :x-original-authentication-results:reply-to:precedence:mailing-list
+         :list-id:x-spam-checked-in-group:list-post:list-help:list-archive
+         :list-subscribe:list-unsubscribe;
+        bh=qObu7NHqaMlnIsmEMo7Wt6rbkE9Jnc4YH/739y4pvb4=;
+        b=p/wPjqZ69AylrOR1sz1pbdcoiZ+AsR0fOhkTpDfPGYB/CsmHIQ/DryPZUr5YBEu3K0
+         yBGPlOh6QFp7tlN9RDrKOjfGP8PEsb2LzITpaf5CSvCUU8st3WdP3ID48s5Rsj15SQxG
+         LR+6fSArido0c/vHyUgVbBdu8CVes+kZdmEiSEroHJmaqoLRyRNXhxACr1v92HqfZepo
+         +GXUNbpzZjmC2TItCaU6o4THk8l3i4IpJR5pEe5CtjsxyPw8aHNVnGEk7pNJA/YlBgDa
+         l7/DLDQqbfUOL5VFYzOgJTwEmcEUMjhdZ6H6M05tVI+A3d9llRxQQIKkrQsEB/tnWjLt
+         as7w==
+Sender: django-announce@googlegroups.com
+X-Gm-Message-State: AOAM532CEy+VgCnma831YmhIqGSAie/FwlYoVqnuBcr+b2IpjQ1+kArq
+	oiwR4BKV5mPfd+eorGYpJUQ=
+X-Google-Smtp-Source: ABdhPJwNYC0qEjo8luvPM6IdZYOW/TWvc/Z53O7hjnnTmqDEraGD9sRKBLQS95MAuzTmV91PL4KhQA==
+X-Received: by 2002:a2e:b051:: with SMTP id d17mr3478267ljl.231.1596439933095;
+        Mon, 03 Aug 2020 00:32:13 -0700 (PDT)
+X-BeenThere: django-announce@googlegroups.com
+Received: by 2002:a2e:9a58:: with SMTP id k24ls2761991ljj.4.gmail; Mon, 03 Aug
+ 2020 00:32:12 -0700 (PDT)
+X-Received: by 2002:a2e:89cc:: with SMTP id c12mr7368108ljk.187.1596439932071;
+        Mon, 03 Aug 2020 00:32:12 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1596439932; cv=none;
+        d=google.com; s=arc-20160816;
+        b=BDnsOqjvN8qTI7tuc2Jm430zxDOPQQzU2qC6m5cShRWXQQd1XwIkZiT9qomAPU8Ptx
+         Ff2PJ/+0zHw3oB5riJON3zXT5iwODjSbUvyXYaXxkwP1vOoP8gXpfHuSKp0sahSq+gD6
+         f8nh7dbYPfwaQOmobt72Ssbf+iF9+s1k1RnjgVRcGFt7VGpzy4I6GQ1viPLTkhOOOj9b
+         f1nVUddnVRec1YU7jYjiqudoXbcjJz/W4ZV/kiW66+j5zERK3NDAtHF+5oANWFbXdllx
+         STr7MvPD3YRXpiXtoBrG6B+LyYmt7lKNYZSfWGDYw37Jpjz86TzxC48T/V38UQqmIbLt
+         n3/w==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20160816;
+        h=content-language:mime-version:user-agent:date:message-id:subject
+         :from:to:dkim-signature;
+        bh=cI4/g+w6X1T4M4+XxVSmbKIkTHPx0AamFsgyMmFnfi0=;
+        b=IvJTAXDNvl4iXtRHjTBCSb/YuFtYaNyuxX1EC5ByYQPpd6/ATbcMhij8UDz4Kjb54d
+         510hgSxvP62vvm5cQOZcNm5/OncTYgAKr8f79WmBCVWyvcYJw0rvbvl5OuHB5lweAqjI
+         1HrAcIOBn8VomE1OFlgOUfMRwGp96af5tjV/MXQY0KeDy88Nsrb85KStLteivrTvhWsD
+         OcYXpvWTYTelVXVjBixrCq+KRUoNMFdXYFs4/dTkHJ1NiBBg+uWC4uttUsvTIO2cjPbz
+         PUXvfneLnoAKJidK7yzgj7qROm008Zldi53HGo9hqcxpkEdU3IxCfyzmwexCbSMmz7to
+         OZFQ==
+ARC-Authentication-Results: i=1; gmr-mx.google.com;
+       dkim=pass header.i=@gmail.com header.s=20161025 header.b=epTlL0hH;
+       spf=pass (google.com: domain of felisiak.mariusz@gmail.com designates 2a00:1450:4864:20::136 as permitted sender) smtp.mailfrom=felisiak.mariusz@gmail.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com
+Received: from mail-lf1-x136.google.com (mail-lf1-x136.google.com. [2a00:1450:4864:20::136])
+        by gmr-mx.google.com with ESMTPS id c27si933419ljn.3.2020.08.03.00.32.12
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Mon, 03 Aug 2020 00:32:12 -0700 (PDT)
+Received-SPF: pass (google.com: domain of felisiak.mariusz@gmail.com designates 2a00:1450:4864:20::136 as permitted sender) client-ip=2a00:1450:4864:20::136;
+Received: by mail-lf1-x136.google.com with SMTP id d2so14314515lfj.1;
+        Mon, 03 Aug 2020 00:32:12 -0700 (PDT)
+X-Received: by 2002:a19:428c:: with SMTP id p134mr7833358lfa.70.1596439931440;
+        Mon, 03 Aug 2020 00:32:11 -0700 (PDT)
+Received: from [172.31.106.101] (772452422.rev.kpsi.pl. [77.245.242.2])
+        by smtp.gmail.com with ESMTPSA id x14sm3580433ljd.1.2020.08.03.00.32.10
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Mon, 03 Aug 2020 00:32:10 -0700 (PDT)
+To: django-developers@googlegroups.com, django-users@googlegroups.com,
+ django-announce@googlegroups.com
+From: Mariusz Felisiak <felisiak.mariusz@gmail.com>
+Subject: [django-announce] Django bugfix releases issued: 3.0.9 and 2.2.15
+Message-ID: <5e7f0415-544a-5289-c537-f172985c90ec@gmail.com>
+Date: Mon, 3 Aug 2020 09:32:09 +0200
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101
+ Thunderbird/68.10.0
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="------------E84FB157335B83EA1DF5593B"
+Content-Language: en-US
+X-Original-Sender: felisiak.mariusz@gmail.com
+X-Original-Authentication-Results: gmr-mx.google.com;       dkim=pass
+ header.i=@gmail.com header.s=20161025 header.b=epTlL0hH;       spf=pass
+ (google.com: domain of felisiak.mariusz@gmail.com designates
+ 2a00:1450:4864:20::136 as permitted sender) smtp.mailfrom=felisiak.mariusz@gmail.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com
+Reply-To: django-announce@googlegroups.com
+Precedence: list
+Mailing-list: list django-announce@googlegroups.com; contact django-announce+owners@googlegroups.com
+List-ID: <django-announce.googlegroups.com>
+X-Spam-Checked-In-Group: django-announce@googlegroups.com
+X-Google-Group-Id: 410273394954
+List-Post: <https://groups.google.com/group/django-announce/post>, <mailto:django-announce@googlegroups.com>
+List-Help: <https://groups.google.com/support/>, <mailto:django-announce+help@googlegroups.com>
+List-Archive: <https://groups.google.com/group/django-announce
+List-Subscribe: <https://groups.google.com/group/django-announce/subscribe>, <mailto:django-announce+subscribe@googlegroups.com>
+List-Unsubscribe: <mailto:googlegroups-manage+410273394954+unsubscribe@googlegroups.com>,
+ <https://groups.google.com/group/django-announce/subscribe>
+
+This is a multi-part message in MIME format.
+--------------E84FB157335B83EA1DF5593B
+Content-Type: text/plain; charset="UTF-8"; format=flowed
+
+Details are available on the Django project weblog:
+
+https://www.djangoproject.com/weblog/2020/aug/03/django-bugfix-releases-309-2215/
+
+-- 
+You received this message because you are subscribed to the Google Groups "django-announce" group.
+To unsubscribe from this group and stop receiving emails from it, send an email to django-announce+unsubscribe@googlegroups.com.
+To view this discussion on the web visit https://groups.google.com/d/msgid/django-announce/5e7f0415-544a-5289-c537-f172985c90ec%40gmail.com.
+
+--------------E84FB157335B83EA1DF5593B
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+<html>
+  <head>
+
+    <meta http-equiv=3D"content-type" content=3D"text/html; charset=3DUTF-8=
+">
+  </head>
+  <body>
+    <p> <input tabindex=3D"-1" style=3D"opacity: 0; height: 1px; width:
+        1px; z-index: -1; overflow: hidden; position: absolute;"
+        type=3D"text">Details are available on the Django project weblog:</=
+p>
+    <p><a class=3D"moz-txt-link-freetext" href=3D"https://www.djangoproject=
+.com/weblog/2020/aug/03/django-bugfix-releases-309-2215/">https://www.djang=
+oproject.com/weblog/2020/aug/03/django-bugfix-releases-309-2215/</a><br>
+    </p>
+  </body>
+</html>
+
+<p></p>
+
+-- <br />
+You received this message because you are subscribed to the Google Groups &=
+quot;django-announce&quot; group.<br />
+To unsubscribe from this group and stop receiving emails from it, send an e=
+mail to <a href=3D"mailto:django-announce+unsubscribe@googlegroups.com">dja=
+ngo-announce+unsubscribe@googlegroups.com</a>.<br />
+To view this discussion on the web visit <a href=3D"https://groups.google.c=
+om/d/msgid/django-announce/5e7f0415-544a-5289-c537-f172985c90ec%40gmail.com=
+?utm_medium=3Demail&utm_source=3Dfooter">https://groups.google.com/d/msgid/=
+django-announce/5e7f0415-544a-5289-c537-f172985c90ec%40gmail.com</a>.<br />
+
+--------------E84FB157335B83EA1DF5593B--
