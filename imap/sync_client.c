@@ -478,6 +478,29 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
 
     /* And then run tasks. */
 
+    if (hash_numrecords(&user_mailboxes)) {
+        struct split_user_mailboxes_rock smrock;
+        smrock.mboxname_list = sync_name_list_create();
+        smrock.user_list = user_list;
+        smrock.channelp = (char **) channelp; /* n.b. casting away constness bc struct */
+        smrock.flags = flags;
+        smrock.r = 0;
+
+        /* process user_mailboxes in sets of ~1000, splitting only on
+         * user boundaries */
+        hash_enumerate(&user_mailboxes, split_user_mailboxes, &smrock);
+        r = smrock.r;
+
+        /* process any stragglers (<1000 remaining) */
+        if (!r)
+            r = do_sync_mailboxes(smrock.mboxname_list, user_list, channelp, flags);
+        if (!r)
+            r = do_restart();
+
+        sync_name_list_free(&smrock.mboxname_list);
+        if (r) goto cleanup;
+    }
+
     for (action = quota_list->head; action; action = action->next) {
         if (!action->active)
             continue;
@@ -555,29 +578,6 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
             report_verbose("  Promoting: SUB %s %s -> META %s\n",
                            action->user, action->name, action->user);
         }
-    }
-
-    if (hash_numrecords(&user_mailboxes)) {
-        struct split_user_mailboxes_rock smrock;
-        smrock.mboxname_list = sync_name_list_create();
-        smrock.user_list = user_list;
-        smrock.channelp = (char **) channelp; /* n.b. casting away constness bc struct */
-        smrock.flags = flags;
-        smrock.r = 0;
-
-        /* process user_mailboxes in sets of ~1000, splitting only on
-         * user boundaries */
-        hash_enumerate(&user_mailboxes, split_user_mailboxes, &smrock);
-        r = smrock.r;
-
-        /* process any stragglers (<1000 remaining) */
-        if (!r)
-            r = do_sync_mailboxes(smrock.mboxname_list, user_list, channelp, flags);
-        if (!r)
-            r = do_restart();
-
-        sync_name_list_free(&smrock.mboxname_list);
-        if (r) goto cleanup;
     }
 
     /* XXX - is unmailbox used much anyway - we need to see if it's logged for a rename,

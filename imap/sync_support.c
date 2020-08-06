@@ -6168,6 +6168,15 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
         }
     }
 
+    /* if we renamed anything, we want to resync the mailbox list before doing the
+     * mailbox contents */
+    if (rename_folders->count) {
+        syslog(LOG_DEBUG,
+               "do_folders(): did some renames, so retrying");
+        r = IMAP_AGAIN;
+        goto bail;
+    }
+
     for (mfolder = master_folders->head; mfolder; mfolder = mfolder->next) {
         if (mfolder->mark) continue;
         /* NOTE: rfolder->name may now be wrong, but we're guaranteed that
@@ -6224,6 +6233,16 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
         ptrarray_append(&locks, lock);
     }
 
+    int tries = 0;
+
+redo:
+    tries++;
+    if (tries > 3) {
+        syslog(LOG_ERR, "failed to settle renames after 3 tries!");
+        r = IMAP_SYNC_CHANGED;
+        goto done;
+    }
+
     kl = dlist_newlist(NULL, "MAILBOXES");
 
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
@@ -6256,6 +6275,12 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
     flags &= ~SYNC_FLAG_DELETE_REMOTE;
     r = do_folders(mboxname_list, topart,
                    replica_folders, sync_be, channelp, flags);
+
+    if (r == IMAP_AGAIN) {
+        sync_folder_list_free(&replica_folders);
+        replica_folders = sync_folder_list_create();
+        goto redo;
+    }
 
 done:
 
@@ -6372,9 +6397,11 @@ static int do_user_main(const char *user, const char *topart,
     sync_name_list_free(&info.mboxlist);
     sync_name_list_free(&info.quotalist);
 
-    if (r) syslog(LOG_ERR, "IOERROR: do_user_main: %s for %s to %s (%s)", error_message(r),
-                  user, (channelp && *channelp) ? *channelp : "[no channel]",
-                  sync_be->hostname);
+    if (r && r != IMAP_AGAIN) {
+        syslog(LOG_ERR, "IOERROR: do_user_main: %s for %s to %s (%s)", error_message(r),
+               user, (channelp && *channelp) ? *channelp : "[no channel]",
+               sync_be->hostname);
+    }
 
     return r;
 }
@@ -6569,6 +6596,16 @@ int sync_do_user(const char *userid, const char *topart,
     if (flags & SYNC_FLAG_LOGGING)
         syslog(LOG_INFO, "USER %s", userid);
 
+    int tries = 0;
+
+redo:
+    tries++;
+    if (tries > 3) {
+        syslog(LOG_ERR, "failed to sync user %s after 3 tries", userid);
+        r = IMAP_SYNC_CHANGED;
+        goto done;
+    }
+
     kl = dlist_setatom(NULL, "USER", userid);
     sync_send_lookup(kl, sync_be->out);
     dlist_free(&kl);
@@ -6602,6 +6639,20 @@ int sync_do_user(const char *userid, const char *topart,
                      sync_be, channelp, flags);
     if (r) goto done;
     r = sync_do_user_sub(userid, replica_subs, sync_be, flags);
+    if (r == IMAP_AGAIN) {
+        // we've done a rename - have to try again!
+        sync_folder_list_free(&replica_folders);
+        sync_name_list_free(&replica_subs);
+        sync_sieve_list_free(&replica_sieve);
+        sync_seen_list_free(&replica_seen);
+        sync_quota_list_free(&replica_quota);
+        replica_folders = sync_folder_list_create();
+        replica_subs = sync_name_list_create();
+        replica_sieve = sync_sieve_list_create();
+        replica_seen = sync_seen_list_create();
+        replica_quota = sync_quota_list_create();
+        goto redo;
+    }
     if (r) goto done;
     r = sync_do_user_sieve(userid, replica_sieve, sync_be, flags);
     if (r) goto done;
