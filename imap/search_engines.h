@@ -129,8 +129,9 @@ struct search_text_receiver {
     void (*end_part)(search_text_receiver_t *, int part);
 #define SEARCH_INDEXLEVEL_BASIC 1
 #define SEARCH_INDEXLEVEL_ATTACH 3
-#define SEARCH_INDEXLEVEL_BEST SEARCH_INDEXLEVEL_ATTACH /* must be <= 127 */
 #define SEARCH_INDEXLEVEL_PARTIAL 0x80 /*  high bit indicates a partial */
+#define SEARCH_INDEXLEVEL_BEST SEARCH_INDEXLEVEL_ATTACH
+#define SEARCH_INDEXLEVEL_MAX (SEARCH_INDEXLEVEL_PARTIAL - 1)
     int (*end_message)(search_text_receiver_t *, uint8_t indexlevel);
     int (*end_mailbox)(search_text_receiver_t *, struct mailbox *);
     int (*flush)(search_text_receiver_t *);
@@ -206,7 +207,7 @@ extern void search_end_search(search_builder_t *);
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox *mailbox,
-                          int flags);
+                          int min_indexlevel, int flags);
 int search_end_update(search_text_receiver_t *rx);
 
 /* Create a search text receiver for snippets. For each non-empty

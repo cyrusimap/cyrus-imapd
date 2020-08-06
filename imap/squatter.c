@@ -104,6 +104,7 @@ static int annotation_flag = 0;
 static int sleepmicroseconds = 0;
 static int allow_partials = 0;
 static int reindex_partials = 0;
+static int reindex_minlevel = 0;
 static const char *temp_root_dir = NULL;
 static search_text_receiver_t *rx = NULL;
 
@@ -129,6 +130,7 @@ __attribute__((noreturn)) static int usage(const char *name)
             "  -i          index incrementally\n"
             "  -p          allow partially indexed messages\n"
             "  -P          reindex partially indexed messages (implies -Z)\n"
+            "  -L level    reindex messages where indexlevel < level (implies -Z)\n"
             "  -N name     index mailbox names starting with name\n"
             "  -S seconds  sleep seconds between indexing mailboxes\n"
             "  -Z          Xapian: use internal index rather than cyrus.indexed.db\n"
@@ -320,7 +322,7 @@ again:
         printf("Indexing mailbox %s... ", extname);
     }
 
-    r = search_update_mailbox(rx, mailbox, flags);
+    r = search_update_mailbox(rx, mailbox, reindex_minlevel, flags);
 
     mailbox_close(&mailbox);
 
@@ -849,7 +851,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:N:RUXZT:S:Fde:f:mn:riavpPAz:t:ouhl")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:N:RUXZT:S:Fde:f:mn:riavpPL:Az:t:ouhl")) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
@@ -868,15 +870,22 @@ int main(int argc, char **argv)
             compact_flags |= SEARCH_COMPACT_REINDEX;
             break;
 
+        case 'L':
+            reindex_minlevel = atoi(optarg);
+            if (reindex_minlevel < 1 || reindex_minlevel > SEARCH_INDEXLEVEL_MAX) {
+                fprintf(stderr, "%s: %s: invalid level argument\n", argv[0], optarg);
+                exit(EX_USAGE);
+            }
+            xapindexed_mode = 1;
+            break;
+
         case 'P':
             reindex_partials = 1;
-            // fallthrough
+            xapindexed_mode = 1;
+            break;
 
         case 'Z':
-            /* we have two different flag types for the two different modes,
-             * set both of them even though only one will be used */
             xapindexed_mode = 1;
-            compact_flags |= SEARCH_COMPACT_XAPINDEXED;
             break;
 
         case 'p':
@@ -982,6 +991,12 @@ int main(int argc, char **argv)
         default:
             usage("squatter");
         }
+    }
+
+    if (xapindexed_mode) {
+        /* we have two different flag types for the two different modes,
+         * set both of them even though only one will be used */
+        compact_flags |= SEARCH_COMPACT_XAPINDEXED;
     }
 
     compact_flags |= SEARCH_VERBOSE(verbose);
