@@ -5026,9 +5026,10 @@ EXPORTED int index_search_evaluate(struct index_state *state,
 }
 
 struct extractor_ctx {
-    struct backend *be;
     struct protstream *clientin;
-    unsigned failed;
+    char *hostname;
+    char *path;
+    struct backend *be;
 };
 
 struct getsearchtext_rock
@@ -5274,11 +5275,6 @@ done:
 
 #define IDLE_TIMEOUT (5 * 60)  /* 5 min */
 
-struct backend_ctx {
-    char *path;
-    int timeout;
-};
-
 static int login(struct backend *s __attribute__((unused)),
                  const char *userid __attribute__((unused)),
                  sasl_callback_t *cb __attribute__((unused)),
@@ -5288,51 +5284,10 @@ static int login(struct backend *s __attribute__((unused)),
     return 0;
 }
 
-static int ping(struct backend *s,
+static int ping(struct backend *s __attribute__((unused)),
                 const char *userid __attribute__((unused)))
 {
-    struct backend_ctx *ctx = (struct backend_ctx *) s->context;
-    size_t hostlen = strcspn(s->hostname, "/");
-    hdrcache_t resp_hdrs = NULL;
-    struct body_t resp_body;
-    unsigned statuscode = 0;
-    const char *errstr;
-    int r = 0;
-
-    prot_printf(s->out,
-                "HEAD %s %s\r\n"
-                "Host: %.*s\r\n"
-                "User-Agent: Cyrus/%s\r\n"
-                "Connection: Keep-Alive\r\n"
-                "Keep-Alive: timeout=%u\r\n"
-                "Accept: text/plain\r\n"
-                "\r\n",
-                ctx->path, HTTP_VERSION,
-                (int) hostlen, s->hostname, CYRUS_VERSION, ctx->timeout);
-    prot_flush(s->out);
-
-    /* Read response(s) from backend until final response or error */
-    do {
-        resp_body.flags = BODY_DISCARD;
-        r = http_read_response(s, METH_HEAD, &statuscode,
-                               &resp_hdrs, &resp_body, &errstr);
-        if (r) {
-            break;
-        }
-    } while (statuscode < 200);
-
-    if (r) {
-        syslog(LOG_DEBUG, "extractor_ping: HEAD %s: failed (%s): %s",
-               ctx->path, error_message(r), errstr);
-    }
-    else {
-        syslog(LOG_DEBUG, "extractor_ping: HEAD %s: got status %u",
-               ctx->path, statuscode);
-    }
-
-    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
-
-    return r;
+    return 0;
 }
 
 static int logout(struct backend *s __attribute__((unused)))
@@ -5340,8 +5295,11 @@ static int logout(struct backend *s __attribute__((unused)))
     return 0;
 }
 
-static void extractor_disconnect(struct backend *be)
+static void extractor_disconnect(struct extractor_ctx *ext)
 {
+    if (!ext) return;
+
+    struct backend *be = ext->be;
     syslog(LOG_DEBUG, "extractor_disconnect(%p)", be);
 
     if (!be || (be->sock == -1)) {
@@ -5363,12 +5321,12 @@ extractor_timeout(struct protstream *s __attribute__((unused)),
                   struct prot_waitevent *ev __attribute__((unused)),
                   void *rock)
 {
-    struct backend *be = (struct backend *) rock;
+    struct extractor_ctx *ext = rock;
 
-    syslog(LOG_DEBUG, "extractor_timeout(%p)", be);
+    syslog(LOG_DEBUG, "extractor_timeout(%p)", ext);
 
     /* too long since we last used the extractor - disconnect */
-    extractor_disconnect(be);
+    extractor_disconnect(ext);
 
     return NULL;
 }
@@ -5376,98 +5334,41 @@ extractor_timeout(struct protstream *s __attribute__((unused)),
 static struct protocol_t http =
 { "http", "HTTP", TYPE_SPEC, { .spec = { &login, &ping, &logout } } };
 
-static int extractor_connect(const char *exturl, struct extractor_ctx *ext)
+static int extractor_connect(struct extractor_ctx *ext)
 {
     struct backend *be;
-    struct backend_ctx *ctx = NULL;
-    struct buf buf = BUF_INITIALIZER;
-    const char *hostname;
-    char path[256];
     time_t now = time(NULL);
-    int r = 0;
 
-    syslog(LOG_DEBUG, "extractor_connect(%s)", exturl);
-
-    if (ext->failed > 1) {
-        syslog(LOG_INFO, "extractor failed for url: %s", exturl);
-        return IMAP_INTERNAL;
-    }
+    syslog(LOG_DEBUG, "extractor_connect()");
 
     be = ext->be;
-    if (be) {
-        ctx = be->context;
-        hostname = be->hostname;
-    }
-    else {
-        char scheme[6], server[100], *p;
-        unsigned https, port;
-
-        /* Parse URL (cheesy parser without having to use libxml2) */
-        int n = sscanf(exturl, "%5[^:]://%99[^/]%255[^\n]",
-                       scheme, server, path);
-        if (n != 3 ||
-            strncmp(lcase(scheme), "http", 4) || (scheme[4] && scheme[4] != 's')) {
-            syslog(LOG_ERR,
-                   "extract_attachment: unexpected non-HTTP URL %s", exturl);
-            return IMAP_INTERNAL;
-        }
-
-        /* Normalize URL parts */
-        https = (scheme[4] == 's');
-        if (*(p = path + strlen(path) - 1) == '/') *p = '\0';
-        if ((p = strrchr(server, ':'))) {
-            *p++ = '\0';
-            port = atoi(p);
-        }
-        else port = https ? 443 : 80;
-
-        /* Build servername, port, and options */
-        buf_printf(&buf, "%s:%u%s/noauth", server, port, https ? "/tls" : "");
-        hostname = buf_cstring(&buf);
+    if (be && be->sock != -1) {
+        // extend the timeout
+        if (be->timeout) be->timeout->mark = now + IDLE_TIMEOUT;
+        return 0;
     }
 
-    if (be && (be->sock != -1)) {
-        syslog(LOG_DEBUG, "extractor_connect: ping existing connection");
+    // clean up any existing connection
+    extractor_disconnect(ext);
+    be = ext->be = backend_connect(be, ext->hostname,
+                                   &http, NULL, NULL, NULL, -1);
 
-        /* ping the extractor */
-        if (ping(be, NULL)) extractor_disconnect(be);
+    if (!be) {
+        syslog(LOG_ERR, "extract_connect: failed to connect to %s",
+               ext->hostname);
+        return IMAP_IOERROR;
     }
 
-    if (!be || (be->sock == -1)) {
-        /* Connect to extractor service */
-        syslog(LOG_DEBUG, "extractor_connect: %sconnect to %s",
-               be ? "re" : "", hostname);
-
-        be = ext->be = backend_connect(be, hostname,
-                                       &http, NULL, NULL, NULL, -1);
-
-        if (!be) {
-            syslog(LOG_ERR, "extract_connect: failed to connect to %s",
-                   hostname);
-            ext->failed++;
-            r = IMAP_IOERROR;
-        }
-        else if (!ctx) {
-            ctx = be->context = xzmalloc(sizeof(struct backend_ctx));
-            ctx->path = xstrdup(path);
-
-            if (ext->clientin) {
-                /* add a default timeout */
-                be->clientin = ext->clientin;
-                be->timeout = prot_addwaitevent(ext->clientin,
-                                                now + IDLE_TIMEOUT,
-                                                extractor_timeout, be);
-            }
-        }
+    if (ext->clientin) {
+        /* add a default timeout */
+        be->clientin = ext->clientin;
+        be->timeout = prot_addwaitevent(ext->clientin,
+                                        now + IDLE_TIMEOUT,
+                                        extractor_timeout, ext);
     }
 
-    if (be->timeout && ctx->timeout) be->timeout->mark = now + ctx->timeout;
-
-    buf_free(&buf);
-
-    return r;
+    return 0;
 }
-
 
 static int extract_attachment(const char *type, const char *subtype,
                               const struct param *type_params,
@@ -5475,49 +5376,40 @@ static int extract_attachment(const char *type, const char *subtype,
                               const struct message_guid *content_guid,
                               struct getsearchtext_rock *str)
 {
-    const char *exturl =
-         config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
     struct backend *be;
-    struct backend_ctx *ctx;
     struct buf buf = BUF_INITIALIZER;
     hdrcache_t hdrs = NULL;
     struct body_t body = { 0, 0, 0, 0, 0, BUF_INITIALIZER };
     const char *guidstr, *errstr = NULL;
     size_t hostlen;
+    const char **hdr, *p;
     int r = 0;
 
-    if (!str->ext) {
-        if (!exturl) return 0;
-        if (!index_text_extractor) {
-            /* This is a legitimate case for sieve and lmtpd (so we don't need
-             * to spam the logs! */
-            syslog(LOG_DEBUG, "%s: ignoring uninitialized extractor for url %s",
-                    __func__, exturl);
-            return 0;
-        }
-
-        /* cache the connection for all the attachments in this message, but only
-         * if the connection succeeds */
-        r = extractor_connect(exturl, index_text_extractor);
-        if (r) return r;
-        str->ext = index_text_extractor;
-    }
-
-    struct extractor_ctx *ext = str->ext;
-
-    be = ext->be;
-    ctx = (struct backend_ctx *) be->context;
-    hostlen = strcspn(be->hostname, "/");
-
-    if (message_guid_isnull(content_guid)) {
-        syslog(LOG_DEBUG, "extract_attachment: ignoring null guid for %s/%s",
-                type ? type : "<null>", subtype ? subtype : "<null>");
+    if (!index_text_extractor) {
+        /* This is a legitimate case for sieve and lmtpd (so we don't need
+         * to spam the logs! */
+        syslog(LOG_DEBUG, "%s: ignoring uninitialized extractor",
+                __func__);
         return 0;
     }
 
-    /* Fetch previously extracted text */
-    unsigned statuscode = 0;
+    if (message_guid_isnull(content_guid)) {
+        syslog(LOG_DEBUG, "extract_attachment: ignoring null guid for %s/%s",
+               type ? type : "<null>", subtype ? subtype : "<null>");
+        return 0;
+    }
+
+    struct extractor_ctx *ext = str->ext = index_text_extractor;
+
+    r = extractor_connect(ext);
+    if (r) return r;
+    be = ext->be;
+
+    hostlen = strcspn(ext->hostname, "/");
     guidstr = message_guid_encode(content_guid);
+
+    /* try to fetch previously extracted text */
+    unsigned statuscode = 0;
     prot_printf(be->out,
                 "GET %s/%s %s\r\n"
                 "Host: %.*s\r\n"
@@ -5526,9 +5418,9 @@ static int extract_attachment(const char *type, const char *subtype,
                 "Keep-Alive: timeout=%u\r\n"
                 "Accept: text/plain\r\n"
                 "\r\n",
-                ctx->path, guidstr, HTTP_VERSION,
+                ext->path, guidstr, HTTP_VERSION,
                 (int) hostlen, be->hostname, CYRUS_VERSION,
-                ctx->timeout ? ctx->timeout : IDLE_TIMEOUT);
+                IDLE_TIMEOUT);
     prot_flush(be->out);
 
     /* Read GET response */
@@ -5538,50 +5430,50 @@ static int extract_attachment(const char *type, const char *subtype,
         if (r) {
             syslog(LOG_ERR,
                    "extract_attachment: failed to read response for GET %s/%s",
-                   ctx->path, guidstr);
-            r = IMAP_IOERROR;
-            goto done;
+                   ext->path, guidstr);
+            statuscode = 599;
         }
     } while (statuscode < 200);
 
     syslog(LOG_DEBUG, "extract_attachment: GET %s/%s: got status %u",
-           ctx->path, guidstr, statuscode);
+           ext->path, guidstr, statuscode);
 
-    /* Abide by server's timeout, if any */
-    if (!ctx->timeout) {
-        const char **hdr, *p;
+    if (statuscode == 200) goto gotdata;
 
-        if ((hdr = spool_getheader(hdrs, "Keep-Alive")) &&
-            (p = strstr(hdr[0], "timeout="))) {
-            ctx->timeout = atoi(p+8);
+    // otherwise we're going to try three times to PUT this request to the server!
+
+    /* Decode data */
+    struct buf decbuf = BUF_INITIALIZER;
+    if (encoding) {
+        if (charset_decode(&decbuf, buf_base(data), buf_len(data), encoding)) {
+            syslog(LOG_ERR, "extract_attachment: failed to decode data");
+            r = IMAP_IOERROR;
+            goto done;
         }
-        else ctx->timeout = IDLE_TIMEOUT;
-
-        if (be->timeout) be->timeout->mark = time(NULL) + ctx->timeout;
+        data = &decbuf;
     }
 
-    if (statuscode == 404) {
-        /* Decode data */
-        struct buf decbuf = BUF_INITIALIZER;
-        if (encoding) {
-            if (charset_decode(&decbuf, buf_base(data), buf_len(data), encoding)) {
-                syslog(LOG_ERR, "extract_attachment: failed to decode data");
-                r = IMAP_IOERROR;
-                goto done;
-            }
-            data = &decbuf;
+    /* Build list of Content-Type parameters */
+    const struct param *param = type_params;
+    while (param && param->attribute) {
+        buf_putc(&buf, ';');
+        buf_appendcstr(&buf, param->attribute);
+        if (param->value) {
+            buf_putc(&buf, '=');
+            buf_appendcstr(&buf, param->value);
         }
+        param = param->next;
+    }
 
-        /* Build list of Content-Type parameters */
-        const struct param *param = type_params;
-        while (param && param->attribute) {
-            buf_putc(&buf, ';');
-            buf_appendcstr(&buf, param->attribute);
-            if (param->value) {
-                buf_putc(&buf, '=');
-                buf_appendcstr(&buf, param->value);
-            }
-            param = param->next;
+    int retry;
+    for (retry = 0; retry < 3; retry++) {
+        if (retry) {
+            // second and third time around, sleep and reconnect
+            sleep(retry);
+            extractor_disconnect(ext);
+            r = extractor_connect(ext);
+            if (r) continue;
+            be = ext->be;
         }
 
         /* Send attachment to service for text extraction */
@@ -5595,8 +5487,8 @@ static int extract_attachment(const char *type, const char *subtype,
                     "Content-Type: %s/%s%s\r\n"
                     "Content-Length: %ld\r\n"
                     "\r\n",
-                    ctx->path, guidstr, HTTP_VERSION,
-                    (int) hostlen, be->hostname, CYRUS_VERSION, ctx->timeout,
+                    ext->path, guidstr, HTTP_VERSION,
+                    (int) hostlen, be->hostname, CYRUS_VERSION, IDLE_TIMEOUT,
                     type, subtype, buf_cstring(&buf), buf_len(data));
         prot_putbuf(be->out, (struct buf *) data);
         prot_flush(be->out);
@@ -5610,27 +5502,39 @@ static int extract_attachment(const char *type, const char *subtype,
             if (r) {
                 syslog(LOG_ERR,
                        "extract_attachment: failed to read response for PUT %s/%s",
-                       ctx->path, guidstr);
-                r = IMAP_IOERROR;
-                goto done;
+                       ext->path, guidstr);
+                statuscode = 599;
             }
         } while (statuscode < 200);
 
         syslog(LOG_DEBUG, "extract_attachment: PUT %s/%s: got status %u",
-               ctx->path, guidstr, statuscode);
-    }
+               ext->path, guidstr, statuscode);
 
-    if (statuscode >= 400 && statuscode <= 499) {
-        /* indexer can't extract this for some reason, never try again */
-        goto done;
-    }
-    if (statuscode != 200 && statuscode != 201) {
+        if (statuscode == 200 || statuscode == 201) {
+            // we got a result, yay
+            goto gotdata;
+        }
+
+        if (statuscode >= 400 && statuscode <= 499) {
+            /* indexer can't extract this for some reason, never try again */
+            goto done;
+        }
+
         /* any other status code is an error */
-        syslog(LOG_ERR, "extract GOT STATUSCODE %d with timeout %d: %s", statuscode, ctx->timeout, errstr);
-        r = IMAP_IOERROR;
-        goto done;
+        syslog(LOG_ERR, "extract GOT STATUSCODE %d with timeout %d: %s", statuscode, IDLE_TIMEOUT, errstr);
     }
 
+    // dropped out of the loop?  Then we failed!
+    r = IMAP_IOERROR;
+    goto done;
+
+gotdata:
+    /* Abide by server's timeout, if any */
+    if ((hdr = spool_getheader(hdrs, "Keep-Alive")) &&
+        (p = strstr(hdr[0], "timeout="))) {
+        int timeout = atoi(p+8);
+        if (be->timeout) be->timeout->mark = time(NULL) + timeout;
+    }
     /* Append extracted text */
     if (buf_len(&body.payload)) {
         str->receiver->begin_part(str->receiver, SEARCH_PART_ATTACHMENTBODY, content_guid);
@@ -5647,10 +5551,42 @@ done:
 
 EXPORTED void index_text_extractor_init(struct protstream *clientin)
 {
+    const char *exturl =
+         config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
+    if (!exturl) return;
+
     syslog(LOG_DEBUG, "extractor_init(%p)", clientin);
+
+    char scheme[6], server[100], path[256], *p;
+    unsigned https, port;
+
+    /* Parse URL (cheesy parser without having to use libxml2) */
+    int n = sscanf(exturl, "%5[^:]://%99[^/]%255[^\n]",
+                   scheme, server, path);
+    if (n != 3 ||
+        strncmp(lcase(scheme), "http", 4) || (scheme[4] && scheme[4] != 's')) {
+        syslog(LOG_ERR,
+               "extract_attachment: unexpected non-HTTP URL %s", exturl);
+        return;
+    }
+
+    /* Normalize URL parts */
+    https = (scheme[4] == 's');
+    if (*(p = path + strlen(path) - 1) == '/') *p = '\0';
+    if ((p = strrchr(server, ':'))) {
+        *p++ = '\0';
+        port = atoi(p);
+    }
+    else port = https ? 443 : 80;
+
+    /* Build servername, port, and options */
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%s:%u%s/noauth", server, port, https ? "/tls" : "");
 
     index_text_extractor = xzmalloc(sizeof(struct extractor_ctx));
     index_text_extractor->clientin = clientin;
+    index_text_extractor->path = xstrdup(path);
+    index_text_extractor->hostname = buf_release(&buf);
 }
 
 EXPORTED void index_text_extractor_destroy(void)
@@ -5661,14 +5597,10 @@ EXPORTED void index_text_extractor_destroy(void)
 
     if (!ext) return;
 
-    if (ext->be) {
-        struct backend *be = ext->be;
-
-        extractor_disconnect(be);
-        free(((struct backend_ctx *) be->context)->path);
-        free(be->context);
-        free(be);
-    }
+    extractor_disconnect(ext);
+    free(ext->be);
+    free(ext->hostname);
+    free(ext->path);
     free(ext);
 
     index_text_extractor = NULL;
