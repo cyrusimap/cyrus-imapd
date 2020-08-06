@@ -533,8 +533,14 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     if (jmap_wantprop(rock->get->props, "shareesActAs")) {
-        /* XXX  Decide on owner vs. self once we have delegation done */
-        json_object_set_new(obj, "shareesActAs", json_string("self"));
+        const char *annotname =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+        buf_reset(&attrib);
+        r = annotatemore_lookupmask_mbe(mbentry, annotname,
+                                    rock->req->accountid, &attrib);
+        json_object_set_new(obj, "shareesActAs",
+                json_string(!r && buf_len(&attrib) ? "secretary" : "self"));
+        buf_free(&attrib);
     }
 
     if (jmap_wantprop(rock->get->props, "participantIdentities")) {
