@@ -205,6 +205,7 @@ static int flush_batch(search_text_receiver_t *rx,
 
 EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
                                    struct mailbox *mailbox,
+                                   int min_indexlevel,
                                    int flags)
 {
     int r = 0;                  /* Using IMAP_* not SQUAT_* return codes here */
@@ -237,7 +238,9 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         message_t *msg = message_new_from_record(mailbox, record);
 
         uint8_t indexlevel = rx->is_indexed(rx, msg);
-        if (reindex_partials && (indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) {
+        if ((reindex_partials && (indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) ||
+            (min_indexlevel && indexlevel < min_indexlevel)) {
+            /* Reindex that message */
             indexlevel = 0;
         }
 
