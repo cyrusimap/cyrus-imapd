@@ -372,9 +372,8 @@ static int octet_regex(const char *text, size_t tlen, const char *pat,
         for (var_num = 0; var_num < nmatch; var_num++) {
             regmatch_t *m = &pm[var_num];
 
-            if (m->rm_so < 0) break;
-
-            append_var(text + m->rm_so, text + m->rm_eo, match_vars);
+            if (m->rm_so < 0) new_var(match_vars);
+            else append_var(text + m->rm_so, text + m->rm_eo, match_vars);
         }
     }
     return r;
