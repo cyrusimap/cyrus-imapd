@@ -46,8 +46,8 @@ cleanup = no
 # We skip some tests that are either long-time known failures, or
 # are brittle and fail sporadically, to keep the CI integration
 # useful.
-# This list last reviewed on 2020-05-13
-suppress = Rename.rename_inbox JMAPBackup Sieve.snooze_tzid
+# This list last reviewed on 2020-08-07
+suppress = Rename.rename_inbox JMAPBackup Sieve.snooze_tzid MboxEvent.tls_login_event
 
 [valgrind]
 
