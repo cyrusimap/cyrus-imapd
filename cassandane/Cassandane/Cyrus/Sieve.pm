@@ -1395,8 +1395,8 @@ sub test_variables_regex
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "variables", "regex"];
 set "folder" "target";
-if header :regex "Subject" "Message (.*)" {
-    fileinto "INBOX.\${folder}.Folder\${1}";
+if header :regex "Subject" "Message (x)?(.*)" {
+    fileinto "INBOX.\${folder}.Folder\${2}";
     stop;
 }
 fileinto "INBOX.\${folder}";
@@ -1410,7 +1410,7 @@ EOF
     $self->{instance}->deliver($msg1);
 
     # should go in Folder2
-    my $msg2 = $self->{gen}->generate(subject => "Message 2");
+    my $msg2 = $self->{gen}->generate(subject => "Message x2");
     $self->{instance}->deliver($msg2);
 
     # should fail to deliver and wind up in INBOX
