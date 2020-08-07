@@ -358,6 +358,11 @@ static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
 
+    if (!m) {
+        /* just doing destination mailbox resolution */
+        return SIEVE_OK;
+    }
+
     printf("filing message '%s' into '%s'\n", m->name, fc->mailbox);
 
     if (fc->imapflags->count) {
@@ -433,6 +438,11 @@ static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
+
+    if (!m) {
+        /* just doing destination mailbox resolution */
+        return SIEVE_OK;
+    }
 
     printf("keeping message '%s'\n", m->name);
     if (kc->imapflags->count) {
