@@ -56,6 +56,9 @@
 #include "util.h"
 #include "xmalloc.h"
 
+#include "lib/retry.h"
+#include "lib/libconfig.h"
+
 /* generated headers are not necessarily in current directory */
 #include "cunit/registers.h"
 
@@ -294,6 +297,18 @@ CU_BOOL CU_assertFormatImplementation(
         fprintf(stderr, "    %s:%u %s\n", strFile, uiLine, buf);
 
     return CU_assertImplementation(bValue, uiLine, buf, strFile, strFunction, bFatal);
+}
+
+EXPORTED void config_read_string(const char *s)
+{
+    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
+    int fd = mkstemp(fname);
+    retry_write(fd, s, strlen(s));
+    config_reset();
+    config_read(fname, 0);
+    unlink(fname);
+    free(fname);
+    close(fd);
 }
 
 static void run_tests(void)

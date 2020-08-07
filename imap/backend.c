@@ -1280,3 +1280,96 @@ EXPORTED void backend_disconnect(struct backend *s)
 
     forget_capabilities(s);
 }
+
+EXPORTED int backend_version(struct backend *be)
+{
+    const char *minor;
+
+    /* IMPORTANT:
+     *
+     * When adding checks for new versions, you must also backport these
+     * checks to previous versions (especially 2.4 and 2.5).
+     *
+     * Otherwise, old versions will be unable to recognise the new version,
+     * assume it is ancient, and downgrade the index to the oldest version
+     * supported (version 6, prior to v2.3).
+     *
+     * In 3.2 and earlier, this function lives in imapd.c
+     */
+
+    /* It's like looking in the mirror and not suffering from schizophrenia */
+    if (strstr(be->banner, CYRUS_VERSION)) {
+        return MAILBOX_MINOR_VERSION;
+    }
+
+    /* unstable 3.3 series ranges from 17..?? */
+    if (strstr(be->banner, "Cyrus IMAP 3.3")) {
+        /* all versions of 3.3 support at least this version */
+        return 17;
+    }
+
+    /* version 3.2 is 16 */
+    if (strstr(be->banner, "Cyrus IMAP 3.2")) {
+        return 16;
+    }
+
+    /* unstable 3.1 series ranges from 13..16 */
+    if (strstr(be->banner, "Cyrus IMAP 3.1")) {
+        /* all versions of 3.1 support at least this version */
+        return 13;
+    }
+
+    /* version 3.0 is 13 */
+    if (strstr(be->banner, "Cyrus IMAP 3.0")) {
+        return 13;
+    }
+
+    /* version 2.5 is 13 */
+    if (strstr(be->banner, "Cyrus IMAP 2.5.")
+     || strstr(be->banner, "Cyrus IMAP Murder 2.5.")
+     || strstr(be->banner, "git2.5.")) {
+        return 13;
+    }
+
+    /* version 2.4 was all 12 */
+    if (strstr(be->banner, "v2.4.") || strstr(be->banner, "git2.4.")) {
+        return 12;
+    }
+
+    minor = strstr(be->banner, "v2.3.");
+    if (!minor) goto unrecognised;
+    minor += strlen("v2.3.");
+
+    /* at least version 2.3.10 */
+    if (minor[1] != ' ') {
+        return 10;
+    }
+    /* single digit version, figure out which */
+    switch (minor[0]) {
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+        return 7;
+        break;
+
+    case '4':
+    case '5':
+    case '6':
+        return 8;
+        break;
+
+    case '7':
+    case '8':
+    case '9':
+        return 9;
+        break;
+    }
+
+unrecognised:
+    /* fallthrough, shouldn't happen */
+    syslog(LOG_WARNING, "%s: did not recognise remote Cyrus version from "
+                        "banner \"%s\".  Assuming index version 6!",
+                        __func__, be->banner);
+    return 6;
+}
