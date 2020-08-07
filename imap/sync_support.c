@@ -6637,8 +6637,8 @@ redo:
     mailbox_close(&mailbox);
     r = do_user_main(userid, topart, replica_folders, replica_quota,
                      sync_be, channelp, flags);
-    if (r) goto done;
-    r = sync_do_user_sub(userid, replica_subs, sync_be, flags);
+    if (!r)
+        r = sync_do_user_sub(userid, replica_subs, sync_be, flags);
     if (r == IMAP_AGAIN) {
         // we've done a rename - have to try again!
         sync_folder_list_free(&replica_folders);
