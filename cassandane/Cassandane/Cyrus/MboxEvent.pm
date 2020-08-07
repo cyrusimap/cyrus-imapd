@@ -114,14 +114,23 @@ sub test_tls_login_event
     }
 
     # client should still be connected
-    my $still_connected = $client->is_open();
-    $self->assert_not_null($still_connected, "connection dropped");
+    # XXX on an ssl socket (which must be blocking), is_open blocks!
+    # XXX prefer to do this:
+    #    my $still_connected = $client->is_open();
+    #    $self->assert_not_null($still_connected, "connection dropped");
+    # XXX but instead, check if a select succeeds
+    $client->select('INBOX');
+    $self->assert_str_equals('ok', $client->get_last_completion_response());
 
     # we should have gotten one Login event and no others
     $self->assert_equals(1, $event_counts{'Login'});
 
     # XXX more correct, but may race against setup_mailbox finishing up
     #$self->assert_deep_equals({ Login => 1 }, \%event_counts);
+
+    # XXX explicitly log out to work around Mail::IMAPTalk destructor
+    # XXX calling is_open()
+    $client->logout();
 }
 
 1;

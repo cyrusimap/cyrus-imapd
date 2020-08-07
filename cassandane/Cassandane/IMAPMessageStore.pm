@@ -102,6 +102,7 @@ sub connect
                       Port => $self->{port},
                       UseSSL => $self->{ssl},
                       SSL_ca_file => $ca_file,
+                      UseBlocking => 1,  # must be blocking for SSL
                       Pedantic => 1,
                       PreserveINBOX => 1,
                       Uid => 0,

@@ -309,6 +309,8 @@ magic(SearchSetForceScanMode => sub {
     shift->config_set(search_queryscan => '1');
 });
 magic(TLS => sub {
+    # XXX Here be dragons.  Check existing tests that use this magic
+    # XXX for some of the hoops you may still need to jump through!
     my $self = shift;
     $self->config_set(tls_server_cert => '@basedir@/conf/certs/cert.pem');
     $self->config_set(tls_server_key => '@basedir@/conf/certs/key.pem');
