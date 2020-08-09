@@ -3380,12 +3380,16 @@ static int reindex_mb(void *rock,
 
     mailbox_unlock_index(mailbox, NULL);
 
-    if (batch.count) {
+    int base = 0;
+    int batchend = 0;
+    for (base = 0; base < batch.count; base = batchend) {
         /* XXX - errors here could leak... */
         /* game on */
+        batchend = base + 8192;
+        if (batchend > batch.count) batchend = batch.count;
 
         /* preload */
-        for (i = 0 ; i < batch.count ; i++) {
+        for (i = base ; i < batchend ; i++) {
             message_t *msg = ptrarray_nth(&batch, i);
 
             const char *fname;
@@ -3393,7 +3397,7 @@ static int reindex_mb(void *rock,
             if (r) goto done;
             r = warmup_file(fname, 0, 0);
             if (r) goto done; /* means we failed to open a file,
-                                so we'll fail later anyway */
+                                 so we'll fail later anyway */
         }
 
         /* index the messages */
@@ -3401,16 +3405,17 @@ static int reindex_mb(void *rock,
         if (filter->flags & SEARCH_COMPACT_ALLOW_PARTIALS) {
             getsearchtext_flags |= INDEX_GETSEARCHTEXT_PARTIALS;
         }
-        for (i = 0 ; i < batch.count ; i++) {
+        for (i = base ; i < batchend ; i++) {
             message_t *msg = ptrarray_nth(&batch, i);
             r = index_getsearchtext(msg, NULL, &tr->super.super, getsearchtext_flags);
             if (r) goto done;
-            message_unref(&msg);
         }
-        if (tr->uncommitted) {
-            r = xapian_dbw_commit_txn(tr->dbw);
-            if (r) goto done;
-        }
+    }
+
+    // just commit once
+    if (tr->uncommitted) {
+        r = xapian_dbw_commit_txn(tr->dbw);
+        if (r) goto done;
     }
 
 done:
@@ -3422,6 +3427,10 @@ done:
         free_receiver(&tr->super);
     }
     mailbox_close(&mailbox);
+    for (i = 0; i < batch.count; i++) {
+        message_t *msg = ptrarray_nth(&batch, i);
+        message_unref(&msg);
+    }
     ptrarray_fini(&batch);
     free(mboxname);
     seqset_free(seq);
