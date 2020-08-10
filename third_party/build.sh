@@ -43,9 +43,9 @@ fi
 
 if [ ! $ITEM ] || [ $ITEM == icu ] ; then
 (
-  cd icu4c
+  cd icu
   git clean -f -x -d
-  cd source
+  cd icu4c/source
   mkdir -p data/out/tmp
   ./configure --enable-silent-rules --with-data-packaging=archive --prefix=$PREFIX
   make $MAKEOPTS

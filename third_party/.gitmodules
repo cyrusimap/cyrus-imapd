@@ -11,7 +11,7 @@
 	url = https://github.com/cyrusimap/libical.git
 	branch = cyrus
 [submodule "icu4c"]
-	path = icu4c
+	path = icu
 	url = https://github.com/cyrusimap/icu4c.git
 	branch = cyrus
 [submodule "cyrus-timezones"]
