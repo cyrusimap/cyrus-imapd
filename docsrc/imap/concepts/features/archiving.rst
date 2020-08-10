@@ -52,8 +52,8 @@ And to control the criteria used to manage migration of data between
 partitions:
 
 .. include:: /imap/reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob archive_days
-        :end-before: endblob archive_days
+        :start-after: startblob archive_after
+        :end-before: endblob archive_after
 
 .. include:: /imap/reference/manpages/configs/imapd.conf.rst
         :start-after: startblob archive_maxsize
