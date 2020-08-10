@@ -139,7 +139,10 @@ typedef union
  * version 0x1A scripts store fileinto mailbox names in UTF8 rather than mUTF7
  * version 0x1B scripts re-implemented vnd.cyrus.snooze times as HH:MM:SS
  *                                                      AND :weekdays as [0, 6]
- * version 0x1C scripts added :tzid arguments to vnd.cyrus.snooze
+ * version 0x1C scripts added :tzid argument to vnd.cyrus.snooze
+ * version 0x1D scripts added :create and :specialuse arguments,
+                        and allowed independent :mailbox and :mailboxid arguments
+                        to vnd.cyrus.snooze
  */
 #define BYTECODE_VERSION 0x1C
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
@@ -369,13 +372,39 @@ enum bytecode {
 
                                    <message: string>                           */
 
-    B_SNOOZE_ORIG,              /* legacy snooze w/o support for :tzid         */
+    B_SNOOZE_ORIG,              /* legacy snooze w/o support for :tzid
 
-    B_SNOOZE,                   /* require vnd.cyrus.snooze
+                                   require "vnd.cyrus.snooze"
+
                                    <mailbox-name/id: string>
                                    <addflags: string-list>
                                    <removeflags: string-list>
                                    <weekdays/is_id-bitmask: int>
+                                   <times: value-list>                         */
+
+    B_SNOOZE_TZID,              /* legacy snooze w/o support for :specialuse
+
+                                   require "vnd.cyrus.snooze"
+
+                                   <tzid: string>
+                                   <mailbox-name/id: string>
+                                   <addflags: string-list>
+                                   <removeflags: string-list>
+                                   <weekdays/is_id-bitmask: int>
+                                   <times: value-list>                         */
+
+
+    B_SNOOZE,                   /* require ["vnd.cyrus.snooze", "imap4flags"
+                                            "mailbox", "specialuse", "mailboxid"]
+
+                                   <mailbox-name: string>
+                                   <mailbox-id: string>
+                                   <special-use: string>
+                                   <create: int>
+                                   <addflags: string-list>
+                                   <removeflags: string-list>
+                                   <weekdays-bitmask: int>
+                                   <tzid: string>
                                    <times: value-list>                         */
 
     /*****  insert new actions above this line  *****/

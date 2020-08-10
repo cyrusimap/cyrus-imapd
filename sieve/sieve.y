@@ -1164,19 +1164,23 @@ dtags: /* empty */               {
 /* SNOOZE tagged arguments */
 sntags: /* empty */              {
                                      $$ = new_command(B_SNOOZE, sscript);
-                                     mailboxid = &($$->u.sn.mailbox);
+                                     create = &($$->u.sn.f.create);
+                                     specialuse = &($$->u.sn.f.specialuse);
+                                     mailboxid = &($$->u.sn.f.mailboxid);
                                  }
         | sntags MAILBOX string  {
-                                     if ($$->u.sn.mailbox != NULL) {
+                                     if ($$->u.sn.f.folder != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":mailbox");
-                                         free($$->u.sn.mailbox);
+                                         free($$->u.sn.f.folder);
                                      }
 
-                                     $$->u.sn.mailbox = $3;
+                                     $$->u.sn.f.folder = $3;
                                  }
-        | sntags mailboxid       { $$->u.sn.is_mboxid = 1; }
+        | sntags create
+        | sntags specialuse
+        | sntags mailboxid
 
         | sntags ADDFLAGS stringlist
                                  {
@@ -1185,6 +1189,11 @@ sntags: /* empty */              {
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":addflags");
                                          free($$->u.sn.addflags);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_IMAP4FLAGS)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "imap4flags");
                                      }
 
                                      $$->u.sn.addflags = $3;
@@ -1196,6 +1205,11 @@ sntags: /* empty */              {
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":removeflags");
                                          free($$->u.sn.removeflags);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_IMAP4FLAGS)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "imap4flags");
                                      }
 
                                      $$->u.sn.removeflags = $3;
@@ -2629,7 +2643,7 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
 {
     assert(c && c->type == B_SNOOZE);
 
-    if (c->u.sn.mailbox) verify_mailbox(sscript, c->u.sn.mailbox);
+    if (c->u.sn.f.folder) verify_mailbox(sscript, c->u.sn.f.folder);
     if (c->u.sn.addflags && !_verify_flaglist(c->u.sn.addflags)) {
         strarray_add(c->u.sn.addflags, "");
     }
@@ -2642,14 +2656,15 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
     arrayu64_sort(times, NULL/*ascending*/);
     c->u.sn.times = times;
 
-    c->nargs = bc_precompile(c->args, "ssSSiU",
-                             c->u.sn.tzid,
-                             c->u.sn.mailbox,
+    c->nargs = bc_precompile(c->args, "sssiSSisU",
+                             c->u.sn.f.folder,
+                             c->u.sn.f.mailboxid,
+                             c->u.sn.f.specialuse,
+                             c->u.sn.f.create,
                              c->u.sn.addflags,
                              c->u.sn.removeflags,
-                             c->u.sn.is_mboxid ?
-                                 (c->u.sn.days | SNOOZE_IS_ID_MASK) :
-                                 (c->u.sn.days & ~SNOOZE_IS_ID_MASK),
+                             c->u.sn.days,
+                             c->u.sn.tzid,
                              c->u.sn.times);
 
     return c;

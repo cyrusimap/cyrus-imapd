@@ -246,8 +246,8 @@ struct Commandlist {
             char *text;
         } l;
         struct { /* it's a snooze action */
-            char *mailbox;
-            int is_mboxid;
+            struct Fileinto f;
+            int is_mboxid;  /* only used for parsing pre- 0x1D scripts */
             strarray_t *addflags;
             strarray_t *removeflags;
             unsigned char days;

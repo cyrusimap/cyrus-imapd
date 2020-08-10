@@ -421,9 +421,9 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>duplicate            return DUPLICATE;
 <INITIAL>:header              return yylval->nval = HEADER;
 <INITIAL>:uniqueid            return yylval->nval = UNIQUEID;
-    /*   :handle              defined in 'vacation' */
+    /*   :handle              defined in 'vacation'         */
     /*   :seconds             defined in 'vacation-seconds' */
-    /*   :last                defined in 'index' */
+    /*   :last                defined in 'index'            */
 
     /* special-use - RFC 8579 */
 <INITIAL>specialuse_exists     return SPECIALUSEEXISTS;
@@ -449,7 +449,9 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>:removeflags          return REMOVEFLAGS;
 <INITIAL>:weekdays             return WEEKDAYS;
 <INITIAL>:tzid                 return TZID;
-    /*   :mailboxid            defined in draft-gondwana-sieve-mailboxid */
+    /*   :create               defined in 'mailbox'     */
+    /*   :mailboxid            defined in 'mailboxid'   */
+    /*   :specialuse           defined in 'special-use' */
 
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */

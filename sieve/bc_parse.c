@@ -244,20 +244,31 @@ static const struct args_t cmd_args_table[] = {
       { offsetof(struct Commandlist, u.l.text)
       } },
     { B_SNOOZE_ORIG,             "sSSB2U",                               /* 42 */
-      { offsetof(struct Commandlist, u.sn.mailbox),
+      { offsetof(struct Commandlist, u.sn.f.folder),
         offsetof(struct Commandlist, u.sn.addflags),
         offsetof(struct Commandlist, u.sn.removeflags),
         offsetof(struct Commandlist, u.sn.days),      SNOOZE_WDAYS_MASK,
         offsetof(struct Commandlist, u.sn.is_mboxid), SNOOZE_IS_ID_MASK,
         offsetof(struct Commandlist, u.sn.times)
       } },
-    { B_SNOOZE,                  "ssSSB2U",                              /* 43 */
+    { B_SNOOZE_TZID,             "ssSSB2U",                              /* 43 */
       { offsetof(struct Commandlist, u.sn.tzid),
-        offsetof(struct Commandlist, u.sn.mailbox),
+        offsetof(struct Commandlist, u.sn.f.folder),
         offsetof(struct Commandlist, u.sn.addflags),
         offsetof(struct Commandlist, u.sn.removeflags),
         offsetof(struct Commandlist, u.sn.days),      SNOOZE_WDAYS_MASK,
         offsetof(struct Commandlist, u.sn.is_mboxid), SNOOZE_IS_ID_MASK,
+        offsetof(struct Commandlist, u.sn.times)
+      } },
+    { B_SNOOZE,                  "sssiSSisU",                            /* 44 */
+      { offsetof(struct Commandlist, u.sn.f.folder),
+        offsetof(struct Commandlist, u.sn.f.mailboxid),
+        offsetof(struct Commandlist, u.sn.f.specialuse),
+        offsetof(struct Commandlist, u.sn.f.create),
+        offsetof(struct Commandlist, u.sn.addflags),
+        offsetof(struct Commandlist, u.sn.removeflags),
+        offsetof(struct Commandlist, u.sn.days),
+        offsetof(struct Commandlist, u.sn.tzid),
         offsetof(struct Commandlist, u.sn.times)
       } },
 };

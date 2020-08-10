@@ -154,7 +154,8 @@ int do_notify(notify_list_t *n, const char *id, const char *from,
 int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
                 strarray_t *match_vars, void *comprock, const char *priority);
 int do_duptrack(duptrack_list_t *d, sieve_duplicate_context_t *dc);
-int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
+int do_snooze(action_list_t *a, const char *awaken_mbox, const char *awaken_mboxid,
+              const char *awaken_spluse, int do_create,
               strarray_t *addflags, strarray_t *removeflags, const char *tzid,
               unsigned char days, arrayu64_t *times,
               strarray_t *imapflags, struct buf *headers);

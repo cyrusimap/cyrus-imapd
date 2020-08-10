@@ -1319,19 +1319,44 @@ static int sieve_snooze(void *ac,
     /* Create snoozeDetails annotation */
     json_t *snoozed = json_pack("{s:s}", "until", tbuf);
 
-    if (sn->awaken_mbox) {
+    if (sn->awaken_mbox || sn->awaken_mboxid || sn->awaken_spluse) {
         char *awaken = NULL;
         const char *awakenid = NULL;
         mbentry_t *mbentry = NULL;
 
-        if (sn->is_mboxid) {
-            awaken = mboxlist_find_uniqueid(sn->awaken_mbox,
+        if (sn->awaken_mboxid) {
+            awaken = mboxlist_find_uniqueid(sn->awaken_mboxid,
                                             userid, sd->authstate);
-            if (awaken) awakenid = sn->awaken_mbox;
+            if (awaken) awakenid = sn->awaken_mboxid;
         }
-        else {
+        if (!awakenid && sn->awaken_spluse) {
+            awaken = mboxlist_find_specialuse(sn->awaken_spluse, userid);
+            if (awaken) {
+                ret = mboxlist_lookup(awaken, &mbentry, NULL);
+                if (!ret) awakenid = mbentry->uniqueid;
+            }
+        }
+        if (!awakenid && sn->awaken_mbox) {
             awaken = mboxname_from_external(sn->awaken_mbox, sd->ns, userid);
             ret = mboxlist_lookup(awaken, &mbentry, NULL);
+            if (ret == IMAP_MAILBOX_NONEXISTENT) {
+                ret = autosieve_createfolder(userid, sd->authstate,
+                                             awaken, sn->do_create);
+
+                if (!ret) ret = mboxlist_lookup(awaken, &mbentry, NULL);
+                if (!ret && sn->awaken_spluse) {
+                    /* Attempt to add special-use flag to newly created mailbox */
+                    struct buf specialuse = BUF_INITIALIZER;
+                    int r2 = specialuse_validate(NULL, userid,
+                                                 sn->awaken_spluse, &specialuse);
+
+                    if (!r2) {
+                        annotatemore_write(awaken, "/specialuse",
+                                           userid, &specialuse);
+                    }
+                    buf_free(&specialuse);
+                }
+            }
             if (!ret) awakenid = mbentry->uniqueid;
         }
 

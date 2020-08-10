@@ -528,11 +528,11 @@ void free_tree(commandlist_t *cl)
             break;
 
         case B_SNOOZE:
-            free(cl->u.sn.mailbox);
-            free(cl->u.sn.tzid);
+            free_fileinto(&cl->u.sn.f);
             strarray_free(cl->u.sn.addflags);
             strarray_free(cl->u.sn.removeflags);
             arrayu64_free(cl->u.sn.times);
+            free(cl->u.sn.tzid);
             break;
         }
 

@@ -789,15 +789,26 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 
         case B_SNOOZE_ORIG:
+        case B_SNOOZE_TZID:
         case B_SNOOZE: {
             const char *sep = "";
             int i;
 
             printf("SNOOZE");
-            if (cmd.type >= B_SNOOZE)
+            if (cmd.type >= B_SNOOZE_TZID) {
+                if (cmd.type >= B_SNOOZE) {
+                    print_string(" MAILBOX", cmd.u.sn.f.folder);
+                    print_string(" MAILBOXID", cmd.u.sn.f.mailboxid);
+                    print_string(" SPECIALUSE", cmd.u.sn.f.specialuse);
+                    printf(" CREATE(%d)", cmd.u.sn.f.create);
+                }
+                else {
+                    print_string(cmd.u.sn.is_mboxid ? " MAILBOXID" : " MAILBOX",
+                                 cmd.u.sn.f.folder);
+                }
+
                 print_string(" TZID", cmd.u.sn.tzid);
-            print_string(cmd.u.sn.is_mboxid ? " MAILBOXID" : " MAILBOX",
-                         cmd.u.sn.mailbox);
+            }
             print_stringlist("\n\tADDFLAGS", cmd.u.sn.addflags);
             print_stringlist("\n\tREMOVEFLAGS", cmd.u.sn.removeflags);
             printf("\n\tWEEKDAYS [");
@@ -1555,14 +1566,26 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_SNOOZE_ORIG:
+        case B_SNOOZE_TZID:
         case B_SNOOZE:
             *requires |= SIEVE_CAPA_SNOOZE;
+            if (cmd.u.sn.is_mboxid) {
+                cmd.u.sn.f.mailboxid = cmd.u.sn.f.folder;
+                cmd.u.sn.f.folder = NULL;
+            }
+
             generate_token("snooze", indent, buf);
-            generate_string(":tzid", cmd.u.sn.tzid, buf);
-            generate_string(cmd.u.sn.is_mboxid ? ":mailboxid" : ":mailbox",
-                            cmd.u.sn.mailbox, buf);
-            generate_stringlist(":addflags", cmd.u.sn.addflags, buf);
-            generate_stringlist(":removeflags", cmd.u.sn.removeflags, buf);
+            generate_string(":mailbox", cmd.u.sn.f.folder, buf);
+            generate_string_capa(":mailboxid", cmd.u.sn.f.mailboxid,
+                                 SIEVE_CAPA_MAILBOXID, requires, buf);
+            generate_string_capa(":specialuse", cmd.u.sn.f.specialuse,
+                                 SIEVE_CAPA_SPECIAL_USE, requires, buf);
+            generate_switch_capa(":create", cmd.u.sn.f.create,
+                                 SIEVE_CAPA_MAILBOX, requires, buf);
+            generate_stringlist_capa(":addflags", cmd.u.sn.addflags,
+                                     SIEVE_CAPA_IMAP4FLAGS, requires, buf);
+            generate_stringlist_capa(":removeflags", cmd.u.sn.removeflags,
+                                     SIEVE_CAPA_IMAP4FLAGS, requires, buf);
             if (cmd.u.sn.days != SNOOZE_WDAYS_MASK) {
                 const char *sep = " [";
                 unsigned i;
@@ -1577,6 +1600,7 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
                 }
                 buf_putc(buf, ']');
             }
+            generate_string(":tzid", cmd.u.sn.tzid, buf);
             generate_valuelist(NULL, cmd.u.sn.times, &generate_time, buf);
             break;
 
