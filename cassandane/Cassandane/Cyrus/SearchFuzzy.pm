@@ -93,6 +93,22 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub run_delve {
+    my ($self, $dir) = @_;
+    my $basedir = $self->{instance}->{basedir};
+    my $str = '';
+    $self->{instance}->run_command({redirects => {stdout => "$basedir/delve.out"}}, 'delve', '-a', '-1', "$basedir/$dir");
+    my %data;
+    open(FH, "<$basedir/delve.out") || die "can't find delve.out";
+    my $title = <FH>;
+    xlog $self, "delve returned: $title";
+    while (<FH>) {
+        chomp;
+        $data{$_} = 1;
+    }
+    return %data;
+}
+
 sub create_testmessages
 {
     my ($self) = @_;
