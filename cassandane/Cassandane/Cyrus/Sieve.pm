@@ -1818,9 +1818,48 @@ EOF
     $self->assert_matches(qr/Subject: Auto:(?:\r\n)? Message 1\r\n/ms, $msg2);
     $self->assert_matches(qr/Auto-Submitted: auto-replied \(vacation\)\r\n/, $msg2);
     $self->assert_matches(qr/\r\n\r\nI am out of the office today./, $msg2);
+}
 
-#    use Data::Dumper;
-#    warn Dumper($msg2);
+sub test_vacation_with_fcc_specialuse
+    :min_version_3_1
+    :needs_component_sieve
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $target = "INBOX.Sent";
+
+    xlog $self, "Install a sieve script with vacation action that uses :fcc";
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["vacation", "fcc", "special-use"];
+
+vacation :fcc "INBOX" :specialuse "\\Sent" :days 1 :addresses ["cassandane@example.com"] text:
+I am out of the office today. I will answer your email as soon as I can.
+.
+;
+EOF
+    );
+
+    xlog $self, "Create the target folder";
+    my $talk = $self->{store}->get_client();
+    $talk->create($target, "(USE (\\Sent))");
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1",
+                                      to => Cassandane::Address->new(localpart => 'cassandane', domain => 'example.com'));
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Check that a copy of the auto-reply message made it";
+    $talk->select($target);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+
+    xlog $self, "Check that the message is an auto-reply";
+    my $res = $talk->fetch(1, 'rfc822');
+    my $msg2 = $res->{1}->{rfc822};
+
+    $self->assert_matches(qr/Subject: Auto:(?:\r\n)? Message 1\r\n/ms, $msg2);
+    $self->assert_matches(qr/Auto-Submitted: auto-replied \(vacation\)\r\n/, $msg2);
+    $self->assert_matches(qr/\r\n\r\nI am out of the office today./, $msg2);
 }
 
 sub test_vacation_with_explicit_subject
