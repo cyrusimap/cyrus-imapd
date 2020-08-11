@@ -2101,6 +2101,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             else {
                 e->op = SEOP_FALSE;
                 e->attr = NULL;
+                strarray_free(folders);
             }
         }
 
