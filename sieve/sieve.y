@@ -966,6 +966,7 @@ fcctags: FCC string              {
         | create
         | flags
         | specialuse
+        | mailboxid
         ;
 
 
@@ -2511,7 +2512,8 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
             strarray_add(c->u.v.fcc.flags, "");
         }
     }
-    else if (c->u.v.fcc.create || c->u.v.fcc.flags || c->u.v.fcc.specialuse) {
+    else if (c->u.v.fcc.create || c->u.v.fcc.flags ||
+             c->u.v.fcc.specialuse || c->u.v.fcc.mailboxid) {
         sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
     }
 
@@ -2522,7 +2524,7 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
     if (c->u.v.seconds > max) c->u.v.seconds = max;
 
     c->nargs = bc_precompile(c->args,
-                             c->u.v.fcc.folder ? "SssiisssiSs" : "Sssiisss",
+                             c->u.v.fcc.folder ? "SssiisssiSss" : "Sssiisss",
                              c->u.v.addresses,
                              c->u.v.subject,
                              c->u.v.message,
@@ -2533,7 +2535,8 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
                              c->u.v.fcc.folder,
                              c->u.v.fcc.create,
                              c->u.v.fcc.flags,
-                             c->u.v.fcc.specialuse);
+                             c->u.v.fcc.specialuse,
+                             c->u.v.fcc.mailboxid);
 
     return c;
 }
@@ -2708,7 +2711,8 @@ static commandlist_t *build_notify(sieve_script_t *sscript, int t,
                 strarray_add(c->u.n.fcc.flags, "");
             }
         }
-        else if (c->u.n.fcc.create || c->u.n.fcc.flags || c->u.n.fcc.specialuse) {
+        else if (c->u.n.fcc.create || c->u.n.fcc.flags ||
+                 c->u.n.fcc.specialuse || c->u.n.fcc.mailboxid) {
             sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
         }
 

@@ -696,7 +696,8 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
         case B_VACATION_ORIG:
         case B_VACATION_SEC:
-        case B_VACATION_FCC:
+        case B_VACATION_FCC_ORIG:
+        case B_VACATION_FCC_SPLUSE:
         case B_VACATION:
             printf("VACATION");
             print_stringlist(" ADDR", cmd.u.v.addresses);
@@ -710,16 +711,21 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 print_string(" FROM", cmd.u.v.from);
                 print_string(" HANDLE", cmd.u.v.handle);
 
-                if (cmd.type >= B_VACATION_FCC) {
+                if (cmd.type >= B_VACATION_FCC_ORIG) {
                     print_string("\n\tFCC", cmd.u.v.fcc.folder);
 
                     if (cmd.u.v.fcc.folder) {
                         printf(" CREATE(%d)", cmd.u.v.fcc.create);
                         print_stringlist(" FLAGS", cmd.u.v.fcc.flags);
 
-                        if (cmd.type >= B_VACATION) {
+                        if (cmd.type >= B_VACATION_FCC_SPLUSE) {
                             print_string("\n\tSPECIALUSE",
                                          cmd.u.v.fcc.specialuse);
+
+                            if (cmd.type >= B_VACATION) {
+                                print_string(" MAILBOXID",
+                                             cmd.u.v.fcc.mailboxid);
+                            }
                         }
                     }
                 }
@@ -1479,7 +1485,8 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
 
         case B_VACATION_ORIG:
         case B_VACATION_SEC:
-        case B_VACATION_FCC:
+        case B_VACATION_FCC_ORIG:
+        case B_VACATION_FCC_SPLUSE:
         case B_VACATION:
             *requires |= SIEVE_CAPA_VACATION;
             generate_token("vacation", indent, buf);

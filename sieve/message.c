@@ -397,6 +397,7 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     a->u.vac.send.msg = msg;
     a->u.vac.send.mime = mime;
     a->u.vac.send.fcc.mailbox = fcc->mailbox;
+    a->u.vac.send.fcc.mailboxid = fcc->mailboxid;
     a->u.vac.send.fcc.specialuse = fcc->specialuse;
     a->u.vac.send.fcc.do_create = fcc->do_create;
     a->u.vac.send.fcc.imapflags = fcc->imapflags;

@@ -2094,7 +2094,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
         case B_VACATION_ORIG:
         case B_VACATION_SEC:
-        case B_VACATION_FCC:
+        case B_VACATION_FCC_ORIG:
+        case B_VACATION_FCC_SPLUSE:
         case B_VACATION:
         {
             int respond;
@@ -2103,7 +2104,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 cmd.u.v.fcc.specialuse,
                 NULL,
                 cmd.u.v.fcc.create,
-                /*mailboxid*/0,
+                cmd.u.v.fcc.mailboxid,
                 /*headers*/NULL,
                 /*resolved_mailbox*/NULL
             };
@@ -2136,6 +2137,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 subject = parse_string(subject, variables);
 
                 fcc.mailbox = parse_string(fcc.mailbox, variables);
+                fcc.mailboxid = parse_string(fcc.mailboxid, variables);
                 fcc.specialuse = parse_string(fcc.specialuse, variables);
             }
 
