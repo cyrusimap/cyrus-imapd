@@ -134,7 +134,7 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " vnd.cyrus.log");
 #endif
         if (i->snooze &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_SNOOZE))
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))
             buf_appendcstr(&buf, " vnd.cyrus.snooze");
 
         /* add tests */
@@ -520,7 +520,7 @@ static const struct sieve_capa_t {
     /* Fcc - RFC 8580 */
     { "fcc", SIEVE_CAPA_FCC },
 
-    /* Mailboxid - draft-gondwana-sieve-mailboxid */
+    /* Mailboxid - draft-ietf-extra-sieve-mailboxid */
     { "mailboxid", SIEVE_CAPA_MAILBOXID },
 
     /* Log - vnd.cyrus.log */
@@ -531,8 +531,9 @@ static const struct sieve_capa_t {
     { "vnd.cyrus.jmapquery", SIEVE_CAPA_JMAPQUERY },
     { "x-cyrus-jmapquery",   SIEVE_CAPA_JMAPQUERY },  // legacy capability
 
-    /* Snooze - vnd.cyrus.snooze */
-    { "vnd.cyrus.snooze", SIEVE_CAPA_SNOOZE },
+    /* Snooze - draft-ietf-extra-sieve-snooze */
+    { "snooze",           SIEVE_CAPA_SNOOZE },
+    { "vnd.cyrus.snooze", SIEVE_CAPA_SNOOZE },        // legacy capability
     { "x-cyrus-snooze",   SIEVE_CAPA_SNOOZE },        // legacy capability
 
     { NULL, 0 }
@@ -731,7 +732,7 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 
     case SIEVE_CAPA_SNOOZE:
         if (!(interp->snooze &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_SNOOZE))) capa = 0;
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))) capa = 0;
         break;
 
     default:
