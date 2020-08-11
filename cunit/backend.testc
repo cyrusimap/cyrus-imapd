@@ -17,6 +17,7 @@
 #include "lib/libconfig.h"
 #include "lib/libcyr_cfg.h"
 #include "lib/util.h"
+#include "lib/xstrlcpy.h"
 
 #define DBDIR   "test-dbdir"
 
@@ -141,11 +142,7 @@ static struct protocol_t test_prot =
 
 static void server_set_banner(struct server_state *state, const char *str)
 {
-    memset(state->banner, 0, sizeof(state->banner));
-    if (str)
-        snprintf(state->banner, sizeof(state->banner), "%s", str);
-    else
-        snprintf(state->banner, sizeof(state->banner), "%s", default_banner);
+    strlcpy(state->banner, str ? str : default_banner, sizeof(state->banner));
 }
 
 /*
