@@ -1908,6 +1908,7 @@ static void _mbox_setargs_fini(struct mboxset_args *args)
     free(args->parent_id);
     free(args->name);
     free(args->specialuse);
+    free(args->color);
     json_decref(args->jargs);
 }
 
