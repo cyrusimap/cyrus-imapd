@@ -1589,8 +1589,14 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
     userid = mbname_userid(sdata->mbname);
 
     if (fcc->mailboxid) {
-        intname = mboxlist_find_uniqueid(fcc->specialuse, userid,
+        intname = mboxlist_find_uniqueid(fcc->mailboxid, userid,
                                          sdata->authstate);
+        if (intname &&
+            (mboxname_isdeletedmailbox(intname, NULL) ||
+             mboxname_isnonimapmailbox(intname, 0))) {
+            free(intname);
+            intname = NULL;
+        }
     }
     if (!intname && fcc->specialuse) {
         intname = mboxlist_find_specialuse(fcc->specialuse, userid);
