@@ -1583,32 +1583,38 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
 {
     struct appendstate as;
     const char *userid;
-    char *intname;
-    int r = IMAP_MAILBOX_NONEXISTENT;
+    char *intname = NULL;
+    int r = 0;
 
     userid = mbname_userid(sdata->mbname);
 
-    if (fcc->specialuse) {
-        intname = mboxname_from_external(fcc->specialuse, sdata->ns, userid);
-        r = mboxlist_lookup(intname, NULL, NULL);
-        if (r) free(intname);
+    if (fcc->mailboxid) {
+        intname = mboxlist_find_uniqueid(fcc->specialuse, userid,
+                                         sdata->authstate);
     }
-    if (r) intname = mboxname_from_externalUTF8(fcc->mailbox, sdata->ns, userid);
+    if (!intname && fcc->specialuse) {
+        intname = mboxlist_find_specialuse(fcc->specialuse, userid);
+    }
+    if (!intname) {
+        intname = mboxname_from_externalUTF8(fcc->mailbox, sdata->ns, userid);
 
-    r = mboxlist_lookup(intname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        r = autosieve_createfolder(userid, sdata->authstate,
-                                   intname, fcc->do_create);
+        r = mboxlist_lookup(intname, NULL, NULL);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            r = autosieve_createfolder(userid, sdata->authstate,
+                                       intname, fcc->do_create);
 
-        if (!r && fcc->specialuse) {
-            /* Attempt to add special-use flag to newly created mailbox */
-            struct buf specialuse = BUF_INITIALIZER;
-            int r2 = specialuse_validate(NULL, userid, fcc->specialuse, &specialuse);
+            if (!r && fcc->specialuse) {
+                /* Attempt to add special-use flag to newly created mailbox */
+                struct buf specialuse = BUF_INITIALIZER;
+                int r2 = specialuse_validate(NULL, userid,
+                                             fcc->specialuse, &specialuse);
 
-            if (!r2) {
-                annotatemore_write(intname, "/specialuse", userid, &specialuse);
+                if (!r2) {
+                    annotatemore_write(intname, "/specialuse",
+                                       userid, &specialuse);
+                }
+                buf_free(&specialuse);
             }
-            buf_free(&specialuse);
         }
     }
     if (!r) {
