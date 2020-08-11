@@ -3410,12 +3410,14 @@ static int reindex_mb(void *rock,
             r = index_getsearchtext(msg, NULL, &tr->super.super, getsearchtext_flags);
             if (r) goto done;
         }
-    }
 
-    // just commit once
-    if (tr->uncommitted) {
-        r = xapian_dbw_commit_txn(tr->dbw);
-        if (r) goto done;
+        // the next write will start a new transaction if uncommitted == 0
+        if (tr->uncommitted) {
+            r = xapian_dbw_commit_txn(tr->dbw);
+            if (r) goto done;
+            tr->uncommitted = 0;
+            tr->commits++;
+        }
     }
 
 done:
