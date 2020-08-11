@@ -419,6 +419,7 @@ static char *_decode_to_utf8(const char *charset,
                         textlen = strlen(text);
                         charset_id = charset_canon_name(guess_cs);
                     }
+                    else free(guess);
                 }
                 charset_free(&guess_cs);
             }
