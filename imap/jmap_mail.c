@@ -13251,5 +13251,6 @@ done:
     if (mailbox) jmap_closembox(req, &mailbox);
     buf_free(&buf);
     free(emailid);
+    free(mboxname);
     return res;
 }
