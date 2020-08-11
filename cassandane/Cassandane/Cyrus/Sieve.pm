@@ -2679,7 +2679,7 @@ sub test_snooze
 
     xlog $self, "Install script";
     $self->{instance}->install_sieve_script(<<EOF
-require ["vnd.cyrus.snooze", "imap4flags"];
+require ["x-cyrus-snooze", "imap4flags"];
 snooze :mailbox "$awakened" :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr";
 EOF
     );
@@ -2746,7 +2746,7 @@ sub test_snooze_mailboxid
 
     xlog $self, "Install script";
     $self->{instance}->install_sieve_script(<<EOF
-require ["vnd.cyrus.snooze", "imap4flags", "mailboxid"];
+require ["snooze", "imap4flags", "mailboxid"];
 snooze :mailboxid "$awakenedid" :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr";
 EOF
     );
@@ -2806,7 +2806,7 @@ sub test_snooze_specialuse
 
     xlog $self, "Install script";
     $self->{instance}->install_sieve_script(<<EOF
-require ["vnd.cyrus.snooze", "imap4flags", "special-use"];
+require ["snooze", "imap4flags", "special-use"];
 snooze :specialuse "\\\\Important" :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr";
 EOF
     );
@@ -2862,7 +2862,7 @@ sub test_snooze_specialuse_create
 
     xlog $self, "Install script";
     $self->{instance}->install_sieve_script(<<EOF
-require ["vnd.cyrus.snooze", "imap4flags", "special-use", "mailbox", "mailboxid"];
+require ["snooze", "imap4flags", "special-use", "mailbox", "mailboxid"];
 snooze :mailboxid "foobar" :specialuse "\\\\Important" :mailbox "$awakened" :create :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr";
 EOF
     );
