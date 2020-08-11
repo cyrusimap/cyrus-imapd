@@ -4842,31 +4842,15 @@ static int delete_cb(void *rock, void *data)
     return r;
 }
 
-/* Perform a DELETE request */
-int meth_delete(struct transaction_t *txn, void *params)
+/* DELETE collection */
+static int meth_delete_collection(struct transaction_t *txn,
+                                  struct meth_params *dparams)
 {
-    struct meth_params *dparams = (struct meth_params *) params;
     int ret = HTTP_NO_CONTENT, r = 0, precond, rights, needrights;
-    struct mboxevent *mboxevent = NULL;
     struct mailbox *mailbox = NULL;
-    struct dav_data *ddata;
-    struct index_record record;
-    const char *etag = NULL;
-    time_t lastmod = 0;
-    void *davdb = NULL;
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
-
-    /* Parse the path */
-    r = dav_parse_req_target(txn, dparams);
-    if (r) return r;
-
-    /* Make sure method is allowed */
-    if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED;
 
     /* if FastMail sharing, we need to remove ACLs */
-    if (config_getswitch(IMAPOPT_FASTMAILSHARING) &&!txn->req_tgt.resource &&
+    if (config_getswitch(IMAPOPT_FASTMAILSHARING) &&
         !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name)) {
         r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mbentry->name,
                             httpd_userid, /*rights*/NULL, /*isadmin*/1,
@@ -4881,7 +4865,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     }
 
     /* Special case of deleting a shared collection */
-    if (!txn->req_tgt.resource && (txn->req_tgt.flags == TGT_DAV_SHARED)) {
+    if (txn->req_tgt.flags == TGT_DAV_SHARED) {
         char *inboxname = mboxname_user_mbox(txn->req_tgt.userid, NULL);
         mbentry_t *mbentry = NULL;
 
@@ -4950,7 +4934,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    needrights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
+    needrights = DACL_RMCOL;
     if (!(rights & needrights)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -4973,88 +4957,129 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    if (!txn->req_tgt.resource) {
-        /* DELETE collection */
+    /* Open mailbox for reading */
+    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+               txn->req_tgt.mbentry->name, error_message(r));
+        txn->error.desc = error_message(r);
+        return HTTP_SERVER_ERROR;
+    }
 
-        /* Open mailbox for reading */
-        r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
+    /* Check any preconditions */
+    precond = dparams->check_precond(txn, dparams, mailbox, NULL, NULL, 0);
+
+    switch (precond) {
+    case HTTP_OK:
+        break;
+
+    case HTTP_LOCKED:
+        txn->error.precond = DAV_NEED_LOCK_TOKEN;
+        txn->error.resource = txn->req_tgt.path;
+        GCC_FALLTHROUGH
+
+    default:
+        /* We failed a precondition - don't perform the request */
+        ret = precond;
+        goto done;
+    }
+
+    if (dparams->delete) {
+        /* Do special processing on all resources */
+        struct delete_rock drock = { txn, NULL, dparams->delete };
+
+        /* Open the DAV DB corresponding to the mailbox */
+        void *davdb = dparams->davdb.open_db(mailbox);
+
+        drock.mailbox = mailbox;
+        r = dparams->davdb.foreach_resource(davdb, mailbox->name,
+                                            &delete_cb, &drock);
+        dparams->davdb.close_db(davdb);
+
         if (r) {
-            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-                    txn->req_tgt.mbentry->name, error_message(r));
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
             goto done;
         }
-
-        /* Check any preconditions */
-        ret = dparams->check_precond(txn, params, mailbox, NULL, NULL, 0);
-
-        switch (ret) {
-            case HTTP_OK:
-                break;
-            case HTTP_LOCKED:
-                txn->error.precond = DAV_NEED_LOCK_TOKEN;
-                txn->error.resource = txn->req_tgt.path;
-                GCC_FALLTHROUGH
-            default:
-                /* We failed a precondition - don't perform the request */
-                r = ret ? ret : HTTP_SERVER_ERROR;
-                goto done;
-        }
-
-        if (dparams->delete) {
-            /* Do special processing on all resources */
-            struct delete_rock drock = { txn, NULL, dparams->delete };
-
-            /* Open the DAV DB corresponding to the mailbox */
-            davdb = dparams->davdb.open_db(mailbox);
-
-            drock.mailbox = mailbox;
-            r = dparams->davdb.foreach_resource(davdb, mailbox->name,
-                                                  &delete_cb, &drock);
-            if (r) {
-                txn->error.desc = error_message(r);
-                ret = HTTP_SERVER_ERROR;
-                goto done;
-            }
-        }
-
-        /* we need the mailbox closed before we delete it */
-        mailbox_close(&mailbox);
-
-        mbname_t *mbname = mbname_from_intname(txn->req_tgt.mbentry->name);
-        struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));
-
-        mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
-
-        if (mboxlist_delayed_delete_isenabled()) {
-            r = mboxlist_delayed_deletemailbox(txn->req_tgt.mbentry->name,
-                                       httpd_userisadmin || httpd_userisproxyadmin,
-                                       httpd_userid, httpd_authstate, mboxevent,
-                                       /*checkack*/1, /*localonly*/0, /*force*/0,
-                                       /* keep_intermediaries */0);
-        }
-        else {
-            r = mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
-                                       httpd_userisadmin || httpd_userisproxyadmin,
-                                       httpd_userid, httpd_authstate, mboxevent,
-                                       /*checkack*/1, /*localonly*/0, /*force*/0,
-                                       /* keep_intermediaries */0);
-        }
-        if (!r) {
-            r = caldav_update_shareacls(mbname_userid(mbname));
-        }
-        if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
-        else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
-        else if (r) ret = HTTP_SERVER_ERROR;
-
-        mboxname_release(&namespacelock);
-        mbname_free(&mbname);
-
-        goto done;
     }
 
-    /* DELETE resource */
+    /* we need the mailbox closed before we delete it */
+    mailbox_close(&mailbox);
+
+    mbname_t *mbname = mbname_from_intname(txn->req_tgt.mbentry->name);
+    struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));
+    struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
+
+    if (mboxlist_delayed_delete_isenabled()) {
+        r = mboxlist_delayed_deletemailbox(txn->req_tgt.mbentry->name,
+                                           httpd_userisadmin || httpd_userisproxyadmin,
+                                           httpd_userid, httpd_authstate,
+                                           mboxevent, /*checkacl*/1,
+                                           /*localonly*/0, /*force*/0,
+                                           /* keep_intermediaries */0);
+    }
+    else {
+        r = mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
+                                   httpd_userisadmin || httpd_userisproxyadmin,
+                                   httpd_userid, httpd_authstate, mboxevent,
+                                   /*checkacl*/1, /*localonly*/0, /*force*/0,
+                                   /* keep_intermediaries */0);
+    }
+    if (!r) {
+        r = caldav_update_shareacls(mbname_userid(mbname));
+    }
+    if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
+    else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
+    else if (r) ret = HTTP_SERVER_ERROR;
+    else mboxevent_notify(&mboxevent);
+
+    mboxevent_free(&mboxevent);
+    mboxname_release(&namespacelock);
+    mbname_free(&mbname);
+
+  done:
+    mailbox_close(&mailbox);
+
+    return ret;
+}
+
+/* DELETE resource */
+static int meth_delete_resource(struct transaction_t *txn,
+                                struct meth_params *dparams)
+{
+    int ret = HTTP_NO_CONTENT, r = 0, precond, rights, needrights;
+    struct mboxevent *mboxevent = NULL;
+    struct mailbox *mailbox = NULL;
+    struct dav_data *ddata;
+    struct index_record record;
+    const char *etag = NULL;
+    time_t lastmod = 0;
+    void *davdb = NULL;
+
+    /* Check ACL for current user */
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
+    needrights = DACL_RMRSRC;
+    if (!(rights & needrights)) {
+        /* DAV:need-privileges */
+        txn->error.precond = DAV_NEED_PRIVS;
+        txn->error.resource = txn->req_tgt.path;
+        txn->error.rights = needrights;
+        return HTTP_NO_PRIVS;
+    }
+
+    if (txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
 
     /* Open mailbox for writing */
     r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
@@ -5062,8 +5087,7 @@ int meth_delete(struct transaction_t *txn, void *params)
         syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
                txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
-        ret = HTTP_SERVER_ERROR;
-        goto done;
+        return HTTP_SERVER_ERROR;
     }
 
     /* Open the DAV DB corresponding to the mailbox */
@@ -5087,7 +5111,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     }
 
     /* Check any preconditions */
-    precond = dparams->check_precond(txn, params, mailbox,
+    precond = dparams->check_precond(txn, dparams, mailbox,
                                      (void *) ddata, etag, lastmod);
 
     switch (precond) {
@@ -5122,25 +5146,44 @@ int meth_delete(struct transaction_t *txn, void *params)
                    txn->req_tgt.mbentry->name, error_message(r));
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
-            goto done;
+        }
+        else {
+            mboxevent_extract_record(mboxevent, mailbox, &record);
+            mboxevent_extract_mailbox(mboxevent, mailbox);
+            mboxevent_set_numunseen(mboxevent, mailbox, -1);
+            mboxevent_set_access(mboxevent, NULL, NULL, httpd_userid,
+                                 txn->req_tgt.mbentry->name, 0);
+            mboxevent_notify(&mboxevent);
         }
 
-        mboxevent_extract_record(mboxevent, mailbox, &record);
-        mboxevent_extract_mailbox(mboxevent, mailbox);
-        mboxevent_set_numunseen(mboxevent, mailbox, -1);
-        mboxevent_set_access(mboxevent, NULL, NULL, httpd_userid,
-                             txn->req_tgt.mbentry->name, 0);
+        mboxevent_free(&mboxevent);
     }
 
   done:
     if (davdb) dparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
 
-    if (!r)
-        mboxevent_notify(&mboxevent);
-    mboxevent_free(&mboxevent);
-
     return ret;
+}
+
+/* Perform a DELETE request */
+int meth_delete(struct transaction_t *txn, void *params)
+{
+    struct meth_params *dparams = (struct meth_params *) params;
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Parse the path */
+    int r = dav_parse_req_target(txn, dparams);
+    if (r) return r;
+
+    /* Make sure method is allowed */
+    if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED;
+
+    if (txn->req_tgt.resource) return meth_delete_resource(txn, dparams);
+
+    return meth_delete_collection(txn, dparams);
 }
 
 
