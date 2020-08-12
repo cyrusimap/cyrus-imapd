@@ -144,12 +144,14 @@ typedef struct sieve_reject_context {
 
 typedef struct sieve_snooze_context {
     const char *awaken_mbox;
+    const char *awaken_mboxid;
+    const char *awaken_spluse;
+    int do_create : 1;
     strarray_t *imapflags;
     strarray_t *addflags;
     strarray_t *removeflags;
     unsigned char days;
     arrayu64_t *times;
-    int is_mboxid : 1;
     const char *tzid;
     struct buf *headers;
 } sieve_snooze_context_t;

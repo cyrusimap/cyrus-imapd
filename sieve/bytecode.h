@@ -139,9 +139,11 @@ typedef union
  * version 0x1A scripts store fileinto mailbox names in UTF8 rather than mUTF7
  * version 0x1B scripts re-implemented vnd.cyrus.snooze times as HH:MM:SS
  *                                                      AND :weekdays as [0, 6]
- * version 0x1C scripts added :tzid arguments to vnd.cyrus.snooze
+ * version 0x1C scripts added :tzid argument to vnd.cyrus.snooze
+ * version 0x1D scripts re-implemented Snooze per draft-ietf-extra-sieve-snooze-00
+ *                      and Fcc per draft-ietf-extra-sieve-mailboxid-01
  */
-#define BYTECODE_VERSION 0x1C
+#define BYTECODE_VERSION 0x1D
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -318,7 +320,8 @@ enum bytecode {
 
                                    <flag-list: string-list>                    */
 
-    B_VACATION_FCC,             /* legacy vacation w/o support for :specialuse
+    B_VACATION_FCC_ORIG,        /* legacy vacation w/o support for :specialuse
+                                   with :fcc
 
                                    require ["vacation", "vacation-seconds,
                                             "fcc", "mailbox"]
@@ -330,7 +333,10 @@ enum bytecode {
                                    IF (fcc-mailbox != NIL)
                                      <create: int> <flag-list: string-list>    */
 
-    B_VACATION,                 /* require ["vacation", "vacation-seconds,
+    B_VACATION_FCC_SPLUSE,      /* legacy vacation w/o support for :mailboxid
+                                   with :fcc
+
+                                   require ["vacation", "vacation-seconds,
                                             "fcc", "mailbox", "special-use"]
 
                                    <addresses: string-list> <subject: string>
@@ -369,14 +375,52 @@ enum bytecode {
 
                                    <message: string>                           */
 
-    B_SNOOZE_ORIG,              /* legacy snooze w/o support for :tzid         */
+    B_SNOOZE_ORIG,              /* legacy snooze w/o support for :tzid
 
-    B_SNOOZE,                   /* require vnd.cyrus.snooze
+                                   require "vnd.cyrus.snooze"
+
                                    <mailbox-name/id: string>
                                    <addflags: string-list>
                                    <removeflags: string-list>
                                    <weekdays/is_id-bitmask: int>
                                    <times: value-list>                         */
+
+    B_SNOOZE_TZID,              /* legacy snooze w/o support for :specialuse
+
+                                   require "vnd.cyrus.snooze"
+
+                                   <tzid: string>
+                                   <mailbox-name/id: string>
+                                   <addflags: string-list>
+                                   <removeflags: string-list>
+                                   <weekdays/is_id-bitmask: int>
+                                   <times: value-list>                         */
+
+
+    B_SNOOZE,                   /* require ["vnd.cyrus.snooze", "imap4flags"
+                                            "mailbox", "specialuse", "mailboxid"]
+
+                                   <mailbox-name: string>
+                                   <mailbox-id: string>
+                                   <special-use: string>
+                                   <create: int>
+                                   <addflags: string-list>
+                                   <removeflags: string-list>
+                                   <weekdays-bitmask: int>
+                                   <tzid: string>
+                                   <times: value-list>                         */
+
+    B_VACATION,                 /* require ["vacation", "vacation-seconds,
+                                            "fcc", "mailbox", "special-use",
+                                            "mailboxid"]
+
+                                   <addresses: string-list> <subject: string>
+                                   <message: string> <seconds: int> <mime: int>
+                                   <from: string> <handle: string>
+                                   <fcc-mailbox: string>
+                                   IF (fcc-mailbox != NIL):
+                                     <create: int> <flag-list: string-list>
+                                     <special-use: string> <mailboxid: string> */
 
     /*****  insert new actions above this line  *****/
     B_ILLEGAL_VALUE             /* any value >= this code is illegal */

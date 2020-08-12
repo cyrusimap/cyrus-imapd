@@ -1780,16 +1780,29 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 
         case B_SNOOZE:
+        case B_SNOOZE_TZID:
         case B_SNOOZE_ORIG:
         {
-            const char *awaken_mbox = cmd.u.sn.mailbox;
+            const char *awaken_mbox = cmd.u.sn.f.folder;
+            const char *awaken_mboxid = cmd.u.sn.f.mailboxid;
+            const char *awaken_spluse = cmd.u.sn.f.specialuse;
             const char *tzid = cmd.u.sn.tzid;
             strarray_t *addflags = NULL;
             strarray_t *removeflags = NULL;
             struct buf *headers = NULL;
 
+            if (!awaken_mboxid && cmd.u.sn.is_mboxid) {
+                awaken_mboxid = cmd.u.sn.f.folder;
+                awaken_mbox = NULL;
+            }
+
             if (requires & BFE_VARIABLES) {
-                awaken_mbox = parse_string(awaken_mbox, variables);
+                if (awaken_mbox)
+                    awaken_mbox = parse_string(awaken_mbox, variables);
+                if (awaken_mboxid)
+                    awaken_mboxid = parse_string(awaken_mboxid, variables);
+                if (awaken_spluse)
+                    awaken_spluse = parse_string(awaken_spluse, variables);
                 tzid = parse_string(tzid, variables);
             }
 
@@ -1802,7 +1815,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             if (i->edited_headers) i->getheadersection(m, &headers);
 
-            res = do_snooze(actions, awaken_mbox, cmd.u.sn.is_mboxid,
+            res = do_snooze(actions, awaken_mbox, awaken_mboxid,
+                            awaken_spluse, cmd.u.sn.f.create,
                             addflags, removeflags, tzid,
                             cmd.u.sn.days, cmd.u.sn.times, actionflags, headers);
 
@@ -2080,7 +2094,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
         case B_VACATION_ORIG:
         case B_VACATION_SEC:
-        case B_VACATION_FCC:
+        case B_VACATION_FCC_ORIG:
+        case B_VACATION_FCC_SPLUSE:
         case B_VACATION:
         {
             int respond;
@@ -2089,7 +2104,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 cmd.u.v.fcc.specialuse,
                 NULL,
                 cmd.u.v.fcc.create,
-                /*mailboxid*/0,
+                cmd.u.v.fcc.mailboxid,
                 /*headers*/NULL,
                 /*resolved_mailbox*/NULL
             };
@@ -2122,6 +2137,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 subject = parse_string(subject, variables);
 
                 fcc.mailbox = parse_string(fcc.mailbox, variables);
+                fcc.mailboxid = parse_string(fcc.mailboxid, variables);
                 fcc.specialuse = parse_string(fcc.specialuse, variables);
             }
 

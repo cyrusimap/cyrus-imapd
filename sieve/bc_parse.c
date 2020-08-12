@@ -195,7 +195,7 @@ static const struct args_t cmd_args_table[] = {
       } },
     { B_KEEP,                    "S",                                    /* 35 */
       { offsetof(struct Commandlist, u.k.flags) } },
-    { B_VACATION_FCC,            "SssiissF",                             /* 36 */
+    { B_VACATION_FCC_ORIG,       "SssiissF",                             /* 36 */
       { offsetof(struct Commandlist, u.v.addresses),
         offsetof(struct Commandlist, u.v.subject),
         offsetof(struct Commandlist, u.v.message),
@@ -205,7 +205,7 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.v.handle),
         offsetof(struct Commandlist, u.v.fcc)
       } },
-    { B_VACATION,                "SssiissF$",                            /* 37 */
+    { B_VACATION_FCC_SPLUSE,     "SssiissF$",                            /* 37 */
       { offsetof(struct Commandlist, u.v.addresses),
         offsetof(struct Commandlist, u.v.subject),
         offsetof(struct Commandlist, u.v.message),
@@ -244,21 +244,42 @@ static const struct args_t cmd_args_table[] = {
       { offsetof(struct Commandlist, u.l.text)
       } },
     { B_SNOOZE_ORIG,             "sSSB2U",                               /* 42 */
-      { offsetof(struct Commandlist, u.sn.mailbox),
+      { offsetof(struct Commandlist, u.sn.f.folder),
         offsetof(struct Commandlist, u.sn.addflags),
         offsetof(struct Commandlist, u.sn.removeflags),
         offsetof(struct Commandlist, u.sn.days),      SNOOZE_WDAYS_MASK,
         offsetof(struct Commandlist, u.sn.is_mboxid), SNOOZE_IS_ID_MASK,
         offsetof(struct Commandlist, u.sn.times)
       } },
-    { B_SNOOZE,                  "ssSSB2U",                              /* 43 */
+    { B_SNOOZE_TZID,             "ssSSB2U",                              /* 43 */
       { offsetof(struct Commandlist, u.sn.tzid),
-        offsetof(struct Commandlist, u.sn.mailbox),
+        offsetof(struct Commandlist, u.sn.f.folder),
         offsetof(struct Commandlist, u.sn.addflags),
         offsetof(struct Commandlist, u.sn.removeflags),
         offsetof(struct Commandlist, u.sn.days),      SNOOZE_WDAYS_MASK,
         offsetof(struct Commandlist, u.sn.is_mboxid), SNOOZE_IS_ID_MASK,
         offsetof(struct Commandlist, u.sn.times)
+      } },
+    { B_SNOOZE,                  "sssiSSisU",                            /* 44 */
+      { offsetof(struct Commandlist, u.sn.f.folder),
+        offsetof(struct Commandlist, u.sn.f.mailboxid),
+        offsetof(struct Commandlist, u.sn.f.specialuse),
+        offsetof(struct Commandlist, u.sn.f.create),
+        offsetof(struct Commandlist, u.sn.addflags),
+        offsetof(struct Commandlist, u.sn.removeflags),
+        offsetof(struct Commandlist, u.sn.days),
+        offsetof(struct Commandlist, u.sn.tzid),
+        offsetof(struct Commandlist, u.sn.times)
+      } },
+    { B_VACATION,                "SssiissF!",                            /* 45 */
+      { offsetof(struct Commandlist, u.v.addresses),
+        offsetof(struct Commandlist, u.v.subject),
+        offsetof(struct Commandlist, u.v.message),
+        offsetof(struct Commandlist, u.v.seconds),
+        offsetof(struct Commandlist, u.v.mime),
+        offsetof(struct Commandlist, u.v.from),
+        offsetof(struct Commandlist, u.v.handle),
+        offsetof(struct Commandlist, u.v.fcc)
       } },
 };
 
@@ -543,21 +564,32 @@ static int bc_args_parse(bytecode_input_t *bc, int pos, const char *fmt,
             pos = bc_comparator_parse(bc, pos, base + *offsets++);
             break;
 
-            /* fccfolder [create flags [special-use] ] */
+            /* fccfolder [create flags [special-use [mailboxid] ] ] */
         case 'F': {
             struct Fileinto *fcc = base + *offsets++;
-            int have_specialuse = 0;
+            int have_specialuse = 0, have_mailboxid = 0;
 
-            if (*fmt == '$') {
+            switch (*fmt) {
+            case '!':
+                have_mailboxid = 1;
+
+                GCC_FALLTHROUGH
+
+            case '$':
                 have_specialuse = 1;
                 fmt++;
+                break;
             }
+
             pos = bc_string_parse(bc, pos, &fcc->folder);
             if (fcc->folder) {
                 fcc->create = ntohl(bc[pos++].value);
                 pos = bc_stringlist_parse(bc, pos, &fcc->flags);
                 if (have_specialuse) {
                     pos = bc_string_parse(bc, pos, &fcc->specialuse);
+                    if (have_mailboxid) {
+                        pos = bc_string_parse(bc, pos, &fcc->mailboxid);
+                    }
                 }
             }
             break;

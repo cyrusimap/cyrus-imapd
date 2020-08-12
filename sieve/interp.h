@@ -201,7 +201,7 @@ enum sieve_capa_flag {
     /* Fcc - RFC 8580 */
     SIEVE_CAPA_FCC          = 1LL<<45,
 
-    /* Mailboxid - draft-gondwana-sieve-mailboxid */
+    /* Mailboxid - draft-ietf-extra-sieve-mailboxid */
     SIEVE_CAPA_MAILBOXID    = 1LL<<46,
 
     /* Log - vnd.cyrus.log */
@@ -214,7 +214,7 @@ enum sieve_capa_flag {
     SIEVE_CAPA_JMAPQUERY    = 0LL<<48, /* disabled at compile-time */
 #endif
 
-    /* Snooze - vnd.cyrus.snooze */
+    /* Snooze - draft-ietf-extra-sieve-snooze */
     SIEVE_CAPA_SNOOZE       = 1LL<<49,
 };
 
