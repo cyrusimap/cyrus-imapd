@@ -10824,6 +10824,7 @@ static int backend_version(struct backend *be)
 
     minor = strstr(be->banner, "v2.3.");
     if (!minor) return 6;
+    minor += strlen("v2.3.");
 
     /* at least version 2.3.10 */
     if (minor[1] != ' ') {
