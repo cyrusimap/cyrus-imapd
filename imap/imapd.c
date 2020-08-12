@@ -11246,7 +11246,7 @@ static int backend_version(struct backend *be)
     }
 
     minor = strstr(be->banner, "v2.3.");
-    if (!minor) return 6;
+    if (!minor) goto unrecognised;
     minor += strlen("v2.3.");
 
     /* at least version 2.3.10 */
@@ -11275,7 +11275,11 @@ static int backend_version(struct backend *be)
         break;
     }
 
+unrecognised:
     /* fallthrough, shouldn't happen */
+    syslog(LOG_WARNING, "%s: did not recognise remote Cyrus version from "
+                        "banner \"%s\".  Assuming index version 6!",
+                        __func__, be->banner);
     return 6;
 }
 
