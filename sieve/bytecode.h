@@ -143,7 +143,7 @@ typedef union
  * version 0x1D scripts re-implemented Snooze per draft-ietf-extra-sieve-snooze-00
  *                      and Fcc per draft-ietf-extra-sieve-mailboxid-01
  */
-#define BYTECODE_VERSION 0x1C
+#define BYTECODE_VERSION 0x1D
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
