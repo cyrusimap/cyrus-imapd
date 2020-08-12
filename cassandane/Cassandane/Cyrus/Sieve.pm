@@ -2785,7 +2785,7 @@ EOF
 sub test_snooze_specialuse
     :needs_component_sieve :needs_component_calalarmd
     :needs_component_jmap
-    :min_version_3_1
+    :min_version_3_3
     :NoAltNameSpace
 {
     my ($self) = @_;
@@ -2845,7 +2845,7 @@ EOF
 sub test_snooze_specialuse_create
     :needs_component_sieve :needs_component_calalarmd
     :needs_component_jmap
-    :min_version_3_1
+    :min_version_3_3
     :NoAltNameSpace
 {
     my ($self) = @_;
