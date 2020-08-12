@@ -804,8 +804,8 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     else {
         r = mboxlist_mboxtree(addrhomeset, restore_addressbook_cb,
                               &rrock, MBOXTREE_SKIP_ROOT);
-        if (!r) mboxname_setdeletedmodseq(addrhomeset, rrock.deletedmodseq,
-                                          MBTYPE_ADDRESSBOOK, 0);
+        if (!r) mboxname_setmodseq(addrhomeset, rrock.deletedmodseq,
+                                   MBTYPE_ADDRESSBOOK, MBOXMODSEQ_ISDELETE);
     }
     free(addrhomeset);
     carddav_close(crock.carddavdb);
@@ -1257,8 +1257,8 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     r = mboxlist_mboxtree(calhomeset, restore_calendar_cb, &rrock,
                           MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
     if (!(r || (restore.mode & DRY_RUN))) {
-        mboxname_setdeletedmodseq(calhomeset,
-                                  rrock.deletedmodseq, MBTYPE_CALENDAR, 0);
+        mboxname_setmodseq(calhomeset, rrock.deletedmodseq,
+                           MBTYPE_CALENDAR, MBOXMODSEQ_ISDELETE);
     }
     free(calhomeset);
     free(crock.inboxname);
@@ -1346,8 +1346,8 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         r = mboxlist_mboxtree(notes, restore_collection_cb,
                               &rrock, MBOXTREE_SKIP_CHILDREN);
         if (!(r || (restore.mode & DRY_RUN))) {
-            mboxname_setdeletedmodseq(notes,
-                                      rrock.deletedmodseq, MBTYPE_EMAIL, 0);
+            mboxname_setmodseq(notes, rrock.deletedmodseq,
+                               MBTYPE_EMAIL, MBOXMODSEQ_ISDELETE);
         }
         free(notes);
     }
@@ -1906,8 +1906,8 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
         hash_enumerate(&mailboxes, &restore_mailbox_cb, &rrock);
 
         if (!(restore.mode & DRY_RUN)) {
-            mboxname_setdeletedmodseq(inbox,
-                                      rrock.deletedmodseq, MBTYPE_EMAIL, 0);
+            mboxname_setmodseq(inbox, rrock.deletedmodseq,
+                               MBTYPE_EMAIL, MBOXMODSEQ_ISDELETE);
         }
     }
 

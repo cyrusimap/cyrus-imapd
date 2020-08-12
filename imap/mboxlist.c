@@ -864,7 +864,8 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
     r = mboxlist_update_entry(mbentry->name, mbentry, &tid);
 
     if (!r)
-        mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, mbentry->mbtype, /*dofolder*/1);
+        mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, mbentry->mbtype,
+                           MBOXMODSEQ_ISFOLDER);
 
     /* commit the change to mupdate */
     if (!r && !localonly && config_mupdate_server) {
@@ -1215,7 +1216,7 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
                 /* bump modseq, we're removing a thing that can be seen */
                 if (!modseq)
                     modseq = mboxname_nextmodseq(mboxname, mbentry->foldermodseq,
-                                                 mbtype, 1 /* dofolder */);
+                                                 mbtype, MBOXMODSEQ_ISFOLDER);
 
                 mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
                 newmbentry->mbtype = MBTYPE_DELETED;
@@ -1246,7 +1247,7 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         if (!modseq)
             modseq = mboxname_nextmodseq(mboxname,
                                          mbentry ? mbentry->foldermodseq : 0,
-                                         mbtype, 1 /* dofolder */);
+                                         mbtype, MBOXMODSEQ_ISFOLDER);
 
         mbentry_t *newmbentry = mboxlist_entry_create();
         newmbentry->uniqueid = xstrdupnull(makeuuid());
@@ -1837,7 +1838,8 @@ EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
             newmbentry->mbtype = MBTYPE_DELETED;
             if (!silent) {
                 newmbentry->foldermodseq = mboxname_nextmodseq(newmbentry->name, newmbentry->foldermodseq,
-                                                               newmbentry->mbtype, 1);
+                                                               newmbentry->mbtype,
+                                                               MBOXMODSEQ_ISFOLDER);
             }
             r = mboxlist_update(newmbentry, /*localonly*/1);
             if (r) {
@@ -2180,7 +2182,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->name = xstrdupnull(newname);
         if (!silent) {
             newmbentry->foldermodseq = mboxname_nextmodseq(newname, newmbentry->foldermodseq,
-                                                           newmbentry->mbtype, 1);
+                                                           newmbentry->mbtype,
+                                                           MBOXMODSEQ_ISFOLDER);
         }
 
         /* skip ahead to the database update */
@@ -2256,7 +2259,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
         newmbentry->foldermodseq = silent ? oldmailbox->foldermodseq
                                           : mboxname_nextmodseq(newname, oldmailbox->foldermodseq,
-                                                                oldmailbox->mbtype, 1);
+                                                                oldmailbox->mbtype,
+                                                                MBOXMODSEQ_ISFOLDER);
 
         r = mboxlist_update_entry(newname, newmbentry, &tid);
         if (r) goto done;
