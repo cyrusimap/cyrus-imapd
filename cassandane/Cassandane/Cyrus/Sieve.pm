@@ -3303,17 +3303,24 @@ sub test_variable_modifiers
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["variables", "editheader", "regex", "enotify"];
 
-set                    "a" "juMBlEd?lETteRS.*";  #  => "juMBlEd?lETteRS.*"
-set :length            "b" "${a}";               #  => "17"
-set :lower             "c" "${a}";               #  => "jumbled?letters.*"
-set :upper             "d" "${a}";               #  => "JUMBLED?LETTERS.*"
-set :lowerfirst        "e" "${a}";               #  => "juMBlEd?lETteRS.*"
-set :lowerfirst :upper "f" "${a}";               #  => "jUMBLED?LETTERS.*"
-set :upperfirst        "g" "${a}";               #  => "JuMBlEd?lETteRS.*"
-set :upperfirst :lower "h" "${a}";               #  => "Jumbled?letters.*"
-set :quotewildcard     "i" "${a}";               #  => "juMBlEd\?lETteRS.\*"
-set :quoteregex        "j" "${a}";               #  => "juMBlEd\?lETteRS\.\*"
-set :encodeurl         "k" "${a}";               #  => "juMBlEd%26lETteRS.%2A"
+set                        "a" "juMBlEd?lETteRS=.*";
+set :length                "b" "${a}";  #  => "18"
+set :lower                 "c" "${a}";  #  => "jumbled?letters=.*"
+set :upper                 "d" "${a}";  #  => "JUMBLED?LETTERS=.*"
+set :lowerfirst            "e" "${a}";  #  => "juMBlEd?lETteRS=.*"
+set :lowerfirst :upper     "f" "${a}";  #  => "jUMBLED?LETTERS.*"
+set :upperfirst            "g" "${a}";  #  => "JuMBlEd?lETteRS=.*"
+set :upperfirst :lower     "h" "${a}";  #  => "Jumbled?letters=.*"
+set :quotewildcard         "i" "${a}";  #  => "juMBlEd\?lETteRS=.\*"
+set :quoteregex            "j" "${a}";  #  => "juMBlEd\?lETteRS=\.\*"
+set :encodeurl             "k" "${a}";  #  => "juMBlEd%3FlETteRS%3D.%2A"
+set :encodeurl :upper      "l" "${a}";  #  => "JUMBLED%3FLETTERS%3D.%2A"
+set :quotewildcard :upper  "m" "${a}";  #  => "JUMBLED\?LETTERS=.\*"
+set :quoteregex :upper     "n" "${a}";  #  => "JUMBLED\?LETTERS=\.\*"
+set :quoteregex :encodeurl
+    :upper                 "o" "${a}";  #  => "JUMBLED%5C%3FLETTERS%3D%5C.%5C%2A"
+set :quoteregex :encodeurl
+    :upper :length         "p" "${a}";  #  => "33"
 
 addheader "X-Cassandane-Test" "len = \"${b}\"";
 addheader "X-Cassandane-Test" "lower = \"${c}\"";
@@ -3325,6 +3332,11 @@ addheader "X-Cassandane-Test" "upperfirst+lower = \"${h}\"";
 addheader "X-Cassandane-Test" "wild = \"${i}\"";
 addheader "X-Cassandane-Test" "regex = \"${j}\"";
 addheader "X-Cassandane-Test" "url = \"${k}\"";
+addheader "X-Cassandane-Test" "url+upper = \"${l}\"";
+addheader "X-Cassandane-Test" "wild+upper = \"${m}\"";
+addheader "X-Cassandane-Test" "regex+upper = \"${n}\"";
+addheader "X-Cassandane-Test" "regex+url+upper = \"${o}\"";
+addheader "X-Cassandane-Test" "regex+url+upper+len = \"${p}\"";
 EOF
         );
 
@@ -3338,16 +3350,21 @@ EOF
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/X-Cassandane-Test: len = "17"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: lower = "jumbled\?letters\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: upper = "JUMBLED\?LETTERS\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: lowerfirst = "juMBlEd\?lETteRS\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: lowerfirst\+upper = "jUMBLED\?LETTERS\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: upperfirst = "JuMBlEd\?lETteRS\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: upperfirst\+lower = "Jumbled\?letters\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: wild = "juMBlEd\\\?lETteRS\.\\\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: regex = "juMBlEd\\\?lETteRS\\\.\\\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: url = "juMBlEd%3FlETteRS\.%2A"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: len = "18"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: lower = "jumbled\?letters=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: upper = "JUMBLED\?LETTERS=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: lowerfirst = "juMBlEd\?lETteRS=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: lowerfirst\+upper = "jUMBLED\?LETTERS=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: upperfirst = "JuMBlEd\?lETteRS=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: upperfirst\+lower = "Jumbled\?letters=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: wild = "juMBlEd\\\?lETteRS=\.\\\*"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: regex = "juMBlEd\\\?lETteRS=\\\.\\\*"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: url = "juMBlEd%3FlETteRS%3D\.%2A"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: wild\+upper = "JUMBLED\\\?LETTERS=\.\\\*"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: regex\+upper = "JUMBLED\\\?LETTERS=\\\.\\\*"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: url\+upper = "JUMBLED%3FLETTERS%3D\.%2A"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: regex\+url\+upper = "JUMBLED%5C%3FLETTERS%3D%5C.%5C%2A"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: regex\+url\+upper\+len = "33"\r\n/, $msg1);
 }
 
 1;
