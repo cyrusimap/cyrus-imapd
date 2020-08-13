@@ -1828,6 +1828,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             const char *mboxid = json_string_value(val);
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
             if (mbentry && mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL &&
+                !(mbentry->mbtype & MBTYPE_INTERMEDIATE) &&
                     jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                 strarray_append(folders, mbentry->name);
             }
@@ -1851,6 +1852,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
                 const char *mboxid = json_string_value(jmboxid);
                 const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
                 if (mbentry && mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL &&
+                    !(mbentry->mbtype & MBTYPE_INTERMEDIATE) &&
                         jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                     strarray_append(folders, mbentry->name);
                 }
