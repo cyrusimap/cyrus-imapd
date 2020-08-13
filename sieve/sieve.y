@@ -825,10 +825,10 @@ stags: /* empty */               { $$ = new_command(B_SET, sscript); }
 
 /* SET modifiers */
 mod40:    LOWER                 { $$ = BFV_LOWER; }
-        | UPPER                 { $$ = BFV_LOWERFIRST; }
+        | UPPER                 { $$ = BFV_UPPER; }
         ;
 
-mod30:    LOWERFIRST            { $$ = BFV_UPPER; }
+mod30:    LOWERFIRST            { $$ = BFV_LOWERFIRST; }
         | UPPERFIRST            { $$ = BFV_UPPERFIRST; }
         ;
 
