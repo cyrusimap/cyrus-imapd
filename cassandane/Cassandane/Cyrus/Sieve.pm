@@ -3318,7 +3318,7 @@ set :encodeurl :upper      "l" "${a}";  #  => "JUMBLED%3FLETTERS%3D.%2A"
 set :quotewildcard :upper  "m" "${a}";  #  => "JUMBLED\?LETTERS=.\*"
 set :quoteregex :upper     "n" "${a}";  #  => "JUMBLED\?LETTERS=\.\*"
 set :quoteregex :encodeurl
-    :upper                 "o" "${a}";  #  => "JUMBLED%5C%3FLETTERS%3D%5C.%5C%2A"
+    :upperfirst :lower     "o" "${a}";  #  => "Jumbled%5C%3fletters%3D%5C.%5C%2A"
 set :quoteregex :encodeurl
     :upper :length         "p" "${a}";  #  => "33"
 
@@ -3335,7 +3335,7 @@ addheader "X-Cassandane-Test" "url = \"${k}\"";
 addheader "X-Cassandane-Test" "url+upper = \"${l}\"";
 addheader "X-Cassandane-Test" "wild+upper = \"${m}\"";
 addheader "X-Cassandane-Test" "regex+upper = \"${n}\"";
-addheader "X-Cassandane-Test" "regex+url+upper = \"${o}\"";
+addheader "X-Cassandane-Test" "regex+url+upperfirst+lower = \"${o}\"";
 addheader "X-Cassandane-Test" "regex+url+upper+len = \"${p}\"";
 EOF
         );
@@ -3363,7 +3363,7 @@ EOF
     $self->assert_matches(qr/X-Cassandane-Test: wild\+upper = "JUMBLED\\\?LETTERS=\.\\\*"\r\n/, $msg1);
     $self->assert_matches(qr/X-Cassandane-Test: regex\+upper = "JUMBLED\\\?LETTERS=\\\.\\\*"\r\n/, $msg1);
     $self->assert_matches(qr/X-Cassandane-Test: url\+upper = "JUMBLED%3FLETTERS%3D\.%2A"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: regex\+url\+upper = "JUMBLED%5C%3FLETTERS%3D%5C.%5C%2A"\r\n/, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Test: regex\+url\+upperfirst\+lower = "Jumbled%5C%3Fletters%3D%5C.%5C%2A"\r\n/, $msg1);
     $self->assert_matches(qr/X-Cassandane-Test: regex\+url\+upper\+len = "33"\r\n/, $msg1);
 }
 
