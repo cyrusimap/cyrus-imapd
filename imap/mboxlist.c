@@ -1675,6 +1675,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                int keep_intermediaries)
 {
     mbentry_t *mbentry = NULL;
+    mbentry_t *newmbentry = NULL;
     strarray_t existing = STRARRAY_INITIALIZER;
     char newname[MAX_MAILBOX_BUFFER];
     int r = 0;
@@ -1753,8 +1754,18 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                keep_intermediaries,
                                0 /* move_subscription */, 0 /* silent */);
 
+    if (r) goto done;
+
+    /* Bump the deletedmodseq of the entries of mbtype. Do not
+     * bump the folderdeletedmodseq, yet. We'll take care of
+     * that in mboxlist_deletemailbox_full. */
+    r = mboxlist_lookup_allow_all(newname, &newmbentry, NULL);
+    if (!r) mboxname_setmodseq(newname, newmbentry->foldermodseq,
+                               newmbentry->mbtype, MBOXMODSEQ_ISDELETE);
+
 done:
     strarray_fini(&existing);
+    mboxlist_entry_free(&newmbentry);
     mboxlist_entry_free(&mbentry);
     mbname_free(&mbname);
 
@@ -1839,7 +1850,7 @@ EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
             if (!silent) {
                 newmbentry->foldermodseq = mboxname_nextmodseq(newmbentry->name, newmbentry->foldermodseq,
                                                                newmbentry->mbtype,
-                                                               MBOXMODSEQ_ISFOLDER);
+                                                               MBOXMODSEQ_ISFOLDER|MBOXMODSEQ_ISDELETE);
             }
             r = mboxlist_update(newmbentry, /*localonly*/1);
             if (r) {
@@ -1923,6 +1934,13 @@ EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
             r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype, newmbentry->foldermodseq);
         }
 
+        /* Bump the modseq of entries of mbtype. There's still a tombstone
+         * for this mailbox, so don't bump the folderdeletedmodseq, yet. */
+        if (!r) {
+            mboxname_setmodseq(mbentry->name, newmbentry->foldermodseq,
+                               mbentry->mbtype, MBOXMODSEQ_ISDELETE);
+        }
+
         mboxlist_entry_free(&newmbentry);
     }
     else {
@@ -1934,6 +1952,11 @@ EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
                    name, cyrusdb_strerror(r));
             r = IMAP_IOERROR;
             if (!force) goto done;
+        }
+        /* This mailbox is gone completely, so mark its modseq */
+        if (!r && !isremote && mboxname_isdeletedmailbox(name, NULL)) {
+            mboxname_setmodseq(name, mailbox->foldermodseq, mbentry->mbtype,
+                               MBOXMODSEQ_ISFOLDER|MBOXMODSEQ_ISDELETE);
         }
         if (r && !force) goto done;
     }
@@ -2166,6 +2189,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     char *newpartition = NULL;
     mupdate_handle *mupdate_h = NULL;
     mbentry_t *newmbentry = NULL;
+    int modseqflags = MBOXMODSEQ_ISFOLDER;
+    if (mboxname_isdeletedmailbox(newname, NULL))
+        modseqflags |= MBOXMODSEQ_ISDELETE;
 
     init_internal();
 
@@ -2182,8 +2208,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->name = xstrdupnull(newname);
         if (!silent) {
             newmbentry->foldermodseq = mboxname_nextmodseq(newname, newmbentry->foldermodseq,
-                                                           newmbentry->mbtype,
-                                                           MBOXMODSEQ_ISFOLDER);
+                                                           newmbentry->mbtype, modseqflags);
         }
 
         /* skip ahead to the database update */
@@ -2259,8 +2284,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
         newmbentry->foldermodseq = silent ? oldmailbox->foldermodseq
                                           : mboxname_nextmodseq(newname, oldmailbox->foldermodseq,
-                                                                oldmailbox->mbtype,
-                                                                MBOXMODSEQ_ISFOLDER);
+                                                                oldmailbox->mbtype, modseqflags);
 
         r = mboxlist_update_entry(newname, newmbentry, &tid);
         if (r) goto done;
