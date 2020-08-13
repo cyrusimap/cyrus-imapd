@@ -3409,6 +3409,7 @@ static int reindex_mb(void *rock,
             message_t *msg = ptrarray_nth(&batch, i);
             r = index_getsearchtext(msg, NULL, &tr->super.super, getsearchtext_flags);
             message_unref(&msg);
+            ptrarray_set(&batch, i, NULL);
             if (r) goto done;
         }
 
