@@ -141,15 +141,15 @@ EXPORTED const char *dlist_reserve_path(const char *part, int isarchive, int isb
                                         const struct message_guid *guid)
 {
     static char buf[MAX_MAILBOX_PATH];
-    const char *base;
+    const char *base = NULL;
 
     /* part must be a configured partition name on this server */
     if (isbackup) {
         base = config_backupstagingpath();
     }
     else {
-        base = isarchive ? config_archivepartitiondir(part)
-                         : config_partitiondir(part);
+        if (isarchive) base = config_archivepartitiondir(part);
+        if (!base) base = config_partitiondir(part);
     }
 
     /* we expect to have a base at this point, so let's assert that */
