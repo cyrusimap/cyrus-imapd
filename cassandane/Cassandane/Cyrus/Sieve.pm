@@ -2746,7 +2746,7 @@ sub test_snooze_mailboxid
 
     xlog $self, "Install script";
     $self->{instance}->install_sieve_script(<<EOF
-require ["snooze", "imap4flags", "mailboxid"];
+require ["x-cyrus-snooze", "imap4flags", "mailboxid"];
 snooze :mailboxid "$awakenedid" :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr";
 EOF
     );
