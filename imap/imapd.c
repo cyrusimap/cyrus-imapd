@@ -7919,9 +7919,6 @@ submboxes:
     if (!r && rename_user) {
         /* user_deletedata takes care of logging the unuser */
         user_deletedata(olduser, 1);
-        /* allow the replica to get the correct new quotaroot
-         * and acls copied across */
-        sync_log_user(newuser);
     }
 
     /* take care of intermediaries */
