@@ -189,6 +189,9 @@ sub config_set
 magic(ReverseACLs => sub {
     shift->config_set(reverseacls => 1);
 });
+magic(RightNow => sub {
+    shift->config_set(sync_rightnow => 1);
+});
 magic(Replication => sub { shift->want('replica'); });
 magic(Murder => sub { shift->want('murder'); });
 magic(Backups => sub { shift->want('backups'); });
