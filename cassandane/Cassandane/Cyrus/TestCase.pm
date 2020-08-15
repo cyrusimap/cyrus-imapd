@@ -459,16 +459,19 @@ sub _create_instances
 
         if ($want->{replica})
         {
+            my %replica_params = %instance_params;
+            $replica_params{config} = $conf->clone();
+            $replica_params{config}->set('sync_rightnow', 0);
             my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
             if (defined $cyrus_replica_prefix and -d $cyrus_replica_prefix) {
                 xlog $self, "replica instance: using [cyrus replica] configuration";
-                $instance_params{installation} = 'replica';
+                $replica_params{installation} = 'replica';
             }
 
-            $instance_params{description} = "replica instance for test $self->{_name}";
-            $self->{replica} = Cassandane::Instance->new(%instance_params,
+            $replica_params{description} = "replica instance for test $self->{_name}";
+            $self->{replica} = Cassandane::Instance->new(%replica_params,
                                                          setup_mailbox => 0);
-            my ($v) = Cassandane::Instance->get_version($instance_params{installation});
+            my ($v) = Cassandane::Instance->get_version($replica_params{installation});
             if ($v < 3) {
                 $self->{replica}->add_service(name => 'sync',
                                               port => $sync_port,
