@@ -76,6 +76,9 @@ static int sync_log_suppressed = 0;
 static strarray_t *channels = NULL;
 static strarray_t *unsuppressable = NULL;
 
+const char *rightnow_channel = NULL;
+static struct buf *rightnow_log = NULL;
+
 static int sync_log_initialized = 0;
 
 static void done_cb(void *rock __attribute__((unused))) {
@@ -113,8 +116,19 @@ EXPORTED void sync_log_init(void)
     strarray_free(unsuppressable);
     unsuppressable = NULL;
     conf = config_getstring(IMAPOPT_SYNC_LOG_UNSUPPRESSABLE_CHANNELS);
-    if (conf)
+    if (conf) {
         unsuppressable = strarray_split(conf, " ", 0);
+        i = strarray_find(unsuppressable, "\"\"", 0);
+        if (i >= 0)
+            strarray_set(unsuppressable, i, NULL);
+    }
+
+    conf = config_getstring(IMAPOPT_SYNC_RIGHTNOW_CHANNEL);
+    if (conf) {
+        if (strcmp(conf, "\"\""))
+            rightnow_channel = conf;
+        rightnow_log = buf_new();
+    }
 
     sync_log_initialized = 1;
 }
@@ -126,6 +140,13 @@ EXPORTED void sync_log_suppress(void)
 
 EXPORTED void sync_log_done(void)
 {
+    if (rightnow_log) {
+        syslog(LOG_ERR, "SYNCERROR: uncheckpointed log %s",
+               buf_cstring(rightnow_log));
+        buf_free(rightnow_log);
+        rightnow_log = NULL;
+    }
+
     strarray_free(channels);
     channels = NULL;
 
@@ -217,30 +238,13 @@ static void sync_log_base(const char *channel, const char *string)
 
 EXPORTED int sync_log_checkpoint(struct protstream *clientin __attribute__((unused)))
 {
-    if (!config_getswitch(IMAPOPT_SYNC_RIGHTNOW)) return 0;
     if (!channels) return 0;
+    if (!rightnow_log) return 0;
+    if (!buf_len(rightnow_log)) return 0;
 
-    struct buf cmd = BUF_INITIALIZER;
-    int r = 0;
-    int i;
+    buf_reset(rightnow_log);
 
-    buf_printf(&cmd, "%s/sync_client", SBIN_DIR);
-
-    for (i = 0 ; i < channels->count ; i++) {
-        const char *channel = channels->data[i];
-        if (!sync_log_enabled(channel)) continue;
-        // run sync_client once
-        if (channel)
-            r = run_command(buf_cstring(&cmd), "-C", config_filename, "-n", channel, "-r", "-X", "-o");
-        else
-            r = run_command(buf_cstring(&cmd), "-C", config_filename, "-r", "-X", "-o");
-        if (r) syslog(LOG_ERR, "IOERROR: failed to exec sync_client %s", error_message(r));
-        if (r) break;
-    }
-
-    buf_free(&cmd);
-
-    return r;
+    return 0;
 }
 
 static const char *sync_quote_name(const char *name)
@@ -345,6 +349,9 @@ EXPORTED void sync_log(const char *fmt, ...)
     va_start(ap, fmt);
     val = va_format(fmt, ap);
     va_end(ap);
+
+    if (rightnow_log)
+        buf_appendcstr(rightnow_log, val);
 
     for (i = 0 ; i < channels->count ; i++) {
         const char *channel = channels->data[i];
