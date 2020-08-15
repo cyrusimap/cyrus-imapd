@@ -974,7 +974,7 @@ skipdelivery:
     if (notifyheader) free(notifyheader);
 
     // checkpoint the replication before we return to reply to the client
-    sync_log_checkpoint();
+    sync_log_checkpoint(deliver_in);
 
     return 0;
 }

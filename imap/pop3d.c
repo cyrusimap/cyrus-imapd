@@ -969,7 +969,7 @@ static void cmdloop(void)
                 mailbox_unlock_index(popd_mailbox, NULL);
 
 done:
-                sync_log_checkpoint();
+                sync_log_checkpoint(popd_in);
 
                 prot_printf(popd_out, "+OK\r\n");
                 telemetry_rusage( popd_userid );

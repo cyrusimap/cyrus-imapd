@@ -215,7 +215,7 @@ static void sync_log_base(const char *channel, const char *string)
     xclose(fd);
 }
 
-EXPORTED int sync_log_checkpoint(void)
+EXPORTED int sync_log_checkpoint(struct protstream *clientin __attribute__((unused)))
 {
     if (!config_getswitch(IMAPOPT_SYNC_RIGHTNOW)) return 0;
     if (!channels) return 0;

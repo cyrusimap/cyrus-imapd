@@ -369,7 +369,7 @@ static int meth_post(struct transaction_t *txn,
     ret = jmap_api(txn, &res, &my_jmap_settings);
 
     // checkpoint before we reply
-    sync_log_checkpoint();
+    sync_log_checkpoint(txn->conn->pin);
 
     if (res) {
         /* Output the JSON object */
@@ -949,7 +949,7 @@ wrotebody:
     json_object_set_new(resp, "type", json_string(normalisedtype));
 
     // checkpoint before replying
-    sync_log_checkpoint();
+    sync_log_checkpoint(txn->conn->pin);
 
     /* Output the JSON object */
     ret = json_response(HTTP_CREATED, txn, resp);
