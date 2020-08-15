@@ -54,6 +54,7 @@
 #include "mboxname.h"
 #include "proxy.h"
 #include "times.h"
+#include "sync_log.h"
 #include "syslog.h"
 #include "user.h"
 #include "xstrlcpy.h"
@@ -366,6 +367,9 @@ static int meth_post(struct transaction_t *txn,
 
     /* Regular JMAP API request */
     ret = jmap_api(txn, &res, &my_jmap_settings);
+
+    // checkpoint before we reply
+    sync_log_checkpoint();
 
     if (res) {
         /* Output the JSON object */
@@ -943,6 +947,9 @@ wrotebody:
     json_object_set_new(resp, "size", json_integer(datalen));
     json_object_set_new(resp, "expires", json_string(datestr));
     json_object_set_new(resp, "type", json_string(normalisedtype));
+
+    // checkpoint before replying
+    sync_log_checkpoint();
 
     /* Output the JSON object */
     ret = json_response(HTTP_CREATED, txn, resp);
