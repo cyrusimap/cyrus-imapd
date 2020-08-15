@@ -1096,4 +1096,220 @@ sub test_mailbox_case_difference
     $self->assert(exists $res->{updated}{$mboxids{Hi}});
 }
 
+sub test_rename_deepuser_standardfolders_rightnow
+    :AllowMoves :Replication :min_version_3_3 :needs_component_jmap :JMAPExtensions :RightNow
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $rhttp = $self->{replica}->get_service('http');
+    my $rjmap = Mail::JMAPTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $rhttp->host(),
+        port => $rhttp->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    $self->_fmjmap_ok('Calendar/set',
+        create => {
+            "1" => { name => "A calendar" },
+        },
+    );
+
+    $self->_fmjmap_ok('Contact/set',
+        create => {
+            "1" => {firstName => "first", lastName => "last"},
+            "2" => {firstName => "second", lastName => "last"},
+        },
+    );
+
+    $self->_fmjmap_ok('Mailbox/set',
+        create => {
+            "1" => { name => 'Archive', parentId => undef, role => 'archive' },
+            "2" => { name => 'Drafts', parentId => undef, role => 'drafts' },
+            "3" => { name => 'Junk', parentId => undef, role => 'junk' },
+            "4" => { name => 'Sent', parentId => undef, role => 'sent' },
+            "5" => { name => 'Trash', parentId => undef, role => 'trash' },
+            "6" => { name => 'bar', parentId => undef, role => undef },
+            "7" => { name => 'sub', parentId => "#6", role => undef },
+        },
+    );
+
+    xlog $self, "Create a folder with intermediates";
+    $admintalk->create("user.cassandane.folderA.folderB.folderC");
+
+    my $data = $self->_fmjmap_ok('Mailbox/get', properties => ['name']);
+    my %byname = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    xlog $self, "Test user rename";
+    # check initial state (replication has been running rightnow!)
+    $self->check_replication('cassandane');
+
+    $data = $self->_fmjmap_ok('Mailbox/get', jmap => $rjmap, properties => ['name']);
+    my %byname_repl = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    $self->assert_deep_equals(\%byname, \%byname_repl);
+
+    # n.b. run_replication dropped all our store connections...
+    $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->getsyslog();
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert(not $admintalk->get_last_error());
+
+    xlog $self, "Make sure we didn't create intermediates in the process!";
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
+    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+
+    $res = $admintalk->select("user.newuser.bar.sub");
+    $self->assert(not $admintalk->get_last_error());
+
+    $self->{jmap}->{user} = 'newuser';
+    $data = $self->_fmjmap_ok('Mailbox/get', properties => ['name']);
+    my %byname_new = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    $self->assert_deep_equals(\%byname, \%byname_new);
+
+    # check nothing got logged on the replica
+    @syslog = $self->{replica}->getsyslog();
+    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
+    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+
+    # check replication is clean
+    $self->check_replication('newuser');
+
+    $rjmap->{user} = 'newuser';
+    $data = $self->_fmjmap_ok('Mailbox/get', jmap => $rjmap, properties => ['name']);
+    my %byname_newrepl = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    $self->assert_deep_equals(\%byname, \%byname_newrepl);
+}
+
+sub test_rename_deepfolder_intermediates_rightnow
+    :AllowMoves :Replication :min_version_3_3 :needs_component_jmap :JMAPExtensions :RightNow
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->setquota('user.cassandane', ['STORAGE', 500000]);
+
+    my $rhttp = $self->{replica}->get_service('http');
+    my $rjmap = Mail::JMAPTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $rhttp->host(),
+        port => $rhttp->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    $self->_fmjmap_ok('Calendar/set',
+        create => {
+            "1" => { name => "A calendar" },
+        },
+    );
+
+    $self->_fmjmap_ok('Contact/set',
+        create => {
+            "1" => {firstName => "first", lastName => "last"},
+            "2" => {firstName => "second", lastName => "last"},
+        },
+    );
+
+    $self->_fmjmap_ok('Mailbox/set',
+        create => {
+            "1" => { name => 'Archive', parentId => undef, role => 'archive' },
+            "2" => { name => 'Drafts', parentId => undef, role => 'drafts' },
+            "3" => { name => 'Junk', parentId => undef, role => 'junk' },
+            "4" => { name => 'Sent', parentId => undef, role => 'sent' },
+            "5" => { name => 'Trash', parentId => undef, role => 'trash' },
+            "6" => { name => 'bar', parentId => undef, role => undef },
+            "7" => { name => 'sub', parentId => "#6", role => undef },
+        },
+    );
+
+    xlog $self, "Create a folder with intermediates";
+    $admintalk->create("user.cassandane.folderA.folderB.folderC");
+
+    my $data = $self->_fmjmap_ok('Mailbox/get', properties => ['name']);
+    my %byname = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    xlog $self, "Test replication";
+    # replicate and check initial state
+    $self->check_replication('cassandane');
+
+    $data = $self->_fmjmap_ok('Mailbox/get', jmap => $rjmap, properties => ['name']);
+    my %byname_repl = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    $self->assert_deep_equals(\%byname, \%byname_repl);
+
+    # n.b. run_replication dropped all our store connections...
+    $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->getsyslog();
+    my $res = $admintalk->rename('user.cassandane.folderA', 'user.cassandane.folderZ');
+    $self->assert(not $admintalk->get_last_error());
+
+    xlog $self, "Make sure we didn't create intermediates in the process!";
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
+    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+
+    $data = $self->_fmjmap_ok('Mailbox/get', properties => ['name']);
+    my %byname_new = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    # we renamed a folder!
+    $byname{folderZ} = delete $byname{folderA};
+
+    $self->assert_deep_equals(\%byname, \%byname_new);
+
+    # replicate and check the renames
+    @syslog = $self->{replica}->getsyslog();
+
+    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
+    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+
+    # check replication is clean
+    $self->check_replication('cassandane');
+
+    $data = $self->_fmjmap_ok('Mailbox/get', jmap => $rjmap, properties => ['name']);
+    my %byname_newrepl = map { $_->{name} => $_->{id} } @{$data->{list}};
+
+    $self->assert_deep_equals(\%byname, \%byname_newrepl);
+
+    # n.b. run_replication dropped all our store connections...
+    $admintalk = $self->{adminstore}->get_client();
+    $admintalk->delete("user.cassandane");
+
+    xlog $self, "Make sure we didn't create intermediates in the process!";
+    @syslog = $self->{instance}->getsyslog();
+    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
+    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+
+    xlog $self, "Make sure there are no files left with cassandane in the name";
+    $self->assert_null(glob "$self->{instance}{basedir}/conf/user/c/cassandane.*");
+    $self->assert(not -d "$self->{instance}{basedir}/data/c/user/cassandane");
+    $self->assert(not -f "$self->{instance}{basedir}/conf/quota/c/user.cassandane");
+
+    # replicate and check the renames
+    @syslog = $self->{replica}->getsyslog();
+    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
+    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+
+    xlog $self, "Make sure there are no files left with cassandane in the on the replica";
+    $self->assert_null(glob "$self->{replica}{basedir}/conf/user/c/cassandane.*");
+    $self->assert(not -d "$self->{replica}{basedir}/data/c/user/cassandane");
+    $self->assert(not -f "$self->{replica}{basedir}/conf/quota/c/user.cassandane");
+
+    xlog $self, "Now clean up all the deleted mailboxes";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
+}
+
 1;
