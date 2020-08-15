@@ -78,6 +78,7 @@
 #include "times.h"
 #include "syslog.h"
 #include "strhash.h"
+#include "sync_log.h"
 #include "tok.h"
 #include "user.h"
 #include "util.h"
@@ -4420,9 +4421,10 @@ static int dav_move_collection(struct transaction_t *txn,
         buf_free(&mrock.newname);
 
         if (mrock.root) {
+            mboxname_release(&namespacelock);
+            sync_log_checkpoint();
             xml_response(HTTP_MULTI_STATUS, txn, mrock.root->doc);
             xmlFreeDoc(mrock.root->doc);
-            mboxname_release(&namespacelock);
             return 0;
         }
     }
@@ -4431,6 +4433,7 @@ static int dav_move_collection(struct transaction_t *txn,
     mboxname_release(&namespacelock);
     switch (r) {
     case 0:
+        sync_log_checkpoint();
         return (overwrite < 0) ? HTTP_NO_CONTENT : HTTP_CREATED;
 
     case IMAP_MAILBOX_EXISTS:
@@ -4854,6 +4857,7 @@ static int meth_delete_collection(struct transaction_t *txn,
             txn->error.desc = error_message(r);
             return HTTP_SERVER_ERROR;
         }
+        sync_log_checkpoint();
         return HTTP_OK;
     }
 
@@ -4921,6 +4925,8 @@ static int meth_delete_collection(struct transaction_t *txn,
 
         mboxlist_entry_free(&mbentry);
         free(inboxname);
+
+        sync_log_checkpoint();
 
         return ret;
     }
@@ -5029,6 +5035,8 @@ static int meth_delete_collection(struct transaction_t *txn,
 
   done:
     mailbox_close(&mailbox);
+
+    sync_log_checkpoint();
 
     return ret;
 }
@@ -5152,6 +5160,8 @@ static int meth_delete_resource(struct transaction_t *txn,
   done:
     if (davdb) dparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
+
+    sync_log_checkpoint();
 
     return ret;
 }
@@ -5802,6 +5812,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
   done:
     buf_free(&pctx.buf);
     mailbox_close(&mailbox);
+
+    sync_log_checkpoint();
 
     if (partition) free(partition);
     if (outdoc) xmlFreeDoc(outdoc);
@@ -6553,22 +6565,22 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     /* Execute the property patch instructions */
     ret = do_proppatch(&pctx, instr);
 
-    /* Output the XML response */
-    if (!ret) {
-        if (r) mailbox_abort(mailbox);
-        else if (get_preferences(txn) & PREFER_MIN) {
-            ret = HTTP_OK;
-            goto done;
-        }
+  done:
+    if (r) mailbox_abort(mailbox);
+    mailbox_close(&mailbox);
+    if (davdb) pparams->davdb.close_db(davdb);
 
-        xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    sync_log_checkpoint();
+
+    if (!ret) {
+        /* Output the XML response if wanted */
+        if (get_preferences(txn) & PREFER_MIN)
+            ret = HTTP_OK;
+        else
+            xml_response(HTTP_MULTI_STATUS, txn, outdoc);
     }
 
-  done:
-    if (davdb) pparams->davdb.close_db(davdb);
-    mailbox_close(&mailbox);
     buf_free(&pctx.buf);
-
     if (outdoc) xmlFreeDoc(outdoc);
     if (indoc) xmlFreeDoc(indoc);
 
@@ -6718,6 +6730,8 @@ static int dav_post_import(struct transaction_t *txn,
     /* Validators */
     dav_get_synctoken(mailbox, &txn->buf, "");
     txn->resp_body.ctag = buf_cstring(&txn->buf);
+
+    sync_log_checkpoint();
 
     /* End of output */
     write_body(0, txn, NULL, 0);
@@ -7296,6 +7310,10 @@ int meth_put(struct transaction_t *txn, void *params)
     buf_free(&msg_buf);
     if (davdb) pparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
+
+    // XXX - this is AFTER the response has been sent, we need to
+    // refactor this for total safety
+    sync_log_checkpoint();
 
     return ret;
 }
