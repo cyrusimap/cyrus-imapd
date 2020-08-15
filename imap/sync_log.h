@@ -51,6 +51,7 @@
 void sync_log_init(void);
 void sync_log_suppress(void);
 void sync_log_done(void);
+int sync_log_checkpoint(void);
 
 void sync_log(const char *fmt, ...);
 void sync_log_channel(const char *channel, const char *fmt, ...);

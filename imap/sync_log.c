@@ -59,6 +59,7 @@
 #include <errno.h>
 
 #include "assert.h"
+#include "command.h"
 #include "sync_log.h"
 #include "global.h"
 #include "cyr_lock.h"
@@ -212,6 +213,34 @@ static void sync_log_base(const char *channel, const char *string)
     (void)fsync(fd); /* paranoia */
     lock_unlock(fd, fname);
     xclose(fd);
+}
+
+EXPORTED int sync_log_checkpoint(void)
+{
+    if (!config_getswitch(IMAPOPT_SYNC_RIGHTNOW)) return 0;
+    if (!channels) return 0;
+
+    struct buf cmd = BUF_INITIALIZER;
+    int r = 0;
+    int i;
+
+    buf_printf(&cmd, "%s/sync_client", SBIN_DIR);
+
+    for (i = 0 ; i < channels->count ; i++) {
+        const char *channel = channels->data[i];
+        if (!sync_log_enabled(channel)) continue;
+        // run sync_client once
+        if (channel)
+            r = run_command(buf_cstring(&cmd), "-C", config_filename, "-n", channel, "-r", "-X", "-o");
+        else
+            r = run_command(buf_cstring(&cmd), "-C", config_filename, "-r", "-X", "-o");
+        if (r) syslog(LOG_ERR, "IOERROR: failed to exec sync_client %s", error_message(r));
+        if (r) break;
+    }
+
+    buf_free(&cmd);
+
+    return r;
 }
 
 static const char *sync_quote_name(const char *name)

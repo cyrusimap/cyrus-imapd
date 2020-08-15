@@ -2674,6 +2674,9 @@ product version in the capabilities
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
+{ "sync_rightnow", 0, SWITCH, "3.3.0" }
+/* Runs sync_client immediately after logging and doesn't return until it succeeds */
+
 { "sync_shutdown_file", NULL, STRING, "2.5.0" }
 /* Simple latch used to tell sync_client(8) that it should shut down at the
    next opportunity. Safer than sending signals to running processes.
