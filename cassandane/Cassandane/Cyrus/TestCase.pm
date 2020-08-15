@@ -399,6 +399,7 @@ sub _create_instances
             $sync_port = Cassandane::PortManager::alloc();
             $conf->set(
                 # sync_client will find the port in the config
+                sync_host => 'localhost',
                 sync_port => $sync_port,
                 # tell sync_client how to login
                 sync_authname => 'repluser',
