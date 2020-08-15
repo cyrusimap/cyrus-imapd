@@ -1163,6 +1163,7 @@ void lmtpmode(struct lmtp_func *func,
 
                 /* do delivery, report status */
                 func->deliver(msg, msg->authuser, msg->authstate, msg->ns);
+
                 for (j = 0; j < msg->rcpt_num; j++) {
                     if (!msg->rcpt[j]->status) delivered++;
                     send_lmtp_error(pout, msg->rcpt[j]->status,
