@@ -11756,10 +11756,8 @@ static int xfer_finalsync(struct xfer_header *xfer)
                        item->mbentry->name, error_message(r));
             }
             else {
-                if (mailbox->quotaroot &&
-                    !sync_name_lookup(master_quotaroots, mailbox->quotaroot)) {
+                if (mailbox->quotaroot)
                     sync_name_list_add(master_quotaroots, mailbox->quotaroot);
-                }
 
                 r = sync_do_annotation(mailbox->name, xfer->be, NULL, flags);
                 if (r) {

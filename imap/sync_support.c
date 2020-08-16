@@ -1207,7 +1207,10 @@ struct sync_name_list *sync_name_list_create(void)
 struct sync_name *sync_name_list_add(struct sync_name_list *l,
                                      const char *name)
 {
-    struct sync_name *item = xzmalloc(sizeof(struct sync_name));
+    struct sync_name * item = sync_name_lookup(l, name);
+    if (item) return item;
+
+    item = xzmalloc(sizeof(struct sync_name));
 
     if (l->tail)
         l->tail = l->tail->next = item;
@@ -3176,8 +3179,7 @@ static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
     /* and make it hold a transaction open */
     annotate_state_begin(astate);
 
-    if (qrl && mailbox->quotaroot &&
-         !sync_name_lookup(qrl, mailbox->quotaroot))
+    if (qrl && mailbox->quotaroot)
         sync_name_list_add(qrl, mailbox->quotaroot);
 
     r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 0,
@@ -6329,8 +6331,7 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
     if (r) goto done;
 
     if (info->quotalist && mailbox->quotaroot) {
-        if (!sync_name_lookup(info->quotalist, mailbox->quotaroot))
-            sync_name_list_add(info->quotalist, mailbox->quotaroot);
+        sync_name_list_add(info->quotalist, mailbox->quotaroot);
     }
 
     sync_name_list_add(info->mboxlist, mbentry->name);

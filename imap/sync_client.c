@@ -329,8 +329,7 @@ static void split_user_mailboxes(const char *key __attribute__((unused)),
         if (!action->active)
             continue;
 
-        if (!sync_name_lookup(smrock->mboxname_list, action->name))
-            sync_name_list_add(smrock->mboxname_list, action->name);
+        sync_name_list_add(smrock->mboxname_list, action->name);
     }
 
     if (smrock->mboxname_list->count >= 1000) {
