@@ -113,7 +113,7 @@ sub test_clone
     $self->assert(!defined $c->get('hello'));
     $self->assert($c2->get('hello') eq 'world');
     $self->assert($c->get('foo') eq 'bar');
-    $self->assert($c2->get('foo') eq 'bar');
+    $self->assert(!defined $c2->get('foo'));
 
     $c->set(foo => undef);
     $self->assert(!defined $c->get('hello'));

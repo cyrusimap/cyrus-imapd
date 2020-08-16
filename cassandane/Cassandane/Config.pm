@@ -110,14 +110,7 @@ sub set
     my ($self, %nv) = @_;
     while (my ($n, $v) = each %nv)
     {
-        if (defined $v)
-        {
-            $self->{params}->{$n} = $v;
-        }
-        else
-        {
-            delete $self->{params}->{$n};
-        }
+        $self->{params}->{$n} = $v;
     }
 }
 
@@ -126,9 +119,8 @@ sub get
     my ($self, $n) = @_;
     while (defined $self)
     {
-        my $v = $self->{params}->{$n};
-        return $v
-            if defined $v;
+        return $self->{params}->{$n}
+            if exists $self->{params}->{$n};
         $self = $self->{parent};
     }
     return undef;
@@ -169,8 +161,8 @@ sub _get_variable
     $n =~ s/@//g;
     while (defined $self)
     {
-        my $v = $self->{variables}->{$n};
-        return $v if defined $v;
+        return $self->{variables}->{$n}
+            if exists $self->{variables}->{$n};
         $self = $self->{parent};
     }
     die "Variable $n not defined";
@@ -180,6 +172,7 @@ sub substitute
 {
     my ($self, $s) = @_;
 
+    return unless defined $s;
     my $r = '';
     while (defined $s)
     {
@@ -207,7 +200,7 @@ sub _flatten
         foreach my $n (keys %{$conf->{params}})
         {
             $nv{$n} = $self->substitute($conf->{params}->{$n})
-                unless defined $nv{$n};
+                unless exists $nv{$n};
         }
     }
     return \%nv;
@@ -222,6 +215,7 @@ sub generate
         or die "Cannot open $filename for writing: $!";
     while (my ($n, $v) = each %$nv)
     {
+        next unless defined $v;
         print CONF "$n: $v\n";
     }
     close CONF;
