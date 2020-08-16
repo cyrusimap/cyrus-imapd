@@ -14482,6 +14482,10 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     }
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
+
+    // chaining!
+    sync_log_checkpoint(imapd_in);
+
     prot_printf(imapd_out, "%s %s\r\n", tag, resp);
 
     /* Reset inactivity timer in case we spent a long time processing data */
