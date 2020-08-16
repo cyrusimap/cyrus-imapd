@@ -14619,6 +14619,7 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
     }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
+    sync_log_checkpoint(imapd_in);
     prot_printf(imapd_out, "%s %s\r\n", tag, resp);
 
     /* Reset inactivity timer in case we spent a long time processing data */
