@@ -190,7 +190,7 @@ magic(ReverseACLs => sub {
     shift->config_set(reverseacls => 1);
 });
 magic(RightNow => sub {
-    shift->config_set(sync_rightnow => 1);
+    shift->config_set(sync_rightnow_channel => '""');
 });
 magic(Replication => sub { shift->want('replica'); });
 magic(Murder => sub { shift->want('murder'); });
@@ -461,7 +461,7 @@ sub _create_instances
         {
             my %replica_params = %instance_params;
             $replica_params{config} = $conf->clone();
-            $replica_params{config}->set('sync_rightnow', 0);
+            $replica_params{config}->set(sync_rightnow_channel => undef);
             my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
             if (defined $cyrus_replica_prefix and -d $cyrus_replica_prefix) {
                 xlog $self, "replica instance: using [cyrus replica] configuration";
