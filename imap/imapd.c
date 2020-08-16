@@ -1272,6 +1272,8 @@ static void cmdloop(void)
         /* ensure we didn't leak anything! */
         assert(!open_mailboxes_exist());
 
+        sync_log_checkpoint(imapd_in);
+
         /* Flush any buffered output */
         prot_flush(imapd_out);
         if (backend_current) prot_flush(backend_current->out);

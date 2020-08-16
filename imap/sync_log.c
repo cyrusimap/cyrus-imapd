@@ -141,8 +141,8 @@ EXPORTED void sync_log_suppress(void)
 EXPORTED void sync_log_done(void)
 {
     if (rightnow_log) {
-        syslog(LOG_ERR, "SYNCERROR: uncheckpointed log %s",
-               buf_cstring(rightnow_log));
+        if (buf_len(rightnow_log))
+            sync_log_checkpoint(NULL);
         buf_free(rightnow_log);
         rightnow_log = NULL;
     }

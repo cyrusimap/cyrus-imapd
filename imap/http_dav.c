@@ -6421,6 +6421,9 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     xml_partial_response(txn, fctx.root->doc, NULL /* end */, 0, &fctx.xmlbuf);
     xmlBufferFree(fctx.xmlbuf);
 
+    // might have made a change!
+    sync_log_checkpoint(txn->conn->pin);
+
     /* End of output */
     write_body(0, txn, NULL, 0);
     ret = 0;
@@ -8261,6 +8264,9 @@ int meth_report(struct transaction_t *txn, void *params)
 
     /* Process the requested report */
     if (!ret) ret = (*report->proc)(txn, rparams, inroot, &fctx);
+
+    // might have made a change!
+    sync_log_checkpoint(txn->conn->pin);
 
     /* Output the XML response */
     if (outroot) {
