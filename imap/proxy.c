@@ -183,8 +183,6 @@ EXPORTED struct backend * proxy_findserver(const char *server,          /* hostn
             ret->timeout = prot_addwaitevent(clientin,
                                              time(NULL) + IDLE_TIMEOUT,
                                              backend_timeout, ret);
-
-            ret->timeout->mark = time(NULL) + IDLE_TIMEOUT;
         }
     }
 
