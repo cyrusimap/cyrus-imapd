@@ -3369,8 +3369,6 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     r = user_meta(userid, sstate->pout);
     if (r) goto bail;
 
-    sync_log_user(userid);
-
 bail:
     sync_name_list_free(&quotaroots);
     return r;
