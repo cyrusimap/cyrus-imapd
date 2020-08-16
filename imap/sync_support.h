@@ -530,6 +530,11 @@ int sync_do_user_sieve(const char *userid,
                        struct sync_sieve_list *replica_sieve,
                        struct backend *sync_be, unsigned flags);
 
+int sync_connect_channel(struct backend **backendp,
+                         const char *channel,
+                         const char *servername,
+                         int verbose, struct buf *tagbuf);
+void sync_disconnect(struct backend **backendp);
 
 
 /* ====================================================================== */

@@ -6832,3 +6832,100 @@ EXPORTED const char *sync_restore(struct dlist *kin,
 
     return sync_response(r);
 }
+
+EXPORTED int sync_connect_channel(struct backend **backendp,
+                                  const char *channel,
+                                  const char *servername,
+                                  int verbose, struct buf *tagbuf)
+{
+    sasl_callback_t *cb;
+    int timeout;
+    const char *port, *auth_status = NULL;
+    int try_imap;
+    struct backend *backend = *backendp;
+
+    *backendp = NULL;
+
+    cb = mysasl_callbacks(NULL,
+                          sync_get_config(channel, "sync_authname"),
+                          sync_get_config(channel, "sync_realm"),
+                          sync_get_config(channel, "sync_password"));
+
+    /* get the right port */
+    port = sync_get_config(channel, "sync_port");
+    if (port) {
+        imap_csync_protocol.service = port;
+        csync_protocol.service = port;
+    }
+
+    try_imap = sync_get_switchconfig(channel, "sync_try_imap");
+
+    if (try_imap) {
+        backend = backend_connect(backend, servername,
+                                  &imap_csync_protocol, "", cb, &auth_status,
+                                  (verbose > 1 ? fileno(stderr) : -1));
+
+        if (backend) {
+            if (backend->capability & CAPA_REPLICATION) {
+                /* attach our IMAP tag buffer to our protstreams as userdata */
+                backend->in->userdata = backend->out->userdata = tagbuf;
+                goto connected;
+            }
+            else {
+                sync_disconnect(&backend);
+            }
+        }
+    }
+
+    backend = backend_connect(backend, servername,
+                              &csync_protocol, "", cb, NULL,
+                              (verbose > 1 ? fileno(stderr) : -1));
+
+    // auth_status means there was an error
+    if (!backend) return IMAP_AGAIN;
+
+connected:
+
+    free_callbacks(cb);
+    cb = NULL;
+
+    if (servername[0] != '/' && backend->sock >= 0) {
+        tcp_disable_nagle(backend->sock);
+        tcp_enable_keepalive(backend->sock);
+    }
+
+#ifdef HAVE_ZLIB
+    /* Does the backend support compression? */
+    if (CAPA(backend, CAPA_COMPRESS)) {
+        prot_printf(backend->out, "%s\r\n",
+                    backend->prot->u.std.compress_cmd.cmd);
+        prot_flush(backend->out);
+
+        if (sync_parse_response("COMPRESS", backend->in, NULL)) {
+            syslog(LOG_NOTICE, "Failed to enable compression, continuing uncompressed");
+        }
+        else {
+            prot_setcompress(backend->in);
+            prot_setcompress(backend->out);
+        }
+    }
+#endif
+
+    /* Set inactivity timer */
+    timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
+    if (timeout < 3) timeout = 3;
+    prot_settimeout(backend->in, timeout);
+
+    /* Force use of LITERAL+ so we don't need two way communications */
+    prot_setisclient(backend->in, 1);
+    prot_setisclient(backend->out, 1);
+
+    *backendp = backend;
+    return 0;
+}
+
+EXPORTED void sync_disconnect(struct backend **backendp)
+{
+    backend_disconnect(*backendp);
+    *backendp = NULL;
+}

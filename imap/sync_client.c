@@ -784,58 +784,16 @@ static int do_daemon_work(const char *channel, const char *sync_shutdown_file,
 static void replica_connect(const char *channel)
 {
     int wait;
-    sasl_callback_t *cb;
-    int timeout;
-    const char *port, *auth_status = NULL;
-    int try_imap;
-
-    cb = mysasl_callbacks(NULL,
-                          sync_get_config(channel, "sync_authname"),
-                          sync_get_config(channel, "sync_realm"),
-                          sync_get_config(channel, "sync_password"));
-
-    /* get the right port */
-    port = sync_get_config(channel, "sync_port");
-    if (port) {
-        imap_csync_protocol.service = port;
-        csync_protocol.service = port;
-    }
-
-    try_imap = sync_get_switchconfig(channel, "sync_try_imap");
 
     for (wait = 15;; wait *= 2) {
-        if (try_imap) {
-            sync_backend = backend_connect(sync_backend, servername,
-                                        &imap_csync_protocol, "", cb, &auth_status,
-                                        (verbose > 1 ? fileno(stderr) : -1));
-
-            if (sync_backend) {
-                if (sync_backend->capability & CAPA_REPLICATION) {
-                    /* attach our IMAP tag buffer to our protstreams as userdata */
-                    sync_backend->in->userdata = sync_backend->out->userdata = &tagbuf;
-                    break;
-                }
-                else {
-                    backend_disconnect(sync_backend);
-                    sync_backend = NULL;
-                }
-            }
-        }
-
-        sync_backend = backend_connect(sync_backend, servername,
-                                       &csync_protocol, "", cb, NULL,
-                                       (verbose > 1 ? fileno(stderr) : -1));
-
-        if (sync_backend || auth_status || connect_once || wait > 1000) break;
+        int r = sync_connect_channel(&sync_backend, channel, servername, verbose, &tagbuf);
+        if (r != IMAP_AGAIN) break;
 
         fprintf(stderr,
                 "Can not connect to server '%s', retrying in %d seconds\n",
                 servername, wait);
         sleep(wait);
     }
-
-    free_callbacks(cb);
-    cb = NULL;
 
     if (!sync_backend) {
         fprintf(stderr, "Can not connect to server '%s'\n",
@@ -844,52 +802,27 @@ static void replica_connect(const char *channel)
         _exit(1);
     }
 
-    if (servername[0] != '/' && sync_backend->sock >= 0) {
-        tcp_disable_nagle(sync_backend->sock);
-        tcp_enable_keepalive(sync_backend->sock);
-    }
-
-#ifdef HAVE_ZLIB
-    /* Does the backend support compression? */
-    if (CAPA(sync_backend, CAPA_COMPRESS)) {
-        prot_printf(sync_backend->out, "%s\r\n",
-                    sync_backend->prot->u.std.compress_cmd.cmd);
-        prot_flush(sync_backend->out);
-
-        if (sync_parse_response("COMPRESS", sync_backend->in, NULL)) {
-            if (do_compress) fatal("Failed to enable compression, aborting", EX_SOFTWARE);
-            syslog(LOG_NOTICE, "Failed to enable compression, continuing uncompressed");
-        }
-        else {
-            prot_setcompress(sync_backend->in);
-            prot_setcompress(sync_backend->out);
-        }
-    }
-    else if (do_compress) fatal("Backend does not support compression, aborting", EX_SOFTWARE);
-#endif
-
     /* links to sockets */
     sync_in = sync_backend->in;
     sync_out = sync_backend->out;
+
+    if (do_compress && sync_in->zstrm) {
+        fprintf(stderr, "Failed to enable compression to server '%s'\n",
+                servername);
+        syslog(LOG_ERR, "Failed to enable compression to server '%s'",
+                servername);
+        _exit(1);
+    }
 
     if (verbose > 1) {
         prot_setlog(sync_in, fileno(stderr));
         prot_setlog(sync_out, fileno(stderr));
     }
-
-    /* Set inactivity timer */
-    timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
-    if (timeout < 3) timeout = 3;
-    prot_settimeout(sync_in, timeout);
-
-    /* Force use of LITERAL+ so we don't need two way communications */
-    prot_setisclient(sync_in, 1);
-    prot_setisclient(sync_out, 1);
 }
 
 static void replica_disconnect(void)
 {
-    backend_disconnect(sync_backend);
+    sync_disconnect(&sync_backend);
 }
 
 static void do_daemon(const char *channel, const char *sync_shutdown_file,
@@ -1243,15 +1176,13 @@ int main(int argc, char **argv)
                     continue;
 
                 char *intname = mboxname_from_external(buf, &sync_namespace, NULL);
-                if (!sync_name_lookup(mboxname_list, intname))
-                    sync_name_list_add(mboxname_list, intname);
+                sync_name_list_add(mboxname_list, intname);
                 free(intname);
             }
             fclose(file);
         } else for (i = optind; i < argc; i++) {
             char *intname = mboxname_from_external(argv[i], &sync_namespace, NULL);
-            if (!sync_name_lookup(mboxname_list, intname))
-                sync_name_list_add(mboxname_list, intname);
+            sync_name_list_add(mboxname_list, intname);
             free(intname);
         }
 
