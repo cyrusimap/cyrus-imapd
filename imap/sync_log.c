@@ -244,7 +244,20 @@ EXPORTED int sync_log_checkpoint(struct protstream *clientin __attribute__((unus
 
     buf_reset(rightnow_log);
 
-    return 0;
+    int r;
+    struct buf cmd = BUF_INITIALIZER;
+    // XXX - this will be replaced with something that does a direct backend connection
+    buf_printf(&cmd, "%s/sync_client", SBIN_DIR);
+
+    if (rightnow_channel)
+       r = run_command(buf_cstring(&cmd), "-C", config_filename, "-n", rightnow_channel, "-r", "-X", "-o", NULL);
+    else
+       r = run_command(buf_cstring(&cmd), "-C", config_filename, "-r", "-X", "-o", NULL);
+    if (r) syslog(LOG_ERR, "IOERROR: failed to exec sync_client %s", error_message(r));
+
+    buf_free(&cmd);
+
+    return r;
 }
 
 static const char *sync_quote_name(const char *name)
