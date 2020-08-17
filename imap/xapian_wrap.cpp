@@ -930,14 +930,14 @@ static std::string parse_listid(const char *str)
     std::string val;
 
     /* Extract list-id */
-    const char *start = strchr(str, '<');
+    const char *start = strrchr(str, '<');
     if (start) {
-        /* RFC2919 list-id header */
+        /* RFC2919 list-id header (with optional closing bracket) */
         const char *end = strchr(++start, '>');
-        if (!end || end - start < 2) {
-            return std::string();
-        }
-        val = std::string(start, end - start);
+        if (end)
+            val = std::string(start, end - start);
+        else
+            val = std::string(start);
     }
     else {
         /* Groups-style header: 'list list-id[; contact list-contact]'
