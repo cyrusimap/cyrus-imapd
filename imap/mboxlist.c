@@ -5188,9 +5188,11 @@ struct upgrade_rock {
     struct buf *namebuf;
     struct db *db;
     struct txn **tid;
+    hash_table *ids;
+    int *r;
 };
 
-static int _upgrade_cb(void *rock,
+static int _foreach_cb(void *rock,
                        const char *key, size_t keylen,
                        const char *data, size_t datalen)
 {
@@ -5209,11 +5211,48 @@ static int _upgrade_cb(void *rock,
 
     mbentry->name = xstrndup(key, keylen);
     mbentry->mbtype |= MBTYPE_LEGACY_DIRS;
-    r = mboxlist_update_entry(mbentry->name, mbentry, urock->tid);
 
-    mboxlist_entry_free(&mbentry);
+    int idx = 0;
+    ptrarray_t *pa = hash_lookup(mbentry->uniqueid, urock->ids);
+    if (!pa) {
+        pa = ptrarray_new();
+        hash_insert(mbentry->uniqueid, pa, urock->ids);
+    }
+    else if (!(mbentry->mbtype & MBTYPE_DELETED)) {
+        idx = ptrarray_size(pa);
+    }
+    else {
+        /* Determine where to insert this entry in the list (sorted by modseq) */
+        int n = ptrarray_size(pa);
+        mbentry_t *this;
+
+        do {
+            this = (mbentry_t *) ptrarray_nth(pa, idx);
+
+        } while ((mbentry->foldermodseq > this->foldermodseq) && (++idx < n));
+    }
+    ptrarray_insert(pa, idx, mbentry);
 
     return r;
+}
+
+static void _upgrade_cb(const char *key __attribute__((unused)),
+                        void *data, void *rock)
+{
+    struct upgrade_rock *urock = (struct upgrade_rock *) rock;
+    ptrarray_t *pa = (ptrarray_t *) data;
+    int idx, n = ptrarray_size(pa);
+
+    for (idx = 0; idx < n; idx++) {
+        mbentry_t *mbentry = (mbentry_t *) ptrarray_nth(pa, idx);
+   
+        if (!*urock->r)
+            *urock->r = mboxlist_update_entry(mbentry->name, mbentry, urock->tid);
+
+        mboxlist_entry_free(&mbentry);
+    }
+
+    ptrarray_free(pa);
 }
 
 EXPORTED int mboxlist_upgrade(int *upgraded)
@@ -5222,7 +5261,8 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     struct buf buf = BUF_INITIALIZER;
     struct db *backup = NULL;
     struct txn *tid = NULL;
-    struct upgrade_rock urock = { &buf, NULL, &tid };
+    hash_table ids = HASH_TABLE_INITIALIZER;
+    struct upgrade_rock urock = { NULL, NULL, &tid, &ids, &r };
     char *fname;
 
     if (upgraded) *upgraded = 0;
@@ -5258,13 +5298,17 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     mboxlist_open(NULL);
 
     /* perform upgrade from backup to new db */
-    r = cyrusdb_foreach(backup, "", 0, NULL, _upgrade_cb, &urock, NULL);
+    construct_hash_table(&ids, 4096, 0);
+    r = cyrusdb_foreach(backup, "", 0, NULL, _foreach_cb, &urock, NULL);
 
     r2 = cyrusdb_close(backup);
     if (r2) {
         syslog(LOG_ERR, "DBERROR: error closing %s: %s", buf_cstring(&buf),
                cyrusdb_strerror(r2));
     }
+
+    hash_enumerate(&ids, &_upgrade_cb, &urock);
+    free_hash_table(&ids, NULL);
 
     /* complete txn on new db */
     if (tid) {
@@ -5332,7 +5376,7 @@ static int mboxlist_upgrade_subs(const char *subsfname, struct db **subs)
     struct buf buf = BUF_INITIALIZER;
     struct db *newsubs = NULL;
     struct txn *tid = NULL;
-    struct upgrade_rock urock = { &buf, NULL, &tid };
+    struct upgrade_rock urock = { &buf, NULL, &tid, NULL, NULL };
 
     /* check if we need to upgrade */
     r = cyrusdb_foreach(*subs, "", 0, NULL, _check_subs_cb, &do_upgrade, NULL);
