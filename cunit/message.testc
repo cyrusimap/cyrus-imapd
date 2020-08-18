@@ -535,8 +535,7 @@ HTML_PART "\r\n"
     CU_ASSERT_STRING_EQUAL(part->disposition, "ATTACHMENT");
     CU_ASSERT_STRING_EQUAL(part->encoding, "BASE64");
 
-    mcontent.base = msg;
-    mcontent.len = sizeof(msg)-1;
+    buf_init_ro(&mcontent.map, msg, sizeof(msg)-1);
     mcontent.body = &body;
 
     types[0] = "TEXT/PLAIN";
@@ -842,8 +841,7 @@ HTML_PART "\r\n"
     CU_ASSERT_STRING_EQUAL(part->disposition, "ATTACHMENT");
     CU_ASSERT_STRING_EQUAL(part->encoding, "BASE64");
 
-    mcontent.base = msg;
-    mcontent.len = sizeof(msg)-1;
+    buf_init_ro(&mcontent.map, msg, sizeof(msg)-1);
     mcontent.body = &body;
 
     types[0] = "TEXT/PLAIN";
