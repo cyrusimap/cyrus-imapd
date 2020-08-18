@@ -13084,11 +13084,12 @@ static int jmap_email_matchmime_method(jmap_req_t *req)
     json_t *jmime = json_object_get(req->args, "mime");
     json_t *err = NULL;
 
-    struct buf *mime = buf_new();
-    buf_setcstr(mime, json_string_value(jmime));
-    struct matchmime_t *matchmime = jmap_email_matchmime_init(mime, &err);
+    struct buf mime = BUF_INITIALIZER;
+    buf_setcstr(&mime, json_string_value(jmime));
+    matchmime_t *matchmime = jmap_email_matchmime_init(&mime, &err);
     int matches = matchmime ? jmap_email_matchmime(matchmime, jfilter, req->accountid, time(NULL), &err) : 0;
     jmap_email_matchmime_free(&matchmime);
+    buf_free(&mime);
     if (!err) {
         json_t *res = json_pack("{s:O s:b}", "filter", jfilter, "matches", matches);
         jmap_ok(req, res);

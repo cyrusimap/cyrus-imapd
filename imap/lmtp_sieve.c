@@ -1089,6 +1089,7 @@ static void cleanup_special_delivery(deliver_data_t *mydata)
     fclose(mydata->m->f);
     prot_free(mydata->m->data);
     jmap_email_matchmime_free(&mydata->m->matchmime);
+    buf_free(&mydata->m->mimebuf);
     append_removestage(mydata->stage);
     if (mydata->content->base) {
         map_free(&mydata->content->base, &mydata->content->len);
@@ -1867,10 +1868,9 @@ static int jmapquery(void *sc, void *mc, const char *json)
 
     if (!md->matchmime) {
         /* mmap the staged message file */
-        struct buf *msg = buf_new();
-        buf_refresh_mmap(msg, 1, fileno(md->f), md->id, md->size, NULL);
+        buf_refresh_mmap(&md->mimebuf, 1, fileno(md->f), md->id, md->size, NULL);
         /* build the query filter */
-        md->matchmime = jmap_email_matchmime_init(msg, &err);
+        md->matchmime = jmap_email_matchmime_init(&md->mimebuf, &err);
     }
 
     /* Run query */

@@ -116,15 +116,16 @@ extern void jmap_email_filtercondition_validate(const char *field, json_t *arg,
  *
  * Returns non-zero if filter matches.
  * On error, sets the JMAP error in err. */
-struct matchmime_t {
+struct matchmime {
     char *dbpath;
     xapian_dbw_t *dbw;
     message_t *m;
-    struct buf *mime;
+    const struct buf *mime;
 };
-extern struct matchmime_t *jmap_email_matchmime_init(struct buf *buf, json_t **err);
-extern void jmap_email_matchmime_free(struct matchmime_t **matchmimep);
-extern int jmap_email_matchmime(struct matchmime_t *matchmime,
+typedef struct matchmime matchmime_t;
+extern matchmime_t *jmap_email_matchmime_init(const struct buf *buf, json_t **err);
+extern void jmap_email_matchmime_free(matchmime_t **matchmimep);
+extern int jmap_email_matchmime(matchmime_t *matchmime,
                                 json_t *jfilter,
                                 const char *accountid,
                                 time_t internaldate,

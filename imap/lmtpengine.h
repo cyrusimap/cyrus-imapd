@@ -49,6 +49,7 @@
 #include "spool.h"
 #include "mboxname.h"
 #include "quota.h"
+#include "jmap_mail_query.h"
 
 typedef struct message_data message_data_t;
 typedef struct address_data address_data_t;
@@ -76,7 +77,8 @@ struct message_data {
 
     hdrcache_t hdrcache;
 
-    struct matchmime_t *matchmime; /* Xapian parsed DB */
+    matchmime_t *matchmime; /* Xapian parsed DB */
+    struct buf mimebuf;     /* mapped copy of the email */
 };
 
 /* return the corresponding header */

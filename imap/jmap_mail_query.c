@@ -928,9 +928,9 @@ HIDDEN void jmap_email_filtercondition_validate(const char *field, json_t *arg,
     }
 }
 
-HIDDEN struct matchmime_t *jmap_email_matchmime_init(struct buf *mime, json_t **err)
+HIDDEN matchmime_t *jmap_email_matchmime_init(const struct buf *mime, json_t **err)
 {
-    struct matchmime_t *matchmime = xzmalloc(sizeof(struct matchmime_t));
+    matchmime_t *matchmime = xzmalloc(sizeof(matchmime_t));
     int r = 0;
 
     matchmime->mime = mime;
@@ -998,13 +998,11 @@ HIDDEN struct matchmime_t *jmap_email_matchmime_init(struct buf *mime, json_t **
     return matchmime;
 }
 
-HIDDEN void jmap_email_matchmime_free(struct matchmime_t **matchmimep)
+HIDDEN void jmap_email_matchmime_free(matchmime_t **matchmimep)
 {
-    struct matchmime_t *matchmime = *matchmimep;
+    matchmime_t *matchmime = *matchmimep;
     if (!matchmime) return;
 
-    if (matchmime->mime) buf_free(matchmime->mime);
-    free(matchmime->mime);
     if (matchmime->m) message_unref(&matchmime->m);
     if (matchmime->dbw) xapian_dbw_close(matchmime->dbw);
     if (matchmime->dbpath) removedir(matchmime->dbpath);
@@ -1014,7 +1012,7 @@ HIDDEN void jmap_email_matchmime_free(struct matchmime_t **matchmimep)
     *matchmimep = NULL;
 }
 
-HIDDEN int jmap_email_matchmime(struct matchmime_t *matchmime,
+HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
                                 json_t *jfilter,
                                 const char *accountid,
                                 time_t internaldate,
