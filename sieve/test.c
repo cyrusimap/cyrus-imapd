@@ -76,6 +76,11 @@
 #include "hash.h"
 #include "times.h"
 
+#ifdef WITH_JMAP
+#include "imap/jmap_mail_query.h"
+#include "imap/mboxname.h"
+#endif
+
 static char vacation_answer;
 
 typedef struct {
@@ -270,6 +275,10 @@ static message_data_t *new_msg(FILE *msg, int size, const char *name)
 
 static void free_msg(message_data_t *m)
 {
+#ifdef WITH_JMAP
+    jmap_email_matchmime_free(&m->content.matchmime);
+#endif
+    buf_free(&m->content.map);
     spool_free_hdrcache(m->cache);
     free(m->name);
     free(m);
@@ -290,8 +299,8 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
 
     if (!m->content.body) {
         /* parse the message body if we haven't already */
-        r = message_parse_file(m->data, &m->content.base,
-                               &m->content.len, &m->content.body, NULL);
+        r = message_parse_file_buf(m->data, &m->content.map,
+                                   &m->content.body, NULL);
     }
 
     /* XXX currently struct bodypart as defined in message.h is the same as
@@ -560,14 +569,10 @@ static int send_response(void *ac, void *ic, void *sc,
 }
 
 #ifdef WITH_JMAP
-#include "imap/jmap_mail_query.h"
-#include "imap/mboxname.h"
-
 static int jmapquery(void *sc, void *mc, const char *json)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
-    struct buf msg = BUF_INITIALIZER;
     const char *userid = sd->userid;
     json_error_t jerr;
     json_t *jfilter, *err = NULL;
@@ -577,13 +582,24 @@ static int jmapquery(void *sc, void *mc, const char *json)
     jfilter = json_loads(json, 0, &jerr);
     if (!jfilter) return 0;
 
-    /* mmap the staged message file */
-    buf_refresh_mmap(&msg, 1, fileno(md->data), md->name, md->size, NULL);
+    int r = 0;
+
+    if (!md->content.body) {
+        /* parse the message body if we haven't already */
+        r = message_parse_file_buf(md->data, &md->content.map,
+                                   &md->content.body, NULL);
+        if (r) {
+            json_decref(jfilter);
+            return 0;
+        }
+    }
+
+    if (!md->content.matchmime)
+        md->content.matchmime = jmap_email_matchmime_init(&md->content.map, &err);
 
     /* Run query */
-    matchmime_t *matchmime = jmap_email_matchmime_init(&msg, &err);
-    if (matchmime) matches = jmap_email_matchmime(matchmime, jfilter, userid, time(NULL), &err);
-    jmap_email_matchmime_free(&matchmime);
+    if (md->content.matchmime)
+        matches = jmap_email_matchmime(md->content.matchmime, jfilter, userid, time(NULL), &err);
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
@@ -593,7 +609,6 @@ static int jmapquery(void *sc, void *mc, const char *json)
     }
 
     json_decref(jfilter);
-    buf_free(&msg);
 
     return matches;
 }
