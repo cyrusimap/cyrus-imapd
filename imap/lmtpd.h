@@ -48,6 +48,7 @@
 #include "lmtpengine.h"
 #include "mboxname.h"
 #include "message.h"
+#include "jmap_mail_query.h"
 
 /* data per message */
 typedef struct deliver_data {

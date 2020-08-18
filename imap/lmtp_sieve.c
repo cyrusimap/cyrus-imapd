@@ -1088,6 +1088,7 @@ static void cleanup_special_delivery(deliver_data_t *mydata)
 {
     fclose(mydata->m->f);
     prot_free(mydata->m->data);
+    jmap_email_matchmime_free(&mydata->m->matchmime);
     append_removestage(mydata->stage);
     if (mydata->content->base) {
         map_free(&mydata->content->base, &mydata->content->len);
@@ -1858,19 +1859,23 @@ static int jmapquery(void *sc, void *mc, const char *json)
     const char *userid = mbname_userid(sd->mbname);
     json_error_t jerr;
     json_t *jfilter, *err = NULL;
+    int matches = 0;
 
     /* Create filter from json */
     jfilter = json_loads(json, 0, &jerr);
     if (!jfilter) return 0;
 
-    /* mmap the staged message file */
-    struct buf *msg = buf_new();
-    buf_refresh_mmap(msg, 1, fileno(md->f), md->id, md->size, NULL);
+    if (!md->matchmime) {
+        /* mmap the staged message file */
+        struct buf *msg = buf_new();
+        buf_refresh_mmap(msg, 1, fileno(md->f), md->id, md->size, NULL);
+        /* build the query filter */
+        md->matchmime = jmap_email_matchmime_init(msg, &err);
+    }
 
     /* Run query */
-    struct matchmime_t *matchmime = jmap_email_matchmime_init(msg, &err);
-    int matches = matchmime ? jmap_email_matchmime(matchmime, jfilter, userid, time(NULL), &err) : 0;
-    jmap_email_matchmime_free(&matchmime);
+    if (md->matchmime && !err)
+        matches = jmap_email_matchmime(md->matchmime, jfilter, userid, time(NULL), &err);
 
     if (err) {
         const char *type = json_string_value(json_object_get(err, "type"));

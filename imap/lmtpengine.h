@@ -75,6 +75,8 @@ struct message_data {
     void *rock;
 
     hdrcache_t hdrcache;
+
+    struct matchmime_t *matchmime; /* Xapian parsed DB */
 };
 
 /* return the corresponding header */
