@@ -1043,6 +1043,10 @@ static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
     dd.m = memcpy(&md, mydata->m, sizeof(message_data_t));
     dd.content = &mc;
     memset(&mc, 0, sizeof(struct message_content));
+#ifdef WITH_JMAP
+    md.matchmime = NULL;
+    memset(&md.mimebuf, 0, sizeof(struct buf));
+#endif
 
     /* build the mailboxname from the recipient address */
     const mbname_t *origmbname = msg_getrcpt(mydata->m, mydata->cur_rcpt);
