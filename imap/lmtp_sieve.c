@@ -1088,8 +1088,10 @@ static void cleanup_special_delivery(deliver_data_t *mydata)
 {
     fclose(mydata->m->f);
     prot_free(mydata->m->data);
+#ifdef WITH_JMAP
     jmap_email_matchmime_free(&mydata->m->matchmime);
     buf_free(&mydata->m->mimebuf);
+#endif
     append_removestage(mydata->stage);
     if (mydata->content->base) {
         map_free(&mydata->content->base, &mydata->content->len);

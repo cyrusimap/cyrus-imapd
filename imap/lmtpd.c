@@ -943,8 +943,10 @@ int deliver(message_data_t *msgdata, char *authuser,
 
     /* cleanup */
     free(status);
+#ifdef WITH_JMAP
     jmap_email_matchmime_free(&msgdata->matchmime);
     buf_free(&msgdata->mimebuf);
+#endif
     if (content.base) map_free(&content.base, &content.len);
     if (content.body) {
         message_free_body(content.body);
