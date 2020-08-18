@@ -375,10 +375,6 @@ static int do_comparisons(strarray_t *needles, const char *hay,
     for (n = 0; n < numneedles && !res; n++) {
         const char *needle = strarray_nth(needles, n);
 
-        if (variables) {
-            needle = parse_string(needle, variables);
-        }
-
         int tmp = do_comparison(needle, hay,
                                 comp, comprock, ctag, variables, match_vars);
         if (tmp < 0) res = tmp;
