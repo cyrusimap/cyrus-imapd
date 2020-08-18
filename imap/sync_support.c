@@ -3026,7 +3026,7 @@ int sync_apply_mailbox(struct dlist *kin,
                          (mailbox->i.options & ~MAILBOX_OPTIONS_MASK);
 
     /* always set the highestmodseq */
-    mboxname_setmodseq(mailbox->name, highestmodseq, mailbox->mbtype, /*dofolder*/0);
+    mboxname_setmodseq(mailbox->name, highestmodseq, mailbox->mbtype, /*flags*/0);
 
     /* this happens rarely, so let us know */
     if (mailbox->i.uidvalidity != uidvalidity) {

@@ -2650,13 +2650,13 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
     return r;
 }
 
-enum domodseq { MAILBOXMODSEQ, QUOTAMODSEQ, RACLMODSEQ };
+enum domodseq { MBOXMODSEQ, QUOTAMODSEQ, RACLMODSEQ };
 
 static modseq_t mboxname_domodseq(const char *mboxname,
                                   modseq_t last,
                                   enum domodseq domodseq,
-                                  int mbtype,   // for MAILBOXMODSEQ
-                                  int dofolder, // for MAILBOXMODSEQ
+                                  int mbtype,   // for MBOXMODSEQ
+                                  int flags,    // for MBOXMODSEQ
                                   modseq_t add)
 {
     struct mboxname_counters counters;
@@ -2664,6 +2664,8 @@ static modseq_t mboxname_domodseq(const char *mboxname,
     modseq_t *typemodseqp = NULL;
     modseq_t *foldersmodseqp = NULL;
     int fd = -1;
+    int dofolder = flags & MBOXMODSEQ_ISFOLDER;
+    int isdelete = flags & MBOXMODSEQ_ISDELETE;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return last + add;
@@ -2674,26 +2676,46 @@ static modseq_t mboxname_domodseq(const char *mboxname,
 
     oldcounters = counters;
 
-    if (domodseq == MAILBOXMODSEQ) {
+    if (domodseq == MBOXMODSEQ) {
         if (mboxname_isaddressbookmailbox(mboxname, mbtype)) {
-            typemodseqp = &counters.carddavmodseq;
-            foldersmodseqp = &counters.carddavfoldersmodseq;
+            typemodseqp = isdelete ?
+                &counters.carddavdeletedmodseq :
+                &counters.carddavmodseq;
+            foldersmodseqp = isdelete ?
+                &counters.carddavfoldersdeletedmodseq :
+                &counters.carddavfoldersmodseq;
         }
         else if (mboxname_iscalendarmailbox(mboxname, mbtype)) {
-            typemodseqp = &counters.caldavmodseq;
-            foldersmodseqp = &counters.caldavfoldersmodseq;
+            typemodseqp = isdelete ?
+                &counters.caldavdeletedmodseq :
+                &counters.caldavmodseq;
+            foldersmodseqp = isdelete ?
+                &counters.caldavfoldersdeletedmodseq :
+                &counters.caldavfoldersmodseq;
         }
         else if (mboxname_isnotesmailbox(mboxname, mbtype)) {
-            typemodseqp = &counters.notesmodseq;
-            foldersmodseqp = &counters.notesfoldersmodseq;
+            typemodseqp = isdelete ?
+                &counters.notesdeletedmodseq :
+                &counters.notesmodseq;
+            foldersmodseqp = isdelete ?
+                &counters.notesfoldersdeletedmodseq :
+                &counters.notesfoldersmodseq;
         }
         else if (mboxname_issubmissionmailbox(mboxname, mbtype)) {
-            typemodseqp = &counters.submissionmodseq;
-            foldersmodseqp = &counters.submissionfoldersmodseq;
+            typemodseqp = isdelete ?
+                &counters.submissiondeletedmodseq :
+                &counters.submissionmodseq;
+            foldersmodseqp = isdelete ?
+                &counters.submissionfoldersdeletedmodseq :
+                &counters.submissionfoldersmodseq;
         }
         else {
-            typemodseqp = &counters.mailmodseq;
-            foldersmodseqp = &counters.mailfoldersmodseq;
+            typemodseqp = isdelete ?
+                &counters.maildeletedmodseq :
+                &counters.mailmodseq;
+            foldersmodseqp = isdelete ?
+                &counters.mailfoldersdeletedmodseq :
+                &counters.mailfoldersmodseq;
         }
     }
     else if (domodseq == QUOTAMODSEQ) {
@@ -2728,14 +2750,14 @@ static modseq_t mboxname_domodseq(const char *mboxname,
     return counters.highestmodseq;
 }
 
-EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder)
+EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int flags)
 {
-    return mboxname_domodseq(mboxname, last, MAILBOXMODSEQ, mbtype, dofolder, 1);
+    return mboxname_domodseq(mboxname, last, MBOXMODSEQ, mbtype, flags, 1);
 }
 
-EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder)
+EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t last, int mbtype, int flags)
 {
-    return mboxname_domodseq(mboxname, last, MAILBOXMODSEQ, mbtype, dofolder, 0);
+    return mboxname_domodseq(mboxname, last, MBOXMODSEQ, mbtype, flags, 0);
 }
 
 EXPORTED modseq_t mboxname_readquotamodseq(const char *mboxname)
@@ -2876,54 +2898,3 @@ done:
     mbname_free(&mbname2);
     return ancestor;
 }
-
-EXPORTED modseq_t mboxname_setdeletedmodseq(const char *mboxname, modseq_t val,
-                                            int mbtype, int dofolder)
-{
-    struct mboxname_counters counters;
-    struct mboxname_counters oldcounters;
-    modseq_t *modseqp = NULL;
-    int fd = -1;
-
-    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-        return val;
-
-    /* XXX error handling */
-    if (mboxname_load_counters(mboxname, &counters, &fd))
-        return val;
-
-    oldcounters = counters;
-
-    if (mboxname_isaddressbookmailbox(mboxname, mbtype)) {
-        modseqp = dofolder ? &counters.carddavfoldersdeletedmodseq :
-            &counters.carddavdeletedmodseq;
-    }
-    else if (mboxname_iscalendarmailbox(mboxname, mbtype)) {
-        modseqp = dofolder ? &counters.caldavfoldersdeletedmodseq :
-            &counters.caldavdeletedmodseq;
-    }
-    else if (mboxname_isnotesmailbox(mboxname, mbtype)) {
-        modseqp = dofolder ? &counters.notesfoldersdeletedmodseq :
-            &counters.notesdeletedmodseq;
-    }
-    else if (mboxname_issubmissionmailbox(mboxname, mbtype)) {
-        modseqp = dofolder ? &counters.submissionfoldersdeletedmodseq :
-            &counters.submissiondeletedmodseq;
-    }
-    else {
-        modseqp = dofolder ? &counters.mailfoldersdeletedmodseq :
-            &counters.maildeletedmodseq;
-    }
-
-    /* make sure all counters are at least the old value */
-    if (*modseqp < val)
-        *modseqp = val;
-
-    if (memcmp(&counters, &oldcounters, sizeof(struct mboxname_counters)))
-        mboxname_set_counters(mboxname, &counters, fd);
-    else
-        mboxname_unload_counters(fd);
-
-    return *modseqp;
-}
-
