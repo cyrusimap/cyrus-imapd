@@ -19314,6 +19314,14 @@ sub test_email_query_listid
         extra_headers => [['list-id', 'sub3.sub2.sub1.top']],
         body => "msg3"
     ) || die;
+    $self->make_message("msg4", # as seen in the wild
+        extra_headers => [['list-id', '"<b>foo</b>" <xxx.yyy.zzz']],
+        body => "msg4"
+    ) || die;
+    $self->make_message("msg5", # as seen in the wild
+        extra_headers => [['list-id', '1234567890 list <xxx.yyy.zzz']],
+        body => "msg5"
+    ) || die;
 
     xlog "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-Z');
@@ -19335,71 +19343,61 @@ sub test_email_query_listid
         }, 'R1'],
     ], $using);
     my @ids = @{$res->[0][1]{ids}};
-    $self->assert_num_equals(3, scalar @ids);
+    $self->assert_num_equals(5, scalar @ids);
 
-    xlog "Query listId";
-    $res = $jmap->CallMethods([
-        ['Email/query', {
-            filter => {
-                listId => 'xxx.yyy.zzz',
-            },
-        }, 'R1'],
-        ['Email/query', {
-            filter => {
-                listId => 'yyy',
-            },
-        }, 'R2'],
-        ['Email/query', {
-            filter => {
-                listId => 'xxx.yyy.*',
-            },
-        }, 'R3'],
-        ['Email/query', {
-            filter => {
-                listId => 'foo',
-            },
-        }, 'R4'],
-        ['Email/query', {
-            filter => {
-                listId => 'xxx . yyy . zzz',
-            },
-        }, 'R5'],
-        ['Email/query', {
-            filter => {
-                listId => 'aaa@bbb.ccc',
-            },
-        }, 'R6'],
-        ['Email/query', {
-            filter => {
-                listId => 'aaa-contact@bbb.ccc',
-            },
-        }, 'R7'],
-        ['Email/query', {
-            filter => {
-                listId => 'aaa @ bbb . ccc',
-            },
-        }, 'R8'],
-        ['Email/query', {
-            filter => {
-                listId => 'aaa',
-            },
-        }, 'R9'],
-        ['Email/query', {
-            filter => {
-                listId => 'sub3.sub2.sub1.top',
-            },
-        }, 'R10'],
-    ], $using);
-    $self->assert_deep_equals([$ids[0]], $res->[0][1]{ids});
-    $self->assert_deep_equals([], $res->[1][1]{ids});
-    $self->assert_deep_equals([], $res->[2][1]{ids});
-    $self->assert_deep_equals([], $res->[3][1]{ids});
-    $self->assert_deep_equals([$ids[0]], $res->[4][1]{ids});
-    $self->assert_deep_equals([$ids[1]], $res->[5][1]{ids});
-    $self->assert_deep_equals([], $res->[6][1]{ids});
-    $self->assert_deep_equals([$ids[1]], $res->[7][1]{ids});
-    $self->assert_deep_equals([], $res->[8][1]{ids});
-    $self->assert_deep_equals([$ids[2]], $res->[9][1]{ids});
+    my @testCases = ({
+        desc => 'simple list-id',
+        listId => 'xxx.yyy.zzz',
+        wantIds => [$ids[0], $ids[3], $ids[4]],
+    }, {
+        desc => 'no substring search for list-id',
+        listId => 'yyy',
+        wantIds => [],
+    }, {
+        desc => 'no wildcard search for list-id',
+        listId => 'xxx.yyy.*',
+        wantIds => [],
+    }, {
+        desc => 'no substring search for list-id #2',
+        listId => 'foo',
+        wantIds => [],
+    }, {
+        desc => 'ignore whitespace',
+        listId => 'xxx . yyy . zzz',
+        wantIds => [$ids[0], $ids[3], $ids[4]],
+    }, {
+        desc => 'Groups-style list-id',
+        listId => 'aaa@bbb.ccc',
+        wantIds => [$ids[1]],
+    }, {
+        desc => 'Ignore contact in groups-style list-id',
+        listId => 'aaa-contact@bbb.ccc',
+        wantIds => [],
+    }, {
+        desc => 'Groups-style list-id with whitespace',
+        listId => 'aaa @ bbb . ccc',
+        wantIds => [$ids[1]],
+    }, {
+        desc => 'Also no substring search in groups-style list-id',
+        listId => 'aaa',
+        wantIds => [],
+    }, {
+        desc => 'unbracketed list-id',
+        listId => 'sub3.sub2.sub1.top',
+        wantIds => [$ids[2]],
+    });
+
+    foreach (@testCases) {
+        $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => {
+                    listId => $_->{listId},
+                },
+                sort => [{ property => 'subject' }],
+            }, 'R1'],
+        ], $using);
+        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
+    }
 }
 
 sub test_email_query_emailaddress
