@@ -3367,4 +3367,53 @@ EOF
     $self->assert_matches(qr/X-Cassandane-Test: regex\+url\+upper\+len = "33"\r\n/, $msg1);
 }
 
+sub test_date
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["date", "variables", "imap4flags", "regex", "relational"];
+
+if date :originalzone "date" "date" "2018-05-16" {
+  addflag "Test1";
+}
+
+set "time" "22:06:18";
+if date :originalzone "date" "time" ["foo", "${time}"] {
+  addflag "Test2";
+}
+
+if date :regex "date" "std11" "^[a-z]{3}, [0-9]{1,2} [a-z]{3} [0-9]{4}" {
+  addflag "Test3";
+}
+
+if date :value "ge" :originalzone "date" "hour" "12" {
+  addflag "Test4";
+}
+EOF
+        );
+
+    my $raw = << 'EOF';
+Date: Wed, 16 May 2018 22:06:18 -0700
+From: Some Person <notifications@github.com>
+To: foo/bar <bar@noreply.github.com>
+Cc: Subscribed <subscribed@noreply.github.com>
+Message-ID: <foo/bar/pull/1234/abcdef01234@github.com>
+X-Cassandane-Unique: foo
+
+foo bar
+EOF
+    xlog $self, "Deliver a message";
+    my $msg1 = Cassandane::Message->new(raw => $raw);
+    $self->{instance}->deliver($msg1);
+
+    my $imaptalk = $self->{store}->get_client();
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+    $self->{store}->set_folder('INBOX');
+    $msg1->set_attribute(uid => 1);
+    $msg1->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2', 'Test3', 'Test4' ]);
+    $self->check_messages({ 1 => $msg1 }, keyed_on => 'uid', check_guid => 0);
+}
+
 1;
