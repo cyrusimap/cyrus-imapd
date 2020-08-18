@@ -1855,7 +1855,6 @@ static int jmapquery(void *sc, void *mc, const char *json)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((deliver_data_t *) mc)->m;
-    struct buf msg = BUF_INITIALIZER;
     const char *userid = mbname_userid(sd->mbname);
     json_error_t jerr;
     json_t *jfilter, *err = NULL;
@@ -1865,10 +1864,11 @@ static int jmapquery(void *sc, void *mc, const char *json)
     if (!jfilter) return 0;
 
     /* mmap the staged message file */
-    buf_refresh_mmap(&msg, 1, fileno(md->f), md->id, md->size, NULL);
+    struct buf *msg = buf_new();
+    buf_refresh_mmap(msg, 1, fileno(md->f), md->id, md->size, NULL);
 
     /* Run query */
-    struct matchmime_t *matchmime = jmap_email_matchmime_init(&msg, &err);
+    struct matchmime_t *matchmime = jmap_email_matchmime_init(msg, &err);
     int matches = matchmime ? jmap_email_matchmime(matchmime, jfilter, userid, time(NULL), &err) : 0;
     jmap_email_matchmime_free(&matchmime);
 
@@ -1888,7 +1888,6 @@ static int jmapquery(void *sc, void *mc, const char *json)
     }
 
     json_decref(jfilter);
-    buf_free(&msg);
 
     return matches;
 }

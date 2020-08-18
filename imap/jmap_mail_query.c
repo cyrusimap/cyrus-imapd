@@ -933,6 +933,8 @@ HIDDEN struct matchmime_t *jmap_email_matchmime_init(struct buf *mime, json_t **
     struct matchmime_t *matchmime = xzmalloc(sizeof(struct matchmime_t));
     int r = 0;
 
+    matchmime->mime = mime;
+
     /* Parse message into memory */
     matchmime->m = message_new_from_data(buf_base(mime), buf_len(mime));
     if (!matchmime->m) {
@@ -1001,6 +1003,8 @@ HIDDEN void jmap_email_matchmime_free(struct matchmime_t **matchmimep)
     struct matchmime_t *matchmime = *matchmimep;
     if (!matchmime) return;
 
+    if (matchmime->mime) buf_free(matchmime->mime);
+    free(matchmime->mime);
     if (matchmime->m) message_unref(&matchmime->m);
     if (matchmime->dbw) xapian_dbw_close(matchmime->dbw);
     if (matchmime->dbpath) removedir(matchmime->dbpath);
