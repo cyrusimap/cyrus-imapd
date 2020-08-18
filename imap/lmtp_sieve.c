@@ -1859,7 +1859,6 @@ static int jmapquery(void *sc, void *mc, const char *json)
     const char *userid = mbname_userid(sd->mbname);
     json_error_t jerr;
     json_t *jfilter, *err = NULL;
-    int r;
 
     /* Create filter from json */
     jfilter = json_loads(json, 0, &jerr);
@@ -1869,7 +1868,9 @@ static int jmapquery(void *sc, void *mc, const char *json)
     buf_refresh_mmap(&msg, 1, fileno(md->f), md->id, md->size, NULL);
 
     /* Run query */
-    r = jmap_email_matchmime(&msg, jfilter, userid, time(NULL), &err);
+    struct matchmime_t *matchmime = jmap_email_matchmime_init(&msg, &err);
+    int matches = matchmime ? jmap_email_matchmime(matchmime, jfilter, userid, time(NULL), &err) : 0;
+    jmap_email_matchmime_free(&matchmime);
 
     if (err) {
         const char *type = json_string_value(json_object_get(err, "type"));
@@ -1878,7 +1879,6 @@ static int jmapquery(void *sc, void *mc, const char *json)
 
         if (strcmpsafe(type, "invalidArguments")) {
             priority = LOG_ERR;
-            r = SIEVE_RUN_ERROR;
         }
 
         syslog(priority, "sieve: jmapquery error: %s", errstr);
@@ -1890,7 +1890,7 @@ static int jmapquery(void *sc, void *mc, const char *json)
     json_decref(jfilter);
     buf_free(&msg);
 
-    return r;
+    return matches;
 }
 #endif
 

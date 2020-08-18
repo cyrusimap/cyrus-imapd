@@ -104,7 +104,6 @@ static int _email_threadkeyword_is_valid(const char *keyword)
 #include "index.h"
 #include "search_query.h"
 #include "times.h"
-#include "xapian_wrap.h"
 
 HIDDEN void jmap_email_contactfilter_init(const char *accountid,
                                           const char *addressbookid,
@@ -929,17 +928,96 @@ HIDDEN void jmap_email_filtercondition_validate(const char *field, json_t *arg,
     }
 }
 
-HIDDEN int jmap_email_matchmime(struct buf *mime,
+HIDDEN struct matchmime_t *jmap_email_matchmime_init(struct buf *mime, json_t **err)
+{
+    struct matchmime_t *matchmime = xzmalloc(sizeof(struct matchmime_t));
+    int r = 0;
+
+    /* Parse message into memory */
+    matchmime->m = message_new_from_data(buf_base(mime), buf_len(mime));
+    if (!matchmime->m) {
+        syslog(LOG_ERR, "jmap_matchmime: can't create Cyrus message");
+        *err = jmap_server_error(r);
+        jmap_email_matchmime_free(&matchmime);
+        return NULL;
+    }
+
+    /* Open temporary database */
+    matchmime->dbpath = create_tempdir(config_getstring(IMAPOPT_TEMP_PATH), "matchmime");
+    if (!matchmime->dbpath) {
+        syslog(LOG_ERR, "jmap_matchmime: can't create tempdir: %s", strerror(errno));
+        *err = jmap_server_error(IMAP_INTERNAL);
+        jmap_email_matchmime_free(&matchmime);
+        return NULL;
+    }
+
+    /* Open search index in temp directory */
+    const char *paths[2];
+    paths[0] = matchmime->dbpath;
+    paths[1] = NULL;
+    r = xapian_dbw_open(paths, &matchmime->dbw, 0);
+    if (r) {
+        syslog(LOG_ERR, "jmap_matchmime: can't open search backend: %s",
+                error_message(r));
+        *err = jmap_server_error(r);
+        jmap_email_matchmime_free(&matchmime);
+        return NULL;
+    }
+
+    /* Index message bodies in-memory */
+    struct matchmime_receiver tr = {
+        {
+            _matchmime_tr_begin_mailbox,
+            _matchmime_tr_first_unindexed_uid,
+            _matchmime_tr_is_indexed,
+            _matchmime_tr_begin_message,
+            _matchmime_tr_begin_part,
+            _matchmime_tr_append_text,
+            _matchmime_tr_end_part,
+            _matchmime_tr_end_message,
+            _matchmime_tr_end_mailbox,
+            _matchmime_tr_flush,
+            _matchmime_tr_audit_mailbox,
+            _matchmime_tr_index_charset_flags,
+            _matchmime_tr_index_message_format
+        },
+        matchmime->dbw, BUF_INITIALIZER
+    };
+    r = index_getsearchtext(matchmime->m, NULL, (struct search_text_receiver*) &tr, 0);
+    buf_free(&tr.buf);
+    if (r) {
+        syslog(LOG_ERR, "jmap_matchmime: can't index MIME message: %s",
+                error_message(r));
+        *err = jmap_server_error(r);
+        jmap_email_matchmime_free(&matchmime);
+        return NULL;
+    }
+
+    return matchmime;
+}
+
+HIDDEN void jmap_email_matchmime_free(struct matchmime_t **matchmimep)
+{
+    struct matchmime_t *matchmime = *matchmimep;
+    if (!matchmime) return;
+
+    if (matchmime->m) message_unref(&matchmime->m);
+    if (matchmime->dbw) xapian_dbw_close(matchmime->dbw);
+    if (matchmime->dbpath) removedir(matchmime->dbpath);
+    free(matchmime->dbpath);
+
+    free(matchmime);
+    *matchmimep = NULL;
+}
+
+HIDDEN int jmap_email_matchmime(struct matchmime_t *matchmime,
                                 json_t *jfilter,
                                 const char *accountid,
                                 time_t internaldate,
                                 json_t **err)
 {
     int r = 0;
-    xapian_dbw_t *dbw = NULL;
-    message_t *m = NULL;
     int matches = 0;
-    char *dbpath = NULL;
 
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     strarray_t capabilities = STRARRAY_INITIALIZER;
@@ -993,72 +1071,16 @@ HIDDEN int jmap_email_matchmime(struct buf *mime,
         goto done;
     }
 
-    /* Parse message into memory */
-    m = message_new_from_data(buf_base(mime), buf_len(mime));
-    if (!m) {
-        syslog(LOG_ERR, "jmap_matchmime: can't create Cyrus message");
-        *err = jmap_server_error(r);
-        goto done;
-    }
-
-    /* Open temporary database */
-    dbpath = create_tempdir(config_getstring(IMAPOPT_TEMP_PATH), "matchmime");
-    if (!dbpath) {
-        syslog(LOG_ERR, "jmap_matchmime: can't create tempdir: %s", strerror(errno));
-        *err = jmap_server_error(IMAP_INTERNAL);
-        goto done;
-    }
-
-    /* Open search index in temp directory */
-    const char *paths[2];
-    paths[0] = dbpath;
-    paths[1] = NULL;
-    r = xapian_dbw_open(paths, &dbw, 0);
-    if (r) {
-        syslog(LOG_ERR, "jmap_matchmime: can't open search backend: %s",
-                error_message(r));
-        *err = jmap_server_error(r);
-        goto done;
-    }
-
-    /* Index message bodies in-memory */
-    struct matchmime_receiver tr = {
-        {
-            _matchmime_tr_begin_mailbox,
-            _matchmime_tr_first_unindexed_uid,
-            _matchmime_tr_is_indexed,
-            _matchmime_tr_begin_message,
-            _matchmime_tr_begin_part,
-            _matchmime_tr_append_text,
-            _matchmime_tr_end_part,
-            _matchmime_tr_end_message,
-            _matchmime_tr_end_mailbox,
-            _matchmime_tr_flush,
-            _matchmime_tr_audit_mailbox,
-            _matchmime_tr_index_charset_flags,
-            _matchmime_tr_index_message_format
-        },
-        dbw, BUF_INITIALIZER
-    };
-    r = index_getsearchtext(m, NULL, (struct search_text_receiver*) &tr, 0);
-    if (r) {
-        syslog(LOG_ERR, "jmap_matchmime: can't index MIME message: %s",
-                error_message(r));
-        *err = jmap_server_error(r);
-        goto done;
-    }
-    buf_free(&tr.buf);
-
     /* Evaluate filter */
     xapian_db_t *db = NULL;
-    r = xapian_db_opendbw(dbw, &db);
+    r = xapian_db_opendbw(matchmime->dbw, &db);
     if (r) {
         syslog(LOG_ERR, "jmap_matchmime: can't open query backend: %s",
                 error_message(r));
         *err = jmap_server_error(r);
         goto done;
     }
-    matches = _email_matchmime_evaluate(jfilter, m, db, &cfilter, internaldate);
+    matches = _email_matchmime_evaluate(jfilter, matchmime->m, db, &cfilter, internaldate);
     xapian_db_close(db);
 
 done:
@@ -1066,10 +1088,6 @@ done:
     jmap_parser_fini(&parser);
     strarray_fini(&capabilities);
     json_decref(unsupported);
-    message_unref(&m);
-    xapian_dbw_close(dbw);
-    if (dbpath) removedir(dbpath);
-    free(dbpath);
     return matches;
 }
 
