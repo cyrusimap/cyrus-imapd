@@ -10150,6 +10150,7 @@ static void _email_mboxrecs_read(jmap_req_t *req,
                 json_pack("{s:s}", "notFound") : jmap_server_error(r);
             json_object_set_new(set_errors, email_id, err);
             _email_mboxrecs_free(&mboxrecs);
+            return;
         }
     }
 
