@@ -398,6 +398,39 @@ EXPORTED int message_parse_file(FILE *infile,
     return r;
 }
 
+/*
+ * Parse the message 'infile'.
+ *
+ * The caller MUST free the allocated body struct.
+ *
+ * If msg_base/msg_len are non-NULL, the file will remain memory-mapped
+ * and returned to the caller.  The caller MUST unmap the file.
+ */
+EXPORTED int message_parse_file_buf(FILE *infile,
+                                    struct buf *buf,
+                                    struct body **body,
+                                    const char *efname)
+{
+    int fd = fileno(infile);
+    struct stat sbuf;
+
+    // unmap or clear space
+    buf_free(buf);
+
+    if (fstat(fd, &sbuf) == -1) {
+        if (efname)
+            syslog(LOG_ERR, "IOERROR: fstat on new message in spool (%s): %m",
+                   efname);
+        else
+            syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
+        fatal("can't fstat message file", EX_OSFILE);
+    }
+    buf_refresh_mmap(buf, 1, fd, efname, sbuf.st_size, "new message");
+
+    if (!*body) *body = (struct body *) xzmalloc(sizeof(struct body));
+    return message_parse_mapped(buf_base(buf), buf_len(buf), *body, efname);
+}
+
 
 /*
  * Parse the message 'infile'.
