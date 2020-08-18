@@ -1037,8 +1037,6 @@ envelope_err:
     {
         char buffer[64];
         const char **headers = NULL;
-        const char **key;
-        const char **keylist = NULL;
         const char *header = NULL;
         const char *header_data;
         const char *header_name = NULL;
@@ -1052,6 +1050,7 @@ envelope_err:
         int zone;
         struct tm tm;
         time_t t;
+        int ctag = 0;
 
         /* index */
         index = test.u.dt.comp.index;
@@ -1068,6 +1067,11 @@ envelope_err:
         match = test.u.dt.comp.match;
         relation = test.u.dt.comp.relation;
         comparator = test.u.dt.comp.collation;
+
+        /* set up variables needed for compiling regex */
+        if (match == B_REGEX) {
+            ctag = regcomp_flags(comparator, requires);
+        }
 
         /* find comparator function */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
@@ -1181,76 +1185,74 @@ envelope_err:
                 goto alldone;
         }
 
-        keylist = (const char **) strarray_safetakevf(test.u.dt.kl);
-        for (key = keylist; *key; ++key) {
-            switch (date_part) {
-            case B_YEAR:
-                snprintf(buffer, sizeof(buffer), "%04d", 1900 + tm.tm_year);
-                break;
-            case B_MONTH:
-                snprintf(buffer, sizeof(buffer), "%02d", 1 + tm.tm_mon);
-                break;
-            case B_DAY:
-                snprintf(buffer, sizeof(buffer), "%02d", tm.tm_mday);
-                break;
-            case B_DATE:
-                snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d",
-                         1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday);
-                break;
-            case B_JULIAN: {
-                int month, year;
-                int c, ya;
+        switch (date_part) {
+        case B_YEAR:
+            snprintf(buffer, sizeof(buffer), "%04d", 1900 + tm.tm_year);
+            break;
+        case B_MONTH:
+            snprintf(buffer, sizeof(buffer), "%02d", 1 + tm.tm_mon);
+            break;
+        case B_DAY:
+            snprintf(buffer, sizeof(buffer), "%02d", tm.tm_mday);
+            break;
+        case B_DATE:
+            snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d",
+                     1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday);
+            break;
+        case B_JULIAN: {
+            int month, year;
+            int c, ya;
 
-                month = 1 + tm.tm_mon;
-                year = 1900 + tm.tm_year;
+            month = 1 + tm.tm_mon;
+            year = 1900 + tm.tm_year;
 
-                if (month > 2) {
-                    month -= 3;
-                }
-                else {
-                    month += 9;
-                    --year;
-                }
-                c = year / 100;
-                ya = year - c * 100;
-
-                snprintf(buffer, sizeof(buffer), "%d",
-                         (c * 146097 / 4 + ya * 1461 / 4 +
-                          (month * 153 + 2) / 5 + tm.tm_mday + 1721119));
-            } break;
-            case B_HOUR:
-                snprintf(buffer, sizeof(buffer), "%02d", tm.tm_hour);
-                break;
-            case B_MINUTE:
-                snprintf(buffer, sizeof(buffer), "%02d", tm.tm_min);
-                break;
-            case B_SECOND:
-                snprintf(buffer, sizeof(buffer), "%02d", tm.tm_sec);
-                break;
-            case B_TIME:
-                snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
-                         tm.tm_hour, tm.tm_min, tm.tm_sec);
-                break;
-            case B_ISO8601:
-                time_to_iso8601(t, buffer, sizeof(buffer), 1);
-                break;
-            case B_STD11:
-                time_to_rfc5322(t, buffer, sizeof(buffer));
-                break;
-            case B_ZONE:
-                snprintf(buffer, sizeof(buffer), "%c%02d%02d",
-                         timezone_offset >= 0 ? '+' : '-',
-                         abs(timezone_offset) / 60,
-                         abs(timezone_offset) % 60);
-                break;
-            case B_WEEKDAY:
-                snprintf(buffer, sizeof(buffer), "%1d", tm.tm_wday);
-                break;
+            if (month > 2) {
+                month -= 3;
             }
+            else {
+                month += 9;
+                --year;
+            }
+            c = year / 100;
+            ya = year - c * 100;
 
-            res |= comp(buffer, strlen(buffer), *key, match_vars, comprock);
+            snprintf(buffer, sizeof(buffer), "%d",
+                     (c * 146097 / 4 + ya * 1461 / 4 +
+                      (month * 153 + 2) / 5 + tm.tm_mday + 1721119));
+        } break;
+        case B_HOUR:
+            snprintf(buffer, sizeof(buffer), "%02d", tm.tm_hour);
+            break;
+        case B_MINUTE:
+            snprintf(buffer, sizeof(buffer), "%02d", tm.tm_min);
+            break;
+        case B_SECOND:
+            snprintf(buffer, sizeof(buffer), "%02d", tm.tm_sec);
+            break;
+        case B_TIME:
+            snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
+                     tm.tm_hour, tm.tm_min, tm.tm_sec);
+            break;
+        case B_ISO8601:
+            time_to_iso8601(t, buffer, sizeof(buffer), 1);
+            break;
+        case B_STD11:
+            time_to_rfc5322(t, buffer, sizeof(buffer));
+            break;
+        case B_ZONE:
+            snprintf(buffer, sizeof(buffer), "%c%02d%02d",
+                     timezone_offset >= 0 ? '+' : '-',
+                     abs(timezone_offset) / 60,
+                     abs(timezone_offset) % 60);
+            break;
+        case B_WEEKDAY:
+            snprintf(buffer, sizeof(buffer), "%1d", tm.tm_wday);
+            break;
         }
-        free(keylist);
+
+        res = do_comparisons(test.u.dt.kl, buffer, comp, comprock, ctag,
+                             (requires & BFE_VARIABLES) ? variables : NULL,
+                             match_vars);
         break;
     }
 
