@@ -485,7 +485,7 @@ HTML_PART "\r\n"
     int r;
     struct body body;
     struct body *part;
-    struct message_content mcontent;
+    struct message_content mcontent = MESSAGE_CONTENT_INITIALIZER;
     const char *types[2] = { NULL, NULL };
     struct bodypart **parts = NULL;
 
@@ -791,7 +791,7 @@ HTML_PART "\r\n"
     int r;
     struct body body;
     struct body *part;
-    struct message_content mcontent;
+    struct message_content mcontent = MESSAGE_CONTENT_INITIALIZER;
     const char *types[2] = { NULL, NULL };
     struct bodypart **parts = NULL;
 
