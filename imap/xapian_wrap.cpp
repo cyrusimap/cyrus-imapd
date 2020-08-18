@@ -227,28 +227,27 @@ static void read_language_counts(const Xapian::Database& db,
     }
 }
 
-static void parse_doclangs(const std::string& val, std::vector<std::string>& doclangs)
+static void parse_doclangs(const std::string& val, std::set<std::string>& doclangs)
 {
     if (val.empty() || !isalpha(val[0])) return;
 
     size_t base = 0, pos;
     while ((pos = val.find(',', base)) != std::string::npos) {
-        doclangs.push_back(val.substr(base, pos - base));
+        doclangs.insert(val.substr(base, pos - base));
         base = pos + 1;
     }
-    doclangs.push_back(val.substr(base));
+    doclangs.insert(val.substr(base));
 }
 
-static std::string format_doclangs(const std::vector<std::string>& doclangs)
+static std::string format_doclangs(const std::set<std::string>& doclangs)
 {
-    std::string val;
-    for (size_t i = 0; i < doclangs.size(); ++i) {
-        val.append(doclangs[i]);
-        if (i < doclangs.size() - 1) {
-            val.append(1, ',');
-        }
+    std::ostringstream val;
+    for (std::set<std::string>::iterator it = doclangs.begin(); it != doclangs.end(); ++it) {
+        if (it != doclangs.begin()) val << ",";
+        val << *it;
     }
-    return val;
+    std::string s = val.str();
+    return s;
 }
 
 static std::string parse_langcode(const char *str)
@@ -712,7 +711,7 @@ struct xapian_dbw
     Xapian::Document *document;
     char doctype;
     char *cyrusid;
-    std::vector<std::string> *doclangs;
+    std::set<std::string> *doclangs;
     std::vector<std::string> *subjects;
 };
 
@@ -731,7 +730,7 @@ static int xapian_dbw_init(xapian_dbw_t *dbw)
     dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_CJK_NGRAM,
             ~Xapian::TermGenerator::FLAG_CJK_NGRAM);
 #endif
-    dbw->doclangs = new std::vector<std::string>;
+    dbw->doclangs = new std::set<std::string>;
     dbw->subjects = new std::vector<std::string>;
     return 0;
 }
@@ -1135,7 +1134,7 @@ int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
                                 "1" : std::to_string(std::stoi(val) + 1));
                     }
                     // Store detected languages in document.
-                    dbw->doclangs->push_back(iso_lang.c_str());
+                    dbw->doclangs->insert(iso_lang.c_str());
                     add_boolean_nterm(*dbw->document, std::string("XI") + iso_lang);
                 }
             }
@@ -1219,19 +1218,19 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
                 dbw->document->add_value(SLOT_DOCLANGS, val);
             }
             // Index subjects by detected document languages.
-            for (const std::string& iso_lang : *dbw->doclangs) {
+            for (std::set<std::string>::iterator it = dbw->doclangs->begin(); it != dbw->doclangs->end(); ++it) {
+                std::string iso_lang = *it;
                 if (iso_lang.compare("en")) {
-                    for (const std::string& subject : *dbw->subjects)
-                        try {
-                            const char *prefix =
-                                get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_SUBJECT);
-                            dbw->term_generator->set_stemmer(get_stemmer(iso_lang));
-                            dbw->term_generator->set_stopper(get_stopper(iso_lang));
-                            dbw->term_generator->index_text(Xapian::Utf8Iterator(subject), 1,
-                                    lang_prefix(iso_lang, prefix));
-                        } catch (const Xapian::InvalidArgumentError &err) {
-                            // ignore unknown stemmer
-                        }
+                    try {
+                        const char *tp = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_SUBJECT);
+                        std::string prefix = lang_prefix(iso_lang, tp);
+                        dbw->term_generator->set_stemmer(get_stemmer(iso_lang));
+                        dbw->term_generator->set_stopper(get_stopper(iso_lang));
+                        for (const std::string& subject : *dbw->subjects)
+                            dbw->term_generator->index_text(Xapian::Utf8Iterator(subject), 1, prefix);
+                    } catch (const Xapian::InvalidArgumentError &err) {
+                        // ignore unknown stemmer
+                    }
                 }
             }
         }
@@ -2186,7 +2185,7 @@ int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
 }
 
 int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part,
-		                    int partnum __attribute__((unused)))
+                            int partnum __attribute__((unused)))
 {
     // Ignore empty queries.
     if (!snipgen->loose_terms && !snipgen->queries) return 0;
@@ -2196,7 +2195,7 @@ int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part,
 
     if (config_getswitch(IMAPOPT_SEARCH_INDEX_LANGUAGE) &&
         snipgen->db->database && snipgen->cyrusid) {
-        std::vector<std::string> doclangs;
+        std::set<std::string> doclangs;
 
         // Lookup stemmer language for this document part, if any.
         std::string key = lang_doc_key(snipgen->cyrusid);
@@ -2209,8 +2208,8 @@ int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part,
         // Generate snippets for each detected message language.
         // The first non-empty snippet wins.
         size_t prev_size = buf_len(snipgen->buf);
-        for (size_t i = 0; i < doclangs.size(); ++i) {
-            const std::string& iso_lang = doclangs[i];
+        for (std::set<std::string>::iterator it = doclangs.begin(); it != doclangs.end(); ++it) {
+            const std::string& iso_lang = *it;
             if (iso_lang.compare("en")) {
                 try {
                     Xapian::Stem stemmer = get_stemmer(iso_lang);
