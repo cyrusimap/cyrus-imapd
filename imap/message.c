@@ -682,7 +682,7 @@ EXPORTED void message_fetch_part(struct message_content *msg,
 
     *parts = NULL;
     message_find_part(msg->body, "1", content_types,
-                      msg->base, msg->len, parts, &n);
+                      buf_base(&msg->map), buf_len(&msg->map), parts, &n);
 }
 
 /*

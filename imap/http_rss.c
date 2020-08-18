@@ -950,12 +950,11 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     for (recno = mailbox->i.num_records, nitems = 0;
          recno >= 1 && (!max_items || nitems < max_items); recno--) {
         struct index_record record;
-        struct buf msg_buf = BUF_INITIALIZER;
         struct body *body = NULL;
         char *subj;
         struct address *addr = NULL;
         const char *content_types[] = { "text", NULL };
-        struct message_content content;
+        struct message_content content = MESSAGE_CONTENT_INITIALIZER;
         struct bodypart **parts;
 
         /* Send a body chunk once in a while */
@@ -966,7 +965,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
         /* Fetch the message */
         if (fetch_message(txn, mailbox, recno, 0,
-                          &record, &body, &msg_buf)) {
+                          &record, &body, &content.map)) {
             continue;
         }
 
@@ -1037,8 +1036,6 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         }
 
         /* <summary> - optional (find and use the first text/ part) */
-        content.base = buf_base(&msg_buf);
-        content.len = buf_len(&msg_buf);
         content.body = body;
         message_fetch_part(&content, content_types, &parts);
 
@@ -1065,7 +1062,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
             free(body);
         }
 
-        buf_free(&msg_buf);
+        buf_free(&content.map);
     }
 
     /* End of Atom <feed> */

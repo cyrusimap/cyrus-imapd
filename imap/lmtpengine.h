@@ -76,11 +76,6 @@ struct message_data {
     void *rock;
 
     hdrcache_t hdrcache;
-
-#ifdef WITH_JMAP
-    matchmime_t *matchmime; /* Xapian parsed DB */
-    struct buf mimebuf;     /* mapped copy of the email */
-#endif
 };
 
 /* return the corresponding header */

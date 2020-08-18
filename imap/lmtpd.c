@@ -580,8 +580,7 @@ int deliver_mailbox(FILE *f,
     if (!r && !content->body) {
         /* parse the message body if we haven't already,
            and keep the file mmap'ed */
-        r = message_parse_file(f, &content->base, &content->len,
-                               &content->body, NULL);
+        r = message_parse_file_buf(f, &content->map, &content->body, NULL);
         /* If the body contains received_date, we should always use that. */
         if (content->body->received_date)
             time_from_rfc5322(content->body->received_date, &internaldate,
@@ -801,7 +800,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     int n, nrcpts;
     struct dest *dlist = NULL;
     enum rcpt_status *status;
-    struct message_content content = { NULL, 0, NULL };
+    struct message_content content = MESSAGE_CONTENT_INITIALIZER;
     char *notifyheader;
     deliver_data_t mydata;
 
@@ -943,15 +942,14 @@ int deliver(message_data_t *msgdata, char *authuser,
 
     /* cleanup */
     free(status);
-#ifdef WITH_JMAP
-    jmap_email_matchmime_free(&msgdata->matchmime);
-    buf_free(&msgdata->mimebuf);
-#endif
-    if (content.base) map_free(&content.base, &content.len);
+    buf_free(&content.map);
     if (content.body) {
         message_free_body(content.body);
         free(content.body);
     }
+#ifdef WITH_JMAP
+    jmap_email_matchmime_free(&content.matchmime);
+#endif
     append_removestage(stage);
     stage = NULL;
     if (notifyheader) free(notifyheader);
