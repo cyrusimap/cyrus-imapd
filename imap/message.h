@@ -142,10 +142,18 @@ extern int message_copy_strict(struct protstream *from, FILE *to,
 extern int message_parse(const char *fname, struct index_record *record);
 
 struct message_content {
-    const char *base;  /* memory mapped file */
-    size_t len;
+    struct buf map;
     struct body *body; /* parsed body structure */
+#ifdef WITH_JMAP
+    struct matchmime *matchmime;
+#endif
 };
+
+#ifdef WITH_JMAP
+#define MESSAGE_CONTENT_INITIALIZER { BUF_INITIALIZER, NULL, NULL }
+#else
+#define MESSAGE_CONTENT_INITIALIZER { BUF_INITIALIZER, NULL }
+#endif
 
 /* MUST keep this struct sync'd with sieve_bodypart in sieve_interface.h */
 struct bodypart {
@@ -164,6 +172,10 @@ extern int message_parse_file(FILE *infile,
                               const char **msg_base, size_t *msg_len,
                               struct body **body,
                               const char *efname);
+extern int message_parse_file_buf(FILE *infile,
+                                  struct buf *buf,
+                                  struct body **body,
+                                  const char *efname);
 extern void message_parse_string(const char *hdr, char **hdrp);
 extern void message_pruneheader(char *buf, const strarray_t *headers,
                                 const strarray_t *headers_not);

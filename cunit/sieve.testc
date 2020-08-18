@@ -327,9 +327,8 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
         /* parse the message body if we haven't already */
         FILE *fp = fopen(msg->filename, "r");
         CU_ASSERT_PTR_NOT_NULL(fp);
-        r = message_parse_file(fp,
-                               &msg->content.base,
-                               &msg->content.len,
+        r = message_parse_file_buf(fp,
+                               &msg->content.map,
                                &msg->content.body,
                                msg->filename);
         CU_ASSERT_EQUAL(r, 0);
@@ -747,8 +746,7 @@ static void message_free(sieve_test_message_t *msg)
     spool_free_hdrcache(msg->headers);
     if (msg->content.body)
         message_free_body(msg->content.body);
-    if (msg->content.base)
-        map_free(&msg->content.base, &msg->content.len);
+    buf_free(&msg->content.map);
     unlink(msg->filename);
     free(msg->filename);
     free(msg);

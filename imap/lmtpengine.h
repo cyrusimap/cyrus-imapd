@@ -49,6 +49,7 @@
 #include "spool.h"
 #include "mboxname.h"
 #include "quota.h"
+#include "jmap_mail_query.h"
 
 typedef struct message_data message_data_t;
 typedef struct address_data address_data_t;

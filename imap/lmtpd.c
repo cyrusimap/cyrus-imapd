@@ -580,8 +580,7 @@ int deliver_mailbox(FILE *f,
     if (!r && !content->body) {
         /* parse the message body if we haven't already,
            and keep the file mmap'ed */
-        r = message_parse_file(f, &content->base, &content->len,
-                               &content->body, NULL);
+        r = message_parse_file_buf(f, &content->map, &content->body, NULL);
         /* If the body contains received_date, we should always use that. */
         if (content->body->received_date)
             time_from_rfc5322(content->body->received_date, &internaldate,
@@ -801,9 +800,10 @@ int deliver(message_data_t *msgdata, char *authuser,
     int n, nrcpts;
     struct dest *dlist = NULL;
     enum rcpt_status *status;
-    struct message_content content = { NULL, 0, NULL };
+    struct message_content content = MESSAGE_CONTENT_INITIALIZER;
     char *notifyheader;
     deliver_data_t mydata;
+    json_t *jerr = NULL;
 
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
@@ -822,6 +822,21 @@ int deliver(message_data_t *msgdata, char *authuser,
     mydata.ns = ns;
     mydata.authuser = authuser;
     mydata.authstate = authstate;
+
+    if (config_getswitch(IMAPOPT_LMTP_PREPARSE)) {
+        int r = message_parse_file_buf(msgdata->f, &content.map,
+                                       &content.body, NULL);
+        if (r) {
+            for (n = 0; n < nrcpts; n++)
+                msg_setrcpt_status(msgdata, n, r, NULL);
+            goto skipdelivery;
+        }
+
+#ifdef WITH_JMAP
+        /* build the query filter */
+        content.matchmime = jmap_email_matchmime_init(&content.map, &jerr);
+#endif
+    }
 
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
@@ -858,7 +873,10 @@ int deliver(message_data_t *msgdata, char *authuser,
             sieve_interp_t *interp = setup_sieve(&ctx);
 
             sieve_srs_init();
-            r = run_sieve(mbname, interp, &mydata);
+            if (jerr)
+                r = -1;
+            else
+                r = run_sieve(mbname, interp, &mydata);
             // set a flag if sieve failed
             if (r < 0) strarray_append(&flags, "$SieveFailed");
 #ifdef WITH_DAV
@@ -886,6 +904,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 
         mboxlist_entry_free(&mbentry);
     }
+
+skipdelivery:
 
     if (dlist) {
         struct dest *d;
@@ -943,13 +963,17 @@ int deliver(message_data_t *msgdata, char *authuser,
 
     /* cleanup */
     free(status);
-    if (content.base) map_free(&content.base, &content.len);
+    buf_free(&content.map);
     if (content.body) {
         message_free_body(content.body);
         free(content.body);
     }
+#ifdef WITH_JMAP
+    jmap_email_matchmime_free(&content.matchmime);
+#endif
     append_removestage(stage);
     stage = NULL;
+    json_decref(jerr);
     if (notifyheader) free(notifyheader);
 
     return 0;

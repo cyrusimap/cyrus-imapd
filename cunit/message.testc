@@ -485,7 +485,7 @@ HTML_PART "\r\n"
     int r;
     struct body body;
     struct body *part;
-    struct message_content mcontent;
+    struct message_content mcontent = MESSAGE_CONTENT_INITIALIZER;
     const char *types[2] = { NULL, NULL };
     struct bodypart **parts = NULL;
 
@@ -535,8 +535,7 @@ HTML_PART "\r\n"
     CU_ASSERT_STRING_EQUAL(part->disposition, "ATTACHMENT");
     CU_ASSERT_STRING_EQUAL(part->encoding, "BASE64");
 
-    mcontent.base = msg;
-    mcontent.len = sizeof(msg)-1;
+    buf_init_ro(&mcontent.map, msg, sizeof(msg)-1);
     mcontent.body = &body;
 
     types[0] = "TEXT/PLAIN";
@@ -792,7 +791,7 @@ HTML_PART "\r\n"
     int r;
     struct body body;
     struct body *part;
-    struct message_content mcontent;
+    struct message_content mcontent = MESSAGE_CONTENT_INITIALIZER;
     const char *types[2] = { NULL, NULL };
     struct bodypart **parts = NULL;
 
@@ -842,8 +841,7 @@ HTML_PART "\r\n"
     CU_ASSERT_STRING_EQUAL(part->disposition, "ATTACHMENT");
     CU_ASSERT_STRING_EQUAL(part->encoding, "BASE64");
 
-    mcontent.base = msg;
-    mcontent.len = sizeof(msg)-1;
+    buf_init_ro(&mcontent.map, msg, sizeof(msg)-1);
     mcontent.body = &body;
 
     types[0] = "TEXT/PLAIN";
