@@ -1449,6 +1449,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    mailbox is over quota.  By default, the failure is temporary,
    causing the MTA to queue the message and retry later. */
 
+{ "lmtp_preparse", 0, SWITCH, "3.3.1" }
+/* If enabled, lmtpd will map in the email and parse the xapian data
+   for jmapsearch.  The advantage is that the parsing is done without
+   holding any locks.  The disadvantage is that the parsing is done
+   even if it winds up not being needed. */
+
 { "lmtp_strict_quota", 0, SWITCH, "2.3.17" }
 /* If enabled, lmtpd returns a failure code when the incoming message
    will cause the user's mailbox to exceed its quota.  By default, the

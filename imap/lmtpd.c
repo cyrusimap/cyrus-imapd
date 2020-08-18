@@ -803,6 +803,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     struct message_content content = MESSAGE_CONTENT_INITIALIZER;
     char *notifyheader;
     deliver_data_t mydata;
+    json_t *jerr = NULL;
 
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
@@ -821,6 +822,21 @@ int deliver(message_data_t *msgdata, char *authuser,
     mydata.ns = ns;
     mydata.authuser = authuser;
     mydata.authstate = authstate;
+
+    if (config_getswitch(IMAPOPT_LMTP_PREPARSE)) {
+        int r = message_parse_file_buf(msgdata->f, &content.map,
+                                       &content.body, NULL);
+        if (r) {
+            for (n = 0; n < nrcpts; n++)
+                msg_setrcpt_status(msgdata, n, r, NULL);
+            goto skipdelivery;
+        }
+
+#ifdef WITH_JMAP
+        /* build the query filter */
+        content.matchmime = jmap_email_matchmime_init(&content.map, &jerr);
+#endif
+    }
 
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
@@ -857,7 +873,10 @@ int deliver(message_data_t *msgdata, char *authuser,
             sieve_interp_t *interp = setup_sieve(&ctx);
 
             sieve_srs_init();
-            r = run_sieve(mbname, interp, &mydata);
+            if (jerr)
+                r = -1;
+            else
+                r = run_sieve(mbname, interp, &mydata);
             // set a flag if sieve failed
             if (r < 0) strarray_append(&flags, "$SieveFailed");
 #ifdef WITH_DAV
@@ -885,6 +904,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 
         mboxlist_entry_free(&mbentry);
     }
+
+skipdelivery:
 
     if (dlist) {
         struct dest *d;
@@ -952,6 +973,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 #endif
     append_removestage(stage);
     stage = NULL;
+    json_decref(jerr);
     if (notifyheader) free(notifyheader);
 
     return 0;
