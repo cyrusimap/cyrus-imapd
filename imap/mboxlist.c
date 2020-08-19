@@ -3556,7 +3556,12 @@ static int racls_del_cb(void *rock,
 static int racls_add_cb(const mbentry_t *mbentry, void *rock)
 {
     struct txn **txn = (struct txn **)rock;
-    return mboxlist_update_racl(mbentry->name, NULL, mbentry, txn);
+    char *dbname = mboxname_to_dbname(mbentry->name);
+
+    int r = mboxlist_update_racl(dbname, NULL, mbentry, txn);
+
+    free(dbname);
+    return r;
 }
 
 EXPORTED int mboxlist_set_racls(int enabled)
