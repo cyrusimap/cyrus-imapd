@@ -2635,7 +2635,7 @@ static void getcalendarevents_filterinstance(json_t *myevent,
                                              const char *ical_uid)
 {
     json_object_del(myevent, "recurrenceOverrides");
-    json_object_del(myevent, "recurrenceRule");
+    json_object_del(myevent, "recurrenceRules");
     jmap_filterprops(myevent, props);
     json_object_set_new(myevent, "id", json_string(id));
     json_object_set_new(myevent, "uid", json_string(ical_uid));
@@ -3368,7 +3368,7 @@ static const jmap_property_t event_props[] = {
         0
     },
     {
-        "recurrenceRule",
+        "recurrenceRules",
         NULL,
         0
     },
@@ -4310,14 +4310,14 @@ static int setcalendarevents_apply_patch(jmap_req_t *req,
             setcalendarevents_set_utctimes(new_instance, utctimes_fallbacktz, invalid);
         }
 
-        json_object_del(new_instance, "recurrenceRule");
+        json_object_del(new_instance, "recurrenceRules");
         json_object_del(new_instance, "recurrenceOverrides");
         new_override = jmap_patchobject_create(old_event, new_instance);
         json_object_del(new_override, "@type");
         json_object_del(new_override, "method");
         json_object_del(new_override, "prodId");
         json_object_del(new_override, "recurrenceId");
-        json_object_del(new_override, "recurrenceRule");
+        json_object_del(new_override, "recurrenceRules");
         json_object_del(new_override, "recurrenceOverrides");
         json_object_del(new_override, "relatedTo");
         json_object_del(new_override, "replyTo");
@@ -5859,6 +5859,7 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_data *cdata)
 struct eventquery_recur_rock {
     ptrarray_t *matches;
     struct buf *buf;
+    icaltimetype lastseen;
 };
 
 static const char *eventquery_recur_make_recurid(icalcomponent *comp,
@@ -5908,14 +5909,18 @@ static int eventquery_recur_cb(icalcomponent *comp,
                                void *vrock)
 {
     struct eventquery_recur_rock *rock = vrock;
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-    icaltimetype utcstart = icaltime_convert_to_zone(start, utc);
 
-    struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
-    match->ical_uid = xstrdup(icalcomponent_get_uid(comp));
-    match->utcstart = xstrdup(icaltime_as_ical_string(utcstart));
-    match->recurid = xstrdup(eventquery_recur_make_recurid(comp, start, rock->buf));
-    ptrarray_append(rock->matches, match);
+    if (icaltime_compare(rock->lastseen, start)) {
+        icaltimezone *utc = icaltimezone_get_utc_timezone();
+        icaltimetype utcstart = icaltime_convert_to_zone(start, utc);
+
+        struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
+        match->ical_uid = xstrdup(icalcomponent_get_uid(comp));
+        match->utcstart = xstrdup(icaltime_as_ical_string(utcstart));
+        match->recurid = xstrdup(eventquery_recur_make_recurid(comp, start, rock->buf));
+        ptrarray_append(rock->matches, match);
+    }
+    rock->lastseen = start;
 
     return 1;
 }
@@ -6050,7 +6055,9 @@ static int eventquery_run(jmap_req_t *req,
             if (is_recurring) {
                 /* Expand all instances, we need them for totals */
                 /* XXX - need tooManyRecurrenceInstances error ? */
-                struct eventquery_recur_rock rock = { &mymatches, &buf };
+                struct eventquery_recur_rock rock = {
+                    &mymatches, &buf, icaltime_null_time()
+                };
                 icalcomponent_myforeach(match->ical, timerange, utc,
                                         eventquery_recur_cb, &rock);
                 eventquery_match_free(&match);
