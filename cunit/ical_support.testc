@@ -1,0 +1,147 @@
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+#include "cunit/cyrunit.h"
+
+#include "imap/ical_support.h"
+
+// caldav_db.h defines these
+
+extern time_t caldav_epoch;
+extern time_t caldav_eternity;
+
+static void init_caldav()
+{
+    if (caldav_epoch == -1) caldav_epoch = INT_MIN;
+    if (caldav_eternity == -1) caldav_eternity = INT_MAX;
+}
+
+static void test_icalrecurrenceset_get_utc_timespan(void)
+{
+    init_caldav();
+
+    char *eternitystr = icaltime_as_ical_string_r(
+        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL));
+
+    struct testcase {
+        const char *desc;
+        const char *icalstr;
+        const char *start;
+        const char *end;
+        int recurring;
+    };
+
+    struct testcase tcs[] = {{
+        "not recurring",
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//foo//bar\r\n"
+        "CALSCALE:GREGORIAN\r\n"
+        "BEGIN:VEVENT\r\n"
+        "DTSTART:20160928T160000Z\r\n"
+        "DURATION:PT1H\r\n"
+        "UID:123456789\r\n"
+        "DTSTAMP:20150928T132434Z\r\n"
+        "SUMMARY:test\r\n"
+        "END:VEVENT\r\n"
+        "END:VCALENDAR\r\n",
+        "20160928T160000Z",
+        "20160928T170000Z",
+        0
+    }, {
+        "eternal rrule",
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//foo//bar\r\n"
+        "CALSCALE:GREGORIAN\r\n"
+        "BEGIN:VEVENT\r\n"
+        "DTSTART:20160928T160000Z\r\n"
+        "DURATION:PT1H\r\n"
+        "RRULE:FREQ=WEEKLY\r\n"
+        "UID:123456789\r\n"
+        "DTSTAMP:20150928T132434Z\r\n"
+        "SUMMARY:test\r\n"
+        "END:VEVENT\r\n"
+        "END:VCALENDAR\r\n",
+        "20160928T160000Z",
+        eternitystr,
+        1
+    }, {
+        "bounded rrule",
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//foo//bar\r\n"
+        "CALSCALE:GREGORIAN\r\n"
+        "BEGIN:VEVENT\r\n"
+        "DTSTART:20160928T160000Z\r\n"
+        "DURATION:PT1H\r\n"
+        "RRULE:FREQ=WEEKLY;COUNT=3\r\n"
+        "UID:123456789\r\n"
+        "DTSTAMP:20150928T132434Z\r\n"
+        "SUMMARY:test\r\n"
+        "END:VEVENT\r\n"
+        "END:VCALENDAR\r\n",
+        "20160928T160000Z",
+        "20161012T170000Z",
+        1
+    }, {
+        "one bounded rrule, one eternal rrule",
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//foo//bar\r\n"
+        "CALSCALE:GREGORIAN\r\n"
+        "BEGIN:VEVENT\r\n"
+        "DTSTART:20160928T160000Z\r\n"
+        "DURATION:PT1H\r\n"
+        "RRULE:FREQ=WEEKLY;COUNT=3\r\n"
+        "RRULE:FREQ=MONTHLY\r\n"
+        "UID:123456789\r\n"
+        "DTSTAMP:20150928T132434Z\r\n"
+        "SUMMARY:test\r\n"
+        "END:VEVENT\r\n"
+        "END:VCALENDAR\r\n",
+        "20160928T160000Z",
+        eternitystr,
+        1
+    }, {
+        "two bounded rrules",
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//foo//bar\r\n"
+        "CALSCALE:GREGORIAN\r\n"
+        "BEGIN:VEVENT\r\n"
+        "DTSTART:20160928T160000Z\r\n"
+        "DURATION:PT1H\r\n"
+        "RRULE:FREQ=WEEKLY;COUNT=3\r\n"
+        "RRULE:FREQ=MONTHLY;UNTIL=20170228T160000Z\r\n"
+        "UID:123456789\r\n"
+        "DTSTAMP:20150928T132434Z\r\n"
+        "SUMMARY:test\r\n"
+        "END:VEVENT\r\n"
+        "END:VCALENDAR\r\n",
+        "20160928T160000Z",
+        "20170228T170000Z",
+        1
+    }, {
+        NULL, NULL, NULL, NULL, 0
+    }};
+
+    struct buf buf = BUF_INITIALIZER;
+    struct testcase *tc;
+    for (tc = tcs; tc->icalstr; tc++) {
+        // fprintf(stderr, "%s: %s\n", __func__, tc->desc);
+        buf_setcstr(&buf, tc->icalstr);
+        icalcomponent *ical = ical_string_as_icalcomponent(&buf);
+        CU_ASSERT_PTR_NOT_NULL(ical);
+        unsigned _recurring = 0;
+        struct icalperiodtype span = icalrecurrenceset_get_utc_timespan(ical,
+                ICAL_VEVENT_COMPONENT, NULL, &_recurring, NULL, NULL);
+        CU_ASSERT_STRING_EQUAL(icaltime_as_ical_string(span.start), tc->start);
+        CU_ASSERT_STRING_EQUAL(icaltime_as_ical_string(span.end), tc->end);
+        CU_ASSERT_EQUAL(_recurring, tc->recurring);
+        icalcomponent_free(ical);
+    }
+    buf_free(&buf);
+
+    free(eternitystr);
+}
