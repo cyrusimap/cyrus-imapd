@@ -8,6 +8,20 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.20</h1>
+<ul>
+<li>Fixed issue #885: timsieved segfault (thanks Christian Henz)</li>
+<li>Fixed issue #2199: better recovery from mupdate failure (thanks Michael
+Menge)</li>
+<li>Fixed: sync_client now replicates annotations in user/mailbox mode (thanks
+John Capo)</li>
+<li>Fixed: build failure with LibreSSL 2.7 (thanks Bernard Spil)</li>
+<li>Fixed: XFER now correctly distinguishes between 2.3.x releases</li>
+<li>Fixed issue #3123: XFER now recognises 3.1, 3.2 and 3.3 backends</li>
+<li>Fixed: XFER now syslogs a warning when it doesn't recognise the backend
+Cyrus version</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.19</h1>
 <ul>
 <li>Fixed: lmtpd crash</li>
