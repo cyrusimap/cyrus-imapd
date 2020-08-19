@@ -376,6 +376,77 @@ static int span_compare_range(icaltime_span *span, icaltime_span *range)
     return 0; /* span overlaps range */
 }
 
+struct multirrule_iterator_entry {
+    struct icaltimetype next;
+    icalrecur_iterator *icaliter;
+};
+
+struct multirrule_iterator {
+    struct multirrule_iterator_entry *entries;
+    size_t nentries;
+    size_t nalloced;
+};
+
+#define ICALSUPPORT_MULTIRRULE_ITERATOR_INITIALIZER { NULL, 0, 0 }
+
+static void multirrule_iterator_fini(struct multirrule_iterator *iter)
+{
+    if (!iter) return;
+
+    size_t i;
+    for (i = 0; i < iter->nentries; i++) {
+        icalrecur_iterator_free(iter->entries[i].icaliter);
+    }
+    free(iter->entries);
+    iter->entries = NULL;
+    iter->nentries = 0;
+    iter->nalloced = 0;
+}
+
+static void multirrule_iterator_add(struct multirrule_iterator *iter,
+                                    struct icalrecurrencetype recur,
+                                    icaltimetype dtstart,
+                                    icaltimetype range_start)
+{
+    icalrecur_iterator *icaliter = icalrecur_iterator_new(recur, dtstart);
+    if (!icaliter) return;
+    if (recur.count > 0) {
+        icalrecur_iterator_set_start(icaliter, range_start);
+    }
+
+    iter->nentries++;
+    if (iter->nentries > iter->nalloced) {
+        iter->nalloced = iter->nalloced ? iter->nalloced * 2 : 4;
+        iter->entries = xrealloc(iter->entries,
+                iter->nalloced * sizeof(struct multirrule_iterator_entry));
+    }
+
+    struct multirrule_iterator_entry *entry = iter->entries + iter->nentries - 1;
+    entry->icaliter = icaliter;
+    entry->next = icalrecur_iterator_next(entry->icaliter);
+}
+
+static icaltimetype multirrule_iterator_next(struct multirrule_iterator *iter)
+{
+    if (!iter->nentries) return icaltime_null_time();
+
+    // XXX if linear search turns out to be too slow use a priority queue
+    icaltimetype next = iter->entries[0].next;
+    size_t i, min = 0;
+    for (i = 1; i < iter->nentries; i++) {
+        struct multirrule_iterator_entry *entry = iter->entries + i;
+        if (icaltime_is_null_time(entry->next)) {
+            continue;
+        }
+        if (icaltime_is_null_time(next) || icaltime_compare(next, entry->next) > 0) {
+            min = i;
+            next = entry->next;
+        }
+    }
+    iter->entries[min].next = icalrecur_iterator_next(iter->entries[min].icaliter);
+    return next;
+}
+
 EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
                                    struct icalperiodtype range,
                                    const icaltimezone *floatingtz,
@@ -502,11 +573,13 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
     icalarray_sort(overrides, sort_overrides);
 
     /* now we can do the RRULE, because we have all overrides */
-    icalrecur_iterator *rrule_itr = NULL;
+    struct multirrule_iterator rrule_itr = ICALSUPPORT_MULTIRRULE_ITERATOR_INITIALIZER;
     if (mastercomp) {
-        icalproperty *rrule =
-            icalcomponent_get_first_property(mastercomp, ICAL_RRULE_PROPERTY);
-        if (rrule) {
+        icalproperty *rrule;
+        for (rrule = icalcomponent_get_first_property(mastercomp, ICAL_RRULE_PROPERTY);
+             rrule;
+             rrule = icalcomponent_get_next_property(mastercomp, ICAL_RRULE_PROPERTY)) {
+
             struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
 
             /* check if span of RRULE overlaps range */
@@ -517,10 +590,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
             if (!recur_span.end) recur_span.end = eternity;
 
             if (!span_compare_range(&recur_span, &range_span)) {
-                rrule_itr = icalrecur_iterator_new(recur, dtstart);
-                if (rrule_itr && (recur.count > 0)) {
-                    icalrecur_iterator_set_start(rrule_itr, range.start);
-                }
+                multirrule_iterator_add(&rrule_itr, recur, dtstart, range.start);
             }
         }
     }
@@ -528,8 +598,8 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
     size_t onum = 0;
     struct recurrence_data *data = overrides->num_elements ?
         icalarray_element_at(overrides, onum) : NULL;
-    struct icaltimetype ritem = rrule_itr ?
-        icalrecur_iterator_next(rrule_itr) : dtstart;
+    struct icaltimetype ritem = rrule_itr.nentries ?
+        multirrule_iterator_next(&rrule_itr) : dtstart;
 
     while (data || !icaltime_is_null_time(ritem)) {
         time_t otime = data ? data->span.start : eternity;
@@ -546,8 +616,8 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
              * recurrence, so increment both */
             if (rtime == otime) {
                 /* incr recurrences */
-                ritem = rrule_itr ?
-                    icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
+                ritem = rrule_itr.nentries ?
+                    multirrule_iterator_next(&rrule_itr) : icaltime_null_time();
             }
 
             /* incr overrides */
@@ -568,13 +638,13 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
                 goto done;
 
             /* incr recurrences */
-            ritem = rrule_itr ?
-                icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
+            ritem = rrule_itr.nentries ?
+                multirrule_iterator_next(&rrule_itr) : icaltime_null_time();
         }
     }
 
  done:
-    if (rrule_itr) icalrecur_iterator_free(rrule_itr);
+    multirrule_iterator_fini(&rrule_itr);
 
     icalarray_free(overrides);
 
@@ -1043,6 +1113,7 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
     do {
         struct icalperiodtype period;
         icalproperty *rrule;
+        ptrarray_t detached_rrules = PTRARRAY_INITIALIZER;
 
         /* Get base dtstart and dtend */
         period = icalcomponent_get_utc_timespan(comp, kind, floating_tz);
@@ -1056,31 +1127,37 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
             unsigned expand = recurring = 1;
 
             if (rrule) {
-                struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
+                do {
+                    struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
+                    if (!icaltime_is_null_time(recur.until)) {
+                        /* Recurrence ends - calculate dtend of last recurrence */
+                        struct icaldurationtype duration;
+                        icaltimezone *utc = icaltimezone_get_utc_timezone();
 
-                if (!icaltime_is_null_time(recur.until)) {
-                    /* Recurrence ends - calculate dtend of last recurrence */
-                    struct icaldurationtype duration;
-                    icaltimezone *utc = icaltimezone_get_utc_timezone();
+                        duration = icaltime_subtract(period.end, period.start);
+                        icaltimetype end =
+                            icaltime_add(icaltime_convert_to_zone(recur.until, utc),
+                                    duration);
 
-                    duration = icaltime_subtract(period.end, period.start);
-                    period.end =
-                        icaltime_add(icaltime_convert_to_zone(recur.until, utc),
-                                duration);
+                        if (icaltime_compare(period.end, end) < 0)
+                            period.end = end;
 
-                    /* Do RDATE expansion only */
-                    /* Temporarily remove RRULE to allow for expansion of
-                     * remaining recurrences. */
-                    icalcomponent_remove_property(comp, rrule);
-                }
-                else if (!recur.count) {
-                    /* Recurrence never ends - set end of span to eternity */
-                    span.end =
-                        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+                        /* Do RDATE expansion only */
+                        /* Temporarily remove RRULE to allow for expansion of
+                         * remaining recurrences. */
+                        icalcomponent_remove_property(comp, rrule);
+                        ptrarray_append(&detached_rrules, rrule);
+                    }
+                    else if (!recur.count) {
+                        /* Recurrence never ends - set end of span to eternity */
+                        span.end =
+                            icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
 
-                    /* Skip RRULE & RDATE expansion */
-                    expand = 0;
-                }
+                        /* Skip RRULE & RDATE expansion */
+                        expand = 0;
+                    }
+                    rrule = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
+                } while (expand && rrule);
             }
 
             /* Expand (remaining) recurrences */
@@ -1090,12 +1167,25 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                         icaltime_from_timet_with_zone(caldav_epoch, 0, NULL),
                         icaltime_from_timet_with_zone(caldav_eternity, 0, NULL),
                         utc_timespan_cb, &span);
+            }
 
-                /* Add RRULE back, if we had removed it before. */
-                if (rrule && !icalproperty_get_parent(rrule)) {
+            /* Add RRULEs back, if we had removed them before. */
+            if (ptrarray_size(&detached_rrules)) {
+                /* Detach any remaining RRULEs, then add them in order */
+                for (rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+                     rrule;
+                     rrule = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+                    icalcomponent_remove_property(comp, rrule);
+                    ptrarray_append(&detached_rrules, rrule);
+                }
+                int i;
+                for (i = 0; i < ptrarray_size(&detached_rrules); i++) {
+                    rrule = ptrarray_nth(&detached_rrules, i);
                     icalcomponent_add_property(comp, rrule);
                 }
             }
+
+            ptrarray_fini(&detached_rrules);
         }
 
         /* Check our dtstart and dtend against span */

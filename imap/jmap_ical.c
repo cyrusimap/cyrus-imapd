@@ -822,21 +822,14 @@ static json_t* recurrence_byX_fromical(short byX[], size_t nmemb, int (*conv)(in
     return jbd;
 }
 
-/* Convert the ical recurrence recur to a JMAP recurrenceRule */
-static json_t*
-recurrence_from_ical(icalcomponent *comp)
+/* Convert the ical recurrence prop to a JMAP recurrenceRule */
+static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untiltz)
 {
     char *s = NULL;
-    size_t i;
     struct buf buf = BUF_INITIALIZER;
-    icalproperty *prop;
-    struct icalrecurrencetype rrule;
+    size_t i;
 
-    prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    if (!prop) {
-        return json_null();
-    }
-    rrule = icalproperty_get_rrule(prop);
+    struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
     if (rrule.freq == ICAL_NO_RECURRENCE) {
         return json_null();
     }
@@ -982,16 +975,6 @@ recurrence_from_ical(icalcomponent *comp)
         /* Recur count takes precedence over until. */
         json_object_set_new(recur, "count", json_integer(rrule.count));
     } else if (!icaltime_is_null_time(rrule.until)) {
-        /* Convert iCalendar UNTIL to start timezone */
-        const char *tzid = NULL;
-        icalproperty *dtstart_prop =
-            icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-        if (dtstart_prop) {
-            icalparameter *tzid_param =
-                icalproperty_get_first_parameter(dtstart_prop, ICAL_TZID_PARAMETER);
-            if (tzid_param) tzid = icalparameter_get_tzid(tzid_param);
-        }
-        icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
         icaltimetype dtuntil;
         if (rrule.until.is_date) {
             dtuntil = rrule.until;
@@ -1001,7 +984,7 @@ recurrence_from_ical(icalcomponent *comp)
             dtuntil.is_date = 0;
         }
         else {
-            dtuntil = icaltime_convert_to_zone(rrule.until, tz);
+            dtuntil = icaltime_convert_to_zone(rrule.until, untiltz);
         }
         struct jmapical_datetime until = JMAPICAL_DATETIME_INITIALIZER;
         jmapical_datetime_from_icaltime(dtuntil, &until);
@@ -1018,6 +1001,40 @@ recurrence_from_ical(icalcomponent *comp)
 
     buf_free(&buf);
     return recur;
+}
+
+/* Convert the ical recurrence recur to a JMAP recurrenceRule */
+static json_t* recurrencerules_from_ical(icalcomponent *comp)
+{
+
+    json_t *jrrules = json_array();
+
+    /* Determine timezone to convert UNTIL to */
+    const char *tzid = NULL;
+    icalproperty *dtstart_prop =
+        icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+    if (dtstart_prop) {
+        icalparameter *tzid_param =
+            icalproperty_get_first_parameter(dtstart_prop, ICAL_TZID_PARAMETER);
+        if (tzid_param) tzid = icalparameter_get_tzid(tzid_param);
+    }
+    icaltimezone *untiltz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+
+    icalproperty *prop;
+    for (prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+
+        json_t *jrrule = recurrencerule_from_ical(prop, untiltz);
+        if (JNOTNULL(jrrule)) json_array_append_new(jrrules, jrrule);
+    }
+
+    if (!json_array_size(jrrules)) {
+        json_decref(jrrules);
+        jrrules = json_null();
+    }
+
+    return jrrules;
 }
 
 static json_t*
@@ -1186,7 +1203,7 @@ overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
         json_object_del(diff, "prodId");
         json_object_del(diff, "method");
         json_object_del(diff, "recurrenceId");
-        json_object_del(diff, "recurrenceRule");
+        json_object_del(diff, "recurrenceRules");
         json_object_del(diff, "recurrenceOverrides");
         json_object_del(diff, "replyTo");
         if (json_is_null(json_object_get(diff, "start"))) {
@@ -2432,8 +2449,9 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     }
 
     /* recurrenceRule */
-    if (jmap_wantprop(props, "recurrenceRule") && !is_override) {
-        json_object_set_new(event, "recurrenceRule", recurrence_from_ical(comp));
+    if (jmap_wantprop(props, "recurrenceRules") && !is_override) {
+        json_object_set_new(event, "recurrenceRules",
+                recurrencerules_from_ical(comp));
     }
 
     /* status */
@@ -2814,25 +2832,28 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
         /* Determine if to store DTSTART as DATE type */
         is_date = 1;
         /* Check recurrence frequency */
-        json_t *jrrule = json_object_get(event, "recurrenceRule");
-        if (json_is_object(jrrule)) {
-            const char *freq = json_string_value(json_object_get(jrrule, "frequency"));
-            if (!strcmpsafe(freq, "hourly") ||
-                !strcmpsafe(freq, "minutely") ||
-                !strcmpsafe(freq, "secondly")) {
-                is_date = 0;
-            }
-            else {
-                /* Check that all overrides have zero time */
-                json_t *joverrides = json_object_get(event, "recurrenceOverrides");
-                const char *recuridval;
-                json_t *jval;
-                json_object_foreach(joverrides, recuridval, jval) {
-                    struct jmapical_datetime recurid = JMAPICAL_DATETIME_INITIALIZER;
-                    if ((jmapical_localdatetime_from_string(recuridval, &recurid) >= 0) &&
-                            !jmapical_datetime_has_zero_time(&recurid)) {
-                        is_date = 0;
-                        break;
+        json_t *jrrules = json_object_get(event, "recurrenceRules");
+        if (json_array_size(jrrules)) {
+            json_t *jrrule = json_array_get(jrrules, 0); // FIXME
+            if (json_is_object(jrrule)) {
+                const char *freq = json_string_value(json_object_get(jrrule, "frequency"));
+                if (!strcmpsafe(freq, "hourly") ||
+                        !strcmpsafe(freq, "minutely") ||
+                        !strcmpsafe(freq, "secondly")) {
+                    is_date = 0;
+                }
+                else {
+                    /* Check that all overrides have zero time */
+                    json_t *joverrides = json_object_get(event, "recurrenceOverrides");
+                    const char *recuridval;
+                    json_t *jval;
+                    json_object_foreach(joverrides, recuridval, jval) {
+                        struct jmapical_datetime recurid = JMAPICAL_DATETIME_INITIALIZER;
+                        if ((jmapical_localdatetime_from_string(recuridval, &recurid) >= 0) &&
+                                !jmapical_datetime_has_zero_time(&recurid)) {
+                            is_date = 0;
+                            break;
+                        }
                     }
                 }
             }
@@ -4036,24 +4057,9 @@ static void recurrence_byX_to_ical(json_t *rrule,
 /* Create or overwrite the RRULE in the VEVENT component comp as defined by the
  * JMAP recurrence. */
 static void
-recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrule)
+recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrule)
 {
     struct buf buf = BUF_INITIALIZER;
-
-    /* Purge existing RRULE. */
-    icalproperty *prop, *next;
-    for (prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-         prop;
-         prop = next) {
-        next = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
-        icalcomponent_remove_property(comp, prop);
-        icalproperty_free(prop);
-    }
-    if (!JNOTNULL(rrule)) {
-        return;
-    }
-
-    jmap_parser_push(parser, "recurrenceRule");
 
     validate_type(parser, rrule, "RecurrenceRule");
 
@@ -4280,8 +4286,38 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
         }
     }
 
-    jmap_parser_pop(parser);
     buf_free(&buf);
+}
+
+/* Create or overwrite the RRULE in the VEVENT component comp as defined by the
+ * JMAP recurrence. */
+static void
+recurrencerules_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrules)
+{
+    /* Purge existing RRULE. */
+    icalproperty *prop, *next;
+    for (prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+         prop;
+         prop = next) {
+        next = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
+        icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
+    }
+    if (!JNOTNULL(rrules) || !json_array_size(rrules)) {
+        return;
+    }
+
+    jmap_parser_push(parser, "recurrenceRules");
+
+    size_t i;
+    json_t *rrule;
+    json_array_foreach(rrules, i, rrule) {
+        jmap_parser_push_index(parser, NULL, i, NULL);
+        recurrencerule_to_ical(comp, parser, rrule);
+        jmap_parser_pop(parser);
+    }
+
+    jmap_parser_pop(parser);
 }
 
 /* Create or overwrite JMAP keywords in comp */
@@ -4647,7 +4683,7 @@ overrides_to_ical(icalcomponent *comp,
     /* Convert current master event to JMAP */
     json_t *master = calendarevent_from_ical(comp, NULL, 0, NULL, jmapctx);
     if (!master) return;
-    json_object_del(master, "recurrenceRule");
+    json_object_del(master, "recurrenceRules");
     json_object_del(master, "recurrenceOverrides");
 
     jmap_parser_push(parser, "recurrenceOverrides");
@@ -4699,7 +4735,7 @@ overrides_to_ical(icalcomponent *comp,
                     !strcmp(key, "prodId") ||
                     !strcmp(key, "method") ||
                     !strcmp(key, "recurrenceId") ||
-                    !strcmp(key, "recurrenceRule") ||
+                    !strcmp(key, "recurrenceRules") ||
                     !strcmp(key, "recurrenceOverrides") ||
                     !strcmp(key, "replyTo")) {
 
@@ -5000,12 +5036,12 @@ static void calendarevent_to_ical(icalcomponent *comp,
         jmap_parser_invalid(parser, "virtualLocations");
     }
 
-    /* recurrenceRule */
-    jprop = json_object_get(event, "recurrenceRule");
-    if (json_is_null(jprop) || json_is_object(jprop)) {
-        if (!is_exc) recurrence_to_ical(comp, parser, jprop);
+    /* recurrenceRules */
+    jprop = json_object_get(event, "recurrenceRules");
+    if (json_is_null(jprop) || json_is_array(jprop)) {
+        if (!is_exc) recurrencerules_to_ical(comp, parser, jprop);
     } else if (jprop) {
-        jmap_parser_invalid(parser, "recurrenceRule");
+        jmap_parser_invalid(parser, "recurrenceRules");
     }
 
     /* status */
