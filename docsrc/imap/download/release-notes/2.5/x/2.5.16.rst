@@ -1,0 +1,30 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 2.5.16 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the `2.5 series <http://www.cyrusimap.org/2.5>`_.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    * https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-2.5.16/cyrus-imapd-2.5.16.tar.gz
+    * https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-2.5.16/cyrus-imapd-2.5.16.tar.gz.sig
+
+.. _relnotes-2.5.16-changes:
+
+Changes Since 2.5.15
+====================
+
+Bug fixes
+---------
+
+* Fixed: XFER now correctly distinguishes between 2.3.x releases
+* Fixed :issue:`3123`: XFER now recognises 3.1, 3.2 and 3.3 backends
+* Fixed: XFER now syslogs a warning when it doesn't recognise the backend
+  Cyrus version
