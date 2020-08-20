@@ -1004,7 +1004,7 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 }
 
 /* Convert the ical recurrence recur to a JMAP recurrenceRule */
-static json_t* recurrencerules_from_ical(icalcomponent *comp)
+static json_t* recurrencerules_from_ical(icalcomponent *comp, icalproperty_kind kind)
 {
 
     json_t *jrrules = json_array();
@@ -1021,9 +1021,9 @@ static json_t* recurrencerules_from_ical(icalcomponent *comp)
     icaltimezone *untiltz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
 
     icalproperty *prop;
-    for (prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+    for (prop = icalcomponent_get_first_property(comp, kind);
          prop;
-         prop = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+         prop = icalcomponent_get_next_property(comp, kind)) {
 
         json_t *jrrule = recurrencerule_from_ical(prop, untiltz);
         if (JNOTNULL(jrrule)) json_array_append_new(jrrules, jrrule);
@@ -1031,7 +1031,7 @@ static json_t* recurrencerules_from_ical(icalcomponent *comp)
 
     if (!json_array_size(jrrules)) {
         json_decref(jrrules);
-        jrrules = json_null();
+        jrrules = NULL;
     }
 
     return jrrules;
@@ -2451,7 +2451,13 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     /* recurrenceRule */
     if (jmap_wantprop(props, "recurrenceRules") && !is_override) {
         json_object_set_new(event, "recurrenceRules",
-                recurrencerules_from_ical(comp));
+                recurrencerules_from_ical(comp, ICAL_RRULE_PROPERTY));
+    }
+
+    /* excludedRecurrenceRules */
+    if (jmap_wantprop(props, "excludedRecurrenceRules") && !is_override) {
+        json_object_set_new(event, "excludedRecurrenceRules",
+                recurrencerules_from_ical(comp, ICAL_EXRULE_PROPERTY));
     }
 
     /* status */
@@ -4057,7 +4063,8 @@ static void recurrence_byX_to_ical(json_t *rrule,
 /* Create or overwrite the RRULE in the VEVENT component comp as defined by the
  * JMAP recurrence. */
 static void
-recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrule)
+recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser,
+                       icalproperty_kind kind, json_t *rrule)
 {
     struct buf buf = BUF_INITIALIZER;
 
@@ -4279,7 +4286,14 @@ recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *
         struct icalrecurrencetype rt =
             icalrecurrencetype_from_string(buf_ucase(&buf));
         if (rt.freq != ICAL_NO_RECURRENCE) {
-            icalcomponent_add_property(comp, icalproperty_new_rrule(rt));
+            icalproperty *prop = NULL;
+            if (kind == ICAL_RRULE_PROPERTY) {
+                prop = icalproperty_new_rrule(rt);
+            }
+            else if (kind == ICAL_EXRULE_PROPERTY) {
+                prop = icalproperty_new_exrule(rt);
+            }
+            if (prop) icalcomponent_add_property(comp, prop);
         } else {
             syslog(LOG_ERR, "jmap_ical: generated bogus RRULE: %s", buf_cstring(&buf));
             jmap_parser_invalid(parser, NULL);
@@ -4292,14 +4306,15 @@ recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *
 /* Create or overwrite the RRULE in the VEVENT component comp as defined by the
  * JMAP recurrence. */
 static void
-recurrencerules_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrules)
+recurrencerules_to_ical(icalcomponent *comp, struct jmap_parser *parser,
+                        icalproperty_kind kind, json_t *rrules)
 {
     /* Purge existing RRULE. */
     icalproperty *prop, *next;
-    for (prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+    for (prop = icalcomponent_get_first_property(comp, kind);
          prop;
          prop = next) {
-        next = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
+        next = icalcomponent_get_next_property(comp, kind);
         icalcomponent_remove_property(comp, prop);
         icalproperty_free(prop);
     }
@@ -4313,7 +4328,7 @@ recurrencerules_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t 
     json_t *rrule;
     json_array_foreach(rrules, i, rrule) {
         jmap_parser_push_index(parser, NULL, i, NULL);
-        recurrencerule_to_ical(comp, parser, rrule);
+        recurrencerule_to_ical(comp, parser, kind, rrule);
         jmap_parser_pop(parser);
     }
 
@@ -5039,9 +5054,19 @@ static void calendarevent_to_ical(icalcomponent *comp,
     /* recurrenceRules */
     jprop = json_object_get(event, "recurrenceRules");
     if (json_is_null(jprop) || json_is_array(jprop)) {
-        if (!is_exc) recurrencerules_to_ical(comp, parser, jprop);
+        if (!is_exc) recurrencerules_to_ical(comp, parser,
+                ICAL_RRULE_PROPERTY, jprop);
     } else if (jprop) {
         jmap_parser_invalid(parser, "recurrenceRules");
+    }
+
+    /* excludedRecurrenceRules */
+    jprop = json_object_get(event, "excludedRecurrenceRules");
+    if (json_is_null(jprop) || json_is_array(jprop)) {
+        if (!is_exc) recurrencerules_to_ical(comp, parser,
+                ICAL_EXRULE_PROPERTY, jprop);
+    } else if (jprop) {
+        jmap_parser_invalid(parser, "excludedRecurrenceRules");
     }
 
     /* status */
