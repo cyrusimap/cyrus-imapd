@@ -1206,6 +1206,27 @@ sub normalize_event
             }
         }
     }
+    if (not exists $event->{excludedRecurrenceRules}) {
+        $event->{excludedRecurrenceRules} = undef;
+    } elsif (defined $event->{excludedRecurrenceRules}) {
+        foreach my $exrule (@{$event->{excludedRecurrenceRules}}) {
+            if (not exists $exrule->{interval}) {
+                $exrule->{interval} = 1;
+            }
+            if (not exists $exrule->{firstDayOfWeek}) {
+                $exrule->{firstDayOfWeek} = 'mo';
+            }
+            if (not exists $exrule->{rscale}) {
+                $exrule->{rscale} = 'gregorian';
+            }
+            if (not exists $exrule->{skip}) {
+                $exrule->{skip} = 'omit';
+            }
+            if (not exists $exrule->{q{@type}}) {
+                $exrule->{q{@type}} = 'RecurrenceRule';
+            }
+        }
+    }
     if (not exists $event->{recurrenceOverrides}) {
         $event->{recurrenceOverrides} = undef;
     }
@@ -2940,6 +2961,35 @@ sub test_calendarevent_set_recurrence_multivalued
     $self->assert_normalized_event_equals($event, $ret);
 }
 
+sub test_calendarevent_set_exrule
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $event =  {
+        calendarId => 'Default',
+        title => "title",
+        description => "description",
+        start => "2020-12-03T09:00:00",
+        duration => "PT1H",
+        timeZone => "Europe/London",
+        showWithoutTime => JSON::false,
+        freeBusyStatus => "busy",
+        recurrenceRules => [{
+            frequency => 'weekly',
+        }],
+        excludedRecurrenceRules => [{
+            frequency => 'monthly',
+            byMonthDay => [1],
+        }],
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarId} = $ret->{calendarId};
+    $self->assert_normalized_event_equals($event, $ret);
+}
 
 sub test_calendarevent_set_recurrenceoverrides
     :min_version_3_1 :needs_component_jmap
@@ -6404,6 +6454,74 @@ sub test_calendarevent_query_expandrecurrences
             'event2uid',
             'event1uid;2019-01-01T14:00:00',
             'event1uid;2019-01-01T09:00:00',
+    ], $res->[0][1]{ids});
+}
+
+sub test_calendarevent_query_expandrecurrences_with_exrule
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    xlog $self, "create events";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    calendarId => $calid,
+                    uid => 'event1uid',
+                    title => "event1",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2020-08-04T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRules => [{
+                        frequency => 'weekly',
+                        interval => 4,
+                    }],
+                    excludedRecurrenceRules => [{
+                        frequency => 'monthly',
+                        byMonthDay => [1],
+                    }, {
+                        frequency => 'monthly',
+                        byMonthDay => [4,22],
+                    }],
+                    recurrenceOverrides => {
+                        '2021-01-01T09:00:00' => {
+                            title => 'rdate overrides exrule',
+                        },
+                    },
+                },
+            }
+        }, 'R1']
+    ]);
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            filter => {
+                before => '2021-02-01T00:00:00Z',
+            },
+            sort => [{
+                property => 'start',
+                isAscending => JSON::false,
+            }],
+            expandRecurrences => JSON::true,
+        }, 'R1']
+    ]);
+    $self->assert_num_equals(5, $res->[0][1]{total});
+    $self->assert_deep_equals([
+          "event1uid;2021-01-19T09:00:00",
+          "event1uid;2021-01-01T09:00:00",
+          "event1uid;2020-11-24T09:00:00",
+          "event1uid;2020-10-27T09:00:00",
+          "event1uid;2020-09-29T09:00:00",
     ], $res->[0][1]{ids});
 }
 
