@@ -387,8 +387,6 @@ struct multirrule_iterator {
     size_t nalloced;
 };
 
-#define ICALSUPPORT_MULTIRRULE_ITERATOR_INITIALIZER { NULL, 0, 0 }
-
 static void multirrule_iterator_fini(struct multirrule_iterator *iter)
 {
     if (!iter) return;
@@ -445,6 +443,40 @@ static icaltimetype multirrule_iterator_next(struct multirrule_iterator *iter)
     }
     iter->entries[min].next = icalrecur_iterator_next(iter->entries[min].icaliter);
     return next;
+}
+
+static struct multirrule_iterator
+multirrule_iterator_for_range(icalcomponent *comp,
+                              struct icalperiodtype range,
+                              icaltime_span range_span,
+                              icaltimetype dtstart,
+                              const icaltimezone *floatingtz,
+                              icalproperty_kind kind)
+{
+    struct multirrule_iterator iter = { NULL, 0, 0 };
+    if (!comp) return iter;
+
+    icalproperty *rrule;
+    for (rrule = icalcomponent_get_first_property(comp, kind);
+         rrule;
+         rrule = icalcomponent_get_next_property(comp, kind)) {
+
+        struct icalrecurrencetype recur = kind == ICAL_EXRULE_PROPERTY ?
+            icalproperty_get_exrule(rrule) : icalproperty_get_rrule(rrule);
+
+        /* check if span of RRULE overlaps range */
+        icaltime_span recur_span = {
+            icaltime_to_timet(dtstart, floatingtz),
+            icaltime_to_timet(recur.until, NULL), 0 /* is_busy */
+        };
+        if (!recur_span.end) recur_span.end = eternity;
+
+        if (!span_compare_range(&recur_span, &range_span)) {
+            multirrule_iterator_add(&iter, recur, dtstart, range.start);
+        }
+    }
+
+    return iter;
 }
 
 EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
@@ -573,33 +605,18 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
     icalarray_sort(overrides, sort_overrides);
 
     /* now we can do the RRULE, because we have all overrides */
-    struct multirrule_iterator rrule_itr = ICALSUPPORT_MULTIRRULE_ITERATOR_INITIALIZER;
-    if (mastercomp) {
-        icalproperty *rrule;
-        for (rrule = icalcomponent_get_first_property(mastercomp, ICAL_RRULE_PROPERTY);
-             rrule;
-             rrule = icalcomponent_get_next_property(mastercomp, ICAL_RRULE_PROPERTY)) {
-
-            struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
-
-            /* check if span of RRULE overlaps range */
-            icaltime_span recur_span = {
-                icaltime_to_timet(dtstart, floatingtz),
-                icaltime_to_timet(recur.until, NULL), 0 /* is_busy */
-            };
-            if (!recur_span.end) recur_span.end = eternity;
-
-            if (!span_compare_range(&recur_span, &range_span)) {
-                multirrule_iterator_add(&rrule_itr, recur, dtstart, range.start);
-            }
-        }
-    }
+    struct multirrule_iterator rrule_itr = multirrule_iterator_for_range(mastercomp,
+            range, range_span, dtstart, floatingtz, ICAL_RRULE_PROPERTY);
+    struct multirrule_iterator exrule_itr = multirrule_iterator_for_range(mastercomp,
+            range, range_span, dtstart, floatingtz, ICAL_EXRULE_PROPERTY);
 
     size_t onum = 0;
     struct recurrence_data *data = overrides->num_elements ?
         icalarray_element_at(overrides, onum) : NULL;
     struct icaltimetype ritem = rrule_itr.nentries ?
         multirrule_iterator_next(&rrule_itr) : dtstart;
+    struct icaltimetype xitem = exrule_itr.nentries ?
+        multirrule_iterator_next(&exrule_itr) : icaltime_null_time();
 
     while (data || !icaltime_is_null_time(ritem)) {
         time_t otime = data ? data->span.start : eternity;
@@ -627,15 +644,23 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
         }
         else {
             /* a non-overridden recurrence */
-            struct icaltimetype thisend = icaltime_add(ritem, event_length);
-            icaltime_span this_span = {
-                rtime, icaltime_to_timet(thisend, floatingtz), 0 /* is_busy */
-            };
-            int r = span_compare_range(&this_span, &range_span);
 
-            if (r > 0 || /* gone past the end of range */
-                (!r && !callback(mastercomp, ritem, thisend, callback_data)))
-                goto done;
+            /* check if this recurrence-id is excluded */
+            while (!icaltime_is_null_time(xitem) && icaltime_compare(xitem, ritem) < 0) {
+                xitem = multirrule_iterator_next(&exrule_itr);
+            }
+            if (icaltime_compare(xitem, ritem)) {
+                /* not excluded - process this recurrence-id */
+                struct icaltimetype thisend = icaltime_add(ritem, event_length);
+                icaltime_span this_span = {
+                    rtime, icaltime_to_timet(thisend, floatingtz), 0 /* is_busy */
+                };
+                int r = span_compare_range(&this_span, &range_span);
+
+                if (r > 0 || /* gone past the end of range */
+                        (!r && !callback(mastercomp, ritem, thisend, callback_data)))
+                    goto done;
+            }
 
             /* incr recurrences */
             ritem = rrule_itr.nentries ?
@@ -644,6 +669,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
     }
 
  done:
+    multirrule_iterator_fini(&exrule_itr);
     multirrule_iterator_fini(&rrule_itr);
 
     icalarray_free(overrides);
