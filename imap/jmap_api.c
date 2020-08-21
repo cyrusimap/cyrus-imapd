@@ -526,7 +526,7 @@ static int capabilities_cb(const mbentry_t *mbentry, void *vrock)
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     const strarray_t *boxes = mbname_boxes(mbname);
     if (!rock->has_mail) {
-        rock->has_mail = mbentry->mbtype == MBTYPE_EMAIL;
+        rock->has_mail = mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL;
     }
     if (!rock->has_contacts) {
         rock->has_contacts = strarray_size(boxes) >= 1 &&
