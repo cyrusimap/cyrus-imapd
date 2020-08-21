@@ -165,7 +165,7 @@ EXPORTED int tls_enabled(void)
     if (!val || !strcasecmp(val, "disabled")) return 0;
 
     if (config_getswitch(IMAPOPT_CHATTY))
-            syslog(LOG_INFO, "TLS is available.");
+            xsyslog(LOG_INFO, "TLS is available.", NULL);
 
     return 1;
 }

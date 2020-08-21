@@ -1442,9 +1442,14 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
                     int num;
                     r = mailbox_user_flag(as->mailbox, mailbox->flagname[userflag], &num, 1);
                     if (r)
-                        syslog(LOG_ERR, "IOERROR: unable to copy flag %s from %s to %s for UID %u: %s",
-                               mailbox->flagname[userflag], mailbox->name, as->mailbox->name,
-                               src_uid, error_message(r));
+                        xsyslog(LOG_ERR, "IOERROR: unable to copy flag",
+                                         "flag=<%s> src_mailbox=<%s> dest_mailbox=<%s>"
+                                         " uid=<%s> error=<%s>",
+                                         mailbox->flagname[userflag],
+                                         mailbox->name,
+                                         as->mailbox->name,
+                                         src_uid,
+                                         error_message(r));
                     else
                         dst_user_flags[num/32] |= 1<<(num&31);
                 }

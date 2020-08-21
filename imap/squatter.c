@@ -558,8 +558,9 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
         for (retry = 1; retry <= 3; retry++) {
             int r = compact_mbox(userid, srctiers, desttier, flags);
             if (!r) break;
-            syslog(LOG_ERR, "IOERROR: failed to compact %s (%d): %s",
-                   userid, retry, error_message(r));
+            xsyslog(LOG_ERR, "IOERROR: failed to compact",
+                             "userid=<%s> retry=<%d> error=<%s>",
+                             userid, retry, error_message(r));
         }
 
         free(prev_userid);

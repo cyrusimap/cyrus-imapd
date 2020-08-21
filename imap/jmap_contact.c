@@ -1201,9 +1201,10 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                req->accountid, uid);
         r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->accountid);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: Contact%s/set remove failed for %s %u",
-                   kind == CARDDAV_KIND_GROUP ? "Group" : "",
-                   mailbox->name, olduid);
+            xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
+                             "kind=<%s> mailbox=<%s> olduid=<%u>",
+                             kind == CARDDAV_KIND_GROUP ? "group" : "contact",
+                             mailbox->name, olduid);
             goto done;
         }
 

@@ -505,9 +505,11 @@ EXPORTED int sieve_script_load(const char *fname, sieve_execute_t **ret)
 
     if (stat(fname, &sbuf) == -1) {
         if (errno == ENOENT) {
-            syslog(LOG_DEBUG, "WARNING: sieve script %s doesn't exist: %m", fname);
+            xsyslog(LOG_DEBUG, "WARNING: sieve script doesn't exist",
+                               "fname=<%s>", fname);
         } else {
-            syslog(LOG_DEBUG, "IOERROR: fstating sieve script %s: %m", fname);
+            xsyslog(LOG_DEBUG, "IOERROR: fstating sieve script",
+                               "fname=<%s>", fname);
         }
         return SIEVE_FAIL;
     }
@@ -534,12 +536,14 @@ EXPORTED int sieve_script_load(const char *fname, sieve_execute_t **ret)
         /* new script -- load it */
         fd = open(fname, O_RDONLY);
         if (fd == -1) {
-            syslog(LOG_ERR, "IOERROR: can not open sieve script %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: can not open sieve script",
+                             "fname=<%s>", fname);
             if (dofree) free(ex);
             return SIEVE_FAIL;
         }
         if (fstat(fd, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: fstating sieve script %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: fstating sieve script",
+                             "fname=<%s>", fname);
             close(fd);
             if (dofree) free(ex);
             return SIEVE_FAIL;

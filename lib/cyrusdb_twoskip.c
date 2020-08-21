@@ -2091,11 +2091,13 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
         cmp = db->compar(KEY(db, &record), record.keylen,
                          KEY(db, &prevrecord), prevrecord.keylen);
         if (cmp <= 0) {
-            syslog(LOG_ERR, "DBERROR: twoskip out of order %s: %.*s (%08llX) <= %.*s (%08llX)",
-                   FNAME(db), (int)record.keylen, KEY(db, &record),
-                   (LLU)record.offset,
-                   (int)prevrecord.keylen, KEY(db, &prevrecord),
-                   (LLU)prevrecord.offset);
+            xsyslog(LOG_ERR, "DBERROR: twoskip out of order",
+                    "fname=<%s> key=<%.*s> offset=<%08llX>"
+                    " prevkey=<%.*s> prevoffset=<%08llX)",
+                    FNAME(db), (int)record.keylen, KEY(db, &record),
+                    (LLU)record.offset,
+                    (int)prevrecord.keylen, KEY(db, &prevrecord),
+                    (LLU)prevrecord.offset);
             return CYRUSDB_INTERNAL;
         }
 
