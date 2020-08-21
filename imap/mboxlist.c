@@ -1670,7 +1670,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     /* all is well - activate the mailbox */
     newmbentry = mboxlist_entry_create();
     newmbentry->acl = xstrdupnull(acl);
-    newmbentry->mbtype = mbtype | MBTYPE_LEGACY_DIRS;
+    newmbentry->mbtype = mbtype;
     newmbentry->partition = xstrdupnull(newpartition);
     if (newmailbox) {
         newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
