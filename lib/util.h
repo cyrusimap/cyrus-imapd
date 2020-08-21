@@ -415,6 +415,12 @@ const char *makeuuid();
 void tcp_enable_keepalive(int fd);
 void tcp_disable_nagle(int fd);
 
+void xsyslog_fn(int priority, const char *description,
+                const char *file_loc, int line_loc,
+                const char *extra_fmt, ...);
+#define xsyslog(pri, desc, ...)  \
+    xsyslog_fn(pri, desc, __FILE__, __LINE__, __VA_ARGS__)
+
 /*
  * GCC_VERSION macro usage:
  * #if GCC_VERSION > 60909    //GCC version 7 and above

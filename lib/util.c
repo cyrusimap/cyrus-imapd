@@ -2058,3 +2058,32 @@ EXPORTED void tcp_disable_nagle(int fd)
         syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
     }
 }
+
+EXPORTED void xsyslog_fn(int priority, const char *description,
+                         const char *file_loc, int line_loc,
+                         const char *extra_fmt, ...)
+{
+    static struct buf buf = BUF_INITIALIZER;
+    int saved_errno = errno;
+
+    buf_reset(&buf);
+    buf_appendcstr(&buf, description);
+    buf_appendmap(&buf, ": ", 2);
+    if (extra_fmt && *extra_fmt) {
+        va_list args;
+
+        va_start(args, extra_fmt);
+        buf_vprintf(&buf, extra_fmt, args);
+        va_end(args);
+
+        buf_putc(&buf, ' ');
+    }
+    if (saved_errno) {
+        buf_printf(&buf, "error=<%s> ", strerror(saved_errno));
+    }
+    buf_printf(&buf, "srcfile=<%s> srcline=<%d>", file_loc, line_loc);
+
+    syslog(priority, "%s", buf_cstring(&buf));
+    buf_free(&buf);
+    errno = saved_errno;
+}
