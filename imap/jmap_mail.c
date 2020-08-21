@@ -12655,7 +12655,8 @@ static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
     struct _email_copy_checkmbox_rock *rock = _rock;
 
     /* Ignore anything but regular and intermediate mailboxes */
-    if (!mbentry || (mbentry->mbtype & ~MBTYPE_INTERMEDIATE)) {
+    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
+        mbtypes_unavailable(mbentry->mbtype)) {
         return 0;
     }
     if (!json_object_get(rock->dst_mboxids, mbentry->uniqueid)) {
