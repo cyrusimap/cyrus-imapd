@@ -577,7 +577,7 @@ static void cachecards_cb(uint64_t rowid, void *payload, void *vrock)
 static int has_addressbooks_cb(const mbentry_t *mbentry, void *rock)
 {
     jmap_req_t *req = rock;
-    if (mbentry->mbtype == MBTYPE_ADDRESSBOOK &&
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_ADDRESSBOOK &&
             jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         return CYRUSDB_DONE;
     }

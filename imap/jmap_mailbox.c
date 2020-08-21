@@ -4129,7 +4129,7 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
     jmap_req_t *req = data->req;
 
     /* Ignore anything but regular mailboxes */
-    if (mbentry->mbtype & ~(MBTYPE_DELETED | MBTYPE_INTERMEDIATE)) {
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
         return 0;
     }
 
