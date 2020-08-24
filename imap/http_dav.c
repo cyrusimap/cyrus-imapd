@@ -1891,9 +1891,10 @@ int propfind_collectionname(const xmlChar *name, xmlNsPtr ns,
 
     if (r && fctx->mbentry && !fctx->req_tgt->resource) {
         /* Special case empty displayname -- use last segment of path */
+        char *p = strrchr(fctx->mbentry->name, '.');
         xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                        &propstat[PROPSTAT_OK], name, ns, NULL, 0);
-        buf_setcstr(&fctx->buf, strrchr(fctx->mbentry->name, '.') + 1);
+        buf_setcstr(&fctx->buf, (p ? p + 1 : fctx->mbentry->name));
         xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
                                            BAD_CAST buf_cstring(&fctx->buf),
                                            buf_len(&fctx->buf)));
