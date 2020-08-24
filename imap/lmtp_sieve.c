@@ -1210,7 +1210,7 @@ done:
 
 #if defined(HAVE_JANSSON) && defined(HAVE_ICAL)
 #include <jansson.h>
-#include <libical/ical.h>
+#include "ical_support.h"
 
 static void add_keywords(strarray_t *flags, json_t *set_keywords, int add)
 {

@@ -106,7 +106,6 @@
 #include "lmtpd.h"
 #include "lmtpengine.h"
 #ifdef USE_SIEVE
-#include "ical_support.h"
 #include "lmtp_sieve.h"
 #endif
 
