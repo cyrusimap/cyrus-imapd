@@ -2008,6 +2008,8 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_register_jmapquery(interp, &jmapquery);
 #endif
 #if defined(HAVE_JANSSON) && defined(HAVE_ICAL)
+    /* need timezones for sieve snooze */
+    ical_support_init();
     sieve_register_snooze(interp, &sieve_snooze);
 #endif
     sieve_register_parse_error(interp, &sieve_parse_error_handler);

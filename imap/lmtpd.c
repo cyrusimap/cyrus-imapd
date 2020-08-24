@@ -217,9 +217,6 @@ int service_init(int argc __attribute__((unused)),
         mylmtp.addheaders = xzmalloc(2 * sizeof(struct addheader));
         mylmtp.addheaders[0].name = "X-Sieve";
         mylmtp.addheaders[0].body = SIEVE_VERSION;
-
-        /* need timezones for sieve snooze */
-        ical_support_init();
 #else
         if (dupelim)
 #endif
