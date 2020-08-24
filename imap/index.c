@@ -5716,11 +5716,13 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
     }
     else if (isbody && !strcmp(type, "APPLICATION")) {
 
+#ifdef USE_HTTPD
         // application/ics is an alias for text/icalendar
         if (!strcmp(subtype, "ICS")) {
             extract_icalbuf(data, charset, encoding, content_guid, str);
             goto done;
         }
+#endif /* USE_HTTPD */
 
         // these are encrypted fields which aren't worth indexing
         if (!strcmp(subtype, "PKCS7-MIME")) goto done;
