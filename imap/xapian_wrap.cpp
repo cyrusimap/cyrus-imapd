@@ -986,11 +986,9 @@ static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnu
 static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
     std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
-    struct buf mypart = BUF_INITIALIZER;
-    buf_copy(&mypart, part);
-    buf_lcase(&mypart);
+    std::string lpart = Xapian::Unicode::tolower(buf_cstring(part));
     struct address_itr itr;
-    address_itr_init(&itr, buf_cstring(&mypart), 0);
+    address_itr_init(&itr, lpart.c_str(), 0);
 
     const struct address *addr;
     while ((addr = address_itr_next(&itr))) {
@@ -1038,7 +1036,6 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
         }
     }
 
-    buf_free(&mypart);
     address_itr_fini(&itr);
     return 0;
 }
