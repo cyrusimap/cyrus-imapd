@@ -58,8 +58,12 @@
 
 #ifdef HAVE_ICAL
 
+static int initialized = 0;
+
 EXPORTED void ical_support_init(void)
 {
+    if (initialized) return;
+
     /* Initialize timezones path */
     const char *tzpath = config_getstring(IMAPOPT_ZONEINFO_DIR);
     icalarray *timezones;
@@ -90,6 +94,8 @@ EXPORTED void ical_support_init(void)
 
     syslog(LOG_DEBUG, "%s: found " SIZE_T_FMT " timezones",
                        __func__, timezones->num_elements);
+
+    initialized = 1;
 }
 
 EXPORTED int cyrus_icalrestriction_check(icalcomponent *ical)
