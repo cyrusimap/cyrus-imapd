@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Generate a version string for cyrus-imapd
 #
 # Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
