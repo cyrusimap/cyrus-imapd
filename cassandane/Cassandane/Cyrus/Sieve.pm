@@ -3120,7 +3120,7 @@ EOF
 }
 
 sub test_jmapquery
-    :min_version_3_3 :needs_component_sieve
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
 
