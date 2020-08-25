@@ -2382,7 +2382,7 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         vals->caldavfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+160)));
         vals->carddavfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+168)));
         vals->notesfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+176)));
-        vals->submissionfoldersmodseq = ntohll(*((uint64_t *)(base+184)));
+        vals->submissionfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+184)));
         vals->uidvalidity = ntohl(*((uint32_t *)(base+192)));
         break;
 
