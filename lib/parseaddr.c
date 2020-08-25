@@ -258,7 +258,12 @@ static int parseaddr_phrase(char **inp, char **phrasep, const char *specials)
                      * field, which means we have an unbalanced " */
                     goto fail;
                 }
-                if (c == '\r' || c == '\n') goto fail;  /* invalid chars */
+                else if (iscntrl(c)) {
+                    if (c == '\r' || c == '\n')
+                        c = ' '; // replace CR and LF with space
+                    else if (c != '\t')
+                        continue; // else ignore anything but TAB
+                }
                 if (c == '"') break;        /* end of quoted string */
                 if (c == '\\') {
                     if (!(c = *src)) goto fail;
