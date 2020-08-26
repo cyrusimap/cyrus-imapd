@@ -2060,8 +2060,7 @@ EXPORTED void tcp_disable_nagle(int fd)
 }
 
 EXPORTED void xsyslog_fn(int priority, const char *description,
-                         const char *file_loc, int line_loc,
-                         const char *extra_fmt, ...)
+                         const char *func, const char *extra_fmt, ...)
 {
     static struct buf buf = BUF_INITIALIZER;
     int saved_errno = errno;
@@ -2081,7 +2080,7 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
     if (saved_errno) {
         buf_printf(&buf, "error=<%s> ", strerror(saved_errno));
     }
-    buf_printf(&buf, "srcfile=<%s> srcline=<%d>", file_loc, line_loc);
+    buf_printf(&buf, "func=<%s>", func);
 
     syslog(priority, "%s", buf_cstring(&buf));
     buf_free(&buf);

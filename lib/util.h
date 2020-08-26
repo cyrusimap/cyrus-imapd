@@ -416,10 +416,9 @@ void tcp_enable_keepalive(int fd);
 void tcp_disable_nagle(int fd);
 
 void xsyslog_fn(int priority, const char *description,
-                const char *file_loc, int line_loc,
-                const char *extra_fmt, ...);
+                const char *func, const char *extra_fmt, ...);
 #define xsyslog(pri, desc, ...)  \
-    xsyslog_fn(pri, desc, __FILE__, __LINE__, __VA_ARGS__)
+    xsyslog_fn(pri, desc, __func__, __VA_ARGS__)
 
 /*
  * GCC_VERSION macro usage:
