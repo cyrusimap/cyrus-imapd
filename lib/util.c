@@ -2078,9 +2078,13 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
         buf_putc(&buf, ' ');
     }
     if (saved_errno) {
-        buf_printf(&buf, "error=<%s> ", strerror(saved_errno));
+        buf_appendmap(&buf, "error=<", 7);
+        buf_appendcstr(&buf, strerror(saved_errno));
+        buf_appendmap(&buf, "> ", 2);
     }
-    buf_printf(&buf, "func=<%s>", func);
+    buf_appendmap(&buf, "func=<", 6);
+    if (func) buf_appendcstr(&buf, func);
+    buf_putc(&buf, '>');
 
     syslog(priority, "%s", buf_cstring(&buf));
     buf_free(&buf);
