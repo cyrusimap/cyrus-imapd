@@ -1670,10 +1670,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                const char *userid,
                                const struct auth_state *auth_state,
                                struct mboxevent *mboxevent,
-                               int checkacl,
-                               int localonly,
-                               int force,
-                               int keep_intermediaries)
+                               int flags)
 {
     mbentry_t *mbentry = NULL;
     mbentry_t *newmbentry = NULL;
@@ -1681,6 +1678,11 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     char newname[MAX_MAILBOX_BUFFER];
     int r = 0;
     long myrights;
+
+    int checkacl = flags & MBOXLIST_DELETE_CHECKACL;
+    int localonly = flags & MBOXLIST_DELETE_LOCALONLY;
+    int force = flags & MBOXLIST_DELETE_FORCE;
+    int keep_intermediaries = flags & MBOXLIST_DELETE_KEEP_INTERMEDIARIES;
 
     init_internal();
 
@@ -1759,7 +1761,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
 
     /* Bump the deletedmodseq of the entries of mbtype. Do not
      * bump the folderdeletedmodseq, yet. We'll take care of
-     * that in mboxlist_deletemailbox_full. */
+     * that in mboxlist_deletemailbox. */
     r = mboxlist_lookup_allow_all(newname, &newmbentry, NULL);
     if (!r) mboxname_setmodseq(newname, newmbentry->foldermodseq,
                                newmbentry->mbtype, MBOXMODSEQ_ISDELETE);
@@ -1786,13 +1788,11 @@ done:
  * 7. delete from mupdate
  *
  */
-EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
-                                         const char *userid,
-                                         const struct auth_state *auth_state,
-                                         struct mboxevent *mboxevent,
-                                         int checkacl,
-                                         int local_only, int force,
-                                         int keep_intermediaries, int silent)
+EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
+                                    const char *userid,
+                                    const struct auth_state *auth_state,
+                                    struct mboxevent *mboxevent,
+                                    int flags)
 {
     mbentry_t *mbentry = NULL;
     int r = 0;
@@ -1800,6 +1800,12 @@ EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
     struct mailbox *mailbox = NULL;
     int isremote = 0;
     mupdate_handle *mupdate_h = NULL;
+
+    int checkacl = flags & MBOXLIST_DELETE_CHECKACL;
+    int localonly = flags & MBOXLIST_DELETE_LOCALONLY;
+    int force = flags & MBOXLIST_DELETE_FORCE;
+    int keep_intermediaries = flags & MBOXLIST_DELETE_KEEP_INTERMEDIARIES;
+    int silent = flags & MBOXLIST_DELETE_SILENT;
 
     init_internal();
 
@@ -1898,7 +1904,7 @@ EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
     if (r && !force) goto done;
 
     /* remove from mupdate */
-    if (!isremote && !local_only && config_mupdate_server) {
+    if (!isremote && !localonly && config_mupdate_server) {
         /* delete the mailbox in MUPDATE */
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         if (r) {
@@ -1985,31 +1991,15 @@ EXPORTED int mboxlist_deletemailbox_full(const char *name, int isadmin,
     return r;
 }
 
-EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
-                                    const char *userid,
-                                    const struct auth_state *auth_state,
-                                    struct mboxevent *mboxevent,
-                                    int checkacl,
-                                    int local_only, int force,
-                                    int keep_intermediaries)
-{
-    return mboxlist_deletemailbox_full(name, isadmin, userid, auth_state,
-                                       mboxevent, checkacl, local_only, force,
-                                       keep_intermediaries, /*silent*/0);
-}
-
 EXPORTED int mboxlist_deletemailboxlock(const char *name, int isadmin,
                                     const char *userid,
                                     const struct auth_state *auth_state,
                                     struct mboxevent *mboxevent,
-                                    int checkacl,
-                                    int local_only, int force,
-                                    int keep_intermediaries)
+                                    int flags)
 {
     struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
 
-    int r = mboxlist_deletemailbox(name, isadmin, userid, auth_state, mboxevent,
-                                   checkacl, local_only, force, keep_intermediaries);
+    int r = mboxlist_deletemailbox(name, isadmin, userid, auth_state, mboxevent, flags);
 
     mboxname_release(&namespacelock);
     return r;

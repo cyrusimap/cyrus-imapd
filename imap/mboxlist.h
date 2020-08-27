@@ -217,40 +217,33 @@ int mboxlist_createsync(const char *name, int mbtype, const char *partition,
                         int keep_intermediaries,
                         struct mailbox **mboxptr);
 
+#define MBOXLIST_DELETE_CHECKACL            (1<<0)
+/* setting local_only disables any communication with the mupdate server
+ * and deletes the mailbox from the filesystem regardless of if it is
+ * MBTYPE_REMOTE or not */
+#define MBOXLIST_DELETE_LOCALONLY           (1<<1)
+/* force ignores errors and just tries to wipe the mailbox off the face of
+ * the planet */
+#define MBOXLIST_DELETE_FORCE               (1<<2)
+#define MBOXLIST_DELETE_KEEP_INTERMEDIARIES (1<<3)
+/* silently delete, do not bump modseq */
+#define MBOXLIST_DELETE_SILENT              (1<<4)
 /* delated delete */
 /* Translate delete into rename */
 /* prepare MailboxDelete notification if mboxevent is not NULL */
 int
 mboxlist_delayed_deletemailbox(const char *name, int isadmin, const char *userid,
                                const struct auth_state *auth_state,
-                               struct mboxevent *mboxevent,
-                               int checkacl,
-                               int localonly, int force, int keep_intermediaries);
+                               struct mboxevent *mboxevent, int flags);
 /* Delete a mailbox. */
-/* setting local_only disables any communication with the mupdate server
- * and deletes the mailbox from the filesystem regardless of if it is
- * MBTYPE_REMOTE or not */
-/* force ignores errors and just tries to wipe the mailbox off the face of
- * the planet */
 /* prepare MailboxDelete notification if mboxevent is not NULL */
 int mboxlist_deletemailbox(const char *name, int isadmin, const char *userid,
                            const struct auth_state *auth_state,
-                           struct mboxevent *mboxevent,
-                           int checkacl,
-                           int local_only, int force, int keep_intermediaries);
-/* same but with silent */
-int mboxlist_deletemailbox_full(const char *name, int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           struct mboxevent *mboxevent,
-                           int checkacl,
-                           int local_only, int force,
-                           int keep_intermediaries, int silent);
+                           struct mboxevent *mboxevent, int flags);
 /* same but wrap with a namespacelock */
 int mboxlist_deletemailboxlock(const char *name, int isadmin, const char *userid,
                            const struct auth_state *auth_state,
-                           struct mboxevent *mboxevent,
-                           int checkacl,
-                           int local_only, int force, int keep_intermediaries);
+                           struct mboxevent *mboxevent, int flags);
 
 /* rename a tree of mailboxes - renames mailbox plus any children */
 int mboxlist_renametree(const char *oldname, const char *newname,

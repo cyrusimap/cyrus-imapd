@@ -530,11 +530,15 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
             struct mboxlock *namespacelock = mboxname_usernamespacelock(me->mailbox);
 
             if (!mboxlist_delayed_delete_isenabled()) {
-                ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1, 0);
+                ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL,
+                        MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
             } else if (mboxname_isdeletedmailbox(me->mailbox, NULL)) {
-                ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1, 0);
+                ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL,
+                        MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
+
             } else {
-                ret = mboxlist_delayed_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1, 0);
+                ret = mboxlist_delayed_deletemailbox(me->mailbox, 1, "", NULL, NULL,
+                        MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
             }
 
             mboxname_release(&namespacelock);

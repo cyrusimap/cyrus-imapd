@@ -7286,18 +7286,18 @@ static int delmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
         r = mboxlist_deletemailbox(mbentry->name,
                                    imapd_userisadmin || imapd_userisproxyadmin,
                                    imapd_userid, imapd_authstate, NULL,
-                                   0, 0, 0, 1);
+                                   MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     } else if ((imapd_userisadmin || imapd_userisproxyadmin) &&
                mboxname_isdeletedmailbox(mbentry->name, NULL)) {
         r = mboxlist_deletemailbox(mbentry->name,
                                    imapd_userisadmin || imapd_userisproxyadmin,
                                    imapd_userid, imapd_authstate, NULL,
-                                   0, 0, 0, 1);
+                                   MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     } else {
         r = mboxlist_delayed_deletemailbox(mbentry->name,
                                            imapd_userisadmin || imapd_userisproxyadmin,
                                            imapd_userid, imapd_authstate, NULL,
-                                           0, 0, 0, 1);
+                                           MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     }
 
     if (r) {
@@ -7380,10 +7380,11 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
             r = mboxlist_deletemailbox(mbname_intname(mbname),
                                        isadmin, imapd_userid,
                                        imapd_authstate, mboxevent,
-                                       0 /* checkacl */, localonly, 0, 0);
+                                       MBOXLIST_DELETE_LOCALONLY);
         }
         else {
             delete_user = mboxname_isusermailbox(mbname_intname(mbname), 1);
+            int delflags = (1-force) ? MBOXLIST_DELETE_CHECKACL : 0;
 
             if (!delete_user && mboxlist_haschildren(mbname_intname(mbname))) {
                 r = IMAP_MAILBOX_HASCHILDREN;
@@ -7392,13 +7393,13 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
                 r = mboxlist_deletemailbox(mbname_intname(mbname),
                                            isadmin, imapd_userid,
                                            imapd_authstate, mboxevent,
-                                           1-force, localonly, 0, 0);
+                                           delflags|MBOXLIST_DELETE_LOCALONLY);
             }
             else {
                 r = mboxlist_delayed_deletemailbox(mbname_intname(mbname),
                                                    isadmin, imapd_userid,
                                                    imapd_authstate, mboxevent,
-                                                   1-force, 0, 0, 0);
+                                                   delflags);
             }
         }
     }
@@ -11867,7 +11868,8 @@ static int xfer_delete(struct xfer_header *xfer)
            should repopulate the local mboxlist entry */
         r = mboxlist_deletemailboxlock(item->mbentry->name,
                                    imapd_userisadmin || imapd_userisproxyadmin,
-                                   imapd_userid, imapd_authstate, NULL, 0, 1, 0, 0);
+                                   imapd_userid, imapd_authstate, NULL,
+                                   MBOXLIST_DELETE_LOCALONLY);
         if (r) {
             syslog(LOG_ERR,
                    "Could not delete local mailbox during move of %s",
