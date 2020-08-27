@@ -758,7 +758,8 @@ static int do_delete(struct cyr_expire_ctx *ctx)
 
             verbosep("Removing: %s\n", name);
 
-            ret = mboxlist_deletemailboxlock(name, 1, NULL, NULL, NULL, 0, 0, 0, 1);
+            ret = mboxlist_deletemailboxlock(name, 1, NULL, NULL, NULL,
+                                             MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
             /* XXX: Ignoring the return from mboxlist_deletemailbox() ??? */
             count++;
         }

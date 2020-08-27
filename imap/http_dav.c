@@ -4283,17 +4283,13 @@ static int remove_collection(const mbentry_t *mbentry,
     if (mboxlist_delayed_delete_isenabled()) {
         r = mboxlist_delayed_deletemailbox(mbentry->name, 1, /* admin */
                                            httpd_userid, httpd_authstate,
-                                           NULL, 1 /* checkacl */,
-                                           0 /* localonly */, 0 /* force */,
-                                           0 /* keep_intermediaries */);
+                                           NULL, MBOXLIST_DELETE_CHECKACL);
 
     }
     else {
         r = mboxlist_deletemailbox(mbentry->name, 1, /* admin */
                                    httpd_userid, httpd_authstate,
-                                   NULL, 1 /* checkacl */,
-                                   0 /* localonly */, 0 /* force */,
-                                   0 /* keep_intermediaries */);
+                                   NULL, MBOXLIST_DELETE_CHECKACL);
     }
 
     return r;
@@ -4371,18 +4367,14 @@ static int dav_move_collection(struct transaction_t *txn,
             r = mboxlist_delayed_deletemailbox(newmailboxname,
                                                httpd_userisadmin,
                                                httpd_userid, httpd_authstate,
-                                               mboxevent, 1 /* checkacl */,
-                                               0 /* localonly*/, 0 /* force */,
-                                               0 /* keep_intermediaries */);
+                                               mboxevent, MBOXLIST_DELETE_CHECKACL);
 
         }
         else {
             r = mboxlist_deletemailbox(newmailboxname,
                                        httpd_userisadmin,
                                        httpd_userid, httpd_authstate,
-                                       mboxevent, 1 /* checkacl */,
-                                       0 /* localonly*/, 0 /* force */,
-                                       0 /* keep_intermediaries */);
+                                       mboxevent, MBOXLIST_DELETE_CHECKACL);
         }
 
         if (!r) mboxevent_notify(&mboxevent);
@@ -5015,16 +5007,13 @@ static int meth_delete_collection(struct transaction_t *txn,
         r = mboxlist_delayed_deletemailbox(txn->req_tgt.mbentry->name,
                                            httpd_userisadmin || httpd_userisproxyadmin,
                                            httpd_userid, httpd_authstate,
-                                           mboxevent, /*checkacl*/1,
-                                           /*localonly*/0, /*force*/0,
-                                           /* keep_intermediaries */0);
+                                           mboxevent, MBOXLIST_DELETE_CHECKACL);
     }
     else {
         r = mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
                                    httpd_userisadmin || httpd_userisproxyadmin,
                                    httpd_userid, httpd_authstate, mboxevent,
-                                   /*checkacl*/1, /*localonly*/0, /*force*/0,
-                                   /* keep_intermediaries */0);
+                                   MBOXLIST_DELETE_CHECKACL);
     }
     if (!r) {
         r = caldav_update_shareacls(mbname_userid(mbname));
@@ -5773,8 +5762,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
             mailbox_close(&mailbox);
             mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
                                    /*isadmin*/1, NULL, NULL, NULL,
-                                   /*checkacl*/0, /*localonly*/0, /*force*/1,
-                                   /*keep_intermediaries*/0);
+                                   MBOXLIST_DELETE_FORCE);
 
             if (!ret) {
                 /* Output the XML response */

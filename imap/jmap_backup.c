@@ -1210,9 +1210,7 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
                 /* XXX  Do we want to do this? */
                 r = mboxlist_deletemailboxlock(mbentry->name, /*isadmin*/0,
                                                req->accountid, req->authstate,
-                                               /*mboxevent*/NULL, /*checkacl*/0,
-                                               /*localonly*/0, /*force*/0,
-                                               /*keep_intermediaries*/0);
+                                               /*mboxevent*/NULL, /*flags*/0);
             }
         }
         else {
