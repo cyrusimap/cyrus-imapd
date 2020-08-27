@@ -1,0 +1,2177 @@
+--deobfuscated by Bee#7291 + Cracked
+-- Farewell Infortality.
+-- Version: 2.82
+-- Instances:
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]:Unknown X V8.0 - Use whiteList key given in Dms - Unknown X made by Rkq5 - Enjoy!. " ,"All")
+local ScreenGui = Instance.new("ScreenGui")
+local WhiteListframe = Instance.new("Frame")
+local WhiteListTitle = Instance.new("TextLabel")
+local Open = Instance.new("TextButton")
+local TextBox = Instance.new("TextBox")
+local ThemainGuiFrame = Instance.new("Frame")
+local GuiTitle = Instance.new("TextLabel")
+local Bypass = Instance.new("TextButton")
+local Speed = Instance.new("TextButton")
+local Bfg = Instance.new("TextButton")
+local AimBot = Instance.new("TextButton")
+local Jutsutools = Instance.new("TextButton")
+local KnifeTools = Instance.new("TextButton")
+local Admin = Instance.new("TextButton")
+local Vis = Instance.new("TextButton")
+local Pg2 = Instance.new("TextButton")
+local CloseMainGui = Instance.new("TextButton")
+local Page2Frame = Instance.new("Frame")
+local Page2Title = Instance.new("TextLabel")
+local Spamgui = Instance.new("TextButton")
+local DupeTools = Instance.new("TextButton")
+local FastDupe = Instance.new("TextButton")
+local Ghost = Instance.new("TextButton")
+local JumFlip = Instance.new("TextButton")
+local ClosePg2 = Instance.new("TextButton")
+local Open2Frame = Instance.new("Frame")
+local Open2 = Instance.new("TextButton")
+--Properties:
+ScreenGui.Parent = game.CoreGui
+ 
+WhiteListframe.Name = "WhiteList frame"
+WhiteListframe.Parent = ScreenGui
+WhiteListframe.BackgroundColor3 = Color3.new(0, 0, 0)
+WhiteListframe.BackgroundTransparency = 0.30000001192093
+WhiteListframe.BorderColor3 = Color3.new(0.74902, 0, 0.996078)
+WhiteListframe.BorderSizePixel = 5
+WhiteListframe.Position = UDim2.new(0.425563902, 0, 0.405362844, 0)
+WhiteListframe.Size = UDim2.new(0, 235, 0, 144)
+ 
+WhiteListTitle.Name = "WhiteListTitle"
+WhiteListTitle.Parent = WhiteListframe
+WhiteListTitle.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+WhiteListTitle.BorderColor3 = Color3.new(0.74902, 0, 0.996078)
+WhiteListTitle.Size = UDim2.new(0, 235, 0, 34)
+WhiteListTitle.Font = Enum.Font.SourceSans
+WhiteListTitle.Text = "White list"
+WhiteListTitle.TextColor3 = Color3.new(0, 0, 0)
+WhiteListTitle.TextSize = 30
+ 
+Open.Name = "Open"
+Open.Parent = WhiteListframe
+Open.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+Open.Position = UDim2.new(0.0723404288, 0, 0.736111104, 0)
+Open.Size = UDim2.new(0, 200, 0, 25)
+Open.Font = Enum.Font.SourceSans
+Open.Text = "Check"
+Open.TextColor3 = Color3.new(0, 0, 0)
+Open.TextSize = 20
+Open.MouseButton1Down:connect(function()
+game:GetService("StarterGui"):SetCore("SendNotification", {
+Title = "[Unknown X]";
+Text = "White listed - Unknown X loaded.";
+})
+ 
+game:GetService("StarterGui"):SetCore("SendNotification", {
+Title = "[Unknown X]";
+Text = "Current version V7.7 - Made by Rkq5 - Enjoy.";
+})
+ 
+if TextBox.Text == '234q678-423q46' then
+ThemainGuiFrame.Visible = true
+WhiteListframe.Visible = false
+Open2Frame.Visible = true
+end
+end)
+ 
+TextBox.Parent = WhiteListframe
+TextBox.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+TextBox.Position = UDim2.new(0.0723404288, 0, 0.375, 0)
+TextBox.Size = UDim2.new(0, 200, 0, 36)
+TextBox.Font = Enum.Font.SourceSans
+TextBox.Text = "WHITELIST KEY HERE"
+TextBox.TextColor3 = Color3.new(0, 0, 0)
+TextBox.TextSize = 20
+ 
+ThemainGuiFrame.Name = "ThemainGuiFrame"
+ThemainGuiFrame.Parent = ScreenGui
+ThemainGuiFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+ThemainGuiFrame.BackgroundTransparency = 0.30000001192093
+ThemainGuiFrame.Position = UDim2.new(0, 0, 0.49211359, 0)
+ThemainGuiFrame.Size = UDim2.new(0, 176, 0, 259)
+ThemainGuiFrame.Visible = false
+ThemainGuiFrame.Active = true
+ 
+GuiTitle.Name = "GuiTitle"
+GuiTitle.Parent = ThemainGuiFrame
+GuiTitle.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+GuiTitle.Size = UDim2.new(0, 176, 0, 34)
+GuiTitle.Font = Enum.Font.SourceSans
+GuiTitle.Text = "Unknown X "
+GuiTitle.TextColor3 = Color3.new(0, 0, 0)
+GuiTitle.TextSize = 25
+ 
+Bypass.Name = "Bypass"
+Bypass.Parent = ThemainGuiFrame
+Bypass.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+Bypass.Position = UDim2.new(0, 0, 0.200772196, 0)
+Bypass.Size = UDim2.new(0, 77, 0, 25)
+Bypass.Font = Enum.Font.SourceSans
+Bypass.Text = "Bypass"
+Bypass.TextColor3 = Color3.new(0, 0, 0)
+Bypass.TextSize = 20
+Bypass.MouseButton1Click:connect(function()
+while true do
+game:GetService"ReplicatedStorage".Name = 'RepStorage'
+wait(0.5)
+end
+end)
+ 
+Speed.Name = "Speed"
+Speed.Parent = ThemainGuiFrame
+Speed.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+Speed.Position = UDim2.new(0.5625, 0, 0.200772196, 0)
+Speed.Size = UDim2.new(0, 77, 0, 25)
+Speed.Font = Enum.Font.SourceSans
+Speed.Text = "Speed"
+Speed.TextColor3 = Color3.new(0, 0, 0)
+Speed.TextSize = 20
+Speed.MouseButton1Click:connect(function()
+repeat wait() until game.Players.LocalPlayer
+m = game.Players.LocalPlayer:GetMouse()
+m.KeyDown:connect(function(key)
+if key == "0" then
+game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 100
+end
+end)
+m.KeyUp:connect(function(key)
+if key == "0" then
+game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
+end
+end)
+end)
+ 
+Bfg.Name = "Bfg"
+Bfg.Parent = ThemainGuiFrame
+Bfg.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+Bfg.Position = UDim2.new(0, 0, 0.382239372, 0)
+Bfg.Size = UDim2.new(0, 77, 0, 25)
+Bfg.Font = Enum.Font.SourceSans
+Bfg.Text = "Bfg"
+Bfg.TextColor3 = Color3.new(0, 0, 0)
+Bfg.TextSize = 20
+Bfg.MouseButton1Down:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: Bfg on press Q to enable. " ,"All")
+local plr = game.Players.LocalPlayer
+local m = plr:GetMouse()
+local r = game:GetService("RunService").Heartbeat
+local h = plr.Character.Humanoid
+local prefix = ""
+ 
+local guns = {}
+ 
+local aim = false
+local State = false
+ 
+function playequipsound()
+local sound = Instance.new("Sound", plr.PlayerGui)
+sound.SoundId = "rbxassetid://439260292"
+sound.Volume = 2
+sound.PlayOnRemove = true
+wait()
+sound:Destroy()
+end
+ 
+function addGuns()
+State = true
+local Weapons = plr.Backpack:GetChildren()
+for c,f in ipairs(Weapons) do
+if f.Name == "Uzi" or f.Name == "Shotty" or f.Name == "Glock" then
+table.insert(guns, f)
+ 
+end
+end
+end
+ 
+function removeGuns()
+State = false
+guns = {}
+end
+ 
+function trackplayers()
+ 
+local tg = function(parent)
+local bg = Instance.new("BillboardGui", parent)
+bg.Adornee = parent
+bg.Size = UDim2.new(3,0,2,0)
+bg.StudsOffset = Vector3.new(0,2,0)
+bg.AlwaysOnTop = true
+bg = Instance.new("ImageLabel")
+bg.Image = "http://www.roblox.com/asset/?id=142406345"
+bg.Size = UDim2.new(1.25,0,1.75,0)
+bg.Position = UDim2.new(-0.125,0,-1.1,0)
+bg.BackgroundTransparency = 1
+end
+ 
+local players = game.Players:GetChildren()
+for a,b in ipairs(players) do
+local h = b.Character:FindFirstChild("Head")
+if h then
+tg(h)
+end
+end
+end
+ 
+m.KeyDown:connect(function(K)
+K=K:lower()
+if K == "q" then
+if State == false then
+addGuns()
+elseif State == true then
+removeGuns()
+if h then
+h:UnequipTools()
+end
+end
+end
+if K == "'" then
+for a,b in ipairs(guns) do
+b.GripPos = Vector3.new(math.random(-2,2),0,math.random(-2,2))
+end
+end
+end)
+ 
+m.Button1Down:connect(function()
+if State == true then
+for a,b in ipairs(guns) do
+b.Fire:FireServer(m.Hit)
+end
+end
+end)
+ 
+r:connect(function()
+if aim == true then
+for a,b in ipairs(guns) do
+if b and m.Target then
+local h = m.Target.Parent:FindFirstChild("Humanoid")
+if h then
+local p = game.Players:FindFirstChild(h.Parent.Name)
+if p then
+b.Fire:FireServer(m.Hit)
+end
+end
+end
+end
+end
+end)
+ 
+plr.Character.Humanoid.Died:connect(function()
+removeGuns()
+end)
+ 
+while true do
+r:wait()
+if State == true then
+for a,b in ipairs(guns) do
+b.Parent = plr.Character
+end
+end
+end
+ 
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[WeBotNow]: Press R to use BFG" ,"All")
+end)
+ 
+AimBot.Name = "AimBot"
+AimBot.Parent = ThemainGuiFrame
+AimBot.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+AimBot.Position = UDim2.new(0.5625, 0, 0.382239372, 0)
+AimBot.Size = UDim2.new(0, 77, 0, 25)
+AimBot.Font = Enum.Font.SourceSans
+AimBot.Text = "AimBot"
+AimBot.TextColor3 = Color3.new(0, 0, 0)
+AimBot.TextSize = 20
+AimBot.MouseButton1Click:connect(function()
+game:GetService("StarterGui"):SetCore("SendNotification", {
+Title = "[Unknown X]";
+Text = "Aimbot has been selected,made it hidden so no one knows your using it lol.";
+})
+mouse = game.Players.LocalPlayer:getMouse()
+mouse.Button1Down:connect(function()
+if game.Players:GetPlayerFromCharacter(mouse.Target.Parent) then
+local selected = game.Players:GetPlayerFromCharacter(mouse.Target.Parent)
+if game.Players.LocalPlayer.Character:findFirstChildOfClass("Tool") then
+local tool = game.Players.LocalPlayer.Character:findFirstChildOfClass("Tool")
+if tool:findFirstChild("Fire") then
+if selected ~= nil then
+repeat
+tool.Fire:FireServer(selected.Character.Head.CFrame)
+wait()
+until selected.Character:findFirstChild("KO")
+end
+end
+end
+end
+end)
+end)
+ 
+Jutsutools.Name = "Jutsu tools"
+Jutsutools.Parent = ThemainGuiFrame
+Jutsutools.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+Jutsutools.Position = UDim2.new(-0.000504102558, 0, 0.556203723, 0)
+Jutsutools.Size = UDim2.new(0, 77, 0, 25)
+Jutsutools.Font = Enum.Font.SourceSans
+Jutsutools.Text = "JutsuTools"
+Jutsutools.TextColor3 = Color3.new(0, 0, 0)
+Jutsutools.TextSize = 20
+Jutsutools.MouseButton1Click:connect(function()
+-- Farewell Infortality.
+-- Version: 2.82
+-- Instances:
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: Jutsu gui On! - made by Rkq5 - Enjoy!. " ,"All")
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextBox")
+local Improvedsword = Instance.new("TextButton")
+local Cane = Instance.new("TextButton")
+local Oldsword = Instance.new("TextButton")
+local Arrow = Instance.new("TextButton")
+local PickAxe = Instance.new("TextButton")
+local AutoSave = Instance.new("TextButton")
+local Close = Instance.new("TextButton")
+--Properties:
+ScreenGui.Parent = game.CoreGui
+ 
+MainFrame.Name = "MainFrame2"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+MainFrame.BackgroundTransparency = 0.30000001192093
+MainFrame.Position = UDim2.new(0.699534178, 0, 0.323343843, 0)
+MainFrame.Size = UDim2.new(0, 225, 0, 228)
+MainFrame.Active = true
+MainFrame.Draggable = true
+ 
+Title.Name = "Title"
+Title.Parent = MainFrame
+Title.BackgroundColor3 = Color3.new(0.396078, 0.788235, 1)
+Title.Size = UDim2.new(0, 225, 0, 35)
+Title.Font = Enum.Font.SourceSans
+Title.Text = "Jutsu items"
+Title.TextColor3 = Color3.new(0, 0, 0)
+Title.TextSize = 30
+Title.TextStrokeColor3 = Color3.new(0.278431, 0.0980392, 1)
+ 
+Improvedsword.Name = "Improved sword"
+Improvedsword.Parent = MainFrame
+Improvedsword.BackgroundColor3 = Color3.new(0.396078, 0.788235, 1)
+Improvedsword.Position = UDim2.new(0, 0, 0.293859661, 0)
+Improvedsword.Size = UDim2.new(0, 99, 0, 20)
+Improvedsword.Font = Enum.Font.SourceSans
+Improvedsword.Text = "Improved sword"
+Improvedsword.TextColor3 = Color3.new(0, 0, 0)
+Improvedsword.TextSize = 18
+Improvedsword.MouseButton1Click:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: Improved Sword on - made by Rkq5 - Enjoy!. " ,"All")
+for madebyemil = 0, 10 do
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Character.Jutsu:Activate()
+game.Players.LocalPlayer.Character.Jutsu.Parent = game.Players.LocalPlayer.Backpack
+end
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -0.6, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -0.8, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -0.8, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.0, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.0, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.2, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.2, -0.6)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.2, -0.8)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.2, -0.0)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.2, 0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.4, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.6, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.8, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.8, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.0, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.2, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.4, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.2, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.4, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.6, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.8, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.8, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.0, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.0, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.2, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.4, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.6, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.8, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.8, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.0, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.0, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.2, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.4, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.6, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.8, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.8, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+ 
+ 
+ 
+ 
+ 
+ 
+game.Players.LocalPlayer.Backpack.Knife.Idle.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch1.AnimationId = "rbxassetid://186934753"
+game.Players.LocalPlayer.Backpack.Knife.Punch2.AnimationId = "rbxassetid://186934753"
+game.Players.LocalPlayer.Backpack.Knife.Running.AnimationId = "rbxassetid://431972483"
+game.Players.LocalPlayer.Backpack.Knife.Info.AnimSpeed.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.Info.Cooldown.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.GripUp = Vector3.new(0,6,-1)
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-0.98,0,0)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+end)
+ 
+Cane.Name = "Cane"
+Cane.Parent = MainFrame
+Cane.BackgroundColor3 = Color3.new(0.396078, 0.788235, 1)
+Cane.Position = UDim2.new(0.555555582, 0, 0.293859661, 0)
+Cane.Size = UDim2.new(0, 100, 0, 20)
+Cane.Font = Enum.Font.SourceSans
+Cane.Text = "Cane"
+Cane.TextColor3 = Color3.new(0, 0, 0)
+Cane.TextSize = 20
+Cane.MouseButton1Click:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: Cane On! - made by Rkq5 - Enjoy!. " ,"All")
+for Rkq5 = 0, 10 do
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Character.Jutsu:Activate()
+game.Players.LocalPlayer.Character.Jutsu.Parent = game.Players.LocalPlayer.Backpack
+end
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -0.6, -0.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.4, -0.5)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.8, -0.6)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.2, -0.7)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.6, -0.8)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3, -0.9)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3, -0.8)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.6, -0.7)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.2, -0.6)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.8, -0.5)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.4, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1, -0.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.1, -0.8)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.2, -0.8)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.4, -0.7)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.5, -0.5)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.6, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.5, -0.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.1, -0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+ 
+ 
+ 
+ 
+ 
+game.Players.LocalPlayer.Backpack.Knife.Idle.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch1.AnimationId = "rbxassetid://218504594"
+game.Players.LocalPlayer.Backpack.Knife.Punch2.AnimationId = "rbxassetid://218504594"
+game.Players.LocalPlayer.Backpack.Knife.Running.AnimationId = "rbxassetid://431972483"
+game.Players.LocalPlayer.Backpack.Knife.Info.AnimSpeed.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.Info.Cooldown.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.GripUp = Vector3.new(0,6,-1)
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-0.98,0,0)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+end)
+ 
+Oldsword.Name = "Old sword"
+Oldsword.Parent = MainFrame
+Oldsword.BackgroundColor3 = Color3.new(0.396078, 0.788235, 1)
+Oldsword.Position = UDim2.new(0, 0, 0.504385948, 0)
+Oldsword.Size = UDim2.new(0, 99, 0, 20)
+Oldsword.Font = Enum.Font.SourceSans
+Oldsword.Text = "Old sword"
+Oldsword.TextColor3 = Color3.new(0, 0, 0)
+Oldsword.TextSize = 20
+Oldsword.MouseButton1Click:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: Old sword on - made by Rkq5 - Enjoy!. " ,"All")
+for Rkq5 = 0, 10 do
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Character.Jutsu:Activate()
+game.Players.LocalPlayer.Character.Jutsu.Parent = game.Players.LocalPlayer.Backpack
+end
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.8, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.8, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -4.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.5, -1.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.1, -1.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(-0.1, -1.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.7, -1.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(-0.3, -1.3, -0.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(-0.4, -1.5, -0.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(-0.5, -1.7, -0.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.8, -1.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.9, -1.7, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(1.0, -1.9, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+ 
+ 
+ 
+ 
+ 
+game.Players.LocalPlayer.Backpack.Knife.Idle.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch1.AnimationId = "rbxassetid://186934753"
+game.Players.LocalPlayer.Backpack.Knife.Punch2.AnimationId = "rbxassetid://186934753"
+game.Players.LocalPlayer.Backpack.Knife.Running.AnimationId = "rbxassetid://431972483"
+game.Players.LocalPlayer.Backpack.Knife.Info.AnimSpeed.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.Info.Cooldown.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.GripUp = Vector3.new(0,6,-1)
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-0.98,0,0)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+end)
+ 
+Arrow.Name = "Arrow"
+Arrow.Parent = MainFrame
+Arrow.BackgroundColor3 = Color3.new(0.396078, 0.788235, 1)
+Arrow.Position = UDim2.new(0.555555582, 0, 0.504385948, 0)
+Arrow.Size = UDim2.new(0, 100, 0, 20)
+Arrow.Font = Enum.Font.SourceSans
+Arrow.Text = "Arrow"
+Arrow.TextColor3 = Color3.new(0, 0, 0)
+Arrow.TextSize = 20
+Arrow.MouseButton1Click:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: Arrow On! - made by Rkq5 - Enjoy!. " ,"All")
+for Rkq5 = 0, 10 do
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Character.Jutsu:Activate()
+game.Players.LocalPlayer.Character.Jutsu.Parent = game.Players.LocalPlayer.Backpack
+end
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.8, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.1, -3.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(-0.1, -3.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.5, -3.4, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.7, -3.2, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+ 
+game.Players.LocalPlayer.Backpack.Knife.Idle.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch1.AnimationId = "rbxassetid://186934753"
+game.Players.LocalPlayer.Backpack.Knife.Punch2.AnimationId = "rbxassetid://186934753"
+game.Players.LocalPlayer.Backpack.Knife.Running.AnimationId = "rbxassetid://431972483"
+game.Players.LocalPlayer.Backpack.Knife.Info.AnimSpeed.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.Info.Cooldown.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.GripUp = Vector3.new(0,6,-1)
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-0.98,0,0)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+end)
+ 
+PickAxe.Name = "PickAxe"
+PickAxe.Parent = MainFrame
+PickAxe.BackgroundColor3 = Color3.new(0.396078, 0.788235, 1)
+PickAxe.Position = UDim2.new(0.0399999991, 0, 0.657894731, 0)
+PickAxe.Size = UDim2.new(0, 207, 0, 20)
+PickAxe.Font = Enum.Font.SourceSans
+PickAxe.Text = "PickAxe"
+PickAxe.TextColor3 = Color3.new(0, 0, 0)
+PickAxe.TextSize = 20
+PickAxe.MouseButton1Click:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: PickAxe On - made by Rkq5 - Enjoy!. " ,"All")
+for Rkq5 = 0, 10 do
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Character.Jutsu:Activate()
+game.Players.LocalPlayer.Character.Jutsu.Parent = game.Players.LocalPlayer.Backpack
+end
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.4, -0.6)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.8, -0.8)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.2, -1.0)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.6, -1.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3, -1.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.4, -1.6)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.8, -1.8)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -0.6, -0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1, -0.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.4, -0.5)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -1.8, -0.7)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.2, -0.9)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.6, -1.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3, -1.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.4, -1.5)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.8, -1.7)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.7, -2.0)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.5, -2.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.4, -2.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.3, -2.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.2, -2.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.0, -2.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -2.8, -2.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.8, -1.5)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.8, -1.3)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.8, -1.2)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.7, -1.0)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.6, -0.8)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.5, -0.6)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.4, -0.5)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.3, -0.5)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.3, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.2, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Jutsu.GripPos = Vector3.new(0.3, -3.1, -0.4)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+ 
+ 
+ 
+ 
+game.Players.LocalPlayer.Backpack.Knife.Idle.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch1.AnimationId = "rbxassetid://186934753"
+game.Players.LocalPlayer.Backpack.Knife.Punch2.AnimationId = "rbxassetid://186934753"
+game.Players.LocalPlayer.Backpack.Knife.Running.AnimationId = "rbxassetid://431972483"
+game.Players.LocalPlayer.Backpack.Knife.Info.AnimSpeed.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.Info.Cooldown.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.GripUp = Vector3.new(0,6,-1)
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-0.98,0,0)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+end)
+ 
+AutoSave.Name = "AutoSave"
+AutoSave.Parent = MainFrame
+AutoSave.BackgroundColor3 = Color3.new(0.396078, 0.788235, 1)
+AutoSave.Position = UDim2.new(0.0399999991, 0, 0.811403513, 0)
+AutoSave.Size = UDim2.new(0, 207, 0, 20)
+AutoSave.Font = Enum.Font.SourceSans
+AutoSave.Text = "AutoSave"
+AutoSave.TextColor3 = Color3.new(0, 0, 0)
+AutoSave.TextSize = 20
+AutoSave.MouseButton1Click:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: AutoSave on, might be buggy - made by Rkq5 - Enjoy!. " ,"All")
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer
+wait (0.3)
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+wait (7.0)
+for _,v in pairs(game.Players.LocalPlayer:GetChildren()) do
+if (v:IsA("Tool")) then
+v.Parent = game.Players.LocalPlayer.Backpack
+end
+end
+end)
+ 
+Close.Name = "Close"
+Close.Parent = MainFrame
+Close.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+Close.Position = UDim2.new(0.884444416, 0, 0, 0)
+Close.Size = UDim2.new(0, 26, 0, 21)
+Close.Font = Enum.Font.SourceSans
+Close.Text = "X"
+Close.TextColor3 = Color3.new(0, 0, 0)
+Close.TextSize = 20
+Close.MouseButton1Click:connect(function()
+MainFrame.Visable = false
+end)
+-- Scripts:
+end)
+ 
+KnifeTools.Name = "KnifeTools"
+KnifeTools.Parent = ThemainGuiFrame
+KnifeTools.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+KnifeTools.Position = UDim2.new(0.5625, 0, 0.555984557, 0)
+KnifeTools.Size = UDim2.new(0, 77, 0, 25)
+KnifeTools.Font = Enum.Font.SourceSans
+KnifeTools.Text = "Item Wall"
+KnifeTools.TextColor3 = Color3.new(0, 0, 0)
+KnifeTools.TextSize = 20
+KnifeTools.MouseButton1Click:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: Item Wall gui - Start with Active1 - Also Dupe Shotty,Knife,Glock and Pipe 40 times, use Fast dupe to make it easier. " ,"All")
+-- Farewell Infortality.
+-- Version: 2.82
+-- Instances:
+local ScreenGui = Instance.new("ScreenGui")
+local ItemwallFrame = Instance.new("Frame")
+local TextLabel = Instance.new("TextLabel")
+local Active1 = Instance.new("TextButton")
+local Active2 = Instance.new("TextButton")
+local Active3 = Instance.new("TextButton")
+local Active4 = Instance.new("TextButton")
+local ItemWallDone = Instance.new("TextButton")
+local CloseItemWall = Instance.new("TextButton")
+--Properties:
+ScreenGui.Parent = game.CoreGui
+ 
+ItemwallFrame.Name = "Item wall Frame"
+ItemwallFrame.Parent = ScreenGui
+ItemwallFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+ItemwallFrame.BackgroundTransparency = 0.30000001192093
+ItemwallFrame.Position = UDim2.new(0.613533854, 0, 0.427444726, 0)
+ItemwallFrame.Size = UDim2.new(0, 189, 0, 220)
+ItemwallFrame.Active = true
+ItemwallFrame.Draggable = true
+ 
+TextLabel.Parent = ItemwallFrame
+TextLabel.BackgroundColor3 = Color3.new(0.819608, 0.27451, 1)
+TextLabel.Size = UDim2.new(0, 189, 0, 21)
+TextLabel.Font = Enum.Font.SourceSans
+TextLabel.Text = "Item wall"
+TextLabel.TextColor3 = Color3.new(0, 0, 0)
+TextLabel.TextSize = 20
+ 
+Active1.Name = "Active1"
+Active1.Parent = ItemwallFrame
+Active1.BackgroundColor3 = Color3.new(0.819608, 0.27451, 1)
+Active1.Position = UDim2.new(0, 0, 0.159090906, 0)
+Active1.Size = UDim2.new(0, 189, 0, 22)
+Active1.Font = Enum.Font.SourceSans
+Active1.Text = "Active1"
+Active1.TextColor3 = Color3.new(0, 0, 0)
+Active1.TextSize = 20
+Active1.MouseButton1Click:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: Use Active 1 to 4 for the full item wall - Made by Rkq5 - Enjoy. " ,"All")
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(0.3, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(1.6, -0.7, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(2.9, -0.8, -0.4)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(4.2, -0.8, -0.4)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(5.5, -0.8, -0.4)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(6.8, -0.8, -0.4)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(8.1, -0.8, -0.4)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(9.4, -0.8, -0.4)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(10.7, -0.8, -0.4)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(12.0, -0.8, -0.4)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(13.3, -0.8, -0.4)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-1.3, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-2.6, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-3.9, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-5.2, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-6.5, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-7.8, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-9.1, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-10.4, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-11.7, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-13.0, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-14.3, -0.6, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(1.3, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(2.6, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(3.9, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(5.2, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(6.5, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(7.8, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(9.1, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(10.4, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(11.7, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(13.0, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(13.3, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-1.3, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-2.6, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-3.9, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-5.2, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-6.5, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-7.8, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-9.1, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-10.4, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-11.7, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-12.0, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-13.3, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Shotty.GripPos = Vector3.new(-13.3, -2.0, -0.2)
+game.Players.LocalPlayer.Backpack.Shotty.Parent = game.Players.LocalPlayer.Character
+end)
+ 
+Active2.Name = "Active2"
+Active2.Parent = ItemwallFrame
+Active2.BackgroundColor3 = Color3.new(0.819608, 0.27451, 1)
+Active2.Position = UDim2.new(0, 0, 0.340909094, 0)
+Active2.Size = UDim2.new(0, 189, 0, 22)
+Active2.Font = Enum.Font.SourceSans
+Active2.Text = "Active2"
+Active2.TextColor3 = Color3.new(0, 0, 0)
+Active2.TextSize = 20
+Active2.MouseButton1Click:connect(function()
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, -1.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, -3.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, -5.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, -7.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, -9.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, -11.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, -13.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, -15.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, -17.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, 2.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, 4.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, 6.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, 8.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, 10.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, 12.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, 14.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, 16.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-5.0, -1.0, 18.5)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+end)
+ 
+Active3.Name = "Active3"
+Active3.Parent = ItemwallFrame
+Active3.BackgroundColor3 = Color3.new(0.819608, 0.27451, 1)
+Active3.Position = UDim2.new(0, 0, 0.527272701, 0)
+Active3.Size = UDim2.new(0, 189, 0, 22)
+Active3.Font = Enum.Font.SourceSans
+Active3.Text = "Active3"
+Active3.TextColor3 = Color3.new(0, 0, 0)
+Active3.TextSize = 20
+Active3.MouseButton1Click:connect(function()
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, -1.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, -3.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, -5.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, -7.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, -9.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, -11.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, -13.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, -15.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, -17.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 1.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 3.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 5.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 7.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 9.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 11.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 13.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 15.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 17.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 19.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Glock.GripPos = Vector3.new(-5.0, -7.5, 21.5)
+game.Players.LocalPlayer.Backpack.Glock.Parent = game.Players.LocalPlayer.Character
+end)
+ 
+Active4.Name = "Active4"
+Active4.Parent = ItemwallFrame
+Active4.BackgroundColor3 = Color3.new(0.819608, 0.27451, 1)
+Active4.Position = UDim2.new(0, 0, 0.699999988, 0)
+Active4.Size = UDim2.new(0, 189, 0, 22)
+Active4.Font = Enum.Font.SourceSans
+Active4.Text = "Active4"
+Active4.TextColor3 = Color3.new(0, 0, 0)
+Active4.TextSize = 20
+Active4.MouseButton1Click:connect(function()
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -0.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -2.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -4.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -6.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -8.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -10.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -12.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -14.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -16.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -18.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -20.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, -22.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 2.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 4.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 6.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 8.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 10.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 10.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 12.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 14.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 16.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 18.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 20.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Backpack.Pipe.GripPos = Vector3.new(0.3, -5.6, 22.2)
+game.Players.LocalPlayer.Backpack.Pipe.Parent = game.Players.LocalPlayer.Character
+end)
+ 
+ItemWallDone.Name = "ItemWallDone"
+ItemWallDone.Parent = ItemwallFrame
+ItemWallDone.BackgroundColor3 = Color3.new(0.819608, 0.27451, 1)
+ItemWallDone.Position = UDim2.new(0, 0, 0.868181884, 0)
+ItemWallDone.Size = UDim2.new(0, 189, 0, 22)
+ItemWallDone.Font = Enum.Font.SourceSans
+ItemWallDone.Text = "Full item wall"
+ItemWallDone.TextColor3 = Color3.new(0, 0, 0)
+ItemWallDone.TextSize = 20
+ItemWallDone.MouseButton1Click:connect(function()
+game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]: FullItem wall on press r to enable. " ,"All")
+local plr = game.Players.LocalPlayer
+local m = plr:GetMouse()
+local r = game:GetService("RunService").Heartbeat
+local h = plr.Character.Humanoid
+local prefix = ""
+ 
+local guns = {}
+ 
+local aim = false
+local State = false
+ 
+function playequipsound()
+local sound = Instance.new("Sound", plr.PlayerGui)
+sound.SoundId = "rbxassetid://439260292"
+sound.Volume = 2
+sound.PlayOnRemove = true
+wait()
+sound:Destroy()
+end
+ 
+function addGuns()
+State = true
+local Weapons = plr.Backpack:GetChildren()
+for c,f in ipairs(Weapons) do
+if f.Name == "Shotty" or f.Name == "Knife" or f.Name == "Glock" or f.Name == "Pipe" then
+table.insert(guns, f)
+ 
+end
+end
+end
+ 
+function removeGuns()
+State = false
+guns = {}
+end
+ 
+function trackplayers()
+ 
+local tg = function(parent)
+local bg = Instance.new("BillboardGui", parent)
+bg.Adornee = parent
+bg.Size = UDim2.new(3,0,2,0)
+bg.StudsOffset = Vector3.new(0,2,0)
+bg.AlwaysOnTop = true
+bg = Instance.new("ImageLabel")
+bg.Image = "http://www.roblox.com/asset/?id=142406345"
+bg.Size = UDim2.new(1.25,0,1.75,0)
+bg.Position = UDim2.new(-0.125,0,-1.1,0)
+bg.BackgroundTransparency = 1
+end
+ 
+local players = game.Players:GetChildren()
+for a,b in ipairs(players) do
+local h = b.Character:FindFirstChild("Head")
+if h then
+tg(h)
+end
+end
+end
+ 
+m.KeyDown:connect(function(K)
+K=K:lower()
+if K == "r" then
+if State == false then
+addGuns()
+elseif State == true then
+removeGuns()
+if h then
+h:UnequipTools()
+end
+end
+end
+if K == "'" then
+for a,b in ipairs(guns) do
+b.GripPos = Vector3.new(math.random(-2,2),0,math.random(-2,2))
+end
+end
+end)
+ 
+m.Button1Down:connect(function()
+if State == true then
+for a,b in ipairs(guns) do
+b.Fire:FireServer(m.Hit)
+end
+end
+end)
+ 
+r:connect(function()
+if aim == true then
+for a,b in ipairs(guns) do
+if b and m.Target then
+local h = m.Target.Parent:FindFirstChild("Humanoid")
+if h then
+local p = game.Players:FindFirstChild(h.Parent.Name)
+if p then
+b.Fire:FireServer(m.Hit)
+end
+end
+end
+end
+end
+end)
+ 
+plr.Character.Humanoid.Died:connect(function()
+removeGuns()
+end)
+ 
+while true do
+r:wait()
+if State == true then
+for a,b in ipairs(guns) do
+b.Parent = plr.Character
+end
+end
+end
+ 
+game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[WeBotNow]: Press R to use BFG" ,"All")
+end)
+ 
+ 
+CloseItemWall.Name = "CloseItemWall"
+CloseItemWall.Parent = ItemwallFrame
+CloseItemWall.BackgroundColor3 = Color3.new(1, 0, 0)
+CloseItemWall.Position = UDim2.new(0.857142866, 0, 0, 0)
+CloseItemWall.Size = UDim2.new(0, 27, 0, 21)
+CloseItemWall.Font = Enum.Font.SourceSans
+CloseItemWall.Text = "X"
+CloseItemWall.TextColor3 = Color3.new(0, 0, 0)
+CloseItemWall.TextSize = 25
+CloseItemWall.MouseButton1Click:connect(function()
+ItemwallFrame.Visible = false
+end)
+-- Scripts:
+ 
+end)
+ 
+Admin.Name = "Admin"
+Admin.Parent = ThemainGuiFrame
+Admin.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+Admin.Position = UDim2.new(0, 0, 0.725868702, 0)
+Admin.Size = UDim2.new(0, 77, 0, 25)
+Admin.Font = Enum.Font.SourceSans
+Admin.Text = "Admin"
+Admin.TextColor3 = Color3.new(0, 0, 0)
+Admin.TextSize = 20
+Admin.MouseButton1Click:connect(function()
+loadstring(game:GetObjects("rbxassetid://02800495431")[1].Source)()
+end)
+ 
+Vis.Name = "Vis"
+Vis.Parent = ThemainGuiFrame
+Vis.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+Vis.Position = UDim2.new(0.5625, 0, 0.725868702, 0)
+Vis.Size = UDim2.new(0, 77, 0, 25)
+Vis.Font = Enum.Font.SourceSans
+Vis.Text = "Vis"
+Vis.TextColor3 = Color3.new(0, 0, 0)
+Vis.TextSize = 20
+Vis.MouseButton1Click:connect(function()
+-- Farewell Infortality.
+-- Version: 2.82
+-- Instances:
+local ScreenGui = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local VS = Instance.new("TextButton")
+local X = Instance.new("TextButton")
+--Properties:
+ScreenGui.Parent = game.CoreGui
+ 
+Frame.Parent = ScreenGui
+Frame.BackgroundColor3 = Color3.new(0.501961, 0.635294, 1)
+Frame.BackgroundTransparency = 0.38999998569489
+Frame.Position = UDim2.new(0.127594158, 0, 0.294952691, 0)
+Frame.Size = UDim2.new(0, 179, 0, 149)
+ 
+VS.Name = "VS"
+VS.Parent = Frame
+VS.BackgroundColor3 = Color3.new(0.447059, 0.396078, 1)
+VS.Position = UDim2.new(0, 0, 0.161073819, 0)
+VS.Size = UDim2.new(0, 179, 0, 95)
+VS.Font = Enum.Font.SourceSans
+VS.Text = "Update Log"
+VS.TextColor3 = Color3.new(0, 0, 0)
+VS.TextSize = 30
+VS.MouseButton1Click:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]:Fully re-done the vis - The Pos and random math is re-done - Press X to run the script . " ,"All")
+end)
+ 
+X.Name = "X"
+X.Parent = Frame
+X.BackgroundColor3 = Color3.new(0.501961, 0.635294, 1)
+X.BackgroundTransparency = 0.38999998569489
+X.Position = UDim2.new(0.843575418, 0, 0.798657715, 0)
+X.Size = UDim2.new(0, 28, 0, 30)
+X.Font = Enum.Font.SourceSans
+X.Text = "X"
+X.TextColor3 = Color3.new(0, 0, 0)
+X.TextSize = 14
+X.MouseButton1Down:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]:Visualizer On! - made by Rkq5 - enjoy! . " ,"All")
+Frame.Visible = false
+local ToVisualize = ""
+local visualizer = false
+local pos = CFrame.new()
+ 
+local function radioglitchy(instance)
+for i,v in pairs(instance:GetChildren()) do
+if v:IsA("Script") then
+v:Destroy()
+end
+radioglitchy(v)
+end
+end
+ 
+local function unequip()
+for _,v in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
+if (v:IsA("Tool")) then
+v.Parent = game.Players.LocalPlayer.Backpack
+end
+end
+end
+ 
+function getSelection()
+local toolsl = {}
+for i,v in next, game.Players.LocalPlayer.Backpack:GetChildren() do
+lowername = string.lower(v.Name)
+if v:IsA'Tool' and string.find(lowername, ToVisualize) then
+table.insert(toolsl,v)
+end
+end
+for i,v in next, game.Players.LocalPlayer.Character:GetChildren() do
+lowername = string.lower(v.Name)
+if v:IsA'Tool' and string.find(lowername, ToVisualize) then
+table.insert(toolsl,v)
+end
+end
+return toolsl
+end
+ 
+ 
+function visualize()
+local rot = 14
+local sine = 60
+while visualizer do
+ 
+ 
+local song = game.Players.LocalPlayer.Character.Torso:FindFirstChild'Song'
+rot = rot + 5 + song.PlaybackLoudness/200
+local tools = getSelection()
+for i,v in next, getSelection() do
+sine = sine + 75
+v.Parent = game.Players.LocalPlayer.Backpack
+v.Grip = CFrame.Angles(math.rad(7),math.rad(14),math.rad(99)) * CFrame.new(8,song.PlaybackLoudness/250 + 10,15) * CFrame.Angles(math.rad((i*(360/#tools))+rot),math.rad(75),45) * CFrame.new(10.5,0,-8+math.sin(sine/#tools)*song.PlaybackLoudness/250)
+v.Parent = game.Players.LocalPlayer.Character
+v.ManualActivationOnly = true
+end
+ 
+wait()
+end
+end
+ 
+ 
+ 
+ 
+ 
+ 
+-- CHAT COMMANDS
+ 
+ 
+ 
+ 
+function commandshandle(plr,msg)
+local lowercommand = string.lower(msg)
+local len = string.len(lowercommand)
+ 
+if string.find(lowercommand,".rm ") then
+meshtoremove = string.gsub(lowercommand,".rm ","")
+ 
+if string.find(meshtoremove, "boom") then
+for _,v in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
+if (v:IsA("Tool") and v.Name == "BoomBox") then
+v.Handle.Mesh:remove()
+end
+end
+for _,v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+if (v:IsA("Tool") and v.Name == "BoomBox") then
+v.Handle.Mesh:remove()
+end
+end
+end
+ 
+if string.find(meshtoremove, "radio") then
+for _,v in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
+if (v:IsA("Tool") and v.Name == "BoomBox") then
+v.Handle.Mesh:remove()
+end
+end
+for _,v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+if (v:IsA("Tool") and v.Name == "BoomBox") then
+v.Handle.Mesh:remove()
+end
+end
+end
+ 
+if string.find(meshtoremove, "spray") then
+for _,v in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
+if (v:IsA("Tool") and v.Name == "Spray") then
+v.Handle.Mesh:remove()
+end
+end
+for _,v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+if (v:IsA("Tool") and v.Name == "Spray") then
+v.Handle.Mesh:remove()
+end
+end
+end
+ 
+end
+ 
+if string.find(lowercommand,"!save ") then
+itemtostore = string.gsub(lowercommand,".save ","")
+ 
+for _,v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+objectlower = string.lower(v.Name)
+if (v:IsA("Tool") and string.find(objectlower, itemtostore)) then
+v.Parent = game.Players.LocalPlayer
+end
+end
+ 
+if string.find(itemtostore, "radio") then
+for _,v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+if (v:IsA("Tool") and v.Name == "BoomBox") then
+v.Parent = game.Players.LocalPlayer
+end
+end
+end
+ 
+end
+ 
+if string.find(lowercommand,"!get ") then
+itemtorecieve = string.gsub(lowercommand,"!get ","")
+ 
+for _,v in pairs(game.Players.LocalPlayer:GetChildren()) do
+objectlower = string.lower(v.Name)
+if (v:IsA("Tool") and string.find(objectlower, itemtorecieve)) then
+v.Parent = game.Players.LocalPlayer.Backpack
+end
+end
+ 
+end
+ 
+if string.find(lowercommand,"song ") then
+idtoplay = string.gsub(lowercommand,"song ","")
+for _,v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+if (v:IsA("Tool") and v.Name == "BoomBox") then
+v.Parent = game.Players.LocalPlayer.Character
+end
+end
+wait(0.1)
+game.Players.LocalPlayer.Character.BoomBox.Remote:FireServer("PlaySong", idtoplay)
+wait(0.1)
+radioglitchy(game.Players.LocalPlayer.Character.BoomBox)
+game.Players.LocalPlayer.Character:FindFirstChild("BoomBox").Parent = game.Players.LocalPlayer.Backpack
+ 
+end
+ 
+if string.find(lowercommand,"!fixradio ") then
+pos = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+wait(0.1)
+toggled = true
+wait(0.05)
+game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0,1000,0)
+wait(0.1)
+toggled = false
+end
+ 
+if string.find(lowercommand,"!fixBoombox ") then
+pos = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+wait(0.1)
+toggled = true
+wait(0.05)
+game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0,1000,0)
+wait(0.1)
+toggled = false
+end
+ 
+ 
+if string.find(lowercommand,"!vis ") then
+toolname = string.gsub(lowercommand,"!vis ","")
+visualizer = false
+unequip()
+ 
+ToVisualize = string.lower(toolname)
+for _,v in pairs(game.Players.LocalPlayer:GetChildren()) do
+objectlower = string.lower(v.Name)
+if (v:IsA("Tool") and string.find(objectlower, toolname)) then
+v.Parent = game.Players.LocalPlayer.Backpack
+end
+end
+ 
+ 
+wait(0.1)
+visualizer = true
+visualize()
+ 
+ 
+end
+ 
+if string.find(lowercommand,"!unvis") then
+visualizer = false
+unequip()
+end
+ 
+if string.find(lowercommand,"!togvis") then
+visualizer = not visualizer
+end
+ 
+end -- End of commandshandle
+ 
+game:GetService('RunService').Stepped:connect(function()
+if toggled == true then
+game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = pos
+end
+end)
+ 
+ 
+game.Players.LocalPlayer.Chatted:connect(function(msg)
+commandshandle(plr,msg)
+end)
+ 
+ 
+ 
+ 
+ 
+print("!vis TOOLNAME - Starts a visualizer")
+print("!unvis - Stops visualizing")
+print("song AUDIOID - Plays the AUDIOID on your radio")
+print("!fixradio / .fixboom - Fixes your radio")
+print("!save TOOLNAME - Stores any tools that have the same TOOLNAME")
+print("!Get TOOLNAME - Brings any tools that has a name that matches the TOOLNAME")
+print(".rm TOOLNAME - Removes the mesh of any tool")
+print("---Made By Rkq5---")
+end)
+-- Scripts:
+ 
+end)
+ 
+Pg2.Name = "Pg 2"
+Pg2.Parent = ThemainGuiFrame
+Pg2.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+Pg2.Position = UDim2.new(0.607954562, 0, 0.934362829, 0)
+Pg2.Size = UDim2.new(0, 69, 0, 17)
+Pg2.Font = Enum.Font.SourceSans
+Pg2.Text = "Page 2"
+Pg2.TextColor3 = Color3.new(0, 0, 0)
+Pg2.TextSize = 20
+Pg2.MouseButton1Click:connect(function()
+Page2Frame.Visible = true
+end)
+ 
+CloseMainGui.Name = "CloseMainGui"
+CloseMainGui.Parent = ThemainGuiFrame
+CloseMainGui.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+CloseMainGui.Position = UDim2.new(-0.00568179786, 0, 0.934362829, 0)
+CloseMainGui.Size = UDim2.new(0, 69, 0, 17)
+CloseMainGui.Font = Enum.Font.SourceSans
+CloseMainGui.Text = "Close"
+CloseMainGui.TextColor3 = Color3.new(0, 0, 0)
+CloseMainGui.TextSize = 20
+CloseMainGui.MouseButton1Click:connect(function()
+ThemainGuiFrame.Visible = false
+end)
+ 
+Page2Frame.Name = "Page2Frame"
+Page2Frame.Parent = ScreenGui
+Page2Frame.BackgroundColor3 = Color3.new(0, 0, 0)
+Page2Frame.BackgroundTransparency = 0.30000001192093
+Page2Frame.Position = UDim2.new(0.13233082, 0, 0.572555244, 0)
+Page2Frame.Size = UDim2.new(0, 205, 0, 208)
+Page2Frame.Visible = false
+ 
+Page2Title.Name = "Page2Title"
+Page2Title.Parent = Page2Frame
+Page2Title.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+Page2Title.Size = UDim2.new(0, 205, 0, 29)
+Page2Title.Font = Enum.Font.SourceSans
+Page2Title.Text = "Page 2"
+Page2Title.TextColor3 = Color3.new(0, 0, 0)
+Page2Title.TextSize = 30
+Page2Title.TextWrapped = true
+ 
+Spamgui.Name = "Spam gui"
+Spamgui.Parent = Page2Frame
+Spamgui.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+Spamgui.Position = UDim2.new(0, 0, 0.245192304, 0)
+Spamgui.Size = UDim2.new(0, 94, 0, 22)
+Spamgui.Font = Enum.Font.SourceSans
+Spamgui.Text = "Spam Gui"
+Spamgui.TextColor3 = Color3.new(0, 0, 0)
+Spamgui.TextSize = 20
+Spamgui.MouseButton1Click:connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]:Spam gui on! - made by Rkq5 - enjoy . " ,"All")
+local ScreenGui = Instance.new("ScreenGui")
+local OpenFrame = Instance.new("Frame")
+local Title = Instance.new("TextBox")
+local Chat1 = Instance.new("TextButton")
+local Chat2 = Instance.new("TextButton")
+local Chat3 = Instance.new("TextButton")
+local Chat4 = Instance.new("TextButton")
+local Close = Instance.new("TextButton")
+--Properties:
+ScreenGui.Parent = game.CoreGui
+ 
+OpenFrame.Name = "OpenFrame"
+OpenFrame.Parent = ScreenGui
+OpenFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+OpenFrame.BackgroundTransparency = 0.30000001192093
+OpenFrame.Position = UDim2.new(0.695652127, 0, 0.47003147, 0)
+OpenFrame.Size = UDim2.new(0, 240, 0, 235)
+OpenFrame.Active = true
+OpenFrame.Draggable = true
+ 
+Title.Name = "Title"
+Title.Parent = OpenFrame
+Title.BackgroundColor3 = Color3.new(0.980392, 0.376471, 1)
+Title.Position = UDim2.new(0, 0, -0.00326200435, 0)
+Title.Size = UDim2.new(0, 240, 0, 40)
+Title.Font = Enum.Font.SourceSans
+Title.Text = "Chat Gui"
+Title.TextColor3 = Color3.new(0, 0, 0)
+Title.TextSize = 30
+ 
+Chat1.Name = "Chat #1"
+Chat1.Parent = OpenFrame
+Chat1.BackgroundColor3 = Color3.new(0.980392, 0.376471, 1)
+Chat1.Position = UDim2.new(-0.00263977051, 0, 0.328652889, 0)
+Chat1.Size = UDim2.new(0, 96, 0, 25)
+Chat1.Font = Enum.Font.SourceSans
+Chat1.Text = "Skid!"
+Chat1.TextColor3 = Color3.new(0, 0, 0)
+Chat1.TextSize = 14
+Chat1.MouseButton1Down:connect(function()
+for Rkq5 = 0, 10 do
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Character.Jutsu:Activate()
+game.Players.LocalPlayer.Character.Jutsu.Parent = game.Players.LocalPlayer.Backpack
+end
+ 
+game.Players.LocalPlayer.Backpack.BoomBox.GripPos = Vector3.new(-100., -100.1, -100.1)
+game.Players.LocalPlayer.Backpack.BoomBox.Parent = game.Players.LocalPlayer.Character
+ 
+ 
+ 
+ 
+ 
+game.Players.LocalPlayer.Backpack.Knife.Idle.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch1.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch2.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Running.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Info.AnimSpeed.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.Info.Cooldown.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.GripUp = Vector3.new(0,6,-1)
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-0.98,0,0)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+ 
+local Tool = game.Players.LocalPlayer.Character.Knife
+Tool.Equipped:Connect(function(Mouse)
+Mouse.Button1Down:Connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]:Skid alert!. " ,"All")
+game.Players.LocalPlayer.Character.BoomBox.Remote:FireServer("PlaySong", "2794150333")
+wait(1.4)
+game.Players.LocalPlayer.Character.BoomBox.Remote:FireServer("PlaySong", "")
+end)
+end)
+end)
+ 
+Chat2.Name = "Chat2"
+Chat2.Parent = OpenFrame
+Chat2.BackgroundColor3 = Color3.new(0.980392, 0.376471, 1)
+Chat2.Position = UDim2.new(0.578571439, 0, 0.327652842, 0)
+Chat2.Size = UDim2.new(0, 101, 0, 25)
+Chat2.Font = Enum.Font.SourceSans
+Chat2.Text = "Club P"
+Chat2.TextColor3 = Color3.new(0, 0, 0)
+Chat2.TextSize = 14
+Chat2.MouseButton1Down:connect(function()
+for Rkq5 = 0, 10 do
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Character.Jutsu:Activate()
+game.Players.LocalPlayer.Character.Jutsu.Parent = game.Players.LocalPlayer.Backpack
+end
+ 
+game.Players.LocalPlayer.Backpack.BoomBox.GripPos = Vector3.new(-100., -100.1, -100.1)
+game.Players.LocalPlayer.Backpack.BoomBox.Parent = game.Players.LocalPlayer.Character
+ 
+ 
+ 
+ 
+ 
+game.Players.LocalPlayer.Backpack.Knife.Idle.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch1.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch2.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Running.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Info.AnimSpeed.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.Info.Cooldown.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.GripUp = Vector3.new(0,6,-1)
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-0.98,0,0)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+ 
+local Tool = game.Players.LocalPlayer.Character.Knife
+Tool.Equipped:Connect(function(Mouse)
+Mouse.Button1Down:Connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]:If you use guns you don't know how to play club penguin. " ,"All")
+game.Players.LocalPlayer.Character.BoomBox.Remote:FireServer("PlaySong", "2794150733")
+wait(2.8)
+game.Players.LocalPlayer.Character.BoomBox.Remote:FireServer("PlaySong", "")
+end)
+end)
+end)
+ 
+Chat3.Name = "Chat3"
+Chat3.Parent = OpenFrame
+Chat3.BackgroundColor3 = Color3.new(0.980392, 0.376471, 1)
+Chat3.Position = UDim2.new(-0.000957489014, 0, 0.542063236, 0)
+Chat3.Size = UDim2.new(0, 96, 0, 29)
+Chat3.Font = Enum.Font.SourceSans
+Chat3.Text = "Gun abuse"
+Chat3.TextColor3 = Color3.new(0, 0, 0)
+Chat3.TextSize = 14
+Chat3.MouseButton1Down:connect(function()
+for Rkq5 = 0, 10 do
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Character.Jutsu:Activate()
+game.Players.LocalPlayer.Character.Jutsu.Parent = game.Players.LocalPlayer.Backpack
+end
+ 
+game.Players.LocalPlayer.Backpack.BoomBox.GripPos = Vector3.new(-100., -100.1, -100.1)
+game.Players.LocalPlayer.Backpack.BoomBox.Parent = game.Players.LocalPlayer.Character
+ 
+ 
+ 
+ 
+ 
+game.Players.LocalPlayer.Backpack.Knife.Idle.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch1.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch2.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Running.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Info.AnimSpeed.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.Info.Cooldown.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.GripUp = Vector3.new(0,6,-1)
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-0.98,0,0)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+ 
+local Tool = game.Players.LocalPlayer.Character.Knife
+Tool.Equipped:Connect(function(Mouse)
+Mouse.Button1Down:Connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]:Oof use guns to win noob... " ,"All")
+game.Players.LocalPlayer.Character.BoomBox.Remote:FireServer("PlaySong", "2793795153")
+wait(2.0)
+game.Players.LocalPlayer.Character.BoomBox.Remote:FireServer("PlaySong", "")
+end)
+end)
+end)
+ 
+Chat4.Name = "Chat4"
+Chat4.Parent = OpenFrame
+Chat4.BackgroundColor3 = Color3.new(0.980392, 0.376471, 1)
+Chat4.Position = UDim2.new(0.576527178, 0, 0.54141897, 0)
+Chat4.Size = UDim2.new(0, 102, 0, 29)
+Chat4.Font = Enum.Font.SourceSans
+Chat4.Text = "Zetox"
+Chat4.TextColor3 = Color3.new(0, 0, 0)
+Chat4.TextSize = 14
+Chat4.MouseButton1Down:connect(function()
+for Rkq5 = 0, 10 do
+wait(0.1)
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Character.Jutsu:Activate()
+game.Players.LocalPlayer.Character.Jutsu.Parent = game.Players.LocalPlayer.Backpack
+end
+ 
+game.Players.LocalPlayer.Backpack.BoomBox.GripPos = Vector3.new(-100., -100.1, -100.1)
+game.Players.LocalPlayer.Backpack.BoomBox.Parent = game.Players.LocalPlayer.Character
+ 
+ 
+ 
+ 
+ 
+game.Players.LocalPlayer.Backpack.Knife.Idle.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch1.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Punch2.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Running.AnimationId = "rbxassetid://"
+game.Players.LocalPlayer.Backpack.Knife.Info.AnimSpeed.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.Info.Cooldown.Value = "0.50"
+game.Players.LocalPlayer.Backpack.Knife.GripUp = Vector3.new(0,6,-1)
+game.Players.LocalPlayer.Backpack.Knife.GripPos = Vector3.new(-0.98,0,0)
+game.Players.LocalPlayer.Backpack.Knife.Parent = game.Players.LocalPlayer.Character
+ 
+local Tool = game.Players.LocalPlayer.Character.Knife
+Tool.Equipped:Connect(function(Mouse)
+Mouse.Button1Down:Connect(function()
+game:GetService"ReplicatedStorage".DefaultChatSystemChatEvents.SayMessageRequest:FireServer("[Rkq5]:Ew you are a zetox user get good xdddd. " ,"All")
+game.Players.LocalPlayer.Character.BoomBox.Remote:FireServer("PlaySong", "2791174578")
+wait(2.6)
+game.Players.LocalPlayer.Character.BoomBox.Remote:FireServer("PlaySong", "")
+end)
+end)
+end)
+ 
+Close.Name = "Close"
+Close.Parent = OpenFrame
+Close.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+Close.Position = UDim2.new(0.878571332, 0, 0.915887058, 0)
+Close.Size = UDim2.new(0, 29, 0, 19)
+Close.Font = Enum.Font.SourceSans
+Close.Text = "X"
+Close.TextColor3 = Color3.new(0, 0, 0)
+Close.TextSize = 20
+Close.MouseButton1Down:connect(function()
+OpenFrame.Visible = false
+end)
+-- Scripts:
+ 
+end)
+ 
+ 
+DupeTools.Name = "DupeTools"
+DupeTools.Parent = Page2Frame
+DupeTools.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+DupeTools.Position = UDim2.new(0.541463435, 0, 0.245192304, 0)
+DupeTools.Size = UDim2.new(0, 94, 0, 22)
+DupeTools.Font = Enum.Font.SourceSans
+DupeTools.Text = "Dupe Tools"
+DupeTools.TextColor3 = Color3.new(0, 0, 0)
+DupeTools.TextSize = 20
+DupeTools.MouseButton1Click:connect(function()
+-- Farewell Infortality.
+-- Version: 2.82
+-- Instances:
+local ScreenGui = Instance.new("ScreenGui")
+local ToolsFrame = Instance.new("Frame")
+local SaveTools = Instance.new("TextButton")
+local Receivetools = Instance.new("TextButton")
+local ToolsFrame2 = Instance.new("Frame")
+local Fastsave = Instance.new("TextButton")
+local ResetFrame = Instance.new("Frame")
+local Reset = Instance.new("TextButton")
+--Properties:
+ScreenGui.Parent = game.CoreGui
+ 
+ToolsFrame.Name = "ToolsFrame"
+ToolsFrame.Parent = ScreenGui
+ToolsFrame.BackgroundColor3 = Color3.new(0.666667, 0.254902, 1)
+ToolsFrame.Position = UDim2.new(0.413652956, 0, -0.00100782618, 0)
+ToolsFrame.Size = UDim2.new(0, 228, 0, 59)
+ToolsFrame.Active = true
+ 
+SaveTools.Name = "SaveTools"
+SaveTools.Parent = ToolsFrame
+SaveTools.BackgroundColor3 = Color3.new(1, 1, 1)
+SaveTools.BackgroundTransparency = 0.30000001192093
+SaveTools.Position = UDim2.new(0.0570175424, 0, 0.288135529, 0)
+SaveTools.Size = UDim2.new(0, 90, 0, 24)
+SaveTools.Font = Enum.Font.SciFi
+SaveTools.Text = "Save Tools"
+SaveTools.TextColor3 = Color3.new(0, 0, 0)
+SaveTools.TextSize = 14
+SaveTools.MouseButton1Click:connect(function()
+ 
+game.Players.LocalPlayer.Backpack.Jutsu.Parent = game.Players.LocalPlayer.Character
+game.Players.LocalPlayer.Character.Jutsu:Activate()
+game.Players.LocalPlayer.Character.Jutsu.Parent = game.Players.LocalPlayer.Backpack
+ 
+for _,v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+if (v:IsA("Tool")) then
+v.Parent = game.Players.LocalPlayer
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+end
+end
+end)
+ 
+Receivetools.Name = "Receive tools"
+Receivetools.Parent = ToolsFrame
+Receivetools.BackgroundColor3 = Color3.new(1, 1, 1)
+Receivetools.BackgroundTransparency = 0.30000001192093
+Receivetools.Position = UDim2.new(0.552631557, 0, 0.288135529, 0)
+Receivetools.Size = UDim2.new(0, 93, 0, 23)
+Receivetools.Font = Enum.Font.SciFi
+Receivetools.Text = "Receive Tools"
+Receivetools.TextColor3 = Color3.new(0, 0, 0)
+Receivetools.TextSize = 14
+Receivetools.MouseButton1Click:connect(function()
+for _,v in pairs(game.Players.LocalPlayer:GetChildren()) do
+if (v:IsA("Tool")) then
+v.Parent = game.Players.LocalPlayer.Backpack
+end
+end
+end)
+ 
+ToolsFrame2.Name = "ToolsFrame2"
+ToolsFrame2.Parent = ToolsFrame
+ToolsFrame2.BackgroundColor3 = Color3.new(0.666667, 0.254902, 1)
+ToolsFrame2.Position = UDim2.new(0.140350878, 0, 1, 0)
+ToolsFrame2.Size = UDim2.new(0, 164, 0, 22)
+ToolsFrame2.Active = true
+ 
+Fastsave.Name = "Fast save"
+Fastsave.Parent = ToolsFrame2
+Fastsave.BackgroundColor3 = Color3.new(1, 1, 1)
+Fastsave.BackgroundTransparency = 0.30000001192093
+Fastsave.Position = UDim2.new(0.0792682916, 0, 0, 0)
+Fastsave.Size = UDim2.new(0, 139, 0, 22)
+Fastsave.Font = Enum.Font.SciFi
+Fastsave.Text = "Fast save"
+Fastsave.TextColor3 = Color3.new(0, 0, 0)
+Fastsave.TextSize = 14
+ 
+ResetFrame.Name = "ResetFrame"
+ResetFrame.Parent = ToolsFrame
+ResetFrame.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+ResetFrame.Position = UDim2.new(0.859649122, 0, 1, 0)
+ResetFrame.Size = UDim2.new(0, 32, 0, 22)
+ResetFrame.Active = true
+ 
+Reset.Name = "Reset"
+Reset.Parent = ResetFrame
+Reset.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+Reset.Size = UDim2.new(0, 32, 0, 22)
+Reset.Font = Enum.Font.SourceSans
+Reset.Text = "R"
+Reset.TextColor3 = Color3.new(0, 0, 0)
+Reset.TextSize = 20
+Reset.MouseButton1Click:connect(function()
+game.Players.LocalPlayer.Character.Humanoid.Health = 0
+end)
+-- Scripts:
+ 
+end)
+ 
+FastDupe.Name = "FastDupe"
+FastDupe.Parent = Page2Frame
+FastDupe.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+FastDupe.Position = UDim2.new(0, 0, 0.442307711, 0)
+FastDupe.Size = UDim2.new(0, 94, 0, 22)
+FastDupe.Font = Enum.Font.SourceSans
+FastDupe.Text = "Fast Dupe"
+FastDupe.TextColor3 = Color3.new(0, 0, 0)
+FastDupe.TextSize = 20
+FastDupe.MouseButton1Click:connect(function()
+loadstring(game:HttpGet("https://pastebin.com/raw/JtNqziC8", true))()
+end)
+ 
+Ghost.Name = "Ghost"
+Ghost.Parent = Page2Frame
+Ghost.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+Ghost.Position = UDim2.new(0.541463435, 0, 0.442307711, 0)
+Ghost.Size = UDim2.new(0, 94, 0, 22)
+Ghost.Font = Enum.Font.SourceSans
+Ghost.Text = "Ghost"
+Ghost.TextColor3 = Color3.new(0, 0, 0)
+Ghost.TextSize = 20
+Ghost.MouseButton1Click:connect(function()
+game.Players.LocalPlayer.Character.Animate.walk.WalkAnim.AnimationId="rbxassetid://451687057"
+for _,v in pairs(game.Players.LocalPlayer.Character.Animate.jump:GetChildren()) do
+v.AnimationId = 'rbxassetid://451686028'
+for _,v in pairs(game.Players.LocalPlayer.Character.Animate.idle:GetChildren()) do
+v.AnimationId = 'rbxassetid://451686028'
+end
+end
+end)
+ 
+JumFlip.Name = "JumFlip"
+JumFlip.Parent = Page2Frame
+JumFlip.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+JumFlip.Position = UDim2.new(0.1902439, 0, 0.653846145, 0)
+JumFlip.Size = UDim2.new(0, 127, 0, 22)
+JumFlip.Font = Enum.Font.SourceSans
+JumFlip.Text = "JumpFlip"
+JumFlip.TextColor3 = Color3.new(0, 0, 0)
+JumFlip.TextSize = 20
+JumFlip.MouseButton1Click:connect(function()
+for _,v in pairs(game.Players.LocalPlayer.Character.Animate.jump:GetChildren()) do
+v.AnimationId = 'rbxassetid://229782914'
+end
+end)
+ 
+ClosePg2.Name = "ClosePg2"
+ClosePg2.Parent = Page2Frame
+ClosePg2.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
+ClosePg2.Position = UDim2.new(0.67804879, 0, 0.918269098, 0)
+ClosePg2.Size = UDim2.new(0, 66, 0, 16)
+ClosePg2.Font = Enum.Font.SourceSans
+ClosePg2.Text = "Close"
+ClosePg2.TextColor3 = Color3.new(0, 0, 0)
+ClosePg2.TextSize = 20
+ClosePg2.MouseButton1Click:connect(function()
+Page2Frame.Visible = false
+end)
+ 
+Open2Frame.Name = "Open2Frame"
+Open2Frame.Parent = ScreenGui
+Open2Frame.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+Open2Frame.Position = UDim2.new(0, 0, 0.435331225, 0)
+Open2Frame.Size = UDim2.new(0, 36, 0, 24)
+Open2Frame.Visible = false
+ 
+Open2.Name = "Open2"
+Open2.Parent = Open2Frame
+Open2.BackgroundColor3 = Color3.new(0.74902, 0, 0.996078)
+Open2.Size = UDim2.new(0, 36, 0, 24)
+Open2.Font = Enum.Font.SourceSans
+Open2.Text = ">"
+Open2.TextColor3 = Color3.new(0, 0, 0)
+Open2.TextSize = 30
+Open2.MouseButton1Click:connect(function()
+ThemainGuiFrame.Visible = true
+end)
