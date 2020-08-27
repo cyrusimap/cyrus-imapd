@@ -445,9 +445,9 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
 
     init_internal();
 
-    if (!quota->root) return IMAP_QUOTAROOT_NONEXISTENT;
+    if (!quota->root || !quota->id) return IMAP_QUOTAROOT_NONEXISTENT;
 
-    qrlen = strlen(quota->root);
+    qrlen = strlen(quota->id);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
 
     if (mboxname_isusermailbox(quota->root, /*isinbox*/0)) {
@@ -459,6 +459,8 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
     }
 
     dl = dlist_newkvlist(NULL, NULL);
+
+    dlist_setatom(dl, "N", quota->root);
 
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
         struct dlist *item = dlist_newlist(dl, quota_db_names[res]);
@@ -478,7 +480,7 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
 
     dlist_printbuf(dl, 0, &buf);
 
-    r = cyrusdb_store(qdb, quota->root, qrlen, buf.s, buf.len, tid);
+    r = cyrusdb_store(qdb, quota->id, qrlen, buf.s, buf.len, tid);
 
     switch (r) {
     case CYRUSDB_OK:
@@ -490,8 +492,8 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
         break;
 
     default:
-        syslog(LOG_ERR, "DBERROR: error storing %s: %s",
-               quota->root, cyrusdb_strerror(r));
+        syslog(LOG_ERR, "DBERROR: error storing %s (%s): %s",
+               quota->id, quota->root, cyrusdb_strerror(r));
         r = IMAP_IOERROR;
         break;
     }
@@ -697,18 +699,24 @@ EXPORTED void quotadb_init(int myflags)
     cyrus_modules_add(done_cb, NULL);
 }
 
+static char *quotadb_fname(void)
+{
+    const char *fname = config_getstring(IMAPOPT_QUOTA_DB_PATH);
+
+    if (fname) return xstrdup(fname);
+
+    return strconcat(config_dir, FNAME_QUOTADB, (char *)NULL);
+}
+
 EXPORTED void quotadb_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
     int flags = CYRUSDB_CREATE;
 
-    if (!fname)
-        fname = config_getstring(IMAPOPT_QUOTA_DB_PATH);
-
     /* create db file name */
     if (!fname) {
-        tofree = strconcat(config_dir, FNAME_QUOTADB, (char *)NULL);
+        tofree = quotadb_fname();
         fname = tofree;
     }
 
@@ -759,4 +767,71 @@ EXPORTED int quota_is_overquota(const struct quota *quota, enum quota_resource r
     int limit = newquotas ? newquotas[res] : quota->limits[res];
 
     return limit >= 0 && quota->useds[res] >= ((quota_t)limit * quota_units[res]);
+}
+
+EXPORTED int quotadb_upgrade(ptrarray_t *quotaroots)
+{
+    int r;
+    struct buf buf = BUF_INITIALIZER;
+    struct txn *tid = NULL;
+    char *fname;
+    int is_legacy = !strcmp(QDB, "quotalegacy");
+
+    syslog(LOG_NOTICE, "Upgrading and quotas.db...");
+
+    /* create db file names */
+    fname = quotadb_fname();
+    buf_setcstr(&buf, fname);
+    buf_appendcstr(&buf, ".OLD");
+
+    if (is_legacy) {
+        /* convert db file to backup */
+        r = cyrusdb_convert(fname, buf_cstring(&buf), "quotalegacy", "flat");
+        if (r) syslog(LOG_ERR, "DBERROR: quotadb_upgrade: %s", error_message(r));
+    }
+    else {
+        quotadb_close();
+        quotadb_done();
+
+        /* rename db file to backup */
+        r = rename(fname, buf_cstring(&buf));
+        if (r) syslog(LOG_ERR, "error: quotadb_upgrade: %m");
+    }
+    buf_free(&buf);
+    free(fname);
+
+    if (r) return r;
+    
+    /* open a new db file */
+    init_internal();
+
+    /* perform upgrade to new db */
+    int i, n = ptrarray_size(quotaroots);
+    for (i = 0; i < n; i++) {
+        struct quota *q = ptrarray_nth(quotaroots, i);
+
+        if (!q->id) q->id = xstrdup(makeuuid());
+
+        r = quota_write(q, 1/*silent*/, &tid);
+        if (!r && is_legacy)
+            r = cyrusdb_delete(qdb, q->root, strlen(q->root), &tid, 1);
+        if (r) break;
+    }
+
+    /* complete txn on new db */
+    if (tid) {
+        if (r) {
+            quota_abort(&tid);
+        }
+        else {
+            quota_commit(&tid);
+        }
+    }
+
+    quotadb_close();
+
+    if (r) syslog(LOG_ERR, "DBERROR: quotadb_upgrade: %s", error_message(r));
+    else syslog(LOG_NOTICE, "Upgrade of quotas.db complete.");
+
+    return r;
 }

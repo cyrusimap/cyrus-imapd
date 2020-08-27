@@ -73,6 +73,7 @@ enum quota_resource {
         { -1, -1, -1, -1 }
 
 struct quota {
+    char *id;
     char *root;
 
     /* Information in quota entry */
@@ -148,4 +149,7 @@ void quotadb_done(void);
 
 int quota_is_overquota(const struct quota *quota, enum quota_resource res,
                        quota_t newquotas[QUOTA_NUMRESOURCES]);
+
+int quotadb_upgrade(ptrarray_t *qrs);
+
 #endif /* INCLUDED_QUOTA_H */

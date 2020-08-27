@@ -144,6 +144,7 @@ EXPORTED mbentry_t *mboxlist_entry_copy(const mbentry_t *src)
     copy->server = xstrdupnull(src->server);
     copy->acl = xstrdupnull(src->acl);
     copy->uniqueid = xstrdupnull(src->uniqueid);
+    copy->quotaroot = xstrdupnull(src->quotaroot);
 
     copy->legacy_specialuse = xstrdupnull(src->legacy_specialuse);
 
@@ -164,6 +165,7 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
     free(mbentry->server);
     free(mbentry->acl);
     free(mbentry->uniqueid);
+    free(mbentry->quotaroot);
 
     free(mbentry->legacy_specialuse);
 
@@ -272,6 +274,9 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
 
     if (mbentry->server)
         dlist_setatom(dl, "S", mbentry->server);
+
+    if (mbentry->quotaroot)
+        dlist_setatom(dl, "Q", mbentry->quotaroot);
 
     if (mbentry->uidvalidity)
         dlist_setnum32(dl, "V", mbentry->uidvalidity);
@@ -509,6 +514,9 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             else if (!strcmp(key, "P")) {
                 rock->mbentry->partition = xstrdupnull(d->data);
             }
+            else if (!strcmp(key, "Q")) {
+                rock->mbentry->quotaroot = xstrdupnull(d->data);
+            }
             else if (!strcmp(key, "S")) {
                 rock->mbentry->server = xstrdupnull(d->data);
             }
@@ -536,6 +544,7 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
  *  M: _m_time
  *  N: _n_ame
  *  P: _p_artition
+ *  Q: _q_uotaroot
  *  S: _s_erver
  *  T: _t_ype
  *  V: uid_v_alidity
@@ -5136,8 +5145,30 @@ struct upgrade_rock {
     struct db *db;
     struct txn **tid;
     hash_table *ids;
+    ptrarray_t *quotaroots;
+    int *upgrade_quotas;
     int *r;
 };
+
+static int _quota_cb(struct quota *q, void *rock)
+{
+    struct upgrade_rock *urock = (struct upgrade_rock *) rock;
+    struct quota *qr;
+    int res;
+
+    qr = xzmalloc(sizeof(struct quota));
+    qr->root = xstrdup(q->root);
+    if (q->id) {
+        qr->id = xstrdup(q->id);
+        *urock->upgrade_quotas = 0;
+    }
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
+        qr->limits[res] = q->limits[res];
+
+    ptrarray_append(urock->quotaroots, qr);
+
+    return 0;
+}
 
 static int _foreach_cb(void *rock,
                        const char *key, size_t keylen,
@@ -5159,7 +5190,50 @@ static int _foreach_cb(void *rock,
     mbentry->name = xstrndup(key, keylen);
     mbentry->mbtype |= MBTYPE_LEGACY_DIRS;
 
+    /* Find quotaroot for this mailbox */
     int idx = 0;
+    int thisq = -1;
+    size_t domainlen = 0;
+    char *p;
+
+    if (config_virtdomains && (p = strchr(mbentry->name, '!')))
+        domainlen = (p + 1 - mbentry->name);
+
+    int n = ptrarray_size(urock->quotaroots);
+    for (idx = 0; idx < n; idx++) {
+        struct quota *q = ptrarray_nth(urock->quotaroots, idx);
+
+        /* have we already passed the name, then there can
+         * be no further matches */
+        if (strcmp(q->root, mbentry->name) > 0) break;
+
+        /* is the mailbox within this root? */
+        if (mboxname_is_prefix(mbentry->name, q->root) ||
+            (strlen(q->root) == domainlen &&
+             !strncmp(mbentry->name, q->root, domainlen))) {
+            /* fantastic, but don't return yet, we may find
+             * a more exact match */
+            thisq = idx;
+        }
+    }
+
+    if (thisq >= 0) {
+        struct quota *q = ptrarray_nth(urock->quotaroots, thisq);
+
+        if (!q->id) {
+            /* Give the quotaroot an id */
+            if (!strcmp(q->root, mbentry->name))
+                q->id = xstrdup(mbentry->uniqueid);
+            else
+                q->id = xstrdup(makeuuid());
+        }
+        
+        mbentry->quotaroot = xstrdup(q->id);
+    }
+
+    
+    /* Add this mailbox to the hash */
+    idx = 0;
     ptrarray_t *pa = hash_lookup(mbentry->uniqueid, urock->ids);
     if (!pa) {
         pa = ptrarray_new();
@@ -5209,7 +5283,11 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     struct db *backup = NULL;
     struct txn *tid = NULL;
     hash_table ids = HASH_TABLE_INITIALIZER;
-    struct upgrade_rock urock = { NULL, NULL, &tid, &ids, &r };
+    ptrarray_t quotaroots = PTRARRAY_INITIALIZER;
+    int upgrade_quotas = 1;
+    struct quota *q;
+    struct upgrade_rock urock =
+        { NULL, NULL, &tid, &ids, &quotaroots, &upgrade_quotas, &r };
     char *fname;
 
     if (upgraded) *upgraded = 0;
@@ -5222,6 +5300,8 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     if (r != CYRUSDB_DONE) return r;
     else if (!do_upgrade) return 0;
 
+    syslog(LOG_NOTICE, "Upgrading mailboxes.db...");
+
     /* create db file names */
     fname = mboxlist_fname();
     buf_setcstr(&buf, fname);
@@ -5230,8 +5310,18 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     /* rename db file to backup */
     r = rename(fname, buf_cstring(&buf));
     free(fname);
-    if (r) goto done;
+    if (r) {
+        syslog(LOG_ERR, "error: mboxlist_upgrade: %m");
+        goto done;
+    }
     
+    /* gather quota roots */
+    r = quota_foreach(NULL, &_quota_cb, &urock, NULL);
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: failed building quota root list");
+        goto done;
+    }
+
     /* open backup db file */
     r = cyrusdb_open(DB, buf_cstring(&buf), 0, &backup);
 
@@ -5257,6 +5347,8 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     hash_enumerate(&ids, &_upgrade_cb, &urock);
     free_hash_table(&ids, NULL);
 
+    if (!r && upgrade_quotas) r = quotadb_upgrade(&quotaroots);
+
     /* complete txn on new db */
     if (tid) {
         if (r) {
@@ -5268,14 +5360,24 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
         if (r2) {
             syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_upgrade: %s",
                    r ? "aborting" : "committing", cyrusdb_strerror(r2));
+            if (!r) r = r2;
         }
     }
 
     mboxlist_close();
 
-    if (!r && upgraded) *upgraded = 1;
+    if (!r) {
+        syslog(LOG_NOTICE, "Upgrade of mailboxes.db complete.");
+
+        if (upgraded) *upgraded = 1;
+    }
 
   done:
+    while ((q = ptrarray_remove(&quotaroots, -1))) {
+        quota_free(q);
+        free(q);
+    }
+    ptrarray_fini(&quotaroots);
     buf_free(&buf);
 
     return r;
@@ -5323,7 +5425,7 @@ static int mboxlist_upgrade_subs(const char *subsfname, struct db **subs)
     struct buf buf = BUF_INITIALIZER;
     struct db *newsubs = NULL;
     struct txn *tid = NULL;
-    struct upgrade_rock urock = { &buf, NULL, &tid, NULL, NULL };
+    struct upgrade_rock urock = { &buf, NULL, &tid, NULL, NULL, NULL, NULL };
 
     /* check if we need to upgrade */
     r = cyrusdb_foreach(*subs, "", 0, NULL, _check_subs_cb, &do_upgrade, NULL);
