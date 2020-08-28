@@ -341,6 +341,7 @@ int buf_findchar(const struct buf *, unsigned int off, int c);
 int buf_findline(const struct buf *buf, const char *line);
 void buf_init_ro(struct buf *buf, const char *base, size_t len);
 void buf_initm(struct buf *buf, char *base, int len);
+void buf_initmcstr(struct buf *buf, char *str);
 void buf_init_ro_cstr(struct buf *buf, const char *str);
 void buf_refresh_mmap(struct buf *buf, int onceonly, int fd,
                    const char *fname, size_t size, const char *mboxname);
