@@ -1534,6 +1534,14 @@ EXPORTED void buf_initm(struct buf *buf, char *base, int len)
 }
 
 /*
+ * Initialise a struct buf to point to writable c string str.
+ */
+EXPORTED void buf_initmcstr(struct buf *buf, char *str)
+{
+    buf_initm(buf, str, strlen(str));
+}
+
+/*
  * Initialise a struct buf to point to a read-only C string.
  */
 EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)

@@ -98,6 +98,23 @@ static void test_initm(void)
     buf_free(&b);
 }
 
+static void test_initmcstr(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    /* data thanks to hipsteripsum.me */
+    char *s = xstrdup("terry richardson fanny pack");
+
+    buf_initmcstr(&b, s);
+    CU_ASSERT_EQUAL(b.len, strlen(s));
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT(!memcmp(b.s, s, strlen(s)));
+
+    /* we don't free(s) - the buf_free() should do that */
+    buf_free(&b);
+}
+
 static void test_long(void)
 {
     struct buf b = BUF_INITIALIZER;
