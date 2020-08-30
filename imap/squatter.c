@@ -108,6 +108,9 @@ static int reindex_minlevel = 0;
 static const char *temp_root_dir = NULL;
 static search_text_receiver_t *rx = NULL;
 
+static strarray_t *skip_domains = NULL;
+static strarray_t *skip_users = NULL;
+
 static const char *name_starts_from = NULL;
 
 static void shut_down(int code) __attribute__((noreturn));
@@ -192,7 +195,13 @@ static void become_daemon(void)
 
 static int should_index(const char *name)
 {
+    // skip early users
+    if (strcmpsafe(name, name_starts_from) < 0)
+        return 0;
+
+    int ret = 1;
     mbentry_t *mbentry = NULL;
+    mbname_t *mbname = mbname_from_intname(name);
     /* Skip remote mailboxes */
     int r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
@@ -206,29 +215,46 @@ static int should_index(const char *name)
                extname, error_message(r));
 
         free(extname);
-        return 0;
+        ret = 0;
+        goto done;
     }
 
     // skip remote or not-real mailboxes
     if (mbentry->mbtype & (MBTYPE_REMOTE|MBTYPE_DELETED|MBTYPE_INTERMEDIATE)) {
-        mboxlist_entry_free(&mbentry);
-        return 0;
+        ret = 0;
+        goto done;
     }
 
     // skip email submissions
     if (mboxname_issubmissionmailbox(mbentry->name, mbentry->mbtype)) {
-        mboxlist_entry_free(&mbentry);
-        return 0;
+        ret = 0;
+        goto done;
     }
 
     // skip COLLECTION mailboxes (just files)
     if (mbentry->mbtype & MBTYPE_COLLECTION) {
-        mboxlist_entry_free(&mbentry);
-        return 0;
+        ret = 0;
+        goto done;
     }
 
+    // skip listed domains
+    if (mbname_domain(mbname) && skip_domains &&
+        strarray_find(skip_domains, mbname_domain(mbname), 0) > 0) {
+        ret = 0;
+        goto done;
+    }
+
+    // skip listed users
+    if (mbname_userid(mbname) && skip_users &&
+        strarray_find(skip_users, mbname_userid(mbname), 0) > 0) {
+        ret = 0;
+        goto done;
+    }
+
+done:
+    mbname_free(&mbname);
     mboxlist_entry_free(&mbentry);
-    return 1;
+    return ret;
 }
 
 /* ====================================================================== */
@@ -338,12 +364,6 @@ again:
 static int addmbox(const mbentry_t *mbentry, void *rock)
 {
     strarray_t *sa = (strarray_t *) rock;
-
-    if (strcmpsafe(mbentry->name, name_starts_from) < 0)
-        return 0;
-    if (mboxname_isdeletedmailbox(mbentry->name, NULL))
-        return 0;
-
     strarray_append(sa, mbentry->name);
     return 0;
 }
@@ -546,6 +566,7 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
 
     for (i = 0; i < strarray_size(mboxnames); i++) {
         const char *mboxname = strarray_nth(mboxnames, i);
+        if (!should_index(mboxname)) continue;
         char *userid = mboxname_to_userid(mboxname);
         if (!userid) continue;
 
@@ -618,8 +639,7 @@ static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
 
     while (sync_log_reader_getitem(slr, args) == 0) {
         if (!strcmp(args[0], "APPEND")) {
-            if (!mboxname_isdeletedmailbox(args[1], NULL))
-                strarray_add(mboxnames, args[1]);
+            strarray_append(mboxnames, args[1]);
         }
         else if (!strcmp(args[0], "USER"))
             mboxlist_usermboxtree(args[1], NULL, addmbox, mboxnames, /*flags*/0);
@@ -644,6 +664,8 @@ static int do_synclogfile(const char *synclogfile)
 
     /* sort mboxnames for locality of reference in file processing mode */
     strarray_sort(mboxnames, cmpstringp_raw);
+    /* and deduplicate */
+    strarray_uniq(mboxnames);
 
     signals_poll();
 
@@ -1030,6 +1052,12 @@ int main(int argc, char **argv)
     }
 
     index_text_extractor_init(NULL);
+
+    const char *conf;
+    conf = config_getstring(IMAPOPT_SEARCH_INDEX_SKIP_DOMAINS);
+    if (conf) skip_domains = strarray_split(conf, " ", STRARRAY_TRIM);
+    conf = config_getstring(IMAPOPT_SEARCH_INDEX_SKIP_USERS);
+    if (conf) skip_users = strarray_split(conf, " ", STRARRAY_TRIM);
 
     switch (mode) {
     case UNKNOWN:
