@@ -1,5 +1,7 @@
 #include "cyr_qsort_r.h"
 
+#ifndef cyr_qsort_r
+
 #ifdef HAVE_FUNCTION_NESTING
 
 EXPORTED void cyr_qsort_r(void *base, size_t nmemb, size_t size,
@@ -35,4 +37,6 @@ EXPORTED void cyr_qsort_r(void *base, size_t nmemb, size_t size,
     qsort_r_compar = NULL;
 }
 
-#endif
+#endif /* HAVE_FUNCTION_NESTING */
+
+#endif /* cyr_qsort_r */
