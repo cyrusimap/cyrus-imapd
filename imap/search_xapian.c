@@ -3683,7 +3683,12 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     if (!tochange || !tochange->count) goto out;
 
     /* also, track which ones to reindex */
-    reindexitems = activefile_filter(active, reindextiers, mbentry->partition);
+    if (reindextiers) {
+        reindexitems = activefile_filter(srctiers, reindextiers, mbentry->partition);
+    }
+    else {
+        reindexitems = strarray_new();
+    }
 
     if (tochange->count == 1 && srctiers->count == 1 &&
         (flags & SEARCH_COMPACT_COPYONE) && !strcmp(desttier, strarray_nth(srctiers, 0))) {
