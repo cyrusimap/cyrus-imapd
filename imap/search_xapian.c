@@ -3714,8 +3714,10 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
         char *target = strarray_join(tochange, ",");
         char *activestr = strarray_join(orig, ",");
         char *reindexstr = strarray_join(reindexitems, ",");
+        const char *reindex = (flags & SEARCH_COMPACT_REINDEX)
+                            ? "ALL" : reindexstr ? reindexstr : "NONE";
         printf("compressing %s to %s for %s (active %s) (reindex %s)\n",
-               target, newdest, mboxname, activestr, reindexstr);
+               target, newdest, mboxname, activestr, reindex);
         free(reindexstr);
         free(activestr);
         free(target);
