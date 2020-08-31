@@ -3428,24 +3428,27 @@ static int reindex_mb(void *rock,
                 if (r) goto done; /* means we failed to open a file,
                                      so we'll fail later anyway */
             }
+            else {
+                // remove it from the list now so we don't try to index it later
+                message_unref(&msg);
+                ptrarray_set(&batch, i, NULL);
+            }
         }
 
         /* index the messages */
         for (i = base ; i < batchend ; i++) {
             message_t *msg = ptrarray_nth(&batch, i);
+            if (!msg) continue;
 
-            uint8_t indexlevel = is_indexed((search_text_receiver_t *)tr, msg);
-            if (indexlevel == 0 || ((indexlevel & SEARCH_INDEXLEVEL_PARTIAL) && !allow_partials)) {
-                r = index_getsearchtext(msg, NULL, &tr->super.super, getsearchtext_flags);
-                if (!r) filter->numindexed++;
-            }
-
+            r = index_getsearchtext(msg, NULL, &tr->super.super, getsearchtext_flags);
             // we must unref the message and then zero out the entry in the ptrarray
             // now, because index_getsearchtext will have mapped the file in, and even
             // if we decided not to index it, we won't need it again
             message_unref(&msg);
             ptrarray_set(&batch, i, NULL);
             if (r) goto done;
+
+            filter->numindexed++;
         }
 
         // the next write will start a new transaction if uncommitted == 0
