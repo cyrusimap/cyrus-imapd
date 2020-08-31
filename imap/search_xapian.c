@@ -3677,6 +3677,9 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     tochange = activefile_filter(active, srctiers, mbentry->partition);
     if (!tochange || !tochange->count) goto out;
 
+    /* also, track which ones to reindex */
+    reindexitems = activefile_filter(active, reindextiers, mbentry->partition);
+
     if (tochange->count == 1 && srctiers->count == 1 &&
         (flags & SEARCH_COMPACT_COPYONE) && !strcmp(desttier, strarray_nth(srctiers, 0))) {
         if (verbose) {
@@ -3696,8 +3699,6 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     /* register the target name first, and put it at the end of the file */
     newdest = activefile_nextname(active, desttier);
     strarray_push(active, newdest);
-
-    reindexitems = activefile_filter(active, reindextiers, mbentry->partition);
 
     if (verbose) {
         char *target = strarray_join(tochange, ",");
@@ -3804,7 +3805,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
             toreindex = strarray_dup(srcdirs);
         }
         else {
-            toreindex = activefile_resolve(mboxname, mbentry->partition, existing, 0, &reindexitems);
+            toreindex = activefile_resolve(mboxname, mbentry->partition, reindexitems, 0, NULL);
             xapian_check_if_needs_reindex(srcdirs, toreindex, flags & SEARCH_COMPACT_ONLYUPGRADE);
             for (i = 0; i < srcdirs->count; i++) {
                 const char *thisdir = strarray_nth(srcdirs, i);
