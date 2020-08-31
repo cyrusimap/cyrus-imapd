@@ -650,6 +650,7 @@ cunit_TESTS = \
 	cunit/msgid.testc \
 	cunit/parseaddr.testc \
 	cunit/parse.testc \
+	cunit/procinfo.testc \
 	cunit/prot.testc \
 	cunit/ptrarray.testc \
 	cunit/quota.testc \
@@ -790,6 +791,7 @@ include_HEADERS = \
 	lib/murmurhash2.h \
 	lib/nonblock.h \
 	lib/parseaddr.h \
+	lib/procinfo.h \
 	lib/retry.h \
 	lib/rfc822tok.h \
 	lib/signals.h \
@@ -1496,6 +1498,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/murmurhash.c \
 	lib/mkgmtime.c \
 	lib/parseaddr.c \
+	lib/procinfo.c \
 	lib/prot.c \
 	lib/ptrarray.c \
 	lib/rfc822tok.c \
