@@ -3388,7 +3388,9 @@ static int reindex_mb(void *rock,
     tr->activetiers = strarray_dup(filter->desttiers);
     // include all the new databases too
     strarray_cat(&alldirs, &filter->temptargets);
-    strarray_cat(&alldirs, tr->activedirs);
+    // skip the first one, there's no data in there!
+    for (i = 1; i < strarray_size(filter->destpaths); i++)
+        strarray_append(&alldirs, strarray_nth(filter->destpaths, i));
 
     r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw, tr->mode, /*nosync*/1);
     if (r) goto done;
