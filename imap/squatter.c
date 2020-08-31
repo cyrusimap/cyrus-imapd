@@ -105,7 +105,6 @@ static int sleepmicroseconds = 0;
 static int allow_partials = 0;
 static int reindex_partials = 0;
 static int reindex_minlevel = 0;
-static const char *temp_root_dir = NULL;
 static search_text_receiver_t *rx = NULL;
 
 static strarray_t *skip_domains = NULL;
@@ -563,13 +562,15 @@ static int do_list(const strarray_t *mboxnames)
     return r;
 }
 
-static int compact_mbox(const char *userid, const strarray_t *srctiers,
+static int compact_mbox(const char *userid, const strarray_t *reindextiers,
+                        const strarray_t *srctiers,
                         const char *desttier, int flags)
 {
-    return search_compact(userid, temp_root_dir, srctiers, desttier, flags);
+    return search_compact(userid, reindextiers, srctiers, desttier, flags);
 }
 
-static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
+static int do_compact(const strarray_t *mboxnames, const strarray_t *reindextiers,
+                      const strarray_t *srctiers,
                       const char *desttier, int flags)
 {
     char *prev_userid = NULL;
@@ -588,7 +589,7 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
 
         int retry;
         for (retry = 1; retry <= 3; retry++) {
-            int r = compact_mbox(userid, srctiers, desttier, flags);
+            int r = compact_mbox(userid, reindextiers, srctiers, desttier, flags);
             if (!r) break;
             xsyslog(LOG_ERR, "IOERROR: failed to compact",
                              "userid=<%s> retry=<%d> error=<%s>",
@@ -883,6 +884,7 @@ int main(int argc, char **argv)
     int user_mode = 0;
     int compact_flags = 0;
     strarray_t *srctiers = NULL;
+    strarray_t *reindextiers = NULL;
     const char *desttier = NULL;
     char *errstr = NULL;
     enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
@@ -951,10 +953,6 @@ int main(int argc, char **argv)
             sleepmicroseconds = (atof(optarg) * 1000000);
             break;
 
-        case 'T':               /* temporary root directory for search */
-            temp_root_dir = optarg;
-            break;
-
         case 'd':               /* foreground (with -R) */
             background = 0;
             break;
@@ -1019,6 +1017,12 @@ int main(int argc, char **argv)
         case 't':
             if (mode != UNKNOWN && mode != COMPACT) usage(argv[0]);
             srctiers = strarray_split(optarg, ",", 0);
+            mode = COMPACT;
+            break;
+
+        case 'T':
+            if (mode != UNKNOWN && mode != COMPACT) usage(argv[0]);
+            reindextiers = strarray_split(optarg, ",", 0);
             mode = COMPACT;
             break;
 
@@ -1104,7 +1108,7 @@ int main(int argc, char **argv)
     case COMPACT:
         if (recursive_flag && optind == argc) usage(argv[0]);
         expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
-        r = do_compact(&mboxnames, srctiers, desttier, compact_flags);
+        r = do_compact(&mboxnames, reindextiers, srctiers, desttier, compact_flags);
         break;
     case AUDIT:
         if (recursive_flag && optind == argc) usage(argv[0]);

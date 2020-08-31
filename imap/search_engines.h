@@ -176,7 +176,7 @@ struct search_engine {
     char *(*describe_internalised)(void *);
     void (*free_internalised)(void *);
     int (*list_files)(const char *userid, strarray_t *);
-    int (*compact)(const char *userid, const char *tempdir,
+    int (*compact)(const char *userid, const strarray_t *reindextiers,
                    const strarray_t *srctiers, const char *desttier,
                    int flags);
     int (*deluser)(const char *userid);
@@ -230,7 +230,7 @@ int search_end_snippets(search_text_receiver_t *rx);
 char *search_describe_internalised(void *internalised);
 void search_free_internalised(void *internalised);
 int search_list_files(const char *userid, strarray_t *);
-int search_compact(const char *userid, const char *tempdir,
+int search_compact(const char *userid, const strarray_t *reindextiers,
                    const strarray_t *srctiers, const char *desttier, int verbose);
 int search_deluser(const char *userid);
 int search_check_config(char **errstr);

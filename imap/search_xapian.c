@@ -3608,7 +3608,7 @@ static void cleanup_xapiandirs(const char *mboxname, const char *partition, stra
     strarray_fini(&bogus);
 }
 
-static int compact_dbs(const char *userid, const char *tempdir,
+static int compact_dbs(const char *userid, const strarray_t *reindextiers,
                        const strarray_t *srctiers, const char *desttier,
                        int flags)
 {
@@ -3620,6 +3620,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     strarray_t *newdirs = NULL;
     strarray_t *active = NULL;
     strarray_t *tochange = NULL;
+    strarray_t *reindexitems = NULL;
     strarray_t *orig = NULL;
     strarray_t *toreindex = NULL;
     strarray_t *tocompact = NULL;
@@ -3628,7 +3629,6 @@ static int compact_dbs(const char *userid, const char *tempdir,
     char *tempdestdir = NULL;
     char *tempreindexdir = NULL;
     strarray_t *newtiers = NULL;
-    struct buf mytempdir = BUF_INITIALIZER;
     char *namelock_fname = NULL;
     int verbose = SEARCH_VERBOSE(flags);
     int created_something = 0;
@@ -3697,10 +3697,15 @@ static int compact_dbs(const char *userid, const char *tempdir,
     newdest = activefile_nextname(active, desttier);
     strarray_push(active, newdest);
 
+    reindexitems = activefile_filter(active, reindextiers, mbentry->partition);
+
     if (verbose) {
         char *target = strarray_join(tochange, ",");
         char *activestr = strarray_join(orig, ",");
-        printf("compressing %s to %s for %s (active %s)\n", target, newdest, mboxname, activestr);
+        char *reindexstr = strarray_join(reindexitems, ",");
+        printf("compressing %s to %s for %s (active %s) (reindex %s)\n",
+               target, newdest, mboxname, activestr, reindexstr);
+        free(reindexstr);
         free(activestr);
         free(target);
     }
@@ -3760,21 +3765,12 @@ static int compact_dbs(const char *userid, const char *tempdir,
      */
     mappedfile_unlock(activefile);
 
-    if (tempdir) {
-        /* run the compress to tmpfs */
-        buf_printf(&mytempdir, "%s/xapian.%d", tempdir, getpid());
-    }
-    else {
-        /* or just directly in place */
-        buf_printf(&mytempdir, "%s", tempdestdir);
-    }
-
     /* make sure the destination path exists */
-    r = cyrus_mkdir(buf_cstring(&mytempdir), 0755);
+    r = cyrus_mkdir(tempdestdir, 0755);
     if (r) goto out;
     /* and doesn't contain any junk */
-    removedir(buf_cstring(&mytempdir));
-    r = mkdir(buf_cstring(&mytempdir), 0755);
+    removedir(tempdestdir);
+    r = mkdir(tempdestdir, 0755);
     if (r) goto out;
 
     if (srcdirs->count == 1 && (flags & SEARCH_COMPACT_COPYONE)) {
@@ -3802,13 +3798,13 @@ static int compact_dbs(const char *userid, const char *tempdir,
          * so also add the new tier so the indexes match up */
         strarray_unshift(newtiers, newdest);
 
-        toreindex = strarray_new();
         tocompact = strarray_new();
         if ((flags & SEARCH_COMPACT_REINDEX)) {
             /* all databases to be reindexed */
-            strarray_cat(toreindex, srcdirs);
+            toreindex = strarray_dup(srcdirs);
         }
         else {
+            toreindex = activefile_resolve(mboxname, mbentry->partition, existing, 0, &reindexitems);
             xapian_check_if_needs_reindex(srcdirs, toreindex, flags & SEARCH_COMPACT_ONLYUPGRADE);
             for (i = 0; i < srcdirs->count; i++) {
                 const char *thisdir = strarray_nth(srcdirs, i);
@@ -3826,7 +3822,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
 
         // first, we'll reindex anything that needs reindexing to a temporary directory
         if (toreindex->count) {
-            tempreindexdir = strconcat(buf_cstring(&mytempdir), ".REINDEX", (char *)NULL);
+            tempreindexdir = strconcat(tempdestdir, ".REINDEX", (char *)NULL);
             // add this directory to the repack target as the first entry point
             strarray_unshift(newdirs, tempreindexdir);
             r = search_reindex(userid, toreindex, newdirs, newtiers, flags);
@@ -3846,38 +3842,24 @@ static int compact_dbs(const char *userid, const char *tempdir,
         // then we'll compact together all the source databases
         if (tocompact->count) {
             // and now we're ready to compact to the real tempdir
-            strarray_unshift(newdirs, buf_cstring(&mytempdir));
+            strarray_unshift(newdirs, tempdestdir);
 
             if (flags & SEARCH_COMPACT_FILTER) {
                 r = search_filter(userid, tocompact, newdirs, newtiers, flags);
                 if (r) {
-                    printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
+                    printf("ERROR: failed to filter to %s", tempdestdir);
                     goto out;
                 }
             }
             else {
                 r = search_compress(userid, tocompact, newdirs, newtiers, flags);
                 if (r) {
-                    printf("ERROR: failed to compact to %s", buf_cstring(&mytempdir));
+                    printf("ERROR: failed to compact to %s", tempdestdir);
                     goto out;
                 }
             }
 
-            if (!xapstat(buf_cstring(&mytempdir))) {
-                /* move the tmpfs files to a temporary name in our target directory */
-                if (tempdir) {
-                    if (verbose) {
-                        printf("copying from tempdir to destination\n");
-                    }
-                    cyrus_mkdir(tempdestdir, 0755);
-                    removedir(tempdestdir);
-                    r = copy_files(buf_cstring(&mytempdir), tempdestdir);
-                    removedir(buf_cstring(&mytempdir));
-                    if (r) {
-                        printf("Failed to rsync from %s to %s", buf_cstring(&mytempdir), tempdestdir);
-                        goto out;
-                    }
-                }
+            if (!xapstat(tempdestdir)) {
                 created_something = 1;
             }
         }
@@ -3975,7 +3957,6 @@ out:
     strarray_free(toreindex);
     strarray_free(tochange);
     strarray_free(tocompact);
-    buf_free(&mytempdir);
     free(namelock_fname);
     free(newdest);
     free(destdir);

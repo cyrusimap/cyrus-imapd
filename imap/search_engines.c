@@ -309,13 +309,13 @@ EXPORTED int search_list_files(const char *userid,
 }
 
 EXPORTED int search_compact(const char *userid,
-                            const char *tempdir,
+                            const strarray_t *reindextiers,
                             const strarray_t *srctiers,
                             const char *desttier,
                             int flags)
 {
     const struct search_engine *se = search_engine();
-    return (se->compact ? se->compact(userid, tempdir, srctiers, desttier, flags) : 0);
+    return (se->compact ? se->compact(userid, reindextiers, srctiers, desttier, flags) : 0);
 }
 
 EXPORTED int search_deluser(const char *userid)
