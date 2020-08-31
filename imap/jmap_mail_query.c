@@ -957,7 +957,7 @@ HIDDEN matchmime_t *jmap_email_matchmime_init(const struct buf *mime, json_t **e
     const char *paths[2];
     paths[0] = matchmime->dbpath;
     paths[1] = NULL;
-    r = xapian_dbw_open(paths, &matchmime->dbw, 0);
+    r = xapian_dbw_open(paths, &matchmime->dbw, /*mode*/0, /*nosync*/1);
     if (r) {
         syslog(LOG_ERR, "jmap_matchmime: can't open search backend: %s",
                 error_message(r));

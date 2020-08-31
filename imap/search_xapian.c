@@ -2473,7 +2473,7 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
     if (!ptrarray_size(&tr->super.segs)) goto out;
 
     if (!tr->dbw) {
-        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode, /*nosync*/0);
         if (r) goto out;
     }
 
@@ -2628,7 +2628,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
     if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
         /* open the DB now, we need it to check if messages are indexed */
-        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode, /*nosync*/0);
         if (r) goto out;
     }
 
@@ -3340,7 +3340,7 @@ static int reindex_mb(void *rock,
     /* open the DB */
     tr = (xapian_update_receiver_t *)begin_update(verbose);
     tr->mode = XAPIAN_DBW_XAPINDEXED; // always use XAPINDEXED for reindex, so we reindex the same emails
-    r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw, tr->mode);
+    r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw, tr->mode, /*nosync*/1);
     if (r) goto done;
     tr->super.mailbox = mailbox;
 
