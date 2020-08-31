@@ -2204,13 +2204,13 @@ If all partitions are over that limit, this feature is not used anymore.
   Deprecated. No longer used.
  */
 
-{ "search_index_skip_domains", NULL, STRING, "3.3.0" }
+{ "search_index_skip_domains", NULL, STRING, "3.3.1" }
 /*
  A space separated list of domains - if set, any users in the listed domains
  will be skipped when indexing.
  */
 
-{ "search_index_skip_users", NULL, STRING, "3.3.0" }
+{ "search_index_skip_users", NULL, STRING, "3.3.1" }
 /*
  A space separated list of usernames - if set, any users in the list
  will be skipped when indexing.
