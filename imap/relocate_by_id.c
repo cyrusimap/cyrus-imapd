@@ -162,12 +162,11 @@ int main(int argc, char **argv)
 
         /* Make a list of all mailboxes in tree */
         if (dousers)
-            mboxlist_usermboxtree(argv[i], NULL, find_p, mboxlist, flags);
+            r = mboxlist_usermboxtree(argv[i], NULL, find_p, mboxlist, flags);
         else
-            mboxlist_mboxtree(argv[i], find_p, mboxlist, flags);
+            r = mboxlist_mboxtree(argv[i], find_p, mboxlist, flags);
 
         /* Process each mailbox in reverse order (children first) */
-        r = 0;
         struct buf part_buf = BUF_INITIALIZER;
         while ((mbentry = ptrarray_pop(mboxlist))) {
             const char *partition = mbentry->partition;
@@ -274,7 +273,7 @@ int main(int argc, char **argv)
                             "Failed to create namelock for %s: %s\n",
                             extname, error_message(r));
                     mboxlist_entry_free(&mbentry);
-                    continue;
+                    goto cleanup;
                 }
             }
 
@@ -291,20 +290,6 @@ int main(int argc, char **argv)
                                  strarray_nth(oldpaths, j));
                 }
                 if (namelock) mboxname_release(&namelock);
-            }
-            else if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                if (!quiet) printf("\tPromoting intermediary: %s\n", extname);
-
-                if (!nochanges) {
-                    r = mboxlist_promote_intermediary(mbentry->name);
-                    if (namelock) mboxname_release(&namelock);
-
-                    if (r) {
-                        fprintf(stderr,
-                                "\tFailed to promote intermediary %s: %s\n",
-                                extname, error_message(r));
-                    }
-                }
             }
             else if (!nochanges) {
                 /* Rewrite mbentry */
@@ -346,6 +331,7 @@ int main(int argc, char **argv)
                 }
             }
 
+          cleanup:
             mboxlist_entry_free(&mbentry);
             strarray_free(oldpaths);
             strarray_free(newpaths);
@@ -387,8 +373,37 @@ static int find_p(const mbentry_t *mbentry, void *rock)
 {
     ptrarray_t *mboxlist = (ptrarray_t *) rock;
 
-    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS)
-        ptrarray_push(mboxlist, mboxlist_entry_copy(mbentry));
+    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+        mbentry_t *mbentry_copy = NULL;
+
+        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            char *extname =
+                mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
+            int r = 0;
+
+            if (!quiet) printf("\nPromoting intermediary: %s\n", extname);
+
+            if (!nochanges) {
+                r = mboxlist_promote_intermediary(mbentry->name);
+                if (r) {
+                    fprintf(stderr,
+                            "\tFailed to promote intermediary %s: %s\n",
+                            extname, error_message(r));
+                }
+                else {
+                    r = mboxlist_lookup(mbentry->name, &mbentry_copy, NULL);
+                }
+            }
+            free(extname);
+
+            if (r) return r;
+        }
+        else {
+            mbentry_copy = mboxlist_entry_copy(mbentry);
+        }
+
+        ptrarray_push(mboxlist, mbentry_copy);
+    }
 
     return 0;
 }
