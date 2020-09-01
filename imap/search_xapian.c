@@ -3684,7 +3684,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
 
     /* also, track which ones to reindex */
     if (reindextiers) {
-        reindexitems = activefile_filter(srctiers, reindextiers, mbentry->partition);
+        reindexitems = activefile_filter(tochange, reindextiers, mbentry->partition);
     }
     else {
         reindexitems = strarray_new();
