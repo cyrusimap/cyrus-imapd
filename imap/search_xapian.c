@@ -3667,7 +3667,14 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     namelock_fname = xapiandb_namelock_fname_from_userid(userid);
 
     /* Get an exclusive namelock */
-    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
+    int lockflags = LOCK_EXCLUSIVE;
+    if (flags & SEARCH_COMPACT_NONBLOCKING) lockflags |= LOCK_NONBLOCK;
+    r = mboxname_lock(namelock_fname, &xapiandb_namelock, lockflags);
+    if (r == IMAP_MAILBOX_LOCKED) {
+        // that's OK, we asked for it!
+        r = 0;
+        goto out;
+    }
     if (r) {
         syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
                namelock_fname);

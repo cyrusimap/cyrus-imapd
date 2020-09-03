@@ -163,6 +163,7 @@ struct search_engine {
 #define SEARCH_COMPACT_XAPINDEXED (1<<9) /* use XAPIAN index */
 #define SEARCH_ATTACHMENTS_IN_ANY (1<<10) /* search attachments in ANY part */
 #define SEARCH_COMPACT_ALLOW_PARTIALS (1<<11) /* allow partially indexed messages */
+#define SEARCH_COMPACT_NONBLOCKING (1<<12) /* skip if locked */
     search_builder_t *(*begin_search)(struct mailbox *, int opts);
     void (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
