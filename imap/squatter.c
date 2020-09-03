@@ -892,11 +892,15 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:N:RUXZT:S:Fde:f:mn:riavpPL:Az:t:ouhl")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:N:RUBXZT:S:Fde:f:mn:riavpPL:Az:t:ouhl")) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
             mode = AUDIT;
+            break;
+
+        case 'B':
+            compact_flags |= SEARCH_COMPACT_NONBLOCKING;
             break;
 
         case 'C':               /* alt config file */
