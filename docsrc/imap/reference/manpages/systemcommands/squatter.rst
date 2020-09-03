@@ -24,7 +24,7 @@ Synopsis
     **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] [ **-i** ] [ **-N** *name* ] [ **-S** *seconds* ] [ **-r** ] [ **-Z** ] **-u** *user*...
     **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] **-R** [ **-n** *channel* ] [ **-d** ] [ **-S** *seconds* ] [ **-Z** ]
     **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] **-f** *synclogfile* [ **-S** *seconds* ] [ **-Z** ]
-    **squatter** [ **-C** *config-file* ] [ **-v** ] **-t** *srctier(s)*... **-z** *desttier* [ **-F** ] [ **-U** ] [ **-T** *reindextiers* ] [ **-X** ] [ **-o** ] [ **-S** *seconds* ] [ **-u** *user*... ]
+    **squatter** [ **-C** *config-file* ] [ **-v** ] **-t** *srctier(s)*... **-z** *desttier* [ **-B** ] [ **-F** ] [ **-U** ] [ **-T** *reindextiers* ] [ **-X** ] [ **-o** ] [ **-S** *seconds* ] [ **-u** *user*... ]
 
 
 
@@ -145,6 +145,13 @@ Options
 
     In rolling mode, don't background and do emit log messages on
     standard error.  Useful for debugging.
+    |v3-new-feature|
+
+.. option:: -B
+
+    In compact mode, use non-blocking lock to start and skip any
+    users who have their xapianactive file locked at the time (i.e
+    another reindex task)
     |v3-new-feature|
 
 .. option:: -F
