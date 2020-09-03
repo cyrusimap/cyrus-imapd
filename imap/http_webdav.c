@@ -520,6 +520,9 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
     if (tgt->mbentry) {
         /* Just return the mboxname (MKCOL or dest of COPY/MOVE collection) */
         tgt->mbentry->name = xstrdup(mboxname);
+
+        /* XXX  Hack to get around MKCOL/PROPPATCH check */
+        tgt->collection = last;
     }
     else if (*mboxname) {
         /* Locate the mailbox */
