@@ -73,6 +73,7 @@ extern int xapian_dbw_cancel_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
 extern int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part);
 extern int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel);
+extern unsigned long xapian_dbw_total_length(xapian_dbw_t *dbw);
 extern uint8_t xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
 
 /* query-side interface */

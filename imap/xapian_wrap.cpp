@@ -1255,6 +1255,19 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
     return r;
 }
 
+unsigned long xapian_dbw_total_length(xapian_dbw_t *dbw)
+{
+    unsigned long res = 0;
+    try {
+        res = dbw->database->get_total_length();
+    }
+    catch (const Xapian::Error &err) {
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception total_size: %s",
+                    err.get_description().c_str());
+    }
+    return res;
+}
+
 uint8_t xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype)
 {
     struct buf buf = BUF_INITIALIZER;
