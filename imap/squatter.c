@@ -237,6 +237,12 @@ static int should_index(const char *name)
         goto done;
     }
 
+    // skip deleted mailboxes
+    if (mbname_isdeleted(mbname)) {
+        ret = 0;
+        goto done;
+    }
+
     // skip listed domains
     if (mbname_domain(mbname) && skip_domains &&
         strarray_find(skip_domains, mbname_domain(mbname), 0) >= 0) {
