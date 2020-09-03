@@ -395,6 +395,11 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
             mboxlist_mboxtree(intname, addmbox, sa, flags);
             free(intname);
         }
+
+        /* sort mboxnames */
+        strarray_sort(sa, cmpstringp_raw);
+        /* and deduplicate */
+        strarray_uniq(sa);
     }
 }
 
@@ -746,6 +751,11 @@ static void do_rolling(const char *channel)
         mboxnames = read_sync_log_items(slr);
 
         if (mboxnames->count) {
+            /* sort mboxnames for locality of reference in file processing mode */
+            strarray_sort(mboxnames, cmpstringp_raw);
+            /* and deduplicate */
+            strarray_uniq(mboxnames);
+
             /* have some due items in the queue, try to index them */
             rx = search_begin_update(verbose);
             if (NULL == rx) {
