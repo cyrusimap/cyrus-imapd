@@ -82,6 +82,8 @@
 #define ACTIVEFILE_METANAME     "xapianactive"
 #define XAPIAN_NAME_LOCK_PREFIX "$XAPIAN$"
 
+// this seems to translate for 4Gb-ish  - units are 10 bytes?
+#define XAPIAN_REINDEX_TEMPDIR_SIZE 419430400
 #define XAPIAN_REINDEX_TEMPDIR_COUNT 64000
 
 /* Name of columns */
@@ -3459,7 +3461,8 @@ static int reindex_mb(void *rock,
             tr->commits++;
 
             // we don't want to blow out the temporary space, so let's split every so often!
-            if (filter->numindexed > XAPIAN_REINDEX_TEMPDIR_COUNT) {
+            if (filter->numindexed > XAPIAN_REINDEX_TEMPDIR_COUNT ||
+                xapian_dbw_total_length(tr->dbw) > XAPIAN_REINDEX_TEMPDIR_SIZE) {
                 // close the database, move the data, open a new database with a new target!  Yikes
                 xapian_dbw_close(tr->dbw);
                 // we move the existing temp database to the same partition as the target, then
