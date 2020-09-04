@@ -2313,7 +2313,8 @@ int xapian_filter(const char *dest, const char **sources,
 
     try {
         /* create a destination database */
-        Xapian::WritableDatabase destdb {dest, Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS};
+        int flags = Xapian::DB_DANGEROUS|Xapian::DB_NO_SYNC|Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS;
+        Xapian::WritableDatabase destdb {dest, flags};
 
         /* With multiple databases as above, the docids are interleaved, so it
          * might be worth trying to open each source and copy its documents to
