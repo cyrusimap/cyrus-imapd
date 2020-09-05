@@ -571,10 +571,25 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     }
 
     if (keeptime) {
+        int ret;
+#if defined(HAVE_FUTIMENS)
+        struct timespec ts[2];
+
+        ts[0] = sbuf.st_atim;
+        ts[1] = sbuf.st_mtim;
+        ret = futimens(destfd, ts);
+#elif defined(HAVE_FUTIMES)
         struct timeval tv[2];
+
         TIMESPEC_TO_TIMEVAL(&tv[0], &sbuf.st_atim);
         TIMESPEC_TO_TIMEVAL(&tv[1], &sbuf.st_mtim);
-        if (futimes(destfd, tv)) {
+        ret = futimes(destfd, tv);
+#else
+        close(destfd);
+        destfd = -1;
+        ret = utimes(to, tv);
+#endif
+        if (ret) {
             syslog(LOG_ERR, "IOERROR: setting times on %s: %m", to);
             r = -1;
         }
