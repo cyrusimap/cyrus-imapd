@@ -148,6 +148,13 @@ extern const unsigned char convert_to_uppercase[256];
 /* Calculate the number of entries in a vector */
 #define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
 
+#ifndef TIMESPEC_TO_TIMEVAL
+#define TIMESPEC_TO_TIMEVAL(tv, ts) { \
+        (tv)->tv_sec = (ts)->tv_sec; \
+        (tv)->tv_usec = (ts)->tv_nsec / 1000; \
+}
+#endif
+
 typedef struct keyvalue {
     char *key, *value;
 } keyvalue;
