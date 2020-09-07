@@ -132,10 +132,21 @@ static int user_deleteacl(char *name, int matchlen, int category, void* rock)
 }
 #endif
 
-EXPORTED const char *user_sieve_path(const char *user)
+EXPORTED const char *user_sieve_path(const char *inuser)
 {
     static char sieve_path[2048];
     char hash, *domain;
+    char *user = xstrdupnull(inuser);
+    char *p;
+
+    /* Make sure it's a real userid, with no ^ escaping!
+     * XXX It's kinda bogus to be handling this here; it should be fixed
+     * XXX much further up somewhere, but that may require deep surgery.
+     */
+    for (p = user; p && *p; p++) {
+        if (*p == '^')
+            *p = '.';
+    }
 
     if (config_virtdomains && (domain = strchr(user, '@'))) {
         char d = (char) dir_hash_c(domain+1, config_fulldirhash);
@@ -153,6 +164,7 @@ EXPORTED const char *user_sieve_path(const char *user)
                  config_getstring(IMAPOPT_SIEVEDIR), hash, user);
     }
 
+    free(user);
     return sieve_path;
 }
 
