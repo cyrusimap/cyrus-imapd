@@ -618,6 +618,8 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
         TIMESPEC_TO_TIMEVAL(&tv[1], &sbuf.st_mtim);
         ret = futimes(destfd, tv);
 #else
+        struct timeval tv[2];
+
         close(destfd);
         destfd = -1;
         ret = utimes(to, tv);
