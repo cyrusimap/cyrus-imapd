@@ -76,6 +76,7 @@ static int sync_log_suppressed = 0;
 static strarray_t *channels = NULL;
 static strarray_t *unsuppressable = NULL;
 
+struct backend *sync_rightnow_backend = NULL;
 const char *rightnow_channel = NULL;
 static struct buf *rightnow_log = NULL;
 

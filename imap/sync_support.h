@@ -51,6 +51,7 @@
 #include "prot.h"
 #include "seen.h"
 #include "mailbox.h"
+#include "sync_log.h"
 
 extern struct protocol_t imap_csync_protocol;
 extern struct protocol_t csync_protocol;
@@ -426,6 +427,17 @@ int read_annotations(const struct mailbox *,
 
 int sync_mailbox_version_check(struct mailbox **mailboxp);
 
+/* =====================  client-side sync  ============================= */
+
+struct sync_client_state {
+    struct backend *backend;
+    const char *servername;
+    const char *channel;
+    struct buf tagbuf;
+    int flags;
+};
+#define SYNC_CLIENT_STATE_INITIALIZER { NULL, NULL, NULL, BUF_INITIALIZER, 0 }
+
 /* =====================  server-side sync  ============================= */
 
 struct sync_state {
@@ -485,21 +497,19 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_NO_COPYBACK (1<<4)
 #define SYNC_FLAG_BATCH (1<<5)
 
-int sync_do_seen(const char *userid, char *uniqueid, struct backend *sync_be,
-                 const char **channelp, unsigned flags);
-int sync_do_quota(const char *root, struct backend *sync_be,
-                  const char **channelp, unsigned flags);
-int sync_do_annotation(char *mboxname, struct backend *sync_be,
-                       const char **channelp, unsigned flags);
-int sync_do_mailboxes(struct sync_name_list *mboxname_list,
-                      const char *topart, struct backend *sync_be,
-                      const char **channelp, unsigned flags);
-int sync_do_user(const char *userid, const char *topart,
-                 struct backend *sync_be, const char **channelp, unsigned flags);
-int sync_do_meta(const char *userid, struct backend *sync_be, unsigned flags);
-int sync_set_sub(const char *userid, const char *mboxname, int add,
-                 struct backend *sync_be, unsigned flags);
-int sync_response_parse(struct protstream *sync_in, const char *cmd,
+int sync_do_seen(struct sync_client_state *sync_cs, const char *userid, char *uniqueid);
+int sync_do_quota(struct sync_client_state *sync_cs, const char *root);
+int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname);
+int sync_do_mailboxes(struct sync_client_state *sync_cs,
+                      struct sync_name_list *mboxname_list,
+                      const char *topart, int flags);
+int sync_do_user(struct sync_client_state *sync_cs,
+                 const char *userid, const char *topart);
+int sync_do_meta(struct sync_client_state *sync_cs, const char *userid);
+int sync_do_sub(struct sync_client_state *sync_cs,
+                const char *userid, const char *mboxname, int add);
+
+int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
                         struct sync_folder_list *folder_list,
                         struct sync_name_list *sub_list,
                         struct sync_sieve_list *sieve_list,
@@ -508,33 +518,34 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
 int sync_find_reserve_messages(struct mailbox *mailbox,
                                uint32_t fromuid, uint32_t touid,
                                struct sync_msgid_list *part_list);
-int sync_reserve_partition(char *partition,
+int sync_reserve_partition(struct sync_client_state *sync_cs, char *partition,
                            struct sync_folder_list *replica_folders,
-                           struct sync_msgid_list *part_list,
-                           struct backend *sync_be);
-int sync_update_mailbox(struct sync_folder *local,
-                        struct sync_folder *remote,
-                        const char *topart,
-                        struct sync_reserve_list *reserve_guids,
-                        struct backend *sync_be, unsigned flags);
-int sync_folder_delete(const char *mboxname,
-                       struct backend *sync_be, unsigned flags);
-int sync_do_user_quota(struct sync_name_list *master_quotaroots,
-                       struct sync_quota_list *replica_quota,
-                       struct backend *sync_be, unsigned flags);
-int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
-                     struct backend *sync_be, unsigned flags);
-int sync_do_user_seen(const char *userid, struct sync_seen_list *replica_seen,
-                      struct backend *sync_be, unsigned flags);
-int sync_do_user_sieve(const char *userid,
-                       struct sync_sieve_list *replica_sieve,
-                       struct backend *sync_be, unsigned flags);
+                           struct sync_msgid_list *part_list);
 
-int sync_connect_channel(struct backend **backendp,
-                         const char *channel,
-                         const char *servername,
-                         int verbose, struct buf *tagbuf);
-void sync_disconnect(struct backend **backendp);
+int sync_do_update_mailbox(struct sync_client_state *sync_cs,
+                           struct sync_folder *local,
+                           struct sync_folder *remote,
+                           const char *topart,
+                           struct sync_reserve_list *reserve_guids);
+
+int sync_do_folder_delete(struct sync_client_state *sync_cs,
+                          const char *mboxname);
+int sync_do_user_quota(struct sync_client_state *sync_cs,
+                       struct sync_name_list *master_quotaroots,
+                       struct sync_quota_list *replica_quota);
+int sync_do_user_sub(struct sync_client_state *sync_cs, const char *userid,
+                     struct sync_name_list *replica_subs);
+int sync_do_user_seen(struct sync_client_state *sync_cs, const char *userid,
+                      struct sync_seen_list *replica_seen);
+int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
+                       struct sync_sieve_list *replica_sieve);
+
+int sync_do_restart(struct sync_client_state *sync_cs);
+
+int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr);
+
+int sync_connect(struct sync_client_state *sync_cs);
+void sync_disconnect(struct sync_client_state *sync_cs);
 
 
 /* ====================================================================== */
