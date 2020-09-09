@@ -65,6 +65,7 @@
 #include "cyr_lock.h"
 #include "mailbox.h"
 #include "retry.h"
+#include "sync_support.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -76,8 +77,7 @@ static int sync_log_suppressed = 0;
 static strarray_t *channels = NULL;
 static strarray_t *unsuppressable = NULL;
 
-struct backend *sync_rightnow_backend = NULL;
-const char *rightnow_channel = NULL;
+struct sync_client_state rightnow_sync_cs;
 static struct buf *rightnow_log = NULL;
 
 static int sync_log_initialized = 0;
@@ -127,7 +127,9 @@ EXPORTED void sync_log_init(void)
     conf = config_getstring(IMAPOPT_SYNC_RIGHTNOW_CHANNEL);
     if (conf) {
         if (strcmp(conf, "\"\""))
-            rightnow_channel = conf;
+            rightnow_sync_cs.channel = conf;
+        rightnow_sync_cs.servername = sync_get_config(rightnow_sync_cs.channel, "sync_host");
+        rightnow_sync_cs.flags = SYNC_FLAG_LOGGING;
         rightnow_log = buf_new();
     }
 
@@ -237,26 +239,46 @@ static void sync_log_base(const char *channel, const char *string)
     xclose(fd);
 }
 
-EXPORTED int sync_log_checkpoint(struct protstream *clientin __attribute__((unused)))
+static struct prot_waitevent *
+sync_rightnow_timeout(struct protstream *s __attribute__((unused)),
+                      struct prot_waitevent *ev __attribute__((unused)),
+                      void *rock __attribute__((unused)))
+{
+    syslog(LOG_DEBUG, "sync_rightnow_timeout()");
+
+    /* too long since we last used the syncer - disconnect */
+    sync_disconnect(&rightnow_sync_cs);
+
+    return NULL;
+}
+
+
+EXPORTED int sync_log_checkpoint(struct protstream *clientin)
 {
     if (!channels) return 0;
     if (!rightnow_log) return 0;
     if (!buf_len(rightnow_log)) return 0;
 
+    time_t when = time(NULL) + 30;
+    if (rightnow_sync_cs.backend) {
+        if (rightnow_sync_cs.backend->timeout->mark) {
+            rightnow_sync_cs.backend->timeout->mark = when;
+        }
+    }
+    else {
+        syslog(LOG_DEBUG, "sync_rightnow_connect(%s)", rightnow_sync_cs.servername);
+        sync_connect(&rightnow_sync_cs);
+        if (!rightnow_sync_cs.backend) {
+            syslog(LOG_ERR, "SYNCERROR sync_rightnow: failed to connect to server");
+            return 0; // dammit, but the show must go on
+        }
+        rightnow_sync_cs.backend->timeout
+            = prot_addwaitevent(clientin, when, sync_rightnow_timeout, NULL);
+    }
+
+    int r = sync_do_reader(&rightnow_sync_cs, reader);
+
     buf_reset(rightnow_log);
-
-    int r;
-    struct buf cmd = BUF_INITIALIZER;
-    // XXX - this will be replaced with something that does a direct backend connection
-    buf_printf(&cmd, "%s/sync_client", SBIN_DIR);
-
-    if (rightnow_channel)
-       r = run_command(buf_cstring(&cmd), "-C", config_filename, "-n", rightnow_channel, "-r", "-X", "-o", NULL);
-    else
-       r = run_command(buf_cstring(&cmd), "-C", config_filename, "-r", "-X", "-o", NULL);
-    if (r) syslog(LOG_ERR, "IOERROR: failed to exec sync_client %s", error_message(r));
-
-    buf_free(&cmd);
 
     return r;
 }
