@@ -276,7 +276,14 @@ EXPORTED int sync_log_checkpoint(struct protstream *clientin)
             = prot_addwaitevent(clientin, when, sync_rightnow_timeout, NULL);
     }
 
-    int r = sync_do_reader(&rightnow_sync_cs, reader);
+    sync_log_reader_t *slr = sync_log_reader_create_with_content(buf_cstring(rightnow_log));
+
+    int r = sync_log_reader_begin(slr);
+    if (!r)
+        r = sync_do_reader(&rightnow_sync_cs, slr);
+
+    sync_log_reader_end(slr);
+    sync_log_reader_free(slr);
 
     buf_reset(rightnow_log);
 
