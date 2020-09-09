@@ -3677,7 +3677,8 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
 
     /* nothing to do if there's no userid */
     if (!userid || !userid[0]) {
-        syslog(LOG_WARNING, "ignoring attempt to %s() without userid", __func__);
+        xsyslog(LOG_WARNING, "ignoring attempt to sync_apply_unuser() without userid",
+                             NULL);
         return 0;
     }
 

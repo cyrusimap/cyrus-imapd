@@ -832,9 +832,10 @@ static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, str
 
         if (!r && config_auditlog) {
             /* XXX is there a difference between "" and NULL? */
-            syslog(LOG_NOTICE, "auditlog: acl sessionid=<%s> "
-                               "mailbox=<%s> uniqueid=<%s> mbtype=<%s> "
-                               "oldacl=<%s> acl=<%s> foldermodseq=<%llu>",
+            xsyslog(LOG_NOTICE, "auditlog: acl",
+                                "sessionid=<%s> "
+                                "mailbox=<%s> uniqueid=<%s> mbtype=<%s> "
+                                "oldacl=<%s> acl=<%s> foldermodseq=<%llu>",
                    session_id(),
                    name, mbentry->uniqueid, mboxlist_mbtype_to_string(mbentry->mbtype),
                    old ? old->acl : "NONE", mbentry->acl, mbentry->foldermodseq);

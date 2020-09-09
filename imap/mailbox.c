@@ -713,14 +713,18 @@ static int mailbox_cacherecord_internal(struct mailbox *mailbox,
 
 err:
     if (!cachefile)
-        syslog(LOG_ERR, "IOERROR: missing cache file for %s uid %u",
-               mailbox->name, record->uid);
+        xsyslog(LOG_ERR, "IOERROR: missing cache file",
+                         "mailbox=<%s> uid=<%u>",
+                         mailbox->name, record->uid);
     else if (!record->cache_offset)
-        syslog(LOG_ERR, "IOERROR: missing cache offset for %s uid %u",
-               mailbox->name, record->uid);
+        xsyslog(LOG_ERR, "IOERROR: missing cache offset",
+                         "mailbox=<%s> uid=<%u>",
+                         mailbox->name, record->uid);
     else if (r)
-        syslog(LOG_ERR, "IOERROR: invalid cache record for %s uid %u (%s) %d at %llu",
-               mailbox->name, record->uid, error_message(r), crc, (long long unsigned)record->cache_offset);
+        xsyslog(LOG_ERR, "IOERROR invalid cache record",
+                         "mailbox=<%s> uid=<%u> error=<%s> crc=<%d> cache_offset=<%llu>",
+                         mailbox->name, record->uid, error_message(r),
+                         crc, (unsigned long long) record->cache_offset);
 
     if (rewrite == MBCACHE_NOPARSE)
         return r;
@@ -730,16 +734,18 @@ err:
     /* parse directly into the cache for this record */
     const char *fname = mailbox_record_fname(mailbox, record);
     if (!fname) {
-        syslog(LOG_ERR, "IOERROR: no spool file for %s uid %u",
-               mailbox->name, record->uid);
+        xsyslog(LOG_ERR, "IOERROR: no spool file",
+                         "mailbox=<%s> uid=<%u>",
+                         mailbox->name, record->uid);
         return IMAP_IOERROR;
     }
 
     /* parse into the file and zero the cache offset */
     r = message_parse(fname, backdoor);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to parse message for %s uid %u",
-               mailbox->name, record->uid);
+        xsyslog(LOG_ERR, "IOERROR: failed to parse message",
+                         "mailbox=<%s> uid=<%u>",
+                         mailbox->name, record->uid);
         return r;
     }
     backdoor->cache_offset = 0;
@@ -747,8 +753,9 @@ err:
     if (rewrite == MBCACHE_REWRITE) {
         r = mailbox_append_cache(mailbox, backdoor);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to append cache for %s uid %u",
-                   mailbox->name, record->uid);
+            xsyslog(LOG_ERR, "IOERROR: failed to append cache",
+                             "mailbox=<%s> uid=<%u>",
+                             mailbox->name, record->uid);
             return r;
         }
     }
