@@ -394,25 +394,34 @@ EXPORTED void sync_log_channel(const char *channel, const char *fmt, ...)
 struct sync_log_reader
 {
     /*
-     * This object works in three modes:
+     * This object works in four modes:
      *
      * - initialised with a sync log channel
      *      - standard mode used by sync_client
      *      - slr->log_file != NULL
      *      - slr->work_file is the name of a rename()d
      *        file that needs to be unlink()ed.
+     *      - slr->content_buf is empty
      *
      * - initialised with a saved file name
      *      - used by the sync_client -f option
      *      - slr->log_file = NULL
      *      - slr->work_file is the file given us by the user
      *        which it's important that we do not unlink()
+     *      - slr->content_buf is empty
      *
      * - initialised with a file descriptor
      *      - slr->log_file = NULL
      *      - slr->work_file = NULL
      *      - slr->fd is a file descriptor, probably stdin,
      *        and possibly a pipe
+     *      - slr->content_buf is empty
+     *      - we cannot unlink() anything even if we wanted to.
+     *
+     * - initialised with the content of a file
+     *      - slr->log_file = NULL
+     *      - slr->work_file = NULL
+     *      - slr->content_buf has a length
      *      - we cannot unlink() anything even if we wanted to.
      */
     char *log_file;
@@ -423,6 +432,7 @@ struct sync_log_reader
     struct buf type;
     struct buf arg1;
     struct buf arg2;
+    struct buf contentbuf;
 };
 
 static sync_log_reader_t *sync_log_reader_alloc(void)
@@ -466,6 +476,13 @@ EXPORTED sync_log_reader_t *sync_log_reader_create_with_filename(const char *fil
     return slr;
 }
 
+EXPORTED sync_log_reader_t *sync_log_reader_create_with_content(const char *content)
+{
+    sync_log_reader_t *slr = sync_log_reader_alloc();
+    buf_init_ro_cstr(&slr->contentbuf, content);
+    return slr;
+}
+
 /*
  * Create a sync log reader object which will read from the given file
  * descriptor 'fd'.  The file descriptor must be open for reading and
@@ -494,6 +511,7 @@ EXPORTED void sync_log_reader_free(sync_log_reader_t *slr)
     buf_free(&slr->type);
     buf_free(&slr->arg1);
     buf_free(&slr->arg2);
+    buf_free(&slr->contentbuf);
     free(slr);
 }
 
@@ -519,6 +537,11 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
     if (slr->input) {
         r = sync_log_reader_end(slr);
         if (r) return r;
+    }
+
+    if (buf_len(&slr->contentbuf)) {
+        slr->input = prot_readmap(buf_base(&slr->contentbuf), buf_len(&slr->contentbuf));
+        return 0;
     }
 
     if (stat(slr->work_file, &sbuf) == 0) {

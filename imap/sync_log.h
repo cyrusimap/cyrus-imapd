@@ -127,6 +127,7 @@ void sync_log_channel(const char *channel, const char *fmt, ...);
 typedef struct sync_log_reader sync_log_reader_t;
 
 sync_log_reader_t *sync_log_reader_create_with_channel(const char *channel);
+sync_log_reader_t *sync_log_reader_create_with_content(const char *content);
 sync_log_reader_t *sync_log_reader_create_with_filename(const char *filename);
 sync_log_reader_t *sync_log_reader_create_with_fd(int fd);
 void sync_log_reader_free(sync_log_reader_t *slr);
