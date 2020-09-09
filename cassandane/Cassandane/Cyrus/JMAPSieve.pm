@@ -334,4 +334,51 @@ sub test_sieve_validate
     $self->assert_null($res->[3][1]{errorDescription});
 }
 
+sub download
+{
+    my ($self, $accountid, $blobid) = @_;
+    my $jmap = $self->{jmap};
+
+    my $uri = $jmap->downloaduri($accountid, $blobid);
+    my %Headers;
+    $Headers{'Authorization'} = $jmap->auth_header();
+    my %getopts = (headers => \%Headers);
+    my $res = $jmap->ua->get($uri, \%getopts);
+    xlog $self, "JMAP DOWNLOAD @_ " . Dumper($res);
+    return $res;
+}
+
+sub test_sieve_download
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $script = <<EOF;
+require "imap4flags";\r
+keep :flags "\\flagged";\r
+EOF
+
+    my $jmap = $self->{jmap};
+
+    xlog "create script";
+    my $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    content => "$script"
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+
+    my $blobId = $res->[0][1]{created}{"1"}{blobId};
+
+    xlog $self, "download script blob";
+    $res = $self->download('cassandane', $blobId);
+    $self->assert_str_equals('200', $res->{status});
+    $self->assert_str_equals($script, $res->{content});
+}
+
 1;
