@@ -85,7 +85,7 @@
 #include "backend.h"
 #include "proc.h"
 #include "proxy.h"
-#include "sync_log.h"
+#include "sync_support.h"
 #include "seen.h"
 #include "userdeny.h"
 
@@ -628,7 +628,7 @@ void shut_down(int code)
     assert(!open_mailboxes_exist());
 
     // clear any final log items
-    sync_log_checkpoint(popd_in);
+    sync_checkpoint(popd_in);
 
     if (popd_in) {
         prot_NONBLOCK(popd_in);
@@ -972,7 +972,7 @@ static void cmdloop(void)
                 mailbox_unlock_index(popd_mailbox, NULL);
 
 done:
-                sync_log_checkpoint(popd_in);
+                sync_checkpoint(popd_in);
 
                 prot_printf(popd_out, "+OK\r\n");
                 telemetry_rusage( popd_userid );

@@ -51,10 +51,12 @@
 void sync_log_init(void);
 void sync_log_suppress(void);
 void sync_log_done(void);
-int sync_log_checkpoint(struct protstream *clientin);
 
 void sync_log(const char *fmt, ...);
 void sync_log_channel(const char *channel, const char *fmt, ...);
+
+struct buf *sync_log_rightnow_buf();
+
 
 #define sync_log_user(user) \
     sync_log("USER %s\n", user)

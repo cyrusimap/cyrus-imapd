@@ -90,7 +90,7 @@
 #include "backend.h"
 #include "prometheus.h"
 #include "proxy.h"
-#include "sync_log.h"
+#include "sync_support.h"
 #include "userdeny.h"
 #include "message.h"
 #include "idle.h"
@@ -1996,7 +1996,7 @@ static void cmdloop(struct http_connection *conn)
         /* make sure nothing leaked */
         assert(!open_mailboxes_exist());
 
-        sync_log_checkpoint(conn->pin);
+        sync_checkpoint(conn->pin);
 
         /* Check for input from client */
         do {

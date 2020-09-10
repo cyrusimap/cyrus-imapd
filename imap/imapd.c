@@ -1272,7 +1272,7 @@ static void cmdloop(void)
         /* ensure we didn't leak anything! */
         assert(!open_mailboxes_exist());
 
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         /* Flush any buffered output */
         prot_flush(imapd_out);
@@ -4172,7 +4172,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
         }
         prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
     } else {
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
@@ -6043,7 +6043,7 @@ notflagsdammit:
                     tag, modified, error_message(r));
     }
     else {
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s%s\r\n",
                     tag, modified, error_message(IMAP_OK_COMPLETED));
@@ -6789,7 +6789,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
             free(copyuid);
     }
     else {
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
@@ -6839,7 +6839,7 @@ static void cmd_expunge(char *tag, char *sequence)
 
     new = index_highestmodseq(imapd_index);
 
-    sync_log_checkpoint(imapd_in);
+    sync_checkpoint(imapd_in);
 
     prot_printf(imapd_out, "%s OK ", tag);
     if (new > old)
@@ -7252,7 +7252,7 @@ localcreate:
         }
     }
 
-    sync_log_checkpoint(imapd_in);
+    sync_checkpoint(imapd_in);
 
     prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
 
@@ -7296,7 +7296,7 @@ static int delmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
     }
 
     // obnoxious "every folder" for debugging
-    sync_log_checkpoint(imapd_in);
+    sync_checkpoint(imapd_in);
 
     return 0;
 }
@@ -7428,7 +7428,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         if (config_mupdate_server)
             kick_mupdate();
 
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
@@ -7526,7 +7526,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
         }
 
         // this is obnoxiously often, and only temporarily here to look for bugs!
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "* OK rename %s %s\r\n",
                     oldextname, newextname);
@@ -7934,7 +7934,7 @@ submboxes:
         if (rename_user)
             sync_log_user(newuser);
 
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
@@ -8342,7 +8342,7 @@ static void cmd_changesub(char *tag, char *namespace, char *name, int add)
         prot_printf(imapd_out, "%s NO %s: %s\r\n", tag, cmd, error_message(r));
     }
     else {
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
@@ -8658,7 +8658,7 @@ static void cmd_setacl(char *tag, const char *name,
         if (config_mupdate_server)
             kick_mupdate();
 
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
@@ -9010,7 +9010,7 @@ out:
         return;
     }
 
-    sync_log_checkpoint(imapd_in);
+    sync_checkpoint(imapd_in);
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
                 error_message(IMAP_OK_COMPLETED));
@@ -10606,7 +10606,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
@@ -10668,7 +10668,7 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
-        sync_log_checkpoint(imapd_in);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
@@ -14457,7 +14457,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
 
     // chaining!
-    sync_log_checkpoint(imapd_in);
+    sync_checkpoint(imapd_in);
 
     prot_printf(imapd_out, "%s %s\r\n", tag, resp);
 
@@ -14592,7 +14592,7 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
     }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
-    sync_log_checkpoint(imapd_in);
+    sync_checkpoint(imapd_in);
     prot_printf(imapd_out, "%s %s\r\n", tag, resp);
 
     /* Reset inactivity timer in case we spent a long time processing data */

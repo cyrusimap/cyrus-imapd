@@ -1173,6 +1173,8 @@ imap_lmtpd_SOURCES = \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/spool.c \
+	imap/sync_support.c \
+	imap/sync_support.h \
 	master/service.c
 
 nodist_imap_lmtpd_SOURCES = imap/lmtp_err.c
@@ -1227,8 +1229,10 @@ imap_nntpd_SOURCES = \
 	imap/smtpclient.h \
 	imap/spool.c \
 	imap/spool.h \
+	imap/sync_support.c \
+	imap/sync_support.h \
 	master/service.c
-imap_nntpd_LDADD = $(LD_SERVER_ADD)
+imap_nntpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 nodist_imap_httpd_SOURCES = \
 	imap/http_caldav_js.h \
@@ -1284,7 +1288,7 @@ imap_httpd_SOURCES = \
 	master/masterconf.c \
 	master/service.c
 
-imap_httpd_LDADD = $(LD_SERVER_ADD)
+imap_httpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 if JMAP
 BUILT_SOURCES += \
@@ -1343,6 +1347,8 @@ imap_pop3d_SOURCES = \
 	imap/mutex_fake.c \
 	imap/pop3d.c \
 	imap/proxy.c \
+	imap/sync_support.c \
+	imap/sync_support.h \
 	master/service.c
 
 if AUTOCREATE

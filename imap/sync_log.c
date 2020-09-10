@@ -65,7 +65,6 @@
 #include "cyr_lock.h"
 #include "mailbox.h"
 #include "retry.h"
-#include "sync_support.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -77,7 +76,6 @@ static int sync_log_suppressed = 0;
 static strarray_t *channels = NULL;
 static strarray_t *unsuppressable = NULL;
 
-struct sync_client_state rightnow_sync_cs;
 static struct buf *rightnow_log = NULL;
 
 static int sync_log_initialized = 0;
@@ -126,10 +124,6 @@ EXPORTED void sync_log_init(void)
 
     conf = config_getstring(IMAPOPT_SYNC_RIGHTNOW_CHANNEL);
     if (conf) {
-        if (strcmp(conf, "\"\""))
-            rightnow_sync_cs.channel = conf;
-        rightnow_sync_cs.servername = sync_get_config(rightnow_sync_cs.channel, "sync_host");
-        rightnow_sync_cs.flags = SYNC_FLAG_LOGGING;
         rightnow_log = buf_new();
     }
 
@@ -144,8 +138,6 @@ EXPORTED void sync_log_suppress(void)
 EXPORTED void sync_log_done(void)
 {
     if (rightnow_log) {
-        if (buf_len(rightnow_log))
-            sync_log_checkpoint(NULL);
         buf_free(rightnow_log);
         rightnow_log = NULL;
     }
@@ -239,55 +231,12 @@ static void sync_log_base(const char *channel, const char *string)
     xclose(fd);
 }
 
-static struct prot_waitevent *
-sync_rightnow_timeout(struct protstream *s __attribute__((unused)),
-                      struct prot_waitevent *ev __attribute__((unused)),
-                      void *rock __attribute__((unused)))
+EXPORTED struct buf *sync_log_rightnow_buf()
 {
-    syslog(LOG_DEBUG, "sync_rightnow_timeout()");
-
-    /* too long since we last used the syncer - disconnect */
-    sync_disconnect(&rightnow_sync_cs);
-
-    return NULL;
-}
-
-
-EXPORTED int sync_log_checkpoint(struct protstream *clientin)
-{
-    if (!channels) return 0;
-    if (!rightnow_log) return 0;
-    if (!buf_len(rightnow_log)) return 0;
-
-    time_t when = time(NULL) + 30;
-    if (rightnow_sync_cs.backend) {
-        if (rightnow_sync_cs.backend->timeout->mark) {
-            rightnow_sync_cs.backend->timeout->mark = when;
-        }
-    }
-    else {
-        syslog(LOG_DEBUG, "sync_rightnow_connect(%s)", rightnow_sync_cs.servername);
-        sync_connect(&rightnow_sync_cs);
-        if (!rightnow_sync_cs.backend) {
-            syslog(LOG_ERR, "SYNCERROR sync_rightnow: failed to connect to server");
-            return 0; // dammit, but the show must go on
-        }
-        rightnow_sync_cs.backend->timeout
-            = prot_addwaitevent(clientin, when, sync_rightnow_timeout, NULL);
-    }
-
-    sync_log_reader_t *slr = sync_log_reader_create_with_content(buf_cstring(rightnow_log));
-
-    int r = sync_log_reader_begin(slr);
-    if (!r)
-        r = sync_do_reader(&rightnow_sync_cs, slr);
-
-    sync_log_reader_end(slr);
-    sync_log_reader_free(slr);
-
-    buf_reset(rightnow_log);
-
-    return r;
+    if (!channels) return NULL;
+    if (!rightnow_log) return NULL;
+    if (!buf_len(rightnow_log)) return NULL;
+    return rightnow_log;
 }
 
 static const char *sync_quote_name(const char *name)

@@ -98,6 +98,8 @@
 
 static int opt_force = 0; // FIXME
 
+struct sync_client_state rightnow_sync_cs;
+
 /* protocol definitions */
 static char *imap_sasl_parsesuccess(char *str, const char **status);
 static void imap_postcapability(struct backend *s);
@@ -7423,4 +7425,61 @@ EXPORTED void sync_disconnect(struct sync_client_state *sync_cs)
     backend_disconnect(sync_cs->backend);
     sync_cs->backend = NULL;
     buf_free(&sync_cs->tagbuf);
+}
+
+static struct prot_waitevent *
+sync_rightnow_timeout(struct protstream *s __attribute__((unused)),
+                      struct prot_waitevent *ev __attribute__((unused)),
+                      void *rock __attribute__((unused)))
+{
+    syslog(LOG_DEBUG, "sync_rightnow_timeout()");
+
+    /* too long since we last used the syncer - disconnect */
+    sync_disconnect(&rightnow_sync_cs);
+
+    return NULL;
+}
+
+EXPORTED int sync_checkpoint(struct protstream *clientin)
+{
+    struct buf *buf = sync_log_rightnow_buf();
+    if (!buf) return 0;
+
+    time_t when = time(NULL) + 30;
+    if (rightnow_sync_cs.backend) {
+        if (rightnow_sync_cs.backend->timeout->mark) {
+            rightnow_sync_cs.backend->timeout->mark = when;
+        }
+    }
+    else {
+        const char *conf = config_getstring(IMAPOPT_SYNC_RIGHTNOW_CHANNEL);
+        if (conf && strcmp(conf, "\"\""))
+            rightnow_sync_cs.channel = conf;
+        rightnow_sync_cs.servername = sync_get_config(rightnow_sync_cs.channel, "sync_host");
+        rightnow_sync_cs.flags = SYNC_FLAG_LOGGING;
+        syslog(LOG_DEBUG, "sync_rightnow_connect(%s)", rightnow_sync_cs.servername);
+        sync_connect(&rightnow_sync_cs);
+        if (!rightnow_sync_cs.backend) {
+            syslog(LOG_ERR, "SYNCERROR sync_rightnow: failed to connect to server: %s",
+                   rightnow_sync_cs.servername);
+            // dammit, but the show must go on
+            buf_reset(buf);
+            return 0;
+        }
+        rightnow_sync_cs.backend->timeout
+            = prot_addwaitevent(clientin, when, sync_rightnow_timeout, NULL);
+    }
+
+    sync_log_reader_t *slr = sync_log_reader_create_with_content(buf_cstring(buf));
+
+    int r = sync_log_reader_begin(slr);
+    if (!r) sync_do_reader(&rightnow_sync_cs, slr);
+
+    sync_log_reader_end(slr);
+    sync_log_reader_free(slr);
+
+    // mark these items consumed!
+    buf_reset(buf);
+
+    return 0;
 }

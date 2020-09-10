@@ -960,7 +960,7 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
     };
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
-    sync_log_checkpoint(sync_in);
+    sync_checkpoint(sync_in);
     prot_printf(sync_out, "%s\r\n", resp);
 }
 
@@ -991,6 +991,6 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
     };
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
-    sync_log_checkpoint(sync_in);
+    sync_checkpoint(sync_in);
     prot_printf(sync_out, "%s\r\n", resp);
 }

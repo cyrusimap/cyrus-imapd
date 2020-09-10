@@ -89,7 +89,7 @@
 #include "prometheus.h"
 #include "prot.h"
 #include "proxy.h"
-#include "sync_log.h"
+#include "sync_support.h"
 #include "telemetry.h"
 #include "times.h"
 #include "tls.h"
@@ -974,7 +974,7 @@ skipdelivery:
     if (notifyheader) free(notifyheader);
 
     // checkpoint the replication before we return to reply to the client
-    sync_log_checkpoint(deliver_in);
+    sync_checkpoint(deliver_in);
 
     return 0;
 }
