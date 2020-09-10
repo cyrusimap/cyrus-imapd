@@ -7422,8 +7422,17 @@ connected:
 
 EXPORTED void sync_disconnect(struct sync_client_state *sync_cs)
 {
+    if (!sync_cs->backend) return;
+
+    if (sync_cs->backend->timeout)
+        prot_removewaitevent(sync_cs->clientin, sync_cs->backend->timeout);
+    sync_cs->clientin = NULL;
+    sync_cs->backend->timeout = NULL;
+
     backend_disconnect(sync_cs->backend);
     sync_cs->backend = NULL;
+
+    // backend may have put stuff here, free it so we don't leak memory
     buf_free(&sync_cs->tagbuf);
 }
 
@@ -7436,6 +7445,7 @@ sync_rightnow_timeout(struct protstream *s __attribute__((unused)),
 
     /* too long since we last used the syncer - disconnect */
     sync_disconnect(&rightnow_sync_cs);
+
 
     return NULL;
 }
@@ -7466,6 +7476,7 @@ EXPORTED int sync_checkpoint(struct protstream *clientin)
             buf_reset(buf);
             return 0;
         }
+        rightnow_sync_cs.clientin = clientin;
         rightnow_sync_cs.backend->timeout
             = prot_addwaitevent(clientin, when, sync_rightnow_timeout, NULL);
     }

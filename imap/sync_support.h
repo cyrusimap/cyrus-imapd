@@ -431,12 +431,13 @@ int sync_mailbox_version_check(struct mailbox **mailboxp);
 
 struct sync_client_state {
     struct backend *backend;
+    struct protstream *clientin;
     const char *servername;
     const char *channel;
     struct buf tagbuf;
     int flags;
 };
-#define SYNC_CLIENT_STATE_INITIALIZER { NULL, NULL, NULL, BUF_INITIALIZER, 0 }
+#define SYNC_CLIENT_STATE_INITIALIZER { NULL, NULL, NULL, NULL, BUF_INITIALIZER, 0 }
 
 /* =====================  server-side sync  ============================= */
 
