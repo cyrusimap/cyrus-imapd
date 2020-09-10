@@ -3501,7 +3501,8 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
     for (num = 0; num < numfolders; num++) {
         const char *mboxname = conversations_folder_name(req->cstate, num);
         mbentry_t *mbentry = NULL;
-        if (mboxlist_lookup_allow_all(mboxname, &mbentry, NULL) ||
+        if (mboxname_isnonimapmailbox(mboxname, 0) ||
+            mboxlist_lookup_allow_all(mboxname, &mbentry, NULL) ||
             mbentry->mbtype != MBTYPE_EMAIL) {
             bv_clear(&gsq->readable_folders, num);
         }
@@ -3516,9 +3517,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         uint32_t num;
         for (num = 0; num < numfolders; num++) {
             const char *mboxname = conversations_folder_name(req->cstate, num);
-            if (!mboxname_isnonimapmailbox(mboxname, 0)) {
-                hash_insert(mboxname, (void*)((uintptr_t)num+1), &foldernum_by_mboxname);
-            }
+            hash_insert(mboxname, (void*)((uintptr_t)num+1), &foldernum_by_mboxname);
         }
         char *inboxname = mboxname_user_mbox(req->accountid, NULL);
         if (!hash_lookup(inboxname, &foldernum_by_mboxname)) {
