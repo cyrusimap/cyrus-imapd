@@ -4172,6 +4172,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
         }
         prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
     } else {
+        index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -6043,6 +6044,7 @@ notflagsdammit:
                     tag, modified, error_message(r));
     }
     else {
+        index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s%s\r\n",
@@ -6789,6 +6791,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
             free(copyuid);
     }
     else {
+        index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -6839,6 +6842,7 @@ static void cmd_expunge(char *tag, char *sequence)
 
     new = index_highestmodseq(imapd_index);
 
+    index_release(imapd_index);
     sync_checkpoint(imapd_in);
 
     prot_printf(imapd_out, "%s OK ", tag);
@@ -7252,6 +7256,7 @@ localcreate:
         }
     }
 
+    index_release(imapd_index);
     sync_checkpoint(imapd_in);
 
     prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
@@ -7296,6 +7301,7 @@ static int delmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
     }
 
     // obnoxious "every folder" for debugging
+    index_release(imapd_index);
     sync_checkpoint(imapd_in);
 
     return 0;
@@ -7428,6 +7434,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         if (config_mupdate_server)
             kick_mupdate();
 
+        index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -7526,6 +7533,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
         }
 
         // this is obnoxiously often, and only temporarily here to look for bugs!
+        index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "* OK rename %s %s\r\n",
@@ -7934,6 +7942,7 @@ submboxes:
         if (rename_user)
             sync_log_user(newuser);
 
+        index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -8342,6 +8351,7 @@ static void cmd_changesub(char *tag, char *namespace, char *name, int add)
         prot_printf(imapd_out, "%s NO %s: %s\r\n", tag, cmd, error_message(r));
     }
     else {
+        index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -8658,6 +8668,7 @@ static void cmd_setacl(char *tag, const char *name,
         if (config_mupdate_server)
             kick_mupdate();
 
+        index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -9010,6 +9021,7 @@ out:
         return;
     }
 
+    index_release(imapd_index);
     sync_checkpoint(imapd_in);
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -10606,6 +10618,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
+        index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -10668,6 +10681,7 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
+        index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -14457,6 +14471,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
 
     // chaining!
+    index_release(imapd_index);
     sync_checkpoint(imapd_in);
 
     prot_printf(imapd_out, "%s %s\r\n", tag, resp);
@@ -14592,6 +14607,7 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
     }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
+    index_release(imapd_index);
     sync_checkpoint(imapd_in);
     prot_printf(imapd_out, "%s %s\r\n", tag, resp);
 
