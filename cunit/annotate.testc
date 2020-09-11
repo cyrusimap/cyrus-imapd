@@ -20,6 +20,7 @@
 #define PARTITION       "default"
 #define COMMENT         "/comment"
 #define EXENTRY         "/vendor/example.com/a-non-default-entry"
+#define UCEXENTRY       "/vendor/EXAMPLE.COM/a-non-default-entry"
 #define VALUE_SHARED    "value.shared"
 #define SIZE_SHARED     "size.shared"
 #define VALUE0          "Hello World"
@@ -1665,6 +1666,199 @@ static void test_getset_server_defined(void)
     buf_free(&val);
 }
 
+static void test_getset_server_defined_ucase(void)
+{
+    int r;
+    annotate_state_t *astate = NULL;
+    strarray_t entries = STRARRAY_INITIALIZER;
+    strarray_t attribs = STRARRAY_INITIALIZER;
+    strarray_t results = STRARRAY_INITIALIZER;
+    struct entryattlist *ealist = NULL;
+    struct buf val = BUF_INITIALIZER;
+    struct buf val2 = BUF_INITIALIZER;
+
+    /* set the definition in uppercase, as if pasted from rfc examples */
+    set_annotation_definitions(
+        UCEXENTRY",server,string,backend,value.shared,\n");
+
+    annotate_init(NULL, NULL);
+
+    annotatemore_open();
+
+    astate = annotate_state_new();
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
+
+    /* should be able to set/get it in lowercase, because these are
+     * case insensitive! */
+    strarray_append(&entries, EXENTRY);
+    strarray_append(&attribs, VALUE_SHARED);
+    strarray_append(&attribs, SIZE_SHARED);
+
+    /* check that there is no value initially */
+
+    r = annotate_state_fetch(astate,
+                             &entries, &attribs,
+                             fetch_cb, &results);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL_FATAL(results.count, 1);
+#define EXPECTED \
+           "mboxname=\"\" " \
+           "uid=0 " \
+           "entry=\"" EXENTRY "\" " \
+           VALUE_SHARED "=NIL " \
+           SIZE_SHARED "=\"0\""
+    CU_ASSERT_STRING_EQUAL(results.data[0], EXPECTED);
+#undef EXPECTED
+    strarray_truncate(&results, 0);
+
+    r = annotatemore_lookup(/*mboxname*/"", EXENTRY, /*userid*/"", &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NULL(val.s);
+
+    /* set a value */
+
+    buf_appendcstr(&val, VALUE0);
+    setentryatt(&ealist, EXENTRY, VALUE_SHARED, &val);
+    annotate_state_set_auth(astate, /*isadmin*/1, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
+    annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
+    CU_ASSERT_EQUAL(r, 0);
+    freeentryatts(ealist);
+    ealist = NULL;
+
+    /* check that we can fetch the value back in the same txn */
+    r = annotate_state_fetch(astate,
+                             &entries, &attribs,
+                             fetch_cb, &results);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL_FATAL(results.count, 1);
+#define EXPECTED \
+           "mboxname=\"\" " \
+           "uid=0 " \
+           "entry=\"" EXENTRY "\" " \
+           VALUE_SHARED "=\"" VALUE0 "\" " \
+           SIZE_SHARED "=\"" LENGTH0 "\""
+    CU_ASSERT_STRING_EQUAL(results.data[0], EXPECTED);
+#undef EXPECTED
+    strarray_truncate(&results, 0);
+
+    r = annotatemore_lookup(/*mboxname*/"", EXENTRY, /*userid*/"", &val2);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
+    buf_free(&val2);
+
+    r = annotate_state_commit(&astate);
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* check that we can fetch the value back in a new txn */
+    astate = annotate_state_new();
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
+
+    r = annotate_state_fetch(astate,
+                             &entries, &attribs,
+                             fetch_cb, &results);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL_FATAL(results.count, 1);
+#define EXPECTED \
+           "mboxname=\"\" " \
+           "uid=0 " \
+           "entry=\"" EXENTRY "\" " \
+           VALUE_SHARED "=\"" VALUE0 "\" " \
+           SIZE_SHARED "=\"" LENGTH0 "\""
+    CU_ASSERT_STRING_EQUAL(results.data[0], EXPECTED);
+#undef EXPECTED
+    strarray_truncate(&results, 0);
+
+    r = annotatemore_lookup(/*mboxname*/"", EXENTRY, /*userid*/"", &val2);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
+    buf_free(&val2);
+
+    annotate_state_abort(&astate);
+    annotatemore_close();
+
+    /* check that we can fetch the value back after close and re-open */
+
+    annotatemore_open();
+
+    astate = annotate_state_new();
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
+
+    r = annotate_state_fetch(astate,
+                             &entries, &attribs,
+                             fetch_cb, &results);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL_FATAL(results.count, 1);
+#define EXPECTED \
+           "mboxname=\"\" " \
+           "uid=0 " \
+           "entry=\"" EXENTRY "\" " \
+           VALUE_SHARED "=\"" VALUE0 "\" " \
+           SIZE_SHARED "=\"" LENGTH0 "\""
+    CU_ASSERT_STRING_EQUAL(results.data[0], EXPECTED);
+#undef EXPECTED
+    strarray_truncate(&results, 0);
+
+    r = annotatemore_lookup(/*mboxname*/"", EXENTRY, /*userid*/"", &val2);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
+    buf_free(&val2);
+
+    buf_free(&val);
+    setentryatt(&ealist, EXENTRY, VALUE_SHARED, &val);
+    annotate_state_set_auth(astate, /*isadmin*/1, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
+    annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
+    CU_ASSERT_EQUAL(r, 0);
+    freeentryatts(ealist);
+    ealist = NULL;
+
+    r = annotate_state_commit(&astate);
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* check that there is no value any more */
+    astate = annotate_state_new();
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
+
+    r = annotate_state_fetch(astate,
+                             &entries, &attribs,
+                             fetch_cb, &results);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL_FATAL(results.count, 1);
+#define EXPECTED \
+           "mboxname=\"\" " \
+           "uid=0 " \
+           "entry=\"" EXENTRY "\" " \
+           VALUE_SHARED "=NIL " \
+           SIZE_SHARED "=\"0\""
+    CU_ASSERT_STRING_EQUAL(results.data[0], EXPECTED);
+#undef EXPECTED
+    strarray_truncate(&results, 0);
+
+    r = annotatemore_lookup(/*mboxname*/"", EXENTRY, /*userid*/"", &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NULL(val.s);
+
+
+    annotate_state_abort(&astate);
+    annotatemore_close();
+
+    strarray_fini(&entries);
+    strarray_fini(&attribs);
+    strarray_fini(&results);
+    buf_free(&val);
+}
 static const char *stringifyea(const struct entryattlist *ea)
 {
     const struct attvaluelist *av;
