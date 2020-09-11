@@ -714,6 +714,29 @@ check-local:
 		fi ; \
 		exit $$retval
 
+# Run every test individually, as if you had run them one at a time as
+# `make check-suitename:testname` manually.  Mainly useful for detecting
+# abstraction failures within our testing infrastructure -- if tests
+# succeed with `make check` but fail with `make check-discrete`, or
+# vice-versa, some state is leaking between tests!
+#
+# This assumes your sh supports arithmetic and process substitutions.
+# Sorry <3
+check-discrete: cunit/unit
+	@echo "Running unit tests, one at a time"
+	@vg = ; \
+		test -z "$$VG" || vg="$(VALGRIND)" ; \
+		cd cunit ; \
+		fails=0 ; \
+		tests=0 ; \
+		while read t ; do \
+			$$vg ./unit -v $$t ; \
+			fails=$$(($$fails + $$?)) ; \
+			tests=$$(($$tests + 1)) ; \
+		done < <( ./unit -l ); \
+		echo "$$fails/$$tests tests failed" ; \
+		exit $$fails
+
 check-%: cunit/unit
 	@echo "Running unit tests for $*"
 	@vg= ; \
