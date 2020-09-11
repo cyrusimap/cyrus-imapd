@@ -303,14 +303,24 @@ EXPORTED void sieve_register_headersection(sieve_interp_t *interp,
     interp->getheadersection = f;
 }
 
-EXPORTED void sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f)
+EXPORTED int sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f)
 {
+    if (!interp->getheadersection) {
+        return SIEVE_NOT_FINALIZED; /* we need getheadersection for editheader! */
+    }
+
     interp->addheader = f;
+    return SIEVE_OK;
 }
 
-EXPORTED void sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f)
+EXPORTED int sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f)
 {
+    if (!interp->getheadersection) {
+        return SIEVE_NOT_FINALIZED; /* we need getheadersection for editheader! */
+    }
+
     interp->deleteheader = f;
+    return SIEVE_OK;
 }
 
 EXPORTED void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f)

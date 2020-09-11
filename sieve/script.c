@@ -186,6 +186,7 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
                                     (sieve_get_specialuseexists *) &stub_generic);
     sieve_register_metadata(interpreter, (sieve_get_metadata *) &stub_generic);
     sieve_register_header(interpreter, (sieve_get_header *) &stub_generic);
+    sieve_register_headersection(interpreter, (sieve_get_headersection *) &stub_generic);
     sieve_register_addheader(interpreter, (sieve_add_header *) &stub_generic);
     sieve_register_deleteheader(interpreter,
                                 (sieve_delete_header *) &stub_generic);
