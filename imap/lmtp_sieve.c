@@ -176,38 +176,6 @@ static int deleteheader(void *mc, const char *head, int index)
     return SIEVE_OK;
 }
 
-static char *mboxname_from_externalUTF8(const char *extname,
-                                        const struct namespace *ns,
-                                        const char *userid)
-{
-    char *intname, *freeme = NULL;
-
-    if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-        charset_t cs = charset_lookupname("utf-8");
-        if (cs == CHARSET_UNKNOWN_CHARSET) {
-            /* huh? */
-            syslog(LOG_INFO, "charset utf-8 is unknown");
-            return NULL;
-        }
-
-        /* Encode mailbox name in IMAP UTF-7 */
-        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
-        charset_free(&cs);
-
-        if (!freeme) {
-            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
-            return NULL;
-        }
-
-        extname = freeme;
-    }
-
-    intname = mboxname_from_external(extname, ns, userid);
-    free(freeme);
-
-    return intname;
-}
-
 static int getmailboxexists(void *sc, const char *extname)
 {
     script_data_t *sd = (script_data_t *)sc;

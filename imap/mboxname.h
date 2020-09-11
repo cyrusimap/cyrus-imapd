@@ -120,6 +120,8 @@ char *mbname_pop_boxes(mbname_t *mbname); /* free it yourself punk */
 void mbname_truncate_boxes(mbname_t *mbname, size_t len);
 void mbname_free(mbname_t **mbnamep);
 
+char *mboxname_from_externalUTF8(const char *extname,
+                                 const struct namespace *ns, const char *userid);
 char *mboxname_from_external(const char *extname, const struct namespace *ns, const char *userid);
 char *mboxname_to_external(const char *intname, const struct namespace *ns, const char *userid);
 
