@@ -1025,7 +1025,7 @@ dhtags: /* empty */              {
         | dhtags matchtype
         | dhtags listmatch
         | dhtags comparator
-        | dhtags idxtags
+        | dhtags index
         ;
 
 
@@ -1433,7 +1433,7 @@ htags: /* empty */               {
         | htags matchtype
         | htags listmatch
         | htags comparator
-        | htags idxtags
+        | htags indexext
         ;
 
 
@@ -1553,7 +1553,18 @@ collation: OCTET                 { $$ = B_OCTET;        }
 
 
 /* Index tags */
-idxtags: INDEX NUMBER            {
+indexext: index                  {
+                                     /* *ctags assigned by the calling rule */
+                                     if (ctags->index != 0 &&
+                                         !supported(SIEVE_CAPA_INDEX)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "index");
+                                     }
+                                 }
+        ;
+
+index: INDEX NUMBER              {
                                      /* *ctags assigned by the calling rule */
                                      if (ctags->index == INT_MIN) {
                                          /* parsed :last before :index */
@@ -1565,12 +1576,6 @@ idxtags: INDEX NUMBER            {
                                                       ":index");
                                      }
                                      else {
-                                       if (!supported(SIEVE_CAPA_INDEX)) {
-                                             sieveerror_c(sscript,
-                                                          SIEVE_MISSING_REQUIRE,
-                                                          "index");
-                                         }
-
                                          ctags->index = $2;
                                      }
                                  }
@@ -1583,13 +1588,7 @@ idxtags: INDEX NUMBER            {
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":last");
                                      }
-                                     else if (ctags->index == 0) {
-                                       if (!supported(SIEVE_CAPA_INDEX)) {
-                                             sieveerror_c(sscript,
-                                                          SIEVE_MISSING_REQUIRE,
-                                                          "index");
-                                         }
-
+                                     else {
                                          /* special value to indicate that
                                             we parsed :last before :index */
                                          ctags->index = INT_MIN;
@@ -1607,7 +1606,7 @@ atags: /* empty */               {
         | atags matchtype
         | atags listmatch
         | atags comparator
-        | atags idxtags
+        | atags indexext
         ;
 
 
@@ -1745,7 +1744,7 @@ dttags: /* empty */              {
                                  }
         | dttags matchtype
         | dttags comparator
-        | dttags idxtags
+        | dttags indexext
         ;
 
 
@@ -2595,6 +2594,9 @@ static commandlist_t *build_deleteheader(sieve_script_t *sscript,
         sieveerror_f(sscript,
                      "MUST NOT delete Received or Auto-Submitted headers");
     }
+    else if (c->u.dh.comp.index == INT_MIN) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":index");
+    }
 
     verify_header(sscript, name);
     verify_patternlist(sscript, values, &c->u.dh.comp, verify_utf8);
@@ -2932,6 +2934,10 @@ static test_t *build_header(sieve_script_t *sscript, test_t *t,
 {
     assert(t && t->type == BC_HEADER);
 
+    if (t->u.hhs.comp.index == INT_MIN) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":index");
+    }
+
     verify_stringlist(sscript, sl, verify_header);
 
     t->nargs = bc_precompile(t->args, "i", t->u.hhs.comp.index);
@@ -2990,6 +2996,10 @@ static test_t *build_address(sieve_script_t *sscript, test_t *t,
 {
     assert(t && t->type == BC_ADDRESS);
 
+    if (t->u.ae.comp.index == INT_MIN) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":index");
+    }
+
     verify_stringlist(sscript, sl, verify_addrheader);
 
     t->nargs = bc_precompile(t->args, "i", t->u.ae.comp.index);
@@ -3041,7 +3051,13 @@ static test_t *build_date(sieve_script_t *sscript,
     if (hn) verify_header(sscript, hn);
     verify_patternlist(sscript, kl, &t->u.dt.comp, NULL);
 
-    if (t->u.dt.comp.index == 0) t->u.dt.comp.index = 1;
+    if (t->u.dt.comp.index == 0) {
+        t->u.dt.comp.index = 1;
+    }
+    else if (t->u.dt.comp.index == INT_MIN) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":index");
+    }
+
     if (t->u.dt.zone.tag == -1) {
         struct tm tm;
         time_t now = time(NULL);
