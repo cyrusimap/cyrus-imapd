@@ -4,8 +4,34 @@
 #include "cunit/cyrunit.h"
 #include "parseaddr.h"
 #include "util.h"
+#include "lib/libconfig.h"
+#include "lib/libcyr_cfg.h"
 #include "imap/mailbox.h"
 #include "imap/message.h"
+
+#define DBDIR           "test-dbdir"
+
+static int set_up(void)
+{
+    /* need basic configuration for message_parse_headers */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r;
+
+    config_reset();
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
+}
 
 static void test_parse_trivial(void)
 {

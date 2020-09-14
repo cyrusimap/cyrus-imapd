@@ -1,8 +1,34 @@
 #include "config.h"
 #include "cunit/cyrunit.h"
 #include "prot.h"
+#include "lib/libcyr_cfg.h"
+#include "lib/libconfig.h"
 #include "imap/dlist.h"
 #include "util.h"
+
+#define DBDIR           "test-dbdir"
+
+static int set_up(void)
+{
+    /* need basic configuration for getxstring */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r;
+
+    config_reset();
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
+}
 
 /* XXX - need LOTS of dlist tests */
 

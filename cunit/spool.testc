@@ -4,8 +4,11 @@
 #include "prot.h"
 #include "retry.h"
 #include "xmalloc.h"
+#include "lib/libconfig.h"
+#include "lib/libcyr_cfg.h"
 #include "imap/spool.h"
 
+#define DBDIR       "test-dbdir"
 #define DELIVERED   "Fri, 29 Oct 2010 13:07:07 +1100"
 #define FIRST_RX    "Fri, 29 Oct 2010 13:05:01 +1100"
 #define SECOND_RX   "Fri, 29 Oct 2010 13:03:03 +1100"
@@ -20,6 +23,28 @@
 #define HRECEIVED1  "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); " FIRST_RX
 #define HRECEIVED2  "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); " SECOND_RX
 #define HRECEIVED3  "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); " THIRD_RX
+
+static int set_up(void)
+{
+    /* need basic configuration for parseheader */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r;
+
+    config_reset();
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
+}
 
 static void test_simple(void)
 {

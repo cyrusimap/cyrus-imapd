@@ -3,10 +3,13 @@
 #endif
 #include <assert.h>
 #include "cunit/cyrunit.h"
-#include "libconfig.h"
+#include "lib/libconfig.h"
+#include "lib/libcyr_cfg.h"
 #include "imap/mboxname.h"
 #include "imap/mailbox.h"
 #include "imap/global.h"
+
+#define DBDIR           "test-dbdir"
 
 static void test_dir_hash_c(void)
 {
@@ -841,12 +844,14 @@ static union config_value old_config_userprefix;
 static union config_value old_config_sharedprefix;
 static union config_value old_config_conversations;
 static const char *old_config_defdomain;
-static char *old_config_dir;
 
 static int set_up(void)
 {
-    char cwd[PATH_MAX];
-    char *s;
+    /* need basic configuration */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
 
     /*
      * TODO: this is pretty hacky.  There should be some
@@ -856,11 +861,6 @@ static int set_up(void)
      */
     old_config_virtdomains = config_virtdomains;
     config_virtdomains = IMAP_ENUM_VIRTDOMAINS_ON;
-
-    old_config_dir = (char *)config_dir;
-    s = getcwd(cwd, sizeof(cwd));
-    assert(s);
-    config_dir = strconcat(cwd, "/conf.d", (char *)NULL);
 
     old_config_defdomain = config_defdomain;
 
@@ -875,25 +875,13 @@ static int set_up(void)
 
 static int tear_down(void)
 {
-    char *cmd;
     int r;
 
-    cmd = strconcat("rm -rf \"", config_dir, "\"", (char *)NULL);
-    r = system(cmd);
-    assert(!r);
-    free(cmd);
-    free((char *)config_dir);
-    config_dir = old_config_dir;
+    config_reset();
 
-    config_virtdomains = old_config_virtdomains;
-    config_defdomain = old_config_defdomain;
-    imapopts[IMAPOPT_UNIXHIERARCHYSEP].val = old_config_unixhierarchysep;
-    imapopts[IMAPOPT_ALTNAMESPACE].val = old_config_altnamespace;
-    imapopts[IMAPOPT_USERPREFIX].val = old_config_userprefix;
-    imapopts[IMAPOPT_SHAREDPREFIX].val = old_config_sharedprefix;
-    imapopts[IMAPOPT_CONVERSATIONS].val = old_config_conversations;
+    r = system("rm -rf " DBDIR);
 
-    return 0;
+    return r;
 }
 
 /* vim: set ft=c: */
