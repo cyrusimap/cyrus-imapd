@@ -279,6 +279,6 @@ void annotate_putdb(annotate_db_t **dbp);
 
 /* Maybe this isn't the right place - move later */
 int specialuse_validate(const char *mboxname, const char *userid,
-                        const char *src, struct buf *dest);
+                        const char *src, struct buf *dest, int allow_dups);
 
 #endif /* ANNOTATE_H */

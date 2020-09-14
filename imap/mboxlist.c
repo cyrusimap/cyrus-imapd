@@ -1682,6 +1682,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     int localonly = flags & MBOXLIST_DELETE_LOCALONLY;
     int force = flags & MBOXLIST_DELETE_FORCE;
     int keep_intermediaries = flags & MBOXLIST_DELETE_KEEP_INTERMEDIARIES;
+    int unprotect_specialuse = flags & MBOXLIST_DELETE_UNPROTECT_SPECIALUSE;
 
     init_internal();
 
@@ -1702,7 +1703,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
         }
     }
 
-    if (!isadmin && mbname_userid(mbname)) {
+    if (!isadmin && mbname_userid(mbname) && !unprotect_specialuse) {
         const char *protect = config_getstring(IMAPOPT_SPECIALUSE_PROTECT);
         if (protect) {
             struct buf attrib = BUF_INITIALIZER;
@@ -1805,6 +1806,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     int force = flags & MBOXLIST_DELETE_FORCE;
     int keep_intermediaries = flags & MBOXLIST_DELETE_KEEP_INTERMEDIARIES;
     int silent = flags & MBOXLIST_DELETE_SILENT;
+    int unprotect_specialuse = flags & MBOXLIST_DELETE_UNPROTECT_SPECIALUSE;
 
     init_internal();
 
@@ -1827,7 +1829,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         }
     }
 
-    if (!isadmin && mbname_userid(mbname)) {
+    if (!isadmin && mbname_userid(mbname) && !unprotect_specialuse) {
         const char *protect = config_getstring(IMAPOPT_SPECIALUSE_PROTECT);
         if (protect) {
             struct buf attrib = BUF_INITIALIZER;

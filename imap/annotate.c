@@ -3280,7 +3280,7 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
 }
 
 EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
-                                 const char *src, struct buf *dest)
+                                 const char *src, struct buf *dest, int allow_dups)
 {
     const char *specialuse_extra_opt = config_getstring(IMAPOPT_SPECIALUSE_EXTRA);
     char *strval = NULL;
@@ -3324,7 +3324,7 @@ EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
     new_attribs = strarray_split(src, NULL, 0);
 
     for (i = 0; i < new_attribs->count; i++) {
-        int skip_mbcheck = 0;
+        int skip_mbcheck = allow_dups;
         const char *item = strarray_nth(new_attribs, i);
 
         for (j = 0; j < valid->count; j++) { /* can't use find here */
@@ -3390,7 +3390,7 @@ static int annotation_set_specialuse(annotate_state_t *state,
     }
 
     r = specialuse_validate(state->mailbox->name, state->userid,
-                            buf_cstring(&entry->priv), &res);
+                            buf_cstring(&entry->priv), &res, 0);
     if (r) goto done;
 
     r = write_entry(state->mailbox, state->uid, entry->name, state->userid,

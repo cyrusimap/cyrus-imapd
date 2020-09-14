@@ -228,7 +228,9 @@ int mboxlist_createsync(const char *name, int mbtype, const char *partition,
 #define MBOXLIST_DELETE_KEEP_INTERMEDIARIES (1<<3)
 /* silently delete, do not bump modseq */
 #define MBOXLIST_DELETE_SILENT              (1<<4)
-/* delated delete */
+/* unprotect_specialuse ignores the specialuse_protect config */
+#define MBOXLIST_DELETE_UNPROTECT_SPECIALUSE (1<<5)
+/* delayed delete */
 /* Translate delete into rename */
 /* prepare MailboxDelete notification if mboxevent is not NULL */
 int
