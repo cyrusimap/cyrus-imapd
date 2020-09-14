@@ -208,6 +208,7 @@ struct annotate_entrydesc
     int (*set)(annotate_state_t *state,
                struct annotate_entry_list *entry,
                int maywrite);
+    char *freeme;               /* entry and name needs to be freed on cleanup */
     void *rock;                 /* rock passed to get() function */
 };
 
@@ -840,10 +841,40 @@ static int annotate_commit(annotate_db_t *d)
 
 EXPORTED void annotate_done(void)
 {
+    int i;
+
     /* DB->done() handled by cyrus_done() */
     if (annotatemore_dbopen) {
         annotatemore_close();
     }
+
+    for (i = 0; i < ptrarray_size(&message_entries); i++) {
+        annotate_entrydesc_t *ae = ptrarray_nth(&message_entries, i);
+        if (ae->freeme) {
+            free(ae->freeme);
+            free(ae);
+        }
+    }
+    ptrarray_fini(&message_entries);
+
+    for (i = 0; i < ptrarray_size(&mailbox_entries); i++) {
+        annotate_entrydesc_t *ae = ptrarray_nth(&mailbox_entries, i);
+        if (ae->freeme) {
+            free(ae->freeme);
+            free(ae);
+        }
+    }
+    ptrarray_fini(&mailbox_entries);
+
+    for (i = 0; i < ptrarray_size(&server_entries); i++) {
+        annotate_entrydesc_t *ae = ptrarray_nth(&server_entries, i);
+        if (ae->freeme) {
+            free(ae->freeme);
+            free(ae);
+        }
+    }
+    ptrarray_fini(&server_entries);
+
     annotate_initialized = 0;
 }
 
@@ -1896,6 +1927,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },
     {
@@ -1907,6 +1939,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },
     {
@@ -1918,6 +1951,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },
     {
@@ -1929,6 +1963,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },
     {
@@ -1940,6 +1975,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },
     {
@@ -1951,6 +1987,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },
     {
@@ -1962,6 +1999,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },
     {
@@ -1972,9 +2010,10 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },
-    { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
+    { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL, NULL }
 };
 
 static const annotate_entrydesc_t message_db_entry =
@@ -1986,6 +2025,7 @@ static const annotate_entrydesc_t message_db_entry =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     };
 
@@ -2005,6 +2045,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         /*
@@ -2020,6 +2061,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         /* RFC 5464 defines /shared/comment and /private/comment */
@@ -2030,6 +2072,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         /*
@@ -2045,6 +2088,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         /*
@@ -2057,6 +2101,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_specialuse,
+        NULL,
         NULL
     },{
         /*
@@ -2072,6 +2117,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "annotsize",
@@ -2081,6 +2127,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_annotsize,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "archive",
@@ -2090,6 +2137,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         ACL_ADMIN,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "delete",
@@ -2099,6 +2147,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         ACL_ADMIN,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "duplicatedeliver",
@@ -2108,6 +2157,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_mailboxopt,
         annotation_set_mailboxopt,
+        NULL,
         (void *)OPT_IMAP_DUPDELIVER
     },{
         IMAP_ANNOT_NS "expire",
@@ -2117,6 +2167,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         ACL_ADMIN,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "lastpop",
@@ -2126,6 +2177,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_lastpop,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "hasalarms",
@@ -2135,6 +2187,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_mailboxopt,
         /*set*/NULL,
+        NULL,
         (void *)OPT_IMAP_HAS_ALARMS
     },{
         IMAP_ANNOT_NS "foldermodseq",
@@ -2144,6 +2197,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_foldermodseq,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "lastupdate",
@@ -2153,6 +2207,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_lastupdate,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "news2mail",
@@ -2162,6 +2217,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         ACL_ADMIN,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "partition",
@@ -2172,6 +2228,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_partition,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "pop3newuidl",
@@ -2181,6 +2238,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_mailboxopt,
         annotation_set_mailboxopt,
+        NULL,
         (void *)OPT_POP3_NEW_UIDL
     },{
         IMAP_ANNOT_NS "pop3showafter",
@@ -2190,6 +2248,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_pop3showafter,
         annotation_set_pop3showafter,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "server",
@@ -2200,6 +2259,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_server,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "sharedseen",
@@ -2209,6 +2269,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_mailboxopt,
         annotation_set_mailboxopt,
+        NULL,
         (void *)OPT_IMAP_SHAREDSEEN
     },{
         IMAP_ANNOT_NS "sieve",
@@ -2218,6 +2279,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         ACL_ADMIN,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "size",
@@ -2227,6 +2289,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_size,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "sortorder",
@@ -2236,6 +2299,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "squat",
@@ -2245,6 +2309,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         ACL_ADMIN,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "synccrcs",
@@ -2255,6 +2320,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         annotation_get_synccrcs,
         NULL,
         NULL,
+        NULL,
     },{
         IMAP_ANNOT_NS "uniqueid",
         ATTRIB_TYPE_STRING,
@@ -2263,8 +2329,9 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         0,
         annotation_get_uniqueid,
         NULL,
+        NULL,
         NULL
-    },{ NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
+    },{ NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL, NULL }
 };
 
 static const annotate_entrydesc_t mailbox_db_entry =
@@ -2276,6 +2343,7 @@ static const annotate_entrydesc_t mailbox_db_entry =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     };
 
@@ -2290,6 +2358,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         ACL_ADMIN,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         /* RFC 5464 defines /shared/comment. */
@@ -2300,6 +2369,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         ACL_ADMIN,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         /*
@@ -2315,6 +2385,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         0,
         annotation_get_fromfile,
         annotation_set_tofile,
+        NULL,
         (void *)"motd"
     },{
         /* The "usemodseq" was added with conversations support, to allow
@@ -2326,6 +2397,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         0,
         annotation_get_usermodseq,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         /* The "usemodseq" was added with conversations support, to allow
@@ -2337,6 +2409,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         0,
         annotation_get_usercounters,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "expire",
@@ -2346,6 +2419,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         ACL_ADMIN,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "freespace",
@@ -2355,6 +2429,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         0,
         annotation_get_freespace,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "freespace/total",
@@ -2364,6 +2439,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         0,
         annotation_get_freespace_total,
         /*set*/NULL,
+        NULL,
         NULL
     },{
         IMAP_ANNOT_NS "freespace/percent/most",
@@ -2373,7 +2449,8 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         0,
         annotation_get_freespace_percent_most,
         /*set*/NULL,
-    NULL
+        NULL,
+        NULL
     },{
         IMAP_ANNOT_NS "shutdown",
         ATTRIB_TYPE_STRING,
@@ -2382,6 +2459,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         0,
         annotation_get_fromfile,
         annotation_set_tofile,
+        NULL,
         (void *)"shutdown"
     },{
         IMAP_ANNOT_NS "squat",
@@ -2391,9 +2469,10 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         ACL_ADMIN,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     },{ NULL, 0, ANNOTATION_PROXY_T_INVALID,
-        0, 0, NULL, NULL, NULL }
+        0, 0, NULL, NULL, NULL, NULL }
 };
 
 static const annotate_entrydesc_t server_db_entry =
@@ -2405,6 +2484,7 @@ static const annotate_entrydesc_t server_db_entry =
         0,
         annotation_get_fromdb,
         annotation_set_todb,
+        NULL,
         NULL
     };
 
@@ -4046,7 +4126,8 @@ static void init_annotation_definitions(void)
             parse_error(&state, "annotation under " IMAP_ANNOT_NS);
             goto bad;
         }
-        ae->name = xstrdup(p);
+        ae->freeme = xstrdup(p);
+        ae->name = ae->freeme;
 
         if (!(p = get_token(&state, ".-_/"))) goto bad;
         switch (table_lookup(annotation_scope_names, p)) {
@@ -4109,7 +4190,7 @@ static void init_annotation_definitions(void)
         continue;
 
 bad:
-        free((char *)ae->name);
+        free(ae->freeme);
         free(ae);
         tok_fini(&state.tok);
         continue;
