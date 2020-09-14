@@ -56,6 +56,7 @@ void sync_log(const char *fmt, ...);
 void sync_log_channel(const char *channel, const char *fmt, ...);
 
 struct buf *sync_log_rightnow_buf();
+void sync_log_reset();
 
 
 #define sync_log_user(user) \

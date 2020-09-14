@@ -1272,7 +1272,7 @@ static void cmdloop(void)
         /* ensure we didn't leak anything! */
         assert(!open_mailboxes_exist());
 
-        sync_checkpoint(imapd_in);
+        sync_log_reset();
 
         /* Flush any buffered output */
         prot_flush(imapd_out);

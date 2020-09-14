@@ -1996,6 +1996,8 @@ static void cmdloop(struct http_connection *conn)
         /* make sure nothing leaked */
         assert(!open_mailboxes_exist());
 
+        sync_log_reset();
+
         sync_checkpoint(conn->pin);
 
         /* Check for input from client */
