@@ -1273,9 +1273,15 @@ static int set_up(void)
 
 static int tear_down(void)
 {
+    int r;
+
+    config_reset();
     restore_tz();
     time_restore();
-    return 0;
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
 }
 
 /* vim: set ft=c: */

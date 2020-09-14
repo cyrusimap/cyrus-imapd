@@ -2014,6 +2014,7 @@ static int tear_down(void)
     auth_freestate(auth_state);
 
     cyrusdb_done();
+    config_reset();
     config_mboxlist_db = NULL;
     config_annotation_db = NULL;
 

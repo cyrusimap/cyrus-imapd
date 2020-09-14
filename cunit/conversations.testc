@@ -1399,6 +1399,7 @@ static int tear_down(void)
     int r;
 
     cyrusdb_done();
+    config_reset();
     config_conversations_db = NULL;
 
     r = system("rm -rf " DBDIR);

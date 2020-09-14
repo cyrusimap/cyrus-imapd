@@ -56,7 +56,14 @@ static int set_up(void)
 
 static int tear_down(void)
 {
-    return 0;
+    int r;
+
+    /* all these tests will initialise some config, clean up after! */
+    config_reset();
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
 }
 
 static void test_int(void)

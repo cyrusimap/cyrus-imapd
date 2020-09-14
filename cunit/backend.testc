@@ -1523,6 +1523,10 @@ static int set_up(void)
  */
 static int tear_down(void)
 {
+    int r;
+
+    config_reset();
+
     if (verbose > 1)
         fprintf(stderr, "Cleaning up server! NOT.\n");
     if (server_pid > 1)
@@ -1538,7 +1542,9 @@ static int tear_down(void)
         sasl_initialised = 0;
     }
 
-    return 0;
+    r = system("rm -rf " DBDIR);
+
+    return r;
 }
 
 /* ====================================================================== */

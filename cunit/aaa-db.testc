@@ -1609,6 +1609,8 @@ static int tear_down(void)
 
     cyrusdb_done();
 
+    config_reset();
+
     if (basedir) {
         char buf[PATH_MAX];
         snprintf(buf, sizeof(buf), "rm -rf \"%s\"", basedir);

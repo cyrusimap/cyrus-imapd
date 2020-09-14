@@ -567,8 +567,14 @@ static int set_up(void)
 
 static int tear_down(void)
 {
+    int r;
+
     libcyrus_done();
-    return 0;
+    config_reset();
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
 }
 
 static void context_setup(sieve_test_context_t *ctx,
