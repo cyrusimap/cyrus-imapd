@@ -65,6 +65,7 @@ sub new
                  conversations => 'yes',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                  httpmodules => 'carddav caldav jmap',
+                 specialuse_extra => '\\XSpecialUse',
                  httpallowcompress => 'no');
 
     return $class->SUPER::new({
@@ -1196,7 +1197,7 @@ sub test_mailbox_querychanges_role
     $res = $jmap->CallMethods([['Mailbox/set', {
         update => {
             $mboxId1 => {
-                role => 'important',
+                role => 'trash',
             },
             $mboxId2 => {
                 role => undef,
@@ -1868,114 +1869,401 @@ sub test_mailbox_set_name_unicode_nfc
     $self->assert_str_equals($want, $res->[0][1]{list}[0]->{name});
 }
 
-
-sub test_mailbox_set_role
-    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
+sub test_mailbox_set_role_create
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
-
     my $jmap = $self->{jmap};
-    my $imaptalk = $self->{store}->get_client();
 
-    xlog $self, "get inbox";
-    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
-    my $inbox = $res->[0][1]{list}[0];
-    $self->assert_str_equals("Inbox", $inbox->{name});
-
-    my $state = $res->[0][1]{state};
-
-    xlog $self, "try to create mailbox with inbox role";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "foo",
-                            parentId => $inbox->{id},
-                            role => "inbox"
-             }}}, "R1"]
+    xlog "create mailboxes with roles";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                    role => 'trash',
+                },
+                mboxB => {
+                    name => 'B',
+                    role => 'junk',
+                },
+            },
+        }, "R2"],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R3'],
     ]);
-    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
-    $self->assert_str_equals('R1', $res->[0][2]);
-    my $errType = $res->[0][1]{notCreated}{"1"}{type};
-    my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
-    $self->assert_str_equals("invalidProperties", $errType);
-    $self->assert_deep_equals([ "role" ], $errProp);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    my $mboxA = $res->[1][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[1][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[2][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+        $mboxA => 'trash',
+        $mboxB => 'junk',
+    }, \%roleByMbox);
+}
 
-    xlog $self, "create mailbox with trash role";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "foo",
-                            parentId => undef,
-                            role => "trash"
-             }}}, "R1"]
+sub test_mailbox_set_role_dups_existingrole
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                    role => 'junk',
+                },
+            },
+        }, "R2"],
     ]);
-    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
-    $self->assert_str_equals('R1', $res->[0][2]);
-    $self->assert_not_null($res->[0][1]{created});
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    my $mboxA = $res->[1][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
 
-    my $id = $res->[0][1]{created}{"1"}{id};
-
-    xlog $self, "get mailbox $id";
-    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
-
-    $self->assert_str_equals("trash", $res->[0][1]{list}[0]->{role});
-
-    xlog $self, "get mailbox $id via IMAP";
-    my $data = $imaptalk->xlist("INBOX.foo", "%");
-    my %annots = map { $_ => 1 } @{$data->[0]->[0]};
-    $self->assert(exists $annots{"\\Trash"});
-
-    xlog $self, "try to create another mailbox with trash role";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "bar",
-                            parentId => $inbox->{id},
-                            role => "trash"
-             }}}, "R1"]
-    ]);
-    $errType = $res->[0][1]{notCreated}{"1"}{type};
-    $errProp = $res->[0][1]{notCreated}{"1"}{properties};
-    $self->assert_str_equals("invalidProperties", $errType);
-    $self->assert_deep_equals([ "role" ], $errProp);
-
-    xlog $self, "try to create a mailbox with an unknown role";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "bam",
-                            parentId => $inbox->{id},
-                            role => "unknown"
-             }}}, "R1"]
-    ]);
-    $errType = $res->[0][1]{notCreated}{"1"}{type};
-    $errProp = $res->[0][1]{notCreated}{"1"}{properties};
-    $self->assert_str_equals("invalidProperties", $errType);
-    $self->assert_deep_equals([ "role" ], $errProp);
-
-    xlog $self, "create a specialuse Sent mailbox via IMAP";
-    $imaptalk->create("INBOX.Sent", "(USE (\\Sent))") || die;
-
-    xlog $self, "create a specialuse Archive and Junk mailbox via IMAP";
-    $imaptalk->create("INBOX.Multi", "(USE (\\Archive \\Junk))") || die;
-
-    xlog $self, "get mailboxes";
-    $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
-    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    my $sent = $m{"Sent"};
-    my $multi = $m{"Multi"};
-    $self->assert_str_equals("sent", $sent->{role});
-    $self->assert_str_equals("archive", $multi->{role});
-
-    xlog $self, "remove a mailbox role";
+    xlog "Can't create a mailbox with a duplicate role";
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
-            update => { "$id" => {
-                role => undef,
-            }
-        }}, "R1"],
+            create => {
+                mboxB => {
+                    name => 'B',
+                    role => 'junk',
+                },
+            },
+        }, "R1"],
+    ]);
+    $self->assert_deep_equals(['role'], $res->[0][1]{notCreated}{'mboxB'}{properties});
+
+    xlog "Can't update a mailbox with a duplicate role";
+    # create it first
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxB => {
+                    name => 'B',
+                },
+            },
+        }, "R1"],
+    ]);
+    my $mboxB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    # now update
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxB => {
+                    name => 'B',
+                    role => 'junk',
+                },
+            },
+        }, "R1"],
         ['Mailbox/get', {
-            ids => [$id], properties => ['role'],
+            properties => ['role', 'name'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{$id});
-    $self->assert_null($res->[1][1]{list}[0]{role});
+    $self->assert_deep_equals(['role'], $res->[0][1]{notUpdated}{$mboxB}{properties});
+    my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[1][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+        $mboxA => 'junk',
+        $mboxB => undef,
+    }, \%roleByMbox);
+}
+
+sub test_mailbox_set_role_dups_createrole
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Can't create two mailboxes with the same role";
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxNope1 => {
+                    name => 'nope1',
+                    role => 'drafts',
+                },
+                mboxNope2=> {
+                    name => 'nope2',
+                    role => 'drafts',
+                },
+            },
+        }, "R2"],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R3'],
+    ]);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    $self->assert_deep_equals(['role'], $res->[1][1]{notCreated}{'mboxNope1'}{properties});
+    $self->assert_deep_equals(['role'], $res->[1][1]{notCreated}{'mboxNope2'}{properties});
+    my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[2][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+    }, \%roleByMbox);
+}
+
+sub test_mailbox_set_role_move_update
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                    role => 'trash',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+            },
+        }, "R2"],
+    ]);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    my $mboxA = $res->[1][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[1][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+
+    xlog "move trash role by update";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxA => {
+                    role => undef,
+                },
+                $mboxB => {
+                    role => 'trash',
+                },
+            },
+        }, "R1"],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxA});
+    $self->assert(exists $res->[0][1]{updated}{$mboxB});
+    my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[1][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+        $mboxA => undef,
+        $mboxB => 'trash',
+    }, \%roleByMbox);
+}
+
+sub test_mailbox_set_role_move_destroy
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "move role by destroy";
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                    role => 'trash',
+                },
+            },
+        }, "R2"],
+    ]);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    my $mboxA = $res->[1][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxB => {
+                    name => 'B',
+                    role => 'trash',
+                },
+            },
+            destroy => [$mboxA],
+        }, "R1"],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$mboxA], $res->[0][1]{destroyed});
+    my $mboxB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[1][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+        $mboxB => 'trash',
+    }, \%roleByMbox);
+}
+
+sub test_mailbox_set_role_protected_destroy
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create protected and unprotected roles";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                    role => 'drafts',
+                },
+                mboxB => {
+                    name => 'B',
+                    role => 'xspecialuse',
+                },
+            },
+        }, "R2"],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R3'],
+    ]);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    my $mboxA = $res->[1][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[1][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[2][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+        $mboxA => 'drafts',
+        $mboxB => 'xspecialuse',
+    }, \%roleByMbox);
+
+    xlog "destroy protected and unprotected roles in one method";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxA, $mboxB],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('serverFail', $res->[0][1]{notDestroyed}{$mboxA}{type});
+    $self->assert_str_equals('serverFail', $res->[0][1]{notDestroyed}{$mboxB}{type});
+
+    xlog "destroy protected and unprotected roles in separate method";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxA],
+        }, 'R1'],
+        ['Mailbox/set', {
+            destroy => [$mboxB],
+        }, 'R2'],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R3'],
+    ]);
+    $self->assert_str_equals('serverFail', $res->[0][1]{notDestroyed}{$mboxA}{type});
+    $self->assert_deep_equals([$mboxB], $res->[1][1]{destroyed});
+    %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[2][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+        $mboxA => 'drafts',
+    }, \%roleByMbox);
+}
+
+sub test_mailbox_set_protected_move_parent
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create protected and unprotected roles";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                    role => 'drafts',
+                },
+                mboxB => {
+                    name => 'B',
+                    role => 'xspecialuse',
+                },
+                mboxC => {
+                    name => 'C',
+                },
+            },
+        }, "R2"],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R3'],
+    ]);
+    my $mboxA = $res->[0][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    my $mboxC = $res->[0][1]{created}{mboxC}{id};
+    $self->assert_not_null($mboxC);
+    xlog "move protected and unprotected roles in one method";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxA => {
+                    parentId => $mboxC,
+                },
+                $mboxB => {
+                    parentId => $mboxC,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$mboxA}{type});
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$mboxB}{type});
+
+    xlog "move protected and unprotected roles in separate method";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxA => {
+                    parentId => $mboxC,
+                },
+            },
+        }, 'R1'],
+        ['Mailbox/set', {
+            update => {
+                $mboxB => {
+                    parentId => $mboxC,
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$mboxA}{type});
+    $self->assert(exists $res->[1][1]{updated}{$mboxB});
 }
 
 sub test_mailbox_set_no_outbox_role
