@@ -464,7 +464,7 @@ static int bc_string_parse(bytecode_input_t *bc, int pos, char **str)
 /* Given a bytecode_input_t at the beginning of a stringlist (the len block),
  * return the stringlist, and the bytecode index of the NEXT item */
 static int bc_stringlist_parse(bytecode_input_t *bc, int pos,
-                                  strarray_t **strlist)
+                               strarray_t **strlist)
 {
     int len = ntohl(bc[pos++].listlen);
 
