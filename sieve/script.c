@@ -418,6 +418,7 @@ static int send_notify_callback(sieve_interp_t *interp,
     }
 
     nc.method = notify->method;
+    nc.from = notify->from;
     nc.options = notify->options ? notify->options : NULL;
     nc.priority = notify->priority;
 
