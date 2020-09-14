@@ -108,7 +108,7 @@ typedef struct notify_list_s {
     const char *id;
     const char *from;
     const char *method;
-    const char **options;
+    strarray_t *options;
     const char *priority;
     const char *message;
     struct notify_list_s *next;
@@ -149,7 +149,7 @@ int do_removeflag(action_list_t *m, const char *flag);
 int do_mark(action_list_t *m);
 int do_unmark(action_list_t *m);
 int do_notify(notify_list_t *n, const char *id, const char *from,
-              const char *method, const char **options,
+              const char *method, strarray_t *options,
               const char *priority, const char *message);
 int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
                 strarray_t *match_vars, void *comprock, const char *priority);

@@ -2025,8 +2025,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             }
 
             res = do_notify(notify_list, cmd.u.n.id, cmd.u.n.from, cmd.u.n.method,
-                            (const char **) strarray_safetakevf(cmd.u.n.options),
-                            priority, message);
+                            cmd.u.n.options, priority, message);
 
             break;
         }

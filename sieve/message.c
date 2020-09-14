@@ -471,7 +471,7 @@ int do_unmark(action_list_t *a)
  * incompatible with: none
  */
 int do_notify(notify_list_t *n, const char *id, const char *from,
-              const char *method, const char **options,
+              const char *method, strarray_t *options,
               const char *priority, const char *message)
 {
     notify_list_t *b = NULL;
@@ -546,7 +546,10 @@ void free_notify_list(notify_list_t *n)
 {
     while (n) {
         notify_list_t *b = n->next;
-        free(n->options); /* strings live in bytecode, only free the array */
+        if (n->options) {
+            /* strings live in bytecode, only free the array */
+            free(strarray_safetakevf(n->options));
+        }
         free(n);
         n = b;
     }

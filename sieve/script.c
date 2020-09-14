@@ -422,8 +422,13 @@ static int send_notify_callback(sieve_interp_t *interp,
     nc.priority = notify->priority;
 
     if (nc.options && !strcmp(nc.method, "mailto")) {
-        if (!strcmpsafe("$env-from$", *nc.options))
-            interp->getenvelope(message_context, "From", &nc.options);
+        if (!strcmpsafe("$env-from$", strarray_nth(nc.options, 0))) {
+            static strarray_t options = STRARRAY_INITIALIZER;
+
+            interp->getenvelope(message_context, "From",
+                                (const char ***) &options.data);
+            nc.options = &options;
+        }
     }
 
     build_notify_message(interp, notify->message, message_context,

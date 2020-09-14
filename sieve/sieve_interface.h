@@ -174,7 +174,7 @@ typedef struct sieve_keep_context {
 
 typedef struct sieve_notify_context {
     const char *method;
-    const char **options;
+    strarray_t *options;
     const char *priority;
     const char *message;
     const char *fname;

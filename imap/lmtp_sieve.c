@@ -1503,17 +1503,14 @@ static int sieve_notify(void *ac,
     if (notifier) {
         sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
         script_data_t *sd = (script_data_t *) script_context;
-        int nopt = 0;
+        int nopt = strarray_size(nc->options);
 
         prometheus_increment(CYRUS_LMTP_SIEVE_NOTIFY_TOTAL);
-
-        /* count options */
-        while (nc->options[nopt]) nopt++;
 
         /* "default" is a magic value that implies the default */
         notify(!strcmp("default",nc->method) ? notifier : nc->method,
                "SIEVE", nc->priority, mbname_userid(sd->mbname), NULL,
-               nopt, nc->options, nc->message, nc->fname);
+               nopt, (const char **) nc->options->data, nc->message, nc->fname);
     }
 
     return SIEVE_OK;
