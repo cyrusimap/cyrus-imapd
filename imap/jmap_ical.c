@@ -212,6 +212,29 @@ set_icalxparam(icalproperty *prop, const char *name, const char *val, int purge)
     icalproperty_add_parameter(prop, param);
 }
 
+static void unescape_ical_text(struct buf *buf, const char *s)
+{
+    for (; *s; s++) {
+        if (*s == '\\') {
+            switch (*++s) {
+                case 'n':
+                case 'N':
+                    buf_putc(buf, '\n');
+                    break;
+                case '\\':
+                case ';':
+                case ',':
+                    buf_putc(buf, *s);
+                    break;
+                default:
+                    buf_putc(buf, *(s-1));
+                    buf_putc(buf, *s);
+            }
+        }
+        else buf_putc(buf, *s);
+    }
+}
+
 /* Compare the value of the first occurences of property kind in components
  * a and b. Return 0 if they match or if both do not contain kind. Note that
  * this function does not define an order on property values, so it can't be
@@ -1306,6 +1329,7 @@ static json_t *participant_from_ical(icalproperty *prop,
 
         buf_setcstr(&buf, icalparameter_get_xvalue(param));
         json_object_set_new(roles, buf_lcase(&buf), json_true());
+        buf_reset(&buf);
     }
     if (!json_object_get(roles, "owner")) {
         const char *o = icalproperty_get_organizer(orga);
@@ -1432,6 +1456,7 @@ static json_t *participant_from_ical(icalproperty *prop,
 
         buf_setcstr(&buf, icalparameter_get_xvalue(param));
         json_object_set_new(linkIds, buf_lcase(&buf), json_true());
+        buf_reset(&buf);
     }
     if (json_object_size(linkIds)) {
         json_object_set_new(p, "linkIds", linkIds);
@@ -1467,7 +1492,9 @@ static json_t *participant_from_ical(icalproperty *prop,
     /* participationComment */
     const char *comment = get_icalxparam_value(prop, JMAPICAL_XPARAM_COMMENT);
     if (comment) {
-        json_object_set_new(p, "participationComment", json_string(comment));
+        unescape_ical_text(&buf, comment);
+        json_object_set_new(p, "participationComment", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
     }
 
     buf_free(&buf);
@@ -1611,7 +1638,10 @@ link_from_ical(icalproperty *prop)
 
     /* title - reuse the same x-param as Apple does for their locations  */
     if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE))) {
-        json_object_set_new(link, "title", json_string(s));
+        struct buf buf = BUF_INITIALIZER;
+        unescape_ical_text(&buf, s);
+        json_object_set_new(link, "title", json_string(buf_cstring(&buf)));
+        buf_free(&buf);
     }
 
     /* size */
@@ -1871,7 +1901,12 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links)
 
     /* description */
     const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
-    if (desc) json_object_set_new(loc, "description", json_string(desc));
+    if (desc) {
+        struct buf buf = BUF_INITIALIZER;
+        unescape_ical_text(&buf, desc);
+        json_object_set_new(loc, "description", json_string(buf_cstring(&buf)));
+        buf_free(&buf);
+    }
 
     /* timeZone */
     const char *tzid = get_icalxparam_value(prop, JMAPICAL_XPARAM_TZID);
@@ -1994,7 +2029,10 @@ locations_from_ical(icalcomponent *comp, json_t *links)
 
             loc = json_pack("{s:s}", "coordinates", uri);
             if ((title = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE))) {
-                json_object_set_new(loc, "name", json_string(title));
+                struct buf buf = BUF_INITIALIZER;
+                unescape_ical_text(&buf, title);
+                json_object_set_new(loc, "name", json_string(buf_cstring(&buf)));
+                buf_free(&buf);
             }
 
             id = xjmapid_from_ical(prop);
@@ -2045,7 +2083,12 @@ virtuallocations_from_ical(icalcomponent *comp)
         json_object_set_new(loc, "name", json_string(name));
 
         const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
-        if (desc) json_object_set_new(loc, "description", json_string(desc));
+        if (desc) {
+            struct buf buf = BUF_INITIALIZER;
+            unescape_ical_text(&buf, desc);
+            json_object_set_new(loc, "description", json_string(buf_cstring(&buf)));
+            buf_free(&buf);
+        }
 
         if (uri) json_object_set_new(locations, id, loc);
         free(id);
