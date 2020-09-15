@@ -2557,7 +2557,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         }
         if (!result->skipped) {
             struct buf val = BUF_INITIALIZER;
-            annotatemore_lookup(mbentry->name, "/specialuse", req->accountid, &val);
+            annotatemore_lookup_mbe(mbentry, "/specialuse", req->accountid, &val);
             if (buf_len(&val)) {
                 result->skipped = 1;
             }
@@ -2972,7 +2972,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
     /* Skip role updates in first iteration */
     if (mode == _MBOXSET_SKIP) {
         struct buf val = BUF_INITIALIZER;
-        annotatemore_lookup(mbentry->name, "/specialuse", req->accountid, &val);
+        annotatemore_lookup_mbe(mbentry, "/specialuse", req->accountid, &val);
         if (buf_len(&val)) {
             result->skipped = 1;
         }
