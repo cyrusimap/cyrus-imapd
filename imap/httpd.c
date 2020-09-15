@@ -189,7 +189,7 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
             }
 #else
             /* Even if we have used all input, this will return non-zero */
-            pending = deflateBound(zstrm, zstrm->avail_in));
+            pending = deflateBound(zstrm, zstrm->avail_in);
 #endif
 
             buf_ensure(&txn->zbuf, pending);
