@@ -7300,10 +7300,6 @@ static int delmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
                     mbentry->name, error_message(r));
     }
 
-    // obnoxious "every folder" for debugging
-    index_release(imapd_index);
-    sync_checkpoint(imapd_in);
-
     return 0;
 }
 
