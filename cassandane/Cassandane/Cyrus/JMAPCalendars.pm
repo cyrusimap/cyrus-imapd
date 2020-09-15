@@ -6961,4 +6961,16 @@ EOF
     $self->assert_str_equals('2020-04-22T00:00:00', $res->[1][1]{list}[0]{start});
 }
 
+sub test_calendarevent_get_location_newline
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my ($id, $ical) = $self->icalfile('location-newline');
+    my $event = $self->putandget_vevent($id, $ical);
+    my @locations = values(%{$event->{locations}});
+    $self->assert_num_equals(2, scalar @locations);
+    $self->assert_str_equals("xyz\nxyz", $locations[0]{name});
+    $self->assert_str_equals("xyz\nxyz", $locations[1]{name});
+}
+
 1;
