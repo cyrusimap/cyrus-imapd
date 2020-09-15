@@ -442,8 +442,8 @@ EOF
          }, "R3"]
     ]);
     $self->assert_not_null($res->[0][1]{actions});
-    $self->assert_str_equals('fileinto', $res->[1][1]{actions}[0]{type});
-    $self->assert_str_equals('keep', $res->[1][1]{actions}[1]{type});
+    $self->assert_str_equals('fileinto', $res->[0][1]{actions}[0]{type});
+    $self->assert_str_equals('keep', $res->[0][1]{actions}[1]{type});
     $self->assert_null($res->[0][1]{error});
 }
 
