@@ -3535,8 +3535,15 @@ static int search_reindex(const char *userid, const strarray_t *srcpaths,
         goto done;
     }
 
+    // we exactly managed to split at the end, or there was nothing to process!
+    if (!filter.numindexed)
+        free(strarray_shift(&filter.temptargets)); // removes temp_path
+
     // put all the indexes into the destination path
-    if (strarray_size(&filter.temptargets) == 1) {
+    if (strarray_size(&filter.temptargets) == 0) {
+        // nothing to copy!
+    }
+    else if (strarray_size(&filter.temptargets) == 1) {
         // copy into place.  Strictly this is a waste, we could just compact directly from here
         r = copy_files(strarray_nth(&filter.temptargets, 0), strarray_nth(destpaths, 0));
     }
