@@ -1043,7 +1043,7 @@ static int split_attribs(const char *data, int datalen,
 
 struct find_rock {
     const char *mboxname;
-    struct glob *mglob;
+    const char *entry;
     struct glob *eglob;
     unsigned int uid;
     modseq_t since_modseq;
@@ -1073,8 +1073,6 @@ static int find_p(void *rock, const char *key, size_t keylen,
     if (frock->uid &&
         frock->uid != ANNOTATE_ANY_UID &&
         frock->uid != uid)
-        return 0;
-    if (!GLOB_MATCH(frock->mglob, mboxid))
         return 0;
     if (!GLOB_MATCH(frock->eglob, entry))
         return 0;
@@ -1155,6 +1153,35 @@ static int find_cb(void *rock, const char *key, size_t keylen,
     return r;
 }
 
+static int _findall(struct findall_data *data, void *rock)
+{
+    struct find_rock *frock = (struct find_rock *) rock;
+    const char *mboxname = "", *mboxid = "";
+    char key[MAX_MAILBOX_PATH+1], *p;
+    size_t keylen;
+
+    if (!data || !data->is_exactmatch) return 0;
+
+    if (data->mbentry) {
+        mboxname = data->mbentry->name;
+        mboxid = data->mbentry->uniqueid;
+    }
+
+    /* Find fixed-string pattern prefix */
+    keylen = make_key(mboxname, mboxid, frock->uid,
+                      frock->entry, NULL, key, sizeof(key));
+
+    for (p = key; keylen; p++, keylen--) {
+        if (*p == '*' || *p == '%') break;
+    }
+    keylen = p - key;
+
+    frock->mboxname = mboxname;
+
+    return cyrusdb_foreach(frock->d->db, key, keylen,
+                           &find_p, &find_cb, frock, tid(frock->d));
+}
+
 EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
                          unsigned int uid,
                          const char *entry,
@@ -1163,8 +1190,6 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
                          void *rock,
                          int flags)
 {
-    char key[MAX_MAILBOX_PATH+1], *p;
-    size_t keylen;
     int r;
     struct find_rock frock;
     mbentry_t *mbentry = NULL;
@@ -1175,8 +1200,8 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
     assert(mboxname);
     assert(entry);
     frock.mboxname = mboxname;
-    frock.eglob = NULL;
-    frock.mglob = NULL;
+    frock.entry = entry;
+    frock.eglob = glob_init(entry, '/');
     frock.d = NULL;
     frock.uid = uid;
     frock.proc = proc;
@@ -1184,11 +1209,9 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
     frock.since_modseq = since_modseq;
     frock.flags = flags;
 
-    if (mboxname && *mboxname) {
+    if (*mboxname) {
         r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
-        if (r) goto out;
-
-        mboxid = mbentry->uniqueid;
+        if (!r) mboxid = mbentry->uniqueid;
     }
 
     r = _annotate_getdb(mboxid, uid, 0, &frock.d);
@@ -1198,24 +1221,20 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
         goto out;
     }
 
-    /* Find fixed-string pattern prefix */
-    keylen = make_key(mboxname, mboxid, uid,
-                      entry, NULL, key, sizeof(key));
+    if (mbentry || !*mboxname) {
+        /* Single mailbox (or server entries) */
+        struct findall_data data = { .mbentry = mbentry, .is_exactmatch = 1 };
 
-    for (p = key; keylen; p++, keylen--) {
-        if (*p == '*' || *p == '%') break;
+        r = _findall(&data, &frock);
     }
-    keylen = p - key;
-
-    frock.eglob = glob_init(entry, '/');
-    frock.mglob = glob_init(mboxid, '.');
-
-    r = cyrusdb_foreach(frock.d->db, key, keylen, &find_p, &find_cb,
-                        &frock, tid(frock.d));
+    else {
+        /* Mailbox pattern */
+        r = mboxlist_findall(NULL, *mboxname ? mboxname : "*",
+                             1, NULL, NULL, &_findall, &frock);
+    }
 
 out:
     mboxlist_entry_free(&mbentry);
-    glob_free(&frock.mglob);
     glob_free(&frock.eglob);
     annotate_putdb(&frock.d);
 
