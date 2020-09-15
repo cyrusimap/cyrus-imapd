@@ -457,12 +457,12 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
     sieve_notify_context_t *nc = (sieve_notify_context_t *)ac;
     sieve_test_context_t *ctx = (sieve_test_context_t *)ic;
     struct buf opts = BUF_INITIALIZER;
-    const char **p;
+    int i;
 
-    for (p = nc->options ; *p ; p++) {
+    for (i = 0; i < strarray_size(nc->options); i++) {
         if (opts.len)
             buf_putc(&opts, ' ');
-        buf_appendcstr(&opts, *p);
+        buf_appendcstr(&opts, strarray_nth(nc->options, i));
     }
 
     ctx->stats.actions++;

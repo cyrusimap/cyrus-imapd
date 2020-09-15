@@ -471,18 +471,16 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     int *force_fail = (int*) ic;
-    int flag = 0;
 
     printf("notify ");
     if (nc->method) {
-        const char **opts = nc->options;
-
         printf("%s(", nc->method);
-        while (opts && *opts) {
-            if (flag) printf(", ");
-            printf("%s", *opts);
-            opts++;
-            flag = 1;
+        if (nc->options) {
+            int i;
+            for (i = 0; i < strarray_size(nc->options); i++) {
+                if (i) printf(", ");
+                printf("%s", strarray_nth(nc->options, i));
+            }
         }
         printf("), ");
     }
