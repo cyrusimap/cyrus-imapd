@@ -1161,7 +1161,7 @@ sub test_mailbox_querychanges_role
             2 => {
                 parentId => $inboxId,
                 name => 'B',
-                role => 'trash',
+                role => 'xspecialuse',
             },
             3 => {
                 parentId => $inboxId,
