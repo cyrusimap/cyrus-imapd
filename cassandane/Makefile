@@ -38,28 +38,36 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-SUBDIRS = utils
+SUBDIRS := utils
+PERL := perl
 
 all clean install::
 	@for dir in $(SUBDIRS) ; do cd $$dir ; $(MAKE) $@ || exit 1 ; done
 
-PERL=	perl
-all::
-	@echo ./utils/annotator.pl syntax check SKIPPED
-	@ e=0; \
-	for script in ./utils/fakeldapd ./utils/fakesaslauthd `find . -type f -name '*.pl' | grep -v 'utils\/annotator.pl' | sort` ;\
-	do \
-		$(PERL) -c $$script || e=1 ;\
-	done ;\
-	for module in `find . -type f -name '*.pm'| sort` ;\
-	do \
-	    $(PERL) -c $$module || e=1 ;\
-	done ;\
-	exit $$e;
-
+all:: syntax
 
 # XXX utils/annotator.pl depends on modules installed with Cyrus, which it
 #     will only be able to find when invoked by Cyrus::Instance (which sets
 #     up $PERL5LIB appropriately) or when the system coincidentally also has
 #     a real Cyrus installation on it.  So we can't rely on it to pass a
 #     simple 'perl -c' check.
+SCRIPTS := $(shell find . -type f -name '*.pl' \
+             | grep -v 'utils\/annotator.pl' | sort)
+
+MODULES := $(shell find . -type f -name '*.pm' | sort)
+
+SYNTAX_rules =
+
+define SYNTAX_template
+ $(1)_syntax: $(1)
+	@$(PERL) -c $(1)
+ SYNTAX_rules += $(1)_syntax
+endef
+
+$(foreach s,$(SCRIPTS),$(eval $(call SYNTAX_template,$(s))))
+
+$(foreach m,$(MODULES),$(eval $(call SYNTAX_template,$(m))))
+
+syntax: $(SYNTAX_rules)
+
+.PHONY: all syntax $(SYNTAX_rules)
