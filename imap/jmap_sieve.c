@@ -1692,8 +1692,8 @@ static const char *_envelope_address_parse(json_t *addr,
 static int jmap_sieve_test(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    const char *key, *scriptid = NULL, *emailid = NULL, *bcname, *tmpname = NULL;
-    json_t *arg, *envelope = NULL, *err = NULL;
+    const char *key, *scriptid = NULL, *bcname, *tmpname = NULL;
+    json_t *arg, *emailids = NULL, *envelope = NULL, *err = NULL;
     strarray_t env_from = STRARRAY_INITIALIZER;
     strarray_t env_to = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
@@ -1715,8 +1715,8 @@ static int jmap_sieve_test(struct jmap_req *req)
             scriptid = json_string_value(arg);
         }
 
-        else if (!strcmp(key, "emailBlobId")) {
-            emailid = json_string_value(arg);
+        else if (!strcmp(key, "emailBlobIds")) {
+            emailids = arg;
         }
 
         else if (!strcmp(key, "envelope")) {
@@ -1738,17 +1738,14 @@ static int jmap_sieve_test(struct jmap_req *req)
     }
 
     if (!scriptid) {
-        jmap_parser_invalid(&parser, "scriptId");
+        jmap_parser_invalid(&parser, "scriptBlobId");
     }
     else if (scriptid[0] == '#') {
         scriptid = jmap_lookup_id(req, scriptid + 1);
     }
 
-    if (!emailid) {
-        jmap_parser_invalid(&parser, "emailId");
-    }
-    else if (emailid[0] == '#') {
-        emailid = jmap_lookup_id(req, emailid + 1);
+    if (!emailids) {
+        jmap_parser_invalid(&parser, "emailBlobIds");
     }
 
     /* envelope */
@@ -1893,52 +1890,86 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_register_include(interp, getinclude);
     sieve_register_execute_error(interp, execute_error);
 
-    /* load the email */
-    message_data_t m = { { BUF_INITIALIZER, NULL, NULL}, 0, NULL,
-        &env_from, &env_to, last_vaca_resp, NULL, &err };
+    /* test against each email */
+    size_t i;
+    json_t *completed = json_object(), *not_completed = json_object();
+    json_array_foreach(emailids, i, arg) {
+        const char *emailid = json_string_value(arg);
 
-    r = jmap_findblob(req, NULL/*accountid*/, emailid,
-                      &mbox, &mr, NULL, NULL, &m.content.map);
-    if (r) {
-        if (r == IMAP_NOTFOUND)
-            err = json_pack("{s:s s:[s]}",
-                            "type", "blobNotFound", "Id", emailid);
-        else
-            err = jmap_server_error(r);
-
-        jmap_error(req, err);
-        goto done;
-    }
-
-    if (!envelope) {
-        buf_setcstr(&buf, req->userid);
-        if (!strchr(req->userid, '@')) {
-            buf_printf(&buf, "@%s", config_servername);
+        if (emailid[0] == '#') {
+            emailid = jmap_lookup_id(req, emailid + 1);
         }
-        strarray_append(&env_to, buf_cstring(&buf));
+
+        /* load the email */
+        message_data_t m = { { BUF_INITIALIZER, NULL, NULL},
+            0, NULL, &env_from, &env_to, last_vaca_resp, NULL, &err };
+
+        r = jmap_findblob(req, NULL/*accountid*/, emailid,
+                          &mbox, &mr, NULL, NULL, &m.content.map);
+        if (r) {
+            if (r == IMAP_NOTFOUND)
+                err = json_pack("{s:s}", "type", "blobNotFound");
+            else
+                err = jmap_server_error(r);
+
+            json_object_set_new(not_completed, emailid, err);
+        }
+        else {
+            if (!envelope) {
+                buf_setcstr(&buf, req->userid);
+                if (!strchr(req->userid, '@')) {
+                    buf_printf(&buf, "@%s", config_servername);
+                }
+                strarray_append(&env_to, buf_cstring(&buf));
+            }
+
+            /* execute the script */
+            script_data_t sd =
+                { req->accountid, req->authstate, &jmap_namespace, &buf };
+
+            err = NULL;
+            m.actions = json_array();
+            sieve_execute_bytecode(exe, interp, &sd, &m);
+
+            if (err) {
+                json_object_set_new(not_completed, emailid, err);
+                json_decref(m.actions);
+            }
+            else {
+                json_object_set_new(completed, emailid, m.actions);
+            }
+
+            free_msg(&m);
+            msgrecord_unref(&mr);
+            jmap_closembox(req, &mbox);
+            if (!envelope) {
+                strarray_fini(&env_from);
+                strarray_fini(&env_to);
+            }
+        }
     }
-
-    /* execute the script */
-    script_data_t sd = { req->accountid, req->authstate, &jmap_namespace, &buf };
-    m.actions = json_array();
-    sieve_execute_bytecode(exe, interp, &sd, &m);
-
-    strarray_fini(&env_from);
-    strarray_fini(&env_to);
-    msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
 
     /* Build response */
-    json_t *res = json_pack("{s:o s:o}", "actions", m.actions,
-                            "error", err ? err : json_null());
-    jmap_ok(req, res);
+    if (!json_object_size(completed)) {
+        json_decref(completed);
+        completed = json_null();
+    }
+    if (!json_object_size(not_completed)) {
+        json_decref(not_completed);
+        not_completed = json_null();
+    }
 
-    free_msg(&m);
+    jmap_ok(req, json_pack("{s:s s:o s:o}",
+                           "accountId", req->accountid,
+                           "completed", completed,
+                           "notCompleted", not_completed));
 
 done:
     jmap_parser_fini(&parser);
     sieve_script_unload(&exe);
     sieve_interp_free(&interp);
+    strarray_fini(&env_from);
+    strarray_fini(&env_to);
     buf_free(&buf);
     if (tmpname) {
         /* Remove temp bytecode file */
