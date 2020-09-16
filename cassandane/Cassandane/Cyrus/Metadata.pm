@@ -2847,6 +2847,50 @@ sub test_folder_delete_msg_dmdel
     $self->folder_delete_msg_common();
 }
 
+sub test_folder_move_partition
+    :Partition2
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $folder = 'user.asd';
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/expire';
+    my $value = '13';
+
+    $admintalk->create($folder);
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+
+    # annotation should be set yet
+    my $res = $admintalk->getmetadata($folder, $entry);
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals({
+        $entry => undef,
+    }, $res->{$folder});
+
+    # set an annotation
+    $admintalk->setmetadata($folder, $entry, $value);
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+
+    # annotation should be set now
+    $res = $admintalk->getmetadata($folder, $entry);
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals({
+        $entry => $value,
+    }, $res->{$folder});
+
+    # move the mailbox to the other partition
+    $admintalk->rename($folder, $folder, 'p2');
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+
+    # annotation should still be set
+    $res = $admintalk->getmetadata($folder, $entry);
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals({
+        $entry => $value,
+    }, $res->{$folder});
+}
+
 sub test_getmetadata_multiple_folders
 {
     my ($self) = @_;
