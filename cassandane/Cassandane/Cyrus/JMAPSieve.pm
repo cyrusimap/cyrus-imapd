@@ -188,6 +188,25 @@ EOF
 
     my $id = $res->[0][1]{created}{"1"}{id};
 
+    xlog "attempt to create script with same name";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    content => "$script"
+                }
+            },
+            replaceOnCreate => JSON::false
+         }, "R1"],
+        ['SieveScript/get', {
+         }, "R2"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_null($res->[0][1]{created});
+    $self->assert_str_equals('scriptNameExists', $res->[0][1]{notCreated}{1}{type});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+
     xlog "rename script";
     $res = $jmap->CallMethods([
         ['SieveScript/set', {
@@ -212,9 +231,9 @@ EOF
             update => {
                 $id => {
                     content => "$script",
-                    isActive => JSON::true
                 }
-            }
+            },
+            onSuccessActivateScript => $id
          }, "R4"],
         ['SieveScript/get', {
          }, "R5"]
@@ -226,21 +245,27 @@ EOF
     $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isActive});
     $self->assert_str_equals($script, $res->[1][1]{list}[0]{content});
 
-    xlog "deactivate script and delete script";
+    xlog "attempt to delete active script";
     $res = $jmap->CallMethods([
         ['SieveScript/set', {
-            update => {
-                $id => {
-                    isActive => JSON::false
-                }
-            },
-            destroy => [ $id ]
+            destroy => [ $id ],
          }, "R6"],
         ['SieveScript/get', {
          }, "R7"]
     ]);
-    $self->assert_not_null($res->[0][1]{updated});
-    $self->assert_null($res->[0][1]{notUpdated});
+    $self->assert_null($res->[0][1]{destroyed});
+    $self->assert_not_null($res->[0][1]{notDestroyed});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+
+    xlog "delete active script";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            destroy => [ $id ],
+            onSuccessActivateScript => JSON::null
+         }, "R8"],
+        ['SieveScript/get', {
+         }, "R9"]
+    ]);
     $self->assert_not_null($res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{notDestroyed});
     $self->assert_num_equals(0, scalar @{$res->[1][1]{list}});
