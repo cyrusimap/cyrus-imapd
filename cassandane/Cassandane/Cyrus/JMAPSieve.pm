@@ -430,21 +430,25 @@ EOF
     $res = $jmap->CallMethods([
         ['Email/set', { create => { "1" => $email }}, "R2"],
     ]);
+
     my $emailid = $res->[0][1]{created}{"1"}{blobId};
 
     xlog "test script";
     $res = $jmap->CallMethods([
         ['SieveScript/test', {
             scriptBlobId => "$scriptid",
-            emailBlobId => "$emailid",
+            emailBlobIds => [ "$emailid" ],
             envelope => JSON::null,
             lastVacationResponse => JSON::null
          }, "R3"]
     ]);
-    $self->assert_not_null($res->[0][1]{actions});
-    $self->assert_str_equals('fileinto', $res->[0][1]{actions}[0]{type});
-    $self->assert_str_equals('keep', $res->[0][1]{actions}[1]{type});
-    $self->assert_null($res->[0][1]{error});
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{completed});
+    $self->assert_str_equals('fileinto',
+                             $res->[0][1]{completed}{$emailid}[0]{type});
+    $self->assert_str_equals('keep',
+                             $res->[0][1]{completed}{$emailid}[1]{type});
+    $self->assert_null($res->[0][1]{notCompleted});
 }
 
 sub test_sieve_test_singlecommand
@@ -452,7 +456,7 @@ sub test_sieve_test_singlecommand
 {
     my ($self) = @_;
 
-    my $email = <<'EOF';
+    my $email1 = <<'EOF';
 From: "Some Example Sender" <example@example.com>
 To: cassandane@example.com
 Subject: test email
@@ -463,13 +467,29 @@ Content-Transfer-Encoding: quoted-printable
 
 This is a test email.
 EOF
-    $email =~ s/\r?\n/\r\n/gs;
+    $email1 =~ s/\r?\n/\r\n/gs;
+
+    my $email2 = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: cassandane@example.com
+Subject: Hello!
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $email2 =~ s/\r?\n/\r\n/gs;
 
     my $script = <<EOF;
-require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use"];
+require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vacation"];
 if header :contains "subject" "test" {
   setflag "\\\\Seen\";
   fileinto :copy :flags ["\\\\Flagged", "\\\\Answered"] :specialuse "\\\\Flagged" :mailboxid "M123" :create "INBOX.foo";
+}
+else {
+  vacation "Gone fishin'";
 }
 EOF
     $script =~ s/\r?\n/\r\n/gs;
@@ -480,11 +500,12 @@ EOF
     my $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-                "1" => { content => $email },
+                "1" => { content => $email1 },
+                "3" => { content => $email2 },
                 "2" => { content => $script }
             }}, 'R0'],
         ['SieveScript/test', {
-            emailBlobId => '#1',
+            emailBlobIds => [ '#1', 'foobar', '#3' ],
             scriptBlobId => '#2',
             envelope => {
                 mailFrom => {
@@ -499,10 +520,22 @@ EOF
             lastVacationResponse => JSON::null
          }, "R1"]
     ]);
-    $self->assert_not_null($res->[1][1]{actions});
-    $self->assert_str_equals('fileinto', $res->[1][1]{actions}[0]{type});
-    $self->assert_str_equals('keep', $res->[1][1]{actions}[1]{type});
-    $self->assert_null($res->[1][1]{error});
+    $self->assert_not_null($res);
+
+    my $emailid1 = $res->[0][1]{created}{1}{blobId};
+    my $emailid2 = $res->[0][1]{created}{3}{blobId};
+
+    $self->assert_not_null($res->[1][1]{completed});
+    $self->assert_str_equals('fileinto',
+                             $res->[1][1]{completed}{$emailid1}[0]{type});
+    $self->assert_str_equals('keep',
+                             $res->[1][1]{completed}{$emailid1}[1]{type});
+    $self->assert_str_equals('vacation',
+                             $res->[1][1]{completed}{$emailid2}[0]{type});
+
+    $self->assert_not_null($res->[1][1]{notCompleted});
+    $self->assert_str_equals('blobNotFound',
+                             $res->[1][1]{notCompleted}{foobar}{type});
 }
 
 1;
