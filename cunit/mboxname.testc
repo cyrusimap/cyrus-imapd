@@ -326,36 +326,37 @@ static struct
     int unixhierarchysep;
 } conf;
 
-static void toexternal_helper(const char *intname,
-                              const char *extname_expected)
-{
-    struct namespace ns;
-    int r;
-
-    config_virtdomains = conf.virtdomains;
-    config_defdomain = conf.defdomain;
-    imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b = conf.unixhierarchysep;
-    imapopts[IMAPOPT_CROSSDOMAINS].val.b = conf.crossdomains;
-    imapopts[IMAPOPT_CROSSDOMAINS_ONLYOTHER].val.b = conf.cdother;
-    imapopts[IMAPOPT_ALTNAMESPACE].val.b = conf.altnamespace;
-    imapopts[IMAPOPT_USERPREFIX].val.s = conf.userprefix;
-    imapopts[IMAPOPT_SHAREDPREFIX].val.s = conf.sharedprefix;
-
-    r = mboxname_init_namespace(&ns, conf.isadmin);
-    CU_ASSERT_EQUAL_FATAL(r, 0);
-
-    if (intname) {
-        char *extname = mboxname_to_external(intname, &ns, conf.userid);
-        CU_ASSERT_STRING_EQUAL(extname, extname_expected);
-        free(extname);
-    }
-
-    if (extname_expected) {
-        char *intname_reversed = mboxname_from_external(extname_expected, &ns, conf.userid);
-        CU_ASSERT_STRING_EQUAL(intname, intname_reversed);
-        free(intname_reversed);
-    }
-}
+#define toexternal_helper(i, e) do {                                      \
+    const char *intname = (i);                                            \
+    const char *extname_expected = (e);                                   \
+    struct namespace ns;                                                  \
+    int r;                                                                \
+                                                                          \
+    config_virtdomains = conf.virtdomains;                                \
+    config_defdomain = conf.defdomain;                                    \
+    imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b = conf.unixhierarchysep;     \
+    imapopts[IMAPOPT_CROSSDOMAINS].val.b = conf.crossdomains;             \
+    imapopts[IMAPOPT_CROSSDOMAINS_ONLYOTHER].val.b = conf.cdother;        \
+    imapopts[IMAPOPT_ALTNAMESPACE].val.b = conf.altnamespace;             \
+    imapopts[IMAPOPT_USERPREFIX].val.s = conf.userprefix;                 \
+    imapopts[IMAPOPT_SHAREDPREFIX].val.s = conf.sharedprefix;             \
+                                                                          \
+    r = mboxname_init_namespace(&ns, conf.isadmin);                       \
+    CU_ASSERT_EQUAL_FATAL(r, 0);                                          \
+                                                                          \
+    if (intname) {                                                        \
+        char *extname = mboxname_to_external(intname, &ns, conf.userid);  \
+        CU_ASSERT_STRING_EQUAL(extname, extname_expected);                \
+        free(extname);                                                    \
+    }                                                                     \
+                                                                          \
+    if (extname_expected) {                                               \
+        char *intname_reversed = mboxname_from_external(extname_expected, \
+                                                        &ns, conf.userid);\
+        CU_ASSERT_STRING_EQUAL(intname, intname_reversed);                \
+        free(intname_reversed);                                           \
+    }                                                                     \
+} while(0)
 
 static void test_toexternal_admin(void)
 {
