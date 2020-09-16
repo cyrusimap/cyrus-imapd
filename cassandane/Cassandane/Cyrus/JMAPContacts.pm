@@ -478,7 +478,7 @@ sub test_contact_set_invalid
     $self->assert_not_null($res);
     my $notCreated = $res->[0][1]{notCreated}{"1"};
     $self->assert_not_null($notCreated);
-    $self->assert_num_equals(1, scalar @{$notCreated->{properties}});
+    $self->assert_num_equals(3, scalar @{$notCreated->{properties}});
 
     xlog $self, "create contacts";
     $res = $jmap->CallMethods([
@@ -510,7 +510,7 @@ sub test_contact_set_invalid
     $self->assert_not_null($res);
     my $notUpdated = $res->[0][1]{notUpdated}{$contact};
     $self->assert_not_null($notUpdated);
-    $self->assert_num_equals(2, scalar @{$notUpdated->{properties}});
+    $self->assert_num_equals(3, scalar @{$notUpdated->{properties}});
 
     xlog $self, "update contact with server-set properties";
     $res = $jmap->CallMethods([['Contact/set', {
