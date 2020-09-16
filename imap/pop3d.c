@@ -971,6 +971,7 @@ static void cmdloop(void)
                 mailbox_unlock_index(popd_mailbox, NULL);
 
 done:
+                mailbox_close(&popd_mailbox);
                 sync_checkpoint(popd_in);
 
                 prot_printf(popd_out, "+OK\r\n");
