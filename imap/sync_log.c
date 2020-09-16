@@ -242,11 +242,11 @@ EXPORTED struct buf *sync_log_rightnow_buf()
 
 EXPORTED void sync_log_reset()
 {
-    if (buf_len(rightnow_log)) {
-        syslog(LOG_NOTICE, "SYNCNOTICE: rightnow log leaked %s", buf_cstring(rightnow_log));
-        buf_reset(rightnow_log);
-    }
-
+    if (!channels) return;
+    if (!rightnow_log) return;
+    if (!buf_len(rightnow_log)) return;
+    syslog(LOG_NOTICE, "SYNCNOTICE: rightnow log leaked %s", buf_cstring(rightnow_log));
+    buf_reset(rightnow_log);
 }
 
 static const char *sync_quote_name(const char *name)
