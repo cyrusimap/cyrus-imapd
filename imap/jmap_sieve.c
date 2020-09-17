@@ -621,8 +621,7 @@ static const char *name_to_idlink(const char *sievedir, const char *name)
             tgt_len = readlink(link, target, sizeof(target) - 1);
 
             if (tgt_len == name_len + SCRIPT_SUFFIX_LEN &&
-                !strncmp(target, name, name_len) &&
-                !strcmp(target + name_len, SCRIPT_SUFFIX)) {
+                !strncmp(target, name, name_len)) {
                 /* This link points to our script */
                 idlink = link;
                 break;
@@ -731,11 +730,12 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
             json_object_set_new(set->created, creation_id, new_sieve);
 
             if (old_link) {
-                /* Remove old link and report as destroyed */
-                unlink(old_link);
+                /* Remove old id link and report id as destroyed */
+                const char *old_id =
+                    old_link + strlen(sievedir) + 1 + SCRIPT_ID_PREFIX_LEN;
 
-                id = old_link + strlen(sievedir) + 1 + SCRIPT_ID_PREFIX_LEN;
-                json_array_append_new(set->destroyed, json_string(id));
+                unlink(old_link);
+                json_array_append_new(set->destroyed, json_string(old_id));
             }
         }
     }
@@ -760,7 +760,7 @@ static void set_update(const char *id, json_t *jsieve,
     json_t *arg, *invalid = json_array(), *err = NULL;
     const char *script, *name = NULL, *content = NULL;
     char newpath[PATH_MAX], *cur_name = NULL;
-    int r = 0;
+    int r = 0, is_active;
 
     if (!id) return;
 
@@ -771,6 +771,7 @@ static void set_update(const char *id, json_t *jsieve,
     }
 
     cur_name = xstrndup(script, strlen(script) - SCRIPT_SUFFIX_LEN);
+    is_active = script_isactive(cur_name, sievedir);
 
     arg = json_object_get(jsieve, "name");
     if (arg && !json_is_string(arg))
@@ -793,7 +794,7 @@ static void set_update(const char *id, json_t *jsieve,
     if (arg) {
         if (!json_is_boolean(arg))
             json_array_append_new(invalid, json_string("isActive"));
-        else if (json_boolean_value(arg) != script_isactive(cur_name, sievedir)){
+        else if (json_boolean_value(arg) != is_active) {
             /* isActive MUST be current value, if present */
             json_array_append_new(invalid, json_string("isActive"));
         }
@@ -817,7 +818,7 @@ static void set_update(const char *id, json_t *jsieve,
         if (err) goto done;
     }
     if (!r && name && strcmp(name, cur_name)) {
-        /* rename script and bytecode; move script id link */
+        /* rename script and bytecode; move script id link; move active link */
         char oldpath[PATH_MAX];
 
         snprintf(oldpath, sizeof(oldpath),
@@ -830,6 +831,9 @@ static void set_update(const char *id, json_t *jsieve,
                      "%s/%s%s", sievedir, SCRIPT_ID_PREFIX, id);
             r = unlink(link);
             if (!r) r = symlink(newpath + strlen(sievedir) + 1, link);
+        }
+        if (!r && is_active) {
+            r = script_setactive(id, sievedir);
         }
         if (!r) {
             snprintf(oldpath, sizeof(oldpath),
@@ -901,6 +905,65 @@ static void set_destroy(const char *id, json_t *onSuccessActivate,
     }
 }
 
+static void set_activate(const char *id, const char *sievedir,
+                         struct jmap_set *set)
+{
+    char link[PATH_MAX], target[PATH_MAX];
+    struct stat sbuf;
+    const char *old_link = NULL;
+    json_t *created = NULL;
+    int r;
+
+    snprintf(link, sizeof(link), "%s/%s", sievedir, DEFAULTBC_NAME);
+
+    /* Lookup currently active script */
+    if (!stat(link, &sbuf)) {
+        ssize_t tgt_len = readlink(link, target, sizeof(target) - 1);
+
+        if (tgt_len > BYTECODE_SUFFIX_LEN) {
+            target[tgt_len - BYTECODE_SUFFIX_LEN] = '\0';
+            old_link = name_to_idlink(sievedir, target);
+        }
+    }
+
+    if (id) {
+        if (id[0] == '#') {
+            /* Resolve creation id */
+            created = json_object_get(set->created, id+1);
+            id = json_string_value(json_object_get(created, "id"));
+        }
+        if (id && json_array_find(set->destroyed, id) >= 0) {
+            /* Don't try to activate a destroyed script */
+            id = NULL;
+        }
+    }
+
+    r = script_setactive(id, sievedir);
+    if (r) {
+        /* XXX  How do we report a failure here? */
+        return;
+    }
+
+    if (old_link) {
+        /* Report previous active script as updated */
+        const char *old_id =
+            old_link + strlen(sievedir) + 1 + SCRIPT_ID_PREFIX_LEN; 
+
+        json_object_set_new(set->updated, old_id,
+                            json_pack("{s:b}", "isActive", 0));
+    }
+
+    if (created) {
+        /* Report new script as active */
+        json_object_set_new(created, "isActive", json_boolean(1));
+    }
+    else if (id) {
+        /* Report current active script as updated */
+        json_object_set_new(set->updated, id,
+                            json_pack("{s:b}", "isActive", 1));
+    }
+}
+
 struct sieve_set_args {
     unsigned replaceOnCreate;
     json_t *onSuccessActivate;
@@ -938,7 +1001,6 @@ static int jmap_sieve_set(struct jmap_req *req)
     struct jmap_set set;
     struct sieve_set_args sub_args = { 0, NULL };
     json_t *jerr = NULL;
-    int r = 0;
 
     const char *sievedir = user_sieve_path(req->accountid);
 
@@ -1019,8 +1081,9 @@ static int jmap_sieve_set(struct jmap_req *req)
         !json_object_size(set.not_created) &&
         !json_object_size(set.not_updated) &&
         !json_array_size(set.not_destroyed)) {
-        r = script_setactive(json_string_value(sub_args.onSuccessActivate),
-                             sievedir);
+
+        id = json_string_value(sub_args.onSuccessActivate);
+        set_activate(id, sievedir, &set);
     }
 
     if (json_object_size(set.created) || json_object_size(set.updated) ||
@@ -1035,7 +1098,7 @@ static int jmap_sieve_set(struct jmap_req *req)
 done:
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
-    return r;
+    return 0;
 }
 
 static int jmap_sieve_validate(struct jmap_req *req)
