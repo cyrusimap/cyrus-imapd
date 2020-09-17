@@ -660,7 +660,7 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
                               unsigned overwrite,
                               const char *sievedir, struct jmap_set *set)
 {
-    json_t *arg, *invalid = json_pack("[]"), *err = NULL;
+    json_t *arg, *invalid = json_array(), *err = NULL;
     const char *id = NULL, *name = NULL, *content = NULL, *old_link = NULL;
     int r, isactive = -1;
     char path[PATH_MAX];
@@ -700,11 +700,10 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
 
     /* Report any property errors and bail out */
     if (json_array_size(invalid)) {
-        err = json_pack("{s:s, s:o}",
+        err = json_pack("{s:s, s:O}",
                         "type", "invalidProperties", "properties", invalid);
         goto done;
     }
-    json_decref(invalid);
 
     r = putscript(name, content, sievedir, &err);
     if (err) goto done;
@@ -750,6 +749,7 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
     if (err) {
         json_object_set_new(set->not_created, creation_id, err);
     }
+    json_decref(invalid);
 
     return id;
 }
@@ -757,7 +757,7 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
 static void set_update(const char *id, json_t *jsieve,
                        const char *sievedir, struct jmap_set *set)
 {
-    json_t *arg, *invalid = json_pack("[]"), *err = NULL;
+    json_t *arg, *invalid = json_array(), *err = NULL;
     const char *script, *name = NULL, *content = NULL;
     char newpath[PATH_MAX], *cur_name = NULL;
     int r = 0;
@@ -807,11 +807,10 @@ static void set_update(const char *id, json_t *jsieve,
 
     /* Report any property errors and bail out */
     if (json_array_size(invalid)) {
-        err = json_pack("{s:s, s:o}",
+        err = json_pack("{s:s, s:O}",
                         "type", "invalidProperties", "properties", invalid);
         goto done;
     }
-    json_decref(invalid);
 
     if (content) {
         r = putscript(cur_name, content, sievedir, &err);
@@ -853,6 +852,7 @@ static void set_update(const char *id, json_t *jsieve,
     if (err) {
         json_object_set_new(set->not_updated, id, err);
     }
+    json_decref(invalid);
     free(cur_name);
 }
 
