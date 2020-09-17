@@ -207,6 +207,31 @@ EOF
     $self->assert_str_equals('scriptNameExists', $res->[0][1]{notCreated}{1}{type});
     $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
 
+    xlog "overwrite existing script";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    content => "$script"
+                }
+            },
+            replaceOnCreate => JSON::true
+         }, "R1"],
+        ['SieveScript/get', {
+         }, "R2"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_equals(JSON::false, $res->[0][1]{created}{1}{isActive});
+
+    $self->assert_equals($id, $res->[0][1]{destroyed}[0]);
+
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_str_equals('foo', $res->[1][1]{list}[0]{name});
+    $self->assert_equals(JSON::false, $res->[1][1]{list}[0]{isActive});
+
+    $id = $res->[0][1]{created}{"1"}{id};
+
     xlog "rename script";
     $res = $jmap->CallMethods([
         ['SieveScript/set', {
