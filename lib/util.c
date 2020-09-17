@@ -2103,7 +2103,7 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
         buf_putc(&buf, ' ');
     }
     if (saved_errno) {
-        buf_appendmap(&buf, "syserror=<", 7);
+        buf_appendmap(&buf, "syserror=<", 10);
         buf_appendcstr(&buf, strerror(saved_errno));
         buf_appendmap(&buf, "> ", 2);
     }
