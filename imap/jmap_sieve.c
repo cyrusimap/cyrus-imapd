@@ -940,16 +940,14 @@ static int jmap_sieve_set(struct jmap_req *req)
     json_t *jerr = NULL;
     int r = 0;
 
+    const char *sievedir = user_sieve_path(req->accountid);
+
     /* Parse arguments */
     jmap_set_parse(req, &parser, sieve_props,
                    &_sieve_setargs_parse, &sub_args, &set, &jerr);
-    if (jerr) {
-        jmap_error(req, jerr);
-        goto done;
-    }
 
     /* Validate scriptId in onSuccessActivateScript */
-    if (JNOTNULL(sub_args.onSuccessActivate)) {
+    if (!jerr && JNOTNULL(sub_args.onSuccessActivate)) {
         const char *id = json_string_value(sub_args.onSuccessActivate);
         int found;
 
@@ -958,17 +956,24 @@ static int jmap_sieve_set(struct jmap_req *req)
         if (*id == '#') {
             found = json_object_get(set.create, id+1) != NULL;
         }
-        else {
-            found = json_object_get(set.update, id) != NULL;
-            if (!found) found = json_array_find(set.destroy, id) >= 0;
+        else if ((found = json_array_find(set.destroy, id) < 0)) {
+            found = script_from_id(sievedir, id) != NULL;
         }
 
-        if (!found) jmap_parser_invalid(&parser, id);
+        if (!found) {
+            jmap_parser_invalid(&parser, id);
+            jerr = json_pack("{s:s s:O}", "type", "invalidArguments",
+                             "arguments", parser.invalid);
+        }
 
         jmap_parser_pop(&parser);
     }
 
-    const char *sievedir = user_sieve_path(req->accountid);
+    if (jerr) {
+        jmap_error(req, jerr);
+        goto done;
+    }
+
     set.old_state = sieve_state(sievedir);
 
     if (set.if_in_state && strcmp(set.if_in_state, set.old_state)) {
