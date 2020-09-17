@@ -597,6 +597,43 @@ static int putscript(const char *name, const char *content,
     return r;
 }
 
+static const char *name_to_idlink(const char *sievedir, const char *name)
+{
+    ssize_t name_len = strlen(name);
+    const char *idlink = NULL;
+    struct dirent *dir;
+    DIR *dp;
+
+    /* Open the directory */
+    dp = opendir(sievedir);
+
+    if (dp == NULL) return NULL;
+
+    while ((dir = readdir(dp)) != NULL) {
+        if (!strncmp(dir->d_name, SCRIPT_ID_PREFIX, SCRIPT_ID_PREFIX_LEN)) {
+            /* Script id symlink */
+            static char link[PATH_MAX];
+            char target[PATH_MAX];
+            ssize_t tgt_len;
+
+            snprintf(link, sizeof(link), "%s/%s", sievedir, dir->d_name);
+
+            tgt_len = readlink(link, target, sizeof(target) - 1);
+
+            if (tgt_len == name_len + SCRIPT_SUFFIX_LEN &&
+                !strncmp(target, name, name_len) &&
+                !strcmp(target + name_len, SCRIPT_SUFFIX)) {
+                /* This link points to our script */
+                idlink = link;
+                break;
+            }
+        }
+    }
+    closedir(dp);
+
+    return idlink;
+}
+
 static int script_setactive(const char *id, const char *sievedir)
 {
     char link[PATH_MAX], target[PATH_MAX];
@@ -624,7 +661,7 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
                               const char *sievedir, struct jmap_set *set)
 {
     json_t *arg, *invalid = json_pack("[]"), *err = NULL;
-    const char *id = NULL, *name = NULL, *content = NULL;
+    const char *id = NULL, *name = NULL, *content = NULL, *old_link = NULL;
     int r, isactive = -1;
     char path[PATH_MAX];
 
@@ -646,7 +683,7 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
         }
         else if (!stat(path, &sbuf)) {
             if (overwrite) {
-                /* XXX  TODO: remove existing script and ID link */
+                old_link = name_to_idlink(sievedir, name);
             }
             else {
                 err = json_pack("{s:s}", "type", "scriptNameExists");
@@ -693,6 +730,14 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
             json_object_set_new(new_sieve, "blobId", json_string(link));
             
             json_object_set_new(set->created, creation_id, new_sieve);
+
+            if (old_link) {
+                /* Remove old link and report as destroyed */
+                unlink(old_link);
+
+                id = old_link + strlen(sievedir) + 1 + SCRIPT_ID_PREFIX_LEN;
+                json_array_append_new(set->destroyed, json_string(id));
+            }
         }
     }
 
@@ -1710,7 +1755,7 @@ static int getinclude(void *sc __attribute__((unused)),
                       char *fpath, size_t size)
 {
     strlcpy(fpath, script, size);
-    strlcat(fpath, ".bc", size);
+    strlcat(fpath, BYTECODE_SUFFIX, size);
 
     return SIEVE_OK;
 }
