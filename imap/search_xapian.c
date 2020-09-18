@@ -3413,7 +3413,7 @@ static int reindex_mb(void *rock,
     for (base = 0; base < batch.count; base = batchend) {
         /* XXX - errors here could leak... */
         /* game on */
-        batchend = base + 8192;
+        batchend = base + 1024;
         if (batchend > batch.count) batchend = batch.count;
 
         /* preload */
