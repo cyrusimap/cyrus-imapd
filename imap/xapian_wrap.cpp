@@ -735,7 +735,7 @@ static int xapian_dbw_init(xapian_dbw_t *dbw)
     return 0;
 }
 
-int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
+int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode, int nosync)
 {
     xapian_dbw_t *dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
     int r = 0;
@@ -743,13 +743,15 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
 
     std::set<int> db_versions;
     try {
+        int flags = Xapian::DB_BACKEND_GLASS|Xapian::DB_RETRY_LOCK;
+        if (nosync) flags |= Xapian::DB_DANGEROUS|Xapian::DB_NO_SYNC;
         try {
-            dbw->database = new Xapian::WritableDatabase{thispath, Xapian::DB_OPEN};
+            dbw->database = new Xapian::WritableDatabase{thispath, flags|Xapian::DB_OPEN};
             db_versions = read_db_versions(*dbw->database);
         } catch (Xapian::DatabaseOpeningError &e) {
             /* It's OK not to atomically create or open, since we can assume
              * the xapianactive file items to be locked. */
-            dbw->database = new Xapian::WritableDatabase{thispath, Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS};
+            dbw->database = new Xapian::WritableDatabase{thispath, flags|Xapian::DB_CREATE};
         }
         if (db_versions.find(XAPIAN_DB_CURRENT_VERSION) == db_versions.end()) {
             // Always index using latest database version.
@@ -1251,6 +1253,19 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
         r = IMAP_IOERROR;
     }
     return r;
+}
+
+unsigned long xapian_dbw_total_length(xapian_dbw_t *dbw)
+{
+    unsigned long res = 0;
+    try {
+        res = dbw->database->get_total_length();
+    }
+    catch (const Xapian::Error &err) {
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception total_size: %s",
+                    err.get_description().c_str());
+    }
+    return res;
 }
 
 uint8_t xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype)

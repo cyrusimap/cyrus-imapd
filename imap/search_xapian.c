@@ -82,6 +82,10 @@
 #define ACTIVEFILE_METANAME     "xapianactive"
 #define XAPIAN_NAME_LOCK_PREFIX "$XAPIAN$"
 
+// this seems to translate for 4Gb-ish  - units are 10 bytes?
+#define XAPIAN_REINDEX_TEMPDIR_SIZE 419430400
+#define XAPIAN_REINDEX_TEMPDIR_COUNT 64000
+
 /* Name of columns */
 #define COL_CYRUSID     "cyrusid"
 
@@ -2473,7 +2477,7 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
     if (!ptrarray_size(&tr->super.segs)) goto out;
 
     if (!tr->dbw) {
-        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode, /*nosync*/0);
         if (r) goto out;
     }
 
@@ -2628,7 +2632,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
     if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
         /* open the DB now, we need it to check if messages are indexed */
-        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode, /*nosync*/0);
         if (r) goto out;
     }
 
@@ -3161,14 +3165,29 @@ struct mbfilter {
     struct txn **tid;
     const strarray_t *destpaths;
     const strarray_t *desttiers;
+    char *temp_path;
+    strarray_t temptargets;
+    int numindexed;
     int flags;
 };
 
 static void free_mbfilter(struct mbfilter *filter)
 {
+    int i;
+
     if (filter->tid) cyrusdb_abort(filter->indexeddb, *filter->tid);
     cyrusdb_close(filter->indexeddb);
     bloom_free(&filter->bloom);
+
+    for (i = 0; i < strarray_size(&filter->temptargets); i++) {
+        removedir(strarray_nth(&filter->temptargets, i));
+    }
+    strarray_fini(&filter->temptargets);
+
+    if (filter->temp_path) {
+        removedir(filter->temp_path);
+        free(filter->temp_path);
+    }
 }
 
 static int copyindexed_cb(void *rock,
@@ -3315,8 +3334,10 @@ static int reindex_mb(void *rock,
     struct seqset *seq = parse_indexed(data, datalen);
     xapian_update_receiver_t *tr = NULL;
     struct mailbox *mailbox = NULL;
+    struct buf buf = BUF_INITIALIZER;
     ptrarray_t batch = PTRARRAY_INITIALIZER;
     int verbose = SEARCH_VERBOSE(filter->flags);
+    strarray_t alldirs = STRARRAY_INITIALIZER;
     int r = 0;
     int i;
     char *dot;
@@ -3337,24 +3358,8 @@ static int reindex_mb(void *rock,
 
     if (mailbox->i.uidvalidity != uidvalidity) goto done; /* returns 0, nothing to index */
 
-    /* open the DB */
-    tr = (xapian_update_receiver_t *)begin_update(verbose);
-    tr->mode = XAPIAN_DBW_XAPINDEXED; // always use XAPINDEXED for reindex, so we reindex the same emails
-    r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw, tr->mode);
-    if (r) goto done;
-    tr->super.mailbox = mailbox;
-
-    tr->activedirs = strarray_dup(filter->destpaths);
-    tr->activetiers = strarray_dup(filter->desttiers);
-
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     mailbox_iter_startuid(iter, seqset_first(seq));
-
-    /* initialise here so it doesn't add firstunindexed
-     * from oldindexed in is_indexed */
-    tr->indexed = seqset_init(0, SEQ_MERGE);
-
-    int allow_partials = SEARCH_COMPACT_ALLOW_PARTIALS;
 
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
@@ -3363,14 +3368,8 @@ static int reindex_mb(void *rock,
         if (!seqset_ismember(seq, record->uid))
             continue;
 
-        message_t *msg = message_new_from_record(mailbox, record);
-
-        /* add the record to the list */
-        uint8_t indexlevel = is_indexed((search_text_receiver_t *)tr, msg);
-        if (indexlevel == 0 || ((indexlevel & SEARCH_INDEXLEVEL_PARTIAL) && !allow_partials))
-            ptrarray_append(&batch, msg);
-        else
-            message_unref(&msg);
+        /* we need to create a new message, because the iterator reuses its one */
+        ptrarray_append(&batch, (void *)message_new_from_record(mailbox, record));
 
         if (record->uid > seqset_last(seq))
             break;
@@ -3380,37 +3379,78 @@ static int reindex_mb(void *rock,
 
     mailbox_unlock_index(mailbox, NULL);
 
+    // nothing to do?  Bonus!
+    if (!ptrarray_size(&batch)) goto done;
+
+    /* open the DB */
+    tr = (xapian_update_receiver_t *)begin_update(verbose);
+    tr->mode = XAPIAN_DBW_XAPINDEXED; // always use XAPINDEXED for reindex, so we reindex the same emails
+    tr->super.mailbox = mailbox;
+    tr->activedirs = strarray_dup(filter->destpaths);
+    tr->activetiers = strarray_dup(filter->desttiers);
+    // include all the new databases too
+    strarray_cat(&alldirs, &filter->temptargets);
+    // skip the first one, there's no data in there!
+    for (i = 1; i < strarray_size(filter->destpaths); i++)
+        strarray_append(&alldirs, strarray_nth(filter->destpaths, i));
+
+    r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw, tr->mode, /*nosync*/1);
+    if (r) goto done;
+
+    /* initialise here so it doesn't add firstunindexed
+     * from oldindexed in is_indexed */
+    tr->indexed = seqset_init(0, SEQ_MERGE);
+
+    int allow_partials = 0;
+    int getsearchtext_flags = 0;
+    if (filter->flags & SEARCH_COMPACT_ALLOW_PARTIALS) {
+        allow_partials = 1;
+        getsearchtext_flags |= INDEX_GETSEARCHTEXT_PARTIALS;
+    }
+
     int base = 0;
     int batchend = 0;
     for (base = 0; base < batch.count; base = batchend) {
         /* XXX - errors here could leak... */
         /* game on */
-        batchend = base + 8192;
+        batchend = base + 1024;
         if (batchend > batch.count) batchend = batch.count;
 
         /* preload */
         for (i = base ; i < batchend ; i++) {
             message_t *msg = ptrarray_nth(&batch, i);
 
-            const char *fname;
-            r = message_get_fname(msg, &fname);
-            if (r) goto done;
-            r = warmup_file(fname, 0, 0);
-            if (r) goto done; /* means we failed to open a file,
-                                 so we'll fail later anyway */
+            /* add the record to the list */
+            uint8_t indexlevel = is_indexed((search_text_receiver_t *)tr, msg);
+            if (indexlevel == 0 || ((indexlevel & SEARCH_INDEXLEVEL_PARTIAL) && !allow_partials)) {
+                const char *fname;
+                r = message_get_fname(msg, &fname);
+                if (r) goto done;
+                r = warmup_file(fname, 0, 0);
+                if (r) goto done; /* means we failed to open a file,
+                                     so we'll fail later anyway */
+            }
+            else {
+                // remove it from the list now so we don't try to index it later
+                message_unref(&msg);
+                ptrarray_set(&batch, i, NULL);
+            }
         }
 
         /* index the messages */
-        int getsearchtext_flags = 0;
-        if (filter->flags & SEARCH_COMPACT_ALLOW_PARTIALS) {
-            getsearchtext_flags |= INDEX_GETSEARCHTEXT_PARTIALS;
-        }
         for (i = base ; i < batchend ; i++) {
             message_t *msg = ptrarray_nth(&batch, i);
+            if (!msg) continue;
+
             r = index_getsearchtext(msg, NULL, &tr->super.super, getsearchtext_flags);
+            // we must unref the message and then zero out the entry in the ptrarray
+            // now, because index_getsearchtext will have mapped the file in, and even
+            // if we decided not to index it, we won't need it again
             message_unref(&msg);
             ptrarray_set(&batch, i, NULL);
             if (r) goto done;
+
+            filter->numindexed++;
         }
 
         // the next write will start a new transaction if uncommitted == 0
@@ -3419,6 +3459,32 @@ static int reindex_mb(void *rock,
             if (r) goto done;
             tr->uncommitted = 0;
             tr->commits++;
+
+            // we don't want to blow out the temporary space, so let's split every so often!
+            if (filter->numindexed > XAPIAN_REINDEX_TEMPDIR_COUNT ||
+                xapian_dbw_total_length(tr->dbw) > XAPIAN_REINDEX_TEMPDIR_SIZE) {
+                // close the database, move the data, open a new database with a new target!  Yikes
+                xapian_dbw_close(tr->dbw);
+                // we move the existing temp database to the same partition as the target, then
+                // start up a brand new temp database at the same path!
+                // e.g. temp == /tmpfs/cyrus-tempXXX-reindex/xapian
+                //      buf  == /mnt/searchdrive/path/to/user/xapian.23.REINDEX.NEW.<num>
+                buf_reset(&buf);
+                buf_printf(&buf, "%s.%d", strarray_nth(filter->destpaths, 0), (int)strarray_size(&filter->temptargets));
+                const char *temp = strarray_nth(&filter->temptargets, 0);
+                syslog(LOG_DEBUG, "REINDEX: chunking %s to %s", temp, buf_cstring(&buf));
+                r = copy_files(temp, buf_cstring(&buf));
+                removedir(temp);
+                // insert the new path directly after the temporary directory
+                strarray_insert(&filter->temptargets, 1, buf_cstring(&buf));
+                // and also open it for the next writes
+                strarray_insert(&alldirs, 1, buf_cstring(&buf));
+
+                // finally, re-open the database on the new empty directory with the extra path added
+                if (!r) r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw, tr->mode, /*nosync*/1);
+                if (r) goto done;
+                filter->numindexed = 0;
+            }
         }
     }
 
@@ -3438,6 +3504,8 @@ done:
     ptrarray_fini(&batch);
     free(mboxname);
     seqset_free(seq);
+    strarray_fini(&alldirs);
+    buf_free(&buf);
     return r;
 }
 
@@ -3455,10 +3523,33 @@ static int search_reindex(const char *userid, const strarray_t *srcpaths,
     if (verbose)
         printf("Reindexing messages for %s\n", userid);
 
+    // set up temporary target
+    filter.temp_path = create_tempdir(config_getstring(IMAPOPT_TEMP_PATH), "reindex");
+    buf_printf(&buf, "%s/xapian", filter.temp_path);
+    strarray_append(&filter.temptargets, buf_cstring(&buf));
+
+    // do the indexing
     r = cyrusdb_foreach(filter.indexeddb, "", 0, NULL, reindex_mb, &filter, NULL);
     if (r) {
         printf("ERROR: failed to reindex to %s\n", strarray_nth(destpaths, 0));
         goto done;
+    }
+
+    // we exactly managed to split at the end, or there was nothing to process!
+    if (!filter.numindexed)
+        free(strarray_shift(&filter.temptargets)); // removes temp_path
+
+    // put all the indexes into the destination path
+    if (strarray_size(&filter.temptargets) == 0) {
+        // nothing to copy!
+    }
+    else if (strarray_size(&filter.temptargets) == 1) {
+        // copy into place.  Strictly this is a waste, we could just compact directly from here
+        r = copy_files(strarray_nth(&filter.temptargets, 0), strarray_nth(destpaths, 0));
+    }
+    else {
+        // we're going to double-compact, but that's OK
+        r = xapian_compact_dbs(strarray_nth(destpaths, 0), (const char **)filter.temptargets.data);
     }
 
     if (verbose)
@@ -3532,7 +3623,7 @@ static void cleanup_xapiandirs(const char *mboxname, const char *partition, stra
     strarray_fini(&bogus);
 }
 
-static int compact_dbs(const char *userid, const char *tempdir,
+static int compact_dbs(const char *userid, const strarray_t *reindextiers,
                        const strarray_t *srctiers, const char *desttier,
                        int flags)
 {
@@ -3544,6 +3635,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     strarray_t *newdirs = NULL;
     strarray_t *active = NULL;
     strarray_t *tochange = NULL;
+    strarray_t *reindexitems = NULL;
     strarray_t *orig = NULL;
     strarray_t *toreindex = NULL;
     strarray_t *tocompact = NULL;
@@ -3552,7 +3644,6 @@ static int compact_dbs(const char *userid, const char *tempdir,
     char *tempdestdir = NULL;
     char *tempreindexdir = NULL;
     strarray_t *newtiers = NULL;
-    struct buf mytempdir = BUF_INITIALIZER;
     char *namelock_fname = NULL;
     int verbose = SEARCH_VERBOSE(flags);
     int created_something = 0;
@@ -3583,7 +3674,14 @@ static int compact_dbs(const char *userid, const char *tempdir,
     namelock_fname = xapiandb_namelock_fname_from_userid(userid);
 
     /* Get an exclusive namelock */
-    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
+    int lockflags = LOCK_EXCLUSIVE;
+    if (flags & SEARCH_COMPACT_NONBLOCKING) lockflags |= LOCK_NONBLOCK;
+    r = mboxname_lock(namelock_fname, &xapiandb_namelock, lockflags);
+    if (r == IMAP_MAILBOX_LOCKED) {
+        // that's OK, we asked for it!
+        r = 0;
+        goto out;
+    }
     if (r) {
         syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
                namelock_fname);
@@ -3600,6 +3698,14 @@ static int compact_dbs(const char *userid, const char *tempdir,
      * level less than or equal to that requested */
     tochange = activefile_filter(active, srctiers, mbentry->partition);
     if (!tochange || !tochange->count) goto out;
+
+    /* also, track which ones to reindex */
+    if (reindextiers) {
+        reindexitems = activefile_filter(tochange, reindextiers, mbentry->partition);
+    }
+    else {
+        reindexitems = strarray_new();
+    }
 
     if (tochange->count == 1 && srctiers->count == 1 &&
         (flags & SEARCH_COMPACT_COPYONE) && !strcmp(desttier, strarray_nth(srctiers, 0))) {
@@ -3624,7 +3730,12 @@ static int compact_dbs(const char *userid, const char *tempdir,
     if (verbose) {
         char *target = strarray_join(tochange, ",");
         char *activestr = strarray_join(orig, ",");
-        printf("compressing %s to %s for %s (active %s)\n", target, newdest, mboxname, activestr);
+        char *reindexstr = strarray_join(reindexitems, ",");
+        const char *reindex = (flags & SEARCH_COMPACT_REINDEX)
+                            ? "ALL" : reindexstr ? reindexstr : "NONE";
+        printf("compressing %s to %s for %s (active %s) (reindex %s)\n",
+               target, newdest, mboxname, activestr, reindex);
+        free(reindexstr);
         free(activestr);
         free(target);
     }
@@ -3684,21 +3795,12 @@ static int compact_dbs(const char *userid, const char *tempdir,
      */
     mappedfile_unlock(activefile);
 
-    if (tempdir) {
-        /* run the compress to tmpfs */
-        buf_printf(&mytempdir, "%s/xapian.%d", tempdir, getpid());
-    }
-    else {
-        /* or just directly in place */
-        buf_printf(&mytempdir, "%s", tempdestdir);
-    }
-
     /* make sure the destination path exists */
-    r = cyrus_mkdir(buf_cstring(&mytempdir), 0755);
+    r = cyrus_mkdir(tempdestdir, 0755);
     if (r) goto out;
     /* and doesn't contain any junk */
-    removedir(buf_cstring(&mytempdir));
-    r = mkdir(buf_cstring(&mytempdir), 0755);
+    removedir(tempdestdir);
+    r = mkdir(tempdestdir, 0755);
     if (r) goto out;
 
     if (srcdirs->count == 1 && (flags & SEARCH_COMPACT_COPYONE)) {
@@ -3726,13 +3828,13 @@ static int compact_dbs(const char *userid, const char *tempdir,
          * so also add the new tier so the indexes match up */
         strarray_unshift(newtiers, newdest);
 
-        toreindex = strarray_new();
         tocompact = strarray_new();
         if ((flags & SEARCH_COMPACT_REINDEX)) {
             /* all databases to be reindexed */
-            strarray_cat(toreindex, srcdirs);
+            toreindex = strarray_dup(srcdirs);
         }
         else {
+            toreindex = activefile_resolve(mboxname, mbentry->partition, reindexitems, 0, NULL);
             xapian_check_if_needs_reindex(srcdirs, toreindex, flags & SEARCH_COMPACT_ONLYUPGRADE);
             for (i = 0; i < srcdirs->count; i++) {
                 const char *thisdir = strarray_nth(srcdirs, i);
@@ -3750,7 +3852,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
 
         // first, we'll reindex anything that needs reindexing to a temporary directory
         if (toreindex->count) {
-            tempreindexdir = strconcat(buf_cstring(&mytempdir), ".REINDEX", (char *)NULL);
+            tempreindexdir = strconcat(tempdestdir, ".REINDEX", (char *)NULL);
             // add this directory to the repack target as the first entry point
             strarray_unshift(newdirs, tempreindexdir);
             r = search_reindex(userid, toreindex, newdirs, newtiers, flags);
@@ -3770,38 +3872,24 @@ static int compact_dbs(const char *userid, const char *tempdir,
         // then we'll compact together all the source databases
         if (tocompact->count) {
             // and now we're ready to compact to the real tempdir
-            strarray_unshift(newdirs, buf_cstring(&mytempdir));
+            strarray_unshift(newdirs, tempdestdir);
 
             if (flags & SEARCH_COMPACT_FILTER) {
                 r = search_filter(userid, tocompact, newdirs, newtiers, flags);
                 if (r) {
-                    printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
+                    printf("ERROR: failed to filter to %s", tempdestdir);
                     goto out;
                 }
             }
             else {
                 r = search_compress(userid, tocompact, newdirs, newtiers, flags);
                 if (r) {
-                    printf("ERROR: failed to compact to %s", buf_cstring(&mytempdir));
+                    printf("ERROR: failed to compact to %s", tempdestdir);
                     goto out;
                 }
             }
 
-            if (!xapstat(buf_cstring(&mytempdir))) {
-                /* move the tmpfs files to a temporary name in our target directory */
-                if (tempdir) {
-                    if (verbose) {
-                        printf("copying from tempdir to destination\n");
-                    }
-                    cyrus_mkdir(tempdestdir, 0755);
-                    removedir(tempdestdir);
-                    r = copy_files(buf_cstring(&mytempdir), tempdestdir);
-                    removedir(buf_cstring(&mytempdir));
-                    if (r) {
-                        printf("Failed to rsync from %s to %s", buf_cstring(&mytempdir), tempdestdir);
-                        goto out;
-                    }
-                }
+            if (!xapstat(tempdestdir)) {
                 created_something = 1;
             }
         }
@@ -3899,7 +3987,6 @@ out:
     strarray_free(toreindex);
     strarray_free(tochange);
     strarray_free(tocompact);
-    buf_free(&mytempdir);
     free(namelock_fname);
     free(newdest);
     free(destdir);

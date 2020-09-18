@@ -24,7 +24,7 @@ Synopsis
     **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] [ **-i** ] [ **-N** *name* ] [ **-S** *seconds* ] [ **-r** ] [ **-Z** ] **-u** *user*...
     **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] **-R** [ **-n** *channel* ] [ **-d** ] [ **-S** *seconds* ] [ **-Z** ]
     **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] **-f** *synclogfile* [ **-S** *seconds* ] [ **-Z** ]
-    **squatter** [ **-C** *config-file* ] [ **-v** ] **-t** *srctier(s)*... **-z** *desttier* [ **-F** ] [ **-U** ] [ **-T** *dir* ] [ **-X** ] [ **-o** ] [ **-S** *seconds* ] [ **-u** *user*... ]
+    **squatter** [ **-C** *config-file* ] [ **-v** ] **-t** *srctier(s)*... **-z** *desttier* [ **-B** ] [ **-F** ] [ **-U** ] [ **-T** *reindextiers* ] [ **-X** ] [ **-o** ] [ **-S** *seconds* ] [ **-u** *user*... ]
 
 
 
@@ -84,7 +84,7 @@ is sometimes useful for cleaning up after problems with rolling mode.
 In the sixth synopsis, **squatter** will compact indices from
 *srctier(s)* to *desttier*, optionally reindexing (**-X**) or filtering
 expunged records (**-F**) in the process.  The optional **-T** flag may be
-used to specify a directory to use for temporary files.  These files are
+used to specify members of srctiers which must be reindexed.  These files are
 eventually copied with `rsync -a` and then removed by `rm`.
 `rsync` can increase the load average of the system, especially when the
 temporary directory is on `tmpfs`.  To throttle `rsync` it is possible to
@@ -145,6 +145,13 @@ Options
 
     In rolling mode, don't background and do emit log messages on
     standard error.  Useful for debugging.
+    |v3-new-feature|
+
+.. option:: -B
+
+    In compact mode, use non-blocking lock to start and skip any
+    users who have their xapianactive file locked at the time (i.e
+    another reindex task)
     |v3-new-feature|
 
 .. option:: -F
@@ -222,14 +229,11 @@ Options
     continuing. Can be used to provide some load balancing.  Accepts
     fractional amounts. |v3-new-feature|
 
-.. option:: -T directory
+.. option:: -T reindextiers
 
-    When indexing, work on a temporary copy of the search engine
-    databases in *directory*.  That directory would typically be on
-    some very fast filesystem, like an SSD or tmpfs.  This option may
-    not work with all search engines, but it's only effect is to speed
-    up initial indexing.
-    Xapian only.
+    In compact mode, a comma-separated subset of the source tiers
+    (see **-t**) to be reindexed.  Similar to **-X** but allows
+    limiting the tiers that will be reindexed.
     |v3-new-feature|
 
 .. option:: -t srctier...
