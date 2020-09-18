@@ -5456,6 +5456,10 @@ static int extract_attachment(const char *type, const char *subtype,
     /* Build list of Content-Type parameters */
     const struct param *param = type_params;
     while (param && param->attribute) {
+        /* Ignore all but select parameters */
+        if (strcmp(param->attribute, "charset")) {
+            continue;
+        }
         buf_putc(&buf, ';');
         buf_appendcstr(&buf, param->attribute);
         if (param->value) {
