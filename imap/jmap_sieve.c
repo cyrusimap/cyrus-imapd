@@ -403,7 +403,6 @@ static char *sieve_state(const char *sievedir)
 {
     struct buf buf = BUF_INITIALIZER;
     struct stat sbuf;
-    time_t state = 0;
     int r;
 
     r = stat(sievedir, &sbuf);
@@ -414,9 +413,12 @@ static char *sieve_state(const char *sievedir)
             if (!r) r = stat(sievedir, &sbuf);
         }
     }
-    state = r ? 0 : sbuf.st_mtime;
 
-    buf_printf(&buf, "%ld", state);
+    if (r) buf_setcstr(&buf, "0");
+    else {
+        buf_printf(&buf, "%ld.%ld-%ld",
+                   sbuf.st_mtim.tv_sec, sbuf.st_mtim.tv_nsec, sbuf.st_size);
+    }
 
     return buf_release(&buf);
 }
