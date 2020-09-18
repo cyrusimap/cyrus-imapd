@@ -1444,7 +1444,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
                     if (r)
                         xsyslog(LOG_ERR, "IOERROR: unable to copy flag",
                                          "flag=<%s> src_mailbox=<%s> dest_mailbox=<%s>"
-                                         " uid=<%s> error=<%s>",
+                                         " uid=<%u> error=<%s>",
                                          mailbox->flagname[userflag],
                                          mailbox->name,
                                          as->mailbox->name,
