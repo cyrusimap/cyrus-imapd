@@ -1998,8 +1998,6 @@ static void cmdloop(struct http_connection *conn)
 
         sync_log_reset();
 
-        sync_checkpoint(conn->pin);
-
         /* Check for input from client */
         do {
             /* Flush any buffered output */
