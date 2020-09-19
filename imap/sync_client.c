@@ -417,7 +417,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsozOAp:X")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsozOAp:1")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -490,7 +490,7 @@ int main(int argc, char **argv)
             mode = MODE_USER;
             break;
 
-        case 'X':  // yes, this is a horrible letter, but we're fresh out of 'o'
+        case '1':  // sync once!
             sync_once = 1;
             break;
 

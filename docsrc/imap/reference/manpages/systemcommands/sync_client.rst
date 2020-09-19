@@ -118,6 +118,10 @@ Options
     specified in ``sync_log_file``. Repeat until ``sync_shutdown_file``
     appears.
 
+.. option:: -1
+
+    Like rolling replication, but only process a single file before exiting.
+
 .. option:: -s
 
     Sieve mode.
