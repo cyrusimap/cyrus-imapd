@@ -7528,10 +7528,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
                            text->olduser, text->newuser);
         }
 
-        // this is obnoxiously often, and only temporarily here to look for bugs!
-        index_release(imapd_index);
-        sync_checkpoint(imapd_in);
-
+        // non-standard output item, but it helps give progress
         prot_printf(imapd_out, "* OK rename %s %s\r\n",
                     oldextname, newextname);
     }
