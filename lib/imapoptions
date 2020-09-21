@@ -2674,6 +2674,10 @@ product version in the capabilities
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
+{ "sync_rightnow_channel", NULL, STRING, "3.3.0" }
+/* if set, run sync_client to this channel immediately.  As with channels,
+   set this value to '""' to sync the default channel! */
+
 { "sync_shutdown_file", NULL, STRING, "2.5.0" }
 /* Simple latch used to tell sync_client(8) that it should shut down at the
    next opportunity. Safer than sending signals to running processes.

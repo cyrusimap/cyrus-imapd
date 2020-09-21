@@ -55,6 +55,10 @@ void sync_log_done(void);
 void sync_log(const char *fmt, ...);
 void sync_log_channel(const char *channel, const char *fmt, ...);
 
+struct buf *sync_log_rightnow_buf();
+void sync_log_reset();
+
+
 #define sync_log_user(user) \
     sync_log("USER %s\n", user)
 
@@ -126,6 +130,7 @@ void sync_log_channel(const char *channel, const char *fmt, ...);
 typedef struct sync_log_reader sync_log_reader_t;
 
 sync_log_reader_t *sync_log_reader_create_with_channel(const char *channel);
+sync_log_reader_t *sync_log_reader_create_with_content(const char *content);
 sync_log_reader_t *sync_log_reader_create_with_filename(const char *filename);
 sync_log_reader_t *sync_log_reader_create_with_fd(int fd);
 void sync_log_reader_free(sync_log_reader_t *slr);

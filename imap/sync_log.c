@@ -59,6 +59,7 @@
 #include <errno.h>
 
 #include "assert.h"
+#include "command.h"
 #include "sync_log.h"
 #include "global.h"
 #include "cyr_lock.h"
@@ -74,6 +75,8 @@
 static int sync_log_suppressed = 0;
 static strarray_t *channels = NULL;
 static strarray_t *unsuppressable = NULL;
+
+static struct buf *rightnow_log = NULL;
 
 static int sync_log_initialized = 0;
 
@@ -112,8 +115,17 @@ EXPORTED void sync_log_init(void)
     strarray_free(unsuppressable);
     unsuppressable = NULL;
     conf = config_getstring(IMAPOPT_SYNC_LOG_UNSUPPRESSABLE_CHANNELS);
-    if (conf)
+    if (conf) {
         unsuppressable = strarray_split(conf, " ", 0);
+        i = strarray_find(unsuppressable, "\"\"", 0);
+        if (i >= 0)
+            strarray_set(unsuppressable, i, NULL);
+    }
+
+    conf = config_getstring(IMAPOPT_SYNC_RIGHTNOW_CHANNEL);
+    if (conf) {
+        rightnow_log = buf_new();
+    }
 
     sync_log_initialized = 1;
 }
@@ -125,6 +137,12 @@ EXPORTED void sync_log_suppress(void)
 
 EXPORTED void sync_log_done(void)
 {
+    sync_log_reset();
+    if (rightnow_log) {
+        buf_free(rightnow_log);
+        rightnow_log = NULL;
+    }
+
     strarray_free(channels);
     channels = NULL;
 
@@ -212,6 +230,23 @@ static void sync_log_base(const char *channel, const char *string)
     (void)fsync(fd); /* paranoia */
     lock_unlock(fd, fname);
     xclose(fd);
+}
+
+EXPORTED struct buf *sync_log_rightnow_buf()
+{
+    if (!channels) return NULL;
+    if (!rightnow_log) return NULL;
+    if (!buf_len(rightnow_log)) return NULL;
+    return rightnow_log;
+}
+
+EXPORTED void sync_log_reset()
+{
+    if (!channels) return;
+    if (!rightnow_log) return;
+    if (!buf_len(rightnow_log)) return;
+    syslog(LOG_NOTICE, "SYNCNOTICE: rightnow log leaked %s", buf_cstring(rightnow_log));
+    buf_reset(rightnow_log);
 }
 
 static const char *sync_quote_name(const char *name)
@@ -317,6 +352,9 @@ EXPORTED void sync_log(const char *fmt, ...)
     val = va_format(fmt, ap);
     va_end(ap);
 
+    if (rightnow_log)
+        buf_appendcstr(rightnow_log, val);
+
     for (i = 0 ; i < channels->count ; i++) {
         const char *channel = channels->data[i];
         if (sync_log_enabled(channel))
@@ -344,25 +382,34 @@ EXPORTED void sync_log_channel(const char *channel, const char *fmt, ...)
 struct sync_log_reader
 {
     /*
-     * This object works in three modes:
+     * This object works in four modes:
      *
      * - initialised with a sync log channel
      *      - standard mode used by sync_client
      *      - slr->log_file != NULL
      *      - slr->work_file is the name of a rename()d
      *        file that needs to be unlink()ed.
+     *      - slr->content_buf is empty
      *
      * - initialised with a saved file name
      *      - used by the sync_client -f option
      *      - slr->log_file = NULL
      *      - slr->work_file is the file given us by the user
      *        which it's important that we do not unlink()
+     *      - slr->content_buf is empty
      *
      * - initialised with a file descriptor
      *      - slr->log_file = NULL
      *      - slr->work_file = NULL
      *      - slr->fd is a file descriptor, probably stdin,
      *        and possibly a pipe
+     *      - slr->content_buf is empty
+     *      - we cannot unlink() anything even if we wanted to.
+     *
+     * - initialised with the content of a file
+     *      - slr->log_file = NULL
+     *      - slr->work_file = NULL
+     *      - slr->content_buf has a length
      *      - we cannot unlink() anything even if we wanted to.
      */
     char *log_file;
@@ -373,6 +420,7 @@ struct sync_log_reader
     struct buf type;
     struct buf arg1;
     struct buf arg2;
+    struct buf contentbuf;
 };
 
 static sync_log_reader_t *sync_log_reader_alloc(void)
@@ -416,6 +464,13 @@ EXPORTED sync_log_reader_t *sync_log_reader_create_with_filename(const char *fil
     return slr;
 }
 
+EXPORTED sync_log_reader_t *sync_log_reader_create_with_content(const char *content)
+{
+    sync_log_reader_t *slr = sync_log_reader_alloc();
+    buf_init_ro_cstr(&slr->contentbuf, content);
+    return slr;
+}
+
 /*
  * Create a sync log reader object which will read from the given file
  * descriptor 'fd'.  The file descriptor must be open for reading and
@@ -444,6 +499,7 @@ EXPORTED void sync_log_reader_free(sync_log_reader_t *slr)
     buf_free(&slr->type);
     buf_free(&slr->arg1);
     buf_free(&slr->arg2);
+    buf_free(&slr->contentbuf);
     free(slr);
 }
 
@@ -469,6 +525,11 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
     if (slr->input) {
         r = sync_log_reader_end(slr);
         if (r) return r;
+    }
+
+    if (buf_len(&slr->contentbuf)) {
+        slr->input = prot_readmap(buf_base(&slr->contentbuf), buf_len(&slr->contentbuf));
+        return 0;
     }
 
     if (stat(slr->work_file, &sbuf) == 0) {

@@ -98,7 +98,7 @@
 #include "times.h"
 #include "smtpclient.h"
 #include "spool.h"
-#include "sync_log.h"
+#include "sync_support.h"
 #include "telemetry.h"
 #include "tls.h"
 #include "userdeny.h"
@@ -3358,6 +3358,8 @@ static int deliver(message_data_t *msg)
         }
     }
 
+    sync_checkpoint(nntp_in);
+
     return r;
 }
 
@@ -3380,6 +3382,8 @@ static int newgroup(message_data_t *msg)
                                newsmaster, newsmaster_authstate, 0, 0, 0);
 
     /* XXX check body of message for useful MIME parts */
+
+    sync_checkpoint(nntp_in);
 
     return r;
 }
@@ -3406,7 +3410,7 @@ static int rmgroup(message_data_t *msg)
                                        newsmaster, newsmaster_authstate,
                                        MBOXLIST_DELETE_CHECKACL);
 
-    if (!r) sync_log_mailbox(mailboxname);
+    sync_checkpoint(nntp_in);
 
     return r;
 }
@@ -3445,7 +3449,7 @@ static int mvgroup(message_data_t *msg)
 
     /* XXX check body of message for useful MIME parts */
 
-    if (!r) sync_log_mailbox_double(oldmailboxname, newmailboxname);
+    sync_checkpoint(nntp_in);
 
     return r;
 }
@@ -3509,6 +3513,8 @@ static int cancel(message_data_t *msg)
      */
     duplicate_key_t dkey = {msgid, "", ""};
     duplicate_mark(&dkey, 0, time(NULL));
+
+    sync_checkpoint(nntp_in);
 
     return r;
 }

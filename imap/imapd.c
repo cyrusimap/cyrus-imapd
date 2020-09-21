@@ -1272,6 +1272,8 @@ static void cmdloop(void)
         /* ensure we didn't leak anything! */
         assert(!open_mailboxes_exist());
 
+        sync_log_reset();
+
         /* Flush any buffered output */
         prot_flush(imapd_out);
         if (backend_current) prot_flush(backend_current->out);
@@ -4170,6 +4172,9 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
         }
         prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
     } else {
+        index_release(imapd_index);
+        sync_checkpoint(imapd_in);
+
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
@@ -5420,41 +5425,23 @@ static void do_xconvmeta(const char *tag,
 static int do_xbackup(const char *channel,
                       const ptrarray_t *list)
 {
-    sasl_callback_t *cb = NULL;
-    struct backend *backend = NULL;
-    const char *hostname;
-    const char *port;
-    unsigned sync_flags = 0; // FIXME ??
     int partial_success = 0;
     int mbox_count = 0;
     int i, r = 0;
+    struct sync_client_state sync_cs = SYNC_CLIENT_STATE_INITIALIZER;
 
-    hostname = sync_get_config(channel, "sync_host");
-    if (!hostname) {
-        syslog(LOG_ERR, "XBACKUP: couldn't find hostname for channel '%s'", channel);
-        return IMAP_BAD_SERVER;
-    }
-
-    port = sync_get_config(channel, "sync_port");
-    if (port) csync_protocol.service = port;
-
-    cb = mysasl_callbacks(NULL,
-                          sync_get_config(channel, "sync_authname"),
-                          sync_get_config(channel, "sync_realm"),
-                          sync_get_config(channel, "sync_password"));
+    sync_cs.servername = sync_get_config(channel, "sync_host");
+    sync_cs.channel = channel;
 
     syslog(LOG_INFO, "XBACKUP: connecting to server '%s' for channel '%s'",
-                     hostname, channel);
+                     sync_cs.servername, channel);
 
-    backend = backend_connect(NULL, hostname, &csync_protocol, NULL, cb, NULL, -1);
-    if (!backend) {
+    r = sync_connect(&sync_cs);
+    if (r) {
         syslog(LOG_ERR, "XBACKUP: failed to connect to server '%s' for channel '%s'",
-                        hostname, channel);
-        return IMAP_SERVER_UNAVAILABLE;
+                        sync_cs.servername, channel);
+        return r;
     }
-
-    free_callbacks(cb);
-    cb = NULL;
 
     for (i = 0; i < list->count; i++) {
         const mbname_t *mbname = ptrarray_nth(list, i);
@@ -5466,7 +5453,7 @@ static int do_xbackup(const char *channel,
         if (userid) {
             syslog(LOG_INFO, "XBACKUP: replicating user %s", userid);
 
-            r = sync_do_user(userid, NULL, backend, /*channelp*/ NULL, sync_flags);
+            r = sync_do_user(&sync_cs, userid, NULL);
         }
         else {
             struct sync_name_list *mboxname_list = sync_name_list_create();
@@ -5474,8 +5461,7 @@ static int do_xbackup(const char *channel,
             syslog(LOG_INFO, "XBACKUP: replicating mailbox %s", intname);
             sync_name_list_add(mboxname_list, intname);
 
-            r = sync_do_mailboxes(mboxname_list, NULL, backend,
-                                  /*channelp*/ NULL, sync_flags);
+            r = sync_do_mailboxes(&sync_cs, mboxname_list, NULL, sync_cs.flags);
             mbox_count++;
             sync_name_list_free(&mboxname_list);
         }
@@ -5498,21 +5484,18 @@ static int do_xbackup(const char *channel,
         if (!r && i < list->count - 1 && (userid || mbox_count >= 1000)) {
             mbox_count = 0;
 
-            sync_send_restart(backend->out);
-            r = sync_parse_response("RESTART", backend->in, NULL);
+            r = sync_do_restart(&sync_cs);
             if (r) goto done;
         }
     }
 
     /* send a final RESTART */
-    sync_send_restart(backend->out);
-    sync_parse_response("RESTART", backend->in, NULL);
+    sync_do_restart(&sync_cs);
 
     if (partial_success) r = 0;
 
 done:
-    backend_disconnect(backend);
-    free(backend);
+    sync_disconnect(&sync_cs);
 
     return r;
 }
@@ -6061,6 +6044,9 @@ notflagsdammit:
                     tag, modified, error_message(r));
     }
     else {
+        index_release(imapd_index);
+        sync_checkpoint(imapd_in);
+
         prot_printf(imapd_out, "%s OK %s%s\r\n",
                     tag, modified, error_message(IMAP_OK_COMPLETED));
     }
@@ -6805,6 +6791,9 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
             free(copyuid);
     }
     else {
+        index_release(imapd_index);
+        sync_checkpoint(imapd_in);
+
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
@@ -6852,6 +6841,9 @@ static void cmd_expunge(char *tag, char *sequence)
     }
 
     new = index_highestmodseq(imapd_index);
+
+    index_release(imapd_index);
+    sync_checkpoint(imapd_in);
 
     prot_printf(imapd_out, "%s OK ", tag);
     if (new > old)
@@ -7264,6 +7256,9 @@ localcreate:
         }
     }
 
+    index_release(imapd_index);
+    sync_checkpoint(imapd_in);
+
     prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
 
     imapd_check(NULL, 0);
@@ -7435,6 +7430,9 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         if (config_mupdate_server)
             kick_mupdate();
 
+        index_release(imapd_index);
+        sync_checkpoint(imapd_in);
+
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
@@ -7530,7 +7528,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
                            text->olduser, text->newuser);
         }
 
-
+        // non-standard output item, but it helps give progress
         prot_printf(imapd_out, "* OK rename %s %s\r\n",
                     oldextname, newextname);
     }
@@ -7934,9 +7932,14 @@ submboxes:
         if (config_mupdate_server)
             kick_mupdate();
 
+        if (rename_user)
+            sync_log_user(newuser);
+
+        index_release(imapd_index);
+        sync_checkpoint(imapd_in);
+
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
-        if (rename_user) sync_log_user(newuser);
     }
 
 done:
@@ -8341,6 +8344,9 @@ static void cmd_changesub(char *tag, char *namespace, char *name, int add)
         prot_printf(imapd_out, "%s NO %s: %s\r\n", tag, cmd, error_message(r));
     }
     else {
+        index_release(imapd_index);
+        sync_checkpoint(imapd_in);
+
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
@@ -8654,6 +8660,9 @@ static void cmd_setacl(char *tag, const char *name,
     } else {
         if (config_mupdate_server)
             kick_mupdate();
+
+        index_release(imapd_index);
+        sync_checkpoint(imapd_in);
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
@@ -9004,6 +9013,9 @@ out:
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
         return;
     }
+
+    index_release(imapd_index);
+    sync_checkpoint(imapd_in);
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
                 error_message(IMAP_OK_COMPLETED));
@@ -10599,6 +10611,9 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
+        index_release(imapd_index);
+        sync_checkpoint(imapd_in);
+
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
@@ -10659,6 +10674,9 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
+        index_release(imapd_index);
+        sync_checkpoint(imapd_in);
+
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
@@ -11149,10 +11167,9 @@ struct xfer_item {
 };
 
 struct xfer_header {
-    struct backend *be;
+    struct sync_client_state sync_cs;
     int remoteversion;
     unsigned long use_replication;
-    struct buf tagbuf;
     char *userid;
     char *toserver;
     char *topart;
@@ -11226,9 +11243,9 @@ static void xfer_done(struct xfer_header **xferptr)
 
     syslog(LOG_INFO, "XFER: disconnecting from servers");
 
-    free(xfer->toserver);
+    sync_disconnect(&xfer->sync_cs);
 
-    buf_free(&xfer->tagbuf);
+    free(xfer->toserver);
 
     xfer_cleanup(xfer);
 
@@ -11244,22 +11261,23 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
 
     syslog(LOG_INFO, "XFER: connecting to server '%s'", toserver);
 
+    xfer->sync_cs.servername = toserver;
+    xfer->sync_cs.flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
+
     /* Get a connection to the remote backend */
-    xfer->be = proxy_findserver(toserver, &imap_protocol, "", &backend_cached,
-                                NULL, NULL, imapd_in);
-    if (!xfer->be) {
+    xfer->sync_cs.backend = proxy_findserver(toserver, &imap_protocol, "", &backend_cached,
+                                             NULL, NULL, imapd_in);
+    if (!xfer->sync_cs.backend) {
         syslog(LOG_ERR, "Failed to connect to server '%s'", toserver);
-        r = IMAP_SERVER_UNAVAILABLE;
         goto fail;
     }
 
-    xfer->remoteversion = backend_version(xfer->be);
-    if (xfer->be->capability & CAPA_REPLICATION) {
+    struct backend *be = xfer->sync_cs.backend;
+    xfer->remoteversion = backend_version(be);
+    if (be->capability & CAPA_REPLICATION) {
         syslog(LOG_INFO, "XFER: destination supports replication");
         xfer->use_replication = 1;
-
-        /* attach our IMAP tag buffer to our protstreams as userdata */
-        xfer->be->in->userdata = xfer->be->out->userdata = &xfer->tagbuf;
+        be->in->userdata = be->out->userdata = &xfer->sync_cs.tagbuf;
     }
 
     xfer->toserver = xstrdup(toserver);
@@ -11295,15 +11313,16 @@ static int xfer_localcreate(struct xfer_header *xfer)
     syslog(LOG_INFO, "XFER: creating mailboxes on destination");
 
     for (item = xfer->items; item; item = item->next) {
+        struct backend *be = xfer->sync_cs.backend;
         if (xfer->topart) {
             /* need to send partition as an atom */
-            prot_printf(xfer->be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n",
+            prot_printf(be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n",
                         strlen(item->extname), item->extname, xfer->topart);
         } else {
-            prot_printf(xfer->be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s\r\n",
+            prot_printf(be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s\r\n",
                         strlen(item->extname), item->extname);
         }
-        r = getresult(xfer->be->in, "LC1");
+        r = getresult(be->in, "LC1");
         if (r) {
             syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
                    item->mbentry->name);
@@ -11427,11 +11446,12 @@ static int xfer_undump(struct xfer_header *xfer)
 
         /* Step 4: Dump local -> remote */
         if (!r) {
-            prot_printf(xfer->be->out, "D01 UNDUMP {" SIZE_T_FMT "+}\r\n%s ",
+            struct backend *be = xfer->sync_cs.backend;
+            prot_printf(be->out, "D01 UNDUMP {" SIZE_T_FMT "+}\r\n%s ",
                         strlen(item->extname), item->extname);
 
             r = dump_mailbox(NULL, mailbox, 0, xfer->remoteversion,
-                             xfer->be->in, xfer->be->out, imapd_authstate);
+                             be->in, be->out, imapd_authstate);
             if (r) {
                 syslog(LOG_ERR,
                        "Could not move mailbox: %s, dump_mailbox() failed %s",
@@ -11443,7 +11463,8 @@ static int xfer_undump(struct xfer_header *xfer)
 
         if (r) return r;
 
-        r = getresult(xfer->be->in, "D01");
+        struct backend *be = xfer->sync_cs.backend;
+        r = getresult(be->in, "D01");
         if (r) {
             syslog(LOG_ERR, "Could not move mailbox: %s, UNDUMP failed %s",
                    item->mbentry->name, error_message(r));
@@ -11451,16 +11472,14 @@ static int xfer_undump(struct xfer_header *xfer)
         }
 
         /* Step 5: Set ACL on remote */
-        r = trashacl(xfer->be->in, xfer->be->out,
-                     item->extname);
+        r = trashacl(be->in, be->out, item->extname);
         if (r) {
             syslog(LOG_ERR, "Could not clear remote acl on %s",
                    item->mbentry->name);
             return r;
         }
 
-        r = dumpacl(xfer->be->in, xfer->be->out,
-                    item->extname, item->mbentry->acl);
+        r = dumpacl(be->in, be->out, item->extname, item->mbentry->acl);
         if (r) {
             syslog(LOG_ERR, "Could not set remote acl on %s",
                    item->mbentry->name);
@@ -11500,7 +11519,6 @@ static int xfer_addusermbox(const mbentry_t *mbentry, void *rock)
 
 static int xfer_initialsync(struct xfer_header *xfer)
 {
-    unsigned flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
     int r;
 
     if (xfer->userid) {
@@ -11508,15 +11526,13 @@ static int xfer_initialsync(struct xfer_header *xfer)
 
         syslog(LOG_INFO, "XFER: initial sync of user %s", xfer->userid);
 
-        r = sync_do_user(xfer->userid, xfer->topart, xfer->be,
-                         /*channelp*/NULL, flags);
+        r = sync_do_user(&xfer->sync_cs, xfer->userid, xfer->topart);
         if (r) return r;
 
         /* User moves may take a while, do another non-blocking sync */
         syslog(LOG_INFO, "XFER: second sync of user %s", xfer->userid);
 
-        r = sync_do_user(xfer->userid, xfer->topart, xfer->be,
-                         /*channelp*/NULL, flags);
+        r = sync_do_user(&xfer->sync_cs, xfer->userid, xfer->topart);
         if (r) return r;
 
         /* User may have renamed/deleted a mailbox while syncing,
@@ -11538,8 +11554,7 @@ static int xfer_initialsync(struct xfer_header *xfer)
                xfer->items->mbentry->name);
 
         sync_name_list_add(mboxname_list, xfer->items->mbentry->name);
-        r = sync_do_mailboxes(mboxname_list, xfer->topart, xfer->be,
-                              /*channelp*/NULL, flags);
+        r = sync_do_mailboxes(&xfer->sync_cs, mboxname_list, xfer->topart, xfer->sync_cs.flags);
         sync_name_list_free(&mboxname_list);
     }
 
@@ -11551,10 +11566,10 @@ static int xfer_initialsync(struct xfer_header *xfer)
  * It is needed for xfer_finalsync(), which needs to hold a single exclusive
  * lock on the mailbox for the duration of this operation.
  */
-static int sync_mailbox(struct mailbox *mailbox,
+static int sync_mailbox(struct xfer_header *xfer,
+                        struct mailbox *mailbox,
                         struct sync_folder_list *replica_folders,
-                        const char *topart,
-                        struct backend *be)
+                        const char *topart)
 {
     int r = 0;
     struct sync_folder_list *master_folders = NULL;
@@ -11565,7 +11580,6 @@ static int sync_mailbox(struct mailbox *mailbox,
     struct sync_annot_list *annots = NULL;
     modseq_t xconvmodseq = 0;
     modseq_t raclmodseq = 0;
-    unsigned flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
 
     if (!topart) topart = mailbox->part;
     reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
@@ -11641,15 +11655,15 @@ static int sync_mailbox(struct mailbox *mailbox,
     sync_find_reserve_messages(mailbox, fromuid, mailbox->i.last_uid, part_list);
 
     reserve = reserve_guids->head;
-    r = sync_reserve_partition(reserve->part, replica_folders,
-                               reserve->list, be);
+    r = sync_reserve_partition(&xfer->sync_cs, reserve->part,
+                               replica_folders, reserve->list);
     if (r) {
         syslog(LOG_ERR, "sync_mailbox(): reserve partition failed: %s '%s'",
                mfolder->name, error_message(r));
         goto cleanup;
     }
 
-    r = sync_update_mailbox(mfolder, rfolder, topart, reserve_guids, be, flags);
+    r = sync_do_update_mailbox(&xfer->sync_cs, mfolder, rfolder, topart, reserve_guids);
     if (r) {
         syslog(LOG_ERR, "sync_mailbox(): update failed: %s '%s'",
                 mfolder->name, error_message(r));
@@ -11676,7 +11690,6 @@ static int xfer_finalsync(struct xfer_header *xfer)
     struct dlist *kl = NULL;
     struct xfer_item *item;
     struct mailbox *mailbox = NULL;
-    unsigned flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
     int r;
 
     if (xfer->userid) {
@@ -11698,10 +11711,10 @@ static int xfer_finalsync(struct xfer_header *xfer)
         dlist_setatom(kl, "MBOXNAME", xfer->items->mbentry->name);
     }
 
-    sync_send_lookup(kl, xfer->be->out);
+    sync_send_lookup(kl, xfer->sync_cs.backend->out);
     dlist_free(&kl);
 
-    r = sync_response_parse(xfer->be->in, cmd, replica_folders, replica_subs,
+    r = sync_response_parse(&xfer->sync_cs, cmd, replica_folders, replica_subs,
                             replica_sieve, replica_seen, replica_quota);
 
     if (r) goto done;
@@ -11750,7 +11763,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
 
         /* Step 4: Sync local -> remote */
         if (!r) {
-            r = sync_mailbox(mailbox, replica_folders, xfer->topart, xfer->be);
+            r = sync_mailbox(xfer, mailbox, replica_folders, xfer->topart);
             if (r) {
                 syslog(LOG_ERR,
                        "Could not move mailbox: %s, sync_mailbox() failed %s",
@@ -11760,7 +11773,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
                 if (mailbox->quotaroot)
                     sync_name_list_add(master_quotaroots, mailbox->quotaroot);
 
-                r = sync_do_annotation(mailbox->name, xfer->be, NULL, flags);
+                r = sync_do_annotation(&xfer->sync_cs, mailbox->name);
                 if (r) {
                     syslog(LOG_ERR, "Could not move mailbox: %s,"
                            " sync_do_annotation() failed %s",
@@ -11780,7 +11793,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
     for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
         if (rfolder->mark) continue;
 
-        r = sync_folder_delete(rfolder->name, xfer->be, flags);
+        r = sync_do_folder_delete(&xfer->sync_cs, rfolder->name);
         if (r) {
             syslog(LOG_ERR, "sync_folder_delete(): failed: %s '%s'",
                    rfolder->name, error_message(r));
@@ -11789,13 +11802,11 @@ static int xfer_finalsync(struct xfer_header *xfer)
     }
 
     /* Handle any mailbox/user metadata */
-    r = sync_do_user_quota(master_quotaroots, replica_quota, xfer->be, flags);
+    r = sync_do_user_quota(&xfer->sync_cs, master_quotaroots, replica_quota);
     if (!r && xfer->userid) {
-        r = sync_do_user_seen(xfer->userid, replica_seen, xfer->be, flags);
-        if (!r) r = sync_do_user_sub(xfer->userid, replica_subs,
-                                     xfer->be, flags);
-        if (!r) r = sync_do_user_sieve(xfer->userid, replica_sieve,
-                                       xfer->be, flags);
+        r = sync_do_user_seen(&xfer->sync_cs, xfer->userid, replica_seen);
+        if (!r) r = sync_do_user_sub(&xfer->sync_cs, xfer->userid, replica_subs);
+        if (!r) r = sync_do_user_sieve(&xfer->sync_cs, xfer->userid, replica_sieve);
     }
 
   done:
@@ -11820,9 +11831,10 @@ static int xfer_reactivate(struct xfer_header *xfer)
 
     /* 6.5) Kick remote server to correct mupdate entry */
     for (item = xfer->items; item; item = item->next) {
-        prot_printf(xfer->be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
+        struct backend *be = xfer->sync_cs.backend;
+        prot_printf(be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
                     strlen(item->extname), item->extname);
-        r = getresult(xfer->be->in, "MP1");
+        r = getresult(be->in, "MP1");
         if (r) {
             syslog(LOG_ERR, "MUPDATE: can't activate mailbox entry '%s': %s",
                    item->mbentry->name, error_message(r));
@@ -11906,10 +11918,10 @@ static void xfer_recover(struct xfer_header *xfer)
         case XFER_REMOTE_CREATED:
             if (!xfer->use_replication) {
                 /* Delete remote mailbox */
-                prot_printf(xfer->be->out,
+                prot_printf(xfer->sync_cs.backend->out,
                             "LD1 LOCALDELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
                             strlen(item->extname), item->extname);
-                r = getresult(xfer->be->in, "LD1");
+                r = getresult(xfer->sync_cs.backend->in, "LD1");
                 if (r) {
                     syslog(LOG_ERR,
                         "Could not back out remote mailbox during move of %s (%s)",
@@ -11984,14 +11996,14 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     /* note use of + to force the setting of a nonexistent
      * quotaroot */
     char *extname = mboxname_to_external(mboxname, &imapd_namespace, imapd_userid);
-    prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n+%s ",
+    prot_printf(xfer->sync_cs.backend->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n+%s ",
                 strlen(extname)+1, extname);
     free(extname);
-    print_quota_limits(xfer->be->out, &q);
-    prot_printf(xfer->be->out, "\r\n");
+    print_quota_limits(xfer->sync_cs.backend->out, &q);
+    prot_printf(xfer->sync_cs.backend->out, "\r\n");
     quota_free(&q);
 
-    r = getresult(xfer->be->in, "Q01");
+    r = getresult(xfer->sync_cs.backend->in, "Q01");
     if (r) syslog(LOG_ERR,
                   "Could not move mailbox: %s, " \
                   "failed setting initial quota root\r\n",
@@ -12184,8 +12196,7 @@ static void cmd_xfer(const char *tag, const char *name,
             /* RESTART after each user or after every 1000 mailboxes */
             mbox_count = 0;
 
-            sync_send_restart(xfer->be->out);
-            r = sync_parse_response("RESTART", xfer->be->in, NULL);
+            r = sync_do_restart(&xfer->sync_cs);
             if (r) goto done;
         }
 
@@ -14451,6 +14462,11 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     }
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
+
+    // chaining!
+    index_release(imapd_index);
+    sync_checkpoint(imapd_in);
+
     prot_printf(imapd_out, "%s %s\r\n", tag, resp);
 
     /* Reset inactivity timer in case we spent a long time processing data */
@@ -14584,6 +14600,8 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
     }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
+    index_release(imapd_index);
+    sync_checkpoint(imapd_in);
     prot_printf(imapd_out, "%s %s\r\n", tag, resp);
 
     /* Reset inactivity timer in case we spent a long time processing data */
