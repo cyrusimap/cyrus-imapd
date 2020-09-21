@@ -368,6 +368,9 @@ static int meth_post(struct transaction_t *txn,
     /* Regular JMAP API request */
     ret = jmap_api(txn, &res, &my_jmap_settings);
 
+    /* ensure we didn't leak anything! */
+    assert(!open_mailboxes_exist());
+
     // checkpoint before we reply
     sync_checkpoint(txn->conn->pin);
 
@@ -1057,6 +1060,12 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
 
     /* Process the API request */
     ret = jmap_api(txn, &res, &my_jmap_settings);
+
+    /* ensure we didn't leak anything! */
+    assert(!open_mailboxes_exist());
+
+    // checkpoint before we reply
+    sync_checkpoint(txn->conn->pin);
 
     /* Free request payload */
     buf_free(&txn->req_body.payload);
