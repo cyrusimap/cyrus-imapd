@@ -11269,6 +11269,7 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
                                              NULL, NULL, imapd_in);
     if (!xfer->sync_cs.backend) {
         syslog(LOG_ERR, "Failed to connect to server '%s'", toserver);
+        r = IMAP_SERVER_UNAVAILABLE;
         goto fail;
     }
 
