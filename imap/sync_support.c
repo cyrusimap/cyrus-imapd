@@ -5652,6 +5652,8 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
         if (!r) r = sync_mailbox_version_check(&mailbox);
     }
 
+    if (!topart) topart = mailbox->part;
+
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* been deleted in the meanwhile... it will get picked up by the
          * delete call later */
