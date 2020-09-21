@@ -534,9 +534,9 @@ EOF
     $self->assert_not_null($res);
     $self->assert_not_null($res->[0][1]{completed});
     $self->assert_str_equals('fileinto',
-                             $res->[0][1]{completed}{$emailid}[0]{type});
+                             $res->[0][1]{completed}{$emailid}[0][0]);
     $self->assert_str_equals('keep',
-                             $res->[0][1]{completed}{$emailid}[1]{type});
+                             $res->[0][1]{completed}{$emailid}[1][0]);
     $self->assert_null($res->[0][1]{notCompleted});
 }
 
@@ -616,11 +616,13 @@ EOF
 
     $self->assert_not_null($res->[1][1]{completed});
     $self->assert_str_equals('fileinto',
-                             $res->[1][1]{completed}{$emailid1}[0]{type});
+                             $res->[1][1]{completed}{$emailid1}[0][0]);
     $self->assert_str_equals('keep',
-                             $res->[1][1]{completed}{$emailid1}[1]{type});
+                             $res->[1][1]{completed}{$emailid1}[1][0]);
     $self->assert_str_equals('vacation',
-                             $res->[1][1]{completed}{$emailid2}[0]{type});
+                             $res->[1][1]{completed}{$emailid2}[0][0]);
+    $self->assert_str_equals('keep',
+                             $res->[1][1]{completed}{$emailid2}[1][0]);
 
     $self->assert_not_null($res->[1][1]{notCompleted});
     $self->assert_str_equals('blobNotFound',
