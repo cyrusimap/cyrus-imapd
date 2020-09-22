@@ -106,6 +106,7 @@ static int allow_duplicateparts = 0;
 static int reindex_partials = 0;
 static int reindex_minlevel = 0;
 static search_text_receiver_t *rx = NULL;
+static struct seqset *index_uids = NULL;
 
 static strarray_t *skip_domains = NULL;
 static strarray_t *skip_users = NULL;
@@ -134,6 +135,7 @@ __attribute__((noreturn)) static int usage(const char *name)
             "  -P          reindex partially indexed messages (implies -Z)\n"
             "  -L level    reindex messages where indexlevel < level (implies -Z)\n"
             "  -N name     index mailbox names starting with name\n"
+            "  -M seqset   index message if UID is in seqset (can be specified multiple times)\n"
             "  -S seconds  sleep seconds between indexing mailboxes\n"
             "  -Z          Xapian: use internal index rather than cyrus.indexed.db\n"
             "\n"
@@ -353,7 +355,7 @@ again:
         printf("Indexing mailbox %s... ", extname);
     }
 
-    r = search_update_mailbox(rx, mailbox, reindex_minlevel, flags);
+    r = search_update_mailbox(rx, mailbox, index_uids, reindex_minlevel, flags);
 
     mailbox_close(&mailbox);
 
@@ -905,7 +907,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:N:RUBXZDT:S:Fde:f:mn:riavpPL:Az:t:ouhl")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:N:RUBXZDT:S:M:Fde:f:mn:riavpPL:Az:t:ouhl")) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
@@ -952,6 +954,20 @@ int main(int argc, char **argv)
 
         case 'D':
             allow_duplicateparts = 1;
+            break;
+
+        case 'M':
+            {
+                struct seqset *seq = seqset_parse(optarg, NULL, 0);
+                if (!seq) {
+                    fprintf(stderr, "%s: %s: invalid sequence\n", argv[0], optarg);
+                    exit(EX_USAGE);
+                }
+                if (index_uids) {
+                    seqset_join(index_uids, seq);
+                }
+                else index_uids = seq;
+            }
             break;
 
         case 'N':

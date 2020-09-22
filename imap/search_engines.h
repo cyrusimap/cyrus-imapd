@@ -220,6 +220,7 @@ extern void search_end_search(search_builder_t *);
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox *mailbox,
+                          struct seqset *uids, // or NULL
                           int min_indexlevel, int flags);
 int search_end_update(search_text_receiver_t *rx);
 

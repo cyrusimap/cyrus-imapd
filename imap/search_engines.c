@@ -206,6 +206,7 @@ static int flush_batch(search_text_receiver_t *rx,
 
 EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
                                    struct mailbox *mailbox,
+                                   struct seqset *uids,
                                    int min_indexlevel,
                                    int flags)
 {
@@ -229,6 +230,10 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
+
+        if (uids && !seqset_ismember(uids, record->uid))
+            continue;
+
         if ((flags & SEARCH_UPDATE_BATCH) && batch.count >= batch_size) {
             syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
                    batch.count, mailbox->name);
