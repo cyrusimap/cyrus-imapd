@@ -372,7 +372,7 @@ static int meth_post(struct transaction_t *txn,
     assert(!open_mailboxes_exist());
 
     // checkpoint before we reply
-    sync_checkpoint(txn->conn->pin);
+    sync_checkpoint(httpd_in);
 
     if (res) {
         /* Output the JSON object */
@@ -952,7 +952,7 @@ wrotebody:
     json_object_set_new(resp, "type", json_string(normalisedtype));
 
     // checkpoint before replying
-    sync_checkpoint(txn->conn->pin);
+    sync_checkpoint(httpd_in);
 
     /* Output the JSON object */
     ret = json_response(HTTP_CREATED, txn, resp);
@@ -1065,7 +1065,7 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
     assert(!open_mailboxes_exist());
 
     // checkpoint before we reply
-    sync_checkpoint(txn->conn->pin);
+    sync_checkpoint(httpd_in);
 
     /* Free request payload */
     buf_free(&txn->req_body.payload);
