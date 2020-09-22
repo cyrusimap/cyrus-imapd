@@ -1485,7 +1485,7 @@ static int jmapquery(void *sc, void *mc, const char *json)
     return matches;
 }
 
-static void _strlist(json_t *action, const char *name, strarray_t *sl)
+static void _strlist(json_t *args, const char *name, strarray_t *sl)
 {
     if (strarray_size(sl)) {
         int i, n = strarray_size(sl);
@@ -1494,7 +1494,7 @@ static void _strlist(json_t *action, const char *name, strarray_t *sl)
         for (i = 0; i < n; i++) {
             json_array_append_new(ja, json_string(strarray_nth(sl, i)));
         }
-        json_object_set_new(action, name, ja);
+        json_object_set_new(args, name, ja);
     }
 }
 
@@ -1523,16 +1523,16 @@ static int keep(void *ac,
     return SIEVE_OK;
 }
 
-static void _fileinto(json_t *action, sieve_fileinto_context_t *fc)
+static void _fileinto(json_t *args, sieve_fileinto_context_t *fc)
 {
-    _strlist(action, "flags", fc->imapflags);
+    _strlist(args, "flags", fc->imapflags);
+
     if (fc->specialuse)
-        json_object_set_new(action, "specialuse", json_string(fc->specialuse));
+        json_object_set_new(args, "specialuse", json_string(fc->specialuse));
     if (fc->mailboxid)
-        json_object_set_new(action, "mailboxid", json_string(fc->mailboxid));
+        json_object_set_new(args, "mailboxid", json_string(fc->mailboxid));
     if (fc->do_create)
-        json_object_set_new(action, "create", json_true());
-    json_object_set_new(action, "mailbox", json_string(fc->mailbox));
+        json_object_set_new(args, "create", json_true());
 }
 
 static int fileinto(void *ac,
@@ -1554,6 +1554,8 @@ static int fileinto(void *ac,
     json_t *args = json_object();
 
     _fileinto(args, fc);
+
+    json_object_set_new(args, "mailbox", json_string(fc->mailbox));
 
     json_array_append_new(m->actions, json_pack("[s o]", action, args));
 
@@ -1592,6 +1594,7 @@ static int redirect(void *ac,
         json_object_set_new(args, "notify", json_string(rc->dsn_notify));
     if (rc->dsn_ret)
         json_object_set_new(args, "ret", json_string(rc->dsn_ret));
+
     json_object_set_new(args, "address", json_string(rc->addr));
 
     json_array_append_new(m->actions, json_pack("[s o]", action, args));
@@ -1645,11 +1648,9 @@ static int send_response(void *ac,
     json_t *args = json_object();
 
     if (src->fcc.mailbox) {
-        json_t *fcc = json_object();
+        json_object_set_new(args, "fcc", json_string(src->fcc.mailbox));
 
-        _fileinto(fcc, &src->fcc);
-
-        json_object_set_new(args, "fcc", fcc);
+        _fileinto(args, &src->fcc);
     }
     if (src->subj)
         json_object_set_new(args, "subject", json_string(src->subj));
@@ -1657,6 +1658,7 @@ static int send_response(void *ac,
         json_object_set_new(args, "from", json_string(src->fromaddr));
     if (src->mime)
         json_object_set_new(args, "mime", json_true());
+
     json_object_set_new(args, "reason", json_string(src->msg));
 
     json_array_append_new(m->actions, json_pack("[s o]", action, args));
