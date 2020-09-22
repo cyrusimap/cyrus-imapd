@@ -1999,12 +1999,21 @@ static int jmap_sieve_test(struct jmap_req *req)
         else {
             /* Generate temporary bytecode file */
             static char template[] = "/tmp/sieve-test-bytecode-XXXXXX";
+            const char *script_data = buf_cstring(&buf);
             sieve_script_t *s = NULL;
             bytecode_info_t *bc = NULL;
             char *errors = NULL;
             int fd = -1;
 
-            r = sieve_script_parse_string(NULL, buf_cstring(&buf), &errors, &s);
+            if (mr) {
+                /* Need to skip over header of rfc822 wrapper */
+                struct index_record record;
+
+                msgrecord_get_index_record(mr, &record);
+                script_data += record.header_size;
+            }
+
+            r = sieve_script_parse_string(NULL, script_data, &errors, &s);
             msgrecord_unref(&mr);
             jmap_closembox(req, &mbox);
 
