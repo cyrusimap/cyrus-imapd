@@ -1827,7 +1827,7 @@ HIDDEN json_t *jmap_get_reply(struct jmap_get *get)
 
 /* Foo/set */
 
-static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *jobj,
+static void jmap_set_validate_props(jmap_req_t *req, int is_create, json_t *jobj,
                                     const jmap_property_t valid_props[],
                                     json_t **err)
 {
@@ -1852,22 +1852,11 @@ static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
         else if (prop->capability && !jmap_is_using(req, prop->capability)) {
             json_array_append_new(invalid, json_string(path));
         }
-        else if (id) {
-            /* update */
-            if (!strcmp("id", prop->name) &&
-                strcmpnull(id, json_string_value(jval))) {
-                /* can NEVER change id */
-                json_array_append_new(invalid, json_string(path));
-            }
-            /* XXX could check IMMUTABLE and SERVER_SET here, but we can't
-             * reject such properties if they match the current value */
+        else if (is_create && (prop->flags & JMAP_PROP_SERVER_SET)) {
+            json_array_append_new(invalid, json_string(path));
         }
-        else {
-            /* create */
-            if (prop->flags & JMAP_PROP_SERVER_SET) {
-                json_array_append_new(invalid, json_string(path));
-            }
-        }
+        /* XXX could check IMMUTABLE and SERVER_SET for update here,
+         * but we can't reject such properties if they match the current value */
         if (tmp) free(tmp);
     }
     if (json_array_size(invalid)) {
@@ -1979,7 +1968,7 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
         /* Make sure no property is set without its capability */
         json_object_foreach(json_object_get(jargs, "create"), key, jval) {
             json_t *err = NULL;
-            jmap_set_validate_props(req, NULL, jval, valid_props, &err);
+            jmap_set_validate_props(req, 1, jval, valid_props, &err);
             if (err) {
                 json_object_del(set->create, key);
                 json_object_set_new(set->not_created, key, err);
@@ -1987,7 +1976,7 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
         }
         json_object_foreach(json_object_get(jargs, "update"), key, jval) {
             json_t *err = NULL;
-            jmap_set_validate_props(req, key, jval, valid_props, &err);
+            jmap_set_validate_props(req, 0, jval, valid_props, &err);
             if (err) {
                 json_object_del(set->update, key);
                 json_object_set_new(set->not_updated, key, err);
