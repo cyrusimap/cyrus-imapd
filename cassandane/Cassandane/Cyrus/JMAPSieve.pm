@@ -385,6 +385,132 @@ sub test_sieve_set_bad_script
     $self->assert_null($res->[0][1]{notDestroyed});
 }
 
+sub test_sieve_query
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create script";
+    my $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    content => "keep;"
+                },
+                "2" => {
+                    name => "bar",
+                    content => "discard;"
+                },
+                "3" => {
+                    name => "pooh",
+                    content => "redirect \"test\@example.com\";"
+                }
+            },
+            onSuccessActivateScript => "#1"
+         }, "R1"],
+    ]);
+    $self->assert_not_null($res);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+    my $id3 = $res->[0][1]{created}{"3"}{id};
+
+    xlog $self, "get unfiltered list";
+    $res = $jmap->CallMethods([ ['SieveScript/query', { }, "R1"] ]);
+    $self->assert_num_equals(3, $res->[0][1]{total});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+
+    xlog $self, "filter by isActive";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        isActive => JSON::true,
+                    }
+                }, "R1"] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by not isActive";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        isActive => JSON::false,
+                    }
+                }, "R1"] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[1]);
+
+    xlog $self, "filter by name containing 'oo', sorted descending";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        name => 'oo',
+                    },
+                    sort => [{
+                        property => 'name',
+                        isAscending => JSON::false,
+                    }]
+                }, "R1"] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[1]);
+
+    xlog $self, "filter by name not containing 'oo'";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        operator => 'NOT',
+                        conditions => [{
+                            name => 'oo',
+                        }]
+                    },
+                }, "R1"] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by name containing 'oo' and inactive";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        operator => 'AND',
+                        conditions => [{
+                            name => 'oo',
+                            isActive => JSON::false,
+                        }]
+                    },
+                }, "R1"] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by name not containing 'oo' or active";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        operator => 'OR',
+                        conditions => [
+                        {
+                            operator => 'NOT',
+                            conditions => [{
+                                name => 'oo',
+                            }]
+                        },
+                        {
+                            isActive => JSON::true,
+                        }]
+                    },
+                    sort => [{
+                        property => 'name',
+                        isAscending => JSON::true,
+                    }]
+                }, "R1"] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[1]);
+}
+
 sub test_sieve_validate
     :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
@@ -480,11 +606,12 @@ sub test_sieve_test
     my $script = <<EOF;
 require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use"];
 if header "subject" "Memo" {
-  fileinto :copy :flags ["\\\\flagged", "\\\\answered"] :specialuse "\\\\flagged" :mailboxid "123" :create "INBOX.foo";
-  setflag "\\\\seen\";
+  fileinto :copy :flags ["\\flagged", "\\answered"] :specialuse "\\flagged" :mailboxid "123" :create "INBOX.foo";
+  setflag "\\seen\";
 }
 EOF
     $script =~ s/\r?\n/\r\n/gs;
+    $script =~ s/\\/\\\\/gs;
 
     my $jmap = $self->{jmap};
 
@@ -574,14 +701,15 @@ EOF
     my $script = <<EOF;
 require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vacation"];
 if header :contains "subject" "test" {
-  setflag "\\\\Seen\";
-  fileinto :copy :flags ["\\\\Flagged", "\\\\Answered"] :specialuse "\\\\Flagged" :mailboxid "M123" :create "INBOX.foo";
+  setflag "\\Seen\";
+  fileinto :copy :flags ["\\Flagged", "\\Answered"] :specialuse "\\Flagged" :mailboxid "M123" :create "INBOX.foo";
 }
 else {
   vacation "Gone fishin'";
 }
 EOF
     $script =~ s/\r?\n/\r\n/gs;
+    $script =~ s/\\/\\\\/gs;
 
     my $jmap = $self->{jmap};
 
