@@ -54,6 +54,7 @@
 #include <errno.h>
 
 #include "arrayu64.h"
+#include "cyr_qsort_r.h"
 #include "hash.h"
 #include "http_err.h"
 #include "http_jmap.h"
@@ -77,6 +78,7 @@
 
 static int jmap_sieve_get(jmap_req_t *req);
 static int jmap_sieve_set(jmap_req_t *req);
+static int jmap_sieve_query(jmap_req_t *req);
 static int jmap_sieve_validate(jmap_req_t *req);
 static int jmap_sieve_test(jmap_req_t *req);
 
@@ -104,10 +106,16 @@ jmap_method_t jmap_sieve_methods_nonstandard[] = {
         /*flags*/0
     },
     {
+        "SieveScript/query",
+        JMAP_SIEVE_EXTENSION,
+        &jmap_sieve_query,
+        JMAP_SHARED_CSTATE
+    },
+    {
         "SieveScript/validate",
         JMAP_SIEVE_EXTENSION,
         &jmap_sieve_validate,
-        JMAP_SHARED_CSTATE
+        /*flags*/0
     },
     {
         "SieveScript/test",
@@ -235,6 +243,8 @@ static const char *script_from_id(const char *sievedir, const char *id)
     if (!stat(link, &sbuf)) {
         ssize_t tgt_len = readlink(link, target, sizeof(target) - 1);
 
+        target[tgt_len] = '\0';
+
         if (tgt_len > SCRIPT_SUFFIX_LEN &&
             !strcmp(target + (tgt_len - SCRIPT_SUFFIX_LEN), SCRIPT_SUFFIX)) {
             name = target;
@@ -310,6 +320,8 @@ typedef struct script_info {
 static void free_script_info(void *data)
 {
     script_info *info = (script_info *) data;
+
+    if (!info) return;
 
     free(info->id);
     free(info->name);
@@ -1133,6 +1145,260 @@ static int jmap_sieve_set(struct jmap_req *req)
 done:
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
+    return 0;
+}
+
+static void filter_parse(jmap_req_t *req __attribute__((unused)),
+                         struct jmap_parser *parser,
+                         json_t *filter,
+                         json_t *unsupported __attribute__((unused)),
+                         void *rock __attribute__((unused)),
+                         json_t **err __attribute__((unused)))
+{
+    const char *field;
+    json_t *arg;
+
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "name")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "isActive")) {
+            if (!json_is_boolean(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, field);
+        }
+    }
+}
+
+
+static int comparator_parse(jmap_req_t *req __attribute__((unused)),
+                            struct jmap_comparator *comp,
+                            void *rock __attribute__((unused)),
+                            json_t **err __attribute__((unused)))
+{
+    if (comp->collation) {
+        return 0;
+    }
+    if (!strcmp(comp->property, "name") ||
+        !strcmp(comp->property, "isActive")) {
+        return 1;
+    }
+    return 0;
+}
+
+typedef struct filter {
+    const char *name;
+    int isActive;
+} filter;
+
+static void *filter_build(json_t *arg)
+{
+    filter *f = (filter *) xzmalloc(sizeof(struct filter));
+
+    f->isActive = -1;
+
+    /* name */
+    if (JNOTNULL(json_object_get(arg, "name"))) {
+        jmap_readprop(arg, "name", 0, NULL, "s", &f->name);
+    }
+
+    /* isActive */
+    if (JNOTNULL(json_object_get(arg, "isActive"))) {
+        jmap_readprop(arg, "isActive", 0, NULL, "b", &f->isActive);
+    }
+
+    return f;
+}
+
+/* Match the script in rock against filter. */
+static int filter_match(void *vf, void *rock)
+{
+    filter *f = (filter *) vf;
+    script_info *info = (script_info *) rock;
+
+    /* name */
+    if (f->name && !strstr(info->name, f->name)) return 0;
+
+    /* isActive */
+    if (f->isActive != -1 && (info->isActive != f->isActive)) return 0;
+
+    /* All matched. */
+    return 1;
+}
+
+typedef struct filter_rock {
+    struct jmap_query *query;
+    jmap_filter *parsed_filter;
+    ptrarray_t matches;
+    script_info *anchor;
+} filter_rock;
+
+static void filter_cb(const char *script, void *data, void *rock)
+{
+    script_info *info = (script_info *) data;
+    struct filter_rock *frock = (struct filter_rock *) rock;
+    struct jmap_query *query = frock->query;
+
+    info->name = xstrdup(script);
+
+    if (query->filter &&
+        !jmap_filter_match(frock->parsed_filter, &filter_match, info)) {
+        return;
+    }
+
+    /* Add record of the match to our array */
+    ptrarray_append(&frock->matches, info);
+
+    if (query->anchor && !strcmp(query->anchor, info->id)) {
+        /* Mark record corresponding to anchor */
+        frock->anchor = info;
+    }
+
+    query->total++;
+}
+
+enum sieve_sort {
+    SIEVE_SORT_NONE = 0,
+    SIEVE_SORT_NAME,
+    SIEVE_SORT_ACTIVE,
+    SIEVE_SORT_DESC = 0x80 /* bit-flag for descending sort */
+};
+
+static int sieve_cmp QSORT_R_COMPAR_ARGS(const void *va, const void *vb, void *rock)
+{
+    arrayu64_t *sortcrit = (arrayu64_t *) rock;
+    script_info *ma = (script_info *) *(void **) va;
+    script_info *mb = (script_info *) *(void **) vb;
+    size_t i, nsort = arrayu64_size(sortcrit);
+
+    for (i = 0; i < nsort; i++) {
+        enum sieve_sort sort = arrayu64_nth(sortcrit, i);
+        int ret = 0;
+
+        switch (sort & ~SIEVE_SORT_DESC) {
+        case SIEVE_SORT_NAME:
+            ret = strcmp(ma->name, mb->name);
+            break;
+
+        case SIEVE_SORT_ACTIVE:
+            if (ma->isActive < mb->isActive)
+                ret = -1;
+            else if (ma->isActive > mb->isActive)
+                ret = 1;
+            break;
+        }
+
+        if (ret) return (sort & SIEVE_SORT_DESC) ? -ret : ret;
+    }
+
+    return 0;
+}
+
+static int jmap_sieve_query(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_query query;
+    jmap_filter *parsed_filter = NULL;
+    arrayu64_t sortcrit = ARRAYU64_INITIALIZER;
+
+    /* Parse request */
+    json_t *err = NULL;
+    jmap_query_parse(req, &parser, NULL, NULL,
+                     filter_parse, NULL, comparator_parse, NULL, &query, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Build filter */
+    if (JNOTNULL(query.filter)) {
+        parsed_filter = jmap_buildfilter(query.filter, filter_build);
+    }
+
+    /* Build sort */
+    if (json_array_size(query.sort)) {
+        json_t *jval;
+        size_t i;
+        json_array_foreach(query.sort, i, jval) {
+            const char *prop = json_string_value(json_object_get(jval, "property"));
+            enum sieve_sort sort = SIEVE_SORT_NONE;
+
+            if (!strcmp(prop, "name")) {
+                sort = SIEVE_SORT_NAME;
+            } else if (!strcmp(prop, "isActive")) {
+                sort = SIEVE_SORT_ACTIVE;
+            }
+
+            if (json_object_get(jval, "isAscending") == json_false()) {
+                sort |= SIEVE_SORT_DESC;
+            }
+
+            arrayu64_append(&sortcrit, sort);
+        }
+    }
+
+    hash_table scripts = HASH_TABLE_INITIALIZER;
+    const char *sievedir = user_sieve_path(req->accountid);
+    filter_rock frock = { &query, parsed_filter, PTRARRAY_INITIALIZER, NULL };
+
+    /* Build a list of scripts */
+    _listscripts(sievedir, &scripts);
+
+    /* Filter the scripts */
+    hash_enumerate(&scripts, &filter_cb, &frock);
+
+    /* Sort results */
+    if (arrayu64_size(&sortcrit)) {
+        cyr_qsort_r(frock.matches.data, frock.matches.count,
+                    sizeof(void *), &sieve_cmp, &sortcrit);
+    }
+    arrayu64_fini(&sortcrit);
+
+    /* Process results */
+    if (query.anchor) {
+        query.position = ptrarray_find(&frock.matches, frock.anchor, 0);
+        if (query.position < 0) {
+            query.position = query.total;
+        }
+        else {
+            query.position += query.anchor_offset;
+        }
+    }
+    else if (query.position < 0) {
+        query.position += query.total;
+    }
+    if (query.position < 0) query.position = 0;
+
+    size_t i;
+    for (i = 0; i < query.total; i++) {
+        script_info *match = ptrarray_nth(&frock.matches, i);
+
+        /* Apply position and limit */
+        if (i >= (size_t) query.position &&
+            (!query.limit || query.limit > json_array_size(query.ids))) {
+            /* Add the submission identifier */
+            json_array_append_new(query.ids, json_string(match->id));
+        }
+    }
+    ptrarray_fini(&frock.matches);
+
+    free_hash_table(&scripts, &free_script_info);
+    if (parsed_filter) jmap_filter_free(parsed_filter, &free);
+
+    /* Build response */
+    query.query_state = sieve_state(sievedir);
+    query.result_position = query.position;
+    query.can_calculate_changes = 0;
+    jmap_ok(req, jmap_query_reply(&query));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_query_fini(&query);
     return 0;
 }
 
