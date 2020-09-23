@@ -11274,6 +11274,7 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
     }
 
     struct backend *be = xfer->sync_cs.backend;
+    xfer->sync_cs.clientin = be->in;
     xfer->remoteversion = backend_version(be);
     if (be->capability & CAPA_REPLICATION) {
         syslog(LOG_INFO, "XFER: destination supports replication");
