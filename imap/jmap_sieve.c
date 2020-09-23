@@ -301,17 +301,31 @@ static void getscript(const char *id, const char *script, int isactive,
     }
 }
 
+typedef struct script_info {
+    char *id;
+    char *name;
+    int isActive;
+} script_info;
+
+static void free_script_info(void *data)
+{
+    script_info *info = (script_info *) data;
+
+    free(info->id);
+    free(info->name);
+    free(info);
+}
+
 struct list_rock {
     const char *sievedir;
     struct jmap_get *get;
-    const char *defaultbc;
 };
 
 static void list_cb(const char *script, void *data, void *rock)
 {
-    const char *id = (const char *) data;
+    script_info *info = (script_info *) data;
+    const char *id = info->id;
     struct list_rock *lrock = (struct list_rock *) rock;
-    int isactive = 0;
 
     if (!id) {
         /* Create script id symlink */
@@ -324,18 +338,11 @@ static void list_cb(const char *script, void *data, void *rock)
         symlink(script, link);
     }
 
-    if (lrock->defaultbc &&
-        !strncmp(lrock->defaultbc, script, strlen(script) - SCRIPT_SUFFIX_LEN)) {
-        isactive = 1;
-    }
-
-    getscript(id, script, isactive, lrock->sievedir, lrock->get);
+    getscript(id, script, info->isActive, lrock->sievedir, lrock->get);
 }
 
-static void listscripts(const char *sievedir, struct jmap_get *get)
+static void _listscripts(const char *sievedir, hash_table *scripts)
 {
-    hash_table scripts = HASH_TABLE_INITIALIZER;
-    struct list_rock lrock = { sievedir, get, NULL };
     char target[PATH_MAX];
     struct dirent *dir;
     DIR *dp;
@@ -346,11 +353,12 @@ static void listscripts(const char *sievedir, struct jmap_get *get)
     if (dp == NULL) return;
 
     /* Build a hash of script name -> script id */
-    construct_hash_table(&scripts, 16, 0);
+    construct_hash_table(scripts, 16, 0);
 
     while ((dir = readdir(dp)) != NULL) {
         const char *name = dir->d_name;
         size_t namelen = strlen(name);
+        script_info *info = NULL;
 
         if (!strncmp(name, SCRIPT_ID_PREFIX, SCRIPT_ID_PREFIX_LEN)) {
             /* Script id symlink */
@@ -359,7 +367,12 @@ static void listscripts(const char *sievedir, struct jmap_get *get)
 
             if (script) {
                 /* Map script name -> id */
-                hash_insert(script, xstrdup(id), &scripts);
+                info = hash_lookup(script, scripts);
+                if (!info) {
+                    info = xzmalloc(sizeof(struct script_info));
+                    hash_insert(script, info, scripts);
+                }
+                info->id = xstrdup(id);
             }
             else {
                 /* Dead link - remove it
@@ -373,13 +386,16 @@ static void listscripts(const char *sievedir, struct jmap_get *get)
         else if (namelen > SCRIPT_SUFFIX_LEN &&
                  !strcmp(name + (namelen - SCRIPT_SUFFIX_LEN), SCRIPT_SUFFIX)) {
             /* Actual script file - check if we have an entry for this name */
-            if (!hash_lookup(name, &scripts)) {
+            info = hash_lookup(name, scripts);
+            if (!info) {
                 /* Add script name -> NULL as a placeholder
                    (we will create an id symlink later, if necessary) */
-                hash_insert(name, NULL, &scripts);
+                info = xzmalloc(sizeof(struct script_info));
+                hash_insert(name, info, scripts);
             }
         }
         else if (!strcmp(name, DEFAULTBC_NAME)) {
+            /* Active bytecode - check if we have an entry for this name */
             char link[PATH_MAX];
             ssize_t tgt_len;
 
@@ -388,15 +404,32 @@ static void listscripts(const char *sievedir, struct jmap_get *get)
 
             if (tgt_len > BYTECODE_SUFFIX_LEN) {
                 target[tgt_len - BYTECODE_SUFFIX_LEN] = '\0';
-                lrock.defaultbc = target;
+                strlcat(target, SCRIPT_SUFFIX, sizeof(target) - 1);
+
+                info = hash_lookup(target, scripts);
+                if (!info) {
+                    /* Add script name -> NULL as a placeholder */
+                    info = xzmalloc(sizeof(struct script_info));
+                    hash_insert(target, info, scripts);
+                }
+                info->isActive = 1;
             }
         }
     }
     closedir(dp);
+}
+
+static void listscripts(const char *sievedir, struct jmap_get *get)
+{
+    hash_table scripts = HASH_TABLE_INITIALIZER;
+    struct list_rock lrock = { sievedir, get };
+
+    /* Build a list of scripts */
+    _listscripts(sievedir, &scripts);
 
     /* Perform a get on each script */
     hash_enumerate(&scripts, &list_cb, &lrock);
-    free_hash_table(&scripts, &free);
+    free_hash_table(&scripts, &free_script_info);
 }
 
 static char *sieve_state(const char *sievedir)
