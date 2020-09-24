@@ -3226,8 +3226,18 @@ static void cmd_id(char *tag)
         id_response(imapd_out);
         prot_printf(imapd_out, ")\r\n");
     }
-    else
+    else if (config_serverinfo) {
+        prot_printf(imapd_out, "\"name\" \"Cyrus IMAPD\"");
+        if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+            prot_printf(imapd_out, " \"version\" \"%s\"", CYRUS_VERSION);
+        }
+        prot_printf(imapd_out, " \"vendor\" \"Project Cyrus\"");
+        prot_printf(imapd_out, " \"support-url\" \"https://www.cyrusimap.org\"");
+        prot_printf(imapd_out, ")\r\n");
+    }
+    else {
         prot_printf(imapd_out, "* ID NIL\r\n");
+    }
 
     imapd_check(NULL, 0);
 
