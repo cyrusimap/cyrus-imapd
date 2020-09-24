@@ -667,6 +667,96 @@ EOF
     $self->assert_null($res->[0][1]{notCompleted});
 }
 
+sub test_sieve_test_upload
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $email1 = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: cassandane@example.com
+Subject: test email
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $email1 =~ s/\r?\n/\r\n/gs;
+
+    my $email2 = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: cassandane@example.com
+Subject: Hello!
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $email2 =~ s/\r?\n/\r\n/gs;
+
+    my $script = <<EOF;
+require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vacation"];
+if header :contains "subject" "test" {
+  setflag "\\Seen\";
+  fileinto :copy :flags ["\\Flagged", "\\Answered"] :specialuse "\\Flagged" :mailboxid "M123" :create "INBOX.foo";
+}
+else {
+  vacation "Gone fishin'";
+}
+EOF
+    $script =~ s/\r?\n/\r\n/gs;
+    $script =~ s/\\/\\\\/gs;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->Upload($email1, "message/rfc822");
+    my $emailid1 = $res->{blobId};
+
+    $res = $jmap->Upload($email2, "message/rfc822");
+    my $emailid2 = $res->{blobId};
+
+    $res = $jmap->Upload($script, "application/sieve");
+    my $scriptid = $res->{blobId};
+
+    xlog "test script";
+    $res = $jmap->CallMethods([
+        ['SieveScript/test', {
+            emailBlobIds => [ $emailid1, 'foobar', $emailid2 ],
+            scriptBlobId => $scriptid,
+            envelope => {
+                mailFrom => {
+                    email => 'foo@example.com',
+                    parameters => JSON::null
+                },
+                rcptTo => [ {
+                    email => 'cassandane@example.com',
+                    parameters => JSON::null
+                } ]
+            },
+            lastVacationResponse => JSON::null
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+
+    $self->assert_not_null($res->[0][1]{completed});
+    $self->assert_str_equals('fileinto',
+                             $res->[0][1]{completed}{$emailid1}[0][0]);
+    $self->assert_str_equals('keep',
+                             $res->[0][1]{completed}{$emailid1}[1][0]);
+    $self->assert_str_equals('vacation',
+                             $res->[0][1]{completed}{$emailid2}[0][0]);
+    $self->assert_str_equals('keep',
+                             $res->[0][1]{completed}{$emailid2}[1][0]);
+
+    $self->assert_not_null($res->[0][1]{notCompleted});
+    $self->assert_str_equals('blobNotFound',
+                             $res->[0][1]{notCompleted}{foobar}{type});
+}
+
 sub test_sieve_test_singlecommand
     :min_version_3_3 :needs_component_jmap :JMAPExtensions
 {
