@@ -1658,6 +1658,7 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
         /* Abort the transaction if it is still in progress */
         cyrusdb_abort(mbdb, *tid);
     }
+    mboxlist_entry_free(&mbentry);
 
     return r;
 }
