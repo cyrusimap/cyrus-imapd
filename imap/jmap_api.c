@@ -1328,13 +1328,20 @@ done:
     }
     if (r) {
         if (data.mbox) jmap_closembox(req, &data.mbox);
-        if (mybody) message_free_body(mybody);
+        if (mybody) {
+            message_free_body(mybody);
+            free(mybody);
+        }
     }
     else {
         *mbox = data.mbox;
         *mr = data.mr;
         if (part) *part = mypart;
         if (body) *body = mybody;
+        else if (mybody) {
+            message_free_body(mybody);
+            free(mybody);
+        }
     }
     if (data.part_id) free(data.part_id);
     return r;
