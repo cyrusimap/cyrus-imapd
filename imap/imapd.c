@@ -3227,6 +3227,7 @@ static void cmd_id(char *tag)
         prot_printf(imapd_out, ")\r\n");
     }
     else if (config_serverinfo) {
+        prot_printf(imapd_out, "* ID (");
         prot_printf(imapd_out, "\"name\" \"Cyrus IMAPD\"");
         if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
             prot_printf(imapd_out, " \"version\" \"%s\"", CYRUS_VERSION);
