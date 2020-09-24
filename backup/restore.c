@@ -509,6 +509,7 @@ done:
         sync_reserve_list_free(&reserve_list);
 
     sync_disconnect(&sync_cs);
+    free(sync_cs.backend);
 
     backup_cleanup_staging_path();
     cyrus_done();

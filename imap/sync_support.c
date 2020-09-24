@@ -7432,7 +7432,6 @@ EXPORTED void sync_disconnect(struct sync_client_state *sync_cs)
     sync_cs->backend->timeout = NULL;
 
     backend_disconnect(sync_cs->backend);
-    sync_cs->backend = NULL;
 
     // backend may have put stuff here, free it so we don't leak memory
     buf_free(&sync_cs->tagbuf);
@@ -7447,7 +7446,8 @@ sync_rightnow_timeout(struct protstream *s __attribute__((unused)),
 
     /* too long since we last used the syncer - disconnect */
     sync_disconnect(&rightnow_sync_cs);
-
+    free(rightnow_sync_cs.backend);
+    rightnow_sync_cs.backend = NULL;
 
     return NULL;
 }

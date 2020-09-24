@@ -5507,6 +5507,7 @@ static int do_xbackup(const char *channel,
 
 done:
     sync_disconnect(&sync_cs);
+    free(sync_cs.backend);
 
     return r;
 }
@@ -11254,7 +11255,9 @@ static void xfer_done(struct xfer_header **xferptr)
 
     syslog(LOG_INFO, "XFER: disconnecting from servers");
 
-    sync_disconnect(&xfer->sync_cs);
+    /* The sync_cs.backend connection is in backend_cached[],
+       so it will be disconnected and freed in imapd_reset() */
+    buf_free(&xfer->sync_cs.tagbuf);
 
     free(xfer->toserver);
 

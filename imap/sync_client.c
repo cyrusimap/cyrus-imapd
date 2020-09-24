@@ -96,7 +96,7 @@ extern char *optarg;
 extern int optind;
 
 static const char *servername = NULL;
-static struct sync_client_state sync_cs;
+static struct sync_client_state sync_cs = SYNC_CLIENT_STATE_INITIALIZER;
 static struct buf tagbuf = BUF_INITIALIZER;
 
 static struct namespace   sync_namespace;
@@ -298,6 +298,8 @@ static void replica_connect()
 static void replica_disconnect(void)
 {
     sync_disconnect(&sync_cs);
+    free(sync_cs.backend);
+    sync_cs.backend = NULL;
 }
 
 static void do_daemon(const char *sync_shutdown_file,
