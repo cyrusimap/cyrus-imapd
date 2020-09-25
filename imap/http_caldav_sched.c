@@ -1399,7 +1399,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
                                        icalcomponent *reply)
 {
     struct hash_table comp_table;
-    icalcomponent *comp, *itip;
+    icalcomponent *comp, *itip, *master = NULL;
     icalcomponent_kind kind;
     icalproperty *prop, *att;
     icalparameter *param;
@@ -1415,7 +1415,10 @@ static const char *deliver_merge_reply(icalcomponent *ical,
         prop =
             icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
         if (prop) recurid = icalproperty_get_value_as_string(prop);
-        else recurid = "";
+        else {
+            master = comp;
+            recurid = "";
+        }
 
         hash_insert(recurid, comp, &comp_table);
 
@@ -1435,9 +1438,14 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 
         comp = hash_lookup(recurid, &comp_table);
         if (!comp) {
-            /* New recurrence overridden by attendee.
-               Create a new recurrence from master component. */
-            comp = master_to_recurrence(hash_lookup("", &comp_table), prop);
+            /* New recurrence overridden by attendee. */
+            if (icalcomponent_get_status(master) == ICAL_STATUS_CANCELLED) {
+                /* The master event has been cancelled - ignore this override. */
+                continue;
+            }
+
+            /* create a new recurrence from master component. */
+            comp = master_to_recurrence(master, prop);
 
             /* Replace DTSTART, DTEND, SEQUENCE */
             prop =
@@ -1474,6 +1482,10 @@ static const char *deliver_merge_reply(icalcomponent *ical,
                 icalcomponent_add_property(comp, icalproperty_clone(prop));
 
             icalcomponent_add_component(ical, comp);
+        }
+        else if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) {
+            /* This component has been cancelled - ignore the reply */
+            continue;
         }
 
         /* Get the sending attendee */
@@ -2236,6 +2248,10 @@ static icalcomponent *find_attended_component(icalcomponent *ical,
                                               const char *attendee)
 {
     icalcomponent *comp = find_component(ical, recurid);
+    if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) {
+        /* Can't attend a cancelled event */
+        return NULL;
+    }
     if (find_attendee(comp, attendee))
         return comp;
     return NULL;
