@@ -165,11 +165,13 @@ struct jmap_restore {
     time_t cutoff;
     unsigned mode : 5;
 
+    int log_level;
+
     /* Response fields */
     unsigned num_undone[3];
 };
 
-#define JMAP_RESTORE_INITIALIZER(mode) { 0, mode, { 0, 0, 0 } }
+#define JMAP_RESTORE_INITIALIZER(mode) { 0, mode, LOG_DEBUG, { 0, 0, 0 } }
 
 static void jmap_restore_parse(jmap_req_t *req,
                                struct jmap_parser *parser,
@@ -196,6 +198,10 @@ static void jmap_restore_parse(jmap_req_t *req,
 
         else if (!strcmp(key, "performDryRun") && json_is_boolean(arg)) {
             if (json_is_true(arg)) restore->mode |= DRY_RUN;
+        }
+
+        else if (!strcmp(key, "verboseLogging") && json_is_boolean(arg)) {
+            if (json_is_true(arg)) restore->log_level = LOG_INFO;
         }
 
         else if (restore->mode & UNDO_EMAIL) {
@@ -266,7 +272,7 @@ struct restore_rock {
     int mbtype;
     modseq_t deletedmodseq;
     char *(*resource_name_cb)(message_t *, void *);
-    int (*restore_cb)(message_t *, message_t *, jmap_req_t *, void *);
+    int (*restore_cb)(message_t *, message_t *, jmap_req_t *, void *, int);
     void *rock;
     struct mailbox *mailbox;
 };
@@ -282,6 +288,7 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
 {
     struct restore_info *restore = (struct restore_info *) data;
     struct restore_rock *rrock = (struct restore_rock *) rock;
+    int log_level = rrock->jrestore->log_level;
     struct mailbox *mailbox = rrock->mailbox;
     jmap_req_t *req = rrock->req;
     message_t *recreatemsg = NULL;
@@ -290,19 +297,19 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
 
     switch (restore->type) {
     case DESTROYS:
-        syslog(LOG_DEBUG, "undo destroy %s", resource);
+        syslog(log_level, "undo destroy %s", resource);
         break;
 
     case UPDATES:
         if (!(rrock->jrestore->mode & UNDO_ALL)) goto done;
 
-        syslog(LOG_DEBUG, "undo update %s", resource);
+        syslog(log_level, "undo update %s", resource);
         break;
 
     case CREATES:
         if (!(rrock->jrestore->mode & UNDO_ALL)) goto done;
 
-        syslog(LOG_DEBUG, "undo create %s", resource);
+        syslog(log_level, "undo create %s", resource);
         break;
 
     default:
@@ -318,7 +325,7 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
     }
 
     if (!(rrock->jrestore->mode & DRY_RUN))
-        r = rrock->restore_cb(recreatemsg, destroymsg, req, rrock->rock);
+        r = rrock->restore_cb(recreatemsg, destroymsg, req, rrock->rock, log_level);
 
     message_unref(&recreatemsg);
     message_unref(&destroymsg);
@@ -332,16 +339,17 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
 static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 {
     struct restore_rock *rrock = (struct restore_rock *) rock;
+    int log_level = rrock->jrestore->log_level;
     hash_table resources = HASH_TABLE_INITIALIZER;
     struct mailbox *mailbox = NULL;
     char *resource = NULL;
     int recno, r;
 
-    syslog(LOG_DEBUG, "restore_collection_cb: processing '%s'  (type = 0x%03x)",
+    syslog(log_level, "restore_collection_cb: processing '%s'  (type = 0x%03x)",
            mbentry->name, mbentry->mbtype);
 
     if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) {
-        syslog(LOG_DEBUG, "skipping '%s': not type 0x%03x",
+        syslog(log_level, "skipping '%s': not type 0x%03x",
                mbentry->name, rrock->mbtype);
 
         return 0;
@@ -355,7 +363,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 
     if ((rrock->jrestore->mode & UNDO_ALL) &&
         rrock->jrestore->cutoff < mailbox->i.changes_epoch) {
-        syslog(LOG_DEBUG,
+        syslog(log_level,
                "skipping '%s': cutoff (%ld) prior to mailbox history (%ld)",
                mailbox->name, rrock->jrestore->cutoff, mailbox->i.changes_epoch);
 
@@ -372,14 +380,14 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         const struct index_record *record = msg_record(msg);
 
         resource = rrock->resource_name_cb(msg, rrock->rock);
-        syslog(LOG_DEBUG,
+        syslog(log_level,
                "UID %u: expunged: %x, savedate: %ld, updated: %ld, name: %s",
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
                record->savedate, record->last_updated,
                resource ? resource : "NULL");
 
         if (!resource) {
-            syslog(LOG_DEBUG, "skipping UID %u: no resource name",
+            syslog(log_level, "skipping UID %u: no resource name",
                    record->uid);
             continue;
         }
@@ -390,7 +398,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             restore = hash_lookup(resource, &resources);
 
             if (restore && restore->msgno_torecreate) {
-                syslog(LOG_DEBUG, "skipping UID %u: found a newer version",
+                syslog(log_level, "skipping UID %u: found a newer version",
                        record->uid);
 
                 free(resource);
@@ -399,7 +407,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 
             if (record->savedate > rrock->jrestore->cutoff &&
                 (rrock->jrestore->mode & UNDO_ALL)) {
-                syslog(LOG_DEBUG, "skipping UID %u: created AND deleted",
+                syslog(log_level, "skipping UID %u: created AND deleted",
                        record->uid);
 
                 free(resource);
@@ -424,17 +432,17 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                     /* Tombstone is before cutoff so this is an update */
                     restore->type = UPDATES;
 
-                    syslog(LOG_DEBUG, "UID %u: updated after cutoff",
+                    syslog(log_level, "UID %u: updated after cutoff",
                            record->uid);
                 }
                 else {
-                    syslog(LOG_DEBUG, "UID %u: destroyed after cutoff",
+                    syslog(log_level, "UID %u: destroyed after cutoff",
                            record->uid);
                 }
             }
             else {
                 /* Resource was destroyed before cutoff - not interested */
-                syslog(LOG_DEBUG, "skipping UID %u: destroyed before cutoff",
+                syslog(log_level, "skipping UID %u: destroyed before cutoff",
                        record->uid);
             }
         }
@@ -447,12 +455,12 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             restore->type = CREATES;
             restore->msgno_todestroy = recno;
 
-            syslog(LOG_DEBUG, "UID %u: created/updated after cutoff",
+            syslog(log_level, "UID %u: created/updated after cutoff",
                    record->uid);
         }
         else {
             /* Resource was not modified after cutoff - not interested */
-            syslog(LOG_DEBUG, "skipping UID %u: not modified after cutoff",
+            syslog(log_level, "skipping UID %u: not modified after cutoff",
                    record->uid);
         }
 
@@ -474,7 +482,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 }
 
 static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
-                             jmap_req_t *req, int is_update)
+                             jmap_req_t *req, int is_update, int log_level)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
@@ -487,7 +495,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
 
     if (!tomailbox) tomailbox = mailbox;
 
-    syslog(LOG_DEBUG, "recreating UID: %u (%s); is_update: %d",
+    syslog(log_level, "recreating UID: %u (%s); is_update: %d",
            record->uid, tomailbox->name, is_update);
 
     /* use latest version of the resource as the source for our append stage */
@@ -544,14 +552,15 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
     return r;
 }
 
-static int destroy_resource(message_t *msg, jmap_req_t *req, int is_replaced)
+static int destroy_resource(message_t *msg, jmap_req_t *req,
+                            int is_replaced, int log_level)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
     struct index_record newrecord;
     int r = 0;
 
-    syslog(LOG_DEBUG,
+    syslog(log_level,
            "destroying UID: %u; is_replaced: %d", record->uid, is_replaced);
 
     /* copy the existing index_record */
@@ -672,13 +681,13 @@ static int _group_name_cb(void *rock, struct carddav_data *cdata)
 }
 
 static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
-                           jmap_req_t *req, void *rock)
+                           jmap_req_t *req, void *rock, int log_level)
 {
     int is_update = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
-        r = recreate_resource(recreatemsg, NULL, req, is_update);
+        r = recreate_resource(recreatemsg, NULL, req, is_update, log_level);
 
         if (!r && !is_update) {
             /* Add this card to the group vCard of recreated contacts */
@@ -732,7 +741,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
     }
 
     if (!r && destroymsg) {
-        r = destroy_resource(destroymsg, req, is_update);
+        r = destroy_resource(destroymsg, req, is_update, log_level);
     }
 
     return r;
@@ -787,7 +796,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
 
     char *addrhomeset = carddav_mboxname(req->accountid, NULL);
 
-    syslog(LOG_DEBUG, "jmap_backup_restore_contacts(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_contacts(%s, %ld)",
            addrhomeset, restore.cutoff);
 
     struct contact_rock crock =
@@ -911,7 +920,7 @@ static int do_scheduling(jmap_req_t *req,
 }
 
 static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
-                         jmap_req_t *req, struct caldav_db *caldavdb)
+                         jmap_req_t *req, struct caldav_db *caldavdb, int log_level)
 {
     struct mailbox *mailbox = msg_mailbox(recreatemsg);
     const struct index_record *record = msg_record(recreatemsg);
@@ -967,14 +976,14 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
     }
     else {
         /* No scheduling - simple recreation will do */
-        r = recreate_resource(recreatemsg, NULL, req, destroymsg != NULL);
+        r = recreate_resource(recreatemsg, NULL, req, destroymsg != NULL, log_level);
     }
 
     return r;
 }
 
 static int destroy_ical(message_t *destroymsg, jmap_req_t *req,
-                        int is_replaced, struct caldav_db *caldavdb)
+                        int is_replaced, struct caldav_db *caldavdb, int log_level)
 {
     int r = 0;
 
@@ -1000,24 +1009,24 @@ static int destroy_ical(message_t *destroymsg, jmap_req_t *req,
         }
     }
 
-    if (!r) r = destroy_resource(destroymsg, req, is_replaced);
+    if (!r) r = destroy_resource(destroymsg, req, is_replaced, log_level);
 
     return r;
 }
 
 static int restore_ical(message_t *recreatemsg, message_t *destroymsg,
-                        jmap_req_t *req, void *rock)
+                        jmap_req_t *req, void *rock, int log_level)
 {
     struct calendar_rock *crock = (struct calendar_rock *) rock;
     int is_update = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
-        r = recreate_ical(recreatemsg, destroymsg, req, crock->caldavdb);
+        r = recreate_ical(recreatemsg, destroymsg, req, crock->caldavdb, log_level);
     }
 
     if (!r && destroymsg) {
-        r = destroy_ical(destroymsg, req, is_update, crock->caldavdb);
+        r = destroy_ical(destroymsg, req, is_update, crock->caldavdb, log_level);
     }
 
     return r;
@@ -1143,7 +1152,8 @@ static int recreate_calendar(const mbentry_t *mbentry,
 
 static int recreate_ical_resources(const mbentry_t *mbentry,
                                    struct restore_rock *rrock,
-                                   struct mailbox *newmailbox)
+                                   struct mailbox *newmailbox,
+                                   int log_level)
 {
     struct mailbox *mailbox = NULL;
     jmap_req_t *req = rrock->req;
@@ -1163,7 +1173,7 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
 
         if (!(rrock->jrestore->mode & DRY_RUN)) {
             r = recreate_resource((message_t *) msg, newmailbox,
-                                  req, 0/*is_update*/);
+                                  req, 0/*is_update*/, log_level);
         }
         if (!r) rrock->jrestore->num_undone[DESTROYS]++;
     }
@@ -1178,6 +1188,7 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
 {
     struct restore_rock *rrock = (struct restore_rock *) rock;
     struct calendar_rock *crock = (struct calendar_rock *) rrock->rock;
+    int log_level = rrock->jrestore->log_level;
     jmap_req_t *req = rrock->req;
     time_t timestamp = 0;
     int r = 0;
@@ -1202,7 +1213,7 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
             }
 
             if (!r) {
-                r = recreate_ical_resources(mbentry, rrock, newmailbox);
+                r = recreate_ical_resources(mbentry, rrock, newmailbox, log_level);
                 mailbox_close(&newmailbox);
             }
 
@@ -1241,7 +1252,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
 
     char *calhomeset = caldav_mboxname(req->accountid, NULL);
 
-    syslog(LOG_DEBUG, "jmap_backup_restore_calendars(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_calendars(%s, %ld)",
            calhomeset, restore.cutoff);
 
     struct calendar_rock crock =
@@ -1300,17 +1311,18 @@ static char *note_resource_name(message_t *msg,
 }
 
 static int restore_note(message_t *recreatemsg, message_t *destroymsg,
-                        jmap_req_t *req, void *rock __attribute__((unused)))
+                        jmap_req_t *req, void *rock __attribute__((unused)),
+                        int log_level)
 {
     int is_update = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
-        r = recreate_resource(recreatemsg, NULL, req, is_update);
+        r = recreate_resource(recreatemsg, NULL, req, is_update, log_level);
     }
 
     if (!r && destroymsg) {
-        r = destroy_resource(destroymsg, req, is_update);
+        r = destroy_resource(destroymsg, req, is_update, log_level);
     }
 
     return r;
@@ -1332,7 +1344,7 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
 
     const char *subfolder = config_getstring(IMAPOPT_NOTESMAILBOX);
 
-    syslog(LOG_DEBUG, "jmap_backup_restore_notes(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_notes(%s, %ld)",
            subfolder ? subfolder : "NULL", restore.cutoff);
 
     if (subfolder) {
@@ -1408,6 +1420,7 @@ static void message_t_free(void *data)
 static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 {
     struct restore_rock *rrock = (struct restore_rock *) rock;
+    int log_level = rrock->jrestore->log_level;
     struct mail_rock *mrock = rrock->rock;
     struct mailbox *mailbox = NULL;
     const message_t *msg;
@@ -1415,17 +1428,17 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     int userflag = -1, isdestroyed_mbox = 0;
     int r;
 
-    syslog(LOG_DEBUG, "restore_message_list_cb: processing '%s'  (type = 0x%03x)",
+    syslog(log_level, "restore_message_list_cb: processing '%s'  (type = 0x%03x)",
            mbentry->name, mbentry->mbtype);
 
     if (mbentry->mbtype != MBTYPE_EMAIL) {
-        syslog(LOG_DEBUG, "skipping '%s': not type EMAIL", mbentry->name);
+        syslog(log_level, "skipping '%s': not type EMAIL", mbentry->name);
 
         return 0;
     }
 
     if (mboxname_isnotesmailbox(mbentry->name, MBTYPE_EMAIL)) {
-        syslog(LOG_DEBUG, "skipping '%s': Notes mailbox", mbentry->name);
+        syslog(log_level, "skipping '%s': Notes mailbox", mbentry->name);
 
         return 0;
     }
@@ -1433,7 +1446,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     if (mboxname_isdeletedmailbox(mbentry->name, &timestamp)) {
         if (timestamp <= rrock->jrestore->cutoff) {
             /* Mailbox was destroyed before cutoff - not interested */
-            syslog(LOG_DEBUG, "skipping '%s': destroyed (%ld) before cutoff",
+            syslog(log_level, "skipping '%s': destroyed (%ld) before cutoff",
                    mbentry->name, timestamp);
 
             return 0;
@@ -1463,7 +1476,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         int isdestroyed_msg = isdestroyed_mbox;
         int ignore_draft = 0;
 
-        syslog(LOG_DEBUG,
+        syslog(log_level,
                "UID %u: expunged: %x, draft: %x, intdate: %ld, updated: %ld",
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
                (record->system_flags & FLAG_DRAFT),
@@ -1473,7 +1486,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         if (rrock->jrestore->mode & UNDO_DRAFTS) {
             /* XXX  conversation ID is faster to lookup than Message-ID */
             msgid = conversations_guid_cid_lookup(rrock->req->cstate, guid);
-            syslog(LOG_DEBUG, "UID: %u, msgid = %llu", record->uid, msgid);
+            syslog(log_level, "UID: %u, msgid = %llu", record->uid, msgid);
         }
 
         /* Remove $restored flag from message */
@@ -1496,7 +1509,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
         if (message && message->ignore) {
             /* An undeleted copy of this message exists */
-            syslog(LOG_DEBUG, "skipping UID %u: undeleted copy exists",
+            syslog(log_level, "skipping UID %u: undeleted copy exists",
                    record->uid);
 
             continue;
@@ -1508,7 +1521,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
             if (record->last_updated <= rrock->jrestore->cutoff) {
                 /* Message has been destroyed before cutoff - ignore */
-                syslog(LOG_DEBUG, "skipping UID %u: destroyed before cutoff",
+                syslog(log_level, "skipping UID %u: destroyed before cutoff",
                        record->uid);
 
                 continue;
@@ -1522,7 +1535,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 /* Destroyed draft */
                 if (!msgid) {
                     /* No way to track this message */
-                    syslog(LOG_DEBUG, "skipping UID %u: no msgid", record->uid);
+                    syslog(log_level, "skipping UID %u: no msgid", record->uid);
 
                     continue;
                 }
@@ -1537,7 +1550,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 else if (message->ignore) {
                     /* An undeleted copy of this draft exists OR
                        this Message-Id exists as a non-draft */
-                    syslog(LOG_DEBUG,
+                    syslog(log_level,
                            "skipping UID %u: non-draft / undeleted draft exists",
                            record->uid);
 
@@ -1692,6 +1705,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 {
     arrayu64_t *msgnos = (arrayu64_t *) data;
     struct restore_rock *rrock = (struct restore_rock *) rock;
+    int log_level = rrock->jrestore->log_level;
     jmap_req_t *req = rrock->req;
     mbname_t *mbname = mbname_from_intname(mboxname);
     struct mailbox *newmailbox = NULL, *mailbox = NULL;
@@ -1832,7 +1846,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 
         message_set_from_mailbox(mailbox, msgno, msg);
         if (!(rrock->jrestore->mode & DRY_RUN)) {
-            r = recreate_resource(msg, newmailbox, req, 0/*is_update*/);
+            r = recreate_resource(msg, newmailbox, req, 0/*is_update*/, log_level);
         }
         if (!r) {
             const struct index_record *record = msg_record(msg);
@@ -1874,7 +1888,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     hashu64_table msgids = HASHU64_TABLE_INITIALIZER;
     char *inbox = mboxname_user_mbox(req->accountid, NULL);
 
-    syslog(LOG_DEBUG, "jmap_backup_restore_mail(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_mail(%s, %ld)",
            inbox, restore.cutoff);
 
     struct mail_rock mrock = {
