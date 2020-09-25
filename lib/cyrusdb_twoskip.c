@@ -513,13 +513,16 @@ static int read_header(struct dbengine *db)
 
     crc = ntohl(*((uint32_t *)(BASE(db) + OFFSET_CRC32)));
 
+    db->end = db->header.current_size;
+
+    if ((db->open_flags & CYRUSDB_NOCRC))
+        return 0;
+
     if (crc32_map(BASE(db), OFFSET_CRC32) != crc) {
         syslog(LOG_ERR, "DBERROR: %s: twoskip header CRC failure",
                FNAME(db));
         return CYRUSDB_IOERROR;
     }
-
-    db->end = db->header.current_size;
 
     return 0;
 }
@@ -558,10 +561,11 @@ static int commit_header(struct dbengine *db)
 
 static int check_tailcrc(struct dbengine *db, struct skiprecord *record)
 {
-    uint32_t crc;
+    if ((db->open_flags & CYRUSDB_NOCRC))
+        return 0;
 
-    crc = crc32_map(BASE(db) + record->keyoffset,
-                    roundup(record->keylen + record->vallen, 8));
+    uint32_t crc = crc32_map(BASE(db) + record->keyoffset,
+                             roundup(record->keylen + record->vallen, 8));
     if (crc != record->crc32_tail) {
         syslog(LOG_ERR, "DBERROR: invalid tail crc %s at %llX",
                FNAME(db), (LLU)record->offset);
@@ -645,8 +649,11 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     record->keyoffset = offset + 8;
     record->valoffset = record->keyoffset + record->keylen;
 
-    if (crc32_map(BASE(db) + record->offset, (offset - record->offset))
-        != record->crc32_head) {
+    if ((db->open_flags & CYRUSDB_NOCRC))
+        return 0;
+
+    uint32_t crc = crc32_map(BASE(db) + record->offset, (offset - record->offset));
+    if (crc != record->crc32_head) {
         syslog(LOG_ERR, "DBERROR: twoskip checksum head error for %s at %08llX",
                FNAME(db), (LLU)offset);
         return CYRUSDB_IOERROR;
