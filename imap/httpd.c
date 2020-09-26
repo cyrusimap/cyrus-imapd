@@ -4559,7 +4559,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
 static int meth_get(struct transaction_t *txn,
                     void *params __attribute__((unused)))
 {
-    int ret = 0, r, fd = -1, precond, len;
+    int r, fd = -1, precond, len;
     const char *prefix, *urls, *path, *ext;
     static struct buf pathbuf = BUF_INITIALIZER;
     struct stat sbuf;
@@ -4572,7 +4572,7 @@ static int meth_get(struct transaction_t *txn,
         if (txn->flags.upgrade & UPGRADE_WS) {
             return ws_start_channel(txn, NULL, &ws_echo);
         }
-        else if (ws_enabled()) {
+        if (ws_enabled()) {
             txn->flags.upgrade |= UPGRADE_WS;
             txn->flags.conn |= CONN_UPGRADE;
         }
@@ -4583,7 +4583,7 @@ static int meth_get(struct transaction_t *txn,
     if (!strncmp(txn->req_uri->path, WELL_KNOWN_PREFIX, len)) {
         if (txn->req_uri->path[len] == '/') len++;
         if (txn->req_uri->path[len] == '\0') return list_well_known(txn);
-        else return HTTP_NOT_FOUND;
+        return HTTP_NOT_FOUND;
     }
 
     /* Serve up static pages */
@@ -4692,7 +4692,7 @@ static int meth_get(struct transaction_t *txn,
         close(fd);
     }
 
-    return ret;
+    return 0;
 }
 
 
