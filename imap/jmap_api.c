@@ -117,7 +117,7 @@ static json_t *extract_array_value(json_t *val, const char *idx,
 
 /* Extract the JSON value at position path from val.
  *
- * Return NULL, if the the value does not exist or if
+ * Return NULL, if the value does not exist or if
  * path is erroneous.
  */
 static json_t *extract_value(json_t *val, const char *path, ptrarray_t *pool)

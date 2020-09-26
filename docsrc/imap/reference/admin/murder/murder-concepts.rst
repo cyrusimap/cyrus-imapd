@@ -43,8 +43,8 @@ acceptable compromise; however, trying to share mailboxes becomes
 difficult or even impossible. Specific examples can be found in `Appendix 
 A: DNS Name Load Balancing`_ and `Appendix B: IMAP Multiplexing`_). 
 
-We propose a new approach to overcome these problems. We call it the the 
-Cyrus IMAP Aggregator. The Cyrus aggregator takes a :ref:`murder <def_murder>` of IMAP 
+We propose a new approach to overcome these problems. We call it the Cyrus
+IMAP Aggregator. The Cyrus aggregator takes a :ref:`murder <def_murder>` of IMAP
 servers and presents a server independent view to the clients. That is, 
 **all the mailboxes across all the IMAP servers are aggregated to a single 
 image**, thereby appearing to be only one IMAP server to the clients. 
@@ -270,7 +270,7 @@ COPY is somewhat special as it acts upon messages in the currently
 SELECT'd mailbox but then interacts with another mailbox.
 
 In the case where the destination mailbox is on the same backend server 
-as the the source folder, the COPY command is issued to the backend 
+as the source folder, the COPY command is issued to the backend
 server and the backend server takes care of the command.
 
 If the destination folder is on a different backend server, the 

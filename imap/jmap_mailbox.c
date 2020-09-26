@@ -391,7 +391,7 @@ static char *_mbox_get_name(const char *account_id, const mbname_t *mbname)
     buf_free(&attrib);
 
     /* No displayname annotation. Most probably this mailbox was
-     * created via IMAP. In any case, determine name from the the
+     * created via IMAP. In any case, determine name from the
      * last segment of the mailboxname hierarchy. */
     char *extname;
     const strarray_t *boxes = mbname_boxes(mbname);

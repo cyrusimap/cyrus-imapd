@@ -97,7 +97,7 @@ Options
 .. option:: -c
 
     Enable challenge prompt callbacks.  This will cause the OTP mechanism
-    to ask for the the one-time password instead of the secret pass-phrase
+    to ask for the one-time password instead of the secret pass-phrase
     (library generates the correct response).
 
 .. option:: -i

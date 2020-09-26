@@ -3692,7 +3692,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             if (r == CYRUSDB_DONE) r = 0;
             if (r) goto done;
 
-            /* reset the the namebuffer */
+            /* reset the namebuffer */
             if (rock->cb)
                 r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
@@ -3706,7 +3706,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
 
         /* "Alt Prefix" folders */
         if (rock->namespace->isalt) {
-            /* reset the the namebuffer */
+            /* reset the namebuffer */
             if (rock->cb)
                 r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
@@ -3754,7 +3754,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             /* because of how domains work, with crossdomains or admin you can't prefix at all :( */
             size_t thislen = (isadmin || crossdomains) ? 0 : strlen(domainpat);
 
-            /* reset the the namebuffer */
+            /* reset the namebuffer */
             if (rock->cb)
                 r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
@@ -3777,7 +3777,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         if (!strncmp(rock->namespace->prefix[NAMESPACE_SHARED], commonpat, MIN(len, prefixlen))) {
             rock->mb_category = MBNAME_SHARED;
 
-            /* reset the the namebuffer */
+            /* reset the namebuffer */
             if (rock->cb)
                 r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
@@ -3799,7 +3799,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
 
         rock->mb_category = MBNAME_OWNERDELETED;
 
-        /* reset the the namebuffer */
+        /* reset the namebuffer */
         if (rock->cb)
             r = (*rock->cb)(NULL, rock->procrock);
         if (r) goto done;
@@ -3812,7 +3812,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     if (isadmin || (allowdeleted && rock->namespace->accessible[NAMESPACE_SHARED])) {
         rock->mb_category = MBNAME_OTHERDELETED;
 
-        /* reset the the namebuffer */
+        /* reset the namebuffer */
         if (rock->cb)
             r = (*rock->cb)(NULL, rock->procrock);
         if (r) goto done;

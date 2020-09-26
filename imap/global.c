@@ -640,7 +640,7 @@ EXPORTED int is_userid_anonymous(const char *user)
 }
 
 /*
- * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
+ * acl_ok() checks to see if the inbox for 'user' grants the 'a'
  * right to 'authstate'. Returns 1 if so, 0 if not.
  */
 /* Note that we do not determine if the mailbox is remote or not */
