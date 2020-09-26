@@ -885,7 +885,6 @@ EXPORTED const char *mbname_intname(const mbname_t *mbname)
     mbname_t *backdoor = (mbname_t *)mbname;
     backdoor->intname = buf_release(&buf);
 
-    buf_free(&buf);
     strarray_free(boxes);
 
     return mbname->intname;
@@ -914,8 +913,6 @@ EXPORTED const char *mbname_userid(const mbname_t *mbname)
 
     mbname_t *backdoor = (mbname_t *)mbname;
     backdoor->userid = buf_release(&buf);
-
-    buf_free(&buf);
 
     return mbname->userid;
 }
@@ -960,8 +957,6 @@ EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct names
     free(backdoor->recipient);
     backdoor->recipient = buf_release(&buf);
     backdoor->extns = ns;
-
-    buf_free(&buf);
 
     return mbname->recipient;
 }

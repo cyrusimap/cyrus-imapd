@@ -3571,14 +3571,12 @@ static void extract_convsubject(const struct index_record *record,
 
 EXPORTED char *message_extract_convsubject(const struct index_record *record)
 {
-    char *msubj = NULL;
     if (cacheitem_base(record, CACHE_HEADERS)) {
         struct buf msubject = BUF_INITIALIZER;
         extract_convsubject(record, &msubject, conversation_normalise_subject);
-        msubj = buf_release(&msubject);
-        buf_free(&msubject);
+        return buf_release(&msubject);
     }
-    return msubj;
+    return NULL;
 }
 
 /*

@@ -696,8 +696,6 @@ static int get_search_annotation(struct protstream *pin,
 
     *lp = sa;
 
-    buf_free(&entry);
-    buf_free(&attrib);
     buf_free(&value);
     return c;
 
