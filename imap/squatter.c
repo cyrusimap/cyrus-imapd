@@ -97,7 +97,6 @@ const int SKIP_FUZZ = 60;
 
 static int verbose = 0;
 static int incremental_mode = 0;
-static int batch_mode = 0;
 static int xapindexed_mode = 0;
 static int recursive_flag = 0;
 static int annotation_flag = 0;
@@ -269,12 +268,10 @@ static int index_one(const char *name, int blocking)
 {
     struct mailbox *mailbox = NULL;
     int r;
-    int flags = 0;
+    int flags = SEARCH_UPDATE_BATCH;
 
     if (incremental_mode)
         flags |= SEARCH_UPDATE_INCREMENTAL;
-    if (batch_mode)
-        flags |= SEARCH_UPDATE_BATCH;
     if (xapindexed_mode)
         flags |= SEARCH_UPDATE_XAPINDEXED;
     if (allow_partials)
@@ -945,7 +942,6 @@ int main(int argc, char **argv)
             if (mode != UNKNOWN) usage(argv[0]);
             mode = ROLLING;
             incremental_mode = 1; /* always incremental if rolling */
-            batch_mode = 1;
             break;
 
         case 'l':               /* list paths */
