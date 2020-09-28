@@ -75,7 +75,8 @@ enum cyrusdb_openflags {
     CYRUSDB_MBOXSORT  = 0x02,    /* Use mailbox sort order ('.' sorts 1st) */
     CYRUSDB_CONVERT   = 0x04,    /* Convert to the named format if not already */
     CYRUSDB_NOCOMPACT = 0x08,    /* Don't run any database compaction routines */
-    CYRUSDB_SHARED    = 0x10     /* Open in shared lock mode */
+    CYRUSDB_SHARED    = 0x10,    /* Open in shared lock mode */
+    CYRUSDB_NOCRC     = 0x20     /* Don't check CRC32 on read */
 };
 
 typedef int foreach_p(void *rock,
