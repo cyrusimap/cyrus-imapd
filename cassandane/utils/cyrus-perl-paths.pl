@@ -18,7 +18,18 @@ sub _cyrus_perl_search_path
         substr($Config{installsitelib}, length($Config{siteprefix})),
         substr($Config{installsitearch}, length($Config{siteprefix}))
     );
-    return map { "-I " . $destdir . $prefix . $_; } @inc;
+
+    my @paths;
+    my $found = 0;
+    foreach (@inc) {
+        my $p = $destdir . $prefix . $_;
+        $found++ if -d $p;
+        push @paths, "-I $p";
+    }
+
+    warn "warning: Cyrus perl paths not found on disk.  Is Cyrus installed?\n"
+        if not $found;
+    return @paths;
 }
 
 my $cassini = Cassandane::Cassini->instance();
