@@ -3120,6 +3120,7 @@ EOF
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=SERVER:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+STATUS:CONFIRMED
 EOF
         $self->{instance}->getnotify();
         $CalDAV->Request('DELETE', "$CalendarId/$uuid.ics");
