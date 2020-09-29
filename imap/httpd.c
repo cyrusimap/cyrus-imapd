@@ -4572,6 +4572,7 @@ static int meth_get(struct transaction_t *txn,
         if (txn->flags.upgrade & UPGRADE_WS) {
             return ws_start_channel(txn, NULL, &ws_echo);
         }
+
         if (ws_enabled()) {
             txn->flags.upgrade |= UPGRADE_WS;
             txn->flags.conn |= CONN_UPGRADE;
@@ -4582,7 +4583,10 @@ static int meth_get(struct transaction_t *txn,
     len = strlen(WELL_KNOWN_PREFIX);
     if (!strncmp(txn->req_uri->path, WELL_KNOWN_PREFIX, len)) {
         if (txn->req_uri->path[len] == '/') len++;
-        if (txn->req_uri->path[len] == '\0') return list_well_known(txn);
+        if (txn->req_uri->path[len] == '\0') {
+            return list_well_known(txn);
+        }
+
         return HTTP_NOT_FOUND;
     }
 
