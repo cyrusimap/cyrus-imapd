@@ -561,7 +561,7 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
         }
 
         /* UTC can be written "Z" or "+00:00" */
-        if ((gmtoff/60 == gmtoff%60) && (gmtoff/60 == 0))
+        if (gmtoff == 0)
             rlen += snprintf(buf+rlen, len-rlen, "Z");
         else
             rlen += snprintf(buf+rlen, len-rlen, "%c%.2lu:%.2lu",
