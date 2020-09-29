@@ -2470,6 +2470,7 @@ static void schedule_full_cancel(const strarray_t *schedule_addresses,
 
     icalcomponent *mastercopy = icalcomponent_clone(mastercomp);
     clean_component(mastercopy);
+    icalcomponent_set_status(mastercopy, ICAL_STATUS_CANCELLED);
     icalcomponent_add_component(itip, mastercopy);
 
     int do_send = !icalcomponent_is_historical(mastercopy, h_cutoff);
@@ -2495,6 +2496,7 @@ static void schedule_full_cancel(const strarray_t *schedule_addresses,
 
         icalcomponent *copy = icalcomponent_clone(comp);
         clean_component(copy);
+        icalcomponent_set_status(copy, ICAL_STATUS_CANCELLED);
         icalcomponent_add_component(itip, copy);
 
         if (!do_send && !icalcomponent_is_historical(copy, h_cutoff))
@@ -2543,6 +2545,7 @@ static void schedule_sub_cancels(const strarray_t *schedule_addresses,
 
         icalcomponent *copy = icalcomponent_clone(comp);
         clean_component(copy);
+        icalcomponent_set_status(copy, ICAL_STATUS_CANCELLED);
         icalcomponent_add_component(itip, copy);
 
         if (!do_send && !icalcomponent_is_historical(copy, h_cutoff))
