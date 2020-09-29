@@ -285,7 +285,6 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
         buf_initm(&errors, *out_errors, strlen(*out_errors));
         buf_insertcstr(&errors, 0, "script errors:\r\n");
         *out_errors = buf_release(&errors);
-        buf_free(&errors);
     }
 
     return r;

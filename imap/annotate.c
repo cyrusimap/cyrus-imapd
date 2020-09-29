@@ -432,10 +432,7 @@ EXPORTED char *dumpentryatt(const struct entryattlist *l)
     }
     buf_printf(&buf, ")");
 
-    char *res = buf_release(&buf);
-    buf_free(&buf);
-
-    return res;
+    return buf_release(&buf);
 }
 
 EXPORTED void clearentryatt(struct entryattlist **l, const char *entry,

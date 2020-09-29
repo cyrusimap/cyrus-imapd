@@ -2152,7 +2152,6 @@ int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen,
     make_cyrusid(&buf, guid, doctype);
     snipgen->cyrusid = buf_release(&buf);
     snipgen->doctype = doctype;
-    buf_free(&buf);
 
     buf_reset(snipgen->buf);
     return 0;

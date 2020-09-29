@@ -1295,7 +1295,6 @@ static char *note_resource_name(message_t *msg,
                                 void *rock __attribute__((unused)))
 {
     struct buf buf = BUF_INITIALIZER;
-    char *resource = NULL;
     int r;
 
     r = message_get_field(msg, "X-Uniform-Type-Identifier",
@@ -1303,11 +1302,11 @@ static char *note_resource_name(message_t *msg,
     if  (!r && !strcmp(buf_cstring(&buf), "com.apple.mail-note")) {
         r = message_get_field(msg, "X-Universally-Unique-Identifier",
                               MESSAGE_DECODED|MESSAGE_TRIM, &buf);
-        resource = buf_release(&buf);
+        return buf_release(&buf);
     }
     buf_free(&buf);
 
-    return resource;
+    return NULL;
 }
 
 static int restore_note(message_t *recreatemsg, message_t *destroymsg,

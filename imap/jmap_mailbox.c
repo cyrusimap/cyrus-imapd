@@ -384,9 +384,7 @@ static char *_mbox_get_name(const char *account_id, const mbname_t *mbname)
     int r = annotatemore_lookup(mbname_intname(mbname), annot, account_id, &attrib);
     if (!r && attrib.len) {
         /* We got a mailbox with a displayname annotation. Use it. */
-        char *name = buf_release(&attrib);
-        buf_free(&attrib);
-        return name;
+        return buf_release(&attrib);
     }
     buf_free(&attrib);
 
@@ -435,18 +433,17 @@ static char *_mbox_get_color(jmap_req_t *req, const mbname_t *mbname)
 {
     struct buf buf = BUF_INITIALIZER;
     const char *annot = IMAP_ANNOT_NS "color";
-    char *color = NULL;
 
     /* Does this mailbox have a defined color */
     // XXX: should we align with calendars and addressbooks?
     annotatemore_lookupmask(mbname_intname(mbname), annot, req->userid, &buf);
     if (buf.len) {
-        color = buf_release(&buf);
+        return buf_release(&buf);
     }
 
     buf_free(&buf);
 
-    return color;
+    return NULL;
 }
 
 static int _mbox_get_showaslabel(jmap_req_t *req, const mbname_t *mbname)

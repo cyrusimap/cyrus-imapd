@@ -995,7 +995,6 @@ static int jmap_usercounters_get(jmap_req_t *req)
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, MODSEQ_FMT, req->counters.highestmodseq);
     get.state = buf_release(&buf);
-    buf_free(&buf);
     jmap_ok(req, jmap_get_reply(&get));
 
 done:

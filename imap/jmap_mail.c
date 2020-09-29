@@ -5884,7 +5884,6 @@ static void _cyrusmsg_init_partids(struct body *body, const char *part_id)
         }
         free(body->part_id);
         body->part_id = NULL;
-        buf_free(&buf);
     }
     else {
         struct buf buf = BUF_INITIALIZER;
@@ -5893,7 +5892,6 @@ static void _cyrusmsg_init_partids(struct body *body, const char *part_id)
             buf_printf(&buf, "%d", 1);
             body->part_id = buf_release(&buf);
         }
-        buf_free(&buf);
 
         if (!strcmp(body->type, "MESSAGE") &&
             !strcmp(body->subtype, "RFC822")) {
