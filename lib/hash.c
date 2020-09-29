@@ -184,7 +184,6 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
 EXPORTED void *hash_del(const char *key, hash_table *table)
 {
       unsigned val = strhash(key) % table->size;
-      void *data;
       bucket *ptr, *last = NULL;
 
       if (!(table->table)[val])
@@ -205,15 +204,10 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
 	  int cmpresult = strcmp(key, ptr->key);
 	  if (!cmpresult)
 	  {
+              void *data = ptr->data;
 	      if (last != NULL )
 	      {
-		  data = ptr -> data;
 		  last -> next = ptr -> next;
-		  if(!table->pool) {
-		      free(ptr->key);
-		      free(ptr);
-		  }
-		  return data;
 	      }
 	      
 	      /*
@@ -226,15 +220,15 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
 	      
 	      else
 	      {
-		  data = ptr->data;
 		  (table->table)[val] = ptr->next;
+              }
 		  if(!table->pool) {
 		      free(ptr->key);
 		      free(ptr);
 		  }
 		  return data;
 	      }
-	  } else if (cmpresult < 0) {
+          if (cmpresult < 0) {
 	      /* its not here! */
 	      return NULL;
 	  }
