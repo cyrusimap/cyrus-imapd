@@ -696,12 +696,17 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
         SSL_set_session(tls_conn, tls_sess);
 
     if ((sts = SSL_connect(tls_conn)) <= 0) {
+        SSL_SESSION *currsess;
+
         printf("SSL_connect error %d\n", sts);
-        tls_sess = SSL_get_session(tls_conn);
-        if (tls_sess) {
-            SSL_CTX_remove_session(tls_ctx, tls_sess);
-            tls_sess = NULL;
+        currsess = SSL_get_session(tls_conn);
+        if (currsess) {
+            SSL_CTX_remove_session(tls_ctx, currsess);
             printf("SSL session removed\n");
+        }
+        if (tls_sess) {
+            SSL_SESSION_free(tls_sess);
+            tls_sess = NULL;
         }
         if (tls_conn!=NULL)
             SSL_free(tls_conn);
@@ -765,7 +770,9 @@ static void do_starttls(int ssl, char *keyfile, unsigned *ssf)
         }
 
     /* TLS negotiation succeeded */
-    tls_sess = SSL_get_session(tls_conn); /* Save the session for reuse */
+    if (tls_sess)
+        SSL_SESSION_free(tls_sess);
+    tls_sess = SSL_get1_session(tls_conn); /* Save the session for reuse */
 
     /* tell SASL about the negotiated layer */
     result=sasl_setprop(conn,
