@@ -2836,8 +2836,6 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
 
     const void *val;
     const char *ssfmsg = NULL;
-    char replybuf[MAX_MAILBOX_BUFFER];
-    const char *reply = NULL;
 
     const char *canon_user;
 
@@ -2936,12 +2934,9 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
         imapd_userid = xstrdup(canon_user);
     }
 
-    snprintf(replybuf, sizeof(replybuf),
-        "User logged in SESSIONID=<%s>", session_id());
-    reply = replybuf;
-    syslog(LOG_NOTICE, "login: %s %s%s %s%s %s", imapd_clienthost,
+    syslog(LOG_NOTICE, "login: %s %s%s %s%s User logged in SESSIONID=<%s>", imapd_clienthost,
            imapd_userid, imapd_magicplus ? imapd_magicplus : "",
-           authtype, imapd_starttls_done ? "+TLS" : "", reply);
+           authtype, imapd_starttls_done ? "+TLS" : "", session_id());
 
     sasl_getprop(imapd_saslconn, SASL_SSF, &val);
     saslprops.ssf = *((sasl_ssf_t *) val);
