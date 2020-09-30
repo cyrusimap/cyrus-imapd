@@ -1684,11 +1684,21 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
         if (session) {
             SSL_CTX_remove_session(c_ctx, session);
         }
-        if (sess) *sess = NULL;
+        if (sess) {
+            if (*sess)
+                SSL_SESSION_free(*sess);
+            *sess = NULL;
+        }
         r = -1;
         goto done;
     }
-    if (sess) *sess = SSL_get_session(tls_conn);
+
+    /* Session may have been renegotiated; make sure we cache the right one */
+    if (sess) {
+        if (*sess)
+            SSL_SESSION_free(*sess);
+        *sess = SSL_get1_session(tls_conn);
+    }
 
     /* Only loglevel==4 dumps everything */
     if (var_proxy_tls_loglevel < 4)
