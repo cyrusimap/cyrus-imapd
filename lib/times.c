@@ -83,7 +83,7 @@ enum {
     UAlpha = 2,             /* Uppercase Alphabet */
     LAlpha = 4,             /* Lowercase Alphabet */
     Digit = 8,              /* Digits/Numbers */
-    TZSign = 16,            /* Timzone sign +/- */
+    TZSign = 16,            /* Timezone sign +/- */
 };
 
 static const long rfc5322_usascii_charset[257] = {
