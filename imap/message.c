@@ -1438,7 +1438,11 @@ static void message_parse_params(const char *hdr, struct param **paramp)
                     }
                     else break;
                 }
-                if (*hdr < ' ' && *hdr != '\t') {
+                if (*hdr & 0x80) {
+                    /* Allow unencoded non-ASCII characters */
+                    /* XXX  Do we want to RFC2231-encode this parameter? */
+                }
+                else if (*hdr < ' ' && *hdr != '\t') {
                     /* Reject control characters */
                     goto skip;
                 }
@@ -1467,7 +1471,7 @@ skip:
         /* Save attribute/value pair */
         *paramp = param = (struct param *)xzmalloc(sizeof(struct param));
         param->attribute = message_ucase(xstrndup(attribute, attributelen));
-        param->value = xmalloc(valuelen + 1);
+        param->value = xzmalloc(valuelen + 1);
         if (*value == '\"') {
             p = param->value;
             value++;
@@ -1479,7 +1483,7 @@ skip:
             *p = '\0';
         }
         else {
-            strlcpy(param->value, value, valuelen + 1);
+            memcpy(param->value, value, valuelen);
         }
 
         /* Get ready to parse the next parameter */
