@@ -2878,6 +2878,7 @@ enum guidsearch_expr_op {
     GSEOP_FALSE,
     GSEOP_INMAILBOX,
     GSEOP_INMAILBOX_OTHERTHAN,
+    GSEOP_UNFUZZ,
     GSEOP_FLAGS,
     GSEOP_CONVFLAGS,
     GSEOP_ALLCONVFLAGS,
@@ -2889,12 +2890,15 @@ enum guidsearch_expr_op {
 union guidsearch_expr_value {
     uint32_t num;
     bitvector_t nums;
+    char *str;
 };
 
 struct guidsearch_expr {
     enum guidsearch_expr_op op;
     ptrarray_t children;
     union guidsearch_expr_value v;
+    const search_attr_t *attr;
+    jmap_req_t *req;
 };
 
 static void guidsearch_expr_free(struct guidsearch_expr *e)
@@ -2910,11 +2914,15 @@ static void guidsearch_expr_free(struct guidsearch_expr *e)
     if (e->op == GSEOP_INMAILBOX_OTHERTHAN) {
         bv_fini(&e->v.nums);
     }
+    else if (e->op == GSEOP_UNFUZZ) {
+        free(e->v.str);
+    }
 
     free(e);
 }
 
 static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state *cstate,
+                                                     jmap_req_t *req,
                                                      search_expr_t *parent,
                                                      search_expr_t *e,
                                                      hash_table *foldernum_by_mboxname,
@@ -2932,7 +2940,7 @@ static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state 
                 search_expr_t *c;
                 for (c = e->children ; c; c = c->next) {
                     struct guidsearch_expr *gc =
-                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname, need_folders);
+                        guidsearch_expr_build(cstate, req, e, c, foldernum_by_mboxname, need_folders);
                     if (!gc || gc->op == GSEOP_TRUE) {
                         guidsearch_expr_free(gc);
                         continue;
@@ -2963,7 +2971,7 @@ static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state 
                 search_expr_t *c;
                 for (c = e->children ; c; c = c->next) {
                     struct guidsearch_expr *gc =
-                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname, need_folders);
+                        guidsearch_expr_build(cstate, req, e, c, foldernum_by_mboxname, need_folders);
                     if (!gc || gc->op == GSEOP_FALSE) {
                         guidsearch_expr_free(gc);
                         continue;
@@ -2994,7 +3002,7 @@ static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state 
                 search_expr_t *c;
                 for (c = e->children ; c; c = c->next) {
                     struct guidsearch_expr *gc =
-                        guidsearch_expr_build(cstate, e, c, foldernum_by_mboxname, need_folders);
+                        guidsearch_expr_build(cstate, req, e, c, foldernum_by_mboxname, need_folders);
                     if (!gc || gc->op == GSEOP_FALSE) {
                         guidsearch_expr_free(gc);
                         continue;
@@ -3130,6 +3138,17 @@ static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state 
                             ge = NULL;
                         }
                     }
+                }
+            }
+            break;
+        case SEOP_FUZZYMATCH:
+            {
+                if (e->attr->flags & SEA_UNFUZZ) {
+                    ge = xzmalloc(sizeof(struct guidsearch_expr));
+                    ge->op = GSEOP_UNFUZZ;
+                    ge->v.str = xstrdup(e->value.s);
+                    ge->attr = e->attr;
+                    ge->req = req;
                 }
             }
             break;
@@ -3278,6 +3297,40 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
                 conversation_fini(&conv);
                 return ret;
             }
+        case GSEOP_UNFUZZ:
+            {
+                /* Re-evaluate the match againt actual message data */
+                char email_id[JMAP_EMAILID_SIZE];
+                struct message_guid guid;
+                struct mailbox *mbox = NULL;
+                char *mboxname = NULL;
+                msgrecord_t *mr = NULL;
+                message_t *msg = NULL;
+                uint32_t uid;
+                int ret = 0;
+
+                message_guid_decode(&guid, match->guidrep);
+                jmap_set_emailid(&guid, email_id);
+
+                if (!jmap_email_find(e->req, email_id, &mboxname, &uid) &&
+                    !jmap_openmbox(e->req, mboxname, &mbox, 0) &&
+                    !msgrecord_find(mbox, uid, &mr) &&
+                    !msgrecord_get_message(mr, &msg)) {
+
+                    search_expr_t *se = search_expr_new(NULL, SEOP_MATCH);
+                    se->value.s = xstrdup(e->v.str);
+                    se->attr = e->attr;
+
+                    search_expr_internalise(NULL, se);
+                    ret = search_expr_evaluate(msg, se);
+                    search_expr_free(se);
+                }
+
+                if (mr) msgrecord_unref(&mr);
+                jmap_closembox(e->req, &mbox);
+                free(mboxname);
+                return ret;
+            }
         default:
             return 1;
     }
@@ -3352,6 +3405,9 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
         case SEOP_FALSE:
             return 0;
         case SEOP_FUZZYMATCH:
+            if (e->attr->flags & SEA_UNFUZZ) {
+                return 3;
+            }
             return 2;
         default:
             return -1;
@@ -3368,7 +3424,7 @@ static int guidsearch_rank_expr(struct conversations_state *cstate,
     /*
      * Returns -1 for unsupported expressions or a bitmask of:
      *  0x0  trivial expression
-     *  0x1  supported but does not require Xapian
+     *  0x1  supported but does not require Xapian (also triggers post-processing)
      *  0x2  requires Xapian
      */
 
@@ -3525,7 +3581,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         }
 
         int need_folders = 0;
-        gsq->matchexpr = guidsearch_expr_build(req->cstate, NULL, search->expr,
+        gsq->matchexpr = guidsearch_expr_build(req->cstate, req, NULL, search->expr,
                                                &foldernum_by_mboxname,
                                                &need_folders);
         gsq->numfolders = need_folders ? numfolders : 0;

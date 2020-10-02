@@ -2403,7 +2403,7 @@ EXPORTED void search_attr_init(void)
             (void *)message_get_to
         },{
             "bcc",
-            SEA_FUZZABLE,
+            SEA_FUZZABLE|SEA_UNFUZZ,
             SEARCH_PART_BCC,
             SEARCH_COST_CACHE,
             search_string_internalise,
@@ -2431,7 +2431,7 @@ EXPORTED void search_attr_init(void)
             (void *)message_get_deliveredto
         },{
             "cc",
-            SEA_FUZZABLE,
+            SEA_FUZZABLE|SEA_UNFUZZ,
             SEARCH_PART_CC,
             SEARCH_COST_CACHE,
             search_string_internalise,
@@ -2515,7 +2515,7 @@ EXPORTED void search_attr_init(void)
             (void *)message_get_subject
         },{
             "to",
-            SEA_FUZZABLE,
+            SEA_FUZZABLE|SEA_UNFUZZ,
             SEARCH_PART_TO,
             SEARCH_COST_CACHE,
             search_string_internalise,

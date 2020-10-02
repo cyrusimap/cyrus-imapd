@@ -85,6 +85,7 @@ enum {
     SEA_MUTABLE =       (1<<0),
     SEA_FUZZABLE =      (1<<1),
     SEA_ISLIST =        (1<<2),
+    SEA_UNFUZZ =        (1<<3),
 };
 
 typedef struct search_attr search_attr_t;
