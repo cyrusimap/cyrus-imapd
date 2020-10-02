@@ -328,7 +328,7 @@ void usage(void)
 {
     fprintf(stderr,
             "usage: ctl_zoneinfo [-C <alt_config>] [-v]"
-            " -r <publisher>:<version>\n");
+            " -r <publisher>:<version> | -w <file>\n");
     exit(EX_USAGE);
 }
 
