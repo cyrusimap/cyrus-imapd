@@ -1728,6 +1728,8 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
     for (patch = icalcomponent_get_first_component(vpatch, ICAL_ANY_COMPONENT);
          patch;
          patch = icalcomponent_get_next_component(vpatch, ICAL_ANY_COMPONENT)) {
+        struct path_segment_t *target = NULL;
+        struct patch_data_t patch_data = { patch, NULL, NULL };
         r = 0;
 
         if (icalcomponent_isa(patch) != ICAL_XPATCH_COMPONENT) {
@@ -1750,8 +1752,6 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
 
         /* Parse PATCH-TARGET */
         char *path = xstrdup(icalproperty_get_patchtarget(prop));
-        struct path_segment_t *target = NULL, *next;
-        struct patch_data_t patch_data = { patch, NULL, NULL };
 
         icalcomponent_remove_property(patch, prop);
         icalproperty_free(prop);
@@ -1832,6 +1832,8 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
       done:
         if (patch) icalcomponent_free(patch);
         if (target) {
+            struct path_segment_t *next;
+
             /* Cleanup target paths */
             path_segment_free(target);
             for (target = patch_data.delete; target; target = next) {
