@@ -409,8 +409,8 @@ The steps to populate the ``zoneinfo_dir`` directory are:
    follows:
    ``ctl_zoneinfo -r <version-string>``
 
-   where <version-string> describes the recently downloaded time zone data
-   (e.g. "IANA Time Zone Database v.2013h").
+   where <version-string> contains description of the recently downloaded time
+   zone data, colon, and the version of the data (e.g. "IANA Time Zone Database:2020a").
 
 6. Check that the zoneinfo index database and all iCalendar data files/links
    are readable by the cyrus user.
