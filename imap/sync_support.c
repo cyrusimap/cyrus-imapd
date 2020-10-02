@@ -5870,9 +5870,9 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
                       unsigned flags)
 {
     int r = 0;
-    struct sync_folder_list *master_folders;
-    struct sync_rename_list *rename_folders;
-    struct sync_reserve_list *reserve_list;
+    struct sync_folder_list *master_folders = NULL;
+    struct sync_rename_list *rename_folders = NULL;
+    struct sync_reserve_list *reserve_list = NULL;
     struct sync_folder *mfolder, *rfolder;
     const char *part;
     uint32_t batchsize = 0;
