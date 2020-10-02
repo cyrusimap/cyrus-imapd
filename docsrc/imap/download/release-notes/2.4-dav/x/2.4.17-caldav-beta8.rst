@@ -4,7 +4,7 @@ Cyrus IMAP 2.4.17-caldav-beta8 Release Notes
 
 Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta7
 
-*   Added Timzone Service module along with associated admin tools (ctl_zoneinfo, vzic).
+*   Added Timezone Service module along with associated admin tools (ctl_zoneinfo, vzic).
 *   Added support for accepting/returning jCal (requires Jansson) and xCal data wherever iCalendar data is allowed.
 *   Proxied responses (including chunked) are now piped to client rather than being buffered and forwarded.
 *   Better handling of COPY/MOVE between backends (including LOCKs).
