@@ -5493,7 +5493,7 @@ static int extract_attachment(const char *type, const char *subtype,
                     ext->path, guidstr, HTTP_VERSION,
                     (int) hostlen, be->hostname, CYRUS_VERSION, IDLE_TIMEOUT,
                     type, subtype, buf_cstring(&buf), buf_len(data));
-        prot_putbuf(be->out, (struct buf *) data);
+        prot_putbuf(be->out, data);
         prot_flush(be->out);
 
         /* Read PUT response */
