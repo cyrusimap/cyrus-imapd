@@ -2853,8 +2853,8 @@ product version in the capabilities
    or renamed to have a different parent. Default is the built-in list*/
 
 { "specialusealways", 1, SWITCH, "3.1.1" }
-/* If enabled, this option causes LIST and LSUB output to always include
-   the XLIST "special-use" flags. */
+/* If enabled, this option causes unextended LIST and LSUB output to
+   include the "special-use" flags. */
 
 { "sql_database", NULL, STRING, "2.3.17" }
 /* Name of the database which contains the cyrusdb table(s). */
