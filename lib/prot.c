@@ -1275,7 +1275,7 @@ EXPORTED int prot_write(struct protstream *s, const char *buf, unsigned len)
     return 0;
 }
 
-EXPORTED int prot_putbuf(struct protstream *s, struct buf *buf)
+EXPORTED int prot_putbuf(struct protstream *s, const struct buf *buf)
 {
     return prot_write(s, buf->s, buf->len);
 }
