@@ -77,6 +77,9 @@ void sync_log_reset();
 #define sync_log_unmailbox(name) \
     sync_log("UNMAILBOX %s\n", name)
 
+#define sync_log_mailbox_double(name1, name2) \
+    sync_log("DOUBLEMAILBOX %s %s\n", name1, name2)
+
 #define sync_log_rename(name1, name2) \
     sync_log("RENAME %s %s\nMAILBOX %s\nMAILBOX %s\n", name1, name2, name1, name2)
 
@@ -109,6 +112,9 @@ void sync_log_reset();
 
 #define sync_log_channel_unmailbox(channel, name) \
     sync_log_channel(channel, "UNMAILBOX %s\n", name)
+
+#define sync_log_channel_mailbox_double(channel, name1, name2) \
+    sync_log_channel(channel, "DOUBLEMAILBOX %s %s\n", name1, name2)
 
 #define sync_log_channel_rename(channel, name1, name2) \
     sync_log_channel(channel, "RENAME %s %s\nMAILBOX %s\nMAILBOX %s\n", \

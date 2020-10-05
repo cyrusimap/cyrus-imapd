@@ -7052,7 +7052,8 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         else if (!strcmp(args[0], "SIEVE"))
             sync_action_list_add(meta_list, NULL, args[1]);
         else if ((!strcmp(args[0], "APPEND")) /* just a mailbox event */
-                 || (!strcmp(args[0], "MAILBOX"))) {
+                 || (!strcmp(args[0], "MAILBOX"))
+                 || (!strcmp(args[0], "DOUBLEMAILBOX"))) {
             char *freeme = NULL;
             const char *userid;
             struct sync_action_list *mailbox_list;
@@ -7066,6 +7067,15 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
                 hash_insert(userid, mailbox_list, &user_mailboxes);
             }
             sync_action_list_add(mailbox_list, args[1], NULL);
+
+            if (args[2]) {
+                /* if there's a second MAILBOX recorded (i.e. a copy or move), add
+                 * it to the same user's mailbox_list (even if it's a diff user),
+                 * so that the order doesn't get lost.
+                 */
+                sync_action_list_add(mailbox_list, args[2], NULL);
+            }
+
             free(freeme);
         }
         else if (!strcmp(args[0], "RENAME")) {

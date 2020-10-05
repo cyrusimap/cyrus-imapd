@@ -3046,9 +3046,12 @@ index_copy(struct index_state *state,
         seqset_free(seq);
     }
 
-    /* we log the first name to get GUID-copy magic */
-    if (!r)
-        sync_log_rename(index_mboxname(state), name);
+    if (!r) {
+        /* we log the first name to get GUID-copy magic */
+        sync_log_mailbox_double(index_mboxname(state), name);
+        /* also want to log an append here, to make sure squatter notices */
+        sync_log_append(name);
+    }
 
 done:
     free(copyargs.records);

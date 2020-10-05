@@ -7789,6 +7789,11 @@ static int _copy_msgrecords(struct auth_state *authstate,
     r = append_commit(&as);
     if (r) goto done;
 
+    /* we log the first name to get GUID-copy magic */
+    sync_log_mailbox_double(src->name, dst->name);
+    /* also want to log an append here, to make sure squatter notices */
+    sync_log_append(dst->name);
+
 done:
     return r;
 }
