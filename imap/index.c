@@ -5380,6 +5380,7 @@ static int extract_attachment(const char *type, const char *subtype,
                               struct getsearchtext_rock *str)
 {
     struct backend *be;
+    struct buf decbuf = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     hdrcache_t hdrs = NULL;
     struct body_t body = { 0, 0, 0, 0, 0, BUF_INITIALIZER };
@@ -5446,7 +5447,6 @@ static int extract_attachment(const char *type, const char *subtype,
     // otherwise we're going to try three times to PUT this request to the server!
 
     /* Decode data */
-    struct buf decbuf = BUF_INITIALIZER;
     if (encoding) {
         if (charset_decode(&decbuf, buf_base(data), buf_len(data), encoding)) {
             syslog(LOG_ERR, "extract_attachment: failed to decode data");
@@ -5496,9 +5496,8 @@ static int extract_attachment(const char *type, const char *subtype,
                     ext->path, guidstr, HTTP_VERSION,
                     (int) hostlen, be->hostname, CYRUS_VERSION, IDLE_TIMEOUT,
                     type, subtype, buf_cstring(&buf), buf_len(data));
-        prot_putbuf(be->out, (struct buf *) data);
+        prot_putbuf(be->out, data);
         prot_flush(be->out);
-        buf_free(&decbuf);
 
         /* Read PUT response */
         body.flags = 0;
@@ -5552,6 +5551,7 @@ done:
     spool_free_hdrcache(hdrs);
     buf_free(&body.payload);
     buf_free(&buf);
+    buf_free(&decbuf);
     return r;
 }
 

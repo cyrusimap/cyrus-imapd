@@ -287,7 +287,7 @@ extern int prot_flush(struct protstream *s);
 
 /* These are protlayer versions of the specified functions */
 extern int prot_write(struct protstream *s, const char *buf, unsigned len);
-extern int prot_putbuf(struct protstream *s, struct buf *buf);
+extern int prot_putbuf(struct protstream *s, const struct buf *buf);
 extern int prot_puts(struct protstream *s, const char *str);
 extern int prot_vprintf(struct protstream *, const char *, va_list)
     __attribute__((format(printf, 2, 0)));
