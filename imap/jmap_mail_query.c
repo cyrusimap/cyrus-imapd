@@ -577,12 +577,70 @@ static xapian_query_t *build_type_query(xapian_db_t *db, const char *type)
     return xq;
 }
 
+typedef struct {
+    char *name;
+    const char *val;
+    unsigned format;
+    unsigned count : 1;
+} header_match_info_t;
+
+static header_match_info_t *new_header_match_info(const char *name, const char *val,
+                                                  unsigned format, unsigned count)
+{
+    header_match_info_t *info = xmalloc(sizeof(header_match_info_t));
+
+    info->name = lcase(xstrdup(name));
+    info->val = val;
+    info->format = format;
+    info->count = !!count;
+
+    return info;
+}
+
+static void free_header_match_info(header_match_info_t *info)
+{
+    free(info->name);
+    free(info);
+}
+
+/* Replicate match_header logic in search_expr.c */
+static int match_header(header_match_info_t *hdr, message_t *m)
+{
+    struct buf buf = BUF_INITIALIZER;
+    int r = message_get_field(m, hdr->name, hdr->format, &buf);
+    int matches = 0;
+
+    if (!r) {
+        if (hdr->val) {
+            charset_t utf8 = charset_lookupname("utf-8");
+            char *v = NULL;
+            if ((v = charset_convert(hdr->val, utf8, charset_flags))) {
+                comp_pat *pat = charset_compilepat(v);
+                if (pat) {
+                    matches = charset_searchstring(v, pat, buf.s, buf.len, charset_flags);
+                }
+                charset_freepat(pat);
+            }
+            free(v);
+            charset_free(&utf8);
+        }
+        else {
+            matches = buf_len(&buf) > 0;
+        }
+    }
+    buf_free(&buf);
+
+    return matches;
+}
+
 static int _email_matchmime_evaluate(json_t *filter,
                                      message_t *m,
                                      xapian_db_t *db,
                                      struct email_contactfilter *cfilter,
                                      time_t internaldate)
 {
+    ptrarray_t match_headers = PTRARRAY_INITIALIZER;
+
     if (!json_object_size(filter)) {
         /* Match all */
         return 1;
@@ -638,6 +696,12 @@ static int _email_matchmime_evaluate(json_t *filter,
 #define MATCHMIME_XQ_OR_MATCHALL(_xq) \
     ((_xq) ? _xq : xapian_query_new_matchall(db))
 
+#define POSTPROCESS_ADDRESS_HEADER(_match_headers, _hdr, _val)                     \
+    if (strchr(_val, '@')) {                                                       \
+        ptrarray_push(_match_headers,                                              \
+                      new_header_match_info(_hdr, _val, MESSAGE_RAW, /*count*/0)); \
+    }
+
     /* Xapian-backed criteria */
     ptrarray_t xqs = PTRARRAY_INITIALIZER;
     const char *match;
@@ -665,18 +729,26 @@ static int _email_matchmime_evaluate(json_t *filter,
     if ((match = json_string_value(json_object_get(filter, "from")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_FROM, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
+
+        POSTPROCESS_ADDRESS_HEADER(&match_headers, "from", match)
     }
     if ((match = json_string_value(json_object_get(filter, "to")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_TO, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
+
+        POSTPROCESS_ADDRESS_HEADER(&match_headers, "to", match)
     }
     if ((match = json_string_value(json_object_get(filter, "cc")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_CC, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
+
+        POSTPROCESS_ADDRESS_HEADER(&match_headers, "cc", match)
     }
     if ((match = json_string_value(json_object_get(filter, "bcc")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_BCC, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
+
+        POSTPROCESS_ADDRESS_HEADER(&match_headers, "bcc", match)
     }
     if ((match = json_string_value(json_object_get(filter, "deliveredTo")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_DELIVEREDTO, match);
@@ -744,6 +816,7 @@ static int _email_matchmime_evaluate(json_t *filter,
     // ignore attachmentBody
 
 #undef MATCHMIME_XQ_OR_MATCHALL
+#undef POSTPROCESS_ADDRESS_HEADER
 
     if (xqs.count) {
         int matches = 0;
@@ -757,6 +830,23 @@ static int _email_matchmime_evaluate(json_t *filter,
             have_matches += xqs_count; // assumes one xapian query per criteria
         }
         else return 0;
+    }
+
+    /* before */
+    if (JNOTNULL(jval = json_object_get(filter, "before"))) {
+        time_t t;
+        time_from_iso8601(json_string_value(jval), &t);
+        if (internaldate < t) {
+            have_matches++;
+        } else return 0;
+    }
+    /* after */
+    if (JNOTNULL(jval = json_object_get(filter, "after"))) {
+        time_t t;
+        time_from_iso8601(json_string_value(jval), &t);
+        if (internaldate >= t) {
+            have_matches++;
+        } else return 0;
     }
 
     /* size */
@@ -807,54 +897,26 @@ static int _email_matchmime_evaluate(json_t *filter,
             hdr = json_string_value(json_array_get(jval, 0));
             val = NULL; // match any value
         }
+        unsigned format = MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE;
+        ptrarray_push(&match_headers,
+                      new_header_match_info(hdr, val, format, /*count*/1));
+    }
 
-        int matches = 0;
+    if (ptrarray_size(&match_headers)) {
+        header_match_info_t *hdr;
+        int fail = 0;
 
-        /* Replicate match_header logic in search_expr.c */
-        char *lhdr = lcase(xstrdup(hdr));
-        struct buf buf = BUF_INITIALIZER;
-        int r = message_get_field(m, lhdr,
-                MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE, &buf);
-        if (!r) {
-            if (val) {
-                charset_t utf8 = charset_lookupname("utf-8");
-                char *v = NULL;
-                if ((v = charset_convert(val, utf8, charset_flags))) {
-                    comp_pat *pat = charset_compilepat(v);
-                    if (pat) {
-                        matches = charset_searchstring(v, pat, buf.s, buf.len, charset_flags);
-                    }
-                    charset_freepat(pat);
-                }
-                free(v);
-                charset_free(&utf8);
-            }
-            else {
-                matches = buf_len(&buf) > 0;
-            }
+        while ((hdr = ptrarray_pop(&match_headers))) {
+            if (!match_header(hdr, m))
+                fail = 1;
+            else if (hdr->count)
+                have_matches++;
+
+            free_header_match_info(hdr);
         }
-        buf_free(&buf);
-        free(lhdr);
-        if (matches) {
-            have_matches++;
-        } else return 0;
-    }
+        ptrarray_fini(&match_headers);
 
-    /* before */
-    if (JNOTNULL(jval = json_object_get(filter, "before"))) {
-        time_t t;
-        time_from_iso8601(json_string_value(jval), &t);
-        if (internaldate < t) {
-            have_matches++;
-        } else return 0;
-    }
-    /* after */
-    if (JNOTNULL(jval = json_object_get(filter, "after"))) {
-        time_t t;
-        time_from_iso8601(json_string_value(jval), &t);
-        if (internaldate >= t) {
-            have_matches++;
-        } else return 0;
+        if (fail) return 0;
     }
 
     return need_matches == have_matches;
