@@ -1,0 +1,50 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.2.4 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.4/cyrus-imapd-3.2.4.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.4/cyrus-imapd-3.2.4.tar.gz.sig
+
+.. _relnotes-3.2.4-changes:
+
+Changes since 3.2.3
+===================
+
+Build changes
+-------------
+
+* Fixed :issue:`3153`: make sure xml_support.c is included in
+  :cyrusman:`ctl_zoneinfo(8)` (thanks John M)
+* Fixed :issue:`3154`: crash from cyr_qsort_r on some platforms
+* Fixed :issue:`3163`: use `uintptr_t` instead of `unsigned long long`
+  for storing values that may be pointers (thanks OBATA Akio)
+* Fixed :issue:`3157`: MKCOL failed via WebDAV
+* Fixed :issue:`3174`: handle platforms without `futimes` or
+  `TIMESPEC_TO_TIMEVAL()` (thanks Andy Fiddaman)
+* Fixed :issue:`3183`: typo in handling of systems without `deflatePending()`
+  (thanks Anatoli)
+
+Bug fixes
+---------
+
+* Fixed :issue:`3120`: allow replication to partitions without a corresponding
+  archive partition
+* Fixed :issue:`3169`: sieve scripts replicated from 2.4 with `fulldirhash`
+  enabled were placed in wrong directory
+* Fixed: unescape iCalendar X-parameter TEXT values
+* Fixed: server-set JMAP properties now rejected in /set and /setcreate
+  calls
+* Fixed: changing JMAP 'id' property now rejected in /set and /setupdate
+* Fixed: crash in :cyrusman:`httpd(8)` from bad Authorization headers
+* Fixed: invalid free on error in JMAP Contacts/set
+* Fixed :issue:`3212`: wrong usage statement in :cyrusman:`ctl_zoneinfo(8)`
+  (thanks Дилян Палаузов)
+* Fixed :issue:`3210`: uninitialised read on error
+* Fixed :issue:`3209`: uninitialised read on error
+* Fixed :issue:`2843`: notifications for cancelled events were not handled
+  correctly
+* Fixed :issue:`3191`: sync_client crashed on RESTART when TLS in use
