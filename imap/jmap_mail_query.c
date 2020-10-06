@@ -581,18 +581,16 @@ typedef struct {
     char *name;
     const char *val;
     unsigned format;
-    unsigned count : 1;
 } header_match_info_t;
 
 static header_match_info_t *new_header_match_info(const char *name, const char *val,
-                                                  unsigned format, unsigned count)
+                                                  unsigned format)
 {
     header_match_info_t *info = xmalloc(sizeof(header_match_info_t));
 
     info->name = lcase(xstrdup(name));
     info->val = val;
     info->format = format;
-    info->count = !!count;
 
     return info;
 }
@@ -696,10 +694,11 @@ static int _email_matchmime_evaluate(json_t *filter,
 #define MATCHMIME_XQ_OR_MATCHALL(_xq) \
     ((_xq) ? _xq : xapian_query_new_matchall(db))
 
-#define POSTPROCESS_ADDRESS_HEADER(_match_headers, _hdr, _val)                     \
+#define POSTPROCESS_ADDRESS_HEADER(_hdr, _val)                                     \
     if (strchr(_val, '@')) {                                                       \
-        ptrarray_push(_match_headers,                                              \
-                      new_header_match_info(_hdr, _val, MESSAGE_RAW, /*count*/0)); \
+        ptrarray_push(&match_headers,                                              \
+                      new_header_match_info(_hdr, _val, MESSAGE_RAW));             \
+        need_matches++;                                                            \
     }
 
     /* Xapian-backed criteria */
@@ -730,25 +729,25 @@ static int _email_matchmime_evaluate(json_t *filter,
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_FROM, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
 
-        POSTPROCESS_ADDRESS_HEADER(&match_headers, "from", match)
+        POSTPROCESS_ADDRESS_HEADER("from", match)
     }
     if ((match = json_string_value(json_object_get(filter, "to")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_TO, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
 
-        POSTPROCESS_ADDRESS_HEADER(&match_headers, "to", match)
+        POSTPROCESS_ADDRESS_HEADER("to", match)
     }
     if ((match = json_string_value(json_object_get(filter, "cc")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_CC, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
 
-        POSTPROCESS_ADDRESS_HEADER(&match_headers, "cc", match)
+        POSTPROCESS_ADDRESS_HEADER("cc", match)
     }
     if ((match = json_string_value(json_object_get(filter, "bcc")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_BCC, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
 
-        POSTPROCESS_ADDRESS_HEADER(&match_headers, "bcc", match)
+        POSTPROCESS_ADDRESS_HEADER("bcc", match)
     }
     if ((match = json_string_value(json_object_get(filter, "deliveredTo")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_DELIVEREDTO, match);
@@ -899,24 +898,22 @@ static int _email_matchmime_evaluate(json_t *filter,
         }
         unsigned format = MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE;
         ptrarray_push(&match_headers,
-                      new_header_match_info(hdr, val, format, /*count*/1));
+                      new_header_match_info(hdr, val, format));
     }
 
     if (ptrarray_size(&match_headers)) {
         header_match_info_t *hdr;
         int fail = 0;
 
+        /* run a match on each header (while successful), freeing as we go */
         while ((hdr = ptrarray_pop(&match_headers))) {
-            if (!match_header(hdr, m))
-                fail = 1;
-            else if (hdr->count)
+            if (!fail && match_header(hdr, m))
                 have_matches++;
+            else fail = 1;
 
             free_header_match_info(hdr);
         }
         ptrarray_fini(&match_headers);
-
-        if (fail) return 0;
     }
 
     return need_matches == have_matches;
