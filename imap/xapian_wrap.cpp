@@ -1616,12 +1616,13 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
     std::string mystr = Xapian::Unicode::tolower(str);
     str = mystr.c_str();
 
-    if (!strchr(str, '@')) {
+    const char *atsign = strchr(str, '@');
+
+    if (!atsign) {
         // query free text
         return new Xapian::Query{db->parser->parse_query(str, qpflags, prefix)};
     }
 
-    const char *atsign = strchr(str, '@');
     Xapian::Query q = Xapian::Query::MatchNothing;
 
     // query name and mailbox (unless just searching for '@domain')
