@@ -967,6 +967,9 @@ done:
         mailbox_close(&mailbox);
     }
 
+    /* ensure we didn't leak anything! */
+    assert(!open_mailboxes_exist());
+
     // checkpoint before replying
     sync_checkpoint(httpd_in);
 
