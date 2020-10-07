@@ -4453,6 +4453,7 @@ static int sync_readcache(struct sync_client_state *sync_cs, const char *mboxnam
     int r = cyrusdb_fetch(db, mboxname, strlen(mboxname), &base, &len, /*tid*/NULL);
     if (r) return r;
 
+
     dlist_parsemap(klp, 0, 0, base, len);
 
     // we need the name so the parser can parse it
@@ -5878,12 +5879,14 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     sync_send_apply(kl, sync_cs->backend->out);
     r = sync_parse_response("MAILBOX", sync_cs->backend->in, NULL);
 
+    // if we succeeded, cache!
+    if (!r) r = sync_cache(sync_cs, local->name, kl);
+
 done:
     if (mailbox && !local->mailbox) mailbox_close(&mailbox);
 
-    // any error, nuke our remote cache.  On success, cache locally
+    // any error, nuke our remote cache.
     if (r) sync_uncache(sync_cs, local->name);
-    else r = sync_cache(sync_cs, local->name, kl);
 
     sync_folder_list_free(&myremotes);
     dlist_free(&kupload);
