@@ -5643,6 +5643,22 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     struct dlist *kl = dlist_newkvlist(NULL, cmd);
     struct dlist *kupload = dlist_newlist(NULL, "MESSAGE");
     annotate_state_t *astate = NULL;
+    struct sync_folder_list *myremotes = NULL;
+
+    if (flags & SYNC_FLAG_ISREPEAT) {
+        // we have to fetch the sync_folder again!
+        myremotes = sync_folder_list_create();
+        struct dlist *mbkl = dlist_newlist(NULL, "MAILBOXES");
+        dlist_setatom(mbkl, "MBOXNAME", local->name);
+        if (flags & SYNC_FLAG_VERBOSE)
+            printf("MAILBOXES %s\n", local->name);
+        sync_send_lookup(mbkl, sync_cs->backend->out);
+        dlist_free(&mbkl);
+        r = sync_response_parse(sync_cs, "MAILBOXES", myremotes,
+                                NULL, NULL, NULL, NULL);
+        if (r) goto done;
+        remote = myremotes->head;
+    }
 
     if (local->mailbox) {
         mailbox = local->mailbox;
@@ -5756,6 +5772,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
 done:
     if (mailbox && !local->mailbox) mailbox_close(&mailbox);
 
+    sync_folder_list_free(&myremotes);
     dlist_free(&kupload);
     dlist_free(&kl);
     return r;
