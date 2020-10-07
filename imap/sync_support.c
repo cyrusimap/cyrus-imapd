@@ -7599,6 +7599,12 @@ EXPORTED void sync_disconnect(struct sync_client_state *sync_cs)
 
     // backend may have put stuff here, free it so we don't leak memory
     buf_free(&sync_cs->tagbuf);
+
+    // drop any cache database too
+    if (sync_cs->cachedb) {
+        cyrusdb_close(sync_cs->cachedb);
+        sync_cs->cachedb = NULL;
+    }
 }
 
 static struct prot_waitevent *
