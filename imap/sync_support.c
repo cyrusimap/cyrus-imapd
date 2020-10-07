@@ -4420,23 +4420,16 @@ static struct db *sync_getcachedb(struct sync_client_state *sync_cs)
     const char *dbtype = config_getstring(IMAPOPT_SYNC_CACHE_DB);
     if (!dbtype) return NULL;
 
-    struct buf path = BUF_INITIALIZER;
-    if (sync_cs->channel && *sync_cs->channel) {
-        buf_printf(&path, "%s/sync/%s/cache.db", config_dir, sync_cs->channel);
-    }
-    else {
-        buf_printf(&path, "%s/sync/cache.db", config_dir);
-    }
+    const char *dbpath = sync_get_config(sync_cs->channel, "sync_cache_db_path");
+    if (!dbpath) return NULL;
 
     int flags = CYRUSDB_CREATE;
 
-    int r = cyrusdb_open(dbtype, buf_cstring(&path), flags, &sync_cs->cachedb);
+    int r = cyrusdb_open(dbtype, dbpath, flags, &sync_cs->cachedb);
     if (r) {
         syslog(LOG_ERR, "DBERROR: failed to open sync cache db %s: %s",
-               buf_cstring(&path), cyrusdb_strerror(r));
+               dbpath, cyrusdb_strerror(r));
     }
-
-    buf_free(&path);
 
     return sync_cs->cachedb;
 }
