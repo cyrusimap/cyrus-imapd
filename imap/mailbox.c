@@ -2121,16 +2121,17 @@ static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype)
         return 0;
     }
 
-    if (locktype == LOCK_EXCLUSIVE) {
-        return conversations_open_mbox(mailbox->name, 0/*shared*/, &mailbox->local_cstate);
-    }
-    else if (locktype == LOCK_SHARED) {
-        return conversations_open_mbox(mailbox->name, 1/*shared*/, &mailbox->local_cstate);
-    }
-    else {
-        /* this function does not support nonblocking locks */
-        fatal("invalid locktype for conversations", EX_SOFTWARE);
-    }
+    /* damn, we're going to have to do the namelock dance */
+    struct mailboxlist *listitem = find_listitem(mailbox->name);
+    assert(listitem);
+    assert(&listitem->m == mailbox);
+
+    int shared = (locktype == LOCK_SHARED) ? 1 : 0;
+
+    mboxname_release(&listitem->l);
+    int r = conversations_open_mbox(mailbox->name, shared, &mailbox->local_cstate);
+    if (!r) r = mboxname_lock(mailbox->name, &listitem->l, locktype);
+    return r;
 }
 
 #ifdef WITH_DAV
