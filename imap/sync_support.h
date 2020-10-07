@@ -434,10 +434,11 @@ struct sync_client_state {
     struct protstream *clientin;
     const char *servername;
     const char *channel;
+    struct db *cachedb;
     struct buf tagbuf;
     int flags;
 };
-#define SYNC_CLIENT_STATE_INITIALIZER { NULL, NULL, NULL, NULL, BUF_INITIALIZER, 0 }
+#define SYNC_CLIENT_STATE_INITIALIZER { NULL, NULL, NULL, NULL, NULL, BUF_INITIALIZER, 0 }
 
 /* =====================  server-side sync  ============================= */
 

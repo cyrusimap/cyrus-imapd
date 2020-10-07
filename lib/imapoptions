@@ -2620,6 +2620,14 @@ product version in the capabilities
    Default is 8192.  If there are more than this many messages appended
    to the mailbox, generate a synthetic partial state and send that. */
 
+{ "sync_cache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.3.2" }
+/* The cyrusdb backend to use for the replication. */
+
+{ "sync_cache_db_path", NULL, STRING, "3.3.2" }
+/* The path for the replication cache.  Prefix with a
+   channel name to apply for that channel.  NOTE, it's
+   quite important to have a different one per backend! */
+
 { "sync_host", NULL, STRING, "2.5.0" }
 /* Name of the host (replica running sync_server(8)) to which
    replication actions will be sent by sync_client(8).
