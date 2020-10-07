@@ -753,7 +753,8 @@ static int jmap_upload(struct transaction_t *txn)
 
     struct body *body = NULL;
 
-    int ret = HTTP_CREATED;
+    int ret = HTTP_SERVER_ERROR;
+    json_t *resp = NULL;
     hdrcache_t hdrcache = txn->req_hdrs;
     struct stagemsg *stage = NULL;
     FILE *f = NULL;
@@ -945,17 +946,11 @@ wrotebody:
     jmap_set_blobid(rawmessage ? &body->guid : &body->content_guid, blob_id);
 
     /* Create response object */
-    json_t *resp = json_pack("{s:s}", "accountId", accountid);
+    resp = json_pack("{s:s}", "accountId", accountid);
     json_object_set_new(resp, "blobId", json_string(blob_id));
     json_object_set_new(resp, "size", json_integer(datalen));
     json_object_set_new(resp, "expires", json_string(datestr));
     json_object_set_new(resp, "type", json_string(normalisedtype));
-
-    // checkpoint before replying
-    sync_checkpoint(httpd_in);
-
-    /* Output the JSON object */
-    ret = json_response(HTTP_CREATED, txn, resp);
 
 done:
     free(normalisedtype);
@@ -971,6 +966,13 @@ done:
         else r = mailbox_commit(mailbox);
         mailbox_close(&mailbox);
     }
+
+    // checkpoint before replying
+    sync_checkpoint(httpd_in);
+
+    /* Output the JSON object */
+    if (resp)
+        ret = json_response(HTTP_CREATED, txn, resp);
 
     return ret;
 }
