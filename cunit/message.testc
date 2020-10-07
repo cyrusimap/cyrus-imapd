@@ -306,6 +306,7 @@ static void test_parse_rxdate(void)
     r = message_parse_mapped(msg_neither, sizeof(msg_neither)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(body.received_date);
+    CU_ASSERT_PTR_NULL(body.x_deliveredinternaldate);
     message_free_body(&body);
 
     /* Received only: first seen Received */
@@ -314,6 +315,7 @@ static void test_parse_rxdate(void)
                              sizeof(msg_only_received)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(body.received_date, FIRST_RX);
+    CU_ASSERT_PTR_NULL(body.x_deliveredinternaldate);
     message_free_body(&body);
 
     /* X-DeliveredInternalDate only: use that */
@@ -321,7 +323,8 @@ static void test_parse_rxdate(void)
     r = message_parse_mapped(msg_only_xdid,
                              sizeof(msg_only_xdid)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
+    CU_ASSERT_PTR_NULL(body.received_date);
+    CU_ASSERT_STRING_EQUAL(body.x_deliveredinternaldate, DELIVERED);
     message_free_body(&body);
 
     /* both, Received first: use X-DeliveredInternalDate */
@@ -329,7 +332,8 @@ static void test_parse_rxdate(void)
     r = message_parse_mapped(msg_received_then_xdid,
                              sizeof(msg_received_then_xdid)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
+    CU_ASSERT_STRING_EQUAL(body.received_date, FIRST_RX);
+    CU_ASSERT_STRING_EQUAL(body.x_deliveredinternaldate, DELIVERED);
     message_free_body(&body);
 
     /* both, X-DeliveredInternalDate first: use X-DeliveredInternalDate */
@@ -337,7 +341,8 @@ static void test_parse_rxdate(void)
     r = message_parse_mapped(msg_xdid_then_received,
                              sizeof(msg_xdid_then_received)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
+    CU_ASSERT_STRING_EQUAL(body.received_date, FIRST_RX);
+    CU_ASSERT_STRING_EQUAL(body.x_deliveredinternaldate, DELIVERED);
     message_free_body(&body);
 }
 
