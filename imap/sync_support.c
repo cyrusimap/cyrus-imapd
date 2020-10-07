@@ -4586,11 +4586,19 @@ static struct db *sync_getcachedb(struct sync_client_state *sync_cs)
     return sync_cs->cachedb;
 }
 
+// NOTE: this is destructive of kl - it removes the RECORD section!
+// this is always safe because of where we call it
 static int sync_cache(struct sync_client_state *sync_cs, const char *mboxname,
                       struct dlist *kl)
 {
     struct db *db = sync_getcachedb(sync_cs);
     if (!db) return 0;
+
+    struct dlist *ritem = dlist_getchild(kl, "RECORD");
+    if (ritem) {
+        dlist_unstitch(kl, ritem);
+        dlist_free(&ritem);
+    }
 
     struct buf buf = BUF_INITIALIZER;
     dlist_printbuf(kl, 0, &buf);
