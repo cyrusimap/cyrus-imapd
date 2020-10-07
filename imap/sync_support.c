@@ -4558,6 +4558,55 @@ int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
     return IMAP_PROTOCOL_BAD_PARAMETERS;
 }
 
+static struct db *sync_getcachedb(struct sync_client_state *sync_cs)
+{
+    if (sync_cs->cachedb) return sync_cs->cachedb;
+
+    const char *dbtype = config_getstring(IMAPOPT_SYNC_CACHE_DB);
+    if (!dbtype) return NULL;
+
+    struct buf path = BUF_INITIALIZER;
+    if (sync_cs->channel && *sync_cs->channel) {
+        buf_printf(&path, "%s/sync/%s/cache.db", config_dir, sync_cs->channel);
+    }
+    else {
+        buf_printf(&path, "%s/sync/cache.db", config_dir);
+    }
+
+    int flags = CYRUSDB_CREATE;
+
+    int r = cyrusdb_open(dbtype, buf_cstring(&path), flags, &sync_cs->cachedb);
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: failed to open sync cache db %s: %s",
+               buf_cstring(&path), cyrusdb_strerror(r));
+    }
+
+    buf_free(&path);
+
+    return sync_cs->cachedb;
+}
+
+static int sync_cache(struct sync_client_state *sync_cs, const char *mboxname,
+                      struct dlist *kl)
+{
+    struct db *db = sync_getcachedb(sync_cs);
+    if (!db) return 0;
+
+    struct buf buf = BUF_INITIALIZER;
+    dlist_printbuf(kl, 0, &buf);
+    int r = cyrusdb_store(db, mboxname, strlen(mboxname),
+                          buf_base(&buf), buf_len(&buf), /*tid*/NULL);
+    buf_free(&buf);
+    return r;
+}
+
+static void sync_uncache(struct sync_client_state *sync_cs, const char *mboxname)
+{
+    struct db *db = sync_getcachedb(sync_cs);
+    if (!db) return;
+    cyrusdb_delete(db, mboxname, strlen(mboxname), /*tid*/NULL, /*force*/1);
+}
+
 static int folder_rename(struct sync_client_state *sync_cs,
                          const char *oldname, const char *newname,
                          const char *partition, unsigned uidvalidity)
@@ -4580,7 +4629,12 @@ static int folder_rename(struct sync_client_state *sync_cs,
     sync_send_apply(kl, sync_cs->backend->out);
     dlist_free(&kl);
 
-    return sync_parse_response(cmd, sync_cs->backend->in, NULL);
+    int r = sync_parse_response(cmd, sync_cs->backend->in, NULL);
+
+    // this means that newname won't be cached, but we'll cache it next sync
+    sync_uncache(sync_cs, oldname);
+
+    return r;
 }
 
 int sync_do_folder_delete(struct sync_client_state *sync_cs, const char *mboxname)
@@ -4603,6 +4657,8 @@ int sync_do_folder_delete(struct sync_client_state *sync_cs, const char *mboxnam
     r = sync_parse_response(cmd, sync_cs->backend->in, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT)
         r = 0;
+
+    sync_uncache(sync_cs, mboxname);
 
     return r;
 }
@@ -5388,6 +5444,10 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     r = sync_parse_response(cmd, sync_cs->backend->in, &kin);
     if (r) return r;
 
+    // we know the remote state, so cache it
+    r = sync_cache(sync_cs, local->name, kin);
+    if (r) return r;
+
     kl = kin->head;
 
     if (!kl) {
@@ -5772,6 +5832,10 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
 done:
     if (mailbox && !local->mailbox) mailbox_close(&mailbox);
 
+    // any error, nuke our remote cache.  On success, cache locally
+    if (r) sync_uncache(sync_cs, local->name);
+    else r = sync_cache(sync_cs, local->name, kl);
+
     sync_folder_list_free(&myremotes);
     dlist_free(&kupload);
     dlist_free(&kl);
@@ -5803,6 +5867,10 @@ int sync_do_update_mailbox(struct sync_client_state *sync_cs,
 
         sync_send_apply(kl, sync_cs->backend->out);
         r = sync_parse_response("MAILBOX", sync_cs->backend->in, NULL);
+
+        // on error, clear cache - otherwise cache this state
+        if (r) sync_uncache(sync_cs, mbentry->name);
+        else r = sync_cache(sync_cs, mbentry->name, kl);
 
         dlist_free(&kl);
         mboxlist_entry_free(&mbentry);
