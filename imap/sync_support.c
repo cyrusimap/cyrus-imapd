@@ -4413,24 +4413,14 @@ static int reserve_messages(struct sync_client_state *sync_cs,
     return 0;
 }
 
-int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
-                        struct sync_folder_list *folder_list,
-                        struct sync_name_list *sub_list,
-                        struct sync_sieve_list *sieve_list,
-                        struct sync_seen_list *seen_list,
-                        struct sync_quota_list *quota_list)
+static int sync_kl_parse(struct dlist *kin,
+                         struct sync_folder_list *folder_list,
+                         struct sync_name_list *sub_list,
+                         struct sync_sieve_list *sieve_list,
+                         struct sync_seen_list *seen_list,
+                         struct sync_quota_list *quota_list)
 {
-    struct dlist *kin = NULL;
     struct dlist *kl;
-    int r;
-
-    r = sync_parse_response(cmd, sync_cs->backend->in, &kin);
-
-    /* Unpleasant: translate remote access error into "please reset me" */
-    if (r == IMAP_MAILBOX_NONEXISTENT)
-        return 0;
-
-    if (r) return r;
 
     for (kl = kin->head; kl; kl = kl->next) {
         if (!strcmp(kl->name, "SIEVE")) {
@@ -4439,12 +4429,12 @@ int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
             const char *guidstr = NULL;
             time_t modtime = 0;
             uint32_t active = 0;
-            if (!sieve_list) goto parse_err;
-            if (!dlist_getatom(kl, "FILENAME", &filename)) goto parse_err;
-            if (!dlist_getdate(kl, "LAST_UPDATE", &modtime)) goto parse_err;
+            if (!sieve_list) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getatom(kl, "FILENAME", &filename)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getdate(kl, "LAST_UPDATE", &modtime)) return IMAP_PROTOCOL_BAD_PARAMETERS;
             dlist_getatom(kl, "GUID", &guidstr); /* optional */
             if (guidstr) {
-                if (!message_guid_decode(&guid, guidstr)) goto parse_err;
+                if (!message_guid_decode(&guid, guidstr)) return IMAP_PROTOCOL_BAD_PARAMETERS;
             }
             else {
                 message_guid_set_null(&guid);
@@ -4456,15 +4446,15 @@ int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
         else if (!strcmp(kl->name, "QUOTA")) {
             const char *root = NULL;
             struct sync_quota *sq;
-            if (!quota_list) goto parse_err;
-            if (!dlist_getatom(kl, "ROOT", &root)) goto parse_err;
+            if (!quota_list) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getatom(kl, "ROOT", &root)) return IMAP_PROTOCOL_BAD_PARAMETERS;
             sq = sync_quota_list_add(quota_list, root);
             sync_decode_quota_limits(kl, sq->limits);
         }
 
         else if (!strcmp(kl->name, "LSUB")) {
             struct dlist *i;
-            if (!sub_list) goto parse_err;
+            if (!sub_list) return IMAP_PROTOCOL_BAD_PARAMETERS;
             for (i = kl->head; i; i = i->next) {
                 sync_name_list_add(sub_list, i->sval);
             }
@@ -4476,12 +4466,12 @@ int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
             uint32_t lastuid = 0;
             time_t lastchange = 0;
             const char *seenuids = NULL;
-            if (!seen_list) goto parse_err;
-            if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) goto parse_err;
-            if (!dlist_getdate(kl, "LASTREAD", &lastread)) goto parse_err;
-            if (!dlist_getnum32(kl, "LASTUID", &lastuid)) goto parse_err;
-            if (!dlist_getdate(kl, "LASTCHANGE", &lastchange)) goto parse_err;
-            if (!dlist_getatom(kl, "SEENUIDS", &seenuids)) goto parse_err;
+            if (!seen_list) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getdate(kl, "LASTREAD", &lastread)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getnum32(kl, "LASTUID", &lastuid)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getdate(kl, "LASTCHANGE", &lastchange)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getatom(kl, "SEENUIDS", &seenuids)) return IMAP_PROTOCOL_BAD_PARAMETERS;
             sync_seen_list_add(seen_list, uniqueid, lastread,
                                lastuid, lastchange, seenuids);
         }
@@ -4507,18 +4497,18 @@ int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
             modseq_t raclmodseq = 0;
             modseq_t foldermodseq = 0;
 
-            if (!folder_list) goto parse_err;
-            if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) goto parse_err;
-            if (!dlist_getatom(kl, "MBOXNAME", &mboxname)) goto parse_err;
-            if (!dlist_getatom(kl, "PARTITION", &part)) goto parse_err;
-            if (!dlist_getatom(kl, "ACL", &acl)) goto parse_err;
-            if (!dlist_getatom(kl, "OPTIONS", &options)) goto parse_err;
-            if (!dlist_getnum64(kl, "HIGHESTMODSEQ", &highestmodseq)) goto parse_err;
-            if (!dlist_getnum32(kl, "UIDVALIDITY", &uidvalidity)) goto parse_err;
-            if (!dlist_getnum32(kl, "LAST_UID", &last_uid)) goto parse_err;
-            if (!dlist_getnum32(kl, "RECENTUID", &recentuid)) goto parse_err;
-            if (!dlist_getdate(kl, "RECENTTIME", &recenttime)) goto parse_err;
-            if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
+            if (!folder_list) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getatom(kl, "MBOXNAME", &mboxname)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getatom(kl, "PARTITION", &part)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getatom(kl, "ACL", &acl)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getatom(kl, "OPTIONS", &options)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getnum64(kl, "HIGHESTMODSEQ", &highestmodseq)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getnum32(kl, "UIDVALIDITY", &uidvalidity)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getnum32(kl, "LAST_UID", &last_uid)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getnum32(kl, "RECENTUID", &recentuid)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getdate(kl, "RECENTTIME", &recenttime)) return IMAP_PROTOCOL_BAD_PARAMETERS;
+            if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) return IMAP_PROTOCOL_BAD_PARAMETERS;
             /* optional */
             dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after);
             dlist_getatom(kl, "MBOXTYPE", &mboxtype);
@@ -4530,7 +4520,6 @@ int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
 
             if (dlist_getlist(kl, "ANNOTATIONS", &al))
                 decode_annotations(al, &annots, NULL, NULL);
-
 
             sync_folder_list_add(folder_list, uniqueid, mboxname,
                                  mboxlist_string_to_mbtype(mboxtype),
@@ -4544,18 +4533,40 @@ int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
                                  xconvmodseq, raclmodseq,
                                  foldermodseq, /*ispartial*/0);
         }
-        else
-            goto parse_err;
+
+        else {
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        }
     }
-    dlist_free(&kin);
 
+    return 0;
+}
+
+int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
+                        struct sync_folder_list *folder_list,
+                        struct sync_name_list *sub_list,
+                        struct sync_sieve_list *sieve_list,
+                        struct sync_seen_list *seen_list,
+                        struct sync_quota_list *quota_list)
+{
+    struct dlist *kin = NULL;
+    int r;
+
+    r = sync_parse_response(cmd, sync_cs->backend->in, &kin);
+
+    /* Unpleasant: translate remote access error into "please reset me" */
+    if (r == IMAP_MAILBOX_NONEXISTENT)
+        return 0;
+
+    if (r) return r;
+
+    r = sync_kl_parse(kin, folder_list, sub_list,
+                      sieve_list, seen_list, quota_list);
+    if (r)
+        syslog(LOG_ERR, "SYNCERROR: %s: Invalid response %s", cmd, dlist_lastkey());
+
+    dlist_free(&kin);
     return r;
-
- parse_err:
-    dlist_free(&kin);
-    syslog(LOG_ERR, "SYNCERROR: %s: Invalid response %s",
-           cmd, dlist_lastkey());
-    return IMAP_PROTOCOL_BAD_PARAMETERS;
 }
 
 static struct db *sync_getcachedb(struct sync_client_state *sync_cs)
