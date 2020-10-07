@@ -4413,6 +4413,83 @@ static int reserve_messages(struct sync_client_state *sync_cs,
     return 0;
 }
 
+static struct db *sync_getcachedb(struct sync_client_state *sync_cs)
+{
+    if (sync_cs->cachedb) return sync_cs->cachedb;
+
+    const char *dbtype = config_getstring(IMAPOPT_SYNC_CACHE_DB);
+    if (!dbtype) return NULL;
+
+    struct buf path = BUF_INITIALIZER;
+    if (sync_cs->channel && *sync_cs->channel) {
+        buf_printf(&path, "%s/sync/%s/cache.db", config_dir, sync_cs->channel);
+    }
+    else {
+        buf_printf(&path, "%s/sync/cache.db", config_dir);
+    }
+
+    int flags = CYRUSDB_CREATE;
+
+    int r = cyrusdb_open(dbtype, buf_cstring(&path), flags, &sync_cs->cachedb);
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: failed to open sync cache db %s: %s",
+               buf_cstring(&path), cyrusdb_strerror(r));
+    }
+
+    buf_free(&path);
+
+    return sync_cs->cachedb;
+}
+
+static int sync_readcache(struct sync_client_state *sync_cs, const char *mboxname,
+                          struct dlist **klp)
+{
+    struct db *db = sync_getcachedb(sync_cs);
+    if (!db) return 0;
+
+    const char *base;
+    size_t len;
+
+    int r = cyrusdb_fetch(db, mboxname, strlen(mboxname), &base, &len, /*tid*/NULL);
+    if (r) return r;
+
+    dlist_parsemap(klp, 0, 0, base, len);
+
+    // we need the name so the parser can parse it
+    if (*klp) (*klp)->name = xstrdup("MAILBOX");
+
+    return 0;
+}
+
+// NOTE: this is destructive of kl - it removes the RECORD section!
+// this is always safe because of where we call it
+static int sync_cache(struct sync_client_state *sync_cs, const char *mboxname,
+                      struct dlist *kl)
+{
+    struct db *db = sync_getcachedb(sync_cs);
+    if (!db) return 0;
+
+    struct dlist *ritem = dlist_getchild(kl, "RECORD");
+    if (ritem) {
+        dlist_unstitch(kl, ritem);
+        dlist_free(&ritem);
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    dlist_printbuf(kl, 0, &buf);
+    int r = cyrusdb_store(db, mboxname, strlen(mboxname),
+                          buf_base(&buf), buf_len(&buf), /*tid*/NULL);
+    buf_free(&buf);
+    return r;
+}
+
+static void sync_uncache(struct sync_client_state *sync_cs, const char *mboxname)
+{
+    struct db *db = sync_getcachedb(sync_cs);
+    if (!db) return;
+    cyrusdb_delete(db, mboxname, strlen(mboxname), /*tid*/NULL, /*force*/1);
+}
+
 static int sync_kl_parse(struct dlist *kin,
                          struct sync_folder_list *folder_list,
                          struct sync_name_list *sub_list,
@@ -4564,66 +4641,19 @@ int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
                       sieve_list, seen_list, quota_list);
     if (r)
         syslog(LOG_ERR, "SYNCERROR: %s: Invalid response %s", cmd, dlist_lastkey());
+    else {
+        // do we have mailboxes to cache?
+        struct dlist *kl = NULL;
+        for (kl = kin->head; kl; kl = kl->next) {
+            if (strcmp(kl->name, "MAILBOX")) continue;
+            const char *mboxname = NULL;
+            if (!dlist_getatom(kl, "MBOXNAME", &mboxname)) continue;
+            sync_cache(sync_cs, mboxname, kl);
+        }
+    }
 
     dlist_free(&kin);
     return r;
-}
-
-static struct db *sync_getcachedb(struct sync_client_state *sync_cs)
-{
-    if (sync_cs->cachedb) return sync_cs->cachedb;
-
-    const char *dbtype = config_getstring(IMAPOPT_SYNC_CACHE_DB);
-    if (!dbtype) return NULL;
-
-    struct buf path = BUF_INITIALIZER;
-    if (sync_cs->channel && *sync_cs->channel) {
-        buf_printf(&path, "%s/sync/%s/cache.db", config_dir, sync_cs->channel);
-    }
-    else {
-        buf_printf(&path, "%s/sync/cache.db", config_dir);
-    }
-
-    int flags = CYRUSDB_CREATE;
-
-    int r = cyrusdb_open(dbtype, buf_cstring(&path), flags, &sync_cs->cachedb);
-    if (r) {
-        syslog(LOG_ERR, "DBERROR: failed to open sync cache db %s: %s",
-               buf_cstring(&path), cyrusdb_strerror(r));
-    }
-
-    buf_free(&path);
-
-    return sync_cs->cachedb;
-}
-
-// NOTE: this is destructive of kl - it removes the RECORD section!
-// this is always safe because of where we call it
-static int sync_cache(struct sync_client_state *sync_cs, const char *mboxname,
-                      struct dlist *kl)
-{
-    struct db *db = sync_getcachedb(sync_cs);
-    if (!db) return 0;
-
-    struct dlist *ritem = dlist_getchild(kl, "RECORD");
-    if (ritem) {
-        dlist_unstitch(kl, ritem);
-        dlist_free(&ritem);
-    }
-
-    struct buf buf = BUF_INITIALIZER;
-    dlist_printbuf(kl, 0, &buf);
-    int r = cyrusdb_store(db, mboxname, strlen(mboxname),
-                          buf_base(&buf), buf_len(&buf), /*tid*/NULL);
-    buf_free(&buf);
-    return r;
-}
-
-static void sync_uncache(struct sync_client_state *sync_cs, const char *mboxname)
-{
-    struct db *db = sync_getcachedb(sync_cs);
-    if (!db) return;
-    cyrusdb_delete(db, mboxname, strlen(mboxname), /*tid*/NULL, /*force*/1);
 }
 
 static int folder_rename(struct sync_client_state *sync_cs,
@@ -6308,7 +6338,6 @@ int sync_do_mailboxes(struct sync_client_state *sync_cs,
 {
     struct sync_name *mbox;
     struct sync_folder_list *replica_folders = sync_folder_list_create();
-    struct dlist *kl = NULL;
     struct buf buf = BUF_INITIALIZER;
     int r;
     strarray_t userids = STRARRAY_INITIALIZER;
@@ -6343,13 +6372,25 @@ redo:
         goto done;
     }
 
-    kl = dlist_newlist(NULL, "MAILBOXES");
+    struct dlist *kl = NULL;
+    struct dlist *cachel = NULL;
 
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
-        dlist_setatom(kl, "MBOXNAME", mbox->name);
-
-        if ((flags & SYNC_FLAG_VERBOSE) || (flags & SYNC_FLAG_LOGGING))
-            buf_printf(&buf, " %s", mbox->name);
+        struct dlist *cl = NULL;
+        // check if it's in the cache, then we don't need to look it up
+        if (!sync_readcache(sync_cs, mbox->name, &cl) && cl) {
+            if (!cachel) cachel = dlist_newlist(NULL, "MAILBOXES");
+            dlist_stitch(cachel, cl);
+            if ((flags & SYNC_FLAG_VERBOSE) || (flags & SYNC_FLAG_LOGGING))
+                buf_printf(&buf, " (%s)", mbox->name);
+        }
+        // if it's not in the cache, then we need to ask for it
+        else {
+            if (!kl) kl = dlist_newlist(NULL, "MAILBOXES");
+            dlist_setatom(kl, "MBOXNAME", mbox->name);
+            if ((flags & SYNC_FLAG_VERBOSE) || (flags & SYNC_FLAG_LOGGING))
+                buf_printf(&buf, " %s", mbox->name);
+        }
     }
 
     if (flags & SYNC_FLAG_VERBOSE)
@@ -6360,13 +6401,19 @@ redo:
 
     buf_free(&buf);
 
-    sync_send_lookup(kl, sync_cs->backend->out);
+    if (kl) {
+        sync_send_lookup(kl, sync_cs->backend->out);
+        dlist_free(&kl);
+        r = sync_response_parse(sync_cs, "MAILBOXES", replica_folders,
+                                NULL, NULL, NULL, NULL);
+        if (r) goto done;
+    }
 
-    dlist_free(&kl);
-
-    r = sync_response_parse(sync_cs, "MAILBOXES", replica_folders,
-                            NULL, NULL, NULL, NULL);
-    if (r) goto done;
+    if (cachel) {
+        r = sync_kl_parse(cachel, replica_folders, NULL, NULL, NULL, NULL);
+        dlist_free(&cachel);
+        if (r) goto done;
+    }
 
     /* we don't want to delete remote folders which weren't found locally,
      * because we may be racing with a rename, and we don't want to lose
