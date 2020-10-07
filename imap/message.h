@@ -110,6 +110,7 @@ struct body {
     char *x_me_message_id;
     char *references;
     char *received_date;
+    char *x_deliveredinternaldate;
 
     /*
      * Cached headers.  Only filled in at top-level

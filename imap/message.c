@@ -979,7 +979,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
                 break;
             case RFC822_X_DELIVEREDINTERNALDATE:
                 /* Explicit x-deliveredinternaldate overrides received: headers */
-                message_parse_string(value, &body->received_date);
+                message_parse_string(value, &body->x_deliveredinternaldate);
                 break;
             case RFC822_X_ME_MESSAGE_ID:
                 message_parse_string(value, &body->x_me_message_id);
@@ -2723,6 +2723,7 @@ EXPORTED void message_free_body(struct body *body)
     if (body->x_me_message_id) free(body->x_me_message_id);
     if (body->references) free(body->references);
     if (body->received_date) free(body->received_date);
+    if (body->x_deliveredinternaldate) free(body->x_deliveredinternaldate);
     if (body->charset_id) free(body->charset_id);
     if (body->part_id) free(body->part_id);
 

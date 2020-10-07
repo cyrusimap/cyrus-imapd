@@ -578,10 +578,17 @@ int deliver_mailbox(FILE *f,
         /* parse the message body if we haven't already,
            and keep the file mmap'ed */
         r = message_parse_file_buf(f, &content->map, &content->body, NULL);
-        /* If the body contains received_date, we should always use that. */
-        if (content->body->received_date)
-            time_from_rfc5322(content->body->received_date, &internaldate,
-                              DATETIME_FULL);
+    }
+
+    /* if the body contains an x-deliveredinternaldate then that overrides all else */
+    if (content->body->x_deliveredinternaldate) {
+        time_from_rfc5322(content->body->x_deliveredinternaldate,
+                          &internaldate, DATETIME_FULL);
+    }
+    /* Otherwise we'll use a received date if there's one */
+    else if (content->body->received_date) {
+        time_from_rfc5322(content->body->received_date,
+                          &internaldate, DATETIME_FULL);
     }
 
     if (!r) {
