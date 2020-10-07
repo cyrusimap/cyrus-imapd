@@ -286,6 +286,8 @@ EXPORTED const char *sync_get_config(const char *channel, const char *val)
             response = config_getstring(IMAPOPT_SYNC_PORT);
         else if (!strcmp(val, "sync_shutdown_file"))
             response = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);
+        else if (!strcmp(val, "sync_cache_db_path"))
+            response = config_getstring(IMAPOPT_SYNC_CACHE_DB_PATH);
         else
             fatal("unknown config variable requested", EX_SOFTWARE);
     }
