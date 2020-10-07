@@ -77,8 +77,9 @@ static void make_cyrusid(struct buf *dst, const struct message_guid *guid, char 
  * Version 13: indexes content-type and subtype separately
  * Version 14: adds SLOT_INDEXVERSION to documents
  * Version 15: receives indexed header fields and text in original format (rather than search form)
+ * Version 16: indexes entire addr-spec as a single value.  Prevents cross-matching localparts and domains
  */
-#define XAPIAN_DB_CURRENT_VERSION 15
+#define XAPIAN_DB_CURRENT_VERSION 16
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 5
 
 static std::set<int> read_db_versions(const Xapian::Database &database)
@@ -1036,6 +1037,13 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
             dbw->term_generator->index_text(Xapian::Utf8Iterator(addr->domain,
                         strlen(addr->domain)), 1, prefix);
         }
+
+        // index entire addr-spec
+        char *a = address_get_all(addr, /*canon_domain*/1);
+        if (a) {
+            add_boolean_nterm(*dbw->document, prefix + 'A' + std::string(a));
+            free(a);
+        }
     }
 
     address_itr_fini(&itr);
@@ -1716,6 +1724,33 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
     // query in legacy format as well!
     if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
         q |= db->parser->parse_query(str, qpflags, prefix);
+    }
+
+    // query localpart@domain
+    if ((atsign > str) && atsign[1]) {
+        struct address *addr = NULL;
+        char *a = NULL;
+
+        parseaddr_list(str, &addr);
+        if (addr && (a = address_get_all(addr, /*canon_domain*/1))) {
+            q = Xapian::Query(Xapian::Query::OP_OR,
+                              // query 'A' term for index >= 16
+                              Xapian::Query(Xapian::Query::OP_AND,
+                                            Xapian::Query(Xapian::Query::OP_VALUE_GE,
+                                                          Xapian::valueno(SLOT_INDEXVERSION),
+                                                          std::string("16")),
+                                            Xapian::Query(std::string(prefix) + 'A' + std::string(a))),
+                              // otherwise, query 'L' + 'D' terms (as per above)
+                              Xapian::Query(Xapian::Query::OP_AND,
+                                            Xapian::Query(Xapian::Query::OP_VALUE_LE,
+                                                          Xapian::valueno(SLOT_INDEXVERSION),
+                                                          std::string("15")),
+                                            q));
+
+            free(a);
+        }
+
+        if (addr) parseaddr_free(addr);
     }
 
     return new Xapian::Query(q);
