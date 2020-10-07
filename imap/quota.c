@@ -407,10 +407,13 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
             free(res);
         }
         else {
-            strlcpy(tail, roots[i], sizeof(buf) - domainlen);
+            char *intname = mboxname_from_external(roots[i], &quota_namespace, NULL);
+            strlcpy(tail, intname, sizeof(buf) - domainlen);
+            free(intname);
         }
-        /* XXX - namespace fixes here */
+
         r = quota_foreach(buf, fixquota_addroot, buf, NULL);
+
         if (r) {
             errmsg(IMAP_IOERROR, "failed building quota list for '%s'", buf);
             break;
@@ -660,16 +663,18 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
         if (isuser) {
             char *inbox = mboxname_user_mbox(roots[i], NULL);
             r = mboxlist_usermboxtree(roots[i], NULL, cb, inbox, /*flags*/0);
+            if (r) errmsg(IMAP_IOERROR, "processing user '%s'", inbox);
             free(inbox);
         }
         else {
-            strlcpy(tail, roots[i], sizeof(buf) - domainlen);
+            char *intname = mboxname_from_external(roots[i], &quota_namespace, NULL);
+            strlcpy(tail, intname, sizeof(buf) - domainlen);
             r = mboxlist_allmbox(buf, cb, buf, /*flags*/0);
+            if (r) errmsg(IMAP_IOERROR, "processing mbox list for '%s'", buf);
+            free(intname);
         }
-        if (r) {
-            errmsg(IMAP_IOERROR, "processing mbox list for '%s'", buf);
-            break;
-        }
+
+        if (r) break;
     }
 
     return r;
