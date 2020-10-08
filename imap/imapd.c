@@ -6202,6 +6202,7 @@ static void cmd_sort(char *tag, int usinguid)
     prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
                 error_message(IMAP_OK_COMPLETED), n, mytime);
 
+    buf_free(&arg);
     freesortcrit(sortcrit);
     freesearchargs(searchargs);
     return;
