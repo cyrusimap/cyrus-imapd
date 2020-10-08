@@ -1667,6 +1667,7 @@ static void cmd_set(struct conn *C,
 
             m->t = t;
         } else {
+            char *thismailbox = m ? m->mailbox : xstrdup(mailbox);
             struct mbent *newm;
 
             /* allocate new mailbox */
@@ -1675,7 +1676,7 @@ static void cmd_set(struct conn *C,
             } else {
                 newm = xrealloc(m, sizeof(struct mbent) + 1);
             }
-            newm->mailbox = xstrdup(mailbox);
+            newm->mailbox = thismailbox;
             newm->location = xstrdup(location);
 
             if (acl) {
