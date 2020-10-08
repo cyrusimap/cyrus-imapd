@@ -1073,7 +1073,7 @@ envelope_err:
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
         if (!comp) {
             res = SIEVE_RUN_ERROR;
-            break;
+            goto date_err;
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
@@ -1094,7 +1094,7 @@ envelope_err:
 
             if (interp->getheader(m, header_name, &headers) != SIEVE_OK) {
                 res = 0;
-                break;
+                goto date_err;
             }
 
             /* count results */
@@ -1116,7 +1116,7 @@ envelope_err:
                 index += header_count;
                 if (index < 0) {
                     res = 0;
-                    break;
+                    goto date_err;
                 }
                 header_count = index + 1;
             }
@@ -1124,7 +1124,7 @@ envelope_err:
             /* check if index is out of bounds */
             if (index < 0 || index >= header_count) {
                 res = 0;
-                break;
+                goto date_err;
             }
             header = headers[index];
 
@@ -1141,7 +1141,7 @@ envelope_err:
 
             if (-1 == time_from_rfc5322(header_data, &t, DATETIME_FULL)) {
                 res = 0;
-                break;
+                goto date_err;
             }
 
             /* timezone offset */
@@ -1155,7 +1155,7 @@ envelope_err:
                 if (!zone ||
                     3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
                     res = 0;
-                    break;
+                    goto date_err;
                 }
 
                 timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
@@ -1177,8 +1177,8 @@ envelope_err:
          */
 
         if (match == B_COUNT) {
-                res = SIEVE_OK;
-                goto alldone;
+            res = SIEVE_OK;
+            goto date_err;
         }
 
         switch (date_part) {
@@ -1249,6 +1249,9 @@ envelope_err:
         res = do_comparisons(test.u.dt.kl, buffer, comp, comprock, ctag,
                              (requires & BFE_VARIABLES) ? variables : NULL,
                              match_vars);
+
+    date_err:
+        free(strarray_takevf(test.u.dt.kl));
         break;
     }
 
@@ -1553,9 +1556,6 @@ envelope_err:
 #endif
         return SIEVE_RUN_ERROR;
     }
-
-
- alldone:
 
     *ip = i;
     return res;
