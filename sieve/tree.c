@@ -365,9 +365,14 @@ void free_test(test_t *t)
         free_testlist(t->u.tl);
         break;
 
+    case BC_NOT:
+        free_test(t->u.t);
+        break;
+
     case BC_EXISTS:
     case BC_IHAVE:
     case BC_VALIDEXTLIST:
+    case BC_VALIDNOTIFYMETHOD:
         strarray_free(t->u.sl);
         break;
 
@@ -378,12 +383,14 @@ void free_test(test_t *t)
 
     case BC_HASFLAG:
     case BC_HEADER:
+    case BC_HEADER_PRE_INDEX:
     case BC_STRING:
         strarray_free(t->u.hhs.sl);
         strarray_free(t->u.hhs.pl);
         break;
 
     case BC_ADDRESS:
+    case BC_ADDRESS_PRE_INDEX:
     case BC_ENVELOPE:
         strarray_free(t->u.ae.sl);
         strarray_free(t->u.ae.pl);
@@ -392,10 +399,6 @@ void free_test(test_t *t)
     case BC_BODY:
         strarray_free(t->u.b.content_types);
         strarray_free(t->u.b.pl);
-        break;
-
-    case BC_NOT:
-        free_test(t->u.t);
         break;
 
     case BC_DATE:
@@ -412,6 +415,7 @@ void free_test(test_t *t)
     case BC_SERVERMETADATA:
     case BC_SERVERMETADATAEXISTS:
     case BC_SPECIALUSEEXISTS:
+    case BC_NOTIFYMETHODCAPABILITY:
         free(t->u.mm.extname);
         free(t->u.mm.keyname);
         strarray_free(t->u.mm.keylist);
