@@ -470,8 +470,6 @@ EXPORTED int conversations_abort(struct conversations_state **statep)
 
     if (!state) return 0;
 
-    *statep = NULL;
-
     /* clean up hashes */
     conversations_abortcache(state);
 
@@ -483,6 +481,8 @@ EXPORTED int conversations_abort(struct conversations_state **statep)
 
     _conv_remove(state);
 
+    *statep = NULL;
+
     return 0;
 }
 
@@ -493,8 +493,6 @@ EXPORTED int conversations_commit(struct conversations_state **statep)
     int r = 0;
 
     if (!state) return 0;
-
-    *statep = NULL;
 
     /* commit cache, writes to to DB */
     conversations_commitcache(state);
@@ -510,6 +508,8 @@ EXPORTED int conversations_commit(struct conversations_state **statep)
     }
 
     _conv_remove(state);
+
+    *statep = NULL;
 
     return r;
 }

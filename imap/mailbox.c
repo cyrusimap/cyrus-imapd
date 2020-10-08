@@ -2126,7 +2126,9 @@ static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype)
     assert(listitem);
     assert(&listitem->m == mailbox);
 
-    int namelocktype = listitem->l->locktype;
+    // we don't want NONBLOCKING here
+    int namelocktype = (listitem->l->locktype == LOCK_SHARED)
+                     ? LOCK_SHARED : LOCK_EXCLUSIVE;
     int shared = (locktype == LOCK_SHARED) ? 1 : 0;
 
     mboxname_release(&listitem->l);
