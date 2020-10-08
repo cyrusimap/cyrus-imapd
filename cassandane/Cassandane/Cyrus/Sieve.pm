@@ -3191,6 +3191,61 @@ EOF
     $self->check_messages({ 1 => $msg2 }, check_guid => 0);
 }
 
+sub test_jmapquery_multiple_to_cross_domain
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $imap = $self->{store}->get_client();
+    $imap->create("INBOX.matches") or die;
+
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+    "to" : "foo@example.net",
+    "header" : ["X-Foo"]
+  }
+.
+  )
+{
+  fileinto "INBOX.matches";
+}
+EOF
+    );
+
+    xlog $self, "Deliver a matching message";
+    my $msg1 = $self->{gen}->generate(
+        subject => "Message 1",
+        extra_headers => [['To', 'foo@example.net'],
+                          ['X-Foo', 'bar']
+        ],
+    );
+    $self->{instance}->deliver($msg1);
+
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Assert that message got moved into INBOX.matches";
+    $self->{store}->set_folder('INBOX.matches');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog $self, "Deliver a non-matching message";
+    my $msg2 = $self->{gen}->generate(
+        subject => "Message 2",
+        extra_headers => [['To', 'foo@example.com, bar@example.net'],
+                          ['X-Foo', 'bar']
+        ],
+    );
+    $self->{instance}->deliver($msg2);
+    $msg2->set_attribute(uid => 1);
+
+    xlog "Assert that message got moved into INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg2 }, check_guid => 0);
+}
+
 sub test_jmapquery_attachmentindexing
     :min_version_3_3 :needs_component_jmap :needs_search_xapian
     :SearchAttachmentExtractor :JMAPExtensions

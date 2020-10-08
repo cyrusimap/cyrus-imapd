@@ -4342,6 +4342,58 @@ sub test_email_query_bcc
     $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[0]);
 }
 
+sub test_email_query_multiple_to_cross_domain
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $account = undef;
+    my $store = $self->{store};
+    my $mboxprefix = "INBOX";
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { accountId => $account }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create email1";
+    my $msg1 = {
+        mailboxIds => { $inboxid => JSON::true },
+        subject => 'msg1',
+        to => [
+            { name => undef, email => "foo\@example.com" },
+            { name => undef, email => "bar\@example.net" }
+        ]
+    };
+
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg1 }}, "R1"]]);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "fetch emails without filter";
+    $res = $jmap->CallMethods([
+        ['Email/query', { accountId => $account }, 'R1'],
+        ['Email/get', {
+            accountId => $account,
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => [ 'subject', 'mailboxIds', 'to' ],
+        }, 'R2'],
+    ]);
+
+    my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+    my $emailId1 = $m{"msg1"}->{id};
+    $self->assert_not_null($emailId1);
+
+    xlog $self, "filter to with mixed localpart and domain";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            to => 'foo@example.net'
+        }
+    }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+}
+
 
 sub test_email_query_shared
     :min_version_3_1 :needs_component_jmap
@@ -19438,7 +19490,8 @@ sub test_email_query_emailaddress
             domain => 'local',
         ),
         to => Cassandane::Address->new(
-            localpart => 't"u "x',
+#            localpart => 't"u "x',      XXX  Is this even legal?
+            localpart => 'tux',
             domain => "example.com"
         ),
         body => "msg3"
@@ -19522,9 +19575,9 @@ EOF
         to => 'example.com',
         wantIds => [$ids[0], $ids[1], $ids[2], $ids[3]],
     }, {
-        to => 't"u "x@example.com',
-        wantIds => [$ids[2]],
-    }, {
+#        to => 't"u "x@example.com',
+#        wantIds => [$ids[2]],
+#    }, {
         to => 'tux@example.com',
         wantIds => [$ids[2]],
     }, {
