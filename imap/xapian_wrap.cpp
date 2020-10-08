@@ -1726,26 +1726,35 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
         q |= db->parser->parse_query(str, qpflags, prefix);
     }
 
-    // query localpart@domain
+    // query localpart@domain (ONLY if no wildcards)
     if ((atsign > str) && atsign[1]) {
         struct address *addr = NULL;
         char *a = NULL;
 
         parseaddr_list(str, &addr);
         if (addr && (a = address_get_all(addr, /*canon_domain*/1))) {
-            q = Xapian::Query(Xapian::Query::OP_OR,
-                              // query 'A' term for index >= 16
-                              Xapian::Query(Xapian::Query::OP_AND,
-                                            Xapian::Query(Xapian::Query::OP_VALUE_GE,
-                                                          Xapian::valueno(SLOT_INDEXVERSION),
-                                                          std::string("16")),
-                                            Xapian::Query(std::string(prefix) + 'A' + std::string(a))),
-                              // otherwise, query 'L' + 'D' terms (as per above)
-                              Xapian::Query(Xapian::Query::OP_AND,
-                                            Xapian::Query(Xapian::Query::OP_VALUE_LE,
-                                                          Xapian::valueno(SLOT_INDEXVERSION),
-                                                          std::string("15")),
-                                            q));
+            if (!strchr(a, '*')) {
+                // query 'A' term for index >= 16
+                std::string term(prefix + 'A' + std::string(a));
+                Xapian::Query qq =
+                    Xapian::Query(Xapian::Query::OP_AND,
+                                  Xapian::Query(Xapian::Query::OP_VALUE_GE,
+                                                Xapian::valueno(SLOT_INDEXVERSION),
+                                                std::string("16")),
+                                  Xapian::Query(term));
+                if (q.get_type() != q.LEAF_MATCH_NOTHING) {
+                    // otherwise, query 'L' + 'D' terms (as per above)
+                    Xapian::Query qq2 =
+                        Xapian::Query(Xapian::Query::OP_AND,
+                                      Xapian::Query(Xapian::Query::OP_VALUE_LE,
+                                                    Xapian::valueno(SLOT_INDEXVERSION),
+                                                    std::string("15")),
+                                      q);
+                    qq |= qq2;
+                }
+
+                q = qq;
+            }
 
             free(a);
         }
