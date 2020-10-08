@@ -2126,11 +2126,12 @@ static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype)
     assert(listitem);
     assert(&listitem->m == mailbox);
 
+    int namelocktype = listitem->l->locktype;
     int shared = (locktype == LOCK_SHARED) ? 1 : 0;
 
     mboxname_release(&listitem->l);
     int r = conversations_open_mbox(mailbox->name, shared, &mailbox->local_cstate);
-    if (!r) r = mboxname_lock(mailbox->name, &listitem->l, locktype);
+    if (!r) r = mboxname_lock(mailbox->name, &listitem->l, namelocktype);
     return r;
 }
 
