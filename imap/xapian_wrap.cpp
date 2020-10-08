@@ -1729,11 +1729,12 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
     // query localpart@domain (ONLY if no wildcards)
     if ((atsign > str) && atsign[1]) {
         struct address *addr = NULL;
-        char *a = NULL;
 
         parseaddr_list(str, &addr);
-        if (addr && (a = address_get_all(addr, /*canon_domain*/1))) {
-            if (!strchr(a, '*')) {
+        if (addr) {
+            char *a = address_get_all(addr, /*canon_domain*/1);
+
+            if (a && !strchr(a, '*')) {
                 // query 'A' term for index >= 16
                 std::string term(prefix + 'A' + std::string(a));
                 Xapian::Query qq =
@@ -1756,10 +1757,9 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
                 q = qq;
             }
 
+            parseaddr_free(addr);
             free(a);
         }
-
-        if (addr) parseaddr_free(addr);
     }
 
     return new Xapian::Query(q);
