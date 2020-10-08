@@ -404,8 +404,6 @@ EXPORTED int prot_setcompress(struct protstream *s)
      */
     s->zbuf_size = s->maxplain + 6;
     s->zbuf = (unsigned char *) xmalloc(sizeof(unsigned char) * s->zbuf_size);
-    syslog(LOG_DEBUG, "created %scompress buffer of %u bytes",
-           s->write ? "" : "de", s->zbuf_size);
     s->zstrm = zstrm;
 
     return 0;
@@ -456,7 +454,6 @@ static int is_incompressible(const char *p, size_t n)
 
     while (sig->type) {
         if (n >= sig->len && !memcmp(p, sig->sig, sig->len)) {
-            syslog(LOG_DEBUG, "data is %s", sig->type);
             return 1;
         }
         sig++;
@@ -653,7 +650,6 @@ EXPORTED int prot_fill(struct protstream *s)
         if (s->zstrm && s->zstrm->avail_in) {
             /* Decompress the data */
             int zr = Z_OK;
-            unsigned in = s->zstrm->avail_in;
 
             s->zstrm->next_out = s->zbuf;
             s->zstrm->avail_out = s->zbuf_size;
@@ -669,8 +665,6 @@ EXPORTED int prot_fill(struct protstream *s)
                 /* inflated some data */
                 s->ptr = s->zbuf;
                 s->cnt = s->zbuf_size - s->zstrm->avail_out;
-
-                syslog(LOG_DEBUG, "decompressed %u -> %u bytes", in, s->cnt);
 
                 /* drop straight to logging and returning the first char */
                 break;
@@ -911,7 +905,6 @@ static int prot_flush_encode(struct protstream *s,
     if (s->zstrm) {
         /* Compress the data */
         int zr = Z_OK;
-        unsigned in = left;
 
         s->zstrm->next_in = ptr;
         s->zstrm->avail_in = left;
@@ -949,8 +942,6 @@ static int prot_flush_encode(struct protstream *s,
 
         ptr = s->zbuf;
         left = s->zbuf_size - s->zstrm->avail_out;
-
-        syslog(LOG_DEBUG, "compressed %u -> %u bytes", in, left);
     }
 #endif /* HAVE_ZLIB */
 
