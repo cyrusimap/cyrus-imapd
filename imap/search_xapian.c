@@ -3980,6 +3980,7 @@ out:
     strarray_free(toreindex);
     strarray_free(tochange);
     strarray_free(tocompact);
+    strarray_free(reindexitems);
     free(namelock_fname);
     free(newdest);
     free(destdir);
