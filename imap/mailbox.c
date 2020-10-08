@@ -2260,6 +2260,8 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
         if (mailbox->is_readonly) {
             mailbox->is_readonly = 0;
             r = mailbox_open_index(mailbox);
+            if (r) syslog(LOG_ERR, "IOERROR: failed to reopen index for %s to upgrade to read-write: %s",
+                          mailbox->name, error_message(r));
         }
         if (!r) r = lock_blocking(mailbox->index_fd, index_fname);
     }
@@ -2350,7 +2352,11 @@ EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int locktype)
     if (r) return r;
 
     r = mailbox_lock_index_internal(mailbox, locktype);
-    if (r) return r;
+    if (r) {
+        if (mailbox->local_cstate)
+            conversations_abort(&mailbox->local_cstate);
+        return r;
+    }
 
     /* otherwise, sanity checks for regular use, but not for internal
      * use during cleanup */
