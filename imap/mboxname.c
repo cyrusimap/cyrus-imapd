@@ -261,7 +261,9 @@ EXPORTED void mboxname_release(struct mboxlock **mboxlockptr)
 
 EXPORTED int mboxname_islocked(const char *mboxname)
 {
-    return find_lockitem(mboxname) ? 1 : 0;
+    struct mboxlocklist *lockitem = find_lockitem(mboxname);
+    if (!lockitem) return 0;
+    return lockitem->l.locktype;
 }
 
 EXPORTED struct mboxlock *mboxname_usernamespacelock(const char *mboxname)
