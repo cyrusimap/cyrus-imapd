@@ -523,11 +523,11 @@ static const char *_namelock_name_from_userid(const char *userid)
     return buf_cstring(&buf);
 }
 
-EXPORTED struct mboxlock *user_namespacelock(const char *userid)
+EXPORTED struct mboxlock *user_namespacelock_full(const char *userid, int locktype)
 {
     struct mboxlock *namelock;
     const char *name = _namelock_name_from_userid(userid);
-    int r = mboxname_lock(name, &namelock, LOCK_EXCLUSIVE);
+    int r = mboxname_lock(name, &namelock, locktype);
     if (r) return NULL;
     return namelock;
 }
