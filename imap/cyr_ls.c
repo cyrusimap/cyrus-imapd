@@ -191,10 +191,10 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
     int r;
     struct list_rock lrock = { opts, 0, NULL };
 
-    printf("\n%s:\n", mbname_extname(mbname, &cyr_ls_namespace, "cyrus"));
-
     r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
     if (!r) {
+        printf("\n%s:\n", mbname_extname(mbname, &cyr_ls_namespace, "cyrus"));
+
         if (mbentry->mbtype & MBTYPE_RESERVE) r = IMAP_MAILBOX_NONEXISTENT;
         else if (mbentry->mbtype & MBTYPE_DELETED) r = IMAP_MAILBOX_NONEXISTENT;
         else if (mbentry->mbtype & MBTYPE_REMOTE) {
