@@ -172,11 +172,11 @@ static int list_cb(struct findall_data *data, void *rock)
                                      data->mbentry->name,
                                      data->mbentry->uniqueid, 0);
         }
-        long_list(path, strrchr(data->extname, '/')+1);
+        long_list(path, strrchr(data->extname, cyr_ls_namespace.hier_sep)+1);
     }
     else {
         printf("%c%s", !(lrock->count++ % lrock->opts->columns) ? '\n' : '\t',
-               strrchr(data->extname, '/')+1);
+               strrchr(data->extname, cyr_ls_namespace.hier_sep)+1);
     }
 
     if (lrock->children) strarray_append(lrock->children, data->extname);
