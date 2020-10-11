@@ -477,7 +477,7 @@ itags: /* empty */               { $$ = new_command(B_INCLUDE, sscript); }
                                                       ":once");
                                      }
 
-                                     $$->u.inc.once = 1;
+                                     $$->u.inc.once = INC_ONCE_MASK;
                                  }
         | itags OPTIONAL         {
                                      if ($$->u.inc.optional != -1) {
@@ -486,7 +486,7 @@ itags: /* empty */               { $$ = new_command(B_INCLUDE, sscript); }
                                                       ":optional");
                                      }
 
-                                     $$->u.inc.optional = 1;
+                                     $$->u.inc.optional = INC_OPTIONAL_MASK;
                                  }
         ;
 
@@ -2799,7 +2799,7 @@ static commandlist_t *build_include(sieve_script_t *sscript,
 
     c->nargs = bc_precompile(c->args, "is",
                              c->u.inc.location |
-                                 (c->u.inc.once << 6) | (c->u.inc.optional << 7),
+                                 (c->u.inc.once | c->u.inc.optional),
                              c->u.inc.script);
 
     return c;
