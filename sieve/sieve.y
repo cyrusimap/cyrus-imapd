@@ -2198,7 +2198,7 @@ static int verify_addrheader(sieve_script_t *sscript, char *hdr)
         "from", "sender", "reply-to",   /* RFC 5322 originator fields */
         "to", "cc", "bcc",              /* RFC 5322 destination fields */
         "message-id", "in-reply-to",    /* RFC 5322 identification fields */
-        "references"
+        "references",
         "resent-from", "resent-sender", /* RFC 5322 resent fields */
         "resent-to", "resent-cc", "resent-bcc",
         "return-path",                  /* RFC 5322 trace fields */
