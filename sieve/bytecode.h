@@ -376,8 +376,8 @@ enum bytecode_tags {
 };
 
 #define INC_LOCATION_MASK 0x3F
-#define INC_OPTIONAL_MASK 0x40
-#define INC_ONCE_MASK     0x80
+#define INC_ONCE_MASK     0x40
+#define INC_OPTIONAL_MASK 0x80
 
 #define SNOOZE_WDAYS_MASK 0x7F
 #define SNOOZE_IS_ID_MASK 0x80
