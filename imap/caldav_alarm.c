@@ -362,12 +362,9 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
         if (icalvalue_isa(val) == ICAL_DURATION_VALUE) {
             icalparameter *param =
                 icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
-            icaltimetype base = icaltime_null_time();
+            icaltimetype base = start;
             if (param && icalparameter_get_related(param) == ICAL_RELATED_END) {
                 base = end;
-            }
-            else {
-                base = start;
             }
             base.is_date = 0; /* need an actual time for triggers */
             alarmtime = icaltime_add(base, trigger.duration);
