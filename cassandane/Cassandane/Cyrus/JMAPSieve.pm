@@ -541,6 +541,21 @@ sub test_sieve_validate
         ['SieveScript/validate', {
             content => "keep;\r\n"
          }, "R4"],
+        ['SieveScript/validate', {
+            blobId => "foo"
+         }, "R5"],
+        ['Blob/set', {
+            create => {
+                "1" => { content => "keep;\r\n" }
+            }
+         }, "R6"],
+        ['SieveScript/validate', {
+            content => "keep;\r\n",
+            blobId => "#1"
+         }, "R7"],
+        ['SieveScript/validate', {
+            blobId => "#1"
+         }, "R8"],
     ]);
     $self->assert_not_null($res);
 
@@ -557,6 +572,16 @@ sub test_sieve_validate
     $self->assert_str_equals("SieveScript/validate", $res->[3][0]);
     $self->assert_equals(JSON::true, $res->[3][1]{isValid});
     $self->assert_null($res->[3][1]{errorDescription});
+
+    $self->assert_str_equals("error", $res->[4][0]);
+    $self->assert_str_equals("blobNotFound", $res->[4][1]{type});
+
+    $self->assert_str_equals("error", $res->[6][0]);
+    $self->assert_str_equals("invalidArguments", $res->[6][1]{type});
+
+    $self->assert_str_equals("SieveScript/validate", $res->[7][0]);
+    $self->assert_equals(JSON::true, $res->[7][1]{isValid});
+    $self->assert_null($res->[7][1]{errorDescription});
 }
 
 sub download
