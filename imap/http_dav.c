@@ -588,7 +588,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 
 
 /* Determine allowed methods in Cal/CardDAV namespace */
-EXPORTED unsigned long calcarddav_allow_cb(struct request_target_t *tgt)
+HIDDEN unsigned long calcarddav_allow_cb(struct request_target_t *tgt)
 {
     unsigned long allow = tgt->namespace->allow;
 
@@ -627,7 +627,7 @@ EXPORTED int dav_parse_req_target(struct transaction_t *txn,
 
 
 /* Parse a path in Cal/CardDAV namespace */
-EXPORTED int calcarddav_parse_path(const char *path,
+HIDDEN int calcarddav_parse_path(const char *path,
                                    struct request_target_t *tgt,
                                    const char *mboxprefix,
                                    const char **resultstr)
