@@ -534,7 +534,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 
         if (!comp) {
             res = SIEVE_RUN_ERROR;
-            break;
+            goto envelope_err;
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
@@ -696,7 +696,7 @@ envelope_err:
 
         if (!comp) {
             res = SIEVE_RUN_ERROR;
-            break;
+            goto header_err;
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
@@ -801,7 +801,7 @@ envelope_err:
 
         if (!comp) {
             res = SIEVE_RUN_ERROR;
-            break;
+            goto string_err;
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
@@ -950,7 +950,7 @@ envelope_err:
 
         if (!comp) {
             res = SIEVE_RUN_ERROR;
-            break;
+            goto body_err;
         }
 	/*
           RFC 5173         Sieve Email Filtering: Body Extension        April 2008
@@ -982,7 +982,8 @@ envelope_err:
         res = interp->getbody(m, content_types, &val);
         free(content_types);
 
-        if (res != SIEVE_OK) break;
+        if (res != SIEVE_OK) goto body_err;
+
 
         /* bodypart(s) exist, now to test them */
 
@@ -1344,7 +1345,7 @@ envelope_err:
 
         if (!comp) {
             res = SIEVE_RUN_ERROR;
-            break;
+            goto meta_err;
         }
 
         if (op == BC_METADATA || op == BC_NOTIFYMETHODCAPABILITY) {
@@ -1377,6 +1378,7 @@ envelope_err:
             free(val);
         }
 
+      meta_err:
         free(strarray_takevf(test.u.mm.keylist));
         break;
     }
@@ -1518,7 +1520,7 @@ envelope_err:
         list_len = strarray_size(test.u.mm.keylist);
 
         if (extname && !(res = interp->getmailboxexists(sc, extname))) {
-            break;
+            goto exists_err;
         }
 
         for (x = 0; x < list_len; x++) {
@@ -1532,6 +1534,7 @@ envelope_err:
         res = interp->getspecialuseexists(sc, extname, &uses);
         strarray_fini(&uses);
 
+      exists_err:
         free(strarray_takevf(test.u.mm.keylist));
         break;
     }
