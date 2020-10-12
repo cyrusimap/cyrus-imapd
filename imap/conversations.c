@@ -567,7 +567,7 @@ static int _conversations_set_key(struct conversations_state *state,
         if (i) buf_putc(&buf, ',');
         buf_printf(&buf, CONV_FMT, cid);
     }
-    buf_printf(&buf, " %lu", stamp);
+    buf_printf(&buf, " " TIME_T_FMT, stamp);
 
     r = cyrusdb_store(state->db,
                       key, keylen,

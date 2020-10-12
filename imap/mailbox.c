@@ -2899,7 +2899,7 @@ static uint32_t crc_basic(const struct mailbox *mailbox,
         flagcrc ^= crc32_cstring(buf);
     }
 
-    snprintf(buf, sizeof(buf), "%u " MODSEQ_FMT " %lu (%u) %lu %s",
+    snprintf(buf, sizeof(buf), "%u " MODSEQ_FMT " " TIME_T_FMT " (%u) " TIME_T_FMT " %s",
             record->uid, record->modseq, record->last_updated,
             flagcrc,
             record->internaldate,
@@ -2959,7 +2959,7 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
     }
 
     if (record->savedate && mailbox->i.minor_version >= 15) {
-        buf_printf(&buf, "%lu", record->savedate);
+        buf_printf(&buf, TIME_T_FMT, record->savedate);
         crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "savedate", "", &buf);
         buf_reset(&buf);
     }
@@ -4520,7 +4520,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
         if (mailbox->i.minor_version >= 15 && repack->newmailbox.i.minor_version < 15) {
             if (record->savedate) {
                 buf_reset(&buf);
-                buf_printf(&buf, "%lu", record->savedate);
+                buf_printf(&buf, TIME_T_FMT, record->savedate);
                 r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "savedate", "", &buf);
                 if (r) goto done;
             }

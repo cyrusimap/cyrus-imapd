@@ -53,6 +53,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
+#include <inttypes.h>
 
 #include "auth_pts.h"
 #include "cyrusdb.h"
@@ -400,7 +401,7 @@ static int ptload(const char *identifier, struct auth_state **state)
 
         syslog(LOG_DEBUG,
                "ptload(): fetched cache record (%s)" \
-               "(mark %ld, current %ld, limit %ld)", identifier,
+               "(mark " TIME_T_FMT ", current " TIME_T_FMT ", limit " TIME_T_FMT ")", identifier,
                fetched->mark, now, now - timeout);
 
         if (fetched->mark > (now - timeout)) {

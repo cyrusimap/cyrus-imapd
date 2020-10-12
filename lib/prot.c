@@ -816,7 +816,7 @@ EXPORTED int prot_fill(struct protstream *s)
         char timebuf[20];
 
         time(&newtime);
-        snprintf(timebuf, sizeof(timebuf), "<%ld<", newtime);
+        snprintf(timebuf, sizeof(timebuf), "<" TIME_T_FMT "<", newtime);
         n = write(s->logfd, timebuf, strlen(timebuf));
 
         left = s->cnt;
@@ -879,7 +879,7 @@ static void prot_flush_log(struct protstream *s)
         char timebuf[20];
 
         time(&newtime);
-        snprintf(timebuf, sizeof(timebuf), ">%ld>", newtime);
+        snprintf(timebuf, sizeof(timebuf), ">" TIME_T_FMT ">", newtime);
         n = write(s->logfd, timebuf, strlen(timebuf));
 
         do {

@@ -231,7 +231,7 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
            mailbox->i.start_offset, mailbox->i.record_size);
     printf("  Number of Messages: %u  Mailbox Size: " QUOTA_T_FMT " bytes  Annotations Size: " QUOTA_T_FMT " bytes\n",
            mailbox->i.exists, mailbox->i.quota_mailbox_used, mailbox->i.quota_annot_used);
-    printf("  Last Append Date: (%lu) %s",
+    printf("  Last Append Date: (" TIME_T_FMT ") %s",
            mailbox->i.last_appenddate, ctime(&mailbox->i.last_appenddate));
     printf("  UIDValidity: %u  Last UID: %u\n",
            mailbox->i.uidvalidity, mailbox->i.last_uid);
@@ -255,8 +255,8 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
         }
     }
     printf("\n");
-    printf("  Last POP3 Login: (%ld) %s", mailbox->i.pop3_last_login,
-           ctime((const long *) &mailbox->i.pop3_last_login));
+    printf("  Last POP3 Login: (" TIME_T_FMT ") %s", mailbox->i.pop3_last_login,
+           ctime((const time_t *) &mailbox->i.pop3_last_login));
     printf("  Highest Mod Sequence: " MODSEQ_FMT "\n",
            mailbox->i.highestmodseq);
 
@@ -277,10 +277,10 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
         }
 
         printf("%06u> UID:%08u"
-               "   INT_DATE:%lu SENTDATE:%lu SAVEDATE:%lu SIZE:%-6u\n",
+               "   INT_DATE:" TIME_T_FMT " SENTDATE:" TIME_T_FMT " SAVEDATE:" TIME_T_FMT " SIZE:%-6u\n",
                msgno, record->uid, record->internaldate,
                record->sentdate, record->savedate, record->size);
-        printf("      > HDRSIZE:%-6u LASTUPD :%lu SYSFLAGS:%08X",
+        printf("      > HDRSIZE:%-6u LASTUPD :" TIME_T_FMT " SYSFLAGS:%08X",
                record->header_size, record->last_updated,
                record->system_flags);
 

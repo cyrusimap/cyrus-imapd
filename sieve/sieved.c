@@ -57,6 +57,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <inttypes.h>
 
 #include <string.h>
 
@@ -158,7 +159,7 @@ static void print_stringlist(const char *label, strarray_t *list)
 
 static void print_time(uint64_t t)
 {
-    printf(" %02lu:%02lu:%02lu", t / 3600, (t % 3600) / 60, t % 60);
+    printf(" %02" PRIu64 ":%02" PRIu64 ":%02" PRIu64, t / 3600, (t % 3600) / 60, t % 60);
 }
 
 static void print_vallist(const char *label, arrayu64_t *list,
@@ -173,7 +174,7 @@ static void print_vallist(const char *label, arrayu64_t *list,
 
         if (!(x % 5)) printf("\n\t\t");
         if (print_cb) print_cb(i);
-        else printf(" %lu", i);
+        else printf(" %" PRIu64, i);
     }
     printf("\n\t]");
 

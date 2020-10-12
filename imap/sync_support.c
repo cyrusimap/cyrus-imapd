@@ -4963,7 +4963,7 @@ static void log_record(const char *name, struct mailbox *mailbox,
                        struct index_record *record)
 {
     syslog(LOG_NOTICE, "SYNCNOTICE: %s uid:%u modseq:" MODSEQ_FMT " "
-          "last_updated:%lu internaldate:%lu flags:(%s) cid:" CONV_FMT,
+          "last_updated:" TIME_T_FMT " internaldate:" TIME_T_FMT " flags:(%s) cid:" CONV_FMT,
            name, record->uid, record->modseq,
            record->last_updated, record->internaldate,
            make_flags(mailbox, record), record->cid);

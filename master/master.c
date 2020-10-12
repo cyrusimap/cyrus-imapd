@@ -1983,13 +1983,13 @@ static void limit_fds(rlim_t x)
     }
 
     if (verbose > 1) {
-        syslog(LOG_DEBUG, "set maximum file descriptors to %ld/%ld",
+        syslog(LOG_DEBUG, "set maximum file descriptors to " RLIM_T_FMT "/" RLIM_T_FMT,
                rl.rlim_cur, rl.rlim_max);
     }
 
     if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
         syslog(LOG_ERR,
-               "setrlimit: Unable to set file descriptors limit to %ld: %m",
+               "setrlimit: Unable to set file descriptors limit to " RLIM_T_FMT ": %m",
                rl.rlim_cur);
     }
 }
