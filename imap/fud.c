@@ -96,8 +96,10 @@ static void send_reply(struct sockaddr *sfrom, socklen_t sfromsiz, int status,
 
 static int soc = 0; /* inetd (master) has handed us the port as stdin */
 
-#ifndef MAXDOMNAME
+#ifndef MAXLOGNAME
 #define MAXLOGNAME 16           /* should find out for real */
+#endif
+#ifndef MAXDOMNAME
 #define MAXDOMNAME 20           /* should find out for real */
 #endif
 
