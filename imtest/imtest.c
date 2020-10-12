@@ -1980,7 +1980,7 @@ static void send_recv_test(void)
 
     end=time(NULL);
 
-    printf("took %ld seconds\n", end - start);
+    printf("took " TIME_T_FMT " seconds\n", end - start);
 }
 
 /*********************************** POP3 ************************************/

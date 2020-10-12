@@ -5491,7 +5491,7 @@ static int extract_attachment(const char *type, const char *subtype,
                     "Keep-Alive: timeout=%u\r\n"
                     "Accept: text/plain\r\n"
                     "Content-Type: %s/%s%s\r\n"
-                    "Content-Length: %ld\r\n"
+                    "Content-Length: " SIZE_T_FMT "\r\n"
                     "\r\n",
                     ext->path, guidstr, HTTP_VERSION,
                     (int) hostlen, be->hostname, CYRUS_VERSION, IDLE_TIMEOUT,
