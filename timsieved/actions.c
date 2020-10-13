@@ -77,8 +77,7 @@ extern int sieved_userisadmin;
 extern sieve_interp_t *interp;
 
 static char *sieve_dir_config = NULL;
-
-static const char *sieved_userid = NULL;
+static char *sieved_userid = NULL;
 
 int actions_init(void)
 {
@@ -100,14 +99,15 @@ int actions_init(void)
 
 int actions_setuser(const char *userid)
 {
-  char *user, *domain = NULL;
+  char *domain = NULL;
   struct buf buf = BUF_INITIALIZER;
   int result, ret = TIMSIEVE_OK;
 
-  sieved_userid = user = xstrdup(userid);
+  free(sieved_userid);
+  sieved_userid = xstrdup(userid);
   if (config_virtdomains) {
       /* split the user and domain */
-      if ((domain = strrchr(user, '@'))) *domain++ = '\0';
+      if ((domain = strrchr(sieved_userid, '@'))) *domain++ = '\0';
   }
 
   buf_setcstr(&buf, sieve_dir_config);
@@ -121,8 +121,8 @@ int actions_setuser(const char *userid)
       buf_appendcstr(&buf, "/global");
   }
   else {
-      char hash = (char) dir_hash_c(user, config_fulldirhash);
-      buf_printf(&buf, "/%c/%s", hash, user);
+      char hash = (char) dir_hash_c(sieved_userid, config_fulldirhash);
+      buf_printf(&buf, "/%c/%s", hash, sieved_userid);
   }
 
   /* rejoin user and domain */
