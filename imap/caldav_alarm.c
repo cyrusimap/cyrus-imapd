@@ -642,7 +642,7 @@ static int read_lastalarm(struct mailbox *mailbox,
 }
 
 /* add a calendar alarm */
-EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox,
+HIDDEN int caldav_alarm_add_record(struct mailbox *mailbox,
                                      const struct index_record *record,
                                      icalcomponent *ical)
 {
@@ -677,7 +677,7 @@ EXPORTED int caldav_alarm_sync_nextcheck(struct mailbox *mailbox, const struct i
 }
 
 /* delete all alarms matching the event */
-EXPORTED int caldav_alarm_delete_record(const char *mboxname, uint32_t imap_uid)
+HIDDEN int caldav_alarm_delete_record(const char *mboxname, uint32_t imap_uid)
 {
     return update_alarmdb(mboxname, imap_uid, 0);
 }
@@ -688,7 +688,7 @@ EXPORTED int caldav_alarm_delete_record(const char *mboxname, uint32_t imap_uid)
     ";"
 
 /* delete all alarms matching the event */
-EXPORTED int caldav_alarm_delete_mailbox(const char *mboxname)
+HIDDEN int caldav_alarm_delete_mailbox(const char *mboxname)
 {
     struct sqldb_bindval bval[] = {
         { ":mboxname",  SQLITE_TEXT, { .s = mboxname  } },
@@ -708,7 +708,7 @@ EXPORTED int caldav_alarm_delete_mailbox(const char *mboxname)
     ";"
 
 /* delete all alarms matching the event */
-EXPORTED int caldav_alarm_delete_user(const char *userid)
+HIDDEN int caldav_alarm_delete_user(const char *userid)
 {
     mbname_t *mbname = mbname_from_userid(userid);
     const char *mboxname = mbname_intname(mbname);

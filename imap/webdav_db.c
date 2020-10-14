@@ -481,7 +481,7 @@ EXPORTED int webdav_delete(struct webdav_db *webdavdb, unsigned rowid)
 
 #define CMD_DELMBOX "DELETE FROM dav_objs WHERE mailbox = :mailbox;"
 
-EXPORTED int webdav_delmbox(struct webdav_db *webdavdb, const char *mailbox)
+HIDDEN int webdav_delmbox(struct webdav_db *webdavdb, const char *mailbox)
 {
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },

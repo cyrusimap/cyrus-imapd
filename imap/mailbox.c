@@ -178,6 +178,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
 static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype);
 
 #ifdef WITH_DAV
+static struct webdav_db *mailbox_open_webdav(struct mailbox *);
 static int mailbox_commit_dav(struct mailbox *mailbox);
 static int mailbox_abort_dav(struct mailbox *mailbox);
 static int mailbox_delete_dav(struct mailbox *mailbox);
@@ -2134,7 +2135,7 @@ static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype)
 }
 
 #ifdef WITH_DAV
-EXPORTED struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox)
+HIDDEN struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox)
 {
     if (!mailbox->local_caldav) {
         mailbox->local_caldav = caldav_open_mailbox(mailbox);
@@ -2148,7 +2149,7 @@ EXPORTED struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox)
     return mailbox->local_caldav;
 }
 
-EXPORTED struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox)
+HIDDEN struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox)
 {
     if (!mailbox->local_carddav) {
         mailbox->local_carddav = carddav_open_mailbox(mailbox);
@@ -2162,7 +2163,7 @@ EXPORTED struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox)
     return mailbox->local_carddav;
 }
 
-EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
+static struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
 {
     if (!mailbox->local_webdav) {
         mailbox->local_webdav = webdav_open_mailbox(mailbox);

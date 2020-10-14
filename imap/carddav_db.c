@@ -904,7 +904,7 @@ EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid)
 
 #define CMD_DELMBOX "DELETE FROM vcard_objs WHERE mailbox = :mailbox;"
 
-EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox)
+HIDDEN int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox)
 {
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
