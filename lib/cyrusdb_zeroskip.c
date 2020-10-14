@@ -593,6 +593,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_zeroskip =
     &cyrusdb_zeroskip_store,
     &cyrusdb_zeroskip_delete,
 
+    NULL, /* lock */
     &cyrusdb_zeroskip_commit,
     &cyrusdb_zeroskip_abort,
 

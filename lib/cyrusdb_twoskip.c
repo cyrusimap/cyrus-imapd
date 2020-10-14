@@ -2616,6 +2616,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_twoskip =
     &store,
     &delete,
 
+    NULL, /* lock */
     &mycommit,
     &myabort,
 

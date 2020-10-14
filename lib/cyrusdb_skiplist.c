@@ -2486,6 +2486,7 @@ EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
     &store,
     &mydelete,
 
+    NULL, /* lock */
     &mycommit,
     &myabort,
 
