@@ -1000,7 +1000,7 @@ struct seqset *index_vanished(struct index_state *state,
         }
 
         const message_t *msg;
-        struct mailbox_iter *iter = mailbox_iter_init(mailbox, params->modseq, ITER_SKIP_EXPUNGED);
+        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
         mailbox_iter_startuid(iter, prevuid);
 
         /* possible efficiency improvement - use "seq_getnext" on seq
