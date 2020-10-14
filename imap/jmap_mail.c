@@ -13208,10 +13208,18 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
     r = msgrecord_get_message(mr, &msg);
     if (!r) r = message_get_field(msg, hdrname, MESSAGE_RAW, &buf);
     if (!r && buf_len(&buf)) {
+        static int initialized_re = 0;
+        static regex_t whitespace_re;
         unsigned outlen;
 
-        /* trim and leading/trailing whitespace */
-        buf_trim(&buf);
+        if (!initialized_re) {
+            r = regcomp(&whitespace_re, "([ \t\r\n]+|\xC2\xA0)", REG_EXTENDED);
+            assert(r == 0);
+            initialized_re = 1;
+        }
+
+        /* eliminate whitespace */
+        buf_replace_all_re(&buf, &whitespace_re, "");
 
         /* base64-decode the data */
         r = sasl_decode64(buf_base(&buf), buf_len(&buf),
