@@ -148,6 +148,19 @@ HIDDEN int cyrusdb_zeroskip_unlink(const char *fname __attribute__((unused)),
     return CYRUSDB_OK;
 }
 
+HIDDEN int cyrusdb_zeroskip_lock(struct dbengine *dbe, struct txn **mytid,
+                                 int flags __attribute__((unused)))
+{
+    struct txn *tid = xmalloc(sizeof(struct txn));
+    int r = zsdb_transaction_begin(dbe->db, &tid->t);
+    if (r != ZS_OK) {
+        free(tid);
+        return CYRUSDB_INTERNAL;
+    }
+    *mytid = tid;
+    return 0;
+}
+
 static int cyrusdb_zeroskip_open(const char *fname,
                                  int flags,
                                  struct dbengine **ret,
@@ -185,12 +198,8 @@ static int cyrusdb_zeroskip_open(const char *fname,
     *ret = dbe;
 
     if (mytid) {
-        *mytid = xmalloc(sizeof(struct txn));
-        r = zsdb_transaction_begin(dbe->db, &(*mytid)->t);
-        if (r != ZS_OK) {
-            r = CYRUSDB_INTERNAL;
-            goto close_db;
-        }
+        r = cyrusdb_zeroskip_lock(dbe, mytid, flags);
+        if (r) goto close_db;
     }
 
     r = CYRUSDB_OK;
@@ -593,7 +602,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_zeroskip =
     &cyrusdb_zeroskip_store,
     &cyrusdb_zeroskip_delete,
 
-    NULL, /* lock */
+    &cyrusdb_zeroskip_lock,
     &cyrusdb_zeroskip_commit,
     &cyrusdb_zeroskip_abort,
 
