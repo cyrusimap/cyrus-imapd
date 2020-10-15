@@ -320,7 +320,6 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     if (r) {
         cyrusdb_abort(open->s.db, open->s.txn);
         _conv_remove(&open->s);
-        free(open);
         return r;
     }
 
