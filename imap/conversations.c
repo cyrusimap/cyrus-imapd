@@ -169,7 +169,7 @@ static int _init_counted(struct conversations_state *state,
         val = config_getstring(IMAPOPT_CONVERSATIONS_COUNTED_FLAGS);
         if (!val) val = "";
         vallen = strlen(val);
-        if (vallen) {
+        if (vallen && !state->is_shared) {
             r = cyrusdb_store(state->db, CFKEY, strlen(CFKEY),
                     val, vallen, &state->txn);
             if (r) {
@@ -317,14 +317,6 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     /* load or initialize counted flags */
     cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
     r = _init_counted(&open->s, val, vallen);
-    if (r == CYRUSDB_READONLY) {
-        /* racy: drop shared lock, grab write lock */
-        cyrusdb_commit(open->s.db, open->s.txn);
-        open->s.txn = NULL;
-        flags &= ~CYRUSDB_SHARED;
-        r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
-        if (!r) r = _init_counted(&open->s, val, vallen);
-    }
     if (r) {
         cyrusdb_abort(open->s.db, open->s.txn);
         _conv_remove(&open->s);
