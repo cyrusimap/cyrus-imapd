@@ -1,87 +1,28 @@
 Mailing Lists
 =============
 
+Cyrus is discussed at a few official mailing lists hosted by
+`Topicbox <https://cyrus.topicbox.com/>`_ — which is, itself, powered by Cyrus!
 
-* cyrus-announce@lists.andrew.cmu.edu
+At the links below you can browse the archives and subscribe to the lists.  You
+can request a daily summary if you don't want to receive every message in real
+time.
+
+* `Cyrus Announcements <https://cyrus.topicbox.com/groups/announce>`_
 
     This is a low-traffic mailing list used  only for announcements
     related to Cyrus releases.
 
-* info-cyrus@lists.andrew.cmu.edu
+* `Cyrus Info <https://cyrus.topicbox.com/groups/info>`_
 
     This is the general mailing list regarding all aspects of Cyrus
     software. The bulk of the discussion is about the IMAP server.
 
-* cyrus-sasl@lists.andrew.cmu.edu
+* `Cyrus SASL <https://cyrus.topicbox.com/groups/sasl>`_
 
     This is the mailing list specifically about the Cyrus SASL library.
 
-* cyrus-devel@lists.andrew.cmu.edu
+* `Cyrus Development <https://cyrus.topicbox.com/groups/devel>`_
 
     This is a mailing list for the use of Cyrus developers and package
     maintainers, for all the Cyrus software.
-
-Archives
---------
-
-.. TODO::
-
-    Which is the best url for the http list archive? Pipermail or the
-    other one? Does the anonymous IMAP version still work?
-
-The list archives can be accessed as follows:
-
-* **cyrus-announce**
-    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-announce>`__ : `Web/HTTP <http://asg.web.cmu.edu/bb/archive.cyrus-announce>`__ or `Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-announce/>`__
-* **info-cyrus**
-    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.info-cyrus>`__ : `Web/HTTP <http://asg.web.cmu.edu/bb/archive.info-cyrus>`__ or `Pipermail <http://lists.andrew.cmu.edu/pipermail/info-cyrus/>`__
-* **cyrus-sasl**
-    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-sasl>`__: `Web/HTTP <http://asg.web.cmu.edu/bb/archive.cyrus-sasl>`__ or `Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-sasl/>`__
-* **cyrus-devel**
-    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-devel>`__ : `Web/HTTP <http://asg.web.cmu.edu/bb/archive.cyrus-devel>`__ or `Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-devel/>`__
-
-Subscribe/Unsubscribe
----------------------
-
-The mailing lists are managed by GNU Mailman. You can manage your list subscription options by visiting
-https://lists.andrew.cmu.edu/
-
-or send mail to the following addresses to subscribe:
-
-    To subscribe to cyrus-announce send email to
-    cyrus-announce-subscribe@lists.andrew.cmu.edu.
-
-    To subscribe to info-cyrus send email to
-    info-cyrus-subscribe@lists.andrew.cmu.edu.
-
-    To subscribe to cyrus-sasl send email to
-    cyrus-sasl-subscribe@lists.andrew.cmu.edu.
-
-    To subscribe to cyrus-devel send email to
-    cyrus-devel-subscribe@lists.andrew.cmu.edu.
-
-    To subscribe to cyrus-bugzilla send email to
-    cyrus-bugzilla-subscribe@lists.andrew.cmu.edu.
-
-Or to these addresses to unsubscribe:
-
-    To unsubscribe from cyrus-announce email
-    cyrus-announce-unsubscribe@lists.andrew.cmu.edu
-
-    To unsubscribe from info-cyrus email
-    info-cyrus-unsubscribe@lists.andrew.cmu.edu
-
-    To unsubscribe from cyrus-sasl email
-    cyrus-sasl-unsubscribe@lists.andrew.cmu.edu
-
-    To unsubscribe from cyrus-devel email
-    cyrus-devel-unsubscribe@lists.andrew.cmu.edu
-
-    To unsubscribe from cyrus-bugzilla email
-    cyrus-bugzilla-unsubscribe@lists.andrew.cmu.edu
-
-Digest Lists
-------------
-
-All of the lists have digest versions. To get the list as a digest, subscribe normally, and then set your list options by visiting the Mailman list info page at https://lists.andrew.cmu.edu/.
-
