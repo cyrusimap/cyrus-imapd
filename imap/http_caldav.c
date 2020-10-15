@@ -4342,8 +4342,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
         if (icaltime_is_date(dtend) != icaltime_is_date(dtstart) ||
 //            !icaltime_get_timezone(dtend) != !icaltime_get_timezone(dtstart) ||
-            icaltime_compare(dtend, dtstart) < 0) {
-            txn->error.desc = "DTEND occurs before DTSTART";
+            icaltime_compare(dtend, dtstart) < 1) {
+            txn->error.desc = "DTEND must occur after DTSTART";
             txn->error.precond = CALDAV_VALID_DATA;
             ret = HTTP_FORBIDDEN;
             goto done;
@@ -4378,8 +4378,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         if (!icaltime_is_null_time(dtend)) {
             dtstart = icalcomponent_get_dtstart(nextcomp);
 
-            if (icaltime_compare(dtend, dtstart) < 0) {
-                txn->error.desc = "DTEND occurs before DTSTART";
+            if (icaltime_is_date(dtend) != icaltime_is_date(dtstart) ||
+                icaltime_compare(dtend, dtstart) < 1) {
+                txn->error.desc = "DTEND must occur after DTSTART";
                 txn->error.precond = CALDAV_VALID_OBJECT;
                 ret = HTTP_FORBIDDEN;
                 goto done;
