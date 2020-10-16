@@ -538,6 +538,12 @@ int deliver_mailbox(FILE *f,
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
     time_t internaldate = 0;
 
+    /* make sure we have an IMAP mailbox */
+    if (mboxname_isdeletedmailbox(mailboxname, NULL) ||
+        mboxname_isnonimapmailbox(mailboxname, 0/*mbtype*/)) {
+        return IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
     if (!savedate) {
         /* make sure delivery is enabled for this mailbox */
         r = delivery_enabled_for_mailbox(mailboxname);
