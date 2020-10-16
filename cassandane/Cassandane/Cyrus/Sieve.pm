@@ -729,6 +729,36 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
+sub test_deliver_fileinto_create_nonimap
+    :needs_component_sieve :min_version_3_0 :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    # sieve script should not be able to create a non-IMAP mailbox
+    my $target = "INBOX.#calendars.target";
+
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "mailbox"];
+fileinto :create "$target";
+EOF
+    , username => 'cassandane');
+
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1, users => [ 'cassandane' ]);
+
+    # autosievefolder should have failed to create the target,
+    # because the the target is in a non-IMAP namespace
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->select($target);
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $self->assert_matches(qr/does not exist/i, $admintalk->get_last_error());
+
+    # then the fileinto should fail,
+    # and the message be delivered to inbox instead
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
 sub test_deliver_fileinto_dot
     :UnixHierarchySep
     :needs_component_sieve
