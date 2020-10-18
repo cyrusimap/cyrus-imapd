@@ -723,4 +723,125 @@ sub test_rename_deepfolder_intermediates
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
 }
 
+sub test_mailbox_rename_to_inbox_sub
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.INBOX.Child") || die;
+    $imaptalk->create("INBOX.Example.INBOX") || die;
+    $imaptalk->create("INBOX.Example.Other") || die;
+    $imaptalk->create("INBOX.Top") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    xlog $self, "fail move Example.INBOX to top level";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{INBOX} => {
+          parentId => undef,
+        }
+      }
+    });
+    $self->assert_null($res->{updated});
+    $self->assert_str_equals("parentId", $res->{notUpdated}{$mboxids{INBOX}}{properties}[0]);
+
+    xlog $self, "fail move Top to inbox";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{Top} => {
+          name => 'inbox',
+        }
+      }
+    });
+    $self->assert_null($res->{updated});
+    $self->assert_str_equals("name", $res->{notUpdated}{$mboxids{Top}}{properties}[0]);
+
+    xlog $self, "fail move Example.Other to InBox";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{Other} => {
+          name => "InBox",
+          parentId => undef,
+        }
+      }
+    });
+    $self->assert_null($res->{updated});
+    $self->assert_str_equals("name", $res->{notUpdated}{$mboxids{Other}}{properties}[0]);
+
+    # no updates YET!
+    $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids2 = map { $_->{name} => $_->{id} } @{$res->{list}};
+    $self->assert_deep_equals(\%mboxids, \%mboxids2);
+
+    xlog $self, "Move Example.INBOX again to sub of Inbox (allowed)";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{INBOX} => {
+          parentId => $mboxids{Inbox},
+          isSeenShared => $JSON::true,
+        }
+      }
+    });
+    # this will have content which is NULL, but it should exist
+    $self->assert(exists $res->{updated}{$mboxids{INBOX}});
+    $self->assert_null($res->{notUpdated});
+
+    # make sure we didn't create the deep tree!
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert(not grep { m/INBOX\.INBOX\.INBOX/ } @syslog);
+}
+
+sub test_mailbox_rename_sub_inbox_both
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.INBOX.Child") || die;
+    $imaptalk->create("INBOX.Example.INBOX") || die;
+    $imaptalk->create("INBOX.Example.Other") || die;
+    $imaptalk->create("INBOX.Top") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    xlog $self, "move Example.INBOX to top level and rename at same time";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{INBOX} => {
+          parentId => undef,
+          name => "INBOX1",
+        }
+      }
+    });
+    $self->assert(exists $res->{updated}{$mboxids{INBOX}});
+    $self->assert_null($res->{notUpdated});
+
+    # make sure we didn't create the deep tree!
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert(not grep { m/INBOX\.INBOX\.INBOX/ } @syslog);
+}
 1;
