@@ -880,4 +880,220 @@ sub test_mailbox_rename_inside_deep
     # rejected due to being a child
     $self->assert_str_equals("parentId", $res->{notUpdated}{$mboxids{A}}{properties}[0]);
 }
+
+sub test_mailbox_rename_to_clash_parent_only
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.A.B") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    $imaptalk->create("INBOX.B") || die;
+
+    xlog $self, "move INBOX.A.B to be a child of INBOX";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{B} => {
+          parentId => undef,
+        }
+      }
+    });
+
+    # rejected due to being a child
+    $self->assert_null($res->{updated});
+    $self->assert_not_null($res->{notUpdated}{$mboxids{B}});
+
+    # there were no renames
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert(not grep { m/auditlog: rename/ } @syslog);
+}
+
+sub test_mailbox_rename_to_clash_name_only_deep
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.A.B") || die;
+    $imaptalk->create("INBOX.C") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    $imaptalk->create("INBOX.C.B") || die;
+
+    xlog $self, "move INBOX.A.B to INBOX.C.B";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{B} => {
+          parentId => $mboxids{C},
+        }
+      }
+    });
+
+    # rejected due to name existing
+    $self->assert_null($res->{updated});
+    $self->assert_not_null($res->{notUpdated}{$mboxids{B}});
+
+    # there were no renames
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert(not grep { m/auditlog: rename/ } @syslog);
+}
+
+sub test_mailbox_rename_to_clash_name_only
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.B") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    xlog $self, "move INBOX.A to INBOX.B";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{A} => {
+          name => "B",
+        }
+      }
+    });
+
+    # rejected due to name existing
+    $self->assert_null($res->{updated});
+    $self->assert_not_null($res->{notUpdated}{$mboxids{A}});
+
+    $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids2 = map { $_->{name} => $_->{id} } @{$res->{list}};
+    $self->assert_deep_equals(\%mboxids, \%mboxids2);
+
+    # there were no renames
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert(not grep { m/auditlog: rename/ } @syslog);
+}
+
+sub test_mailbox_rename_to_clash_both
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.Foo") || die;
+    $imaptalk->create("INBOX.Foo.A") || die;
+    $imaptalk->create("INBOX.Bar") || die;
+    $imaptalk->create("INBOX.Bar.B") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    xlog $self, "move INBOX.Foo.A to INBOX.Bar.B";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{A} => {
+          parentId => $mboxids{Bar},
+          name => "B",
+        }
+      }
+    });
+
+    # rejected due to name existing
+    $self->assert_str_equals("name", $res->{notUpdated}{$mboxids{A}}{properties}[0]);
+
+    $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids2 = map { $_->{name} => $_->{id} } @{$res->{list}};
+    $self->assert_deep_equals(\%mboxids, \%mboxids2);
+
+    # there were no renames
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert(not grep { m/auditlog: rename/ } @syslog);
+}
+
+sub test_mailbox_case_difference
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.Foo.Hi") || die;
+    $imaptalk->create("INBOX.A") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    xlog $self, "move INBOX.A to INBOX.Foo.B";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{A} => {
+          name => "Hi",
+          parentId => $mboxids{Foo},
+        },
+        $mboxids{Hi} => {
+          name => "HI",
+        }
+      }
+    });
+
+    $self->assert_null($res->{notUpdated});
+    $self->assert(exists $res->{updated}{$mboxids{A}});
+    $self->assert(exists $res->{updated}{$mboxids{Hi}});
+}
+
 1;
