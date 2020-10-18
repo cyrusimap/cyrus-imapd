@@ -844,4 +844,40 @@ sub test_mailbox_rename_sub_inbox_both
     my @syslog = $self->{instance}->getsyslog();
     $self->assert(not grep { m/INBOX\.INBOX\.INBOX/ } @syslog);
 }
+
+sub test_mailbox_rename_inside_deep
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.A.B") || die;
+    $imaptalk->create("INBOX.A.B.C") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    xlog $self, "move INBOX.A to be a child of INBOX.A.B.C";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{A} => {
+          parentId => $mboxids{C},
+        }
+      }
+    });
+
+    # rejected due to being a child
+    $self->assert_str_equals("parentId", $res->{notUpdated}{$mboxids{A}}{properties}[0]);
+}
 1;
