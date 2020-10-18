@@ -2279,6 +2279,12 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
         goto done;
     }
 
+    if (args->is_toplevel && !strcasecmp(args->name, "inbox")) {
+        // you can't write a top-level mailbox called "INBOX" in any case
+        jmap_parser_invalid(&parser, "name");
+        goto done;
+    }
+
     /* Encode the mailbox name for IMAP. */
     mboxname = _mbox_newname(args->name, mbparent->name, args->is_toplevel);
     if (!mboxname) {
@@ -2640,6 +2646,14 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         if (args->name && strcmp(name, args->name)) {
             name = args->name;
             force_rename = 1;
+        }
+
+        if (is_toplevel && !strcasecmp(name, "inbox")) {
+            /* you can't write a top-level mailbox called "INBOX" in any case.  If the old
+             * name wasn't "inbox" then the name is bad, otherwise it's the NULL parentId
+             * that is the problem */
+            jmap_parser_invalid(&parser, strcasecmp(oldname, "inbox") ? "name" : "parentId");
+            goto done;
         }
 
         /* Do old and new mailbox names differ? */
