@@ -100,6 +100,7 @@
 #include "proc.h"
 #include "retry.h"
 #include "seen.h"
+#include "user.h"
 #include "util.h"
 #include "sequence.h"
 #include "statuscache.h"
@@ -222,12 +223,11 @@ EXPORTED int open_mailboxes_exist()
 
 static struct mailboxlist *create_listitem(const char *name)
 {
-    struct mailboxlist *item = xmalloc(sizeof(struct mailboxlist));
+    struct mailboxlist *item = xzmalloc(sizeof(struct mailboxlist));
     item->next = open_mailboxes;
     open_mailboxes = item;
 
     item->nopen = 1;
-    item->l = NULL;
     zeromailbox(item->m);
     item->m.name = xstrdup(name);
     /* ensure we never print insane times */
@@ -928,7 +928,7 @@ static int mailbox_open_index(struct mailbox *mailbox)
     return 0;
 }
 
-static int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype)
+static int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype, int index_locktype)
 {
     struct mailbox *mailbox = &listitem->m;
     int r;
@@ -936,6 +936,20 @@ static int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype)
     mailbox_release_resources(mailbox);
 
     mboxname_release(&listitem->l);
+    mboxname_release(&mailbox->local_namespacelock);
+
+    char *userid = mboxname_to_userid(mailbox->name);
+    if (userid) {
+        int haslock = user_isnamespacelocked(userid);
+        if (haslock) {
+            if (index_locktype != LOCK_SHARED) assert(haslock != LOCK_SHARED);
+        }
+        else {
+            mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
+        }
+        free(userid);
+    }
+
     r = mboxname_lock(mailbox->name, &listitem->l, locktype);
     if (r) return r;
 
@@ -979,6 +993,20 @@ static int mailbox_open_advanced(const char *name,
 
     listitem = create_listitem(name);
     mailbox = &listitem->m;
+
+    // lock the user namespace FIRST before the mailbox namespace
+    char *userid = mboxname_to_userid(name);
+    if (userid) {
+        int haslock = user_isnamespacelocked(userid);
+        if (haslock) {
+            if (index_locktype != LOCK_SHARED) assert(haslock != LOCK_SHARED);
+        }
+        else {
+            int locktype = index_locktype;
+            mailbox->local_namespacelock = user_namespacelock_full(userid, locktype);
+        }
+        free(userid);
+    }
 
     r = mboxname_lock(name, &listitem->l, locktype);
     if (r) {
@@ -1110,7 +1138,7 @@ EXPORTED int mailbox_setversion(struct mailbox *mailbox, int version)
         /* we need an exclusive lock on the listitem because we're renaming
          * index files, so release locks and then go full exclusive */
         mailbox_unlock_index(mailbox, NULL);
-        r = mailbox_mboxlock_reopen(listitem, LOCK_EXCLUSIVE);
+        r = mailbox_mboxlock_reopen(listitem, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE);
 
         /* we need to re-open the index because we dropped the mboxname lock,
          * so the file may have changed */
@@ -1184,7 +1212,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
         /* if we deleted the mailbox we MUST clean it up or the files will leak,
          * so wait until the other locks are cleared */
         if (mailbox->i.options & OPT_MAILBOX_DELETED) locktype = LOCK_EXCLUSIVE;
-        int r = mailbox_mboxlock_reopen(listitem, locktype);
+        int r = mailbox_mboxlock_reopen(listitem, locktype, LOCK_EXCLUSIVE);
         /* we need to re-open the index because we dropped the mboxname lock,
          * so the file may have changed */
         if (!r) r = mailbox_open_index(mailbox);
@@ -1224,6 +1252,9 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
     }
 
     if (listitem->l) mboxname_release(&listitem->l);
+
+    if (mailbox->local_namespacelock)
+        mboxname_release(&mailbox->local_namespacelock);
 
     remove_listitem(listitem);
 }
@@ -2250,7 +2281,20 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     assert(mailbox->index_fd != -1);
     assert(!mailbox->index_locktype);
 
-    r = 0;
+    char *userid = mboxname_to_userid(mailbox->name);
+    if (userid) {
+        if (!user_isnamespacelocked(userid)) {
+            struct mailboxlist *listitem = find_listitem(mailbox->name);
+            assert(listitem);
+            assert(&listitem->m == mailbox);
+            r = mailbox_mboxlock_reopen(listitem, LOCK_SHARED, locktype);
+            if (locktype == LOCK_SHARED)
+                mailbox->is_readonly = 1;
+            if (!r) r = mailbox_open_index(mailbox);
+        }
+        free(userid);
+        if (r) return r;
+    }
 
     if (locktype == LOCK_EXCLUSIVE) {
         /* handle read-only case cleanly - we need to re-open read-write first! */
@@ -2420,6 +2464,11 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
         if (r)
             syslog(LOG_ERR, "Error committing to conversations database for mailbox %s: %s",
                    mailbox->name, error_message(r));
+    }
+
+    // release the namespacelock here
+    if (mailbox->local_namespacelock) {
+        mboxname_release(&mailbox->local_namespacelock);
     }
 }
 
