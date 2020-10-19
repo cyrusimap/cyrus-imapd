@@ -75,6 +75,7 @@
 #include "strhash.h"
 #include "sync_log.h"
 #include "syslog.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -101,6 +102,7 @@
 
 struct conversations_open {
     struct conversations_state s;
+    struct mboxlock *local_namespacelock;
     struct conversations_open *next;
 };
 
@@ -307,6 +309,17 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
 
     open = xzmalloc(sizeof(struct conversations_open));
 
+    if (userid) {
+        int haslock = user_isnamespacelocked(userid);
+        if (haslock) {
+            if (!shared) assert(haslock != LOCK_SHARED);
+        }
+        else {
+            int locktype = shared ? LOCK_SHARED : LOCK_EXCLUSIVE;
+            open->local_namespacelock = user_namespacelock_full(userid, locktype);
+        }
+    }
+
     /* open db */
     open->s.is_shared = shared;
     int flags = CYRUSDB_CREATE | (shared ? (CYRUSDB_SHARED|CYRUSDB_NOCRC) : CYRUSDB_CONVERT);
@@ -428,6 +441,8 @@ static void _conv_remove(struct conversations_state *state)
                 strarray_free(cur->s.counted_flags);
             if (cur->s.folder_names)
                 strarray_free(cur->s.folder_names);
+            if (cur->local_namespacelock)
+                mboxname_release(&cur->local_namespacelock);
             free(cur);
             return;
         }
