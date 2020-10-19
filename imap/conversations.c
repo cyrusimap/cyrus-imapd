@@ -99,6 +99,11 @@
 
 #define DB config_conversations_db
 
+struct conversations_open {
+    struct conversations_state s;
+    struct conversations_open *next;
+};
+
 static struct conversations_open *open_conversations;
 
 static conv_status_t NULLSTATUS = CONV_STATUS_INIT;
