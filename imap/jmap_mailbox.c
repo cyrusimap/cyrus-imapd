@@ -3345,16 +3345,17 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
 }
 
 struct mboxset_entry {
-    char *old_parent_id; // NULL if not updated
     char *parent_id;
     char *name;
+    int changed_parent;
+    int is_inbox;
+    int is_toplevel;
     int is_deleted;
 };
 
 static void _mboxset_entry_free(void *entryp)
 {
     struct mboxset_entry *entry = entryp;
-    free(entry->old_parent_id);
     free(entry->parent_id);
     free(entry->name);
     free(entryp);
@@ -3392,9 +3393,21 @@ static void _mboxset_state_mkentry_cb(const char *imapname, void *idptr, void *r
 
     /* Find parent */
     mbentry_t *pmbentry = NULL;
-    if (_findparent(imapname, &pmbentry) == 0) {
+
+    size_t nboxes = strarray_size(mbname_boxes(mbname));
+    switch (nboxes) {
+    case 0:
+        entry->is_inbox = 1;
+        break;
+    case 1:
+        entry->is_toplevel = 1;
+        break;
+    default:
+        assert(_findparent(imapname, &pmbentry) == 0);
         entry->parent_id = xstrdup(pmbentry->uniqueid);
+        break;
     }
+
     mboxlist_entry_free(&pmbentry);
 
     /* Add entry */
@@ -3410,37 +3423,43 @@ static void _mboxset_state_conflict_cb(const char *id, void *data, void *rock)
     if (state->has_conflict || entry->is_deleted) {
         return;
     }
-    if (entry->parent_id == NULL) {
+    if (entry->is_inbox) {
         /* This is the INBOX. There can't be a conflict. */
         return;
     }
-    struct mboxset_entry *parent = hash_lookup(entry->parent_id, state->entry_by_id);
-    if (!parent) {
-        /* This is an internal error in the state. It can't be valid. */
-        state->has_conflict = 1;
-        return;
+    if (entry->parent_id) {
+        struct mboxset_entry *parent = hash_lookup(entry->parent_id, state->entry_by_id);
+        if (!parent) {
+            /* This is an internal error in the state. It can't be valid. */
+            state->has_conflict = 1;
+            return;
+        }
+        /* A mailbox must not have a deleted parent. */
+        if (parent->is_deleted) {
+            state->has_conflict = 1;
+            return;
+        }
     }
-    /* A mailbox must not have a deleted parent. */
-    if (parent->is_deleted) {
-        state->has_conflict = 1;
-        return;
-    }
+    const char *parent_id = "";
+    if (entry->parent_id) parent_id = entry->parent_id;
+
     /* A mailbox must not have siblings with the same name. */
-    strarray_t *siblings = hash_lookup(entry->parent_id, state->siblings_by_parent_id);
+    strarray_t *siblings = hash_lookup(parent_id, state->siblings_by_parent_id);
     if (!siblings) {
         siblings = strarray_new();
-        hash_insert(entry->parent_id, siblings, state->siblings_by_parent_id);
+        hash_insert(parent_id, siblings, state->siblings_by_parent_id);
     }
     int i;
     for (i = 0; i < strarray_size(siblings); i++) {
-        if (!strcasecmp(entry->name, strarray_nth(siblings, i))) {
+        if (!strcmp(entry->name, strarray_nth(siblings, i))) {
             state->has_conflict = 1;
             return;
         }
     }
     strarray_append(siblings, entry->name);
+
     /* A mailbox must not be parent of its parents. */
-    const char *parent_id = entry->parent_id;
+    parent_id = entry->parent_id;
     while (parent_id) {
         if (!strcmp(id, parent_id)) {
             state->has_conflict = 1;
@@ -3457,8 +3476,6 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
                                            struct mboxset_ops *ops)
 {
     struct buf buf = BUF_INITIALIZER;
-    char *inboxname = mboxname_user_mbox(state->req->accountid, NULL);
-    const char *inbox_id = hash_lookup(inboxname, state->id_by_imapname);
 
     /* Apply create and update */
     int i;
@@ -3467,7 +3484,11 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
         if (args->creation_id) {
             /* Create entry for in-memory mailbox tree */
             struct mboxset_entry *entry = xzmalloc(sizeof(struct mboxset_entry));
-            entry->parent_id = xstrdup(args->parent_id ? args->parent_id : inbox_id);
+            // it's gotta have one or the other!
+            if (args->is_toplevel)
+                entry->is_toplevel = 1;
+            else
+                entry->parent_id = xstrdup(args->parent_id);
             entry->name = xstrdup(args->name);
             buf_putc(&buf, '#');
             buf_appendcstr(&buf, args->creation_id);
@@ -3477,18 +3498,31 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
         else {
             /* Update entry in in-memory mailbox tree */
             struct mboxset_entry *entry = hash_lookup(args->mbox_id, state->entry_by_id);
-            if (!entry) goto done;
+            if (!entry) {
+                state->has_conflict = 1;
+                break;
+            }
             if (args->name) {
                 free(entry->name);
                 entry->name = xstrdup(args->name);
             }
+            if (args->is_toplevel) {
+                if (!entry->is_toplevel)
+                    entry->changed_parent = 1;
+                free(entry->parent_id);
+                entry->parent_id = NULL;
+                entry->is_toplevel = 1;
+            }
             if (args->parent_id) {
-                free(entry->old_parent_id);
-                entry->old_parent_id = entry->parent_id;
+                if (entry->is_toplevel || !strcmpsafe(entry->parent_id, args->parent_id))
+                    entry->changed_parent = 1;
+                free(entry->parent_id);
                 entry->parent_id = xstrdup(args->parent_id);
+                entry->is_toplevel = 0;
             }
         }
     }
+
     /* Apply destroy */
     for (i = 0; i < strarray_size(ops->del); i++) {
         const char *mbox_id = strarray_nth(ops->del, i);
@@ -3505,8 +3539,6 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
         hash_enumerate(state->entry_by_id, _mboxset_state_conflict_cb, state);
     }
 
-done:
-    free(inboxname);
     buf_free(&buf);
 }
 
@@ -3563,7 +3595,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
                     continue;
                 }
                 struct mboxset_entry *entry = hash_lookup(args->mbox_id, state->entry_by_id);
-                if (entry->old_parent_id) {
+                if (entry->changed_parent) {
                     state->has_conflict = 1;
                     buf_printf(&conflict_desc,
                             "\nMailbox %s has protected specialuse %s. "
