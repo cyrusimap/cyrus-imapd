@@ -404,49 +404,49 @@ sub badscript_common
     ($res, $errs) = $self->compile_sieve_script('badreject1',
         "reject \"foo\"\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 1: reject (?:extension )?MUST be enabled/, $errs);
+    $self->assert_matches(qr/reject.*MUST be enabled/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badreject2',
         "require [\"reject\"];\nreject\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 3: syntax error.*expecting STRING/, $errs);
+    $self->assert_matches(qr/syntax error/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badreject3',
         "require [\"reject\"];\nreject 42\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 2: syntax error.*expecting STRING/, $errs);
+    $self->assert_matches(qr/syntax error/, $errs);
 
     # TODO: test UTF-8 verification of the string parameter
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto1',
         "fileinto \"foo\"\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 1: fileinto (?:extension )?MUST be enabled/, $errs);
+    $self->assert_matches(qr/fileinto.*MUST be enabled/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto2',
         "require [\"fileinto\"];\nfileinto\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 3: syntax error.*unexpected.*\$end/, $errs);
+    $self->assert_matches(qr/syntax error/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto3',
         "require [\"fileinto\"];\nfileinto 42\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 2: syntax error.*unexpected.*NUMBER/, $errs);
+    $self->assert_matches(qr/syntax error/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto4',
         "require [\"fileinto\"];\nfileinto :copy \"foo\"\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 2: copy (?:extension )?MUST be enabled/, $errs);
+    $self->assert_matches(qr/copy.*MUST be enabled/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto5',
         "require [\"fileinto\",\"copy\"];\nfileinto \"foo\"\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 3: syntax error.*expecting.*;/, $errs);
+    $self->assert_matches(qr/syntax error/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto6',
         "require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\"\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 3: syntax error.*expecting.*;/, $errs);
+    $self->assert_matches(qr/syntax error/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('goodfileinto7',
         "require [\"fileinto\",\"copy\"];\nfileinto \"foo\";\n");
