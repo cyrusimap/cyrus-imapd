@@ -5871,12 +5871,12 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
      * the records in the target user.  Sorry, was too complex
      * otherwise handling all the special cases */
     if (mailbox_has_conversations(oldmailbox)) {
-        oldcstate = conversations_get_mbox(oldmailbox->name);
+        oldcstate = mailbox_get_cstate(oldmailbox);
         assert(oldcstate);
     }
 
     if (mailbox_has_conversations(newmailbox)) {
-        newcstate = conversations_get_mbox(newmailbox->name);
+        newcstate = mailbox_get_cstate(newmailbox);
         assert(newcstate);
     }
 
