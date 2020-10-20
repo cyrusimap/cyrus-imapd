@@ -5136,14 +5136,20 @@ EXPORTED int mailbox_create(const char *name,
     listitem = create_listitem(name);
     mailbox = &listitem->m;
 
-    /* if we can't get an exclusive lock first try, there's something
-     * racy going on! */
-    /* an exclusive lock around the non-exclusive lock to avoid create
-     * races on fixed names like calendar Inbox and Outbox */
-    struct mboxlock *mblock = NULL;
-    r = mboxname_lock("$CREATE", &mblock, LOCK_EXCLUSIVE);
-    if (!r) r = mboxname_lock(name, &listitem->l, LOCK_NONBLOCKING);
-    mboxname_release(&mblock);
+    /* needs to be an exclusive namelock to create a mailbox */
+    char *userid = mboxname_to_userid(name);
+    if (userid) {
+        int haslock = user_isnamespacelocked(userid);
+        if (haslock) {
+            assert(haslock != LOCK_SHARED);
+        }
+        else {
+            mailbox->local_namespacelock = user_namespacelock_full(userid, LOCK_EXCLUSIVE);
+        }
+        free(userid);
+    }
+
+    r = mboxname_lock(name, &listitem->l, LOCK_EXCLUSIVE);
     if (r) goto done;
 
     mailbox->part = xstrdup(part);
