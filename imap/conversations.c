@@ -75,6 +75,7 @@
 #include "strhash.h"
 #include "sync_log.h"
 #include "syslog.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -98,6 +99,12 @@
 #define CONVSPLITFOLDER "#splitconversations"
 
 #define DB config_conversations_db
+
+struct conversations_open {
+    struct conversations_state s;
+    struct mboxlock *local_namespacelock;
+    struct conversations_open *next;
+};
 
 static struct conversations_open *open_conversations;
 
@@ -169,7 +176,7 @@ static int _init_counted(struct conversations_state *state,
         val = config_getstring(IMAPOPT_CONVERSATIONS_COUNTED_FLAGS);
         if (!val) val = "";
         vallen = strlen(val);
-        if (vallen) {
+        if (vallen && !state->is_shared) {
             r = cyrusdb_store(state->db, CFKEY, strlen(CFKEY),
                     val, vallen, &state->txn);
             if (r) {
@@ -200,9 +207,9 @@ static int _init_counted(struct conversations_state *state,
 
 int _saxfolder(int type, struct dlistsax_data *d)
 {
-    struct conversations_open *open = (struct conversations_open *)d->rock;
+    strarray_t *list = (strarray_t *)d->rock;
     if (type == DLISTSAX_STRING)
-        strarray_append(open->s.folder_names, d->data);
+        strarray_append(list, d->data);
     return 0;
 }
 
@@ -302,6 +309,17 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
 
     open = xzmalloc(sizeof(struct conversations_open));
 
+    if (userid) {
+        int haslock = user_isnamespacelocked(userid);
+        if (haslock) {
+            if (!shared) assert(haslock != LOCK_SHARED);
+        }
+        else {
+            int locktype = shared ? LOCK_SHARED : LOCK_EXCLUSIVE;
+            open->local_namespacelock = user_namespacelock_full(userid, locktype);
+        }
+    }
+
     /* open db */
     open->s.is_shared = shared;
     int flags = CYRUSDB_CREATE | (shared ? (CYRUSDB_SHARED|CYRUSDB_NOCRC) : CYRUSDB_CONVERT);
@@ -317,18 +335,9 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     /* load or initialize counted flags */
     cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
     r = _init_counted(&open->s, val, vallen);
-    if (r == CYRUSDB_READONLY) {
-        /* racy: drop shared lock, grab write lock */
-        cyrusdb_commit(open->s.db, open->s.txn);
-        open->s.txn = NULL;
-        flags &= ~CYRUSDB_SHARED;
-        r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
-        if (!r) r = _init_counted(&open->s, val, vallen);
-    }
     if (r) {
         cyrusdb_abort(open->s.db, open->s.txn);
         _conv_remove(&open->s);
-        free(open);
         return r;
     }
 
@@ -336,9 +345,10 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     open->s.folder_names = strarray_new();
 
     /* if there's a value, parse as a dlist */
-    if (!cyrusdb_fetch(open->s.db, FNKEY, strlen(FNKEY),
-                   &val, &vallen, &open->s.txn)) {
-        dlist_parsesax(val, vallen, 0, _saxfolder, open);
+    vallen = 0;
+    cyrusdb_fetch(open->s.db, FNKEY, strlen(FNKEY), &val, &vallen, &open->s.txn);
+    if (vallen) {
+        dlist_parsesax(val, vallen, 0, _saxfolder, open->s.folder_names);
     }
 
     if (userid)
@@ -431,6 +441,8 @@ static void _conv_remove(struct conversations_state *state)
                 strarray_free(cur->s.counted_flags);
             if (cur->s.folder_names)
                 strarray_free(cur->s.folder_names);
+            if (cur->local_namespacelock)
+                mboxname_release(&cur->local_namespacelock);
             free(cur);
             return;
         }

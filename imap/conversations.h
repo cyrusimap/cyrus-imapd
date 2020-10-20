@@ -99,11 +99,6 @@ struct conversations_state {
     unsigned is_shared:1;
 };
 
-struct conversations_open {
-    struct conversations_state s;
-    struct conversations_open *next;
-};
-
 typedef struct conversation conversation_t;
 typedef struct conv_folder  conv_folder_t;
 typedef struct conv_sender  conv_sender_t;

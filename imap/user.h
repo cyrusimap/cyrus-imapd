@@ -77,7 +77,9 @@ char *user_hash_subs(const char *user);
 /* find any sort of file for the user */
 char *user_hash_meta(const char *userid, const char *suffix);
 
-struct mboxlock *user_namespacelock(const char *userid);
+/* default to exclusive lock! */
+struct mboxlock *user_namespacelock_full(const char *userid, int locktype);
+#define user_namespacelock(userid) user_namespacelock_full(userid, LOCK_EXCLUSIVE)
 int user_isnamespacelocked(const char *userid);
 
 #endif

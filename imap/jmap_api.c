@@ -2042,6 +2042,7 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
     json_t *jargs = req->args;
     const char *key;
     json_t *arg;
+    int have_sincemodseq = 0;
 
     memset(changes, 0, sizeof(struct jmap_changes));
     changes->created = json_array();
@@ -2056,6 +2057,7 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
         /* sinceState */
         else if (!strcmp(key, "sinceState")) {
             if (json_is_string(arg)) {
+                have_sincemodseq = 1;
                 changes->since_modseq = atomodseq_t(json_string_value(arg));
             }
             else {
@@ -2081,7 +2083,7 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
     }
-    else if (!changes->since_modseq || changes->since_modseq < minmodseq) {
+    else if (!have_sincemodseq || changes->since_modseq < minmodseq) {
         *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
     }
 }

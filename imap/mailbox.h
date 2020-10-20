@@ -280,6 +280,9 @@ struct mailbox {
     /* conversations */
     struct conversations_state *local_cstate;
 
+    /* namespace lock */
+    struct mboxlock *local_namespacelock;
+
 #ifdef WITH_DAV
     struct caldav_db *local_caldav;
     struct carddav_db *local_carddav;

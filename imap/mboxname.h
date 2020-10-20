@@ -126,6 +126,7 @@ char *mboxname_from_external(const char *extname, const struct namespace *ns, co
 char *mboxname_to_external(const char *intname, const struct namespace *ns, const char *userid);
 
 
+int open_mboxlocks_exist(void);
 int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
                   int locktype);
 void mboxname_release(struct mboxlock **mboxlockptr);
