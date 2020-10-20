@@ -1271,6 +1271,7 @@ static void cmdloop(void)
 
         /* ensure we didn't leak anything! */
         assert(!open_mailboxes_exist());
+        assert(!open_mboxlocks_exist());
 
         sync_log_reset();
 

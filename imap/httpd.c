@@ -1995,6 +1995,7 @@ static void cmdloop(struct http_connection *conn)
 
         /* make sure nothing leaked */
         assert(!open_mailboxes_exist());
+        assert(!open_mboxlocks_exist());
 
         sync_log_reset();
 

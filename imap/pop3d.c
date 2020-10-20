@@ -626,6 +626,7 @@ void shut_down(int code)
 
     /* make sure we didn't leak */
     assert(!open_mailboxes_exist());
+    assert(!open_mboxlocks_exist());
 
     sync_log_reset();
 

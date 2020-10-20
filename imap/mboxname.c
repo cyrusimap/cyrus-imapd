@@ -124,6 +124,10 @@ static const char index_mod64[256] = {
 
 #define FNAME_SHAREDPREFIX "shared"
 
+EXPORTED int open_mboxlocks_exist(void)
+{
+    return open_mboxlocks ? 1 : 0;
+}
 
 static struct mboxlocklist *create_lockitem(const char *name)
 {

@@ -370,6 +370,7 @@ static int meth_post(struct transaction_t *txn,
 
     /* ensure we didn't leak anything! */
     assert(!open_mailboxes_exist());
+    assert(!open_mboxlocks_exist());
 
     // checkpoint before we reply
     sync_checkpoint(httpd_in);
@@ -969,6 +970,7 @@ done:
 
     /* ensure we didn't leak anything! */
     assert(!open_mailboxes_exist());
+    assert(!open_mboxlocks_exist());
 
     // checkpoint before replying
     sync_checkpoint(httpd_in);
@@ -1068,6 +1070,7 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
 
     /* ensure we didn't leak anything! */
     assert(!open_mailboxes_exist());
+    assert(!open_mboxlocks_exist());
 
     // checkpoint before we reply
     sync_checkpoint(httpd_in);
