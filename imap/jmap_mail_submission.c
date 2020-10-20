@@ -1203,16 +1203,20 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         goto done;
     }
 
-    int r = ensure_submission_collection(req->accountid,
-                                         &mbentry, &created);
-    if (r) {
+    /* submission collection */
+    int r = lookup_submission_collection(req->accountid, &mbentry);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = 0; // that's OK, we'll skip trying to open the mailbox
+    }
+    else if (r) {
         syslog(LOG_ERR,
-               "jmap_emailsubmission_get: ensure_submission_collection(%s): %s",
+               "jmap_emailsubmission_get: lookup_submission_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
     }
-
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    else {
+        r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    }
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
@@ -1223,7 +1227,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
 
         json_array_foreach(get.ids, i, val) {
             const char *id = json_string_value(val);
-            message_t *msg = msg_from_subid(mbox, id);
+            message_t *msg = mbox ? msg_from_subid(mbox, id) : NULL;
 
             if (!msg) {
                 /* Not a valid id */
@@ -1235,7 +1239,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
             message_unref(&msg);
         }
     }
-    else {
+    else if (mbox) {
         struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
         const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
@@ -1252,7 +1256,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         mailbox_iter_done(&iter);
     }
 
-    jmap_closembox(req, &mbox);
+    if (mbox) jmap_closembox(req, &mbox);
 
     /* Build response */
     json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
@@ -1549,10 +1553,17 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
         return 0;
     }
 
-    int r = ensure_submission_collection(req->accountid, &mbentry, NULL);
+    int r = lookup_submission_collection(req->accountid, &mbentry);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mboxlist_entry_free(&mbentry);
+        r = 0;
+        changes.new_modseq = jmap_highestmodseq(req, MBTYPE_SUBMISSION);
+        jmap_ok(req, jmap_changes_reply(&changes));
+        goto done;
+    }
     if (r) {
         syslog(LOG_ERR,
-               "jmap_emailsubmission_changes: ensure_submission_collection(%s): %s",
+               "jmap_emailsubmission_changes: lookup_submission_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
     }
@@ -1964,10 +1975,22 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         goto done;
     }
 
-    int r = ensure_submission_collection(req->accountid, &mbentry, &created);
+    int r = lookup_submission_collection(req->accountid, &mbentry);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mboxlist_entry_free(&mbentry);
+        r = 0;
+        /* Build response */
+        json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
+        query.query_state = xstrdup(json_string_value(jstate));
+        json_decref(jstate);
+        query.result_position = 0;
+        query.can_calculate_changes = 0;
+        jmap_ok(req, jmap_query_reply(&query));
+        goto done;
+    }
     if (r) {
         syslog(LOG_ERR,
-               "jmap_emailsubmission_changes: ensure_submission_collection(%s): %s",
+               "jmap_emailsubmission_changes: lookup_submission_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
     }
