@@ -176,7 +176,6 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox,
 static void cleanup_stale_expunged(struct mailbox *mailbox);
 static bit32 mailbox_index_record_to_buf(struct index_record *record, int version,
                                          unsigned char *buf);
-static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype);
 
 #ifdef WITH_DAV
 static struct webdav_db *mailbox_open_webdav(struct mailbox *);
@@ -1218,7 +1217,6 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
         if (!r) r = mailbox_open_index(mailbox);
         /* lock_internal so DELETED doesn't cause it to appear to be
          * NONEXISTENT - but we still need conversations so we can write changes! */
-        if (!r) r = mailbox_lock_conversations(mailbox, LOCK_EXCLUSIVE);
         if (!r) r = mailbox_lock_index_internal(mailbox, LOCK_EXCLUSIVE);
         if (!r) {
             /* finish cleaning up */
@@ -2140,31 +2138,6 @@ EXPORTED int mailbox_has_conversations(struct mailbox *mailbox)
     return 1;
 }
 
-static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype)
-{
-    /* does this mailbox have conversations? */
-    if (!mailbox_has_conversations(mailbox))
-        return 0;
-
-    /* already locked */
-    struct conversations_state *cstate = conversations_get_mbox(mailbox->name);
-    if (cstate) {
-        if (locktype == LOCK_EXCLUSIVE) assert (!cstate->is_shared);
-        return 0;
-    }
-
-    if (locktype == LOCK_EXCLUSIVE) {
-        return conversations_open_mbox(mailbox->name, 0/*shared*/, &mailbox->local_cstate);
-    }
-    else if (locktype == LOCK_SHARED) {
-        return conversations_open_mbox(mailbox->name, 1/*shared*/, &mailbox->local_cstate);
-    }
-    else {
-        /* this function does not support nonblocking locks */
-        fatal("invalid locktype for conversations", EX_SOFTWARE);
-    }
-}
-
 #ifdef WITH_DAV
 HIDDEN struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox)
 {
@@ -2384,11 +2357,6 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
 EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int locktype)
 {
     int r = 0;
-
-    /* always lock the conversations DB, since if we have the index file
-     * locked at all, we can't open it later */
-    r = mailbox_lock_conversations(mailbox, locktype);
-    if (r) return r;
 
     r = mailbox_lock_index_internal(mailbox, locktype);
     if (r) return r;
@@ -3715,9 +3683,24 @@ EXPORTED struct conversations_state *mailbox_get_cstate(struct mailbox *mailbox)
     if (!mailbox_has_conversations(mailbox))
         return NULL;
 
-    mailbox_lock_conversations(mailbox, mailbox->is_readonly ? LOCK_SHARED : LOCK_EXCLUSIVE);
+    /* we already own it? */
+    if (mailbox->local_cstate)
+        return mailbox->local_cstate;
 
-    return conversations_get_mbox(mailbox->name);
+    /* already exists, use that one */
+    struct conversations_state *cstate = conversations_get_mbox(mailbox->name);
+    if (cstate) {
+        /* but make sure it's not read-only unless we are */
+        if (!mailbox->is_readonly) assert (!cstate->is_shared);
+        return cstate;
+    }
+
+    /* open the conversations DB - don't bother checking return code since it'll
+     * only be set if it opens successfully, and we can only return NULL or an
+     * object */
+    conversations_open_mbox(mailbox->name, mailbox->is_readonly, &mailbox->local_cstate);
+
+    return mailbox->local_cstate;
 }
 
 static int mailbox_update_conversations(struct mailbox *mailbox,
@@ -5197,15 +5180,6 @@ EXPORTED int mailbox_create(const char *name,
     /* and create the directory too :) */
     if (cyrus_mkdir(fname, 0755) == -1) {
         syslog(LOG_ERR, "IOERROR: creating %s: %m", fname);
-        r = IMAP_IOERROR;
-        goto done;
-    }
-
-    /* open conversations FIRST */
-    r = mailbox_lock_conversations(mailbox, LOCK_EXCLUSIVE);
-    if (r) {
-        syslog(LOG_ERR, "IOERROR: locking conversations %s %s",
-               mailbox->name, error_message(r));
         r = IMAP_IOERROR;
         goto done;
     }
