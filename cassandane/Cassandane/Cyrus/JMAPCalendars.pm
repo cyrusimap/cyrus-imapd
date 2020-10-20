@@ -4014,7 +4014,13 @@ sub test_calendarevent_changes_issue2558
     my $jmap = $self->{jmap};
 
     xlog $self, "get calendar event updates with bad state";
-    my $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => '0' }, "R1"]]);
+    my $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => 'nonsense' }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    xlog $self, "get calendar event updates without state";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', { }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
     $self->assert_str_equals('R1', $res->[0][2]);
