@@ -8596,7 +8596,7 @@ static void my_dav_init(struct buf *serverinfo)
     stat(config_filename, &sbuf);
     server_info_lastmod = MAX(compile_time, sbuf.st_mtime);
 
-    buf_printf(&server_info_token, "%ld-%ld-%ld", (long) compile_time,
+    buf_printf(&server_info_token, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
                sbuf.st_mtime, sbuf.st_size);
     message_guid_generate(&guid, buf_cstring(&server_info_token),
                           buf_len(&server_info_token));
