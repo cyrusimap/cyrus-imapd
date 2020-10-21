@@ -194,6 +194,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
                                          unsigned char *buf);
 
 #ifdef WITH_DAV
+EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *);
 static int mailbox_commit_dav(struct mailbox *mailbox);
 static int mailbox_abort_dav(struct mailbox *mailbox);
 #endif
