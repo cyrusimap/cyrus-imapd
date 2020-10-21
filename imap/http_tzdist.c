@@ -778,7 +778,7 @@ static int action_capa(struct transaction_t *txn)
      * Extend this to include config file size/mtime if we add run-time options.
      */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld", (long) compile_time);
+    buf_printf(&txn->buf, TIME_T_FMT, compile_time);
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
     etag = message_guid_encode(&guid);
 
