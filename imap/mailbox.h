@@ -572,6 +572,7 @@ extern int mailbox_delete(struct mailbox **mailboxptr);
 
 struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox);
 struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox);
+struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox);
 
 /* reading bits and pieces */
 extern int mailbox_refresh_index_header(struct mailbox *mailbox);
