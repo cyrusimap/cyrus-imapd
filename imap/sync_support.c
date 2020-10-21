@@ -7076,8 +7076,8 @@ static void remove_meta(char *user, struct sync_action_list *list)
 
 /* ====================================================================== */
 
-#define report_verbose printf
-#define report_verbose_error printf
+#define report_verbose(...) syslog(LOG_INFO, __VA_ARGS__)
+#define report_verbose_error(...) syslog(LOG_ERR, __VA_ARGS__)
 
 static int do_mailboxes(struct sync_client_state *sync_cs,
                         struct sync_name_list *mboxname_list,
