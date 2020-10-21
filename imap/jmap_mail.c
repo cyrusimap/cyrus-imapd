@@ -10676,7 +10676,7 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
         struct email_updateplan *plan = hash_iter_val(iter);
         if (plan->use_seendb) {
             /* Read seen sequence set */
-            int r = seen_lockread(bulk->seendb, plan->mbox->uniqueid, &plan->old_seendata);
+            int r = seen_read(bulk->seendb, plan->mbox->uniqueid, &plan->old_seendata);
             if (!r) {
                 plan->old_seenseq = seqset_parse(plan->old_seendata.seenuids, NULL, 0);
                 if (!hash_lookup(plan->mbox_id, &seenseq_by_mbox_id))
@@ -12222,7 +12222,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
             delseen = seqset_init(0, SEQ_SPARSE);
             addseen = seqset_init(0, SEQ_SPARSE);
             struct seendata sd = SEENDATA_INITIALIZER;
-            int r = seen_lockread(rock->seendb, mbox->uniqueid, &sd);
+            int r = seen_read(rock->seendb, mbox->uniqueid, &sd);
             if (!r) {
                 seenseq = seqset_parse(sd.seenuids, NULL, sd.lastuid);
                 seen_freedata(&sd);
