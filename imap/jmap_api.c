@@ -56,6 +56,7 @@
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "http_jmap.h"
+#include "imparse.h"
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "proxy.h"
@@ -2023,7 +2024,7 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
 
         /* sinceState */
         else if (!strcmp(key, "sinceState")) {
-            if (json_is_string(arg)) {
+            if (json_is_string(arg) && imparse_isnumber(json_string_value(arg))) {
                 changes->since_modseq = atomodseq_t(json_string_value(arg));
             }
             else {
