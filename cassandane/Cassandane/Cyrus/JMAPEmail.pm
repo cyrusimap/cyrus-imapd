@@ -19545,6 +19545,9 @@ EOF
         to => 'foo*@*example.com',
         wantIds => [$ids[0], $ids[1]],
     }, {
+        to => 'foo.bar@*.com',
+        wantIds => [$ids[0]],
+    }, {
         to => 'foo.baz+*@yyy.example.com',
         wantIds => [$ids[1]],
     }, {
