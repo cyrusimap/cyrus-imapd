@@ -193,7 +193,7 @@ dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdarg.h)
-AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror posix_fadvise strsep memmem)
+AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror posix_fadvise strsep memmem memrchr)
 AC_CHECK_FUNCS(strlcat strlcpy strnchr getgrouplist fmemopen pselect futimens futimes)
 AC_HEADER_DIRENT
 
@@ -2354,6 +2354,10 @@ extern char *strsep(char **, const char *);
 
 #ifndef HAVE_MEMMEM
 extern void *memmem(const void *, size_t, const void *, size_t);
+#endif
+
+#ifndef HAVE_MEMRCHR
+extern void *memrchr(const void *, int, size_t);
 #endif
 
 /* compile time options; think carefully before modifying */
