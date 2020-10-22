@@ -1474,7 +1474,7 @@ void xml_add_lockdisc(xmlNodePtr node, const char *root, struct dav_data *data)
             }
         }
 
-        snprintf(tbuf, sizeof(tbuf), "Second-%lu", data->lock_expire - now);
+        snprintf(tbuf, sizeof(tbuf), "Second-" TIME_T_FMT, data->lock_expire - now);
         xmlNewChild(active, NULL, BAD_CAST "timeout", BAD_CAST tbuf);
 
         node1 = xmlNewChild(active, NULL, BAD_CAST "locktoken", NULL);

@@ -613,12 +613,12 @@ static int list_feeds(struct transaction_t *txn)
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
     stat(mboxlist, &sbuf);
     lastmod = MAX(lastmod, sbuf.st_mtime);
-    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf, "-" TIME_T_FMT "-" OFF_T_FMT, sbuf.st_mtime, sbuf.st_size);
 
     /* stat() imapd.conf for Last-Modified and ETag */
     stat(config_filename, &sbuf);
     lastmod = MAX(lastmod, sbuf.st_mtime);
-    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf, "-" TIME_T_FMT "-" OFF_T_FMT, sbuf.st_mtime, sbuf.st_size);
 
     /* Check any preconditions */
     precond = check_precond(txn, buf_cstring(&txn->buf), lastmod);

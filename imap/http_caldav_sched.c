@@ -348,7 +348,7 @@ static int imip_send_sendmail(icalcomponent *ical, const char *sender,
     time_to_rfc5322(t, datestr, sizeof(datestr));
     buf_printf(&msgbuf, "Date: %s\r\n", datestr);
 
-    buf_printf(&msgbuf, "Message-ID: <cyrus-caldav-%u-%ld-%u@%s>\r\n",
+    buf_printf(&msgbuf, "Message-ID: <cyrus-caldav-%u-" TIME_T_FMT "-%u@%s>\r\n",
             p, t, send_count++, config_servername);
 
     /* Create multipart boundary */
