@@ -2699,7 +2699,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         simple_hdr(txn, "iSchedule-Version", "1.0");
 
         if (resp_body->iserial) {
-            simple_hdr(txn, "iSchedule-Capabilities", "%ld", resp_body->iserial);
+            simple_hdr(txn, "iSchedule-Capabilities", TIME_T_FMT, resp_body->iserial);
         }
     }
     if (resp_body->patch) {
@@ -3776,7 +3776,7 @@ static int auth_success(struct transaction_t *txn, const char *userid)
 
     /* Recreate telemetry log entry for request (w/ credentials redacted) */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "<%ld<", time(NULL));         /* timestamp */
+    buf_printf(&txn->buf, "<" TIME_T_FMT "<", time(NULL)); /* timestamp */
     buf_printf(&txn->buf, "%s %s %s\r\n",               /* request-line*/
                txn->req_line.meth, txn->req_line.uri, txn->req_line.ver);
     spool_enum_hdrcache(txn->req_hdrs,                  /* header fields */
@@ -4411,7 +4411,7 @@ static int list_well_known(struct transaction_t *txn)
     /* stat() imapd.conf for Last-Modified and ETag */
     stat(config_filename, &sbuf);
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld-%ld-%ld",
+    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT,
                compile_time, sbuf.st_mtime, sbuf.st_size);
     sbuf.st_mtime = MAX(compile_time, sbuf.st_mtime);
 

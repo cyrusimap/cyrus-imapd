@@ -454,7 +454,7 @@ static int update_alarmdb(const char *mboxname,
     if (!alarmdb) return -1;
     int rc = SQLITE_OK;
 
-    syslog(LOG_DEBUG, "update_alarmdb(%s:%u, %ld)",
+    syslog(LOG_DEBUG, "update_alarmdb(%s:%u, " TIME_T_FMT ")",
            mboxname, imap_uid, nextcheck);
 
     if (nextcheck)
@@ -606,7 +606,7 @@ static int write_lastalarm(struct mailbox *mailbox,
            mailbox->name, record->uid);
 
     if (data) {
-        buf_printf(&annot_buf, "%ld %ld", data->lastrun, data->nextcheck);
+        buf_printf(&annot_buf, TIME_T_FMT " " TIME_T_FMT, data->lastrun, data->nextcheck);
     }
     syslog(LOG_DEBUG, "data: %s", buf_cstring(&annot_buf));
 
@@ -635,7 +635,7 @@ static int read_lastalarm(struct mailbox *mailbox,
                             annotname, "", &annot_buf);
 
     if (annot_buf.len &&
-        sscanf(buf_cstring(&annot_buf), "%ld %ld",
+        sscanf(buf_cstring(&annot_buf), TIME_T_FMT " " TIME_T_FMT,
                &data->lastrun, &data->nextcheck) == 2) {
         r = 0;
     }

@@ -325,7 +325,7 @@ static int frame_recv_cb(nghttp2_session *session,
         logbuf = &txn->conn->logbuf;
 
         buf_reset(logbuf);
-        buf_printf(logbuf, "<%ld<", time(NULL));   /* timestamp */
+        buf_printf(logbuf, "<" TIME_T_FMT "<", time(NULL));   /* timestamp */
         write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
     }
 
@@ -777,7 +777,7 @@ HIDDEN void http2_begin_headers(struct transaction_t *txn)
         struct buf *logbuf = &txn->conn->logbuf;
 
         buf_reset(logbuf);
-        buf_printf(logbuf, ">%ld>", time(NULL));  /* timestamp */
+        buf_printf(logbuf, ">" TIME_T_FMT ">", time(NULL));  /* timestamp */
         write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
     }
 }
@@ -915,7 +915,7 @@ HIDDEN int http2_data_chunk(struct transaction_t *txn,
         int niov = 0;
 
         buf_reset(logbuf);
-        buf_printf(logbuf, ">%ld>", time(NULL));  /* timestamp */
+        buf_printf(logbuf, ">" TIME_T_FMT ">", time(NULL));  /* timestamp */
         WRITEV_ADD_TO_IOVEC(iov, niov,
                             buf_base(logbuf), buf_len(logbuf));
         WRITEV_ADD_TO_IOVEC(iov, niov, data, datalen);
@@ -1062,4 +1062,3 @@ HIDDEN int32_t http2_get_streamid(void *http2_strm __attribute__((unused)))
 HIDDEN void http2_end_stream(void *http2_strm __attribute__((unused))) {}
 
 #endif /* HAVE_NGHTTP2 */
-

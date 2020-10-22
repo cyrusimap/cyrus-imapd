@@ -269,7 +269,7 @@ static int meth_get_isched(struct transaction_t *txn,
         capa = xmlNewChild(root, NULL, BAD_CAST "capabilities", NULL);
 
         buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%ld", txn->resp_body.iserial);
+        buf_printf(&txn->buf, TIME_T_FMT, txn->resp_body.iserial);
         xmlNewChild(capa, NULL, BAD_CAST "serial-number",
                            BAD_CAST buf_cstring(&txn->buf));
 
@@ -660,7 +660,7 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
         buf_printf(&hdrs, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
     }
     buf_printf(&hdrs, "iSchedule-Version: 1.0\r\n");
-    buf_printf(&hdrs, "iSchedule-Message-ID: <cmu-ischedule-%u-%ld-%u@%s>\r\n",
+    buf_printf(&hdrs, "iSchedule-Message-ID: <cmu-ischedule-%u-" TIME_T_FMT "-%u@%s>\r\n",
                getpid(), time(NULL), send_count++, config_servername);
     buf_printf(&hdrs, "Content-Type: text/calendar; charset=utf-8");
 

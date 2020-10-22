@@ -602,7 +602,7 @@ static int action_proc(struct transaction_t *txn)
         char buf[1024];
 
         while (fgets(buf, sizeof(buf), f)) {
-            if (sscanf(buf, "btime %ld\n", &boot_time) == 1) break;
+            if (sscanf(buf, "btime " TIME_T_FMT "\n", &boot_time) == 1) break;
             while (buf[strlen(buf)-1] != '\n' && fgets(buf, sizeof(buf), f)) {
             }
         }

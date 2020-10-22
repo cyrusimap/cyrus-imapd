@@ -957,13 +957,13 @@ static int list_addressbooks(struct transaction_t *txn)
     stat(mboxlist, &sbuf);
     lastmod = MAX(compile_time, sbuf.st_mtime);
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld-%ld-%ld",
+    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT,
                compile_time, sbuf.st_mtime, sbuf.st_size);
 
     /* stat() config file for Last-Modified and ETag */
     stat(config_filename, &sbuf);
     lastmod = MAX(lastmod, sbuf.st_mtime);
-    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf, "-" TIME_T_FMT "-" OFF_T_FMT, sbuf.st_mtime, sbuf.st_size);
     etag = buf_cstring(&txn->buf);
 
     /* Check any preconditions */

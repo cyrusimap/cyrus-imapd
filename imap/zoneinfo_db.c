@@ -188,7 +188,7 @@ EXPORTED int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **
 
     /* version SP type SP dtstamp SP (string *(TAB string)) */
     buf_reset(&databuf);
-    buf_printf(&databuf, "%u %u %ld ", ZONEINFO_VERSION, zi->type, zi->dtstamp);
+    buf_printf(&databuf, "%u %u " TIME_T_FMT " ", ZONEINFO_VERSION, zi->type, zi->dtstamp);
     for (sl = zi->data, sep = ""; sl; sl = sl->next, sep = "\t")
         buf_printf(&databuf, "%s%s", sep, sl->s);
 

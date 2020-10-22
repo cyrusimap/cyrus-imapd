@@ -311,7 +311,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             int niov = 0;
 
             assert(!buf_len(&txn->buf));
-            buf_printf(&txn->buf, "<%ld<", time(NULL));  /* timestamp */
+            buf_printf(&txn->buf, "<" TIME_T_FMT "<", time(NULL));  /* timestamp */
             WRITEV_ADD_TO_IOVEC(iov, niov,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&inbuf), buf_len(&inbuf));
@@ -336,7 +336,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             int niov = 0;
 
             assert(!buf_len(&txn->buf));
-            buf_printf(&txn->buf, ">%ld>", time(NULL));  /* timestamp */
+            buf_printf(&txn->buf, ">" TIME_T_FMT ">", time(NULL));  /* timestamp */
             WRITEV_ADD_TO_IOVEC(iov, niov,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&outbuf), buf_len(&outbuf));
