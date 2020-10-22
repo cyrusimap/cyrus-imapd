@@ -63,6 +63,7 @@
 #include "json_support.h"
 #include "map.h"
 #include "parseaddr.h"
+#include "sievedir.h"
 #include "sieve/sieve_interface.h"
 #include "sieve/bc_parse.h"
 #include "strarray.h"
@@ -303,17 +304,10 @@ static void getscript(const char *id, const char *script, int isactive,
         }
 
         if (jmap_wantprop(get->props, "content")) {
-            int fd;
-
-            buf_reset(&buf);
-            buf_printf(&buf, "%s/%s", sievedir, script);
-            fd = open(buf_cstring(&buf), 0);
-
-            buf_free(&buf);
-            buf_refresh_mmap(&buf, 1, fd, script, MAP_UNKNOWN_LEN, "sieve");
+            struct buf *content = sieve_getscript(sievedir, script);
             json_object_set_new(sieve, "content",
-                                json_string(buf_cstring(&buf)));
-            close(fd);
+                                json_string(buf_cstring(content)));
+            buf_destroy(content);
         }
         buf_free(&buf);
 

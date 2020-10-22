@@ -80,6 +80,7 @@
 #include "xstrlcat.h"
 #include "strarray.h"
 #include "ptrarray.h"
+#include "sievedir.h"
 
 #ifdef USE_CALALARMD
 #include "caldav_alarm.h"
@@ -991,42 +992,18 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
 {
     const char *sieve_path = user_sieve_path(userid);
-    char filename[2048];
-    FILE *file;
-    struct stat sbuf;
-    char *result, *s;
-    uint32_t count;
-    int c;
+    struct buf *buf = sieve_getscript(sieve_path, name);
+    char *result = NULL;
 
-    if (sizep)
+    if (buf) {
+        if (sizep) *sizep = buf_len(buf);
+        result = buf_release(buf);
+        buf_destroy(buf);
+    }
+    else if (sizep)
         *sizep = 0;
 
-    snprintf(filename, sizeof(filename), "%s/%s", sieve_path, name);
-
-    file = fopen(filename, "r");
-    if (!file) return NULL;
-
-    if (fstat(fileno(file), &sbuf) < 0) {
-        fclose(file);
-        return(NULL);
-    }
-
-    count = sbuf.st_size;
-    s = result = xmalloc(count+1);
-
-    if (sizep)
-        *sizep = count;
-
-    while (count > 0) {
-        if ((c=fgetc(file)) == EOF)
-            break;
-        *s++ = c;
-        count--;
-    }
-    fclose(file);
-    *s = '\0';
-
-    return(result);
+    return result;
 }
 
 int sync_sieve_upload(const char *userid, const char *name,

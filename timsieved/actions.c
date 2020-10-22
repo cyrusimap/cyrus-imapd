@@ -66,6 +66,7 @@
 #include "imap/sync_log.h"
 #include "imap/tls.h"
 #include "imap/version.h"
+#include "sievedir.h"
 #include "sieve/sieve_interface.h"
 #include "timsieved/actions.h"
 #include "timsieved/codes.h"
@@ -78,6 +79,8 @@ extern sieve_interp_t *interp;
 
 static char *sieve_dir_config = NULL;
 static char *sieved_userid = NULL;
+
+static char *sieve_dir = NULL;
 
 int actions_init(void)
 {
@@ -128,7 +131,9 @@ int actions_setuser(const char *userid)
   /* rejoin user and domain */
   if (domain) domain[-1] = '@';
 
-  const char *sieve_dir = buf_cstring(&buf);
+  if (sieve_dir) free(sieve_dir);
+  sieve_dir = buf_release(&buf);
+
   result = chdir(sieve_dir);
   if (result != 0) {
       result = cyrus_mkdir(sieve_dir, 0755);
@@ -222,66 +227,36 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
 
 int getscript(struct protstream *conn, const struct buf *name)
 {
-  FILE *stream;
-  struct stat filestats;        /* returned by stat */
-  int size;                     /* size of the file */
-  int result;
-  int cnt;
+    int size;                     /* size of the file */
+    int result;
+    char path[1024];
+    struct buf *buf;
 
-  char path[1024];
+    result = scriptname_valid(name);
+    if (result != TIMSIEVE_OK) {
+        prot_printf(conn,"NO \"Invalid script name\"\r\n");
+        return result;
+    }
 
-  result = scriptname_valid(name);
-  if (result!=TIMSIEVE_OK)
-  {
-      prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return result;
-  }
+    snprintf(path, 1023, "%s.script", name->s);
 
+    buf = sieve_getscript(sieve_dir, path);
 
-  snprintf(path, 1023, "%s.script", name->s);
+    if (!buf) {
+        prot_printf(conn,"NO (NONEXISTENT) \"Script doesn't exist\"\r\n");
+        return TIMSIEVE_NOEXIST;
+    }
 
-  result = stat(path, &filestats);
-  if (result != 0) {
-    prot_printf(conn,"NO (NONEXISTENT) \"Script doesn't exist\"\r\n");
-    return TIMSIEVE_NOEXIST;
-  }
-  size = filestats.st_size;
+    size = buf_len(buf);
+    prot_printf(conn, "{%d}\r\n", size);
+    prot_write(conn, buf_base(buf), size);
+    buf_destroy(buf);
 
-  stream = fopen(path, "r");
+    prot_printf(conn,"\r\n");
 
-  if (stream == NULL) {
-      prot_printf(conn,"NO \"fopen failed\"\r\n");
-      return TIMSIEVE_NOEXIST;
-  }
+    prot_printf(conn, "OK\r\n");
 
-  prot_printf(conn, "{%d}\r\n", size);
-
-  cnt = 0;
-  while (cnt < size) {
-      char buf[BLOCKSIZE];
-      int amount=BLOCKSIZE;
-
-      if (size-cnt < BLOCKSIZE)
-          amount=size-cnt;
-
-      if (fread(buf, 1, BLOCKSIZE, stream) == 0) {
-          if (ferror(stream)) {
-              fatal("fatal error (fread)", 0);
-          }
-      }
-
-      prot_write(conn, buf, amount);
-
-      cnt += amount;
-  }
-
-  prot_printf(conn,"\r\n");
-
-  prot_printf(conn, "OK\r\n");
-
-  fclose(stream);
-
-  return TIMSIEVE_OK;
+    return TIMSIEVE_OK;
 }
 
 /* counts the number of scripts user has that are DIFFERENT from name.

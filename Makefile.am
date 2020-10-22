@@ -792,6 +792,7 @@ include_HEADERS = \
 	lib/parseaddr.h \
 	lib/retry.h \
 	lib/rfc822tok.h \
+	lib/sievedir.h \
 	lib/signals.h \
 	lib/sqldb.h \
 	lib/strarray.h \
@@ -1483,6 +1484,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/prot.c \
 	lib/ptrarray.c \
 	lib/rfc822tok.c \
+	lib/sievedir.c \
 	lib/signals.c \
 	lib/stristr.c \
 	lib/times.c \
