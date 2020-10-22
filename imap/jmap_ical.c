@@ -5038,9 +5038,7 @@ calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
         } else {
             jmap_parser_invalid(parser, "status");
         }
-    } else if (json_is_null(jprop) || !jprop) {
-        status = ICAL_STATUS_CONFIRMED;
-    } else {
+    } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "status");
     }
     if (status != ICAL_STATUS_NONE) {
