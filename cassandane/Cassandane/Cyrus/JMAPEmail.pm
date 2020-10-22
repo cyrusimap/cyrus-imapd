@@ -655,6 +655,14 @@ sub test_email_get_attachment_name
     "Content-Disposition: attachment; filename=\"q\\\".dat\"\r\n".
     "\r\n" .
     "test13".
+
+    # Some clients send raw UTF-8 characters in MIME parameters.
+    # The following test checks Cyrus leniently accept this.
+    "\r\n--sub\r\n".
+    "Content-Type: application/test14; name=😀.txt\r\n".
+    "\r\n" .
+    "test14".
+
     "\r\n--sub--\r\n";
 
     $exp_sub{A} = $self->make_message("foo",
@@ -725,6 +733,9 @@ sub test_email_get_attachment_name
 
     $att = $m{"application/test13"};
     $self->assert_str_equals('q".dat', $att->{name});
+
+    $att = $m{"application/test14"};
+    $self->assert_str_equals("\N{GRINNING FACE}.txt", $att->{name});
 }
 
 sub test_email_get_body_notext
