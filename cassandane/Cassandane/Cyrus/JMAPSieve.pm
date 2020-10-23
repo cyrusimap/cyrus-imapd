@@ -581,7 +581,7 @@ EOF
     ]);
     $self->assert_not_null($res);
 
-    my $scriptid = $res->[0][1]{created}{"1"}{blobId};
+    my $scriptid = $res->[0][1]{created}{"1"}{id};
 
     xlog "create email";
     $res = $jmap->CallMethods([['Mailbox/get', { properties => ["id"] }, "R1"]]);
@@ -605,7 +605,7 @@ EOF
     xlog "test script";
     $res = $jmap->CallMethods([
         ['SieveScript/test', {
-            scriptBlobId => "$scriptid",
+            scriptId => "$scriptid",
             emailBlobIds => [ "$emailid" ],
             envelope => JSON::null,
             lastVacationResponse => JSON::null
@@ -672,14 +672,11 @@ EOF
     $res = $jmap->Upload($email2, "message/rfc822");
     my $emailid2 = $res->{blobId};
 
-    $res = $jmap->Upload($script, "application/sieve");
-    my $scriptid = $res->{blobId};
-
     xlog "test script";
     $res = $jmap->CallMethods([
         ['SieveScript/test', {
             emailBlobIds => [ $emailid1, 'foobar', $emailid2 ],
-            scriptBlobId => $scriptid,
+            scriptContent => $script,
             envelope => {
                 mailFrom => {
                     email => 'foo@example.com',
@@ -762,11 +759,10 @@ EOF
             create => {
                 "1" => { content => $email1 },
                 "3" => { content => $email2 },
-                "2" => { content => $script }
             }}, 'R0'],
         ['SieveScript/test', {
             emailBlobIds => [ '#1', 'foobar', '#3' ],
-            scriptBlobId => '#2',
+            scriptContent => $script,
             envelope => {
                 mailFrom => {
                     email => 'foo@example.com',
