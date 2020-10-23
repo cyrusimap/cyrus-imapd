@@ -691,8 +691,8 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
     const char *id = NULL, *name = NULL, *content = NULL, *old_link = NULL;
-    int r, isactive = -1;
     char path[PATH_MAX];
+    int r;
 
     arg = json_object_get(jsieve, "id");
     if (arg) json_array_append_new(invalid, json_string("id"));
@@ -749,10 +749,8 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
         if (r) syslog(LOG_ERR, "IOERROR: symlink(%s, %s): %m", path, link);
         else {
             /* Report script as created */
-            json_t *new_sieve = json_pack("{s:s}", "id", id);
+            json_t *new_sieve = json_pack("{s:s s:b}", "id", id, "isActive", 0);
 
-            if (isactive == -1)
-                json_object_set_new(new_sieve, "isActive", json_false());
             json_object_set_new(set->created, creation_id, new_sieve);
 
             if (old_link) {
