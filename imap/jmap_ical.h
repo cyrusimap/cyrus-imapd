@@ -204,6 +204,9 @@ extern struct icaldurationtype jmapical_duration_to_icalduration(const struct jm
 extern void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
                                                 struct jmapical_duration *dur);
 
+/* Convert ical duration property value to Duration with subseconds */
+extern int jmapical_duration_from_icalprop(icalproperty *prop, struct jmapical_duration *dur);
+
 /* Calculate time-range between t1 and t2 into Duration dur */
 extern void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
                                                time_t t2, bit64 t2nanos,
