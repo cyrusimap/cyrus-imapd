@@ -1476,7 +1476,6 @@ static int jmap_sieve_validate(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     const char *key, *content = NULL;
-    struct buf buf = BUF_INITIALIZER;
     json_t *arg, *err = NULL;
     int is_valid = 0;
 
@@ -1484,14 +1483,6 @@ static int jmap_sieve_validate(struct jmap_req *req)
     json_object_foreach(req->args, key, arg) {
         if (!strcmp(key, "accountId")) {
             /* already handled in jmap_api() */
-        }
-
-        else if (!content && !strcmp(key, "blobId")) {
-            content = script_findblob(req, json_string_value(arg), &buf, &err);
-            if (err) {
-                jmap_error(req, err);
-                goto done;
-            }
         }
 
         else if (!content && !strcmp(key, "content")) {
@@ -1535,7 +1526,6 @@ static int jmap_sieve_validate(struct jmap_req *req)
 
 done:
     jmap_parser_fini(&parser);
-    buf_free(&buf);
     return 0;
 }
 
