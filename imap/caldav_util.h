@@ -148,4 +148,6 @@ extern int caldav_read_usedefaultalerts(struct dlist *dl,
                                         const struct index_record *record,
                                         icalcomponent **icalp);
 
-#endif /* CALDAV_UTIL_H */
+extern icaltimezone *caldav_get_calendar_tz(const char *mboxname, const char *userid);
+
+#endif /* HTTP_CALDAV_H */
