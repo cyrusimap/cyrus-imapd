@@ -58,6 +58,7 @@
 #include "caldav_db.h"
 #include "caldav_util.h"
 #include "cyr_qsort_r.h"
+#include "dynarray.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
@@ -76,7 +77,9 @@
 #include "user.h"
 #include "util.h"
 #include "webdav_db.h"
+#include "xapian_wrap.h"
 #include "xmalloc.h"
+#include "xsha1.h"
 #include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
@@ -92,6 +95,12 @@ static int jmap_calendarevent_query(struct jmap_req *req);
 static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 static int jmap_calendarevent_parse(jmap_req_t *req);
+static int jmap_calendarprincipal_get(struct jmap_req *req);
+static int jmap_calendarprincipal_query(struct jmap_req *req);
+static int jmap_calendarprincipal_changes(struct jmap_req *req);
+static int jmap_calendarprincipal_querychanges(struct jmap_req *req);
+static int jmap_calendarprincipal_set(struct jmap_req *req);
+static int jmap_calendarprincipal_getavailability(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
@@ -152,6 +161,42 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         &jmap_calendarevent_parse,
         JMAP_NEED_CSTATE
     },
+    {
+        "CalendarPrincipal/get",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarprincipal_get,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarPrincipal/query",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarprincipal_query,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarPrincipal/changes",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarprincipal_changes,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarPrincipal/queryChanges",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarprincipal_querychanges,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarPrincipal/set",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarprincipal_set,
+        /*flags*/0
+    },
+    {
+        "CalendarPrincipal/getAvailability",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarprincipal_getavailability,
+        JMAP_NEED_CSTATE
+    },
     { NULL, NULL, NULL, 0}
 };
 
@@ -170,6 +215,9 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_CALENDARS, json_object());
 
+    json_object_set_new(settings->server_capabilities,
+            JMAP_URN_CALENDARPRINCIPALS, json_object());
+
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
                 JMAP_CALENDARS_EXTENSION, json_object());
@@ -182,9 +230,17 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
     ptrarray_append(&settings->getblob_handlers, jmap_calendarevent_getblob);
 }
 
-HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities)
+HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
+                                       const char *current_principalid)
 {
     json_object_set_new(account_capabilities, JMAP_URN_CALENDARS, json_object());
+
+
+    json_object_set_new(account_capabilities, JMAP_URN_CALENDARS, json_object());
+
+    json_object_set_new(account_capabilities, JMAP_URN_CALENDARPRINCIPALS,
+            json_pack("{s:o}", "currentUserPrincipalId", current_principalid ?
+                json_string(current_principalid) : json_null()));
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities, JMAP_CALENDARS_EXTENSION, json_object());
@@ -1110,7 +1166,7 @@ static void setcalendar_readprops(jmap_req_t *req,
     }
 
     /* includeInAvailablity */
-    jprop = json_object_get(arg, "includeInAvailablity");
+    jprop = json_object_get(arg, "includeInAvailability");
     if (json_is_string(jprop)) {
         const char *avail = json_string_value(jprop);
         props->transp = -1;
@@ -3562,7 +3618,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            sched_inboxname,
                                            sched_outboxname,
                                            HASH_TABLE_INITIALIZER, /* utctimes_fallbacktz */
-                                           PTRARRAY_INITIALIZER,   /* malloced_fallbacktzs */
+                                           PTRARRAY_INITIALIZER,
                                            JMAPICAL_DATETIME_INITIALIZER,
                                            JMAPICAL_DATETIME_INITIALIZER,
                                            0 /* reduce_participants */
@@ -4695,8 +4751,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     r = setcalendarevents_apply_patch(req, event_patch, oldical, eid->recurid,
                                       invalid, &schedule_addresses, &ical,
                                       utctimes_fallbacktz, update, err);
-    if (tz_is_malloced)
-        icaltimezone_free(utctimes_fallbacktz, 1);
+    if (tz_is_malloced) icaltimezone_free(utctimes_fallbacktz, 1);
 
     if (json_array_size(invalid)) {
         r = 0;
@@ -6144,12 +6199,12 @@ done:
     return r;
 }
 
-static void validatefilter(jmap_req_t *req __attribute__((unused)),
-                           struct jmap_parser *parser,
-                           json_t *filter,
-                           json_t *unsupported __attribute__((unused)),
-                           void *rock __attribute__((unused)),
-                           json_t **err __attribute__((unused)))
+static void calendarevent_validatefilter(jmap_req_t *req __attribute__((unused)),
+                                         struct jmap_parser *parser,
+                                         json_t *filter,
+                                         json_t *unsupported __attribute__((unused)),
+                                         void *rock __attribute__((unused)),
+                                         json_t **err __attribute__((unused)))
 {
     const char *field;
     json_t *arg;
@@ -6207,10 +6262,10 @@ static void validatefilter(jmap_req_t *req __attribute__((unused)),
     }
 }
 
-static int validatecomparator(jmap_req_t *req __attribute__((unused)),
-                              struct jmap_comparator *comp,
-                              void *rock __attribute__((unused)),
-                              json_t **err __attribute__((unused)))
+static int calendarevent_validatecomparator(jmap_req_t *req __attribute__((unused)),
+                                            struct jmap_comparator *comp,
+                                            void *rock __attribute__((unused)),
+                                            json_t **err __attribute__((unused)))
 {
     /* Reject any collation */
     if (comp->collation) {
@@ -6251,8 +6306,8 @@ static int jmap_calendarevent_query(struct jmap_req *req)
     json_t *err = NULL;
     jmap_query_parse(req, &parser,
                      _calendarevent_queryargs_parse, &expandrecur,
-                     validatefilter, NULL,
-                     validatecomparator, NULL,
+                     calendarevent_validatefilter, NULL,
+                     calendarevent_validatecomparator, NULL,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -6577,5 +6632,1525 @@ done:
     jmap_parse_fini(&parse);
     free_hash_table(props, NULL);
     free(props);
+    return 0;
+}
+
+static const jmap_property_t calendarprincipal_props[] = {
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "name",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "description",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "email",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "type",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "timeZone",
+        NULL,
+        0,
+    },
+    {
+        "mayGetAvailability",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "accountId",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "account",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "sendTo",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    { NULL, NULL, 0 }
+};
+
+typedef int(*principal_foreach_fn)
+    (jmap_req_t* req, const char* accountid, int rights, void* rock);
+
+struct principal_foreach_rock {
+    jmap_req_t *req;
+    principal_foreach_fn proc;
+    void *rock;
+    struct buf accountid;
+    int rights;
+};
+
+static int principal_foreach_cb(struct findall_data *data, void *rock)
+{
+    if (!data || !data->mbentry || !data->mbname) return 0;
+
+    struct principal_foreach_rock *myrock = rock;
+    struct jmap_req *req = myrock->req;
+
+    if (!jmap_hasrights_mbentry(req, data->mbentry, JACL_LOOKUP)) {
+        return 0;
+    }
+
+    const char *accountid = mbname_userid(data->mbname);
+    int r = 0;
+    if (strcmp(accountid, buf_cstring(&myrock->accountid))) {
+        if (buf_len(&myrock->accountid)) {
+            r = myrock->proc(req, buf_cstring(&myrock->accountid),
+                             myrock->rights, myrock->rock);
+        }
+        buf_setcstr(&myrock->accountid, accountid);
+        myrock->rights = jmap_myrights_mbentry(req, data->mbentry);
+    }
+    else {
+        myrock->rights |= jmap_myrights_mbentry(req, data->mbentry);
+    }
+
+    return r;
+}
+
+static int principal_foreach(struct jmap_req *req, principal_foreach_fn proc, void *rock)
+{
+    /* Find shared accounts */
+    const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    strarray_t patterns = STRARRAY_INITIALIZER;
+    char *userpat = strconcat("user.*.", prefix, NULL);
+    userpat[4] = jmap_namespace.hier_sep;
+    userpat[6] = jmap_namespace.hier_sep;
+    strarray_append(&patterns, userpat);
+    struct principal_foreach_rock myrock = {
+        req, proc, rock, BUF_INITIALIZER, 0
+    };
+    int r = mboxlist_findallmulti(&jmap_namespace, &patterns, 0, req->userid,
+                                  req->authstate, principal_foreach_cb, &myrock);
+    strarray_fini(&patterns);
+    free(userpat);
+    if (buf_len(&myrock.accountid)) {
+        r = proc(req, buf_cstring(&myrock.accountid), myrock.rights, rock);
+    }
+
+    /* Add own account */
+    if (!r) r = proc(req, req->userid, JACL_ALL, rock);
+
+    buf_free(&myrock.accountid);
+    return r;
+}
+
+
+static json_t *buildprincipal(struct jmap_req *req,
+                              hash_table *props,
+                              json_t *jaccount,
+                              int rights,
+                              const char *accountid)
+{
+    char *calhomename = caldav_mboxname(accountid, NULL);
+    json_t *jp = json_object();
+    struct buf buf = BUF_INITIALIZER;
+    strarray_t addrs = STRARRAY_INITIALIZER;
+    get_schedule_addresses(NULL, calhomename, accountid, &addrs);
+
+    json_object_set_new(jp, "id", json_string(accountid));
+
+    if (jmap_wantprop(props, "name")) {
+        static const char *annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+        annotatemore_lookupmask(calhomename, annot, req->userid, &buf);
+        json_object_set_new(jp, "name", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
+    if (jmap_wantprop(props, "description")) {
+        static const char *annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-description";
+        annotatemore_lookupmask(calhomename, annot, req->userid, &buf);
+        json_object_set_new(jp, "description", buf_len(&buf) ?
+                json_string(buf_cstring(&buf)) : json_null());
+        buf_reset(&buf);
+    }
+
+    if (jmap_wantprop(props, "email")) {
+        json_t *jemail = json_null();
+        if (strarray_size(&addrs)) {
+            jemail = json_string(strarray_nth(&addrs, 0));
+        }
+        json_object_set_new(jp, "email", jemail);
+    }
+
+    if (jmap_wantprop(props, "type")) {
+        /* XXX - how to determine type? also see propfind_calusertype */
+        json_object_set_new(jp, "type", json_string("individual"));
+    }
+
+    if (jmap_wantprop(props, "timeZone")) {
+        static const char *tzid_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+        static const char *tz_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+
+        annotatemore_lookupmask(calhomename, tzid_annot, accountid, &buf);
+        if (!buf_len(&buf)) {
+            annotatemore_lookupmask(calhomename, tz_annot, accountid, &buf);
+            if (buf_len(&buf)) {
+                icalcomponent *ical = icalparser_parse_string(buf_cstring(&buf));
+                if (ical && icalcomponent_isa(ical) == ICAL_VCALENDAR_COMPONENT) {
+                    icalcomponent *comp =
+                        icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+                    if (comp) {
+                        icalproperty *prop =
+                            icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
+                        if (prop) {
+                            buf_setcstr(&buf, icalproperty_get_tzid(prop));
+                        }
+                    }
+                }
+                if (ical) icalcomponent_free(ical);
+            }
+        }
+
+        json_object_set_new(jp, "timeZone", buf_len(&buf) ?
+                json_string(buf_cstring(&buf)) : json_null());
+        buf_reset(&buf);
+    }
+
+    if (jmap_wantprop(props, "mayGetAvailability")) {
+        json_object_set_new(jp, "mayGetAvailability",
+                json_boolean(rights & JACL_READFB));
+    }
+
+    if (jmap_wantprop(props, "accountId")) {
+        json_object_set_new(jp, "accountId", json_string(accountid));
+    }
+
+    if (jmap_wantprop(props, "account")) {
+        json_object_set(jp, "account", jaccount ? jaccount : json_null());
+    }
+
+    if (jmap_wantprop(props, "sendTo")) {
+        json_t *jsendTo = json_null();
+        if (strarray_size(&addrs)) {
+            const char *addr = strarray_nth(&addrs, 0);
+            if (strncasecmp(addr, "mailto:", 7)) {
+                buf_setcstr(&buf, "mailto:");
+            }
+            buf_appendcstr(&buf, addr);
+            jsendTo = json_pack("{s:s}", "imip", buf_cstring(&buf));
+            buf_reset(&buf);
+        }
+        json_object_set_new(jp, "sendTo", jsendTo);
+    }
+
+    free(calhomename);
+    strarray_fini(&addrs);
+    buf_free(&buf);
+    return jp;
+}
+
+struct principal_get_rock {
+    struct jmap_get *get;
+    json_t *jaccounts;
+    hash_table *wantids;
+    SHA_CTX *sha1;
+};
+
+static int principal_state_init(jmap_req_t *req, SHA_CTX *sha1)
+{
+    SHA1_Init(sha1);
+    char *calhomename = caldav_mboxname(req->userid, NULL);
+    struct mailbox *mbox = NULL;
+    int r = jmap_openmbox(req, calhomename, &mbox, 0);
+    if (!r) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "%s" MODSEQ_FMT, req->userid, mailbox_foldermodseq(mbox));
+        SHA1_Update(sha1, buf_base(&buf), buf_len(&buf));
+        buf_free(&buf);
+    }
+    jmap_closembox(req, &mbox);
+    free(calhomename);
+    return r;
+}
+
+static void principal_state_update(jmap_req_t *req __attribute__((unused)),
+                                   SHA_CTX *sha1,
+                                   const char *accountid)
+{
+    SHA1_Update(sha1, accountid, strlen(accountid));
+}
+
+static char *principal_state_string(SHA_CTX *sha1)
+{
+    uint8_t digest[SHA1_DIGEST_LENGTH];
+    SHA1_Final(digest, sha1);
+    char hexdigest[SHA1_DIGEST_LENGTH*2 + 1];
+    bin_to_lchex(digest, SHA1_DIGEST_LENGTH, hexdigest);
+    hexdigest[SHA1_DIGEST_LENGTH*2] = '\0';
+    return xstrdup(hexdigest);
+}
+
+static int principal_state_current_cb(jmap_req_t *req,
+                                      const char *accountid,
+                                      int rights __attribute__((unused)),
+                                      void *rock)
+{
+    SHA_CTX *sha1 = rock;
+    if (strcmp(req->userid, accountid)) {
+        principal_state_update(req, sha1, accountid);
+    }
+    return 0;
+}
+
+static int principal_currentstate(jmap_req_t *req, char **state)
+{
+    /* Principal state is the hash of the authenticated userid, its
+     * calendar home folder modseq and the account ids of all accounts
+     * it where at least one calendar or the calendar home is visible */
+    SHA_CTX sha1;
+    principal_state_init(req, &sha1);
+    int r = principal_foreach(req, principal_state_current_cb, &sha1);
+    if (!r) {
+        *state = principal_state_string(&sha1);
+    }
+    return r;
+}
+
+static int principal_get_cb(jmap_req_t *req, const char *accountid,
+                            int rights, void *rock)
+{
+    struct principal_get_rock *getrock = rock;
+
+    /* Update state */
+    SHA1_Update(getrock->sha1, accountid, strlen(accountid));
+
+    /* Convert princpial */
+    if (hash_del(accountid, getrock->wantids)) {
+        struct jmap_get *get = getrock->get;
+        json_t *jaccount = json_object_get(getrock->jaccounts, accountid);
+        json_t *jp = buildprincipal(req, get->props, jaccount, rights, accountid);
+        if (jp) {
+            if (strcmp(req->userid, accountid)) {
+                principal_state_update(req, getrock->sha1, accountid);
+            }
+            json_array_append_new(get->list, jp);
+        }
+        else {
+            json_array_append_new(get->not_found, json_string(accountid));
+        }
+    }
+
+    return 0;
+}
+
+static int jmap_calendarprincipal_get(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
+
+    jmap_get_parse(req, &parser, calendarprincipal_props, 0, NULL, NULL, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    json_t *jaccounts = NULL, *jprimary_accounts = NULL;
+    if (jmap_wantprop(get.props, "account")) {
+        jaccounts = json_object();
+        jprimary_accounts = json_object();
+        jmap_accounts(jaccounts, jprimary_accounts);
+    }
+
+    /* Determine which princpials to fetch */
+    hash_table wantids = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&wantids, json_array_size(get.ids) + 1, 0);
+    size_t i;
+    json_t *jval;
+    json_array_foreach(get.ids, i, jval) {
+        hash_insert(json_string_value(jval), (void*)0x1, &wantids);
+    }
+
+    /* Traverse principals */
+    SHA_CTX sha1;
+    principal_state_init(req, &sha1);
+    struct principal_get_rock rock = { &get, jaccounts, &wantids, &sha1 };
+    int r = principal_foreach(req, principal_get_cb, &rock);
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+    get.state = principal_state_string(&sha1);
+
+    json_decref(jaccounts);
+    json_decref(jprimary_accounts);
+    hash_iter *it = hash_table_iter(&wantids);
+    while (hash_iter_next(it)) {
+        json_array_append_new(get.not_found, json_string(hash_iter_key(it)));
+    }
+    hash_iter_free(&it);
+    free_hash_table(&wantids, NULL);
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+
+
+    jmap_ok(req, jmap_get_reply(&get));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    return 0;
+}
+
+static void principal_query_validatefilter(jmap_req_t *req __attribute__((unused)),
+                                           struct jmap_parser *parser,
+                                           json_t *filter,
+                                           json_t *unsupported __attribute__((unused)),
+                                           void *rock __attribute__((unused)),
+                                           json_t **err __attribute__((unused)))
+{
+    const char *field;
+    json_t *arg;
+
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "accountIds")) {
+            if (json_is_array(arg)) {
+                size_t i;
+                json_t *jval;
+                json_array_foreach(arg, i, jval) {
+                    if (!json_is_string(jval)) {
+                        jmap_parser_push_index(parser, "accountIds", i, NULL);
+                        jmap_parser_invalid(parser, NULL);
+                        jmap_parser_pop(parser);
+                    }
+                }
+            }
+            else jmap_parser_invalid(parser, field);
+        }
+        else if (!strcmp(field, "email") ||
+                 !strcmp(field, "name") ||
+                 !strcmp(field, "text") ||
+                 !strcmp(field, "type") ||
+                 !strcmp(field, "timeZone")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, field);
+        }
+    }
+}
+
+static int principal_query_validatecomparator(jmap_req_t *req __attribute__((unused)),
+                                              struct jmap_comparator *comp,
+                                              void *rock __attribute__((unused)),
+                                              json_t **err __attribute__((unused)))
+{
+    /* Reject any collation */
+    if (comp->collation) {
+        return 0;
+    }
+    if (!strcmp(comp->property, "id")) {
+        return 1;
+    }
+    return 0;
+}
+
+struct principalfilter_expr {
+    const char *op;
+    ptrarray_t conditions;
+    json_t *jaccountids;
+    xapian_query_t *email;
+    xapian_query_t *name;
+    xapian_query_t *text;
+    const char *type;
+    const char *timezone;
+};
+
+struct principalfilter {
+    /* Query-scoped context */
+    hash_table props;
+    struct xapian_dbw *dbw;
+    struct xapian_db *db;
+    struct principalfilter_expr *root;
+    /* Principal-scoped context */
+    char guidrep[MESSAGE_GUID_SIZE*2];
+    int xqmatches;
+};
+
+static struct principalfilter_expr *principalfilter_buildexpr(json_t *jfilter,
+                                                              struct principalfilter *filter)
+{
+    struct principalfilter_expr *expr = xzmalloc(sizeof(struct principalfilter_expr));
+
+    expr->op = json_string_value(json_object_get(jfilter, "operator"));
+    if (expr->op) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(json_object_get(jfilter, "conditions"), i, jval) {
+            struct principalfilter_expr *subexpr =
+                principalfilter_buildexpr(jval, filter);
+            if (subexpr) ptrarray_append(&expr->conditions, subexpr);
+        }
+    }
+    else {
+        expr->jaccountids = json_object_get(jfilter, "accountIds");
+
+        const char *s;
+        if ((s = json_string_value(json_object_get(jfilter, "email")))) {
+            hash_insert("email", (void*)0x1, &filter->props);
+            expr->email = xapian_query_new_match(filter->db, SEARCH_PART_FROM, s);
+        }
+        if ((s = json_string_value(json_object_get(jfilter, "name")))) {
+            hash_insert("name", (void*)0x1, &filter->props);
+            expr->name = xapian_query_new_match(filter->db, SEARCH_PART_SUBJECT, s);
+        }
+        if ((s = json_string_value(json_object_get(jfilter, "text")))) {
+            hash_insert("email", (void*)0x1, &filter->props);
+            hash_insert("name", (void*)0x1, &filter->props);
+            hash_insert("description", (void*)0x1, &filter->props);
+            xapian_query_t *xqs[3], *xq;
+            size_t count = 0;
+            xq = xapian_query_new_match(filter->db, SEARCH_PART_FROM, s);
+            if (xq) xqs[count++] = xq;
+            xq = xapian_query_new_match(filter->db, SEARCH_PART_SUBJECT, s);
+            if (xq) xqs[count++] = xq;
+            xq = xapian_query_new_match(filter->db, SEARCH_PART_BODY, s);
+            if (xq) xqs[count++] = xq;
+            if (count) {
+                expr->text = xapian_query_new_compound(filter->db, 1, xqs, count);
+            }
+        }
+        if ((s = json_string_value(json_object_get(jfilter, "type")))) {
+            hash_insert("type", (void*)0x1, &filter->props);
+            expr->type = s;
+        }
+        if ((s = json_string_value(json_object_get(jfilter, "timeZone")))) {
+            hash_insert("timeZone", (void*)0x1, &filter->props);
+            expr->timezone = s;
+        }
+    }
+
+    return expr;
+}
+
+static int principalfilter_init(json_t *jfilter, struct principalfilter *filter)
+{
+    if (!jfilter) return 0;
+
+    construct_hash_table(&filter->props, 8, 0);
+    int r = xapian_dbw_openmem(&filter->dbw);
+    if (r) return r;
+    r = xapian_db_opendbw(filter->dbw, &filter->db);
+    if (r) return r;
+    filter->root = principalfilter_buildexpr(jfilter, filter);
+    return 0;
+}
+
+static void principalfilter_finiexpr(struct principalfilter_expr *expr)
+{
+    int i;
+    for (i = 0; i < ptrarray_size(&expr->conditions); i++) {
+        struct principalfilter_expr *se = ptrarray_nth(&expr->conditions, i);
+        principalfilter_finiexpr(se);
+        free(se);
+    }
+    ptrarray_fini(&expr->conditions);
+
+    if (expr->email)
+        xapian_query_free(expr->email);
+    if (expr->name)
+        xapian_query_free(expr->name);
+    if (expr->text)
+        xapian_query_free(expr->text);
+}
+
+static void principalfilter_fini(struct principalfilter *filter)
+{
+    if (filter->props.size)
+        free_hash_table(&filter->props, NULL);
+    if (filter->db)
+        xapian_db_close(filter->db);
+    if (filter->dbw)
+        xapian_dbw_close(filter->dbw);
+    if (filter->root) {
+        principalfilter_finiexpr(filter->root);
+        free(filter->root);
+    }
+}
+
+static int principalfilter_matchexpr_cb(void *base, size_t n, void *rock)
+{
+    struct principalfilter *filter = rock;
+    size_t i;
+    for (i = 0; i < n; i++) {
+        if (!memcmp(base + i, filter->guidrep, MESSAGE_GUID_SIZE*2)) {
+            filter->xqmatches = 1;
+            return CYRUSDB_DONE;
+        }
+    }
+    return 0;
+}
+
+static int principalfilter_matchexpr(json_t *jp,
+                                     struct principalfilter *filter,
+                                     struct principalfilter_expr *expr)
+{
+    if (!expr) return 1;
+
+    if (expr->op) {
+        int i;
+        for (i = 0; i < ptrarray_size(&expr->conditions); i++) {
+            struct principalfilter_expr *subexpr = ptrarray_nth(&expr->conditions, i);
+            if (principalfilter_matchexpr(jp, filter, subexpr)) {
+                if (!strcmp(expr->op, "OR"))
+                    return 1;
+                else if (!strcmp(expr->op, "NOT"))
+                    return 0;
+            }
+            else {
+                if (!strcmp(expr->op, "AND"))
+                    return 0;
+            }
+            return strcmp(expr->op, "OR");
+        }
+    }
+    else {
+        if (expr->jaccountids) {
+            const char *accountid = json_string_value(json_object_get(jp, "id"));
+            int matches = 0;
+            json_t *jval;
+            size_t i;
+            json_array_foreach(expr->jaccountids, i, jval) {
+                if (!strcmpsafe(accountid, json_string_value(jval))) {
+                    matches = 1;
+                    break;
+                }
+            }
+            if (!matches) return 0;
+        }
+        if (expr->email) {
+            filter->xqmatches = 0;
+            xapian_query_run(filter->db, expr->email,
+                    principalfilter_matchexpr_cb, filter);
+            if (!filter->xqmatches) return 0;
+        }
+        if (expr->name) {
+            filter->xqmatches = 0;
+            xapian_query_run(filter->db, expr->name,
+                    principalfilter_matchexpr_cb, filter);
+            if (!filter->xqmatches) return 0;
+        }
+        if (expr->text) {
+            filter->xqmatches = 0;
+            xapian_query_run(filter->db, expr->text,
+                    principalfilter_matchexpr_cb, filter);
+            if (!filter->xqmatches) return 0;
+        }
+        if (expr->type) {
+            const char *s = json_string_value(json_object_get(jp, "type"));
+            if (strcmpsafe(expr->type, s)) {
+                return 0;
+            }
+        }
+        if (expr->timezone) {
+            const char *s = json_string_value(json_object_get(jp, "timeZone"));
+            if (strcmpsafe(expr->timezone, s)) {
+                return 0;
+            }
+        }
+    }
+
+
+    return 1;
+}
+
+static int principalfilter_match(json_t *jp, struct principalfilter *filter)
+{
+    const char *id = json_string_value(json_object_get(jp, "id"));
+    if (!id) return 0;
+
+    /* Set principal-scoped context */
+    struct message_guid guid;
+    message_guid_generate(&guid, id, strlen(id));
+    memcpy(filter->guidrep, message_guid_encode(&guid), MESSAGE_GUID_SIZE*2);
+
+    struct buf buf = BUF_INITIALIZER;
+    const char *s;
+
+    /* Index principal for text matching */
+    xapian_dbw_begin_doc(filter->dbw, &guid, XAPIAN_WRAP_DOCTYPE_MSG);
+    if ((s = json_string_value(json_object_get(jp, "email")))) {
+        buf_setcstr(&buf, s);
+        xapian_dbw_doc_part(filter->dbw, &buf, SEARCH_PART_FROM);
+        buf_reset(&buf);
+    }
+    if ((s = json_string_value(json_object_get(jp, "name")))) {
+        buf_setcstr(&buf, s);
+        xapian_dbw_doc_part(filter->dbw, &buf, SEARCH_PART_SUBJECT);
+        buf_reset(&buf);
+    }
+    if ((s = json_string_value(json_object_get(jp, "description")))) {
+        buf_setcstr(&buf, s);
+        xapian_dbw_doc_part(filter->dbw, &buf, SEARCH_PART_BODY);
+        buf_reset(&buf);
+    }
+    xapian_dbw_end_doc(filter->dbw, 1);
+
+    /* Evaluate filter */
+    int matches = principalfilter_matchexpr(jp, filter, filter->root);
+
+    buf_free(&buf);
+    return matches;
+}
+
+struct principal_query_rock {
+    struct jmap_req *req;
+    struct jmap_query *query;
+    struct principalfilter *filter;
+    strarray_t *matches;
+};
+
+static int principal_query_cb(jmap_req_t *req, const char *accountid, int rights, void *rock)
+{
+    struct principal_query_rock *qrock = rock;
+    struct jmap_query *query = qrock->query;
+
+    if (query->filter) {
+        struct principalfilter *filter = qrock->filter;
+        json_t *jp = buildprincipal(req, &filter->props, NULL, rights, accountid);
+        if (jp && principalfilter_match(jp, filter)) {
+            /* Matches filter */
+            strarray_append(qrock->matches, accountid);
+        }
+        json_decref(jp);
+    }
+    else {
+        /* No filter - always matches */
+        strarray_append(qrock->matches, accountid);
+    }
+
+    return 0;
+}
+
+static int principalid_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                               const void *vb,
+                                               void *rock)
+{
+    intptr_t is_ascending = (intptr_t) rock;
+    const char *sa = (*(const char **)va);
+    const char *sb = (*(const char **)vb);
+    return strcmp(sa, sb) * (is_ascending ? 1 : -1);
+}
+
+static int principal_query(jmap_req_t *req, struct jmap_query *query, json_t **err)
+{
+    strarray_t matches = STRARRAY_INITIALIZER;
+    struct principalfilter filter = {
+        HASH_TABLE_INITIALIZER,
+        NULL, NULL, NULL, { 0 }, 0
+    };
+
+    /* Find principals */
+    principalfilter_init(query->filter, &filter);
+    struct principal_query_rock rock = { req, query, &filter, &matches };
+    int r = principal_foreach(req, principal_query_cb, &rock);
+    if (r) {
+        *err = jmap_server_error(r);
+        goto done;
+    }
+
+    /* Make query state */
+    SHA_CTX sha1;
+    SHA1_Init(&sha1);
+    size_t i;
+    for (i = 0; i < (size_t) strarray_size(&matches); i++) {
+        const char *id = strarray_nth(&matches, i);
+        SHA1_Update(&sha1, id, strlen(id));
+    }
+    uint8_t digest[SHA1_DIGEST_LENGTH];
+    SHA1_Final(digest, &sha1);
+    char hexdigest[SHA1_DIGEST_LENGTH*2 + 1];
+    bin_to_lchex(digest, SHA1_DIGEST_LENGTH, hexdigest);
+    hexdigest[SHA1_DIGEST_LENGTH*2] = '\0';
+    query->query_state = xstrdup(hexdigest);
+
+    query->total = json_array_size(query->ids);
+
+    /* Sort matches - only sort by id is supported */
+    int is_ascending = 1;
+    if (json_array_size(query->sort)) {
+        json_t *jcomp = json_array_get(query->sort, 0);
+        if (json_object_get(jcomp, "isAscending") == json_false()) {
+            is_ascending = 0;
+        }
+    }
+    cyr_qsort_r(matches.data, matches.count, sizeof(char*),
+                principalid_cmp, (void*)(intptr_t) is_ascending);
+
+    /* Apply windowing */
+    size_t startpos = 0;
+    if (query->anchor) {
+        ssize_t j;
+        for (j = 0; j < strarray_size(&matches); j++) {
+            if (!strcmpsafe(query->anchor, strarray_nth(&matches, j))) {
+                /* Found anchor */
+                if (query->anchor_offset < 0) {
+                    startpos = -query->anchor_offset > j ?
+                        0 : j + query->anchor_offset;
+                }
+                else {
+                    startpos = j + query->anchor_offset;
+                }
+                break;
+            }
+        }
+    }
+    else if (query->position < 0) {
+        startpos = ((size_t) -query->position) > (size_t) strarray_size(&matches) ?
+            0 : strarray_size(&matches) + query->position;
+    }
+    else startpos = query->position;
+    /* Build result list */
+    for (i = startpos; i < (size_t) strarray_size(&matches); i++) {
+        if (query->have_limit && json_array_size(query->ids) >= query->limit) {
+            break;
+        }
+        json_array_append_new(query->ids,
+                json_string(strarray_nth(&matches, i)));
+    }
+
+done:
+    principalfilter_fini(&filter);
+    strarray_fini(&matches);
+    return 0;
+}
+
+static int jmap_calendarprincipal_query(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_query query;
+
+    /* Parse request */
+    json_t *err = NULL;
+    jmap_query_parse(req, &parser, NULL, NULL,
+                     principal_query_validatefilter, NULL,
+                     principal_query_validatecomparator, NULL,
+                     &query, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(err, "arguments", parser.invalid);
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Run query */
+    principal_query(req, &query, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* All done */
+    jmap_ok(req, jmap_query_reply(&query));
+
+done:
+    jmap_query_fini(&query);
+    jmap_parser_fini(&parser);
+    return 0;
+}
+
+static int jmap_calendarprincipal_changes(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes;
+    json_t *err = NULL;
+
+    jmap_changes_parse(req, &parser, 0, NULL, NULL, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+
+  done:
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
+    return 0;
+}
+
+static int jmap_calendarprincipal_querychanges(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_querychanges query;
+
+    json_t *err = NULL;
+    jmap_querychanges_parse(req, &parser, NULL, NULL,
+                            principal_query_validatefilter, NULL,
+                            principal_query_validatecomparator, NULL,
+                            &query, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+
+done:
+    jmap_querychanges_fini(&query);
+    jmap_parser_fini(&parser);
+    return 0;
+}
+
+static int jmap_calendarprincipal_set(struct jmap_req *req)
+{
+    struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set;
+    json_t *err = NULL;
+
+    jmap_set_parse(req, &argparser, calendarprincipal_props, NULL, NULL, &set, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    int r = principal_currentstate(req, &set.old_state);
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+    if (set.if_in_state && strcmp(set.if_in_state, set.old_state)) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
+    }
+
+    /* create */
+    const char *id;
+    json_t *jarg;
+    json_object_foreach(set.create, id, jarg) {
+        json_object_set_new(set.not_created, id,
+                json_pack("{s:s}", "type", "forbidden"));
+    }
+
+    /* update */
+    json_object_foreach(set.update, id, jarg) {
+        /* Only allow updates for authenticated user principal */
+        if (strcmp(id, req->userid)) {
+            json_object_set_new(set.not_updated, id,
+                    json_pack("{s:s}", "type", "forbidden"));
+            continue;
+        }
+        /* Validate properties */
+        json_t *invalid = json_array();
+        const char *pname;
+        json_t *jprop;
+        json_object_foreach(jarg, pname, jprop) {
+            if (strcmp(pname, "timeZone")) {
+                json_array_append_new(invalid, json_string(pname));
+            }
+        }
+        if (json_array_size(invalid)) {
+            json_object_set_new(set.not_updated, id,
+                    json_pack("{s:s s:o}", "type", "invalidProperties",
+                        "properties", invalid));
+            continue;
+        }
+        json_decref(invalid);
+        /* Update princpial */
+        const char *tzid = json_string_value(json_object_get(jarg, "timeZone"));
+        if (tzid) {
+            icaltimezone *tz;
+            if ((tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid))) {
+                char *calhomename = caldav_mboxname(req->userid, NULL);
+                struct mailbox *mbox = NULL;
+                int r = jmap_openmbox(req, calhomename, &mbox, 1);
+                if (!r) {
+                    annotate_state_t *astate = NULL;
+                    r = mailbox_get_annotate_state(mbox, 0, &astate);
+                    if (!r) {
+                        static const char *tzid_annot =
+                            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+                        static const char *tz_annot =
+                            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+
+                        struct buf val = BUF_INITIALIZER;
+                        buf_setcstr(&val, tzid);
+                        r = annotate_state_writemask(astate, tzid_annot, req->userid, &val);
+                        icalcomponent *vtz = icaltimezone_get_component(tz);
+                        if (vtz) {
+                            buf_setcstr(&val, icalcomponent_as_ical_string(vtz));
+                            int r2 = annotate_state_writemask(astate, tz_annot, req->userid, &val);
+                            if (!r) r = r2;
+                        }
+                        buf_free(&val);
+                    }
+                }
+                jmap_closembox(req, &mbox);
+                free(calhomename);
+                if (!r) {
+                    json_object_set_new(set.updated, id, json_object());
+                }
+                else json_object_set_new(set.not_updated, id, jmap_server_error(r));
+            }
+            else json_object_set_new(set.not_updated, id, json_pack("{s:s s:[s]}",
+                        "type", "invalidProperties", "properties", "timeZone"));
+        }
+    }
+
+    /* destroy */
+    size_t i;
+    json_array_foreach(set.destroy, i, jarg) {
+        json_object_set_new(set.not_destroyed, json_string_value(jarg),
+                json_pack("{s:s}", "type", "forbidden"));
+    }
+
+    r = principal_currentstate(req, &set.new_state);
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+
+    jmap_ok(req, jmap_set_reply(&set));
+
+done:
+    jmap_parser_fini(&argparser);
+    jmap_set_fini(&set);
+    return 0;
+}
+
+struct busyperiod {
+    struct jmapical_datetime utcstart;
+    struct jmapical_datetime utcend;
+    icalproperty_status status;
+    json_t *jevent;
+};
+
+#define JMAP_BUSYPERIOD_INITIALIZER {\
+    JMAPICAL_DATETIME_INITIALIZER, \
+    JMAPICAL_DATETIME_INITIALIZER, \
+    ICAL_STATUS_NONE, \
+    NULL \
+}
+
+struct principal_getavailability_rock {
+    /* Request-scoped context */
+    jmap_req_t *req;
+    struct buf *buf;
+    icaltimetype icalstart;
+    icaltimetype icalend;
+    const char *principalid;
+    struct dynarray *busyperiods;
+    int show_details;
+    struct jmapical_jmapcontext *jmapctx;
+    hash_table *eventprops;
+    int cumulatedrights;
+    /* Mailbox-scoped context */
+    struct mailbox *mbox;
+    mbentry_t *mbentry;
+    int checkacl;
+    int rights;
+    icaltimezone *floatingtz;
+    /* Event-scoped context */
+    json_t *jevent;
+};
+
+static int getavailability_ishidden(icalcomponent *comp)
+{
+    icalproperty *prop;
+    prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+    if (prop && icalproperty_get_transp(prop) == ICAL_TRANSP_TRANSPARENT) {
+        return 0;
+    }
+    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+    if (prop && icalproperty_get_class(prop) == ICAL_CLASS_CONFIDENTIAL) {
+        return 0;
+    }
+    prop = icalcomponent_get_first_property(comp, ICAL_STATUS_PROPERTY);
+    if (prop && icalproperty_get_status(prop) == ICAL_STATUS_CANCELLED) {
+        return 0;
+    }
+    return 1;
+}
+
+static int principal_getavailability_ical_cb(icalcomponent *comp,
+                                              icaltimetype start,
+                                              icaltimetype end,
+                                              void *vrock)
+{
+    if (!getavailability_ishidden(comp)) return 1;
+
+    struct principal_getavailability_rock *rock = vrock;
+    struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+    icalproperty *prop;
+    struct busyperiod bp = JMAP_BUSYPERIOD_INITIALIZER;
+
+    /* Convert to UTC */
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    icaltimetype utcstart = icaltime_convert_to_zone(start, utc);
+    icaltimetype utcend = icaltime_convert_to_zone(end, utc);
+
+    /* Handle fractional seconds */
+    bit64 startnano = 0;
+    bit64 endnano = 0;
+    prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+    if (prop) {
+        jmapical_datetime_from_icalprop(prop, &dt);
+        startnano = dt.nano;
+    }
+    prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
+    if (prop) {
+        struct jmapical_duration dur = JMAPICAL_DURATION_INITIALIZER;
+        jmapical_duration_from_icalprop(prop,  &dur);
+        endnano = startnano + dur.nanos;
+        if (endnano > 1000000000) {
+            icaltime_adjust(&utcend, 0, 0, 0, endnano / 1000000000);
+            endnano %= 1000000000;
+        }
+    }
+    else {
+        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+        if (prop) {
+            jmapical_datetime_from_icalprop(prop, &dt);
+            endnano = dt.nano;
+        }
+    }
+
+    /* utcStart and utcEnd */
+    jmapical_datetime_from_icaltime(utcstart, &bp.utcstart);
+    bp.utcstart.nano = startnano;
+    jmapical_datetime_from_icaltime(utcend, &bp.utcend);
+    bp.utcend.nano = endnano;
+
+    /* busyStatus */
+    bp.status = ICAL_STATUS_NONE;
+    prop = icalcomponent_get_first_property(comp, ICAL_STATUS_PROPERTY);
+    if (prop) {
+        bp.status = icalproperty_get_status(prop);
+    }
+
+    /* event */
+    enum icalproperty_class class = ICAL_CLASS_NONE;
+    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+    if (prop) class = icalproperty_get_class(prop);
+    if (rock->show_details && rock->jevent &&
+            class != ICAL_CLASS_PRIVATE && class != ICAL_CLASS_CONFIDENTIAL) {
+
+        /* Build event instance */
+        json_t *jevent = NULL;
+        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (prop) {
+            /* A recurrence override. */
+            json_t *joverrides = json_object_get(rock->jevent, "recurrenceOverrides");
+            jmapical_datetime_from_icalprop(prop, &dt);
+            jmapical_localdatetime_as_string(&dt, rock->buf);
+            const char *recurid;
+            json_t *jval;
+            json_object_foreach(joverrides, recurid, jval) {
+                if (!strcmpsafe(recurid, buf_cstring(rock->buf))) {
+                    jevent = jmap_patchobject_apply(rock->jevent, jval, NULL);
+                    break;
+                }
+            }
+            buf_reset(rock->buf);
+        }
+        if (!jevent) {
+            /* Copy from main event */
+            jevent = json_copy(rock->jevent); // shallow copy
+        }
+
+        /* Set start */
+        jmapical_datetime_from_icaltime(start, &dt);
+        dt.nano = startnano;
+        jmapical_localdatetime_as_string(&dt, rock->buf);
+        json_object_set_new(jevent, "start", json_string(buf_cstring(rock->buf)));
+        buf_reset(rock->buf);
+
+        /* Filter properties and set event */
+        json_object_del(jevent, "recurrenceOverrides");
+        json_object_del(jevent, "recurrenceRules");
+        json_object_del(jevent, "excludedRecurrenceRules");
+        jmap_filterprops(jevent, rock->eventprops);
+        bp.jevent = jevent;
+    }
+
+    dynarray_append(rock->busyperiods, &bp);
+
+    return 1;
+}
+
+static int principal_getavailability_cb(void *vrock, struct caldav_data *cdata)
+{
+    struct principal_getavailability_rock *rock = vrock;
+    icalcomponent *ical = NULL;
+    int r = 0;
+
+    if (cdata->comp_type != CAL_COMP_VEVENT) return 0;
+
+    /* Lookup mailbox entry */
+    if (!rock->mbentry ||
+            (cdata->dav.mailbox_byname &&
+             strcmp(rock->mbentry->name, cdata->dav.mailbox)) ||
+            (!cdata->dav.mailbox_byname &&
+             strcmp(rock->mbentry->uniqueid, cdata->dav.mailbox))) {
+        mboxlist_entry_free(&rock->mbentry);
+        rock->mbentry = jmap_mbentry_from_dav(rock->req, &cdata->dav);
+        if (!rock->mbentry) {
+            xsyslog(LOG_ERR, "no mbentry for mailbox",
+                    "dav.mailbox=<%s> dav.mailbox_byname=<%d>",
+                    cdata->dav.mailbox, cdata->dav.mailbox_byname);
+            return 0;
+        }
+    }
+
+    if (!rock->mbox || strcmp(mailbox_uniqueid(rock->mbox), rock->mbentry->uniqueid)) {
+        /* reset state for calendar collection */
+        if (rock->mbox) {
+            jmap_closembox(rock->req, &rock->mbox);
+        }
+        if (rock->floatingtz) {
+            icaltimezone_free(rock->floatingtz, 1);
+            rock->floatingtz = NULL;
+        }
+        rock->rights = 0;
+        /* check ACL */
+        if (rock->checkacl) {
+            rock->rights = jmap_myrights_mbentry(rock->req, rock->mbentry);
+            rock->cumulatedrights |= rock->rights;
+            if (!(rock->rights & JACL_READFB)) {
+                goto done;
+            }
+        }
+        /* check if the collection is marked as transparent */
+        const char *annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
+
+        if (!annotatemore_lookupmask_mbe(rock->mbentry, annot, rock->req->userid,
+                    rock->buf)) {
+            if (!strcmp(buf_cstring(rock->buf), "transparent")) {
+                goto done;
+            }
+            buf_reset(rock->buf);
+        }
+        r = jmap_openmbox(rock->req, rock->mbentry->name, &rock->mbox, 0);
+        if (r) goto done;
+        rock->floatingtz = caldav_get_calendar_tz(rock->mbentry->name,
+                rock->req->userid);
+    }
+
+    ical = caldav_record_to_ical(rock->mbox, cdata, NULL, NULL);
+    if (!ical) goto done;
+
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    if (!comp || !getavailability_ishidden(comp)) {
+        goto done;
+    }
+
+    /* Check mailbox-scoped ACL for showDetails */
+    if (rock->show_details && rock->checkacl && !(rock->rights & ACL_READ)) {
+        rock->show_details = 0;
+    }
+    if (rock->show_details) {
+        /* Fetch all properties, we need them for recurrence overrides */
+        rock->jevent = jmapical_tojmap(ical, NULL, rock->jmapctx);
+    }
+
+    struct icalperiodtype timerange = {
+        rock->icalstart, rock->icalend, icaldurationtype_null_duration()
+    };
+    icalcomponent_myforeach(ical, timerange, rock->floatingtz,
+            principal_getavailability_ical_cb, rock);
+    json_decref(rock->jevent);
+    rock->jevent = NULL;
+
+done:
+    if (ical) icalcomponent_free(ical);
+    buf_reset(rock->buf);
+    return r;
+}
+
+static int busyperiod_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                              const void *vb,
+                                              void *rock __attribute__((unused)))
+{
+    const struct busyperiod *a = va;
+    const struct busyperiod *b = vb;
+
+    int cmp = jmapical_datetime_compare(&a->utcstart, &b->utcstart);
+    if (cmp) return cmp;
+
+    if (a->jevent && !b->jevent) {
+        return -1;
+    }
+    else if (!a->jevent && b->jevent) {
+        return 1;
+    }
+
+    if (a->status != b->status) {
+        if (a->status == ICAL_STATUS_CONFIRMED) {
+            return -1;
+        }
+        if (b->status == ICAL_STATUS_CONFIRMED) {
+            return 1;
+        }
+        if (a->status != ICAL_STATUS_TENTATIVE) {
+            return -1;
+        }
+        if (b->status != ICAL_STATUS_TENTATIVE) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static void principal_getavailability(jmap_req_t *req,
+                                      const char *principalid,
+                                      struct jmapical_datetime *dtstart,
+                                      struct jmapical_datetime *dtend,
+                                      int show_details,
+                                      hash_table *props)
+{
+    struct caldav_db *db = caldav_open_userid(principalid);
+    if (!db) {
+        jmap_error(req, json_pack("{s:s s:s}", "type", "serverFail",
+                    "description", "cannot open caldav db"));
+        return;
+    }
+
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    struct buf buf = BUF_INITIALIZER;
+    int checkacl = strcmp(req->userid, principalid);
+    struct dynarray *busyperiods = dynarray_new(sizeof(struct busyperiod));
+    struct jmapical_jmapcontext jmapctx;
+    jmap_calendarcontext_init(&jmapctx, req);
+
+    /* Lookup busytime across calendars */
+    icaltimetype icalstart = jmapical_datetime_to_icaltime(dtstart, utc);
+    time_t tstart = icaltime_as_timet_with_zone(icalstart, utc);
+    icaltimetype icalend = jmapical_datetime_to_icaltime(dtend, utc);
+    time_t tend = icaltime_as_timet_with_zone(icalend, utc);
+    struct principal_getavailability_rock rock = {
+        req,
+        &buf,
+        icalstart,
+        icalend,
+        principalid,
+        busyperiods,
+        show_details,
+        &jmapctx,
+        props,
+        0,
+        NULL,
+        NULL,
+        checkacl,
+        0,
+        NULL,
+        NULL
+    };
+
+    enum caldav_sort sort[] = { CAL_SORT_MAILBOX };
+    int r = caldav_foreach_timerange(db, NULL, tstart, tend, sort, 1,
+                                     principal_getavailability_cb, &rock);
+    if (r) jmap_error(req, jmap_server_error(r));
+    if (rock.mbox) {
+        jmap_closembox(req, &rock.mbox);
+    }
+    if (rock.mbentry) {
+        mboxlist_entry_free(&rock.mbentry);
+    }
+    if (rock.floatingtz) {
+        icaltimezone_free(rock.floatingtz, 1);
+        rock.floatingtz = NULL;
+    }
+    if (r) return;
+
+    /* Check cumulated calendar ACLs */
+    if (checkacl) {
+        if (!(rock.cumulatedrights & JACL_LOOKUP)) {
+            jmap_error(req, json_pack("{s:s}", "type", "notFound"));
+            goto done;
+        }
+        else if (!(rock.cumulatedrights & JACL_READFB)) {
+            jmap_error(req, json_pack("{s:s}", "type", "forbidden"));
+            goto done;
+        }
+    }
+
+    /* The server MUST merge and split BusyPeriod objects where the “event”
+     * property is null, such that none of them overlap and either there is a
+     * gap in time between any two objects (the utcEnd of one does not equal
+     * the utcStart of another) or those objects have a different busyStatus
+     * property. If there are overlapping BusyPeriod time ranges with
+     * different “busyStatus” properties the server MUST choose the value in
+     * the following order: confirmed > unavailable > tentative. */
+    cyr_qsort_r(busyperiods->data, busyperiods->count, sizeof(struct busyperiod),
+            (int(*)(const void*, const void*, void*))busyperiod_cmp, NULL);
+    int count = dynarray_size(busyperiods) ? 1 : 0;
+    int i;
+    for (i = 1; i < dynarray_size(busyperiods); i++) {
+        struct busyperiod *bp = dynarray_nth(busyperiods, i);
+        struct busyperiod *prevbp = dynarray_nth(busyperiods, count-1);
+        if (bp->jevent || bp->status != prevbp->status ||
+                jmapical_datetime_compare(&prevbp->utcend, &bp->utcstart) < 0) {
+            /* Insert new busy period */
+            dynarray_set(busyperiods, count++, bp);
+        }
+        else if (jmapical_datetime_compare(&prevbp->utcend, &bp->utcend) < 0) {
+            /* Merge busy period */
+            prevbp->utcend = bp->utcend;
+        }
+    }
+
+    /* Build result */
+
+    json_t *jbusyperiods = json_array();
+    for (i = 0; i < count; i++) {
+        struct busyperiod *bp = dynarray_nth(busyperiods, i);
+        json_t *jb = json_object();
+
+        /* utcStart */
+        jmapical_utcdatetime_as_string(&bp->utcstart, &buf);
+        json_object_set_new(jb, "utcStart", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+
+        /* utcEnd */
+        jmapical_utcdatetime_as_string(&bp->utcend, &buf);
+        json_object_set_new(jb, "utcEnd", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+
+        /* busyStatus */
+        const char *busystatus = NULL;
+        if (bp->status == ICAL_STATUS_TENTATIVE) {
+            busystatus = "tentative";
+        }
+        else if (bp->status == ICAL_STATUS_CONFIRMED) {
+            busystatus = "confirmed";
+        }
+        else if (bp->status == ICAL_STATUS_NONE) {
+            busystatus = "unavailable";
+        }
+        json_object_set_new(jb, "busyStatus", json_string(busystatus));
+
+        /* event */
+        json_object_set(jb, "event", bp->jevent ? bp->jevent : json_null());
+
+        json_array_append_new(jbusyperiods, jb);
+    }
+    jmap_ok(req, json_pack("{s:o}", "list", jbusyperiods));
+
+done:
+    buf_free(&buf);
+    caldav_close(db);
+    for (i = 0; i < dynarray_size(busyperiods); i++) {
+        struct busyperiod *bp = dynarray_nth(busyperiods, i);
+        json_decref(bp->jevent);
+    }
+    dynarray_free(&busyperiods);
+    jmap_calendarcontext_fini(&jmapctx);
+}
+
+static int jmap_calendarprincipal_getavailability(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    char *principalid = NULL;
+    int show_details = 0;
+    hash_table *props = NULL;
+
+    struct jmapical_datetime dtstart = JMAPICAL_DATETIME_INITIALIZER;
+    struct jmapical_datetime dtend = JMAPICAL_DATETIME_INITIALIZER;
+
+    /* Parse arguments */
+    const char *s;
+    json_t *myargs = json_copy(req->args); // shallow copy
+    if ((s = json_string_value(json_object_get(myargs, "id")))) {
+        principalid = xstrdup(s);
+        json_object_del(myargs, "id");
+    }
+    if ((s = json_string_value(json_object_get(myargs, "utcStart")))) {
+        if (jmapical_utcdatetime_from_string(s, &dtstart) == 0) {
+            json_object_del(myargs, "utcStart");
+        }
+    }
+    if ((s = json_string_value(json_object_get(myargs, "utcEnd")))) {
+        if (jmapical_utcdatetime_from_string(s, &dtend) == 0) {
+            json_object_del(myargs, "utcEnd");
+        }
+    }
+    if (json_is_boolean(json_object_get(myargs, "showDetails"))) {
+        show_details = json_boolean_value(json_object_get(myargs, "showDetails"));
+        json_object_del(myargs, "showDetails");
+    }
+
+    json_t *jprops = json_object_get(myargs, "eventProperties");
+    if (json_is_array(jprops)) {
+        props = xzmalloc(sizeof(hash_table));
+        construct_hash_table(props, json_array_size(jprops) + 1, 0);
+        json_t *jval;
+        size_t i;
+        json_array_foreach(jprops, i, jval) {
+            const char *name = json_string_value(jval);
+            const jmap_property_t *propdef = NULL;
+            if (name) {
+                propdef = jmap_property_find(name, event_props);
+                if (propdef && propdef->capability &&
+                        !jmap_is_using(req, propdef->capability)) {
+                    propdef = NULL;
+                }
+            }
+            if (propdef) {
+                hash_insert(name, (void*)1, props);
+            }
+            else {
+                jmap_parser_push_index(&parser, "eventProperties", i, name);
+                jmap_parser_invalid(&parser, NULL);
+                jmap_parser_pop(&parser);
+            }
+        }
+        json_object_del(myargs, "eventProperties");
+    }
+    else if (jprops == NULL || json_is_null(jprops)) {
+        json_object_del(myargs, "eventProperties");
+    }
+
+    if (json_object_size(myargs)) {
+        const char *pname;
+        json_t *jval;
+        json_object_foreach(myargs, pname, jval) {
+            jmap_parser_invalid(&parser, pname);
+        }
+        jmap_error(req, json_pack("{s:s s:O}", "type", "invalidArguments",
+                    "arguments", parser.invalid));
+        goto done;
+    }
+    json_decref(myargs);
+
+    principal_getavailability(req, principalid, &dtstart, &dtend, show_details, props);
+
+done:
+    if (props) {
+        free_hash_table(props, NULL);
+        free(props);
+    }
+    jmap_parser_fini(&parser);
+    free(principalid);
     return 0;
 }
