@@ -5971,7 +5971,7 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
                               struct propstat propstat[],
                               void *rock __attribute__((unused)))
 {
-    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
+    if (!pctx->txn->req_tgt.resource) {
         xmlChar *type, *ver = NULL, *freeme = NULL;
         const char *tz = NULL;
         struct mime_type_t *mime;
@@ -6265,8 +6265,7 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
     const char *value = NULL;
     int r = 0;
 
-    if (!(namespace_calendar.allow & ALLOW_CAL_NOTZ) ||
-        !fctx->req_tgt->collection || fctx->req_tgt->resource)
+    if (!(namespace_calendar.allow & ALLOW_CAL_NOTZ) || fctx->req_tgt->resource)
         return HTTP_NOT_FOUND;
 
     r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
@@ -6547,8 +6546,6 @@ static int proppatch_defaultalarm(xmlNodePtr prop, unsigned set,
 }
 
 
-static icaltimezone *get_calendar_tz(const char *mboxname, const char *userid);
-
 /* mboxlist_findall() callback to run calendar-query on a collection */
 static int calquery_by_collection(const mbentry_t *mbentry, void *rock)
 {
@@ -6560,7 +6557,7 @@ static int calquery_by_collection(const mbentry_t *mbentry, void *rock)
 
     if (!calfilter->tz && (calfilter->flags & NEED_TZ)) {
         /* Determine which time zone to use for floating time */
-        calfilter->tz = cal_tz = get_calendar_tz(mboxname, httpd_userid);
+        calfilter->tz = cal_tz = caldav_get_calendar_tz(mboxname, httpd_userid);
     }
 
     int r = propfind_by_collection(mbentry, rock);
@@ -6885,17 +6882,10 @@ add_vavailability(struct vavailability_array *vavail, icalcomponent *ical)
     if (!prop || !newav->priority) newav->priority = 10;
 }
 
-
-/* caldav_foreach() callback to find busytime of a resource */
-static int busytime_by_resource(void *rock, void *data)
+HIDDEN int busytime_add_resource(struct mailbox *mailbox,
+                                 struct freebusy_filter *fbfilter,
+                                 struct caldav_data *cdata)
 {
-    struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
-    struct caldav_data *cdata = (struct caldav_data *) data;
-    struct freebusy_filter *fbfilter =
-        (struct freebusy_filter *) fctx->filter_crit;
-
-    keepalive_response(fctx->txn);
-
     if (!cdata->dav.imap_uid) return 0;
 
     /* Perform component filtering */
@@ -6926,7 +6916,7 @@ static int busytime_by_resource(void *rock, void *data)
         icalcomponent *ical = NULL;
 
         /* Fetch index record for the resource */
-        ical = caldav_record_to_ical(fctx->mailbox, cdata, NULL, NULL);
+        ical = caldav_record_to_ical(mailbox, cdata, NULL, NULL);
         if (!ical) return 0;
 
         if (cdata->comp_flags.recurring) {
@@ -6971,7 +6961,21 @@ static int busytime_by_resource(void *rock, void *data)
 }
 
 
-static icaltimezone *get_calendar_tz(const char *mboxname, const char *userid)
+/* caldav_foreach() callback to find busytime of a resource */
+static int busytime_by_resource(void *rock, void *data)
+{
+    struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    struct caldav_data *cdata = (struct caldav_data *) data;
+    struct freebusy_filter *fbfilter =
+        (struct freebusy_filter *) fctx->filter_crit;
+
+    keepalive_response(fctx->txn);
+
+    return busytime_add_resource(fctx->mailbox, fbfilter, cdata);
+}
+
+
+HIDDEN icaltimezone *caldav_get_calendar_tz(const char *mboxname, const char *userid)
 {
     struct buf attrib = BUF_INITIALIZER;
     icaltimezone *tz = NULL;
@@ -7034,7 +7038,7 @@ static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
     }
 
     /* Determine which time zone to use for floating time */
-    fbfilter->tz = get_calendar_tz(mboxname, httpd_userid);
+    fbfilter->tz = caldav_get_calendar_tz(mboxname, httpd_userid);
 
     int r = propfind_by_collection(mbentry, rock);
 
@@ -7226,78 +7230,18 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
     }
 }
 
-
-/* Create an iCalendar object containing busytime of all specified resources */
-icalcomponent *busytime_query_local(struct transaction_t *txn,
-                                    struct propfind_ctx *fctx,
-                                    char mailboxname[],
-                                    icalproperty_method method,
-                                    const char *uid,
-                                    const char *organizer,
-                                    const char *attendee)
+HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
+                                       icalproperty_method method,
+                                       const char *uid,
+                                       const char *organizer,
+                                       const char *attendee)
 {
-    struct freebusy_filter *fbfilter =
-        (struct freebusy_filter *) fctx->filter_crit;
     struct freebusy_array *freebusy = &fbfilter->freebusy;
     struct vavailability_array *vavail = &fbfilter->vavail;
     icalcomponent *ical = NULL;
     icalcomponent *fbcomp;
     icalproperty *prop;
     unsigned n;
-
-    syslog(LOG_DEBUG, "busytime_query_local(mbox: '%s', org: '%s', att: '%s')",
-           mailboxname, organizer, attendee);
-
-    fctx->open_db = (db_open_proc_t) &caldav_open_mailbox;
-    fctx->close_db = (db_close_proc_t) &caldav_close;
-    fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
-    fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
-    fctx->proc_by_resource = &busytime_by_resource;
-
-    /* Gather up all of the busytime and VAVAILABILITY periods */
-    if (fctx->depth > 0) {
-        /* Calendar collection(s) */
-
-        if (txn->req_tgt.collection) {
-            /* Get busytime for target calendar collection */
-            busytime_by_collection(txn->req_tgt.mbentry, fctx);
-        }
-        else {
-            /* Get busytime for all contained calendar collections */
-            mboxlist_mboxtree(mailboxname, busytime_by_collection,
-                              fctx, MBOXTREE_SKIP_ROOT);
-
-            /* XXX  Get busytime for all shared calendar collections? */
-        }
-
-        if (fctx->davdb) caldav_close(fctx->davdb);
-    }
-
-    if (*fctx->ret) return NULL;
-
-    if (fbfilter->flags & CHECK_USER_AVAIL) {
-        /* Check for CALDAV:calendar-availability on user's Inbox */
-        struct buf attrib = BUF_INITIALIZER;
-        const char *prop_annot =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-availability";
-        char *userid = mboxname_to_userid(mailboxname);
-        char *mboxname = caldav_mboxname(userid, SCHED_INBOX);
-        if (!annotatemore_lookupmask(mboxname, prop_annot,
-                                     httpd_userid, &attrib) && attrib.len) {
-            add_vavailability(vavail,
-                              icalparser_parse_string(buf_cstring(&attrib)));
-        }
-        else {
-            prop_annot = DAV_ANNOT_NS "<" XML_NS_CS ">calendar-availability";
-            if (!annotatemore_lookupmask(mboxname, prop_annot,
-                                         httpd_userid, &attrib) && attrib.len) {
-                add_vavailability(vavail,
-                                  icalparser_parse_string(buf_cstring(&attrib)));
-            }
-        }
-        free(mboxname);
-        free(userid);
-    }
 
     /* Combine VAVAILABILITY components into busytime */
     if (vavail->len) combine_vavailability(fbfilter);
@@ -7404,6 +7348,78 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
     }
 
     return ical;
+}
+
+
+/* Create an iCalendar object containing busytime of all specified resources */
+icalcomponent *busytime_query_local(struct transaction_t *txn,
+                                    struct propfind_ctx *fctx,
+                                    char mailboxname[],
+                                    icalproperty_method method,
+                                    const char *uid,
+                                    const char *organizer,
+                                    const char *attendee)
+{
+    struct freebusy_filter *fbfilter =
+        (struct freebusy_filter *) fctx->filter_crit;
+    struct vavailability_array *vavail = &fbfilter->vavail;
+
+    syslog(LOG_DEBUG, "busytime_query_local(mbox: '%s', org: '%s', att: '%s')",
+           mailboxname, organizer, attendee);
+
+    fctx->open_db = (db_open_proc_t) &caldav_open_mailbox;
+    fctx->close_db = (db_close_proc_t) &caldav_close;
+    fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
+    fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
+    fctx->proc_by_resource = &busytime_by_resource;
+
+    /* Gather up all of the busytime and VAVAILABILITY periods */
+    if (fctx->depth > 0) {
+        /* Calendar collection(s) */
+
+        if (txn->req_tgt.collection) {
+            /* Get busytime for target calendar collection */
+            busytime_by_collection(txn->req_tgt.mbentry, fctx);
+        }
+        else {
+            /* Get busytime for all contained calendar collections */
+            mboxlist_mboxtree(mailboxname, busytime_by_collection,
+                              fctx, MBOXTREE_SKIP_ROOT);
+
+            /* XXX  Get busytime for all shared calendar collections? */
+        }
+
+        if (fctx->davdb) caldav_close(fctx->davdb);
+    }
+
+    if (*fctx->ret) return NULL;
+
+
+    if (fbfilter->flags & CHECK_USER_AVAIL) {
+        /* Check for CALDAV:calendar-availability on user's Inbox */
+        struct buf attrib = BUF_INITIALIZER;
+        const char *prop_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-availability";
+        char *userid = mboxname_to_userid(mailboxname);
+        char *mboxname = caldav_mboxname(userid, SCHED_INBOX);
+        if (!annotatemore_lookupmask(mboxname, prop_annot,
+                                     httpd_userid, &attrib) && attrib.len) {
+            add_vavailability(vavail,
+                              icalparser_parse_string(buf_cstring(&attrib)));
+        }
+        else {
+            prop_annot = DAV_ANNOT_NS "<" XML_NS_CS ">calendar-availability";
+            if (!annotatemore_lookupmask(mboxname, prop_annot,
+                                         httpd_userid, &attrib) && attrib.len) {
+                add_vavailability(vavail,
+                                  icalparser_parse_string(buf_cstring(&attrib)));
+            }
+        }
+        free(mboxname);
+        free(userid);
+    }
+
+    return busytime_to_ical(fbfilter, method, uid, organizer, attendee);
 }
 
 
