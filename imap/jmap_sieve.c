@@ -2101,7 +2101,7 @@ static const char *_envelope_address_parse(json_t *addr,
 static int jmap_sieve_test(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    const char *key, *scriptid = NULL, *bcname, *tmpname = NULL;
+    const char *key, *content = NULL, *scriptid = NULL, *bcname, *tmpname = NULL;
     json_t *arg, *emailids = NULL, *envelope = NULL, *err = NULL;
     strarray_t env_from = STRARRAY_INITIALIZER;
     strarray_t env_to = STRARRAY_INITIALIZER;
@@ -2120,7 +2120,11 @@ static int jmap_sieve_test(struct jmap_req *req)
             /* already handled in jmap_api() */
         }
 
-        else if (!strcmp(key, "scriptBlobId")) {
+        else if (!strcmp(key, "scriptContent")) {
+            content = json_string_value(arg);
+        }
+
+        else if (!strcmp(key, "scriptId")) {
             scriptid = json_string_value(arg);
         }
 
@@ -2146,11 +2150,8 @@ static int jmap_sieve_test(struct jmap_req *req)
         }
     }
 
-    if (!scriptid) {
-        jmap_parser_invalid(&parser, "scriptBlobId");
-    }
-    else if (scriptid[0] == '#') {
-        scriptid = jmap_lookup_id(req, scriptid + 1);
+    if (!content == !scriptid) {
+        jmap_parser_invalid(&parser, "scriptContent");
     }
 
     if (!emailids) {
@@ -2198,10 +2199,16 @@ static int jmap_sieve_test(struct jmap_req *req)
         goto done;
     }
 
-    /* Is scriptid an installed script? */
-    const char *sievedir = user_sieve_path(req->accountid);
-    const char *script = script_from_id(sievedir, scriptid+1);
-    if (script) {
+    if (scriptid) {
+        const char *sievedir = user_sieve_path(req->accountid);
+        const char *script = script_from_id(sievedir, scriptid);
+
+        if (!script) {
+            err = json_pack("{s:s}", "type", "notFound");
+            jmap_error(req, err);
+            goto done;
+        }
+
         /* Use pre-compiled bytecode file */
         buf_printf(&buf, "%s/%.*s%s", sievedir,
                    (int) strlen(script) - SCRIPT_SUFFIX_LEN, script,
@@ -2209,61 +2216,40 @@ static int jmap_sieve_test(struct jmap_req *req)
         bcname = buf_cstring(&buf);
     }
     else {
-        /* Is scriptid an uploaded blob? */
-        r = jmap_findblob(req, NULL/*accountid*/, scriptid,
-                          &mbox, &mr, NULL, NULL, &buf);
-        if (r == IMAP_NOTFOUND) {
-            err = json_pack("{s:s s:[s]}",
-                            "type", "blobNotFound", "Id", scriptid);
+        /* Generate temporary bytecode file */
+        static char template[] = "/tmp/sieve-test-bytecode-XXXXXX";
+        sieve_script_t *s = NULL;
+        bytecode_info_t *bc = NULL;
+        char *errors = NULL;
+        int fd = -1;
+
+        r = sieve_script_parse_string(NULL, content, &errors, &s);
+        msgrecord_unref(&mr);
+        jmap_closembox(req, &mbox);
+
+        if (r != SIEVE_OK) {
+            err = json_pack("{s:s, s:s}", "type", "invalidScript",
+                            "description", errors);
+            free(errors);
         }
-        else if (r) {
-            err = jmap_server_error(r);
+        else if (sieve_generate_bytecode(&bc, s) == -1) {
+            err = json_pack("{s:s s:s}", "type", "serverFail",
+                            "description", "unable to generate bytecode");
         }
-        else {
-            /* Generate temporary bytecode file */
-            static char template[] = "/tmp/sieve-test-bytecode-XXXXXX";
-            const char *script_data = buf_cstring(&buf);
-            sieve_script_t *s = NULL;
-            bytecode_info_t *bc = NULL;
-            char *errors = NULL;
-            int fd = -1;
-
-            if (mr) {
-                /* Need to skip over header of rfc822 wrapper */
-                struct index_record record;
-
-                msgrecord_get_index_record(mr, &record);
-                script_data += record.header_size;
-            }
-
-            r = sieve_script_parse_string(NULL, script_data, &errors, &s);
-            msgrecord_unref(&mr);
-            jmap_closembox(req, &mbox);
-
-            if (r != SIEVE_OK) {
-                err = json_pack("{s:s, s:s}", "type", "invalidScript",
-                                "description", errors);
-                free(errors);
-            }
-            else if (sieve_generate_bytecode(&bc, s) == -1) {
-                err = json_pack("{s:s s:s}", "type", "serverFail",
-                                "description", "unable to generate bytecode");
-            }
-            else if ((fd = mkstemp(template)) < 0) {
-                err = json_pack("{s:s s:s}", "type", "serverFail",
-                                "description", "unable to open temporary file");
-            }
-            else if (sieve_emit_bytecode(fd, bc) == -1) {
-                err = json_pack("{s:s s:s}", "type", "serverFail",
-                                "description", "unable to emit bytecode");
-            }
-
-            sieve_free_bytecode(&bc);
-            sieve_script_free(&s);
-            close(fd);
-
-            bcname = tmpname = template;
+        else if ((fd = mkstemp(template)) < 0) {
+            err = json_pack("{s:s s:s}", "type", "serverFail",
+                            "description", "unable to open temporary file");
         }
+        else if (sieve_emit_bytecode(fd, bc) == -1) {
+            err = json_pack("{s:s s:s}", "type", "serverFail",
+                            "description", "unable to emit bytecode");
+        }
+
+        sieve_free_bytecode(&bc);
+        sieve_script_free(&s);
+        close(fd);
+
+        bcname = tmpname = template;
 
         if (err) {
             jmap_error(req, err);
