@@ -109,6 +109,7 @@ sub set_up
     $self->{jmap}->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:calendarprincipals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 }
@@ -10300,6 +10301,528 @@ EOF
     $payload = decode_json($imip->{MESSAGE});
     $self->assert_str_equals('someone@local', $payload->{recipient});
     $self->assert_str_equals('test@example.com', $payload->{sender});
+}
+
+sub test_calendarprincipal_get
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    # Set timezone
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:calendar-timezone>
+BEGIN:VCALENDAR
+PRODID:-//CyrusIMAP.org//Cyrus 1.0//EN
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Europe/Berlin
+COMMENT:[DE] Germany (most areas)
+LAST-MODIFIED:20200820T145616Z
+X-LIC-LOCATION:Europe/Berlin
+X-PROLEPTIC-TZNAME:LMT
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+005328
+TZOFFSETTO:+0100
+DTSTART:18930401T000000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZNAME:CEST
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+DTSTART:19810329T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+DTSTART:19961027T030000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+END:STANDARD
+END:VTIMEZONE
+END:VCALENDAR
+</C:calendar-timezone>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane",
+                       $proppatchXml, 'Content-Type' => 'text/xml');
+
+    # Set description
+    $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:calendar-description>A description</C:calendar-description>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane",
+                       $proppatchXml, 'Content-Type' => 'text/xml');
+
+    # Set name
+    $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<D:displayname>Cassandane User</D:displayname>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/principals/user/cassandane",
+                       $proppatchXml, 'Content-Type' => 'text/xml');
+
+
+    my $res = $jmap->CallMethods([
+        ['CalendarPrincipal/get', {
+            ids => ['cassandane', 'nope'],
+        }, 'R1']
+    ]);
+    my $p = $res->[0][1]{list}[0];
+
+    $self->assert_not_null($p->{account});
+    delete ($p->{account});
+    $self->assert_deep_equals({
+        id => 'cassandane',
+        name => 'Cassandane User',
+        description => 'A description',
+        email => 'cassandane@example.com',
+        type => 'individual',
+        timeZone => 'Europe/Berlin',
+        mayGetAvailability => JSON::true,
+        accountId => 'cassandane',
+        sendTo => {
+            imip => 'mailto:cassandane@example.com',
+        },
+    }, $p);
+    $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
+}
+
+sub test_calendarprincipal_query
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("manifold");
+    # Trigger creation of default calendar
+    my $http = $self->{instance}->get_service("http");
+    Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    $admintalk->setacl("user.manifold", "cassandane", "lr") or die;
+    $admintalk->setacl("user.manifold.#calendars", "cassandane", "lr") or die;
+    $admintalk->setacl("user.manifold.#calendars.Default", "cassandane" => 'lr') or die;
+
+    xlog "test filters";
+    my $res = $jmap->CallMethods([
+        ['CalendarPrincipal/query', {
+            filter => {
+                name => 'Test',
+                email => 'cassandane@example.com',
+                text => 'User',
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals(['cassandane'], $res->[0][1]{ids});
+
+    xlog "test sorting";
+    $res = $jmap->CallMethods([
+        ['CalendarPrincipal/query', {
+            sort => [{
+                property => 'id',
+            }],
+        }, 'R1'],
+        ['CalendarPrincipal/query', {
+            sort => [{
+                property => 'id',
+                isAscending => JSON::false,
+            }],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals(['cassandane', 'manifold'], $res->[0][1]{ids});
+    $self->assert_deep_equals(['manifold', 'cassandane'], $res->[1][1]{ids});
+}
+
+sub test_calendarprincipal_changes
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarPrincipal/changes', {
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}
+
+sub test_calendarprincipal_querychanges
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarPrincipal/queryChanges', {
+            sinceQueryState => 'whatever',
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}
+
+sub test_calendarprincipal_set
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarPrincipal/set', {
+            create => {
+                principal1 => {
+                    timeZone => 'America/New_York',
+                },
+            },
+            update => {
+                cassandane => {
+                    name => 'Xyz',
+                },
+                principal2 => {
+                    timeZone => 'Europe/Berlin',
+                },
+            },
+            destroy => ['principal3'],
+        }, 'R1']
+    ]);
+
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notCreated}{principal1}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notUpdated}{principal2}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notDestroyed}{principal3}{type});
+
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{cassandane}{type});
+    $self->assert_deep_equals(['name'],
+        $res->[0][1]{notUpdated}{cassandane}{properties});
+
+    $res = $jmap->CallMethods([
+        ['CalendarPrincipal/get', {
+            ids => ['cassandane'],
+            properties => ['timeZone'],
+        }, 'R1'],
+        ['CalendarPrincipal/set', {
+            update => {
+                cassandane => {
+                    timeZone => 'Australia/Melbourne',
+                },
+            },
+        }, 'R2'],
+        ['CalendarPrincipal/get', {
+            ids => ['cassandane'],
+            properties => ['timeZone'],
+        }, 'R3']
+    ]);
+    $self->assert_null($res->[0][1]{list}[0]{timeZone});
+    $self->assert_deep_equals({}, $res->[1][1]{updated}{cassandane});
+    $self->assert_str_equals('Australia/Melbourne',
+        $res->[2][1]{list}[0]{timeZone});
+
+    $self->assert_not_null($res->[1][1]{oldState});
+    $self->assert_not_null($res->[1][1]{newState});
+    $self->assert_str_not_equals($res->[1][1]{oldState}, $res->[1][1]{newState});
+
+    my $oldState = $res->[1][1]{oldState};
+    $res = $jmap->CallMethods([
+        ['CalendarPrincipal/set', {
+            ifInState => $oldState,
+            update => {
+                cassandane => {
+                    timeZone => 'Asia/Tokyo',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
+}
+
+sub test_calendarprincipal_getavailability_showdetails
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                invisible => {
+                    name => 'invisibleCalendar',
+                    includeInAvailability => 'none',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $invisibleCalendarId = $res->[0][1]{created}{invisible}{id};
+    $self->assert_not_null($invisibleCalendarId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarId => 'Default',
+                    uid => 'event1uid',
+                    title => "event1",
+                    start => "2020-07-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    status => 'confirmed',
+                    recurrenceRules => [{
+                        frequency => 'weekly',
+                        count => 12,
+                    }],
+                    recurrenceOverrides => {
+                        "2020-08-26T09:00:00" => {
+                            start => "2020-08-26T13:00:00",
+                        },
+                    },
+                },
+                event2 => {
+                    calendarId => 'Default',
+                    uid => 'event2uid',
+                    title => "event2",
+                    start => "2020-08-07T11:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT3H",
+                },
+                event3 => {
+                    calendarId => 'Default',
+                    uid => 'event3uid',
+                    title => "event3",
+                    start => "2020-08-10T13:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    freeBusyStatus => 'free',
+                },
+                event4 => {
+                    calendarId => 'Default',
+                    uid => 'event4uid',
+                    title => "event4",
+                    start => "2020-08-12T09:30:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    status => 'tentative',
+                },
+                event5 => {
+                    calendarId => $invisibleCalendarId,
+                    uid => 'event5uid',
+                    title => "event5",
+                    start => "2020-08-14T15:30:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                },
+            },
+        }, 'R1'],
+        ['CalendarPrincipal/getAvailability', {
+            id => 'cassandane',
+            utcStart => '2020-08-01T00:00:00Z',
+            utcEnd => '2020-09-01T00:00:00Z',
+            showDetails => JSON::true,
+            eventProperties => ['start', 'title'],
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(5, scalar keys %{$res->[0][1]{created}});
+
+    $self->assert_deep_equals([{
+        utcStart => "2020-08-05T07:00:00Z",
+        utcEnd => "2020-08-05T08:00:00Z",
+        busyStatus => 'confirmed',
+        event => {
+            start => "2020-08-05T09:00:00",
+            title => 'event1',
+        },
+    }, {
+        utcStart => "2020-08-07T09:00:00Z",
+        utcEnd => "2020-08-07T12:00:00Z",
+        busyStatus => 'unavailable',
+        event => {
+            start => "2020-08-07T11:00:00",
+            title => 'event2',
+        },
+    }, {
+        utcStart => "2020-08-12T07:00:00Z",
+        utcEnd => "2020-08-12T08:00:00Z",
+        busyStatus => 'confirmed',
+        event => {
+            start => "2020-08-12T09:00:00",
+            title => 'event1',
+        },
+    }, {
+        utcStart => "2020-08-12T07:30:00Z",
+        utcEnd => "2020-08-12T08:30:00Z",
+        busyStatus => 'tentative',
+        event => {
+            start => "2020-08-12T09:30:00",
+            title => 'event4',
+        },
+    }, {
+        utcStart => "2020-08-19T07:00:00Z",
+        utcEnd => "2020-08-19T08:00:00Z",
+        busyStatus => 'confirmed',
+        event => {
+            start => "2020-08-19T09:00:00",
+            title => 'event1',
+        },
+    }, {
+        utcStart => "2020-08-26T11:00:00Z",
+        utcEnd => "2020-08-26T12:00:00Z",
+        busyStatus => 'confirmed',
+        event => {
+            start => "2020-08-26T13:00:00",
+            title => 'event1',
+        },
+    }], $res->[1][1]{list});
+}
+
+sub test_calendarprincipal_getavailability_merged
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                # 09:00 to 10:30: Two events adjacent to each other.
+                'event-0900-1000' => {
+                    calendarId => 'Default',
+                    title => "event-0900-1000",
+                    start => "2020-08-01T09:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT1H",
+                },
+                'event-1000-1030' => {
+                    calendarId => 'Default',
+                    title => "event-1000-1030",
+                    start => "2020-08-01T10:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT30M",
+                },
+                # 05:00 to 08:00: One event completely overlapping the other.
+                'event-0500-0800' => {
+                    calendarId => 'Default',
+                    title => "event-0500-0800",
+                    start => "2020-08-01T05:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT3H",
+                },
+                'event-0600-0700' => {
+                    calendarId => 'Default',
+                    title => "event-06:00-07:00",
+                    start => "2020-08-01T06:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT1H",
+                },
+                # 01:00 to 03:00: One event partially overlapping the other.
+                'event-0100-0200' => {
+                    calendarId => 'Default',
+                    title => "event-0100-0200",
+                    start => "2020-08-01T01:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT1H",
+                },
+                'event-0130-0300' => {
+                    calendarId => 'Default',
+                    title => "event-0130-0300",
+                    start => "2020-08-01T01:30:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT1H30M",
+                },
+                # 12:00 to 13:30: Overlapping events with differing busyStatus.
+                'event-1200-1300-tentative' => {
+                    calendarId => 'Default',
+                    title => "event-1200-1300-tentative",
+                    start => "2020-08-01T12:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT1H",
+                    status => 'tentative',
+                },
+                'event-1200-1330-confirmed' => {
+                    calendarId => 'Default',
+                    title => "event-1200-1330-confirmed",
+                    start => "2020-08-01T12:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT1H30M",
+                    status => 'confirmed',
+                },
+                'event-1200-1230-unavailable' => {
+                    calendarId => 'Default',
+                    title => "event-1200-1330-unavailable",
+                    start => "2020-08-01T12:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT30M",
+                },
+            },
+        }, 'R1'],
+        ['CalendarPrincipal/getAvailability', {
+            id => 'cassandane',
+            utcStart => '2020-08-01T00:00:00Z',
+            utcEnd => '2020-09-01T00:00:00Z',
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(9, scalar keys %{$res->[0][1]{created}});
+
+    $self->assert_deep_equals([{
+        utcStart => "2020-08-01T01:00:00Z",
+        utcEnd => "2020-08-01T03:00:00Z",
+        busyStatus => 'unavailable',
+        event => undef,
+    }, {
+        utcStart => "2020-08-01T05:00:00Z",
+        utcEnd => "2020-08-01T08:00:00Z",
+        busyStatus => 'unavailable',
+        event => undef,
+    }, {
+        utcStart => "2020-08-01T09:00:00Z",
+        utcEnd => "2020-08-01T10:30:00Z",
+        busyStatus => 'unavailable',
+        event => undef,
+    }, {
+        utcStart => "2020-08-01T12:00:00Z",
+        utcEnd => "2020-08-01T13:30:00Z",
+        busyStatus => 'confirmed',
+        event => undef,
+    }, {
+        utcStart => "2020-08-01T12:00:00Z",
+        utcEnd => "2020-08-01T12:30:00Z",
+        busyStatus => 'unavailable',
+        event => undef,
+    }, {
+        utcStart => "2020-08-01T12:00:00Z",
+        utcEnd => "2020-08-01T13:00:00Z",
+        busyStatus => 'tentative',
+        event => undef,
+    }], $res->[1][1]{list});
 }
 
 1;
