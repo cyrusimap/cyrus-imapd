@@ -56,7 +56,6 @@
 #include "arrayu64.h"
 #include "cyr_qsort_r.h"
 #include "hash.h"
-#include "http_err.h"
 #include "http_jmap.h"
 #include "imap_err.h"
 #include "jmap_mail.h"
@@ -81,9 +80,6 @@ static int jmap_sieve_set(jmap_req_t *req);
 static int jmap_sieve_query(jmap_req_t *req);
 static int jmap_sieve_validate(jmap_req_t *req);
 static int jmap_sieve_test(jmap_req_t *req);
-
-static int jmap_sieve_getblob(jmap_req_t *req,
-                              const char *blobid, const char *accept);
 
 static int maxscripts = 0;
 static json_int_t maxscriptsize = 0;
@@ -142,8 +138,6 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
             hash_insert(mp->name, mp, &settings->methods);
         }
     }
-
-    ptrarray_append(&settings->getblob_handlers, jmap_sieve_getblob);
 
     maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
     maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE) * 1024;
@@ -280,12 +274,6 @@ static void getscript(const char *id, const char *script, int isactive,
             }
 
             json_object_set_new(sieve, "isActive", json_boolean(isactive));
-        }
-
-        if (jmap_wantprop(get->props, "blobId")) {
-            buf_reset(&buf);
-            buf_printf(&buf, "S%s", id);
-            json_object_set_new(sieve, "blobId", json_string(buf_cstring(&buf)));
         }
 
         if (jmap_wantprop(get->props, "content")) {
@@ -483,11 +471,6 @@ static const jmap_property_t sieve_props[] = {
         "isActive",
         NULL,
         JMAP_PROP_SERVER_SET
-    },
-    {
-        "blobId",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     },
     {
         "content",
@@ -770,10 +753,6 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
 
             if (isactive == -1)
                 json_object_set_new(new_sieve, "isActive", json_false());
-
-            snprintf(link, sizeof(link), "S%s", id);
-            json_object_set_new(new_sieve, "blobId", json_string(link));
-            
             json_object_set_new(set->created, creation_id, new_sieve);
 
             if (old_link) {
@@ -1457,59 +1436,6 @@ static int jmap_sieve_validate(struct jmap_req *req)
 done:
     jmap_parser_fini(&parser);
     return 0;
-}
-
-static int jmap_sieve_getblob(jmap_req_t *req,
-                              const char *blobid, const char *accept_mime)
-{
-    struct buf buf = BUF_INITIALIZER;
-    int res = HTTP_OK;
-
-    if (*blobid != 'S') return 0;
-
-    /* Lookup scriptid */
-    const char *sievedir = user_sieve_path(req->accountid);
-    const char *script = script_from_id(sievedir, blobid+1);
-    if (script) {
-        buf_printf(&buf, "%s/%s", sievedir, script);
-    }
-    else {
-        res = HTTP_NOT_FOUND;
-        goto done;
-    }
-
-    /* Make sure client can handle blob type. */
-    if (accept_mime) {
-        if (strcmp(accept_mime, "application/octet-stream") &&
-            strcmp(accept_mime, "application/sieve")) {
-            res = HTTP_NOT_ACCEPTABLE;
-            goto done;
-        }
-
-        req->txn->resp_body.type = accept_mime;
-    }
-    else req->txn->resp_body.type = "application/sieve";
-
-    /* Load the message */
-    int fd = open(buf_cstring(&buf), 0);
-    if (fd == -1) {
-        req->txn->error.desc = "failed to load script";
-        res = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
-    buf_free(&buf);
-    buf_refresh_mmap(&buf, 1, fd, script, MAP_UNKNOWN_LEN, "sieve");
-
-    /* Write body */
-    req->txn->resp_body.len = buf_len(&buf);
-    write_body(HTTP_OK, req->txn, buf_base(&buf), buf_len(&buf));
-    close(fd);
-
-done:
-    buf_free(&buf);
-
-    return res;
 }
 
 typedef struct {
