@@ -576,6 +576,13 @@ HIDDEN void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
     dur->seconds = icaldur.seconds;
 }
 
+HIDDEN int jmapical_duration_from_icalprop(icalproperty *prop, struct jmapical_duration *dur)
+{
+    struct icaldurationtype icaldur = icalproperty_get_duration(prop);
+    jmapical_duration_from_icalduration(icaldur, dur);
+    return 0;
+}
+
 HIDDEN void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
                                                time_t t2, bit64 t2nanos,
                                                struct jmapical_duration *dur)

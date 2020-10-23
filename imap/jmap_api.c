@@ -576,7 +576,7 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_emailsubmission_capabilities(capas);
         jmap_mdn_capabilities(capas);
         jmap_contact_capabilities(capas);
-        jmap_calendar_capabilities(capas);
+        jmap_calendar_capabilities(capas, accountid);
         jmap_backup_capabilities(capas);
         jmap_notes_capabilities(capas);
 #ifdef USE_SIEVE
@@ -602,7 +602,7 @@ static json_t *lookup_capabilities(const char *accountid,
                 jmap_contact_capabilities(capas);
             }
             if (rock.has_calendars) {
-                jmap_calendar_capabilities(capas);
+                jmap_calendar_capabilities(capas, NULL);
             }
             // should we offer Backup/restoreXxx for shared accounts?
         }
@@ -1006,6 +1006,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     free_hash_table(&mboxrights, free);
 
     json_t *jprimary = json_string(httpd_userid);
+
     json_object_set(primary_accounts, JMAP_URN_MAIL, jprimary);
     json_object_set(primary_accounts, JMAP_URN_SUBMISSION, jprimary);
     json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);
