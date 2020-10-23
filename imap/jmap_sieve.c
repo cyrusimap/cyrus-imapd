@@ -487,7 +487,7 @@ static const jmap_property_t sieve_props[] = {
     {
         "blobId",
         NULL,
-        JMAP_PROP_IMMUTABLE
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     },
     {
         "content",
@@ -702,51 +702,12 @@ static int script_setactive(const char *id, const char *sievedir)
     return r;
 }
 
-static const char *script_findblob(struct jmap_req *req, const char *id,
-                                   struct buf *buf, json_t **err)
-{
-    struct mailbox *mbox = NULL;
-    msgrecord_t *mr = NULL;
-    const char *content = NULL;
-    int r;
-
-    if (id[0] == '#') {
-        id = jmap_lookup_id(req, id + 1);
-    }
-
-    r = jmap_findblob(req, NULL/*accountid*/, id, &mbox, &mr, NULL, NULL, buf);
-    if (r == IMAP_NOTFOUND) {
-        *err = json_pack("{s:s s:[s]}", "type", "blobNotFound", "Id", id);
-    }
-    else if (r) {
-        *err = jmap_server_error(r);
-    }
-    else {
-        content = buf_cstring(buf);
-
-        if (mr) {
-            /* Need to skip over header of rfc822 wrapper */
-            struct index_record record;
-
-            msgrecord_get_index_record(mr, &record);
-            content += record.header_size;
-
-            msgrecord_unref(&mr);
-            jmap_closembox(req, &mbox);
-        }
-    }
-
-    return content;
-}
-
-static const char *set_create(struct jmap_req *req,
-                              const char *creation_id, json_t *jsieve,
+static const char *set_create(const char *creation_id, json_t *jsieve,
                               unsigned overwrite,
                               const char *sievedir, struct jmap_set *set)
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
     const char *id = NULL, *name = NULL, *content = NULL, *old_link = NULL;
-    struct buf buf = BUF_INITIALIZER;
     int r, isactive = -1;
     char path[PATH_MAX];
 
@@ -777,24 +738,11 @@ static const char *set_create(struct jmap_req *req,
         }
     }
 
-    arg = json_object_get(jsieve, "blobId");
-    if (arg) {
-        if (!json_is_string(arg))
-            json_array_append_new(invalid, json_string("blobId"));
-        else if (json_object_get(jsieve, "content"))
-            json_array_append_new(invalid, json_string("content"));
-        else {
-            content = script_findblob(req, json_string_value(arg), &buf, &err);
-            if (err) goto done;
-        }
-    }
-    else {
-        arg = json_object_get(jsieve, "content");
-        if (!arg || !json_is_string(arg))
-            json_array_append_new(invalid, json_string("content"));
-        else 
-            content = json_string_value(arg);
-    }
+    arg = json_object_get(jsieve, "content");
+    if (!arg || !json_is_string(arg))
+        json_array_append_new(invalid, json_string("content"));
+    else 
+        content = json_string_value(arg);
 
     /* Report any property errors and bail out */
     if (json_array_size(invalid)) {
@@ -849,19 +797,16 @@ static const char *set_create(struct jmap_req *req,
         json_object_set_new(set->not_created, creation_id, err);
     }
     json_decref(invalid);
-    buf_free(&buf);
 
     return id;
 }
 
-static void set_update(struct jmap_req *req,
-                       const char *id, json_t *jsieve,
+static void set_update(const char *id, json_t *jsieve,
                        const char *sievedir, struct jmap_set *set)
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
     const char *script, *name = NULL, *content = NULL;
     char newpath[PATH_MAX], *cur_name = NULL;
-    struct buf buf = BUF_INITIALIZER;
     int r = 0, is_active;
 
     if (!id) return;
@@ -902,24 +847,11 @@ static void set_update(struct jmap_req *req,
         }
     }
  
-    arg = json_object_get(jsieve, "blobId");
-    if (arg) {
-        if (!json_is_string(arg))
-            json_array_append_new(invalid, json_string("blobId"));
-        else if (json_object_get(jsieve, "content"))
-            json_array_append_new(invalid, json_string("content"));
-        else {
-            content = script_findblob(req, json_string_value(arg), &buf, &err);
-            if (err) goto done;
-        }
-    }
-    else {
-        arg = json_object_get(jsieve, "content");
-        if (arg && !json_is_string(arg))
-            json_array_append_new(invalid, json_string("content"));
-        else 
-            content = json_string_value(arg);
-    }
+    arg = json_object_get(jsieve, "content");
+    if (arg && !json_is_string(arg))
+        json_array_append_new(invalid, json_string("content"));
+    else 
+        content = json_string_value(arg);
 
     /* Report any property errors and bail out */
     if (json_array_size(invalid)) {
@@ -973,7 +905,6 @@ static void set_update(struct jmap_req *req,
     }
     json_decref(invalid);
     free(cur_name);
-    buf_free(&buf);
 }
 
 static void set_destroy(const char *id, json_t *onSuccessActivate,
@@ -1132,8 +1063,7 @@ static int jmap_sieve_set(struct jmap_req *req)
         jmap_parser_push(&parser, "onSuccessActivateScript");
 
         if (*id == '#') {
-            found = json_object_get(set.create, id+1)
-                || json_object_get(set.not_created, id+1);
+            found = json_object_get(set.create, id+1) != NULL;
         }
         else if ((found = json_array_find(set.destroy, id) < 0)) {
             found = script_from_id(sievedir, id) != NULL;
@@ -1165,7 +1095,7 @@ static int jmap_sieve_set(struct jmap_req *req)
     const char *creation_id, *script_id;
     json_t *val;
     json_object_foreach(set.create, creation_id, val) {
-        script_id = set_create(req, creation_id, val,
+        script_id = set_create(creation_id, val,
                                sub_args.replaceOnCreate, sievedir, &set);
         if (script_id) {
             /* Register creation id */
@@ -1180,7 +1110,7 @@ static int jmap_sieve_set(struct jmap_req *req)
         script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
         if (!script_id) continue;
 
-        set_update(req, script_id, val, sievedir, &set);
+        set_update(script_id, val, sievedir, &set);
     }
 
 
@@ -2356,17 +2286,35 @@ static int jmap_sieve_test(struct jmap_req *req)
     }
     else {
         /* Is scriptid an uploaded blob? */
-        const char *script_data = script_findblob(req, scriptid, &buf, &err);
-
-        if (script_data) {
+        r = jmap_findblob(req, NULL/*accountid*/, scriptid,
+                          &mbox, &mr, NULL, NULL, &buf);
+        if (r == IMAP_NOTFOUND) {
+            err = json_pack("{s:s s:[s]}",
+                            "type", "blobNotFound", "Id", scriptid);
+        }
+        else if (r) {
+            err = jmap_server_error(r);
+        }
+        else {
             /* Generate temporary bytecode file */
             static char template[] = "/tmp/sieve-test-bytecode-XXXXXX";
+            const char *script_data = buf_cstring(&buf);
             sieve_script_t *s = NULL;
             bytecode_info_t *bc = NULL;
             char *errors = NULL;
             int fd = -1;
 
+            if (mr) {
+                /* Need to skip over header of rfc822 wrapper */
+                struct index_record record;
+
+                msgrecord_get_index_record(mr, &record);
+                script_data += record.header_size;
+            }
+
             r = sieve_script_parse_string(NULL, script_data, &errors, &s);
+            msgrecord_unref(&mr);
+            jmap_closembox(req, &mbox);
 
             if (r != SIEVE_OK) {
                 err = json_pack("{s:s, s:s}", "type", "invalidScript",
