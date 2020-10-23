@@ -111,4 +111,6 @@ extern int caldav_write_defaultalarms(struct mailbox *mailbox,
  * and rescoped to messages. */
 extern int caldav_bump_defaultalarms(struct mailbox *mailbox);
 
+extern icaltimezone *caldav_get_calendar_tz(const char *mboxname, const char *userid);
+
 #endif /* HTTP_CALDAV_H */
