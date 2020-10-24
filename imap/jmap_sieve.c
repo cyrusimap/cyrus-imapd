@@ -264,7 +264,10 @@ static void getscript(const char *id, const char *script, int isactive,
 
         if (jmap_wantprop(get->props, "name")) {
             buf_setmap(&buf, script, strlen(script) - SCRIPT_SUFFIX_LEN);
-            json_object_set_new(sieve, "name", json_string(buf_cstring(&buf)));
+            if (!strcmp(id, buf_cstring(&buf)))
+                json_object_set_new(sieve, "name", json_null());
+            else
+                json_object_set_new(sieve, "name", json_string(buf_cstring(&buf)));
         }
 
         if (jmap_wantprop(get->props, "isActive")) {
@@ -690,7 +693,7 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
                               const char *sievedir, struct jmap_set *set)
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
-    const char *id = NULL, *name = NULL, *content = NULL, *old_link = NULL;
+    const char *id = makeuuid(), *name = NULL, *content = NULL, *old_link = NULL;
     char path[PATH_MAX];
     int r;
 
@@ -698,7 +701,9 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
     if (arg) json_array_append_new(invalid, json_string("id"));
 
     arg = json_object_get(jsieve, "name");
-    if (!arg || !json_is_string(arg))
+    if (!JNOTNULL(arg))
+        name = id;
+    else if (!json_is_string(arg))
         json_array_append_new(invalid, json_string("name"));
     else  {
         /* sanity check script name and check for name collision */
@@ -715,7 +720,7 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
                 old_link = name_to_idlink(sievedir, name);
             }
             else {
-                err = json_pack("{s:s}", "type", "scriptNameExists");
+                err = json_pack("{s:s}", "type", "alreadyExists");
                 goto done;
             }
         }
@@ -741,7 +746,6 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
         /* create script id link */
         char link[PATH_MAX];
 
-        id = makeuuid();
         snprintf(link, sizeof(link), "%s/%s%s", sievedir, SCRIPT_ID_PREFIX, id);
         snprintf(path, sizeof(path), "%s%s", name, SCRIPT_SUFFIX);
         r = symlink(path, link);
@@ -772,6 +776,7 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
   done:
     if (err) {
         json_object_set_new(set->not_created, creation_id, err);
+        id = NULL;
     }
     json_decref(invalid);
 
