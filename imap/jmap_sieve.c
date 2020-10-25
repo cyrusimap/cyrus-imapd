@@ -689,11 +689,10 @@ static int script_setactive(const char *id, const char *sievedir)
 }
 
 static const char *set_create(const char *creation_id, json_t *jsieve,
-                              unsigned overwrite,
                               const char *sievedir, struct jmap_set *set)
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
-    const char *id = makeuuid(), *name = NULL, *content = NULL, *old_link = NULL;
+    const char *id = makeuuid(), *name = NULL, *content = NULL;
     char path[PATH_MAX];
     int r;
 
@@ -716,13 +715,8 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
             json_array_append_new(invalid, json_string("name"));
         }
         else if (!stat(path, &sbuf)) {
-            if (overwrite) {
-                old_link = name_to_idlink(sievedir, name);
-            }
-            else {
-                err = json_pack("{s:s}", "type", "alreadyExists");
-                goto done;
-            }
+            err = json_pack("{s:s}", "type", "alreadyExists");
+            goto done;
         }
     }
 
@@ -756,15 +750,6 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
             json_t *new_sieve = json_pack("{s:s s:b}", "id", id, "isActive", 0);
 
             json_object_set_new(set->created, creation_id, new_sieve);
-
-            if (old_link) {
-                /* Remove old id link and report id as destroyed */
-                const char *old_id =
-                    old_link + strlen(sievedir) + 1 + SCRIPT_ID_PREFIX_LEN;
-
-                unlink(old_link);
-                json_array_append_new(set->destroyed, json_string(old_id));
-            }
         }
     }
 
@@ -984,7 +969,7 @@ static void set_activate(const char *id, const char *sievedir,
 
     if (created) {
         /* Report new script as active */
-        json_object_set_new(created, "isActive", json_boolean(1));
+        json_object_set_new(created, "isActive", json_true());
     }
     else if (id) {
         /* Report current active script as updated */
@@ -994,7 +979,6 @@ static void set_activate(const char *id, const char *sievedir,
 }
 
 struct sieve_set_args {
-    unsigned replaceOnCreate;
     json_t *onSuccessActivate;
 };
 
@@ -1007,13 +991,7 @@ static int _sieve_setargs_parse(jmap_req_t *req __attribute__((unused)),
     struct sieve_set_args *set = (struct sieve_set_args *) rock;
     int r = 1;
 
-    if (!strcmp(key, "replaceOnCreate")) {
-        if (json_is_boolean(arg))
-            set->replaceOnCreate =json_boolean_value(arg);
-        else r = 0;
-    }
-
-    else if (!strcmp(key, "onSuccessActivateScript")) {
+    if (!strcmp(key, "onSuccessActivateScript")) {
         if (json_is_string(arg) || json_is_null(arg))
             set->onSuccessActivate = arg;
         else r = 0;
@@ -1028,7 +1006,7 @@ static int jmap_sieve_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
-    struct sieve_set_args sub_args = { 0, NULL };
+    struct sieve_set_args sub_args = { NULL };
     json_t *jerr = NULL;
 
     const char *sievedir = user_sieve_path(req->accountid);
@@ -1077,8 +1055,7 @@ static int jmap_sieve_set(struct jmap_req *req)
     const char *creation_id, *script_id;
     json_t *val;
     json_object_foreach(set.create, creation_id, val) {
-        script_id = set_create(creation_id, val,
-                               sub_args.replaceOnCreate, sievedir, &set);
+        script_id = set_create(creation_id, val, sievedir, &set);
         if (script_id) {
             /* Register creation id */
             jmap_add_id(req, creation_id, script_id);
