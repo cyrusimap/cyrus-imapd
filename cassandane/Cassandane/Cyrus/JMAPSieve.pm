@@ -187,23 +187,24 @@ EOF
                     content => "$script1"
                 },
                 "2" => {
-                    name => "xxx",
+                    name => JSON::null,
                     content => "$script2"
                 }
-            }
+            },
+            onSuccessActivateScript => "#1"
          }, "R1"],
         ['SieveScript/get', {
             'ids' => [ '#1', '#2' ]
          }, "R2"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_equals(JSON::false, $res->[0][1]{created}{1}{isActive});
+    $self->assert_equals(JSON::true, $res->[0][1]{created}{1}{isActive});
     $self->assert_equals(JSON::false, $res->[0][1]{created}{2}{isActive});
 
     $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
     $self->assert_str_equals('foo', $res->[1][1]{list}[0]{name});
-    $self->assert_equals(JSON::false, $res->[1][1]{list}[0]{isActive});
-    $self->assert_str_equals('xxx', $res->[1][1]{list}[1]{name});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isActive});
+    $self->assert_equals(JSON::null, $res->[1][1]{list}[1]{name});
     $self->assert_equals(JSON::false, $res->[1][1]{list}[1]{isActive});
 
     my $id1 = $res->[0][1]{created}{"1"}{id};
@@ -218,42 +219,14 @@ EOF
                     content => "$script1"
                 }
             },
-            replaceOnCreate => JSON::false
          }, "R1"],
         ['SieveScript/get', {
          }, "R2"]
     ]);
     $self->assert_not_null($res);
     $self->assert_null($res->[0][1]{created});
-    $self->assert_str_equals('scriptNameExists', $res->[0][1]{notCreated}{1}{type});
+    $self->assert_str_equals('alreadyExists', $res->[0][1]{notCreated}{1}{type});
     $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
-
-    xlog "overwrite existing script and activate it";
-    $res = $jmap->CallMethods([
-        ['SieveScript/set', {
-            create => {
-                "1" => {
-                    name => "foo",
-                    content => "$script3"
-                }
-            },
-            replaceOnCreate => JSON::true,
-            onSuccessActivateScript => "#1"
-         }, "R1"],
-        ['SieveScript/get', {
-         }, "R2"]
-    ]);
-    $self->assert_not_null($res);
-    $self->assert_equals(JSON::true, $res->[0][1]{created}{1}{isActive});
-    $self->assert_null($res->[0][1]{updated});
-    $self->assert_equals($id1, $res->[0][1]{destroyed}[0]);
-
-    $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
-    $self->assert_str_equals('foo', $res->[1][1]{list}[0]{name});
-    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isActive});
-    $self->assert_str_equals($script3, $res->[1][1]{list}[0]{content});
-
-    $id1 = $res->[0][1]{created}{"1"}{id};
 
     xlog "rename and deactivate script";
     $res = $jmap->CallMethods([
@@ -275,39 +248,27 @@ EOF
         ['SieveScript/set', {
             update => {
                 $id1 => {
-                    content => "$script1",
+                    content => "$script3",
                 }
             },
             onSuccessActivateScript => $id2
          }, "R4"],
-        ['SieveScript/get', {
-         }, "R5"]
     ]);
     $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{updated}{$id1});
     $self->assert_equals(JSON::true, $res->[0][1]{updated}{$id2}{isActive});
     $self->assert_null($res->[0][1]{notUpdated});
-
-    $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
-    $self->assert_str_equals('bar', $res->[1][1]{list}[0]{name});
-    $self->assert_equals(JSON::false, $res->[1][1]{list}[0]{isActive});
-    $self->assert_str_equals($script1, $res->[1][1]{list}[0]{content});
-    $self->assert_equals(JSON::true, $res->[1][1]{list}[1]{isActive});
 
     xlog "change active script";
     $res = $jmap->CallMethods([
         ['SieveScript/set', {
             onSuccessActivateScript => $id1
          }, "R4"],
-        ['SieveScript/get', {
-         }, "R5"]
     ]);
     $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_equals(JSON::true, $res->[0][1]{updated}{$id1}{isActive});
+    $self->assert_equals(JSON::false, $res->[0][1]{updated}{$id2}{isActive});
     $self->assert_null($res->[0][1]{notUpdated});
-    $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
-    $self->assert_str_equals($id1, $res->[1][1]{list}[0]{id});
-    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isActive});
-    $self->assert_str_equals($id2, $res->[1][1]{list}[1]{id});
-    $self->assert_equals(JSON::false, $res->[1][1]{list}[1]{isActive});
 
     xlog "attempt to delete active script";
     $res = $jmap->CallMethods([
