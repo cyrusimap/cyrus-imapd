@@ -788,19 +788,25 @@ static void set_update(const char *id, json_t *jsieve,
     is_active = script_isactive(cur_name, sievedir);
 
     arg = json_object_get(jsieve, "name");
-    if (arg && !json_is_string(arg))
-        json_array_append_new(invalid, json_string("name"));
-    else if (arg) {
-        /* sanity check script name and check for name collision */
-        struct stat sbuf;
-
-        name = json_string_value(arg);
-        snprintf(newpath, sizeof(newpath),
-                 "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
-
-        if (!*name || strrchr(name, '/') ||
-            (strcmp(name, cur_name) && !stat(newpath, &sbuf))) {
+    if (arg) {
+        if (json_is_string(arg))
+            name = json_string_value(arg);
+        else if (json_is_null(arg))
+            name = id;
+        else
             json_array_append_new(invalid, json_string("name"));
+
+        if (name) {
+            /* sanity check script name and check for name collision */
+            struct stat sbuf;
+
+            snprintf(newpath, sizeof(newpath),
+                     "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
+
+            if (!*name || strrchr(name, '/') ||
+                (strcmp(name, cur_name) && !stat(newpath, &sbuf))) {
+                json_array_append_new(invalid, json_string("name"));
+            }
         }
     }
 
