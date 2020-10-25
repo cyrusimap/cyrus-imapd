@@ -368,6 +368,10 @@ sub test_sieve_query
                 "3" => {
                     name => "pooh",
                     content => "redirect \"test\@example.com\";"
+                },
+                "4" => {
+                    name => JSON::null,
+                    content => "stop;"
                 }
             },
             onSuccessActivateScript => "#1"
@@ -377,11 +381,25 @@ sub test_sieve_query
     my $id1 = $res->[0][1]{created}{"1"}{id};
     my $id2 = $res->[0][1]{created}{"2"}{id};
     my $id3 = $res->[0][1]{created}{"3"}{id};
+    my $id4 = $res->[0][1]{created}{"4"}{id};
 
     xlog $self, "get unfiltered list";
     $res = $jmap->CallMethods([ ['SieveScript/query', { }, "R1"] ]);
-    $self->assert_num_equals(3, $res->[0][1]{total});
-    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
+
+    xlog $self, "sort by name";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    sort => [{
+                        property => 'name',
+                    }]
+                }, "R1"] ]);
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id4, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($id2, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[2]);
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[3]);
 
     xlog $self, "filter by isActive";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
@@ -399,10 +417,12 @@ sub test_sieve_query
                         isActive => JSON::false,
                     }
                 }, "R1"] ]);
-    $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($id3, $res->[0][1]{ids}[1]);
+    $self->assert_num_equals(3, $res->[0][1]{total});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+    my %scriptIds = map { $_ => 1 } @{$res->[0][1]{ids}};
+    $self->assert_not_null($scriptIds{$id2});
+    $self->assert_not_null($scriptIds{$id3});
+    $self->assert_not_null($scriptIds{$id4});
 
     xlog $self, "filter by name containing 'oo', sorted descending";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
@@ -416,8 +436,9 @@ sub test_sieve_query
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($id1, $res->[0][1]{ids}[1]);
+    %scriptIds = map { $_ => 1 } @{$res->[0][1]{ids}};
+    $self->assert_not_null($scriptIds{$id1});
+    $self->assert_not_null($scriptIds{$id3});
 
     xlog $self, "filter by name not containing 'oo'";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
@@ -428,9 +449,11 @@ sub test_sieve_query
                         }]
                     },
                 }, "R1"] ]);
-    $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    %scriptIds = map { $_ => 1 } @{$res->[0][1]{ids}};
+    $self->assert_not_null($scriptIds{$id2});
+    $self->assert_not_null($scriptIds{$id4});
 
     xlog $self, "filter by name containing 'oo' and inactive";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
@@ -466,10 +489,12 @@ sub test_sieve_query
                         isAscending => JSON::true,
                     }]
                 }, "R1"] ]);
-    $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($id1, $res->[0][1]{ids}[1]);
+    $self->assert_num_equals(3, $res->[0][1]{total});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+    %scriptIds = map { $_ => 1 } @{$res->[0][1]{ids}};
+    $self->assert_not_null($scriptIds{$id1});
+    $self->assert_not_null($scriptIds{$id2});
+    $self->assert_not_null($scriptIds{$id4});
 }
 
 sub test_sieve_validate
