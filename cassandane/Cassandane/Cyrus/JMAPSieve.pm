@@ -436,9 +436,8 @@ sub test_sieve_query
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
-    %scriptIds = map { $_ => 1 } @{$res->[0][1]{ids}};
-    $self->assert_not_null($scriptIds{$id1});
-    $self->assert_not_null($scriptIds{$id3});
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[1]);
 
     xlog $self, "filter by name not containing 'oo'";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
