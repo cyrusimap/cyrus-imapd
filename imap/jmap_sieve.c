@@ -264,8 +264,10 @@ static void getscript(const char *id, const char *script, int isactive,
 
         if (jmap_wantprop(get->props, "name")) {
             buf_setmap(&buf, script, strlen(script) - SCRIPT_SUFFIX_LEN);
-            if (!strcmp(id, buf_cstring(&buf)))
+            if (!strcmp(id, buf_cstring(&buf))) {
+                /* name == id, treat name as NULL */
                 json_object_set_new(sieve, "name", json_null());
+            }
             else
                 json_object_set_new(sieve, "name", json_string(buf_cstring(&buf)));
         }
@@ -1208,6 +1210,9 @@ static void filter_cb(const char *script, void *data, void *rock)
     script_info *info = (script_info *) data;
     struct filter_rock *frock = (struct filter_rock *) rock;
     struct jmap_query *query = frock->query;
+
+    /* name == id, treat name as NULL (empty string) */
+    if (!strcmp(script, info->id)) script = "";
 
     info->name = xstrdup(script);
 
