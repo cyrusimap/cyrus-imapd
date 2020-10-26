@@ -6198,9 +6198,23 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     listitem = create_listitem(name);
     mailbox = &listitem->m;
 
+    // lock the user namespace FIRST before the mailbox namespace
+    char *userid = mboxname_to_userid(name);
+    if (userid) {
+        int haslock = user_isnamespacelocked(userid);
+        if (haslock) {
+            assert(haslock != LOCK_SHARED);
+        }
+        else {
+            int locktype = LOCK_EXCLUSIVE;
+            mailbox->local_namespacelock = user_namespacelock_full(userid, locktype);
+        }
+        free(userid);
+    }
+
     /* if we can't get an exclusive lock first try, there's something
      * racy going on! */
-    r = mboxname_lock(name, &listitem->l, LOCK_NONBLOCKING);
+    r = mboxname_lock(name, &listitem->l, LOCK_EXCLUSIVE);
     if (r) goto done;
 
     /* Start by looking up current data in mailbox list */
