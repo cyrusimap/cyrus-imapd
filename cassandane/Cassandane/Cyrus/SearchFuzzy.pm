@@ -93,21 +93,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub run_delve {
-    my ($self, $dir, @cmd) = @_;
-    my $basedir = $self->{instance}->{basedir};
-    my $str = '';
-    $self->{instance}->run_command({redirects => {stdout => "$basedir/delve.out"}}, 'delve', @cmd, '-1', "$basedir/$dir");
-    my @data;
-    open(FH, "<$basedir/delve.out") || die "can't find delve.out";
-    my $title = <FH>;
-    xlog $self, "delve returned: $title";
-    while (<FH>) {
-        chomp;
-        push @data, $_;
-    }
-    return @data;
-}
 
 sub create_testmessages
 {
@@ -1784,6 +1769,112 @@ sub test_fuzzyalways_annot
     # But does not do substring search.
     $uids = $imap->search('body', 'bod') || die;
     $self->assert_deep_equals([], $uids);
+}
+
+sub run_delve {
+    my ($self, $dir, @args) = @_;
+    my $basedir = $self->{instance}->{basedir};
+    my @myargs = ('delve');
+    push(@myargs, @args);
+    push(@myargs, $dir);
+    $self->{instance}->run_command({redirects => {stdout => "$basedir/delve.out"}}, @myargs);
+    open(FH, "<$basedir/delve.out") || die "can't find delve.out";
+    my $data = <FH>;
+    return $data;
+}
+
+sub delve_docs
+{
+    my ($self, $dir) = @_;
+    my $delveout = $self->run_delve($dir, '-V0');
+    $delveout =~ s/^Value 0 for each document: //;
+    my @docs = split ' ', $delveout;
+    my @parts = map { $_ =~ /^\d+:\*P\*/ ? substr($_, 5) : () } @docs;
+    my @gdocs = map { $_ =~ /^\d+:\*G\*/ ? substr($_, 5) : () } @docs;
+    return \@gdocs, \@parts;
+}
+
+sub test_dedup_part_index
+    :needs_search_xapian
+{
+    my ($self) = @_;
+
+    my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
+
+    $self->make_message('msgA', body => 'part1') || die;
+    $self->make_message('msgB', body => 'part2') || die;
+
+    xlog "create duplicate part within the same indexing batch";
+    $self->make_message('msgC', body => 'part1') || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "create duplicate part in another indexing batch";
+    $self->make_message('msgD', body => 'part1') || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "assert deduplicated parts";
+    my $delveout = $self->run_delve($xapdirs->{t1} . '/xapian', '-V0');
+    $delveout =~ s/^Value 0 for each document: //;
+    my @docs = split ' ', $delveout;
+    my @parts = map { $_ =~ /^\d+:\*P\*/ ? substr($_, 5) : () } @docs;
+    my @gdocs = map { $_ =~ /^\d+:\*G\*/ ? substr($_, 5) : () } @docs;
+    $self->assert_num_equals(2, scalar @parts);
+    $self->assert_str_not_equals($parts[0], $parts[1]);
+    $self->assert_num_equals(4, scalar @gdocs);
+
+    xlog "compact to t2 tier";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-z', 't2', '-t', 't1');
+
+    xlog "create duplicate part in top tier";
+    $self->make_message('msgD', body => 'part1') || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "Assert deduplicated parts across tiers";
+    $delveout = $self->run_delve($xapdirs->{t1}. '/xapian.1', '-V0');
+    $delveout =~ s/^Value 0 for each document: //;
+    @docs = split ' ', $delveout;
+    @parts = map { $_ =~ /^\d+:\*P\*/ ? substr($_, 5) : () } @docs;
+    @gdocs = map { $_ =~ /^\d+:\*G\*/ ? substr($_, 5) : () } @docs;
+    $self->assert_num_equals(0, scalar @parts);
+    $self->assert_num_equals(1, scalar @gdocs);
+}
+
+sub test_dedup_part_compact
+{
+    my ($self) = @_;
+
+    my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
+
+    xlog "force duplicate part into index";
+    $self->make_message('msgA', body => 'part1') || die;
+    $self->make_message('msgB', body => 'part1') || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-D');
+
+    xlog "assert duplicated parts";
+    my ($gdocs, $parts) = $self->delve_docs($xapdirs->{t1} . "/xapian");
+    $self->assert_num_equals(2, scalar @$parts);
+    $self->assert_str_equals(@$parts[0], @$parts[1]);
+    $self->assert_num_equals(2, scalar @$gdocs);
+
+    xlog "compact and filter to t2 tier";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-z', 't2', '-t', 't1', '-F');
+
+    xlog "assert parts got deduplicated";
+    ($gdocs, $parts) = $self->delve_docs($xapdirs->{t2} . "/xapian");
+    $self->assert_num_equals(1, scalar @$parts);
+    $self->assert_num_equals(2, scalar @$gdocs);
+
+    xlog "force duplicate part into t1 index";
+    $self->make_message('msgC', body => 'part1') || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', '-D');
+
+    xlog "compact and filter to t3 tier";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-z', 't3', '-t', 't1,t2', '-F');
+
+    xlog "assert parts got deduplicated";
+    ($gdocs, $parts) = $self->delve_docs($xapdirs->{t3} . "/xapian");
+    $self->assert_num_equals(1, scalar @$parts);
+    $self->assert_num_equals(3, scalar @$gdocs);
 }
 
 1;
