@@ -680,6 +680,7 @@ sub _generate_imapd_conf
             defaultsearchtier => 't1',
             't1searchpartition-default' => "$self->{basedir}/search",
             't2searchpartition-default' => "$self->{basedir}/search2",
+            't3searchpartition-default' => "$self->{basedir}/search3",
         );
         while (my ($k, $v) = each %xapian_defaults) {
             if (not defined $self->{config}->get($k)) {
