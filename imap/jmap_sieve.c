@@ -270,7 +270,8 @@ static void getscript(const char *id, const char *script, int isactive,
 
         if (jmap_wantprop(get->props, "isActive")) {
             if (isactive < 0) {
-                buf_setmap(&buf, script, strlen(script) - SCRIPT_SUFFIX_LEN);
+                if (!buf_len(&buf))
+                    buf_setmap(&buf, script, strlen(script) - SCRIPT_SUFFIX_LEN);
                 isactive = sieve_script_isactive(sievedir, buf_cstring(&buf));
             }
 
