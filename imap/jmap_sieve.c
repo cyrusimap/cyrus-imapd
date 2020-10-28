@@ -221,7 +221,10 @@ static int script_isactive(const char *name, const char *sievedir)
     return ret;
 }
 
-static const char *script_from_id(const char *sievedir, const char *id)
+#define SCRIPT_NAME_ONLY (1<<0)
+
+static const char *script_from_id(const char *sievedir, const char *id,
+                                  unsigned flags)
 {
     static char target[PATH_MAX];
     char link[PATH_MAX];
@@ -237,6 +240,8 @@ static const char *script_from_id(const char *sievedir, const char *id)
 
         if (tgt_len > SCRIPT_SUFFIX_LEN &&
             !strcmp(target + (tgt_len - SCRIPT_SUFFIX_LEN), SCRIPT_SUFFIX)) {
+            if (flags & SCRIPT_NAME_ONLY)
+                target[tgt_len - SCRIPT_SUFFIX_LEN] = '\0';
             name = target;
         }
     }
@@ -283,7 +288,7 @@ static int create_id_link(const char *sievedir, const char *id, const char *name
 static void getscript(const char *id, const char *script, int isactive,
                       const char *sievedir, struct jmap_get *get)
 {
-    if (!script) script = script_from_id(sievedir, id);
+    if (!script) script = script_from_id(sievedir, id, 0);
 
     if (script) {
         json_t *sieve = json_pack("{s:s}", "id", id);
@@ -378,7 +383,7 @@ static void _listscripts(const char *sievedir, hash_table *scripts)
         if (!strncmp(name, SCRIPT_ID_PREFIX, SCRIPT_ID_PREFIX_LEN)) {
             /* Script id symlink */
             const char *id = name + SCRIPT_ID_PREFIX_LEN;
-            const char *script = script_from_id(sievedir, id);
+            const char *script = script_from_id(sievedir, id, 0);
 
             if (script) {
                 /* Map script name -> id */
@@ -695,10 +700,8 @@ static int script_setactive(const char *id, const char *sievedir)
 
     if (r) syslog(LOG_ERR, "IOERROR: unlink(%s): %m", link);
     else if (id) {
-        const char *script = script_from_id(sievedir, id);
-        snprintf(target, sizeof(target), "%.*s%s",
-                 (int) strlen(script) - SCRIPT_SUFFIX_LEN,
-                 script, BYTECODE_SUFFIX);
+        const char *script = script_from_id(sievedir, id, SCRIPT_NAME_ONLY);
+        snprintf(target, sizeof(target), "%s%s", script, BYTECODE_SUFFIX);
         r = symlink(target, link);
         if (r) syslog(LOG_ERR, "IOERROR: symlink(%s, %s): %m", target, link);
     }
@@ -790,13 +793,13 @@ static void set_update(const char *id, json_t *jsieve,
 
     if (!id) return;
 
-    script = script_from_id(sievedir, id);
+    script = script_from_id(sievedir, id, SCRIPT_NAME_ONLY);
     if (!script) {
         err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
 
-    cur_name = xstrndup(script, strlen(script) - SCRIPT_SUFFIX_LEN);
+    cur_name = xstrdup(script);
     is_active = script_isactive(cur_name, sievedir);
 
     arg = json_object_get(jsieve, "name");
@@ -890,7 +893,7 @@ static void set_update(const char *id, json_t *jsieve,
 static void set_destroy(const char *id,
                         const char *sievedir, struct jmap_set *set)
 {
-    const char *script = script_from_id(sievedir, id);
+    const char *script = script_from_id(sievedir, id, SCRIPT_NAME_ONLY);
     json_t *err = NULL;
 
     if (!script) {
@@ -907,13 +910,13 @@ static void set_destroy(const char *id,
         snprintf(path, sizeof(path), "%s/%s%s", sievedir, SCRIPT_ID_PREFIX, id);
         r = unlink(path);
         if (!r) {
-            snprintf(path+dirlen, sizeof(path)-dirlen, "%s", script);
+            snprintf(path + dirlen, sizeof(path) - dirlen, "%s%s",
+                     script, SCRIPT_SUFFIX);
             unlink(path);
         }
         if (!r) {
-            snprintf(path + dirlen, sizeof(path) - dirlen, "%.*s%s",
-                     (int) strlen(script) - SCRIPT_SUFFIX_LEN, script,
-                     BYTECODE_SUFFIX);
+            snprintf(path + dirlen, sizeof(path) - dirlen, "%s%s",
+                     script, BYTECODE_SUFFIX);
             unlink(path);
         }
         if (r) {
@@ -1037,7 +1040,7 @@ static int jmap_sieve_set(struct jmap_req *req)
             found = json_object_get(set.create, id+1) != NULL;
         }
         else if ((found = json_array_find(set.destroy, id) < 0)) {
-            found = script_from_id(sievedir, id) != NULL;
+            found = script_from_id(sievedir, id, 0) != NULL;
         }
 
         if (!found) {
@@ -2213,7 +2216,7 @@ static int jmap_sieve_test(struct jmap_req *req)
 
     if (scriptid) {
         const char *sievedir = user_sieve_path(req->accountid);
-        const char *script = script_from_id(sievedir, scriptid);
+        const char *script = script_from_id(sievedir, scriptid, SCRIPT_NAME_ONLY);
 
         if (!script) {
             err = json_pack("{s:s}", "type", "notFound");
@@ -2222,9 +2225,7 @@ static int jmap_sieve_test(struct jmap_req *req)
         }
 
         /* Use pre-compiled bytecode file */
-        buf_printf(&buf, "%s/%.*s%s", sievedir,
-                   (int) strlen(script) - SCRIPT_SUFFIX_LEN, script,
-                   BYTECODE_SUFFIX);
+        buf_printf(&buf, "%s/%s%s", sievedir, script, BYTECODE_SUFFIX);
         bcname = buf_cstring(&buf);
     }
     else {
