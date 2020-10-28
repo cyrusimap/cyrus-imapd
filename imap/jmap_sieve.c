@@ -661,19 +661,14 @@ static const char *name_to_idlink(const char *sievedir, const char *name)
 
 static int script_setactive(const char *id, const char *sievedir)
 {
-    char link[PATH_MAX], target[PATH_MAX];
     int r;
 
-    snprintf(link, sizeof(link), "%s/%s", sievedir, DEFAULTBC_NAME);
-    r = unlink(link);
-    if (r && errno == ENOENT) r = 0;
-
-    if (r) syslog(LOG_ERR, "IOERROR: unlink(%s): %m", link);
-    else if (id) {
+    if (id) {
         const char *script = script_from_id(sievedir, id, SCRIPT_NAME_ONLY);
-        snprintf(target, sizeof(target), "%s%s", script, BYTECODE_SUFFIX);
-        r = symlink(target, link);
-        if (r) syslog(LOG_ERR, "IOERROR: symlink(%s, %s): %m", target, link);
+        r = sieve_activate_script(sievedir, script);
+    }
+    else {
+        r = sieve_deactivate_script(sievedir);
     }
 
     return r;

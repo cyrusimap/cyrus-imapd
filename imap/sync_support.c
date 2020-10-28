@@ -1071,36 +1071,22 @@ int sync_sieve_upload(const char *userid, const char *name,
     return r;
 }
 
-int sync_sieve_activate(const char *userid, const char *name)
+int sync_sieve_activate(const char *userid, const char *bcname)
 {
     const char *sieve_path = user_sieve_path(userid);
     char target[2048];
-    char active[2048];
-    char tmp[2048+4];  /* +4 for ".NEW" */
-
-    snprintf(target, sizeof(target), "%s", name);
-    snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
-    snprintf(tmp, sizeof(tmp), "%s.NEW", active);
+    int r;
 
 #ifdef USE_SIEVE
-    char *bc_fname = strconcat(sieve_path, "/", target, NULL);
-    sieve_rebuild(NULL, bc_fname, 0, NULL);
-    free(bc_fname);
+    snprintf(target, sizeof(target), "%s/%s", sieve_path, bcname);
+    sieve_rebuild(NULL, target, 0, NULL);
 #endif
 
-    /* N.B symlink() does NOT verify target for anything but string validity,
-     * so activation of a nonexistent script will report success.
-     */
-    if (symlink(target, tmp) < 0) {
-        syslog(LOG_ERR, "IOERROR: unable to symlink %s as %s: %m", target, tmp);
-        return IMAP_IOERROR;
-    }
+    snprintf(target, sizeof(target), "%.*s",
+             (int) strlen(bcname) - BYTECODE_SUFFIX_LEN, bcname);
 
-    if (rename(tmp, active) < 0) {
-        syslog(LOG_ERR, "IOERROR: unable to rename %s to %s: %m", tmp, active);
-        unlink(tmp);
-        return IMAP_IOERROR;
-    }
+    r = sieve_activate_script(sieve_path, target);
+    if (r) return r;
 
     sync_log_sieve(userid);
 
@@ -1110,10 +1096,9 @@ int sync_sieve_activate(const char *userid, const char *name)
 int sync_sieve_deactivate(const char *userid)
 {
     const char *sieve_path = user_sieve_path(userid);
-    char active[2048];
+    int r = sieve_deactivate_script(sieve_path);
 
-    snprintf(active, sizeof(active), "%s/defaultbc", sieve_path);
-    unlink(active);
+    if (r) return r;
 
     sync_log_sieve(userid);
 

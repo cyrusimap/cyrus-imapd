@@ -57,6 +57,7 @@
 #include "map.h"
 #include "sievedir.h"
 #include "util.h"
+#include "imap/imap_err.h"
 
 EXPORTED struct buf *sieve_getscript(const char *sievedir, const char *script)
 {
@@ -97,6 +98,46 @@ EXPORTED int sieve_script_isactive(const char *sievedir, const char *name)
     }
     else if (tgt_len == -1 && errno != ENOENT) {
         syslog(LOG_ERR, "IOERROR: readlink(%s): %m", link);
+    }
+
+    return 0;
+}
+
+EXPORTED int sieve_activate_script(const char *sievedir, const char *name)
+{
+    char target[PATH_MAX];
+    char active[PATH_MAX];
+    char tmp[PATH_MAX+4];  /* +4 for ".NEW" */
+
+    snprintf(target, sizeof(target), "%s%s", name, BYTECODE_SUFFIX);
+    snprintf(active, sizeof(active), "%s/%s", sievedir, DEFAULTBC_NAME);
+    snprintf(tmp, sizeof(tmp), "%s.NEW", active);
+
+    /* N.B symlink() does NOT verify target for anything but string validity,
+     * so activation of a nonexistent script will report success.
+     */
+    if (symlink(target, tmp) < 0) {
+        syslog(LOG_ERR, "IOERROR: unable to symlink %s as %s: %m", target, tmp);
+        return IMAP_IOERROR;
+    }
+
+    if (rename(tmp, active) < 0) {
+        syslog(LOG_ERR, "IOERROR: unable to rename %s to %s: %m", tmp, active);
+        unlink(tmp);
+        return IMAP_IOERROR;
+    }
+
+    return 0;
+}
+
+EXPORTED int sieve_deactivate_script(const char *sievedir)
+{
+    char active[PATH_MAX];
+
+    snprintf(active, sizeof(active), "%s/defaultbc", sievedir);
+    if (unlink(active) != 0 && errno != ENOENT) {
+        syslog(LOG_ERR, "IOERROR: unable to unlink %s: %m", active);
+        return IMAP_IOERROR;
     }
 
     return 0;

@@ -446,14 +446,9 @@ int putscript(struct protstream *conn, const struct buf *name,
 
 static int deleteactive(struct protstream *conn)
 {
-    if (unlink("defaultbc") != 0) {
-        if (errno == ENOENT) {
-            /* RFC 5804, 2.8 SETACTIVE Command:
-             * Disabling an active script when there is no script active is
-             * not an error and MUST result in an OK reply. */
-            return TIMSIEVE_OK;
-        }
-        prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
+    int result = sieve_deactivate_script(sieve_dir);
+    if (result != 0) {
+        prot_printf(conn,"NO \"Unable to deactivate script\"\r\n");
         return TIMSIEVE_FAIL;
     }
     sync_log_sieve(sieved_userid);
@@ -571,7 +566,6 @@ static int exists(char *str)
 int setactive(struct protstream *conn, const struct buf *name)
 {
     int result;
-    char filename[1024];
 
     /* if string name is empty, disable active script */
     if (!name->len) {
@@ -601,27 +595,12 @@ int setactive(struct protstream *conn, const struct buf *name)
         return TIMSIEVE_OK;
     }
 
-    /* get the name of the active sieve script */
-    snprintf(filename, sizeof(filename), "%s.bc", name->s);
-
-    /* ok we want to do this atomically so let's
-       - make <activesieve>.NEW as a hard link
-       - rename it to <activesieve>
-    */
-    result = symlink(filename, "defaultbc.NEW");
-    if (result) {
-        syslog(LOG_ERR, "symlink(%s, defaultbc.NEW): %m", filename);
-        prot_printf(conn, "NO \"Can't make link\"\r\n");
+    result = sieve_activate_script(sieve_dir, name->s);
+    if (result != 0) {
+        prot_printf(conn,"NO \"Error activating script\"\r\n");
         return TIMSIEVE_FAIL;
     }
 
-    result = rename("defaultbc.NEW", "defaultbc");
-    if (result) {
-        unlink("defaultbc.NEW");
-        syslog(LOG_ERR, "rename(defaultbc.NEW, defaultbc): %m");
-        prot_printf(conn,"NO \"Error renaming\"\r\n");
-        return TIMSIEVE_FAIL;
-    }
     sync_log_sieve(sieved_userid);
 
     prot_printf(conn,"OK\r\n");

@@ -55,4 +55,7 @@ struct buf *sieve_getscript(const char *sievedir, const char *script);
 
 int sieve_script_isactive(const char *sievedir, const char *name);
 
+int sieve_activate_script(const char *sievedir, const char *name);
+int sieve_deactivate_script(const char *sievedir);
+
 #endif /* INCLUDED_SIEVEDIR_H */
