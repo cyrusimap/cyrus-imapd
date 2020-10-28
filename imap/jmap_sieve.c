@@ -189,37 +189,6 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
 
 #define SCRIPT_ID_PREFIX       ".JMAPID:"
 #define SCRIPT_ID_PREFIX_LEN   8
-#define BYTECODE_SUFFIX        ".bc"
-#define BYTECODE_SUFFIX_LEN    3
-#define SCRIPT_SUFFIX          ".script"
-#define SCRIPT_SUFFIX_LEN      7
-#define DEFAULTBC_NAME         "defaultbc"
-
-static int script_isactive(const char *name, const char *sievedir)
-{
-    char link[PATH_MAX];
-    struct stat sbuf;
-    int ret = 0;
-
-    if (!name) return 0;
-
-    snprintf(link, sizeof(link), "%s/%s", sievedir, DEFAULTBC_NAME);
-
-    if (!stat(link, &sbuf)) {
-        char target[PATH_MAX];
-        ssize_t tgt_len = readlink(link, target, sizeof(target) - 1);
-
-        if (tgt_len > BYTECODE_SUFFIX_LEN &&
-            !strncmp(name, target, tgt_len - BYTECODE_SUFFIX_LEN)) {
-            ret = 1;
-        }
-        else if (tgt_len == -1 && errno != ENOENT) {
-            syslog(LOG_ERR, "IOERROR: readlink(%s): %m", link);
-        }
-    }
-
-    return ret;
-}
 
 #define SCRIPT_NAME_ONLY (1<<0)
 
@@ -302,7 +271,7 @@ static void getscript(const char *id, const char *script, int isactive,
         if (jmap_wantprop(get->props, "isActive")) {
             if (isactive < 0) {
                 buf_setmap(&buf, script, strlen(script) - SCRIPT_SUFFIX_LEN);
-                isactive = script_isactive(buf_cstring(&buf), sievedir);
+                isactive = sieve_script_isactive(sievedir, buf_cstring(&buf));
             }
 
             json_object_set_new(sieve, "isActive", json_boolean(isactive));
@@ -800,7 +769,7 @@ static void set_update(const char *id, json_t *jsieve,
     }
 
     cur_name = xstrdup(script);
-    is_active = script_isactive(cur_name, sievedir);
+    is_active = sieve_script_isactive(sievedir, cur_name);
 
     arg = json_object_get(jsieve, "name");
     if (arg) {
@@ -899,7 +868,7 @@ static void set_destroy(const char *id,
     if (!script) {
         err = json_pack("{s:s}", "type", "notFound");
     }
-    else if (script_isactive(script, sievedir)) {
+    else if (sieve_script_isactive(sievedir, script)) {
         err = json_pack("{s:s}", "type", "scriptIsActive");
     }
     else {

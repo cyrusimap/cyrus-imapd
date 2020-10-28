@@ -461,34 +461,6 @@ static int deleteactive(struct protstream *conn)
     return TIMSIEVE_OK;
 }
 
-
-/* is this the active script? */
-static int isactive(char *name)
-{
-    char filename[1024];
-    char activelink[1024];
-    ssize_t link_len;
-
-    snprintf(filename, 1023, "%s.bc", name);
-    memset(activelink, 0, sizeof(activelink));
-
-    link_len = readlink("defaultbc", activelink, sizeof(activelink)-1);
-    if (link_len == -1)
-    {
-        if (errno != ENOENT)
-            syslog(LOG_ERR, "readlink(defaultbc): %m");
-
-        return FALSE;
-    }
-    activelink[link_len] = '\0';
-
-    if (!strcmp(filename, activelink)) {
-        return TRUE;
-    } else {
-        return FALSE;
-    }
-}
-
 /* delete a sieve script */
 int deletescript(struct protstream *conn, const struct buf *name)
 {
@@ -504,7 +476,7 @@ int deletescript(struct protstream *conn, const struct buf *name)
 
   snprintf(path, 1023, "%s.script", name->s);
 
-  if (isactive(name->s)) {
+  if (sieve_script_isactive(sieve_dir, name->s)) {
     prot_printf(conn, "NO (ACTIVE) \"Active script cannot be deleted\"\r\n");
     return TIMSIEVE_FAIL;
   }
@@ -558,7 +530,7 @@ int listscripts(struct protstream *conn)
             {
                 char *namewo = xstrndup(dir->d_name, length-7);
 
-                if (isactive(namewo))
+                if (sieve_script_isactive(sieve_dir, namewo))
                     prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
                 else
                     prot_printf(conn,"\"%s\"\r\n", namewo);
@@ -624,7 +596,7 @@ int setactive(struct protstream *conn, const struct buf *name)
     }
 
     /* if script already is the active one just say ok */
-    if (isactive(name->s)==TRUE) {
+    if (sieve_script_isactive(sieve_dir, name->s)==TRUE) {
         prot_printf(conn,"OK\r\n");
         return TIMSIEVE_OK;
     }
@@ -706,7 +678,7 @@ int renamescript(struct protstream *conn,
       return TIMSIEVE_FAIL;
   }
 
-  if (isactive(oldname->s)) {
+  if (sieve_script_isactive(sieve_dir, oldname->s)) {
     result = setactive(conn, newname);
   }
   else {

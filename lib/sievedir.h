@@ -45,6 +45,14 @@
 
 #include "util.h"
 
+#define BYTECODE_SUFFIX        ".bc"
+#define BYTECODE_SUFFIX_LEN    3
+#define SCRIPT_SUFFIX          ".script"
+#define SCRIPT_SUFFIX_LEN      7
+#define DEFAULTBC_NAME         "defaultbc"
+
 struct buf *sieve_getscript(const char *sievedir, const char *script);
+
+int sieve_script_isactive(const char *sievedir, const char *name);
 
 #endif /* INCLUDED_SIEVEDIR_H */

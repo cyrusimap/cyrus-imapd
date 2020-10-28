@@ -46,10 +46,16 @@
 #include <unistd.h>
 #endif
 
-#include <stdio.h>
+#include <dirent.h>
+#include <ctype.h>
+#include <string.h>
+#include <syslog.h>
+#include <assert.h>
+#include <errno.h>
 
 #include "assert.h"
 #include "map.h"
+#include "sievedir.h"
 #include "util.h"
 
 EXPORTED struct buf *sieve_getscript(const char *sievedir, const char *script)
@@ -71,4 +77,27 @@ EXPORTED struct buf *sieve_getscript(const char *sievedir, const char *script)
     buf_move(ret, &buf);
 
     return ret;
+}
+ 
+EXPORTED int sieve_script_isactive(const char *sievedir, const char *name)
+{
+    char link[PATH_MAX];
+    char target[PATH_MAX];
+    ssize_t tgt_len;
+
+    if (!name) return 0;
+
+    snprintf(link, sizeof(link), "%s/%s", sievedir, DEFAULTBC_NAME);
+
+    tgt_len = readlink(link, target, sizeof(target) - 1);
+
+    if (tgt_len > BYTECODE_SUFFIX_LEN) {
+        target[tgt_len - BYTECODE_SUFFIX_LEN] = '\0';
+        return !strcmp(name, target);
+    }
+    else if (tgt_len == -1 && errno != ENOENT) {
+        syslog(LOG_ERR, "IOERROR: readlink(%s): %m", link);
+    }
+
+    return 0;
 }
