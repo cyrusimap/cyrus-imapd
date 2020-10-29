@@ -285,15 +285,18 @@ EOF
     xlog "delete active script";
     $res = $jmap->CallMethods([
         ['SieveScript/set', {
-            destroy => [ $id1 ],
             onSuccessActivateScript => JSON::null
          }, "R8"],
+        ['SieveScript/set', {
+            destroy => [ $id1 ],
+         }, "R8.5"],
         ['SieveScript/get', {
          }, "R9"]
     ]);
-    $self->assert_not_null($res->[0][1]{destroyed});
-    $self->assert_null($res->[0][1]{notDestroyed});
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_equals(JSON::false, $res->[0][1]{updated}{$id1}{isActive});
+    $self->assert_not_null($res->[1][1]{destroyed});
+    $self->assert_null($res->[1][1]{notDestroyed});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{list}});
 }
 
 sub test_sieve_set_bad_script
