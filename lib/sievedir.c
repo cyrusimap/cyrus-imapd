@@ -142,3 +142,26 @@ EXPORTED int sieve_deactivate_script(const char *sievedir)
 
     return 0;
 }
+
+EXPORTED int sieve_delete_script(const char *sievedir, const char *name)
+{
+    char path[PATH_MAX];
+    int r;
+
+    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
+    r = unlink(path);
+    if (r) {
+        if (errno == ENOENT) return IMAP_NOTFOUND;
+
+        syslog(LOG_ERR, "IOERROR: unlink(%s): %m", path);
+        return IMAP_IOERROR;
+    }
+
+    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
+    r = unlink(path);
+    if (r && errno != ENOENT) {
+        syslog(LOG_NOTICE, "IOERROR: unlink(%s): %m", path);
+    }
+
+    return 0;
+}

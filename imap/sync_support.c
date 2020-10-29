@@ -1105,52 +1105,20 @@ int sync_sieve_deactivate(const char *userid)
     return(0);
 }
 
-int sync_sieve_delete(const char *userid, const char *name)
+int sync_sieve_delete(const char *userid, const char *script)
 {
     const char *sieve_path = user_sieve_path(userid);
-    char filename[2048];
-    char active[2048];
-    DIR *mbdir;
-    struct dirent *next = NULL;
-    struct stat sbuf;
-    int is_default = 0;
-    int count;
+    char name[2048];
 
-    if (!(mbdir = opendir(sieve_path)))
-        return(IMAP_IOERROR);
+    snprintf(name, sizeof(name), "%.*s",
+             (int) strlen(script) - SCRIPT_SUFFIX_LEN, script);
 
-    while((next = readdir(mbdir)) != NULL) {
-        if(!strcmp(next->d_name, ".") || !strcmp(next->d_name, ".."))
-            continue;
-
-        snprintf(filename, sizeof(filename), "%s/%s",
-                 sieve_path, next->d_name);
-
-        if (stat(filename, &sbuf) < 0)
-            continue;
-
-        if (!strcmp(next->d_name, "defaultbc")) {
-            if (sbuf.st_mode & S_IFLNK) {
-                count = readlink(filename, active, 2047);
-
-                if (count >= 0) {
-                    active[count] = '\0';
-                    if (!strcmp(active, name))
-                        is_default = 1;
-                }
-            }
-            continue;
-        }
-    }
-    closedir(mbdir);
-
-    if (is_default) {
-        snprintf(filename, sizeof(filename), "%s/defaultbc", sieve_path);
-        unlink(filename);
+    /* XXX  Do we NOT care about errors? */
+    if (sieve_script_isactive(sieve_path, name)) {
+        sieve_deactivate_script(sieve_path);
     }
 
-    snprintf(filename, sizeof(filename), "%s/%s", sieve_path, name);
-    unlink(filename);
+    sieve_delete_script(sieve_path, name);
 
     sync_log_sieve(userid);
 

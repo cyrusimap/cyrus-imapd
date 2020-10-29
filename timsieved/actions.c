@@ -460,7 +460,6 @@ static int deleteactive(struct protstream *conn)
 int deletescript(struct protstream *conn, const struct buf *name)
 {
   int result;
-  char path[1024];
 
   result = scriptname_valid(name);
   if (result!=TIMSIEVE_OK)
@@ -469,15 +468,12 @@ int deletescript(struct protstream *conn, const struct buf *name)
       return result;
   }
 
-  snprintf(path, 1023, "%s.script", name->s);
-
   if (sieve_script_isactive(sieve_dir, name->s)) {
     prot_printf(conn, "NO (ACTIVE) \"Active script cannot be deleted\"\r\n");
     return TIMSIEVE_FAIL;
   }
 
-  result = unlink(path);
-
+  result = sieve_delete_script(sieve_dir, name->s);
   if (result != 0) {
       if (errno == ENOENT)
           prot_printf(conn, "NO (NONEXISTENT) \"Script %s does not exist.\"\r\n", name->s);
@@ -486,14 +482,6 @@ int deletescript(struct protstream *conn, const struct buf *name)
       return TIMSIEVE_FAIL;
   }
 
-  snprintf(path, 1023, "%s.bc", name->s);
-
-  result = unlink(path);
-
-  if (result != 0) {
-      prot_printf(conn,"NO \"Error deleting bytecode\"\r\n");
-      return TIMSIEVE_FAIL;
-  }
   sync_log_sieve(sieved_userid);
 
   prot_printf(conn,"OK\r\n");

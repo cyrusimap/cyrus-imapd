@@ -343,7 +343,7 @@ int sync_sieve_activate(const char *userid, const char *bcname);
 
 int sync_sieve_deactivate(const char *userid);
 
-int sync_sieve_delete(const char *userid, const char *name);
+int sync_sieve_delete(const char *userid, const char *script);
 
 /* ====================================================================== */
 

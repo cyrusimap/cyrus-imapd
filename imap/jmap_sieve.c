@@ -868,21 +868,16 @@ static void set_destroy(const char *id,
         err = json_pack("{s:s}", "type", "scriptIsActive");
     }
     else {
-        size_t dirlen = strlen(sievedir) + 1;
         char path[PATH_MAX];
         int r;
 
         snprintf(path, sizeof(path), "%s/%s%s", sievedir, SCRIPT_ID_PREFIX, id);
         r = unlink(path);
-        if (!r) {
-            snprintf(path + dirlen, sizeof(path) - dirlen, "%s%s",
-                     script, SCRIPT_SUFFIX);
-            unlink(path);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: unlink(%s): %m", path);
         }
-        if (!r) {
-            snprintf(path + dirlen, sizeof(path) - dirlen, "%s%s",
-                     script, BYTECODE_SUFFIX);
-            unlink(path);
+        else {
+            r = sieve_delete_script(sievedir, script);
         }
         if (r) {
             err = json_pack("{s:s, s:s}", "type", "serverFail",
