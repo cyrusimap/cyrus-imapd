@@ -201,14 +201,14 @@ EOF
     $self->assert_equals(JSON::true, $res->[0][1]{created}{1}{isActive});
     $self->assert_equals(JSON::false, $res->[0][1]{created}{2}{isActive});
 
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+
     $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
     $self->assert_str_equals('foo', $res->[1][1]{list}[0]{name});
     $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isActive});
-    $self->assert_equals(JSON::null, $res->[1][1]{list}[1]{name});
+    $self->assert_str_equals($id2, $res->[1][1]{list}[1]{name});
     $self->assert_equals(JSON::false, $res->[1][1]{list}[1]{isActive});
-
-    my $id1 = $res->[0][1]{created}{"1"}{id};
-    my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "attempt to create script with same name";
     $res = $jmap->CallMethods([
@@ -373,7 +373,7 @@ sub test_sieve_query
                     content => "redirect \"test\@example.com\";"
                 },
                 "4" => {
-                    name => JSON::null,
+                    name => "abc",
                     content => "stop;"
                 }
             },
