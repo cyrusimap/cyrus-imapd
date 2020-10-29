@@ -784,4 +784,100 @@ EOF
                              $res->[1][1]{notCompleted}{foobar}{type});
 }
 
+sub test_sieve_blind_replace_active
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create initial script";
+    my $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => JSON::null,
+                    content => "keep;"
+                }
+            },
+            onSuccessActivateScript => "#1"
+         }, "R1"],
+        ['SieveScript/query', {
+            filter => {
+                isActive => JSON::false,
+            }
+         }, "R2"],
+        ['SieveScript/set', {
+            '#destroy' => {
+                resultOf => 'R2',
+                name => 'SieveScript/query',
+                path => '/ids'
+            }
+         }, "R3"],
+        ['SieveScript/get', {
+         }, "R4"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_equals(JSON::true, $res->[0][1]{created}{1}{isActive});
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{destroyed});
+
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+
+    $self->assert_deep_equals([], $res->[1][1]{ids});
+
+    $self->assert_null($res->[2][1]{created});
+    $self->assert_null($res->[2][1]{updated});
+    $self->assert_null($res->[2][1]{destroyed});
+
+    $self->assert_num_equals(1, scalar @{$res->[3][1]{list}});
+    $self->assert_str_equals($id1, $res->[3][1]{list}[0]{name});
+    $self->assert_str_equals('keep;', $res->[3][1]{list}[0]{content});
+    $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{isActive});
+
+    xlog "replace active script";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => {
+                "2" => {
+                    name => JSON::null,
+                    content => "discard;"
+                }
+            },
+            onSuccessActivateScript => "#2"
+         }, "R1"],
+        ['SieveScript/query', {
+            filter => {
+                isActive => JSON::false,
+            }
+         }, "R2"],
+        ['SieveScript/set', {
+            '#destroy' => {
+                resultOf => 'R2',
+                name => 'SieveScript/query',
+                path => '/ids'
+            }
+         }, "R3"],
+        ['SieveScript/get', {
+         }, "R4"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_equals(JSON::true, $res->[0][1]{created}{2}{isActive});
+    $self->assert_equals(JSON::false, $res->[0][1]{updated}{$id1}{isActive});
+    $self->assert_null($res->[0][1]{destroyed});
+
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+
+    $self->assert_deep_equals([$id1], $res->[1][1]{ids});
+
+    $self->assert_null($res->[2][1]{created});
+    $self->assert_null($res->[2][1]{updated});
+    $self->assert_deep_equals([$id1], $res->[2][1]{destroyed});
+
+    $self->assert_num_equals(1, scalar @{$res->[3][1]{list}});
+    $self->assert_str_equals($id2, $res->[3][1]{list}[0]{name});
+    $self->assert_str_equals('discard;', $res->[3][1]{list}[0]{content});
+    $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{isActive});
+}
+
 1;
