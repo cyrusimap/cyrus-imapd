@@ -886,11 +886,6 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         json_decref(args);
     }
 
-    /* tell syslog which methods were called */
-    spool_replace_header(xstrdup(":jmap"),
-                         strarray_join(&methods, ","), txn->req_hdrs);
-
-
     /* Build response */
     if (txn->meth == METH_UNKNOWN) {
         /* API request over WebSocket */
@@ -913,6 +908,11 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     buf_free(&state);
 
   done:
+    /* tell syslog which methods were called */
+    spool_replace_header(xstrdup(":jmap"),
+                         strarray_join(&methods, ","), txn->req_hdrs);
+
+
     {
         /* Clean up call stack */
         json_t *jval;
