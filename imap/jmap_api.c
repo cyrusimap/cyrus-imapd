@@ -320,6 +320,7 @@ static int validate_request(struct transaction_t *txn, json_t *req,
         mname = strchr(mname, '/');
         if (!mname) continue;
 
+        mname++;
         if (!strcmp(mname, "get")) {
             json_t *ids = json_object_get(json_array_get(val, 1), "ids");
             if (json_array_size(ids) >
