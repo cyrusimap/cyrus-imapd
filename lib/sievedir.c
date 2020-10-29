@@ -59,7 +59,7 @@
 #include "util.h"
 #include "imap/imap_err.h"
 
-EXPORTED struct buf *sieve_getscript(const char *sievedir, const char *script)
+EXPORTED struct buf *sieve_get_script(const char *sievedir, const char *script)
 {
     struct buf buf = BUF_INITIALIZER;
 

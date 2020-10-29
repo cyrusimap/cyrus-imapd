@@ -240,7 +240,7 @@ int getscript(struct protstream *conn, const struct buf *name)
 
     snprintf(path, 1023, "%s.script", name->s);
 
-    buf = sieve_getscript(sieve_dir, path);
+    buf = sieve_get_script(sieve_dir, path);
 
     if (!buf) {
         prot_printf(conn,"NO (NONEXISTENT) \"Script doesn't exist\"\r\n");

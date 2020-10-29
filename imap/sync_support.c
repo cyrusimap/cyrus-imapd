@@ -992,7 +992,7 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
 {
     const char *sieve_path = user_sieve_path(userid);
-    struct buf *buf = sieve_getscript(sieve_path, name);
+    struct buf *buf = sieve_get_script(sieve_path, name);
     char *result = NULL;
 
     if (buf) {

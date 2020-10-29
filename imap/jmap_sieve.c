@@ -279,7 +279,7 @@ static void getscript(const char *id, const char *script, int isactive,
         }
 
         if (jmap_wantprop(get->props, "content")) {
-            struct buf *content = sieve_getscript(sievedir, script);
+            struct buf *content = sieve_get_script(sievedir, script);
             json_object_set_new(sieve, "content",
                                 json_string(buf_cstring(content)));
             buf_destroy(content);
