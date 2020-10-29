@@ -240,7 +240,7 @@ int getscript(struct protstream *conn, const struct buf *name)
 
     snprintf(path, 1023, "%s.script", name->s);
 
-    buf = sieve_get_script(sieve_dir, path);
+    buf = sievedir_get_script(sieve_dir, path);
 
     if (!buf) {
         prot_printf(conn,"NO (NONEXISTENT) \"Script doesn't exist\"\r\n");
@@ -446,7 +446,7 @@ int putscript(struct protstream *conn, const struct buf *name,
 
 static int deleteactive(struct protstream *conn)
 {
-    int result = sieve_deactivate_script(sieve_dir);
+    int result = sievedir_deactivate_script(sieve_dir);
     if (result != SIEVEDIR_OK) {
         prot_printf(conn,"NO \"Unable to deactivate script\"\r\n");
         return TIMSIEVE_FAIL;
@@ -468,12 +468,12 @@ int deletescript(struct protstream *conn, const struct buf *name)
       return result;
   }
 
-  if (sieve_script_isactive(sieve_dir, name->s)) {
+  if (sievedir_script_isactive(sieve_dir, name->s)) {
     prot_printf(conn, "NO (ACTIVE) \"Active script cannot be deleted\"\r\n");
     return TIMSIEVE_FAIL;
   }
 
-  result = sieve_delete_script(sieve_dir, name->s);
+  result = sievedir_delete_script(sieve_dir, name->s);
   if (result != SIEVEDIR_OK) {
       if (result == SIEVEDIR_NOTFOUND)
           prot_printf(conn, "NO (NONEXISTENT) \"Script %s does not exist.\"\r\n", name->s);
@@ -513,7 +513,7 @@ int listscripts(struct protstream *conn)
             {
                 char *namewo = xstrndup(dir->d_name, length-7);
 
-                if (sieve_script_isactive(sieve_dir, namewo))
+                if (sievedir_script_isactive(sieve_dir, namewo))
                     prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
                 else
                     prot_printf(conn,"\"%s\"\r\n", namewo);
@@ -578,12 +578,12 @@ int setactive(struct protstream *conn, const struct buf *name)
     }
 
     /* if script already is the active one just say ok */
-    if (sieve_script_isactive(sieve_dir, name->s)==TRUE) {
+    if (sievedir_script_isactive(sieve_dir, name->s)==TRUE) {
         prot_printf(conn,"OK\r\n");
         return TIMSIEVE_OK;
     }
 
-    result = sieve_activate_script(sieve_dir, name->s);
+    result = sievedir_activate_script(sieve_dir, name->s);
     if (result != SIEVEDIR_OK) {
         prot_printf(conn,"NO \"Error activating script\"\r\n");
         return TIMSIEVE_FAIL;
@@ -645,7 +645,7 @@ int renamescript(struct protstream *conn,
       return TIMSIEVE_FAIL;
   }
 
-  if (sieve_script_isactive(sieve_dir, oldname->s)) {
+  if (sievedir_script_isactive(sieve_dir, oldname->s)) {
     result = setactive(conn, newname);
   }
   else {

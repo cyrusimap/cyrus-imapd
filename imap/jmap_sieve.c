@@ -272,14 +272,14 @@ static void getscript(const char *id, const char *script, int isactive,
             if (isactive < 0) {
                 if (!buf_len(&buf))
                     buf_setmap(&buf, script, strlen(script) - SCRIPT_SUFFIX_LEN);
-                isactive = sieve_script_isactive(sievedir, buf_cstring(&buf));
+                isactive = sievedir_script_isactive(sievedir, buf_cstring(&buf));
             }
 
             json_object_set_new(sieve, "isActive", json_boolean(isactive));
         }
 
         if (jmap_wantprop(get->props, "content")) {
-            struct buf *content = sieve_get_script(sievedir, script);
+            struct buf *content = sievedir_get_script(sievedir, script);
             json_object_set_new(sieve, "content",
                                 json_string(buf_cstring(content)));
             buf_destroy(content);
@@ -665,10 +665,10 @@ static int script_setactive(const char *id, const char *sievedir)
 
     if (id) {
         const char *script = script_from_id(sievedir, id, SCRIPT_NAME_ONLY);
-        r = sieve_activate_script(sievedir, script);
+        r = sievedir_activate_script(sievedir, script);
     }
     else {
-        r = sieve_deactivate_script(sievedir);
+        r = sievedir_deactivate_script(sievedir);
     }
 
     return r;
@@ -765,7 +765,7 @@ static void set_update(const char *id, json_t *jsieve,
     }
 
     cur_name = xstrdup(script);
-    is_active = sieve_script_isactive(sievedir, cur_name);
+    is_active = sievedir_script_isactive(sievedir, cur_name);
 
     arg = json_object_get(jsieve, "name");
     if (arg) {
@@ -864,7 +864,7 @@ static void set_destroy(const char *id,
     if (!script) {
         err = json_pack("{s:s}", "type", "notFound");
     }
-    else if (sieve_script_isactive(sievedir, script)) {
+    else if (sievedir_script_isactive(sievedir, script)) {
         err = json_pack("{s:s}", "type", "scriptIsActive");
     }
     else {
@@ -877,7 +877,7 @@ static void set_destroy(const char *id,
             syslog(LOG_ERR, "IOERROR: unlink(%s): %m", path);
         }
         else {
-            r = sieve_delete_script(sievedir, script);
+            r = sievedir_delete_script(sievedir, script);
         }
         if (r) {
             err = json_pack("{s:s, s:s}", "type", "serverFail",

@@ -992,7 +992,7 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
 {
     const char *sieve_path = user_sieve_path(userid);
-    struct buf *buf = sieve_get_script(sieve_path, name);
+    struct buf *buf = sievedir_get_script(sieve_path, name);
     char *result = NULL;
 
     if (buf) {
@@ -1085,7 +1085,7 @@ int sync_sieve_activate(const char *userid, const char *bcname)
     snprintf(target, sizeof(target), "%.*s",
              (int) strlen(bcname) - BYTECODE_SUFFIX_LEN, bcname);
 
-    r = sieve_activate_script(sieve_path, target);
+    r = sievedir_activate_script(sieve_path, target);
     if (r) return r;
 
     sync_log_sieve(userid);
@@ -1096,7 +1096,7 @@ int sync_sieve_activate(const char *userid, const char *bcname)
 int sync_sieve_deactivate(const char *userid)
 {
     const char *sieve_path = user_sieve_path(userid);
-    int r = sieve_deactivate_script(sieve_path);
+    int r = sievedir_deactivate_script(sieve_path);
 
     if (r) return r;
 
@@ -1114,11 +1114,11 @@ int sync_sieve_delete(const char *userid, const char *script)
              (int) strlen(script) - SCRIPT_SUFFIX_LEN, script);
 
     /* XXX  Do we NOT care about errors? */
-    if (sieve_script_isactive(sieve_path, name)) {
-        sieve_deactivate_script(sieve_path);
+    if (sievedir_script_isactive(sieve_path, name)) {
+        sievedir_deactivate_script(sieve_path);
     }
 
-    sieve_delete_script(sieve_path, name);
+    sievedir_delete_script(sieve_path, name);
 
     sync_log_sieve(userid);
 

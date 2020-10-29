@@ -58,7 +58,7 @@
 #include "sievedir.h"
 #include "util.h"
 
-EXPORTED struct buf *sieve_get_script(const char *sievedir, const char *script)
+EXPORTED struct buf *sievedir_get_script(const char *sievedir, const char *script)
 {
     struct buf buf = BUF_INITIALIZER;
 
@@ -79,7 +79,7 @@ EXPORTED struct buf *sieve_get_script(const char *sievedir, const char *script)
     return ret;
 }
  
-EXPORTED int sieve_script_isactive(const char *sievedir, const char *name)
+EXPORTED int sievedir_script_isactive(const char *sievedir, const char *name)
 {
     char link[PATH_MAX];
     char target[PATH_MAX];
@@ -102,7 +102,7 @@ EXPORTED int sieve_script_isactive(const char *sievedir, const char *name)
     return 0;
 }
 
-EXPORTED int sieve_activate_script(const char *sievedir, const char *name)
+EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
 {
     char target[PATH_MAX];
     char active[PATH_MAX];
@@ -129,7 +129,7 @@ EXPORTED int sieve_activate_script(const char *sievedir, const char *name)
     return SIEVEDIR_OK;
 }
 
-EXPORTED int sieve_deactivate_script(const char *sievedir)
+EXPORTED int sievedir_deactivate_script(const char *sievedir)
 {
     char active[PATH_MAX];
 
@@ -142,7 +142,7 @@ EXPORTED int sieve_deactivate_script(const char *sievedir)
     return SIEVEDIR_OK;
 }
 
-EXPORTED int sieve_delete_script(const char *sievedir, const char *name)
+EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
 {
     char path[PATH_MAX];
     int r;
