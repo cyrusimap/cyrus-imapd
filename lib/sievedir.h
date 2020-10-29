@@ -45,6 +45,11 @@
 
 #include "util.h"
 
+/* error codes */
+#define SIEVEDIR_OK        0
+#define SIEVEDIR_IOERROR  -1
+#define SIEVEDIR_NOTFOUND -2
+
 #define BYTECODE_SUFFIX        ".bc"
 #define BYTECODE_SUFFIX_LEN    3
 #define SCRIPT_SUFFIX          ".script"

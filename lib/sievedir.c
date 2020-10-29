@@ -57,7 +57,6 @@
 #include "map.h"
 #include "sievedir.h"
 #include "util.h"
-#include "imap/imap_err.h"
 
 EXPORTED struct buf *sieve_get_script(const char *sievedir, const char *script)
 {
@@ -118,16 +117,16 @@ EXPORTED int sieve_activate_script(const char *sievedir, const char *name)
      */
     if (symlink(target, tmp) < 0) {
         syslog(LOG_ERR, "IOERROR: unable to symlink %s as %s: %m", target, tmp);
-        return IMAP_IOERROR;
+        return SIEVEDIR_IOERROR;
     }
 
     if (rename(tmp, active) < 0) {
         syslog(LOG_ERR, "IOERROR: unable to rename %s to %s: %m", tmp, active);
         unlink(tmp);
-        return IMAP_IOERROR;
+        return SIEVEDIR_IOERROR;
     }
 
-    return 0;
+    return SIEVEDIR_OK;
 }
 
 EXPORTED int sieve_deactivate_script(const char *sievedir)
@@ -137,10 +136,10 @@ EXPORTED int sieve_deactivate_script(const char *sievedir)
     snprintf(active, sizeof(active), "%s/defaultbc", sievedir);
     if (unlink(active) != 0 && errno != ENOENT) {
         syslog(LOG_ERR, "IOERROR: unable to unlink %s: %m", active);
-        return IMAP_IOERROR;
+        return SIEVEDIR_IOERROR;
     }
 
-    return 0;
+    return SIEVEDIR_OK;
 }
 
 EXPORTED int sieve_delete_script(const char *sievedir, const char *name)
@@ -151,10 +150,10 @@ EXPORTED int sieve_delete_script(const char *sievedir, const char *name)
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
     r = unlink(path);
     if (r) {
-        if (errno == ENOENT) return IMAP_NOTFOUND;
+        if (errno == ENOENT) return SIEVEDIR_NOTFOUND;
 
         syslog(LOG_ERR, "IOERROR: unlink(%s): %m", path);
-        return IMAP_IOERROR;
+        return SIEVEDIR_IOERROR;
     }
 
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
@@ -163,5 +162,5 @@ EXPORTED int sieve_delete_script(const char *sievedir, const char *name)
         syslog(LOG_NOTICE, "IOERROR: unlink(%s): %m", path);
     }
 
-    return 0;
+    return SIEVEDIR_OK;
 }

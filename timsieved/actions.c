@@ -447,7 +447,7 @@ int putscript(struct protstream *conn, const struct buf *name,
 static int deleteactive(struct protstream *conn)
 {
     int result = sieve_deactivate_script(sieve_dir);
-    if (result != 0) {
+    if (result != SIEVEDIR_OK) {
         prot_printf(conn,"NO \"Unable to deactivate script\"\r\n");
         return TIMSIEVE_FAIL;
     }
@@ -474,8 +474,8 @@ int deletescript(struct protstream *conn, const struct buf *name)
   }
 
   result = sieve_delete_script(sieve_dir, name->s);
-  if (result != 0) {
-      if (errno == ENOENT)
+  if (result != SIEVEDIR_OK) {
+      if (result == SIEVEDIR_NOTFOUND)
           prot_printf(conn, "NO (NONEXISTENT) \"Script %s does not exist.\"\r\n", name->s);
       else
           prot_printf(conn,"NO \"Error deleting script\"\r\n");
@@ -584,7 +584,7 @@ int setactive(struct protstream *conn, const struct buf *name)
     }
 
     result = sieve_activate_script(sieve_dir, name->s);
-    if (result != 0) {
+    if (result != SIEVEDIR_OK) {
         prot_printf(conn,"NO \"Error activating script\"\r\n");
         return TIMSIEVE_FAIL;
     }
