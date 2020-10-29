@@ -882,7 +882,7 @@ static void set_update(const char *id, json_t *jsieve,
     free(cur_name);
 }
 
-static void set_destroy(const char *id, json_t *onSuccessActivate,
+static void set_destroy(const char *id,
                         const char *sievedir, struct jmap_set *set)
 {
     const char *script = script_from_id(sievedir, id);
@@ -891,9 +891,7 @@ static void set_destroy(const char *id, json_t *onSuccessActivate,
     if (!script) {
         err = json_pack("{s:s}", "type", "notFound");
     }
-    else if (script_isactive(script, sievedir) &&
-             (!onSuccessActivate ||
-              !strcmpnull(id, json_string_value(onSuccessActivate)))) {
+    else if (script_isactive(script, sievedir)) {
         err = json_pack("{s:s}", "type", "scriptIsActive");
     }
     else {
@@ -1088,7 +1086,7 @@ static int jmap_sieve_set(struct jmap_req *req)
         script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
         if (!script_id) continue;
 
-        set_destroy(script_id, sub_args.onSuccessActivate, sievedir, &set);
+        set_destroy(script_id, sievedir, &set);
     }
 
     if (sub_args.onSuccessActivate &&
