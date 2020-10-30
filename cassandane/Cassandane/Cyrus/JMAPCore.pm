@@ -116,6 +116,8 @@ sub test_get_session
     # need to version-gate jmap features that aren't in 3.2...
     my ($maj, $min) = Cassandane::Instance->get_version();
 
+    my $buildinfo = Cassandane::BuildInfo->new();
+
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
@@ -182,19 +184,20 @@ sub test_get_session
     $self->assert(exists $coreCapability->{collationAlgorithms});
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:mail'});
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:submission'});
-    $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:vacationresponse'});
     $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
-    if ($maj > 3 || ($maj == 3 && $min >= 3)) {
-        # jmap sieve added in 3.3
-        $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/sieve'});
+    if ($buildinfo->get('component', 'sieve')) {
+        $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:vacationresponse'});
+        if ($maj > 3 || ($maj == 3 && $min >= 3)) {
+            # jmap sieve added in 3.3
+            $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/sieve'});
+        }
     }
 
     # primaryAccounts
     my $expect_primaryAccounts = {
         'urn:ietf:params:jmap:mail' => 'cassandane',
         'urn:ietf:params:jmap:submission' => 'cassandane',
-        'urn:ietf:params:jmap:vacationresponse' => 'cassandane',
         'https://cyrusimap.org/ns/jmap/contacts' => 'cassandane',
         'https://cyrusimap.org/ns/jmap/calendars' => 'cassandane',
     };
@@ -202,8 +205,15 @@ sub test_get_session
         # jmap backup and sieve added in 3.3
         $expect_primaryAccounts->{'https://cyrusimap.org/ns/jmap/backup'}
             = 'cassandane';
-        $expect_primaryAccounts->{'https://cyrusimap.org/ns/jmap/sieve'}
+    }
+    if ($buildinfo->get('component', 'sieve')) {
+        $expect_primaryAccounts->{'urn:ietf:params:jmap:vacationresponse'}
             = 'cassandane';
+        if ($maj > 3 || ($maj == 3 && $min >= 3)) {
+            # jmap sieve added in 3.3
+            $expect_primaryAccounts->{'https://cyrusimap.org/ns/jmap/sieve'}
+            = 'cassandane';
+        }
     }
     $self->assert_deep_equals($expect_primaryAccounts,
                               $session->{primaryAccounts});
@@ -225,7 +235,9 @@ sub test_get_session
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
     $self->assert_equals(JSON::true, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
-    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    if ($buildinfo->get('component', 'sieve')) {
+        $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    }
     $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 
@@ -237,7 +249,9 @@ sub test_get_session
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
     $self->assert_equals(JSON::false, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
     $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
-    $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    if ($buildinfo->get('component', 'sieve')) {
+        $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    }
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 
@@ -249,7 +263,9 @@ sub test_get_session
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
     $self->assert_equals(JSON::true, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
     $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
-    $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    if ($buildinfo->get('component', 'sieve')) {
+        $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    }
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 }
