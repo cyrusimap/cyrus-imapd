@@ -18992,7 +18992,7 @@ EOF
 }
 
 sub test_email_query_fromanycontact_ignore_localpartonly
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions :needs_component_sieve
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
