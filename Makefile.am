@@ -1316,12 +1316,16 @@ imap_httpd_SOURCES += \
 	imap/jmap_mailbox.c \
 	imap/jmap_mdn.c \
 	imap/jmap_notes.c \
-	imap/jmap_sieve.c \
 	imap/jmap_util.c \
 	imap/jmap_util.h \
 	imap/jmap_vacation.c \
 	imap/sync_support.c \
         imap/sync_support.h
+
+if SIEVE
+imap_httpd_SOURCES += \
+	imap/jmap_sieve.c
+endif
 
 nodist_imap_httpd_SOURCES += \
 	imap/jmap_err.c \

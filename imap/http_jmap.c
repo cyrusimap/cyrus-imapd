@@ -179,7 +179,9 @@ static void jmap_init(struct buf *serverinfo)
     jmap_calendar_init(&my_jmap_settings);
     jmap_backup_init(&my_jmap_settings);
     jmap_notes_init(&my_jmap_settings);
+#ifdef USE_SIEVE
     jmap_sieve_init(&my_jmap_settings);
+#endif
 
     if (ws_enabled()) {
         json_object_set_new(my_jmap_settings.server_capabilities,

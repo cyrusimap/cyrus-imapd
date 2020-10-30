@@ -124,7 +124,6 @@ jmap_method_t jmap_sieve_methods_nonstandard[] = {
 
 HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
 {
-#ifdef USE_SIEVE
     jmap_method_t *mp;
     for (mp = jmap_sieve_methods_standard; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
@@ -141,12 +140,10 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
 
     maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
     maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE) * 1024;
-#endif /* USE_SIEVE */
 }
 
 HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
 {
-#ifdef USE_SIEVE
     static json_t *sieve_capabilities = NULL;
 
     if (!sieve_capabilities) {
@@ -187,8 +184,6 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
     }
 
     json_object_set(account_capabilities, JMAP_SIEVE_EXTENSION, sieve_capabilities);
-#endif /* USE_SIEVE */
-
 }
 
 #define SCRIPT_ID_PREFIX       ".JMAPID:"
