@@ -792,7 +792,6 @@ include_HEADERS = \
 	lib/parseaddr.h \
 	lib/retry.h \
 	lib/rfc822tok.h \
-	lib/sievedir.h \
 	lib/signals.h \
 	lib/sqldb.h \
 	lib/strarray.h \
@@ -843,6 +842,8 @@ backup_libcyrus_backup_la_LIBADD = $(LD_BASIC_ADD)
 
 backup_backupd_SOURCES = \
     imap/mutex_fake.c \
+    imap/sievedir.c \
+    imap/sievedir.h \
     imap/sync_support.c \
     imap/sync_support.h \
     master/service.c \
@@ -851,6 +852,8 @@ backup_backupd_LDADD = backup/libcyrus_backup.la $(LD_SIEVE_ADD) $(LD_SERVER_ADD
 
 backup_ctl_backups_SOURCES = \
     imap/mutex_fake.c \
+    imap/sievedir.c \
+    imap/sievedir.h \
     imap/sync_support.c \
     imap/sync_support.h \
     backup/ctl_backups.c
@@ -864,6 +867,8 @@ backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
 
 backup_restore_SOURCES = \
     imap/mutex_fake.c \
+    imap/sievedir.c \
+    imap/sievedir.h \
     imap/sync_support.c \
     imap/sync_support.h \
     backup/restore.c
@@ -958,6 +963,8 @@ imap_imapd_SOURCES = \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/proxy.h \
+	imap/sievedir.c \
+	imap/sievedir.h \
 	imap/sync_support.c \
 	imap/sync_support.h \
 	master/service.c
@@ -1174,6 +1181,8 @@ imap_lmtpd_SOURCES = \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/spool.c \
+	imap/sievedir.c \
+	imap/sievedir.h \
 	imap/sync_support.c \
 	imap/sync_support.h \
 	master/service.c
@@ -1230,6 +1239,8 @@ imap_nntpd_SOURCES = \
 	imap/smtpclient.h \
 	imap/spool.c \
 	imap/spool.h \
+	imap/sievedir.c \
+	imap/sievedir.h \
 	imap/sync_support.c \
 	imap/sync_support.h \
 	master/service.c
@@ -1320,6 +1331,8 @@ imap_httpd_SOURCES += \
 	imap/jmap_util.c \
 	imap/jmap_util.h \
 	imap/jmap_vacation.c \
+	imap/sievedir.c \
+	imap/sievedir.h \
 	imap/sync_support.c \
         imap/sync_support.h
 
@@ -1352,6 +1365,8 @@ imap_pop3d_SOURCES = \
 	imap/mutex_fake.c \
 	imap/pop3d.c \
 	imap/proxy.c \
+	imap/sievedir.c \
+	imap/sievedir.h \
 	imap/sync_support.c \
 	imap/sync_support.h \
 	master/service.c
@@ -1399,13 +1414,13 @@ imap_squatter_LDADD = $(LD_UTILITY_ADD)
 imap_squat_dump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squat_dump.c
 imap_squat_dump_LDADD = $(LD_UTILITY_ADD)
 
-imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c imap/sync_support.c imap/sync_support.h
+imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c imap/sync_support.c imap/sync_support.h imap/sievedir.c imap/sievedir.h
 imap_sync_client_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
-imap_sync_reset_SOURCES = imap/mutex_fake.c imap/sync_reset.c imap/sync_support.c imap/sync_support.h
+imap_sync_reset_SOURCES = imap/mutex_fake.c imap/sync_reset.c imap/sync_support.c imap/sync_support.h imap/sievedir.c imap/sievedir.h
 imap_sync_reset_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
-imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c imap/sync_support.h master/service.c
+imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c imap/sync_support.h master/service.c imap/sievedir.c imap/sievedir.h
 imap_sync_server_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
@@ -1484,7 +1499,6 @@ lib_libcyrus_la_SOURCES = \
 	lib/prot.c \
 	lib/ptrarray.c \
 	lib/rfc822tok.c \
-	lib/sievedir.c \
 	lib/signals.c \
 	lib/stristr.c \
 	lib/times.c \
@@ -1838,6 +1852,8 @@ sieve_test_mailbox_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 timsieved_timsieved_SOURCES = \
 	imap/mutex_fake.c \
 	imap/proxy.c \
+	imap/sievedir.c \
+	imap/sievedir.h \
 	master/service.c \
 	timsieved/actions.c \
 	timsieved/actions.h \
