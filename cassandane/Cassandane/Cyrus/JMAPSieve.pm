@@ -540,7 +540,7 @@ sub test_sieve_validate
 }
 
 sub test_sieve_test
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
