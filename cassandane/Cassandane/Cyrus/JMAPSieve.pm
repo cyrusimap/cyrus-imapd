@@ -609,7 +609,7 @@ EOF
 }
 
 sub test_sieve_test_upload
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -696,7 +696,7 @@ EOF
 }
 
 sub test_sieve_test_singlecommand
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
