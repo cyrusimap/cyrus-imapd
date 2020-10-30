@@ -7630,7 +7630,7 @@ static int jmap_email_parse(jmap_req_t *req)
         else if (part) {
             _email_from_rfc822body(req, &getargs, mr, part, &email);
         }
-        else if (body) {
+        else if (mr) {
             _email_from_record(req, &getargs, mr, &email);
         }
 
