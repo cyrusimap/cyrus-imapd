@@ -3277,8 +3277,8 @@ EOF
 }
 
 sub test_jmapquery_attachmentindexing
-    :min_version_3_3 :needs_component_jmap :needs_search_xapian
-    :SearchAttachmentExtractor :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :needs_search_xapian :SearchAttachmentExtractor :JMAPExtensions
 {
     my ($self) = @_;
 
