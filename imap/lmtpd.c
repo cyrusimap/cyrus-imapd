@@ -842,7 +842,7 @@ int deliver(message_data_t *msgdata, char *authuser,
             goto skipdelivery;
         }
 
-#ifdef WITH_JMAP
+#if defined(USE_SIEVE) && defined(WITH_JMAP)
         /* build the query filter */
         content.matchmime = jmap_email_matchmime_init(&content.map, &jerr);
 #endif
@@ -978,7 +978,7 @@ skipdelivery:
         message_free_body(content.body);
         free(content.body);
     }
-#ifdef WITH_JMAP
+#if defined(USE_SIEVE) && defined(WITH_JMAP)
     jmap_email_matchmime_free(&content.matchmime);
 #endif
     append_removestage(stage);
