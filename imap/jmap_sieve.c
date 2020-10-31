@@ -513,111 +513,29 @@ done:
 static int putscript(const char *name, const char *content,
                      const char *sievedir, json_t **err)
 {
-    char new_path[PATH_MAX];
-    FILE *f;
-
     /* check script size */
     if ((json_int_t) strlen(content) > maxscriptsize) {
         *err = json_pack("{s:s}", "type", "tooLarge");
         return 0;
     }
 
-    /* parse the script */
     char *errors = NULL;
-    sieve_script_t *s = NULL;
-    (void) sieve_script_parse_string(NULL, content, &errors, &s);
-    if (!s) {
+    int r = sievedir_put_script(sievedir, name, content, &errors);
+
+    switch (r) {
+    case SIEVEDIR_INVALID:
         *err = json_pack("{s:s, s:s}", "type", "invalidScript",
                          "description", errors);
         free(errors);
-        return 0;
-    }
-
-    /* open a new file for the script */
-    snprintf(new_path, sizeof(new_path),
-             "%s/%s%s.NEW", sievedir, name, SCRIPT_SUFFIX);
-
-    f = fopen(new_path, "w+");
-
-    if (f == NULL) {
-        syslog(LOG_ERR, "IOERROR: fopen(%s): %m", new_path);
-        sieve_script_free(&s);
+        break;
+    case SIEVEDIR_FAIL:
         *err = json_pack("{s:s, s:s}", "type", "serverFail",
-                         "description", "couldn't create script file");
-        return 0;
-    }
-
-    size_t i, content_len = strlen(content);
-    int saw_cr = 0;
-
-    /* copy data to file - replacing any lone CR or LF with the
-     * CRLF pair so notify messages are SMTP compatible */
-    for (i = 0; i < content_len; i++) {
-        if (saw_cr) {
-            if (content[i] != '\n') putc('\n', f);
-        }
-        else if (content[i] == '\n')
-            putc('\r', f);
-
-        putc(content[i], f);
-        saw_cr = (content[i] == '\r');
-    }
-    if (saw_cr) putc('\n', f);
-
-    fflush(f);
-    fclose(f);
-
-    /* generate the bytecode */
-    bytecode_info_t *bc = NULL;
-    if (sieve_generate_bytecode(&bc, s) == -1) {
-        unlink(new_path);
-        sieve_script_free(&s);
+                         "description", "bytecode generation failed");
+        break;
+    case SIEVEDIR_IOERROR:
         *err = json_pack("{s:s, s:s}", "type", "serverFail",
-                         "description", "bytecode generate failed");
-        return 0;
-    }
-
-    /* open the new bytecode file */
-    char new_bcpath[PATH_MAX];
-    snprintf(new_bcpath, sizeof(new_bcpath),
-             "%s/%s%s.NEW", sievedir, name, BYTECODE_SUFFIX);
-    int fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
-    if (fd < 0) {
-        syslog(LOG_ERR, "IOERROR: open(%s): %m", new_bcpath);
-        unlink(new_path);
-        sieve_free_bytecode(&bc);
-        sieve_script_free(&s);
-        *err = json_pack("{s:s, s:s}", "type", "serverFail",
-                         "description", "couldn't create bytecode file");
-        return 0;
-    }
-
-    /* emit the bytecode */
-    if (sieve_emit_bytecode(fd, bc) == -1) {
-        close(fd);
-        unlink(new_path);
-        unlink(new_bcpath);
-        sieve_free_bytecode(&bc);
-        sieve_script_free(&s);
-        *err = json_pack("{s:s, s:s}", "type", "serverFail",
-                         "description", "bytecode emit failed");
-        return 0;
-    }
-
-    sieve_free_bytecode(&bc);
-    sieve_script_free(&s);
-
-    close(fd);
-
-    /* rename */
-    char path[PATH_MAX];
-    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
-    int r = rename(new_path, path);
-    if (r) syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", new_path, path);
-    else {
-        snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-        r = rename(new_bcpath, path);
-        if (r) syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", new_bcpath, path);
+                         "description", strerror(errno));
+        break;
     }
 
     return r;

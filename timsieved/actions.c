@@ -297,14 +297,8 @@ static int countscripts(char *name)
 int putscript(struct protstream *conn, const struct buf *name,
               const struct buf *data, int verify_only)
 {
-  FILE *stream;
-  const char *dataptr;
-  struct buf errors = BUF_INITIALIZER;
-  unsigned int i;
-  int last_was_r = 0;
   int result;
-  char path[1024], p2[1024];
-  char bc_path[1024], bc_p2[1024];
+  char *err = NULL;
   int maxscripts;
   sieve_script_t *s = NULL;
 
@@ -316,9 +310,8 @@ int putscript(struct protstream *conn, const struct buf *name,
   }
 
   if (verify_only) {
-      char *err = NULL;
       result = sieve_script_parse_string(interp, buf_cstring(data), &err, &s);
-      if (err) buf_initm(&errors, err, strlen(err));
+      sieve_script_free(&s);
   }
   else {
       /* see if this would put the user over quota */
@@ -332,112 +325,34 @@ int putscript(struct protstream *conn, const struct buf *name,
           return TIMSIEVE_FAIL;
       }
 
-      snprintf(path, 1023, "%s.script.NEW", name->s);
-
-      stream = fopen(path, "w+");
-
-      if (stream == NULL) {
-          prot_printf(conn, "NO \"Unable to open script for writing (%s)\"\r\n",
-                      path);
-          return TIMSIEVE_NOEXIST;
-      }
-
-      dataptr = data->s;
-
-      /* copy data to file - replacing any lone \r or \n with the
-       * \r\n pair so notify messages are SMTP compatible */
-      for (i = 0; i < data->len; i++) {
-          if (last_was_r) {
-              if (dataptr[i] != '\n')
-                  putc('\n', stream);
-          }
-          else {
-              if (dataptr[i] == '\n')
-                  putc('\r', stream);
-          }
-          putc(dataptr[i], stream);
-          last_was_r = (dataptr[i] == '\r');
-      }
-      if (last_was_r)
-          putc('\n', stream);
-
-      rewind(stream);
-
-      /* let's make sure this is a valid script
-         (no parse errors)
-      */
-      result = sieve_script_parse(interp, stream, &errors, &s);
-
-      fflush(stream);
-      fclose(stream);
+      result = sievedir_put_script(sieve_dir,
+                                   buf_cstring(name), buf_cstring(data), &err);
+      if (result == SIEVEDIR_OK)
+          sync_log_sieve(sieved_userid);
   }
 
-  if (result != SIEVE_OK) {
-      if (buf_len(&errors)) {
+  switch (result) {
+  case SIEVEDIR_INVALID:
+      if (err) {
           prot_printf(conn, "NO ");
-          prot_printstring(conn, buf_cstring(&errors));
+          prot_printstring(conn, err);
           prot_printf(conn, "\r\n");
+          free(err);
       } else {
           prot_printf(conn, "NO \"parse failed\"\r\n");
       }
-      sieve_script_free(&s);
-      buf_free(&errors);
-      unlink(path);
       return TIMSIEVE_FAIL;
-  }
 
-  buf_free(&errors);
+    case SIEVEDIR_FAIL:
+        prot_printf(conn, "NO \"bytecode generate failed\"\r\n");
+        return TIMSIEVE_FAIL;
 
-  if (!verify_only) {
-      int fd;
-      bytecode_info_t *bc = NULL;
-
-      /* Now, generate the bytecode */
-      if(sieve_generate_bytecode(&bc, s) == -1) {
-          unlink(path);
-          sieve_script_free(&s);
-          prot_printf(conn, "NO \"bytecode generate failed\"\r\n");
-          return TIMSIEVE_FAIL;
-      }
-
-      /* Now, open the new file */
-      snprintf(bc_path, 1023, "%s.bc.NEW", name->s);
-      fd = open(bc_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
-      if(fd < 0) {
-          unlink(path);
-          sieve_free_bytecode(&bc);
-          sieve_script_free(&s);
-          prot_printf(conn, "NO \"couldn't open bytecode file\"\r\n");
-          return TIMSIEVE_FAIL;
-      }
-
-      /* Now, emit the bytecode */
-      if(sieve_emit_bytecode(fd, bc) == -1) {
-          close(fd);
-          unlink(path);
-          unlink(bc_path);
-          sieve_free_bytecode(&bc);
-          sieve_script_free(&s);
-          prot_printf(conn, "NO \"bytecode emit failed\"\r\n");
-          return TIMSIEVE_FAIL;
-      }
-
-      sieve_free_bytecode(&bc);
-
-      close(fd);
-
-      /* Now, rename! */
-      snprintf(p2, 1023, "%s.script", name->s);
-      snprintf(bc_p2, 1023, "%s.bc", name->s);
-      rename(path, p2);
-      rename(bc_path, bc_p2);
-
-  }
-
-  sieve_script_free(&s);
+    case SIEVEDIR_IOERROR:
+        prot_printf(conn, "NO \"%s\"\r\n", strerror(errno));
+        return TIMSIEVE_FAIL;
+    }
 
   prot_printf(conn, "OK\r\n");
-  sync_log_sieve(sieved_userid);
 
   return TIMSIEVE_OK;
 }

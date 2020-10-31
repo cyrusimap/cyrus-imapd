@@ -49,6 +49,8 @@
 #define SIEVEDIR_OK        0
 #define SIEVEDIR_IOERROR  -1
 #define SIEVEDIR_NOTFOUND -2
+#define SIEVEDIR_INVALID  -3
+#define SIEVEDIR_FAIL     -4
 
 #define BYTECODE_SUFFIX        ".bc"
 #define BYTECODE_SUFFIX_LEN    3
@@ -62,6 +64,8 @@ int sievedir_activate_script(const char *sievedir, const char *name);
 int sievedir_deactivate_script(const char *sievedir);
 
 struct buf *sievedir_get_script(const char *sievedir, const char *script);
+int sievedir_put_script(const char *sievedir, const char *name,
+                        const char *content, char **errors);
 int sievedir_delete_script(const char *sievedir, const char *name);
 
 #endif /* INCLUDED_SIEVEDIR_H */

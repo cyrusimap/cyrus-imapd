@@ -56,6 +56,8 @@
 #include "assert.h"
 #include "map.h"
 #include "sievedir.h"
+#include "sieve/bc_parse.h"
+#include "sieve/sieve_interface.h"
 #include "util.h"
 
 EXPORTED struct buf *sievedir_get_script(const char *sievedir, const char *script)
@@ -164,3 +166,98 @@ EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
 
     return SIEVEDIR_OK;
 }
+
+#ifdef USE_SIEVE
+EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
+                                 const char *content, char **errors)
+{
+    char new_path[PATH_MAX];
+    FILE *f;
+
+    /* parse the script */
+    sieve_script_t *s = NULL;
+    (void) sieve_script_parse_string(NULL, content, errors, &s);
+    if (!s) return SIEVEDIR_INVALID;
+
+    /* open a new file for the script */
+    snprintf(new_path, sizeof(new_path),
+             "%s/%s%s.NEW", sievedir, name, SCRIPT_SUFFIX);
+
+    f = fopen(new_path, "w+");
+
+    if (f == NULL) {
+        syslog(LOG_ERR, "IOERROR: fopen(%s): %m", new_path);
+        sieve_script_free(&s);
+        return SIEVEDIR_IOERROR;
+    }
+
+    size_t i, content_len = strlen(content);
+    int saw_cr = 0;
+
+    /* copy data to file - replacing any lone CR or LF with the
+     * CRLF pair so notify messages are SMTP compatible */
+    for (i = 0; i < content_len; i++) {
+        if (saw_cr) {
+            if (content[i] != '\n') putc('\n', f);
+        }
+        else if (content[i] == '\n')
+            putc('\r', f);
+
+        putc(content[i], f);
+        saw_cr = (content[i] == '\r');
+    }
+    if (saw_cr) putc('\n', f);
+
+    fflush(f);
+    fclose(f);
+
+    /* generate the bytecode */
+    bytecode_info_t *bc = NULL;
+    if (sieve_generate_bytecode(&bc, s) == -1) {
+        unlink(new_path);
+        sieve_script_free(&s);
+        return SIEVEDIR_FAIL;
+    }
+
+    /* open the new bytecode file */
+    char new_bcpath[PATH_MAX];
+    snprintf(new_bcpath, sizeof(new_bcpath),
+             "%s/%s%s.NEW", sievedir, name, BYTECODE_SUFFIX);
+    int fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+    if (fd < 0) {
+        syslog(LOG_ERR, "IOERROR: open(%s): %m", new_bcpath);
+        unlink(new_path);
+        sieve_free_bytecode(&bc);
+        sieve_script_free(&s);
+        return SIEVEDIR_IOERROR;
+    }
+
+    /* emit the bytecode */
+    if (sieve_emit_bytecode(fd, bc) == -1) {
+        close(fd);
+        unlink(new_path);
+        unlink(new_bcpath);
+        sieve_free_bytecode(&bc);
+        sieve_script_free(&s);
+        return SIEVEDIR_FAIL;
+    }
+
+    sieve_free_bytecode(&bc);
+    sieve_script_free(&s);
+
+    close(fd);
+
+    /* rename */
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
+    int r = rename(new_path, path);
+    if (r) syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", new_path, path);
+    else {
+        snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
+        r = rename(new_bcpath, path);
+        if (r) syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", new_bcpath, path);
+    }
+
+    return (r ? SIEVEDIR_IOERROR : SIEVEDIR_OK);
+}
+#endif /* USE_SIEVE */
