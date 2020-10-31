@@ -134,16 +134,16 @@ int actions_setuser(const char *userid)
   if (sieve_dir) free(sieve_dir);
   sieve_dir = buf_release(&buf);
 
-  result = chdir(sieve_dir);
-  if (result != 0) {
+  struct stat sbuf;
+  result = stat(sieve_dir, &sbuf);
+  if (result && errno == ENOENT) {
       result = cyrus_mkdir(sieve_dir, 0755);
-      if (!result) result = mkdir(sieve_dir, 0755);
-      if (!result) result = chdir(sieve_dir);
-      if (result) {
-          syslog(LOG_ERR, "mkdir %s: %m", sieve_dir);
-          ret = TIMSIEVE_FAIL;
+      if (!result) {
+          result = mkdir(sieve_dir, 0755);
+          if (!result) result = stat(sieve_dir, &sbuf);
       }
   }
+  ret = result ? TIMSIEVE_FAIL : TIMSIEVE_OK;
 
   buf_free(&buf);
   return ret;
@@ -244,7 +244,7 @@ static int countscripts(char *name)
 
     snprintf(myname, 1023, "%s.script", name);
 
-    if ((dp = opendir(".")) == NULL) {
+    if ((dp = opendir(sieve_dir)) == NULL) {
         return -1;
     }
 
@@ -382,7 +382,7 @@ int listscripts(struct protstream *conn)
     size_t length;
 
     /* open the directory */
-    dp=opendir(".");
+    dp=opendir(sieve_dir);
 
     if (dp==NULL)
     {
