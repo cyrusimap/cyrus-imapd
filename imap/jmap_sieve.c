@@ -1056,12 +1056,31 @@ static int jmap_sieve_set(struct jmap_req *req)
     /* create */
     const char *creation_id, *script_id;
     json_t *val;
-    json_object_foreach(set.create, creation_id, val) {
-        script_id = set_create(creation_id, val, sievedir, &set);
-        if (script_id) {
-            /* Register creation id */
-            jmap_add_id(req, creation_id, script_id);
+    if (json_object_size(set.create)) {
+        hash_table scripts = HASH_TABLE_INITIALIZER;
+        int num_scripts;
+
+        /* Build a list of scripts */
+        _listscripts(sievedir, &scripts);
+        num_scripts = hash_numrecords(&scripts);
+
+        json_object_foreach(set.create, creation_id, val) {
+            if (num_scripts >= maxscripts) {
+                json_object_set_new(set.not_created, creation_id,
+                                    json_pack("{s:s}", "type", "overQuota"));
+                continue;
+            }
+
+            script_id = set_create(creation_id, val, sievedir, &set);
+            if (script_id) {
+                /* Register creation id */
+                jmap_add_id(req, creation_id, script_id);
+
+                num_scripts++;
+            }
         }
+
+        free_hash_table(&scripts, &free_script_info);
     }
 
 
