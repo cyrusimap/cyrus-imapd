@@ -521,6 +521,12 @@ static int putscript(const char *name, const char *content,
     char new_path[PATH_MAX];
     FILE *f;
 
+    /* check script size */
+    if ((json_int_t) strlen(content) > maxscriptsize) {
+        *err = json_pack("{s:s}", "type", "tooLarge");
+        return 0;
+    }
+
     /* parse the script */
     char *errors = NULL;
     sieve_script_t *s = NULL;
