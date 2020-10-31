@@ -83,6 +83,24 @@ EXPORTED struct buf *sievedir_get_script(const char *sievedir, const char *scrip
     return ret;
 }
  
+/* Everything but '/' and '\0' are valid. */
+EXPORTED int sievedir_valid_name(const struct buf *name)
+{
+    size_t lup, len = buf_len(name);
+    const char *ptr;
+
+    /* must be at least one character long */
+    if (len < 1) return 0;
+
+    ptr = buf_base(name);
+
+    for (lup = 0; lup < len; lup++) {
+        if ((ptr[lup] == '/') || (ptr[lup] == '\0')) return 0;
+    }
+
+    return (lup < 1013);
+}
+
 EXPORTED int sievedir_script_exists(const char *sievedir, const char *name)
 {
     char path[PATH_MAX];

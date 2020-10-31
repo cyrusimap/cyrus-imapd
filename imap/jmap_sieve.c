@@ -609,9 +609,11 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
         json_array_append_new(invalid, json_string("name"));
     else  {
         /* sanity check script name and check for name collision */
-        name = json_string_value(arg);
+        struct buf buf = BUF_INITIALIZER;
 
-        if (!*name || strrchr(name, '/')) {
+        name = json_string_value(arg);
+        buf_init_ro_cstr(&buf, name);
+        if (!sievedir_valid_name(&buf)) {
             json_array_append_new(invalid, json_string("name"));
         }
         else if (sievedir_script_exists(sievedir, name)) {
@@ -692,7 +694,10 @@ static void set_update(const char *id, json_t *jsieve,
 
         if (name) {
             /* sanity check script name and check for name collision */
-            if (!*name || strrchr(name, '/')) {
+            struct buf buf = BUF_INITIALIZER;
+
+            buf_init_ro_cstr(&buf, name);
+            if (!sievedir_valid_name(&buf)) {
                 json_array_append_new(invalid, json_string("name"));
             }
             else if (strcmp(name, cur_name) &&

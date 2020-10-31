@@ -149,31 +149,6 @@ int actions_setuser(const char *userid)
   return ret;
 }
 
-/*
- *
- * Everything but '/' and '\0' are valid.
- *
- */
-
-static int scriptname_valid(const struct buf *name)
-{
-  unsigned int lup;
-  char *ptr;
-
-  /* must be at least one character long */
-  if (name->len < 1) return TIMSIEVE_FAIL;
-
-  ptr = name->s;
-
-  for (lup=0;lup<name->len;lup++)
-  {
-      if ((ptr[lup]=='/') || (ptr[lup]=='\0'))
-          return TIMSIEVE_FAIL;
-  }
-
-  return lup < 1013 ? TIMSIEVE_OK : TIMSIEVE_FAIL;
-}
-
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
                  int starttls_done, int authenticated, sasl_ssf_t sasl_ssf)
 {
@@ -228,14 +203,12 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
 int getscript(struct protstream *conn, const struct buf *name)
 {
     int size;                     /* size of the file */
-    int result;
     char path[1024];
     struct buf *buf;
 
-    result = scriptname_valid(name);
-    if (result != TIMSIEVE_OK) {
+    if (!sievedir_valid_name(name)) {
         prot_printf(conn,"NO \"Invalid script name\"\r\n");
-        return result;
+        return TIMSIEVE_FAIL;
     }
 
     snprintf(path, 1023, "%s.script", name->s);
@@ -302,11 +275,10 @@ int putscript(struct protstream *conn, const struct buf *name,
   int maxscripts;
   sieve_script_t *s = NULL;
 
-  result = scriptname_valid(name);
-  if (result!=TIMSIEVE_OK)
+  if (!sievedir_valid_name(name))
   {
       prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return result;
+      return TIMSIEVE_FAIL;
   }
 
   if (verify_only) {
@@ -376,11 +348,10 @@ int deletescript(struct protstream *conn, const struct buf *name)
 {
   int result;
 
-  result = scriptname_valid(name);
-  if (result!=TIMSIEVE_OK)
+  if (!sievedir_valid_name(name))
   {
       prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return result;
+      return TIMSIEVE_FAIL;
   }
 
   if (sievedir_script_isactive(sieve_dir, name->s)) {
@@ -460,11 +431,10 @@ int setactive(struct protstream *conn, const struct buf *name)
         return TIMSIEVE_OK;
     }
 
-    result = scriptname_valid(name);
-    if (result!=TIMSIEVE_OK)
+    if (!sievedir_valid_name(name))
     {
         prot_printf(conn,"NO \"Invalid script name\"\r\n");
-        return result;
+        return TIMSIEVE_FAIL;
     }
 
     if (sievedir_script_exists(sieve_dir, name->s)==FALSE)
@@ -498,17 +468,15 @@ int renamescript(struct protstream *conn,
   int result;
   char oldpath[1024], newpath[1024];
 
-  result = scriptname_valid(oldname);
-  if (result!=TIMSIEVE_OK)
+  if (!sievedir_valid_name(oldname))
   {
       prot_printf(conn,"NO \"Invalid old script name\"\r\n");
-      return result;
+      return TIMSIEVE_FAIL;
   }
-  result = scriptname_valid(newname);
-  if (result!=TIMSIEVE_OK)
+  if (!sievedir_valid_name(newname))
   {
       prot_printf(conn,"NO \"Invalid new script name\"\r\n");
-      return result;
+      return TIMSIEVE_FAIL;
   }
 
   if (sievedir_script_exists(sieve_dir, newname->s)==TRUE) {
@@ -555,15 +523,13 @@ int renamescript(struct protstream *conn,
 
 int cmd_havespace(struct protstream *conn, const struct buf *sieve_name, unsigned long num)
 {
-    int result;
     int maxscripts;
     extern unsigned long maxscriptsize;
 
-    result = scriptname_valid(sieve_name);
-    if (result!=TIMSIEVE_OK)
+    if (!sievedir_valid_name(sieve_name))
     {
         prot_printf(conn,"NO \"Invalid script name\"\r\n");
-        return result;
+        return TIMSIEVE_FAIL;
     }
 
     /* see if the size of the script is too big */
