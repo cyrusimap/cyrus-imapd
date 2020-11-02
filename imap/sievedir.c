@@ -145,6 +145,11 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
     char active[PATH_MAX];
     char tmp[PATH_MAX+4];  /* +4 for ".NEW" */
 
+    if (sievedir_script_isactive(sievedir, name)) {
+        /* already active - nothing to do here */
+        return SIEVEDIR_OK;
+    }
+
     snprintf(target, sizeof(target), "%s%s", name, BYTECODE_SUFFIX);
     snprintf(active, sizeof(active), "%s/%s", sievedir, DEFAULTBC_NAME);
     snprintf(tmp, sizeof(tmp), "%s.NEW", active);

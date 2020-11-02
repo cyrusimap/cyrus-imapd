@@ -445,12 +445,6 @@ int setactive(struct protstream *conn, const struct buf *name)
         return TIMSIEVE_NOEXIST;
     }
 
-    /* if script already is the active one just say ok */
-    if (sievedir_script_isactive(sieve_dir, name->s)==TRUE) {
-        prot_printf(conn,"OK\r\n");
-        return TIMSIEVE_OK;
-    }
-
     result = sievedir_activate_script(sieve_dir, name->s);
     if (result != SIEVEDIR_OK) {
         prot_printf(conn,"NO \"Error activating script\"\r\n");
