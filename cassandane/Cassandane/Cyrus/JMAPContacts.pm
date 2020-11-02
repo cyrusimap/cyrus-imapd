@@ -48,6 +48,7 @@ use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use Storable 'dclone';
 use File::Basename;
+use File::Copy;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -3203,5 +3204,36 @@ sub test_contact_copy_overquota
     $self->assert_str_equals('overQuota', $res->[0][1]{notCreated}{2}{type});
 
 }
+
+sub test_contact_get_invalid_utf8
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Contact/get', {
+            properties => ['emails'],
+        }, 'R1']
+    ]);
+
+    my $basedir = $self->{instance}->{basedir};
+    copy('data/vcard/invalid-utf8.eml',
+         $basedir.'/data/user/cassandane/#addressbooks/1.') or die;
+    $self->{instance}->run_command({ cyrus => 1 },
+        'reconstruct', 'user.cassandane.#addressbooks');
+
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            properties => ['emails'],
+        }, 'R1']
+    ]);
+    $self->assert_deep_equals([{
+        type => 'work',
+        value => "beno\N{REPLACEMENT CHARACTER}t\@local",
+        isDefault => JSON::true,
+    }], $res->[0][1]{list}[0]{emails});
+}
+
 
 1;
