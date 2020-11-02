@@ -58,6 +58,7 @@
 #define SCRIPT_SUFFIX_LEN      7
 #define DEFAULTBC_NAME         "defaultbc"
 
+int sievedir_script_exists(const char *sievedir, const char *name);
 int sievedir_script_isactive(const char *sievedir, const char *name);
 
 int sievedir_activate_script(const char *sievedir, const char *name);

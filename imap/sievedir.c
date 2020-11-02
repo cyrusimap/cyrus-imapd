@@ -52,6 +52,8 @@
 #include <syslog.h>
 #include <assert.h>
 #include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "assert.h"
 #include "map.h"
@@ -81,6 +83,16 @@ EXPORTED struct buf *sievedir_get_script(const char *sievedir, const char *scrip
     return ret;
 }
  
+EXPORTED int sievedir_script_exists(const char *sievedir, const char *name)
+{
+    char path[PATH_MAX];
+    struct stat sbuf;
+
+    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
+
+    return (stat(path, &sbuf) == 0);
+}
+
 EXPORTED int sievedir_script_isactive(const char *sievedir, const char *name)
 {
     char link[PATH_MAX];

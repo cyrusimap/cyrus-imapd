@@ -597,7 +597,6 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
     const char *id = makeuuid(), *name = NULL, *content = NULL;
-    char path[PATH_MAX];
     int r;
 
     arg = json_object_get(jsieve, "id");
@@ -610,15 +609,12 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
         json_array_append_new(invalid, json_string("name"));
     else  {
         /* sanity check script name and check for name collision */
-        struct stat sbuf;
-
         name = json_string_value(arg);
-        snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
 
         if (!*name || strrchr(name, '/')) {
             json_array_append_new(invalid, json_string("name"));
         }
-        else if (!stat(path, &sbuf)) {
+        else if (sievedir_script_exists(sievedir, name)) {
             err = json_pack("{s:s}", "type", "alreadyExists");
             goto done;
         }
@@ -671,7 +667,7 @@ static void set_update(const char *id, json_t *jsieve,
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
     const char *script, *name = NULL, *content = NULL;
-    char newpath[PATH_MAX], *cur_name = NULL;
+    char *cur_name = NULL;
     int r = 0, is_active;
 
     if (!id) return;
@@ -696,14 +692,13 @@ static void set_update(const char *id, json_t *jsieve,
 
         if (name) {
             /* sanity check script name and check for name collision */
-            struct stat sbuf;
-
-            snprintf(newpath, sizeof(newpath),
-                     "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
-
-            if (!*name || strrchr(name, '/') ||
-                (strcmp(name, cur_name) && !stat(newpath, &sbuf))) {
+            if (!*name || strrchr(name, '/')) {
                 json_array_append_new(invalid, json_string("name"));
+            }
+            else if (strcmp(name, cur_name) &&
+                     sievedir_script_exists(sievedir, name)) {
+                err = json_pack("{s:s}", "type", "alreadyExists");
+                goto done;
             }
         }
     }
@@ -737,10 +732,12 @@ static void set_update(const char *id, json_t *jsieve,
     }
     if (!r && name && strcmp(name, cur_name)) {
         /* rename script and bytecode; move script id link; move active link */
-        char oldpath[PATH_MAX];
+        char oldpath[PATH_MAX], newpath[PATH_MAX];
 
         snprintf(oldpath, sizeof(oldpath),
                  "%s/%s%s", sievedir, cur_name, SCRIPT_SUFFIX);
+        snprintf(newpath, sizeof(oldpath),
+                 "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
         r = rename(oldpath, newpath);
         if (!r) {
             r = create_id_link(sievedir, id, name);

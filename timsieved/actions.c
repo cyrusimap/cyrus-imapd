@@ -445,25 +445,6 @@ int listscripts(struct protstream *conn)
     return TIMSIEVE_OK;
 }
 
-/* does the script 'str' exist
-   return TRUE | FALSE */
-static int exists(char *str)
-{
-    char filename[1024];
-    struct stat filestats;  /* returned by stat */
-    int result;
-
-    snprintf(filename, 1023, "%s.script", str);
-
-    result = stat(filename,&filestats);
-
-    if (result != 0) {
-        return FALSE;
-    }
-
-    return TRUE;
-}
-
 /* set the sieve script 'name' to be the active script */
 
 int setactive(struct protstream *conn, const struct buf *name)
@@ -486,7 +467,7 @@ int setactive(struct protstream *conn, const struct buf *name)
         return result;
     }
 
-    if (exists(name->s)==FALSE)
+    if (sievedir_script_exists(sieve_dir, name->s)==FALSE)
     {
         prot_printf(conn,"NO (NONEXISTENT) \"Script does not exist\"\r\n");
         return TIMSIEVE_NOEXIST;
@@ -530,7 +511,7 @@ int renamescript(struct protstream *conn,
       return result;
   }
 
-  if (exists(newname->s)==TRUE) {
+  if (sievedir_script_exists(sieve_dir, newname->s)==TRUE) {
     prot_printf(conn, "NO (ALREADYEXISTS) \"Script %s already exists.\"\r\n",
                 newname->s);
     return TIMSIEVE_EXISTS;
