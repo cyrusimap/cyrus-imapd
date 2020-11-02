@@ -237,6 +237,15 @@ static void strip_spurious_deletes(struct changes_rock *urock)
     }
 }
 
+static json_t *jmap_utf8string(const char *s)
+{
+    char *freeme = NULL;
+    json_t *jval = json_string(jmap_decode_to_utf8("utf-8", ENCODING_NONE,
+                s, strlen(s), 1.0, &freeme, NULL));
+    free(freeme);
+    return jval;
+}
+
 /*****************************************************************************
  * JMAP Contacts API
  ****************************************************************************/
@@ -266,7 +275,7 @@ static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
         if (!propval) continue;
 
         if (!strcasecmp(name, "fn")) {
-            json_object_set_new(obj, "name", json_string(propval));
+            json_object_set_new(obj, "name", jmap_utf8string(propval));
         }
 
         else if (!strcasecmp(name, "x-addressbookserver-member")) {
@@ -1382,7 +1391,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     /* name fields: Family; Given; Middle; Prefix; Suffix. */
 
     const char *family = strarray_safenth(n, 0);
-    json_object_set_new(obj, "lastName", json_string(family));
+    json_object_set_new(obj, "lastName", jmap_utf8string(family));
 
     /* JMAP doesn't have a separate field for Middle (aka "Additional
      * Names"), so we just mash them into firstName. See reverse of this in
@@ -1394,20 +1403,20 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         buf_putc(&buf, ' ');
         buf_appendcstr(&buf, middle);
     }
-    json_object_set_new(obj, "firstName", json_string(buf_cstring(&buf)));
+    json_object_set_new(obj, "firstName", jmap_utf8string(buf_cstring(&buf)));
 
     const char *prefix = strarray_safenth(n, 3);
     json_object_set_new(obj, "prefix",
-                        json_string(prefix)); /* just prefix */
+                        jmap_utf8string(prefix)); /* just prefix */
 
     const char *suffix = strarray_safenth(n, 4);
     json_object_set_new(obj, "suffix",
-                        json_string(suffix)); /* just suffix */
+                        jmap_utf8string(suffix)); /* just suffix */
 
     json_object_set_new(obj, "company",
-                        json_string(strarray_safenth(org, 0)));
+                        jmap_utf8string(strarray_safenth(org, 0)));
     json_object_set_new(obj, "department",
-                        json_string(strarray_safenth(org, 1)));
+                        jmap_utf8string(strarray_safenth(org, 1)));
 
     /* we used to store jobTitle in ORG[2] instead of TITLE, which confused
      * CardDAV clients. that's fixed, but there's now lots of cards with it
@@ -1415,7 +1424,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     const char *item = vparse_stringval(card, "title");
     if (!item)
         item = strarray_safenth(org, 2);
-    json_object_set_new(obj, "jobTitle", json_string(item));
+    json_object_set_new(obj, "jobTitle", jmap_utf8string(item));
 
     json_t *adr = json_array();
 
@@ -1468,15 +1477,15 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         }
 
         json_object_set_new(item, "street",
-                            json_string(buf_cstring(&buf)));
+                            jmap_utf8string(buf_cstring(&buf)));
         json_object_set_new(item, "locality",
-                            json_string(strarray_safenth(a, 3)));
+                            jmap_utf8string(strarray_safenth(a, 3)));
         json_object_set_new(item, "region",
-                            json_string(strarray_safenth(a, 4)));
+                            jmap_utf8string(strarray_safenth(a, 4)));
         json_object_set_new(item, "postcode",
-                            json_string(strarray_safenth(a, 5)));
+                            jmap_utf8string(strarray_safenth(a, 5)));
         json_object_set_new(item, "country",
-                            json_string(strarray_safenth(a, 6)));
+                            jmap_utf8string(strarray_safenth(a, 6)));
 
         json_array_append_new(adr, item);
     }
@@ -1514,7 +1523,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         json_object_set_new(item, "type", json_string(type));
         if (label) json_object_set_new(item, "label", json_string(label));
 
-        json_object_set_new(item, "value", json_string(entry->v.value));
+        json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
 
         json_array_append_new(emails, item);
         i++;
@@ -1568,7 +1577,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         json_object_set_new(item, "type", json_string(type));
         if (label) json_object_set_new(item, "label", json_string(label));
 
-        json_object_set_new(item, "value", json_string(entry->v.value));
+        json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
 
         json_array_append_new(phones, item);
     }
@@ -1604,7 +1613,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
             }
             json_object_set_new(item, "type", json_string("username"));
             if (label) json_object_set_new(item, "label", json_string(label));
-            json_object_set_new(item, "value", json_string(entry->v.value));
+            json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
             json_array_append_new(online, item);
         }
         if (!strcasecmp(entry->name, "x-social-profile")) {
@@ -1623,7 +1632,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
             json_object_set_new(item, "type", json_string("username"));
             if (label) json_object_set_new(item, "label", json_string(label));
             json_object_set_new(item, "value",
-                                json_string(value ? value : entry->v.value));
+                                jmap_utf8string(value ? value : entry->v.value));
             json_array_append_new(online, item);
         }
         if (!strcasecmp(entry->name, "x-fm-online-other")) {
@@ -1637,7 +1646,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
             }
             json_object_set_new(item, "type", json_string("other"));
             if (label) json_object_set_new(item, "label", json_string(label));
-            json_object_set_new(item, "value", json_string(entry->v.value));
+            json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
             json_array_append_new(online, item);
         }
     }
@@ -1645,18 +1654,18 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     json_object_set_new(obj, "online", online);
 
     item = vparse_stringval(card, "nickname");
-    json_object_set_new(obj, "nickname", json_string(item ? item : ""));
+    json_object_set_new(obj, "nickname", jmap_utf8string(item ? item : ""));
 
     entry = vparse_get_entry(card, NULL, "anniversary");
     _date_to_jmap(entry, &buf);
-    json_object_set_new(obj, "anniversary", json_string(buf_cstring(&buf)));
+    json_object_set_new(obj, "anniversary", jmap_utf8string(buf_cstring(&buf)));
 
     entry = vparse_get_entry(card, NULL, "bday");
     _date_to_jmap(entry, &buf);
-    json_object_set_new(obj, "birthday", json_string(buf_cstring(&buf)));
+    json_object_set_new(obj, "birthday", jmap_utf8string(buf_cstring(&buf)));
 
     item = vparse_stringval(card, "note");
-    json_object_set_new(obj, "notes", json_string(item ? item : ""));
+    json_object_set_new(obj, "notes", jmap_utf8string(item ? item : ""));
 
     item = vparse_stringval(card, "photo");
     json_object_set_new(obj, "x-hasPhoto",
