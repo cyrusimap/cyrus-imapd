@@ -341,6 +341,9 @@ static void test_encode_mimeheader(void)
              "=?UTF-8?Q?01234567890123456789012345678901234567890123456789012345?="
              "\r\n ""=?UTF-8?Q?=E2=82=AC?=");
 
+    /* only encode display-name of address */
+    TESTCASE("\"abc\xe2\x88\x97xyz\" <foo@example.com>", "=?UTF-8?Q?\"abc=E2=88=97xyz\"?= <foo@example.com>");
+
 #undef TESTCASE
 }
 
