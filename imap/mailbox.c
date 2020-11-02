@@ -6030,7 +6030,7 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
 
     if (!r && mailbox_has_conversations(oldmailbox)) {
         struct conversations_state *oldcstate =
-            conversations_get_mbox(oldmailbox->name);
+            mailbox_get_cstate(oldmailbox);
 
         assert(oldcstate);
 
