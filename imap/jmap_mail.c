@@ -353,117 +353,13 @@ static char *_decode_to_utf8(const char *charset,
                              const char *encoding,
                              int *is_encoding_problem)
 {
-    charset_t cs = charset_lookupname(charset);
-    char *text = NULL;
-    int enc = encoding_lookupname(encoding);
-
-    if (cs == CHARSET_UNKNOWN_CHARSET || enc == ENCODING_UNKNOWN) {
-        syslog(LOG_INFO, "decode_to_utf8 error (%s, %s)", charset, encoding);
-        *is_encoding_problem = 1;
-        goto done;
-    }
-    text = charset_to_utf8(data, datalen, cs, enc);
-    if (!text) {
-        *is_encoding_problem = 1;
-        goto done;
-    }
-
-    size_t textlen = strlen(text);
-    struct char_counts counts = charset_count_validutf8(text, textlen);
-    *is_encoding_problem = counts.invalid || counts.replacement;
-
-    const char *charset_id = charset_canon_name(cs);
-
-    if (!strncasecmp(charset_id, "UTF-32", 6)) {
-        /* Special-handle UTF-32. Some clients announce the wrong endianess. */
-        if (counts.invalid || counts.replacement) {
-            charset_t guess_cs = CHARSET_UNKNOWN_CHARSET;
-            if (!strcasecmp(charset_id, "UTF-32") || !strcasecmp(charset_id, "UTF-32BE"))
-                guess_cs = charset_lookupname("UTF-32LE");
-            else
-                guess_cs = charset_lookupname("UTF-32BE");
-            char *guess = charset_to_utf8(data, datalen, guess_cs, enc);
-            if (guess) {
-                struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
-                if (guess_counts.valid > counts.valid) {
-                    free(text);
-                    text = guess;
-                    counts = guess_counts;
-                    textlen = strlen(text);
-                    charset_id = charset_canon_name(guess_cs);
-                }
-            }
-            charset_free(&guess_cs);
-        }
-    }
-    else if (!charset_id || !strcasecmp("US-ASCII", charset_id)) {
-        int has_cntrl = 0;
-        size_t i;
-        for (i = 0; i < textlen; i++) {
-            if (iscntrl(text[i])) {
-                has_cntrl = 1;
-                break;
-            }
-        }
-        if (has_cntrl) {
-            /* Could be ISO-2022-JP */
-            charset_t guess_cs = charset_lookupname("ISO-2022-JP");
-            if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
-                char *guess = charset_to_utf8(data, datalen, guess_cs, enc);
-                if (guess) {
-                    struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
-                    if (!guess_counts.invalid && !guess_counts.replacement) {
-                        free(text);
-                        text = guess;
-                        counts = guess_counts;
-                        textlen = strlen(text);
-                        charset_id = charset_canon_name(guess_cs);
-                    }
-                    else free(guess);
-                }
-                charset_free(&guess_cs);
-            }
-        }
-    }
-
-#ifdef HAVE_LIBCHARDET
-    if (counts.invalid || counts.replacement) {
-        static Detect *d = NULL;
-        if (!d) d = detect_init();
-
-        DetectObj *obj = detect_obj_init();
-        if (!obj) goto done;
-        detect_reset(&d);
-
-        struct buf buf = BUF_INITIALIZER;
-        charset_decode(&buf, data, datalen, enc);
-        buf_cstring(&buf);
-        if (detect_handledata_r(&d, buf_base(&buf), buf_len(&buf), &obj) == CHARDET_SUCCESS) {
-            charset_t guess_cs = charset_lookupname(obj->encoding);
-            if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
-                char *guess = charset_to_utf8(data, datalen, guess_cs, enc);
-                if (guess) {
-                    struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
-                    if (guess_counts.valid > counts.valid) {
-                        free(text);
-                        text = guess;
-                        counts = guess_counts;
-                    }
-                    else {
-                        free(guess);
-                    }
-                }
-                charset_free(&guess_cs);
-            }
-        }
-        detect_obj_free(&obj);
-        buf_free(&buf);
-    }
-#endif
-
-done:
-    charset_free(&cs);
-    return text;
+    /* XXX - keep confidence 0.0 for regression? */
+    char *cbuf = NULL;
+    const char *cval = jmap_decode_to_utf8(charset,
+            encoding_lookupname(encoding),
+            data, datalen, 0.0, &cbuf,
+            is_encoding_problem);
+    return cbuf ? cbuf : xstrdupnull(cval);
 }
 
 static char *_decode_mimeheader(const char *raw)
