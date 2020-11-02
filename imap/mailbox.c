@@ -5446,15 +5446,6 @@ EXPORTED int mailbox_create(const char *name,
         }
     }
 
-    /* open conversations FIRST */
-    r = mailbox_lock_conversations(mailbox, LOCK_EXCLUSIVE);
-    if (r) {
-        syslog(LOG_ERR, "IOERROR: locking conversations %s %s",
-               mailbox->name, error_message(r));
-        r = IMAP_IOERROR;
-        goto done;
-    }
-
     fname = mailbox_meta_fname(mailbox, META_INDEX);
     if (!fname) {
         xsyslog(LOG_ERR, "IOERROR: Mailbox name too long",
