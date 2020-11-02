@@ -1615,6 +1615,51 @@ EOF
     $self->assert_matches(qr/X-Cassandane-Unique: .*\r\n\r\n/, $msg1);
 }
 
+sub test_editheader_encoded_address_list
+    :min_version_3_1
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog $self, "Install a sieve script with editheader actions";
+    my $script = <<EOF;
+require ["editheader", "encoded-character", "variables"];
+if header :matches "To" "*bbb\@example.com*" {
+  deleteheader "To";
+  addheader :last "To" "\${1}\${unicode:0022}BBB\${unicode:0022} <bbb\@example.net>\${2}";
+}
+addheader :last "X-Foo" "must encode star (\${unicode:2217})";
+addheader :last "X-Bar" "don't need to encode this";
+addheader :last "X-Blah" "can encode <ddd\@example.com> in non-list \${unicode:2217}";
+EOF
+
+    $script =~ s/\r?\n/\r\n/gs;
+    $script =~ s/\\/\\\\/gs;
+
+    $self->{instance}->install_sieve_script($script);
+
+    xlog $self, "Deliver a matching message";
+    my $msg1 = $self->{gen}->generate(
+        subject => "Message 1",
+        extra_headers => [['To', '"=?UTF-8?Q?=E2=88=97?=" <aaa@example.com>, bbb@example.com, ccc@example.com']
+        ],
+    );
+    $self->{instance}->deliver($msg1);
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+    my $res = $imaptalk->fetch(1, 'rfc822');
+
+    $msg1 = $res->{1}->{rfc822};
+
+    $self->assert_matches(qr/To: =\?UTF-8\?Q\?"=E2=88=97"\?= <aaa\@example.com>, =\?UTF-8\?Q\?"BBB"\?=\r\n/, $msg1);
+    $self->assert_matches(qr/ <bbb\@example.net>, ccc\@example.com\r\n/, $msg1);
+    $self->assert_matches(qr/X-Foo: =\?UTF-8\?Q\?must_encode_star_\(=E2=88=97\)\?=\r\n/, $msg1);
+    $self->assert_matches(qr/X-Bar: don't need to encode this\r\n/, $msg1);
+    $self->assert_matches(qr/X-Blah: =\?UTF-8\?Q\?can_encode_<ddd\@example.com>_in_non-list_=E2=88=97\?=\r\n\r\n/, $msg1);
+
+}
+
 sub test_duplicate
     :min_version_3_1
     :needs_component_sieve
