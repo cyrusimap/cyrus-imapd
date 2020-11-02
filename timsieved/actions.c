@@ -462,7 +462,6 @@ int renamescript(struct protstream *conn,
                  const struct buf *oldname, const struct buf *newname)
 {
   int result;
-  char oldpath[1024], newpath[1024];
 
   if (!sievedir_valid_name(oldname))
   {
@@ -481,39 +480,17 @@ int renamescript(struct protstream *conn,
     return TIMSIEVE_EXISTS;
   }
 
-  snprintf(oldpath, 1023, "%s.script", oldname->s);
-  snprintf(newpath, 1023, "%s.script", newname->s);
-
-  result = rename(oldpath, newpath);
-
-  if (result != 0) {
-      if (errno== ENOENT)
-          prot_printf(conn, "NO (NONEXISTENT) \"Script %s does not exist.\"\r\n",
-                      oldname->s);
-      else
-          prot_printf(conn,"NO \"Error renaming script\"\r\n");
-      return TIMSIEVE_FAIL;
-  }
-
-  snprintf(oldpath, 1023, "%s.bc", oldname->s);
-  snprintf(newpath, 1023, "%s.bc", newname->s);
-
-  result = rename(oldpath, newpath);
-
-  if (result != 0) {
-      prot_printf(conn,"NO \"Error renaming bytecode\"\r\n");
-      return TIMSIEVE_FAIL;
-  }
-
-  if (sievedir_script_isactive(sieve_dir, oldname->s)) {
-    result = setactive(conn, newname);
+  result = sievedir_rename_script(sieve_dir, oldname->s, newname->s);
+  if (result == SIEVEDIR_OK) {
+      prot_printf(conn,"OK\r\n");
+      sync_log_sieve(sieved_userid);
+      result = TIMSIEVE_OK;
   }
   else {
-    prot_printf(conn,"OK\r\n");
-    result = TIMSIEVE_OK;
+      prot_printf(conn,"NO \"Error renaming script\"\r\n");
+      result = TIMSIEVE_FAIL;
   }
 
-  if (result == TIMSIEVE_OK) sync_log_sieve(sieved_userid);
   return result;
 }
 

@@ -71,5 +71,7 @@ struct buf *sievedir_get_script(const char *sievedir, const char *script);
 int sievedir_put_script(const char *sievedir, const char *name,
                         const char *content, char **errors);
 int sievedir_delete_script(const char *sievedir, const char *name);
+int sievedir_rename_script(const char *sievedir,
+                           const char *oldname, const char *newname);
 
 #endif /* INCLUDED_SIEVEDIR_H */

@@ -207,6 +207,42 @@ EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
     return SIEVEDIR_OK;
 }
 
+EXPORTED int sievedir_rename_script(const char *sievedir,
+                                    const char *oldname, const char *newname)
+{
+    /* rename script and bytecode; move active link */
+    char oldpath[PATH_MAX], newpath[PATH_MAX];
+    int r;
+
+    snprintf(oldpath, sizeof(oldpath),
+             "%s/%s%s", sievedir, oldname, SCRIPT_SUFFIX);
+    snprintf(newpath, sizeof(oldpath),
+             "%s/%s%s", sievedir, newname, SCRIPT_SUFFIX);
+    r = rename(oldpath, newpath);
+    if (r) {
+        if (errno == ENOENT) return SIEVEDIR_NOTFOUND;
+
+        syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", oldpath, newpath);
+        return SIEVEDIR_IOERROR;
+    }
+
+    snprintf(oldpath, sizeof(oldpath),
+             "%s/%s%s", sievedir, oldname, BYTECODE_SUFFIX);
+    snprintf(newpath, sizeof(newpath),
+             "%s/%s%s", sievedir, newname, BYTECODE_SUFFIX);
+    r = rename(oldpath, newpath);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", oldpath, newpath);
+        return SIEVEDIR_IOERROR;
+    }
+
+    if (sievedir_script_isactive(sievedir, oldname)) {
+        r = sievedir_activate_script(sievedir, newname);
+    }
+
+    return r;
+}
+
 #ifdef USE_SIEVE
 EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
                                  const char *content, char **errors)

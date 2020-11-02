@@ -737,25 +737,9 @@ static void set_update(const char *id, json_t *jsieve,
     }
     if (!r && name && strcmp(name, cur_name)) {
         /* rename script and bytecode; move script id link; move active link */
-        char oldpath[PATH_MAX], newpath[PATH_MAX];
-
-        snprintf(oldpath, sizeof(oldpath),
-                 "%s/%s%s", sievedir, cur_name, SCRIPT_SUFFIX);
-        snprintf(newpath, sizeof(oldpath),
-                 "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
-        r = rename(oldpath, newpath);
+        r = sievedir_rename_script(sievedir, cur_name, name);
         if (!r) {
             r = create_id_link(sievedir, id, name);
-        }
-        if (!r && is_active) {
-            r = script_setactive(id, sievedir);
-        }
-        if (!r) {
-            snprintf(oldpath, sizeof(oldpath),
-                     "%s/%s%s", sievedir, cur_name, BYTECODE_SUFFIX);
-            snprintf(newpath, sizeof(newpath),
-                     "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-            r = rename(oldpath, newpath);
         }
     }
     if (!r) {
