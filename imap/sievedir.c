@@ -111,13 +111,11 @@ EXPORTED int sievedir_script_exists(const char *sievedir, const char *name)
     return (stat(path, &sbuf) == 0);
 }
 
-EXPORTED int sievedir_script_isactive(const char *sievedir, const char *name)
+EXPORTED const char *sievedir_get_active(const char *sievedir)
 {
+    static char target[PATH_MAX];
     char link[PATH_MAX];
-    char target[PATH_MAX];
     ssize_t tgt_len;
-
-    if (!name) return 0;
 
     snprintf(link, sizeof(link), "%s/%s", sievedir, DEFAULTBC_NAME);
 
@@ -125,13 +123,20 @@ EXPORTED int sievedir_script_isactive(const char *sievedir, const char *name)
 
     if (tgt_len > BYTECODE_SUFFIX_LEN) {
         target[tgt_len - BYTECODE_SUFFIX_LEN] = '\0';
-        return !strcmp(name, target);
+        return target;
     }
     else if (tgt_len == -1 && errno != ENOENT) {
         syslog(LOG_ERR, "IOERROR: readlink(%s): %m", link);
     }
 
-    return 0;
+    return NULL;
+}
+
+EXPORTED int sievedir_script_isactive(const char *sievedir, const char *name)
+{
+    if (!name) return 0;
+
+    return (strcmpnull(name, sievedir_get_active(sievedir)) == 0);
 }
 
 EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)

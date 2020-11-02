@@ -380,6 +380,7 @@ int listscripts(struct protstream *conn)
     DIR *dp;
     struct dirent *dir;
     size_t length;
+    const char *active = sievedir_get_active(sieve_dir);
 
     /* open the directory */
     dp=opendir(sieve_dir);
@@ -393,13 +394,14 @@ int listscripts(struct protstream *conn)
     while ((dir=readdir(dp)) != NULL) /* while there are files here */
     {
         length=strlen(dir->d_name);
-        if (length >= strlen(".script")) /* if ends in .script */
+        if (length >= SCRIPT_SUFFIX_LEN) /* if ends in .script */
         {
-            if (strcmp(dir->d_name + (length - 7), ".script")==0)
+            if (strcmp(dir->d_name + (length - SCRIPT_SUFFIX_LEN),
+                       SCRIPT_SUFFIX)==0)
             {
                 char *namewo = xstrndup(dir->d_name, length-7);
 
-                if (sievedir_script_isactive(sieve_dir, namewo))
+                if (!strcmpnull(active, namewo))
                     prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
                 else
                     prot_printf(conn,"\"%s\"\r\n", namewo);

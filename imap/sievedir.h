@@ -62,6 +62,7 @@ int sievedir_valid_name(const struct buf *name);
 
 int sievedir_script_exists(const char *sievedir, const char *name);
 int sievedir_script_isactive(const char *sievedir, const char *name);
+const char *sievedir_get_active(const char *sievedir);
 
 int sievedir_activate_script(const char *sievedir, const char *name);
 int sievedir_deactivate_script(const char *sievedir);
