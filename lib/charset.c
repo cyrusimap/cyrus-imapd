@@ -3052,6 +3052,96 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
 }
 
 
+#define ATOM_SPECIALS  "()<>[]:;@\\,.\" \t"
+
+/* Find the first email address (addr-spec) in data */
+static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
+{
+    const char *end = data + datalen;
+    const char *s, *e, *at;
+    int angle_addr = 0;
+
+    if (datalen < 3) return NULL;
+
+    at = strchr(data + 1, '@');
+
+    if (!at || at >= end - 1) return NULL;
+
+    /* find end of domain */
+    e = at + 1;
+
+    if (*e == '[') {
+        /* find end of domain-literal */
+        while (++e < end && !(*e == '[' || *e == ']'|| *e == '\\'));
+
+        /* domain-literal MUST end with ']' */
+        if (*e++ != ']') return NULL;
+    }
+    else if (!isspace(*e) && !strchr(ATOM_SPECIALS, *e)) {
+        /* find end of dot-atom */
+        while (++e < end && (*e == '.' || !strchr(ATOM_SPECIALS, *e)));
+
+        /* atom MUST NOT end with '.' */
+        if (*(e-1) == '.') return NULL;
+    }
+    else return NULL;
+
+    if (e < end) {
+        /* gobble trailing data */
+        if (*e == '>') {
+            angle_addr = 1;
+            e++;
+        }
+
+        /* gobble trailing whitespace */
+        while (e < end && isspace(*e)) e++;
+
+        /* multiple addresses MUST only be separated with ',' */
+        if (e < end && *e++ != ',') return NULL;
+
+        /* gobble trailing whitespace */
+        while (e < end && isspace(*e)) e++;
+    }
+
+
+    /* find start of localpart */
+    s = at - 1;
+
+    if (*s == '\"') {
+        /* find start of quoted-string */
+        while (--s >= data && (*s != '"' || (--s >= data && *s == '\\')));
+
+        /* quoted-string must start with '"' */
+        if (*(s+1) != '"') return NULL;
+    }
+    else if (!isspace(*s) && !strchr(ATOM_SPECIALS, *s)) {
+        /* find start of dot-atom */
+        while (--s >= data && (*s == '.' || !strchr(ATOM_SPECIALS, *s)));
+
+        /* atom MUST NOT start with '.' */
+        if (*(s+1) == '.') return NULL;
+    }
+    else return NULL;
+
+    if (s < data) s = data;
+    else if (angle_addr) {
+        /* angle-addr MUST start with '<' */
+        if (*s != '<') return NULL;
+
+        /* gobble leading whitespace */
+        while (s > data && isspace(*(s-1))) s--;
+    }
+    else if (!(isspace(*s) || *s == ',')) {
+        /* invalid separator */
+        return NULL;
+    }
+
+    /* found a valid address */
+    *addrlen = e - s;
+
+    return s;
+}
+
 /*
  * If 'isheader' is non-zero "Q" encode (per RFC 2047), otherwise
  * quoted-printable encode (per RFC 2045), the 'data' of 'len' bytes.
@@ -3097,11 +3187,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
 
     if (need_quote) {
         int cnt = 0;
-
-        if (isheader) {
-            buf_appendcstr(&buf, "=?UTF-8?Q?");
-            cnt = 10;
-        }
+        size_t next_addr = 0, addr_len = 0;
 
         for (n = 0; n < len; n++) {
             unsigned char this = data[n];
@@ -3109,6 +3195,53 @@ static char *qp_encode(const char *data, size_t len, int isheader,
 
             /* Insert line break before exceeding line length limits */
             if (isheader) {
+                if (!next_addr) {
+                    /* Find next email address (addr-spec) */
+                    const char *addr = find_addr(data + n, len - n, &addr_len);
+
+                    next_addr = addr ? (size_t) (addr - data) : len;
+
+                    if (n < next_addr) {
+                        /* display-name precedes address */
+                        need_quote = 1;
+                        if (cnt + 10 >= ENCODED_MAX_LINE_LEN) {
+                            buf_appendcstr(&buf, "\r\n ");
+                            cnt = 1;
+                        }
+                        buf_appendcstr(&buf, "=?UTF-8?Q?");
+                        cnt += 10;
+                    }
+                    else need_quote = 0;
+                }
+
+                if (n == next_addr) {
+                    /* we don't encode an address */
+                    if (need_quote) {
+                        need_quote = 0;
+                        buf_appendcstr(&buf, "?=");
+                        cnt += 2;
+                    }
+
+                    /* don't fold in the middle of an address */
+                    if (cnt + addr_len >= ENCODED_MAX_LINE_LEN) {
+                        buf_appendcstr(&buf, "\r\n");
+                        cnt = 0;
+
+                        if (!isspace(data[n])) {
+                            buf_putc(&buf, ' ');
+                            cnt += 1;
+                        }
+                    }
+                    buf_appendmap(&buf, data + n, addr_len);
+                    cnt += addr_len;
+
+                    next_addr = 0;
+
+                    /* jump to end of address */
+                    n += addr_len - 1;
+                    continue;
+                }
+
                 /* RFC 2047 forbids splitting multi-octet characters */
                 int needbytes;
                 if (this < 0x80) needbytes = 0;
@@ -3170,7 +3303,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             }
         }
 
-        if (isheader) buf_appendcstr(&buf, "?=");
+        if (isheader && need_quote) buf_appendcstr(&buf, "?=");
     }
     else if (need_fold) {
         /* fold header every 78 characters (if possible) */
