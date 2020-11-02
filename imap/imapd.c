@@ -7896,12 +7896,6 @@ submboxes:
         r = mboxlist_allmbox(oldmailboxname, renmbox, &rock, MBOXTREE_INTERMEDIATES);
     }
 
-    /* take care of deleting old ACLs, subscriptions, seen state and quotas */
-    if (!r && rename_user) {
-        /* user_deletedata takes care of logging the unuser */
-        user_deletedata(olduser, 1);
-    }
-
     /* take care of intermediaries */
     mboxlist_update_intermediaries(oldmailboxname, mbtype, 0);
     mboxlist_update_intermediaries(newmailboxname, mbtype, 0);
