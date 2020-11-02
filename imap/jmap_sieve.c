@@ -248,6 +248,37 @@ static const char *script_from_id(const char *sievedir, const char *id)
     return name;
 }
 
+static int create_id_link(const char *sievedir, const char *id, const char *name)
+{
+    /* create script id link */
+    char link[PATH_MAX];
+    int r;
+
+    snprintf(link, sizeof(link), "%s/%s%s", sievedir, SCRIPT_ID_PREFIX, id);
+
+    r = unlink(link);
+    if (r) {
+        if (errno == ENOENT) r = 0;
+        else syslog(LOG_ERR, "IOERROR: unlink(%s): %m", link);
+    }
+
+    if (!r) {
+        char target[PATH_MAX];
+        size_t namelen = strlen(name);
+
+        if (namelen <= SCRIPT_SUFFIX_LEN ||
+            strcmp(name + (namelen - SCRIPT_SUFFIX_LEN), SCRIPT_SUFFIX)) {
+            snprintf(target, sizeof(target), "%s%s", name, SCRIPT_SUFFIX);
+            name = target;
+        }
+
+        r = symlink(name, link);
+        if (r) syslog(LOG_ERR, "IOERROR: symlink(%s, %s): %m", name, link);
+    }
+
+    return r;
+}
+
 static void getscript(const char *id, const char *script, int isactive,
                       const char *sievedir, struct jmap_get *get)
 {
@@ -324,13 +355,8 @@ static void list_cb(const char *script, void *data, void *rock)
 
     if (!id) {
         /* Create script id symlink */
-        char link[PATH_MAX];
-
         id = makeuuid();
-        snprintf(link, sizeof(link),
-                 "%s/%s%s", lrock->sievedir, SCRIPT_ID_PREFIX, id);
-
-        symlink(script, link);
+        create_id_link(lrock->sievedir, id, script);
     }
 
     getscript(id, script, info->isActive, lrock->sievedir, lrock->get);
@@ -736,14 +762,8 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
 
     if (!r) {
         /* create script id link */
-        char link[PATH_MAX];
-
-        snprintf(link, sizeof(link), "%s/%s%s", sievedir, SCRIPT_ID_PREFIX, id);
-        snprintf(path, sizeof(path), "%s%s", name, SCRIPT_SUFFIX);
-        r = symlink(path, link);
-
-        if (r) syslog(LOG_ERR, "IOERROR: symlink(%s, %s): %m", path, link);
-        else {
+        r = create_id_link(sievedir, id, name);
+        if (!r) {
             /* Report script as created */
             json_t *new_sieve = json_pack("{s:s s:b}", "id", id, "isActive", 0);
 
@@ -843,12 +863,7 @@ static void set_update(const char *id, json_t *jsieve,
                  "%s/%s%s", sievedir, cur_name, SCRIPT_SUFFIX);
         r = rename(oldpath, newpath);
         if (!r) {
-            char link[PATH_MAX];
-
-            snprintf(link, sizeof(link),
-                     "%s/%s%s", sievedir, SCRIPT_ID_PREFIX, id);
-            r = unlink(link);
-            if (!r) r = symlink(newpath + strlen(sievedir) + 1, link);
+            r = create_id_link(sievedir, id, name);
         }
         if (!r && is_active) {
             r = script_setactive(id, sievedir);
