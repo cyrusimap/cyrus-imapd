@@ -232,37 +232,46 @@ int getscript(struct protstream *conn, const struct buf *name)
     return TIMSIEVE_OK;
 }
 
+struct count_rock {
+    int count;
+    const char *myname;
+};
+
+static int count_cb(const char *sievedir __attribute__((unused)),
+                    const char *name, struct stat *sbuf,
+                    const char *link_target __attribute__((unused)),
+                    void *rock)
+{
+    struct count_rock *crock = (struct count_rock *) rock;
+    size_t name_len;
+
+    if (!S_ISREG(sbuf->st_mode)) return 0;
+
+    name_len = strlen(name);
+    if (name_len > SCRIPT_SUFFIX_LEN &&
+        !strcmp(name + name_len - SCRIPT_SUFFIX_LEN, SCRIPT_SUFFIX)) {
+        /* is a script */
+        name_len -= SCRIPT_SUFFIX_LEN;
+        if (!crock->myname ||
+            strlen(crock->myname) != name_len ||
+            strncmp(crock->myname, name, name_len)) {
+            /* and it's different from me */
+            crock->count++;
+        }
+    }
+
+    return 0;
+}
+
 /* counts the number of scripts user has that are DIFFERENT from name.
    used for enforcing quotas */
 static int countscripts(char *name)
 {
-    DIR *dp;
-    struct dirent *dir;
-    size_t length;
-    int number=0;
-    char myname[1024];
+    struct count_rock crock = { 0, name };
 
-    snprintf(myname, 1023, "%s.script", name);
+    sievedir_foreach(sieve_dir, &count_cb, &crock);
 
-    if ((dp = opendir(sieve_dir)) == NULL) {
-        return -1;
-    }
-
-    while ((dir=readdir(dp)) != NULL) {
-        length=strlen(dir->d_name);
-        if (length >= strlen(".script") &&
-            (strcmp(dir->d_name + (length - 7), ".script") == 0)) {
-            /* this is a sieve script */
-            if (strcmp(myname, dir->d_name) != 0) {
-                /* and it's different from me */
-                number++;
-            }
-        }
-    }
-
-    closedir(dp);
-
-    return number;
+    return crock.count;
 }
 
 
@@ -374,44 +383,43 @@ int deletescript(struct protstream *conn, const struct buf *name)
   return TIMSIEVE_OK;
 }
 
+struct list_rock {
+    struct protstream *conn;
+    const char *active;
+};
+
+static int list_cb(const char *sievedir __attribute__((unused)),
+                   const char *name, struct stat *sbuf,
+                   const char *link_target __attribute__((unused)),
+                   void *rock)
+{
+    struct list_rock *lrock = (struct list_rock *) rock;
+    size_t name_len = strlen(name);
+
+    if (S_ISREG(sbuf->st_mode) &&
+        name_len > SCRIPT_SUFFIX_LEN &&
+        !strcmp(name + name_len - SCRIPT_SUFFIX_LEN, SCRIPT_SUFFIX)) {
+        /* is a script */
+        name_len -= SCRIPT_SUFFIX_LEN;
+        prot_printf(lrock->conn, "\"%.*s\"", (int) name_len, name);
+        if (lrock->active &&
+            strlen(lrock->active) == name_len &&
+            !strncmp(lrock->active, name, name_len)) {
+            /* is the active script */
+            prot_puts(lrock->conn, " ACTIVE");
+        }
+        prot_puts(lrock->conn, "\r\n");
+    }
+
+    return 0;
+}
+
 /* list the scripts user has available */
 int listscripts(struct protstream *conn)
 {
-    DIR *dp;
-    struct dirent *dir;
-    size_t length;
-    const char *active = sievedir_get_active(sieve_dir);
+    struct list_rock lrock = { conn, sievedir_get_active(sieve_dir) };
 
-    /* open the directory */
-    dp=opendir(sieve_dir);
-
-    if (dp==NULL)
-    {
-        prot_printf(conn,"NO \"Error opening directory\"\r\n");
-        return TIMSIEVE_FAIL;
-    }
-
-    while ((dir=readdir(dp)) != NULL) /* while there are files here */
-    {
-        length=strlen(dir->d_name);
-        if (length >= SCRIPT_SUFFIX_LEN) /* if ends in .script */
-        {
-            if (strcmp(dir->d_name + (length - SCRIPT_SUFFIX_LEN),
-                       SCRIPT_SUFFIX)==0)
-            {
-                char *namewo = xstrndup(dir->d_name, length-7);
-
-                if (!strcmpnull(active, namewo))
-                    prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
-                else
-                    prot_printf(conn,"\"%s\"\r\n", namewo);
-
-                free(namewo);
-            }
-        }
-    }
-
-    closedir(dp);
+    sievedir_foreach(sieve_dir, &list_cb, &lrock);
 
     prot_printf(conn,"OK\r\n");
 

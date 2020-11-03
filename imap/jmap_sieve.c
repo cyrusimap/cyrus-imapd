@@ -316,7 +316,7 @@ struct list_rock {
     struct jmap_get *get;
 };
 
-static void list_cb(const char *script, void *data, void *rock)
+static void get_cb(const char *script, void *data, void *rock)
 {
     script_info *info = (script_info *) data;
     const char *id = info->id;
@@ -331,36 +331,26 @@ static void list_cb(const char *script, void *data, void *rock)
     getscript(id, script, info->isActive, lrock->sievedir, lrock->get);
 }
 
-static void _listscripts(const char *sievedir, hash_table *scripts)
+static int list_cb(const char *sievedir __attribute__((unused)),
+                   const char *name, struct stat *sbuf,
+                   const char *link_target, void *rock)
 {
-    char target[PATH_MAX];
-    struct dirent *dir;
-    DIR *dp;
+    hash_table *scripts = (hash_table *) rock;
+    size_t namelen = strlen(name);
+    script_info *info = NULL;
 
-    /* Open the directory */
-    dp = opendir(sievedir);
-
-    if (dp == NULL) return;
-
-    /* Build a hash of script name -> script id */
-    construct_hash_table(scripts, 16, 0);
-
-    while ((dir = readdir(dp)) != NULL) {
-        const char *name = dir->d_name;
-        size_t namelen = strlen(name);
-        script_info *info = NULL;
-
-        if (!strncmp(name, SCRIPT_ID_PREFIX, SCRIPT_ID_PREFIX_LEN)) {
+    if (S_ISLNK(sbuf->st_mode)) {
+        if (namelen > SCRIPT_ID_PREFIX_LEN &&
+            !strncmp(name, SCRIPT_ID_PREFIX, SCRIPT_ID_PREFIX_LEN)) {
             /* Script id symlink */
             const char *id = name + SCRIPT_ID_PREFIX_LEN;
-            const char *script = script_from_id(sievedir, id, 0);
 
-            if (script) {
+            if (link_target && *link_target) {
                 /* Map script name -> id */
-                info = hash_lookup(script, scripts);
+                info = hash_lookup(link_target, scripts);
                 if (!info) {
                     info = xzmalloc(sizeof(struct script_info));
-                    hash_insert(script, info, scripts);
+                    hash_insert(link_target, info, scripts);
                 }
                 info->id = xstrdup(id);
             }
@@ -373,40 +363,44 @@ static void _listscripts(const char *sievedir, hash_table *scripts)
                 unlink(link);
             }
         }
-        else if (namelen > SCRIPT_SUFFIX_LEN &&
-                 !strcmp(name + (namelen - SCRIPT_SUFFIX_LEN), SCRIPT_SUFFIX)) {
-            /* Actual script file - check if we have an entry for this name */
-            info = hash_lookup(name, scripts);
-            if (!info) {
-                /* Add script name -> NULL as a placeholder
-                   (we will create an id symlink later, if necessary) */
-                info = xzmalloc(sizeof(struct script_info));
-                hash_insert(name, info, scripts);
-            }
-        }
-        else if (!strcmp(name, DEFAULTBC_NAME)) {
+        else if (!strcmp(name, DEFAULTBC_NAME) && link_target && *link_target) {
             /* Active bytecode - check if we have an entry for this name */
-            char link[PATH_MAX];
-            ssize_t tgt_len;
+            char active[PATH_MAX];
 
-            snprintf(link, sizeof(link), "%s/%s", sievedir, name);
-            tgt_len = readlink(link, target, sizeof(target) - 1);
+            snprintf(active, sizeof(active), "%.*s%s",
+                     (int) strlen(link_target) - BYTECODE_SUFFIX_LEN,
+                     link_target, SCRIPT_SUFFIX);
 
-            if (tgt_len > BYTECODE_SUFFIX_LEN) {
-                target[tgt_len - BYTECODE_SUFFIX_LEN] = '\0';
-                strlcat(target, SCRIPT_SUFFIX, sizeof(target) - 1);
-
-                info = hash_lookup(target, scripts);
-                if (!info) {
-                    /* Add script name -> NULL as a placeholder */
-                    info = xzmalloc(sizeof(struct script_info));
-                    hash_insert(target, info, scripts);
-                }
-                info->isActive = 1;
+            info = hash_lookup(active, scripts);
+            if (!info) {
+                /* Add script name -> NULL as a placeholder */
+                info = xzmalloc(sizeof(struct script_info));
+                hash_insert(active, info, scripts);
             }
+            info->isActive = 1;
         }
     }
-    closedir(dp);
+    else if (namelen > SCRIPT_SUFFIX_LEN &&
+             !strcmp(name + (namelen - SCRIPT_SUFFIX_LEN), SCRIPT_SUFFIX)) {
+        /* Actual script file - check if we have an entry for this name */
+        info = hash_lookup(name, scripts);
+        if (!info) {
+            /* Add script name -> NULL as a placeholder
+               (we will create an id symlink later, if necessary) */
+            info = xzmalloc(sizeof(struct script_info));
+            hash_insert(name, info, scripts);
+        }
+    }
+
+    return 0;
+}
+
+static void _listscripts(const char *sievedir, hash_table *scripts)
+{
+    /* Build a hash of script name -> script id */
+    construct_hash_table(scripts, maxscripts, 0);
+
+    sievedir_foreach(sievedir, &list_cb, scripts);
 }
 
 static void listscripts(const char *sievedir, struct jmap_get *get)
@@ -418,7 +412,7 @@ static void listscripts(const char *sievedir, struct jmap_get *get)
     _listscripts(sievedir, &scripts);
 
     /* Perform a get on each script */
-    hash_enumerate(&scripts, &list_cb, &lrock);
+    hash_enumerate(&scripts, &get_cb, &lrock);
     free_hash_table(&scripts, &free_script_info);
 }
 
@@ -539,42 +533,6 @@ static int putscript(const char *name, const char *content,
     }
 
     return r;
-}
-
-static const char *name_to_idlink(const char *sievedir, const char *name)
-{
-    ssize_t name_len = strlen(name);
-    const char *idlink = NULL;
-    struct dirent *dir;
-    DIR *dp;
-
-    /* Open the directory */
-    dp = opendir(sievedir);
-
-    if (dp == NULL) return NULL;
-
-    while ((dir = readdir(dp)) != NULL) {
-        if (!strncmp(dir->d_name, SCRIPT_ID_PREFIX, SCRIPT_ID_PREFIX_LEN)) {
-            /* Script id symlink */
-            static char link[PATH_MAX];
-            char target[PATH_MAX];
-            ssize_t tgt_len;
-
-            snprintf(link, sizeof(link), "%s/%s", sievedir, dir->d_name);
-
-            tgt_len = readlink(link, target, sizeof(target) - 1);
-
-            if (tgt_len == name_len + SCRIPT_SUFFIX_LEN &&
-                !strncmp(target, name, name_len)) {
-                /* This link points to our script */
-                idlink = link;
-                break;
-            }
-        }
-    }
-    closedir(dp);
-
-    return idlink;
 }
 
 static int script_setactive(const char *id, const char *sievedir)
@@ -797,17 +755,42 @@ static void set_destroy(const char *id,
     }
 }
 
+static int find_cb(const char *sievedir __attribute__((unused)),
+                   const char *name, struct stat *sbuf,
+                   const char *link_target, void *rock)
+{
+    script_info *info = (script_info *) rock;
+
+    if (S_ISLNK(sbuf->st_mode) &&
+        !strncmp(name, SCRIPT_ID_PREFIX, SCRIPT_ID_PREFIX_LEN)) {
+        size_t tgt_len = strlen(link_target) - SCRIPT_SUFFIX_LEN;
+
+        if (strlen(info->name) == tgt_len &&
+            !strncmp(info->name, link_target, tgt_len)) {
+            info->id = xstrdup(name + SCRIPT_ID_PREFIX_LEN);
+            return 1;  /* done */
+        }
+    }
+
+    return 0;
+}
+
 static void set_activate(const char *id, const char *sievedir,
                          struct jmap_set *set)
 {
-    const char *active, *old_link = NULL;
+    const char *active;
+    char *old_id = NULL;
     json_t *created = NULL;
     int r;
 
     /* Lookup currently active script */
     active = sievedir_get_active(sievedir);
     if (active) {
-        old_link = name_to_idlink(sievedir, active);
+        /* get it's id */
+        script_info info = { NULL, (char *) active, 1 };
+
+        sievedir_foreach(sievedir, &find_cb, &info);
+        old_id = info.id;
     }
 
     if (id) {
@@ -828,13 +811,11 @@ static void set_activate(const char *id, const char *sievedir,
         return;
     }
 
-    if (old_link) {
+    if (old_id) {
         /* Report previous active script as updated */
-        const char *old_id =
-            old_link + strlen(sievedir) + 1 + SCRIPT_ID_PREFIX_LEN; 
-
         json_object_set_new(set->updated, old_id,
                             json_pack("{s:b}", "isActive", 0));
+        free(old_id);
     }
 
     if (created) {

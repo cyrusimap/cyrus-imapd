@@ -932,59 +932,51 @@ void sync_sieve_list_free(struct sync_sieve_list **lp)
     *lp = NULL;
 }
 
+struct list_rock {
+    struct sync_sieve_list *list;
+    char *active;
+};
+
+static int list_cb(const char *sievedir,
+                   const char *name, struct stat *sbuf,
+                   const char *link_target, void *rock)
+{
+    struct list_rock *lrock = (struct list_rock *) rock;
+
+    if (S_ISLNK(sbuf->st_mode)) {
+        if (!strcmp(name, DEFAULTBC_NAME) && link_target && *link_target) {
+            lrock->active = xstrdup(link_target);
+        }
+    }
+    else {
+        /* calculate the sha1 on the fly, relatively cheap */
+        struct buf *buf = sievedir_get_script(sievedir, name);
+
+        if (buf_len(buf)) {
+            struct message_guid guid;
+
+            message_guid_generate(&guid, buf_base(buf), buf_len(buf));
+
+            sync_sieve_list_add(lrock->list, name, sbuf->st_mtime, &guid, 0);
+            buf_destroy(buf);
+        }
+    }
+
+    return 0;
+}
+
 struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 {
     struct sync_sieve_list *list = sync_sieve_list_create();
     const char *sieve_path = user_sieve_path(userid);
-    char filename[2048];
-    char active[2048];
-    DIR *mbdir;
-    struct dirent *next = NULL;
-    struct stat sbuf;
-    int count;
+    struct list_rock lrock = { list, NULL };
 
-    mbdir = opendir(sieve_path);
-    if (!mbdir) return list;
+    sievedir_foreach(sieve_path, &list_cb, &lrock);
 
-    active[0] = '\0';
-    while((next = readdir(mbdir)) != NULL) {
-        uint32_t size;
-        char *result;
-        struct message_guid guid;
-        if (!strcmp(next->d_name, ".") || !strcmp(next->d_name, ".."))
-            continue;
-
-        snprintf(filename, sizeof(filename), "%s/%s",
-                 sieve_path, next->d_name);
-
-        if (stat(filename, &sbuf) < 0)
-            continue;
-
-        if (!strcmp(next->d_name, "defaultbc")) {
-            if (sbuf.st_mode & S_IFLNK) {
-                count = readlink(filename, active, 2047);
-
-                if (count >= 0) {
-                    active[count] = '\0';
-                } else {
-                    /* XXX Report problem? */
-                }
-            }
-            continue;
-        }
-
-        /* calculate the sha1 on the fly, relatively cheap */
-        result = sync_sieve_read(userid, next->d_name, &size);
-        if (!result) continue;
-        message_guid_generate(&guid, result, size);
-
-        sync_sieve_list_add(list, next->d_name, sbuf.st_mtime, &guid, 0);
-        free(result);
+    if (lrock.active) {
+        sync_sieve_list_set_active(list, lrock.active);
+        free(lrock.active);
     }
-    closedir(mbdir);
-
-    if (active[0])
-        sync_sieve_list_set_active(list, active);
 
     return list;
 }

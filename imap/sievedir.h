@@ -58,6 +58,12 @@
 #define SCRIPT_SUFFIX_LEN      7
 #define DEFAULTBC_NAME         "defaultbc"
 
+void sievedir_foreach(const char *sievedir,
+                      int (*func)(const char *sievedir,
+                                  const char *name, struct stat *sbuf,
+                                  const char *link_target, void *rock),
+                      void *rock);
+
 int sievedir_valid_name(const struct buf *name);
 
 int sievedir_script_exists(const char *sievedir, const char *name);

@@ -61,8 +61,53 @@
 #include "sieve/bc_parse.h"
 #include "sieve/sieve_interface.h"
 #include "util.h"
+#include "xstrlcpy.h"
 
-EXPORTED struct buf *sievedir_get_script(const char *sievedir, const char *script)
+EXPORTED void sievedir_foreach(const char *sievedir,
+                               int (*func)(const char *sievedir,
+                                           const char *name, struct stat *sbuf,
+                                           const char *target, void *rock),
+                               void *rock)
+{
+    DIR *dp;
+    struct dirent *dir;
+    char path[PATH_MAX];
+    int dir_len;
+
+    if ((dp = opendir(sievedir)) == NULL) return;
+
+    dir_len = snprintf(path, sizeof(path), "%s/", sievedir);
+
+    while ((dir = readdir(dp)) != NULL) {
+        const char *name = dir->d_name;
+        char target[PATH_MAX] = "";
+        struct stat sbuf;
+
+        if (!strcmp(name, ".") || !strcmp(name, "..")) continue;
+
+        strlcpy(path + dir_len, name, sizeof(path) - dir_len);
+
+        if (lstat(path, &sbuf) < 0) continue;
+
+        if (S_ISLNK(sbuf.st_mode)) {
+            /* fetch link target */
+            ssize_t tgt_len = readlink(path, target, sizeof(target) - 1);
+
+            if (tgt_len > 0) target[tgt_len] = '\0';
+        }
+        else if (!S_ISREG(sbuf.st_mode)) {
+            /* ignore irregular files */
+            continue;
+        }
+
+        if (func(sievedir, name, &sbuf, target, rock) != 0) break;
+    }
+
+    closedir(dp);
+}
+
+EXPORTED struct buf *sievedir_get_script(const char *sievedir,
+                                         const char *script)
 {
     struct buf buf = BUF_INITIALIZER;
 
