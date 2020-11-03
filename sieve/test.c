@@ -243,7 +243,7 @@ static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
     strarray_t *contents;
-    char *head;
+    char *lcasedhead = xstrduplcase(phead);
 
     *body = NULL;
 
@@ -251,16 +251,12 @@ static int getheader(void *v, const char *phead, const char ***body)
         fill_cache(m);
     }
 
-    /* copy header parameter so we can mangle it */
-    head = xstrdup(phead);
-    lcase(head);
-
     /* check the cache */
-    contents = (strarray_t *)hash_lookup(head, &m->cache);
+    contents = (strarray_t *)hash_lookup(lcasedhead, &m->cache);
     if (contents)
         *body = (const char **) contents->data;
 
-    free(head);
+    free(lcasedhead);
 
     if (*body) {
         return SIEVE_OK;

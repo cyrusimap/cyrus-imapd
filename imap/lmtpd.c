@@ -1087,7 +1087,9 @@ char *generate_notify(message_data_t *m)
 
     for (i = 0; notifyheaders[i]; i++) {
         const char *h = notifyheaders[i];
-        body = msg_getheader(m, h);
+        char *lcasedheader = xstrduplcase(h);
+        body = msg_getheader(m, lcasedheader);
+        free (lcasedheader);
         if (body) {
             int j;
 

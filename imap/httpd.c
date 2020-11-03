@@ -87,6 +87,7 @@
 #include "telemetry.h"
 #include "backend.h"
 #include "proxy.h"
+#include "lib/stristr.h"
 #include "userdeny.h"
 #include "message.h"
 #include "idle.h"
@@ -320,7 +321,7 @@ static int http2_header_cb(nghttp2_session *session,
 
     if (!txn) return 0;
 
-    my_name = xstrndup((const char *) name, namelen);
+    my_name = lcase(xstrndup((const char *) name, namelen));
     my_value = xstrndup((const char *) value, valuelen);
 
     syslog(LOG_DEBUG, "http2_header_cb(%s: %s)", my_name, my_value);
@@ -344,6 +345,7 @@ static int http2_header_cb(nghttp2_session *session,
     }
 
     spool_cache_header(my_name, my_value, txn->req_hdrs);
+    free (my_name);
 
     return 0;
 }
@@ -502,7 +504,7 @@ static int starthttp2(struct http_connection *conn, struct transaction_t *txn)
     }
 
     if (txn && txn->flags.conn & CONN_UPGRADE) {
-        const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
+        const char **hdr = spool_getheader(txn->req_hdrs, "http2-settings");
         if (!hdr || hdr[1]) return 0;
 
         /* base64url decode the settings.
@@ -1467,8 +1469,8 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
         const char **hdr;
 
         /* Check which response is required */
-        if ((hdr = spool_getheader(txn->req_hdrs, "Upgrade")) &&
-            strstr(hdr[0], TLS_VERSION)) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "upgrade")) &&
+            stristr(hdr[0], TLS_VERSION)) {
             /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
 
             txn->flags.conn |= CONN_UPGRADE;
@@ -1482,7 +1484,7 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
             struct buf *html = &txn->resp_body.payload;
 
             /* Create https URL */
-            hdr = spool_getheader(txn->req_hdrs, "Host");
+            hdr = spool_getheader(txn->req_hdrs, "host");
             buf_printf(&txn->buf, "https://%s", hdr[0]);
             if (strcmp(path, "*")) {
                 buf_appendcstr(&txn->buf, path);
@@ -1524,7 +1526,7 @@ static int examine_request(struct transaction_t *txn)
 
     /* Check for HTTP method override */
     if (!strcmp(req_line->meth, "POST") &&
-        (hdr = spool_getheader(txn->req_hdrs, "X-HTTP-Method-Override"))) {
+        (hdr = spool_getheader(txn->req_hdrs, "x-http-method-override"))) {
         txn->flags.override = 1;
         req_line->meth = (char *) hdr[0];
     }
@@ -1543,7 +1545,7 @@ static int examine_request(struct transaction_t *txn)
     }
 
     /* Check for mandatory Host header (HTTP/1.1+ only) */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Host")) && hdr[1]) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "host")) && hdr[1]) {
         txn->error.desc = "Too many Host headers";
         return HTTP_BAD_REQUEST;
     }
@@ -1552,7 +1554,7 @@ static int examine_request(struct transaction_t *txn)
         case VER_2:
             /* HTTP/2 - create a Host header from :authority */
             hdr = spool_getheader(txn->req_hdrs, ":authority");
-            spool_cache_header(xstrdup("Host"), xstrdup(hdr[0]), txn->req_hdrs);
+            spool_cache_header("host", xstrdup(hdr[0]), txn->req_hdrs);
             break;
 
         case VER_1_0:
@@ -1564,7 +1566,7 @@ static int examine_request(struct transaction_t *txn)
             }
             else buf_setcstr(&txn->buf, config_servername);
 
-            spool_cache_header(xstrdup("Host"),
+            spool_cache_header("host",
                                xstrdup(buf_cstring(&txn->buf)), txn->req_hdrs);
             buf_reset(&txn->buf);
             break;
@@ -1647,7 +1649,7 @@ static int examine_request(struct transaction_t *txn)
             if (!strncmp(path, namespaces[i]->well_known, len) &&
                 (!path[len] || path[len] == '/')) {
 
-                hdr = spool_getheader(txn->req_hdrs, "Host");
+                hdr = spool_getheader(txn->req_hdrs, "host");
                 buf_reset(&txn->buf);
                 buf_printf(&txn->buf, "%s://%s",
                            https? "https" : "http", hdr[0]);
@@ -1698,7 +1700,7 @@ static int examine_request(struct transaction_t *txn)
     }
 
     /* Perform authentication, if necessary */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Authorization"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "authorization"))) {
         if (httpd_userid) {
             /* Reauth - reinitialize */
             syslog(LOG_DEBUG, "reauth - reinit");
@@ -1754,7 +1756,7 @@ static int examine_request(struct transaction_t *txn)
 
     /* Perform proxy authorization, if necessary */
     else if (saslprops.authid &&
-             (hdr = spool_getheader(txn->req_hdrs, "Authorize-As")) &&
+             (hdr = spool_getheader(txn->req_hdrs, "authorize-as")) &&
              *hdr[0]) {
         const char *authzid = hdr[0];
 
@@ -1787,7 +1789,7 @@ static int examine_request(struct transaction_t *txn)
     if (ret) return client_need_auth(txn, r);
 
     /* Check if this is a Cross-Origin Resource Sharing request */
-    if (allow_cors && (hdr = spool_getheader(txn->req_hdrs, "Origin"))) {
+    if (allow_cors && (hdr = spool_getheader(txn->req_hdrs, "origin"))) {
         const char *err = NULL;
         xmlURIPtr uri = parse_uri(METH_UNKNOWN, hdr[0], 0, &err);
 
@@ -1796,7 +1798,7 @@ static int examine_request(struct transaction_t *txn)
 
             if ((https == o_https) &&
                 !strcasecmp(uri->server,
-                            *spool_getheader(txn->req_hdrs, "Host"))) {
+                            *spool_getheader(txn->req_hdrs, "host"))) {
                 txn->flags.cors = CORS_SIMPLE;
             }
             else {
@@ -1832,7 +1834,7 @@ static int examine_request(struct transaction_t *txn)
        doesn't implement it correctly (raw deflate vs. zlib)? */
     if (txn->conn->zstrm &&
         txn->flags.ver == VER_1_1 &&
-        (hdr = spool_getheader(txn->req_hdrs, "TE"))) {
+        (hdr = spool_getheader(txn->req_hdrs, "te"))) {
         struct accept *e, *enc = parse_accept(hdr);
 
         for (e = enc; e && e->token; e++) {
@@ -1846,7 +1848,7 @@ static int examine_request(struct transaction_t *txn)
         if (enc) free(enc);
     }
     else if ((txn->conn->zstrm || txn->conn->brotli) &&
-             (hdr = spool_getheader(txn->req_hdrs, "Accept-Encoding"))) {
+             (hdr = spool_getheader(txn->req_hdrs, "accept-encoding"))) {
         struct accept *e, *enc = parse_accept(hdr);
         float qual = 0.0;
 
@@ -2237,7 +2239,7 @@ EXPORTED time_t calc_compile_time(const char *time, const char *date)
 /* Parse Expect header(s) for interesting expectations */
 static int parse_expect(struct transaction_t *txn)
 {
-    const char **exp = spool_getheader(txn->req_hdrs, "Expect");
+    const char **exp = spool_getheader(txn->req_hdrs, "expect");
     int i, ret = 0;
 
     /* Expect not supported by HTTP/1.0 clients */
@@ -2270,7 +2272,7 @@ static int parse_expect(struct transaction_t *txn)
 /* Parse Connection header(s) for interesting options */
 static int parse_connection(struct transaction_t *txn)
 {
-    const char **conn = spool_getheader(txn->req_hdrs, "Connection");
+    const char **conn = spool_getheader(txn->req_hdrs, "connection");
     int i;
 
     if (conn && txn->flags.ver == VER_2) {
@@ -2294,7 +2296,7 @@ static int parse_connection(struct transaction_t *txn)
                 if (!strcasecmp(token, "Upgrade")) {
                     /* Client wants to upgrade */
                     const char **upgrade =
-                        spool_getheader(txn->req_hdrs, "Upgrade");
+                        spool_getheader(txn->req_hdrs, "upgrade");
 
                     if (upgrade && upgrade[0]) {
                         syslog(LOG_NOTICE,
@@ -2802,14 +2804,14 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     if (txn->flags.cors) {
         /* Construct Cross-Origin Resource Sharing headers */
         simple_hdr(txn, "Access-Control-Allow-Origin",
-                      *spool_getheader(txn->req_hdrs, "Origin"));
+                      *spool_getheader(txn->req_hdrs, "origin"));
         simple_hdr(txn, "Access-Control-Allow-Credentials", "true");
 
         if (txn->flags.cors == CORS_PREFLIGHT) {
             allow_hdr(txn, "Access-Control-Allow-Methods", txn->req_tgt.allow);
 
             for (hdr = spool_getheader(txn->req_hdrs,
-                                       "Access-Control-Request-Headers");
+                                       "access-control-request-headers");
                  hdr && *hdr; hdr++) {
                 simple_hdr(txn, "Access-Control-Allow-Headers", *hdr);
             }
@@ -3067,11 +3069,11 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     buf_printf(&log, "%s", httpd_clienthost);
     if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
     if (txn->req_hdrs &&
-        (hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
+        (hdr = spool_getheader(txn->req_hdrs, "user-agent"))) {
         buf_printf(&log, " with \"%s\"", hdr[0]);
-        if ((hdr = spool_getheader(txn->req_hdrs, "X-Client")))
+        if ((hdr = spool_getheader(txn->req_hdrs, "x-client")))
             buf_printf(&log, " by \"%s\"", hdr[0]);
-        else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With")))
+        else if ((hdr = spool_getheader(txn->req_hdrs, "x-requested-with")))
             buf_printf(&log, " by \"%s\"", hdr[0]);
     }
     /* Add request-line */
@@ -3099,43 +3101,43 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             buf_printf(&log, "%smethod-override=%s", sep, txn->req_line.meth);
             sep = "; ";
         }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Origin"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "origin"))) {
             buf_printf(&log, "%sorigin=%s", sep, hdr[0]);
             sep = "; ";
         }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Referer"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "referer"))) {
             buf_printf(&log, "%sreferer=%s", sep, hdr[0]);
             sep = "; ";
         }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "destination"))) {
             buf_printf(&log, "%sdestination=%s", sep, hdr[0]);
             sep = "; ";
         }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Lock-Token"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "lock-token"))) {
             buf_printf(&log, "%slock-token=%s", sep, hdr[0]);
             sep = "; ";
         }
-        if ((hdr = spool_getheader(txn->req_hdrs, "If"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "if"))) {
             buf_printf(&log, "%sif=%s", sep, hdr[0]);
             sep = "; ";
         }
-        if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "if-schedule-tag-match"))) {
             buf_printf(&log, "%sif-schedule-tag-match=%s", sep, hdr[0]);
             sep = "; ";
         }
-        else if ((hdr = spool_getheader(txn->req_hdrs, "If-Match"))) {
+        else if ((hdr = spool_getheader(txn->req_hdrs, "if-match"))) {
             buf_printf(&log, "%sif-match=%s", sep, hdr[0]);
             sep = "; ";
         }
-        else if ((hdr = spool_getheader(txn->req_hdrs, "If-Unmodified-Since"))) {
+        else if ((hdr = spool_getheader(txn->req_hdrs, "if-unmodified-since"))) {
             buf_printf(&log, "%sif-unmodified-since=%s", sep, hdr[0]);
             sep = "; ";
         }
-        if ((hdr = spool_getheader(txn->req_hdrs, "If-None-Match"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "if-none-match"))) {
             buf_printf(&log, "%sif-none-match=%s", sep, hdr[0]);
             sep = "; ";
         }
-        else if ((hdr = spool_getheader(txn->req_hdrs, "If-Modified-Since"))) {
+        else if ((hdr = spool_getheader(txn->req_hdrs, "if-modified-since"))) {
             buf_printf(&log, "%sif-modified-since=%s", sep, hdr[0]);
             sep = "; ";
         }
@@ -3143,7 +3145,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             buf_printf(&log, "%stype=%s", sep, hdr[0]);
             sep = "; ";
         }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "depth"))) {
             buf_printf(&log, "%sdepth=%s", sep, hdr[0]);
             sep = "; ";
         }
@@ -3198,7 +3200,7 @@ EXPORTED void write_multipart_body(long code, struct transaction_t *txn,
 
         /* Create multipart boundary */
         snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
-                 *spool_getheader(txn->req_hdrs, "Host"),
+                 *spool_getheader(txn->req_hdrs, "host"),
                  (long) getpid(), (long) time(0), (long) rand());
 
         /* Create Content-Type w/ boundary */
@@ -3425,7 +3427,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
             if (code == HTTP_PARTIAL) {
                 /* check_precond() tells us that this is a range request */
-                code = parse_ranges(*spool_getheader(txn->req_hdrs, "Range"),
+                code = parse_ranges(*spool_getheader(txn->req_hdrs, "range"),
                                     outlen, &txn->resp_body.range);
 
                 switch (code) {
@@ -3698,7 +3700,7 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
         unsigned level = 0;
 
         if (txn->req_hdrs &&
-            (hdr = spool_getheader(txn->req_hdrs, "Host")) &&
+            (hdr = spool_getheader(txn->req_hdrs, "host")) &&
             hdr[0] && *hdr[0]) {
             host = (char *) hdr[0];
             if ((port = strchr(host, ':'))) *port++ = '\0';
@@ -4143,7 +4145,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     if (saslprops.authid) free(saslprops.authid);
     saslprops.authid = xstrdup(user);
 
-    authzid = spool_getheader(txn->req_hdrs, "Authorize-As");
+    authzid = spool_getheader(txn->req_hdrs, "authorize-as");
     if (authzid && *authzid[0]) {
         /* Trying to proxy as another user */
         user = authzid[0];
@@ -4287,14 +4289,14 @@ EXPORTED int check_precond(struct transaction_t *txn,
     time_t since = 0;
 
     /* Step 1 */
-    if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
+    if ((hdr = spool_getheader(hdrcache, "if-match"))) {
         if (!etag_match(hdr, etag)) return HTTP_PRECOND_FAILED;
 
         /* Continue to step 3 */
     }
 
     /* Step 2 */
-    else if ((hdr = spool_getheader(hdrcache, "If-Unmodified-Since"))) {
+    else if ((hdr = spool_getheader(hdrcache, "if-unmodified-since"))) {
         if (time_from_rfc822(hdr[0], &since) < 0) return HTTP_BAD_REQUEST;
 
         if (lastmod > since) return HTTP_PRECOND_FAILED;
@@ -4303,7 +4305,7 @@ EXPORTED int check_precond(struct transaction_t *txn,
     }
 
     /* Step 3 */
-    if ((hdr = spool_getheader(hdrcache, "If-None-Match"))) {
+    if ((hdr = spool_getheader(hdrcache, "if-none-match"))) {
         if (etag_match(hdr, etag)) {
             if (txn->meth == METH_GET || txn->meth == METH_HEAD)
                 return HTTP_NOT_MODIFIED;
@@ -4316,7 +4318,7 @@ EXPORTED int check_precond(struct transaction_t *txn,
 
     /* Step 4 */
     else if ((txn->meth == METH_GET || txn->meth == METH_HEAD) &&
-             (hdr = spool_getheader(hdrcache, "If-Modified-Since"))) {
+             (hdr = spool_getheader(hdrcache, "if-modified-since"))) {
         if (time_from_rfc822(hdr[0], &since) < 0) return HTTP_BAD_REQUEST;
 
         if (lastmod <= since) return HTTP_NOT_MODIFIED;
@@ -4326,9 +4328,9 @@ EXPORTED int check_precond(struct transaction_t *txn,
 
     /* Step 5 */
     if (txn->flags.ranges &&  /* Only if we support Range requests */
-        txn->meth == METH_GET && (hdr = spool_getheader(hdrcache, "Range"))) {
+        txn->meth == METH_GET && (hdr = spool_getheader(hdrcache, "range"))) {
 
-        if ((hdr = spool_getheader(hdrcache, "If-Range"))) {
+        if ((hdr = spool_getheader(hdrcache, "if-range"))) {
             time_from_rfc822(hdr[0], &since); /* error OK here, could be an etag */
         }
 
@@ -4644,7 +4646,7 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
 
         if (txn->flags.cors) {
             const char **hdr =
-                spool_getheader(txn->req_hdrs, "Access-Control-Request-Method");
+                spool_getheader(txn->req_hdrs, "access-control-request-method");
 
             if (hdr) {
                 /* CORS preflight request */
@@ -4743,7 +4745,7 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_TRACE)) return HTTP_NOT_ALLOWED;
 
-    if ((hdr = spool_getheader(txn->req_hdrs, "Max-Forwards"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "max-forwards"))) {
         max_fwd = strtoul(hdr[0], NULL, 10);
     }
 

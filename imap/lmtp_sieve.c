@@ -110,7 +110,9 @@ static int getheader(void *v, const char *phead, const char ***body)
     message_data_t *m = ((deliver_data_t *) v)->m;
 
     if (phead==NULL) return SIEVE_FAIL;
-    *body = msg_getheader(m, phead);
+    char *lcasedhead = xstrduplcase(phead);
+    *body = msg_getheader(m, lcasedhead);
+    free(lcasedhead);
 
     if (*body) {
         return SIEVE_OK;

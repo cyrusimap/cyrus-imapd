@@ -247,30 +247,25 @@ static int parseheader(struct protstream *fin, FILE *fout,
     /* Note: xstrdup()ing the string ensures we return
      * a minimal length string with no allocation slack
      * at the end */
-    if (headname != NULL) *headname = xstrdup(name.s);
+    if (headname != NULL) *headname = xstrduplcase(name.s);
     if (contents != NULL) *contents = xstrdup(body.s);
 
     return 0;
 }
 
-EXPORTED void spool_cache_header(char *name, char *body, hdrcache_t cache)
+EXPORTED void spool_cache_header(const char *name, char *body, hdrcache_t cache)
 {
     strarray_t *contents;
-
-    lcase(name);
 
     contents = (strarray_t *)hash_lookup(name, cache);
     if (!contents)
         contents = hash_insert(name, strarray_new(), cache);
     strarray_appendm(contents, body);
-    free(name);
 }
 
-EXPORTED void spool_replace_header(char *name, char *body, hdrcache_t cache)
+EXPORTED void spool_replace_header(const char *name, char *body, hdrcache_t cache)
 {
     strarray_t *contents;
-
-    lcase(name);
 
     contents = (strarray_t *)hash_lookup(name, cache);
     if (!contents)
@@ -278,18 +273,14 @@ EXPORTED void spool_replace_header(char *name, char *body, hdrcache_t cache)
     else
         strarray_truncate(contents, 0);
     strarray_appendm(contents, body);
-    free(name);
 }
 
-EXPORTED void spool_remove_header(char *name, hdrcache_t cache)
+EXPORTED void spool_remove_header(const char *name, hdrcache_t cache)
 {
     strarray_t *contents;
 
-    lcase(name);
-
     contents = (strarray_t *)hash_del(name, cache);
     if (contents) strarray_free(contents);
-    free(name);
 }
 
 EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
@@ -319,18 +310,12 @@ EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t 
 
 EXPORTED const char **spool_getheader(hdrcache_t cache, const char *phead)
 {
-    char *head;
     strarray_t *contents;
 
     assert(cache && phead);
 
-    head = xstrdup(phead);
-    lcase(head);
-
     /* check the cache */
-    contents = (strarray_t *)hash_lookup(head, cache);
-
-    free(head);
+    contents = (strarray_t *) hash_lookup(phead, cache);
 
     return contents ? (const char **)contents->data : NULL;
 }
