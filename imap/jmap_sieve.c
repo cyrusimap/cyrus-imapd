@@ -800,22 +800,14 @@ static void set_destroy(const char *id,
 static void set_activate(const char *id, const char *sievedir,
                          struct jmap_set *set)
 {
-    char link[PATH_MAX], target[PATH_MAX];
-    struct stat sbuf;
-    const char *old_link = NULL;
+    const char *active, *old_link = NULL;
     json_t *created = NULL;
     int r;
 
-    snprintf(link, sizeof(link), "%s/%s", sievedir, DEFAULTBC_NAME);
-
     /* Lookup currently active script */
-    if (!stat(link, &sbuf)) {
-        ssize_t tgt_len = readlink(link, target, sizeof(target) - 1);
-
-        if (tgt_len > BYTECODE_SUFFIX_LEN) {
-            target[tgt_len - BYTECODE_SUFFIX_LEN] = '\0';
-            old_link = name_to_idlink(sievedir, target);
-        }
+    active = sievedir_get_active(sievedir);
+    if (active) {
+        old_link = name_to_idlink(sievedir, active);
     }
 
     if (id) {
