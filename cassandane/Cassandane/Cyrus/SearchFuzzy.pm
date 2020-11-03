@@ -94,19 +94,19 @@ sub tear_down
 }
 
 sub run_delve {
-    my ($self, $dir) = @_;
+    my ($self, $dir, @cmd) = @_;
     my $basedir = $self->{instance}->{basedir};
     my $str = '';
-    $self->{instance}->run_command({redirects => {stdout => "$basedir/delve.out"}}, 'delve', '-a', '-1', "$basedir/$dir");
-    my %data;
+    $self->{instance}->run_command({redirects => {stdout => "$basedir/delve.out"}}, 'delve', @cmd, '-1', "$basedir/$dir");
+    my @data;
     open(FH, "<$basedir/delve.out") || die "can't find delve.out";
     my $title = <FH>;
     xlog $self, "delve returned: $title";
     while (<FH>) {
         chomp;
-        $data{$_} = 1;
+        push @data, $_;
     }
-    return %data;
+    return @data;
 }
 
 sub create_testmessages
