@@ -106,6 +106,48 @@ EXPORTED void sievedir_foreach(const char *sievedir,
     closedir(dp);
 }
 
+struct count_rock {
+    int count;
+    const char *myname;
+};
+
+static int count_cb(const char *sievedir __attribute__((unused)),
+                    const char *name, struct stat *sbuf,
+                    const char *link_target __attribute__((unused)),
+                    void *rock)
+{
+    struct count_rock *crock = (struct count_rock *) rock;
+    size_t name_len;
+
+    if (!S_ISREG(sbuf->st_mode)) return 0;
+
+    name_len = strlen(name);
+    if (name_len > SCRIPT_SUFFIX_LEN &&
+        !strcmp(name + name_len - SCRIPT_SUFFIX_LEN, SCRIPT_SUFFIX)) {
+        /* is a script */
+        name_len -= SCRIPT_SUFFIX_LEN;
+        if (!crock->myname ||
+            strlen(crock->myname) != name_len ||
+            strncmp(crock->myname, name, name_len)) {
+            /* and it's different from me */
+            crock->count++;
+        }
+    }
+
+    return 0;
+}
+
+/* counts the number of scripts user has that are DIFFERENT from name */
+EXPORTED int sievedir_num_scripts(const char *sievedir, const char *name)
+{
+    struct count_rock crock = { 0, name };
+
+    sievedir_foreach(sievedir, &count_cb, &crock);
+
+    return crock.count;
+}
+
+
 EXPORTED struct buf *sievedir_get_script(const char *sievedir,
                                          const char *script)
 {

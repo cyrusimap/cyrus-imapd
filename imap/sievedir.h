@@ -64,6 +64,8 @@ void sievedir_foreach(const char *sievedir,
                                   const char *link_target, void *rock),
                       void *rock);
 
+int sievedir_num_scripts(const char *sievedir, const char *name);
+
 int sievedir_valid_name(const struct buf *name);
 
 int sievedir_script_exists(const char *sievedir, const char *name);
