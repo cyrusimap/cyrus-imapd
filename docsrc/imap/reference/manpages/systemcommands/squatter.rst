@@ -140,7 +140,8 @@ Options
 
     In compact mode, filter the resulting database to only include
     messages which are not expunged in mailboxes with existing
-    name/uidvalidity.
+    name/uidvalidity.  On the 3.0 branch this is broken and does increase
+    the index size.
     |v3-new-feature|
 
 .. option:: -f synclogfile
