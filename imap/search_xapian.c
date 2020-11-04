@@ -328,14 +328,19 @@ static strarray_t *activefile_open(const char *mboxname, const char *partition,
     if (!r && !mappedfile_size(*activefile))
         _activefile_init(mboxname, partition, *activefile);
     free(fname);
-
-    if (r) return NULL;
+    if (r) {
+        xsyslog(LOG_ERR, "mappedfile_open %s: %s", fname, error_message(r));
+        return NULL;
+    }
 
     /* take the requested lock (a better helper API would allow this to be
      * specified as part of the open call, but here's where we are */
     if (type == AF_LOCK_WRITE) r = mappedfile_writelock(*activefile);
     else r = mappedfile_readlock(*activefile);
-    if (r) return NULL;
+    if (r) {
+        xsyslog(LOG_ERR, "mappedfile_readlock %s: %s", fname, error_message(r));
+        return NULL;
+    }
 
     /* finally, read the contents */
     return activefile_read(*activefile);
@@ -2604,7 +2609,12 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         strarray_unshiftm(active, newstart);
         r = activefile_write(tr->activefile, active);
         mappedfile_close(&tr->activefile);
+        strarray_free(active);
         active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE);
+        if (!active) {
+            r = IMAP_IOERROR;
+            goto out;
+        }
     }
 
     assert(active->count);
