@@ -59,6 +59,8 @@
 #define SCRIPT_SUFFIX_LEN      7
 #define DEFAULTBC_NAME         "defaultbc"
 
+#define SIEVEDIR_MAX_NAME_LEN  1024 - SCRIPT_SUFFIX_LEN - 4 /* for ".NEW" */
+
 int sievedir_foreach(const char *sievedir,
                      int (*func)(const char *sievedir,
                                  const char *name, struct stat *sbuf,

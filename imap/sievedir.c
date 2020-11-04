@@ -195,7 +195,7 @@ EXPORTED int sievedir_valid_name(const struct buf *name)
         if ((ptr[lup] == '/') || (ptr[lup] == '\0')) return 0;
     }
 
-    return (lup < 1013);
+    return (lup < SIEVEDIR_MAX_NAME_LEN);
 }
 
 EXPORTED int sievedir_script_exists(const char *sievedir, const char *name)
