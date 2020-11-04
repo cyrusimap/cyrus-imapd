@@ -78,7 +78,8 @@ EXPORTED int sievedir_foreach(const char *sievedir,
     if ((dp = opendir(sievedir)) == NULL) {
         if (errno == ENOENT) return SIEVEDIR_OK;
 
-        syslog(LOG_ERR, "IOERROR: opendir(%s): %m", sievedir);
+        xsyslog(LOG_ERR, "IOERROR: can not open sieve directory",
+                "path=<%s>", sievedir);
         return SIEVEDIR_IOERROR;
     }
 
@@ -222,7 +223,8 @@ EXPORTED const char *sievedir_get_active(const char *sievedir)
         return target;
     }
     else if (tgt_len == -1 && errno != ENOENT) {
-        syslog(LOG_ERR, "IOERROR: readlink(%s): %m", link);
+        xsyslog(LOG_ERR, "IOERROR: failed to read active script link",
+                "link=<%s>", link);
     }
 
     return NULL;
@@ -254,12 +256,14 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
      * so activation of a nonexistent script will report success.
      */
     if (symlink(target, tmp) < 0) {
-        syslog(LOG_ERR, "IOERROR: unable to symlink %s as %s: %m", target, tmp);
+        xsyslog(LOG_ERR, "IOERROR: failed to create temp active script link",
+                "target=<%s> link=<%s>", target, tmp);
         return SIEVEDIR_IOERROR;
     }
 
     if (rename(tmp, active) < 0) {
-        syslog(LOG_ERR, "IOERROR: unable to rename %s to %s: %m", tmp, active);
+        xsyslog(LOG_ERR, "IOERROR: failed to rename active script link",
+                "oldpath=<%s> newpath=<%s>", tmp, active);
         unlink(tmp);
         return SIEVEDIR_IOERROR;
     }
@@ -273,7 +277,8 @@ EXPORTED int sievedir_deactivate_script(const char *sievedir)
 
     snprintf(active, sizeof(active), "%s/defaultbc", sievedir);
     if (unlink(active) != 0 && errno != ENOENT) {
-        syslog(LOG_ERR, "IOERROR: unable to unlink %s: %m", active);
+        xsyslog(LOG_ERR, "IOERROR: failed to delete active script link",
+                "link=<%s>", active);
         return SIEVEDIR_IOERROR;
     }
 
@@ -290,14 +295,16 @@ EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
     if (r) {
         if (errno == ENOENT) return SIEVEDIR_NOTFOUND;
 
-        syslog(LOG_ERR, "IOERROR: unlink(%s): %m", path);
+        xsyslog(LOG_ERR, "IOERROR: failed to delete script file",
+                "path=<%s>", path);
         return SIEVEDIR_IOERROR;
     }
 
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
     r = unlink(path);
     if (r && errno != ENOENT) {
-        syslog(LOG_NOTICE, "IOERROR: unlink(%s): %m", path);
+        xsyslog(LOG_ERR, "IOERROR: failed to delete bytecode file",
+                "path=<%s>", path);
     }
 
     return SIEVEDIR_OK;
@@ -318,7 +325,8 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
     if (r) {
         if (errno == ENOENT) return SIEVEDIR_NOTFOUND;
 
-        syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", oldpath, newpath);
+        xsyslog(LOG_ERR, "IOERROR: failed to rename script file",
+                "oldpath=<%s> newpath=<%s>", oldpath, newpath);
         return SIEVEDIR_IOERROR;
     }
 
@@ -328,7 +336,8 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
              "%s/%s%s", sievedir, newname, BYTECODE_SUFFIX);
     r = rename(oldpath, newpath);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", oldpath, newpath);
+        xsyslog(LOG_ERR, "IOERROR: failed to rename bytecode file",
+                "oldpath=<%s> newpath=<%s>", oldpath, newpath);
         return SIEVEDIR_IOERROR;
     }
 
@@ -358,7 +367,8 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     f = fopen(new_path, "w+");
 
     if (f == NULL) {
-        syslog(LOG_ERR, "IOERROR: fopen(%s): %m", new_path);
+        xsyslog(LOG_ERR, "IOERROR: failed to open new script file",
+                "newpath=<%s>", new_path);
         sieve_script_free(&s);
         return SIEVEDIR_IOERROR;
     }
@@ -397,7 +407,8 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
              "%s/%s%s.NEW", sievedir, name, BYTECODE_SUFFIX);
     int fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
     if (fd < 0) {
-        syslog(LOG_ERR, "IOERROR: open(%s): %m", new_bcpath);
+        xsyslog(LOG_ERR, "IOERROR: failed to open new bytecode file",
+                "newpath=<%s>", new_bcpath);
         unlink(new_path);
         sieve_free_bytecode(&bc);
         sieve_script_free(&s);
@@ -423,11 +434,17 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
     int r = rename(new_path, path);
-    if (r) syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", new_path, path);
+    if (r) {
+        xsyslog(LOG_ERR, "IOERROR: failed to rename script file",
+                "oldpath=<%s> newpath=<%s>", new_path, path);
+    }
     else {
         snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
         r = rename(new_bcpath, path);
-        if (r) syslog(LOG_ERR, "IOERROR: rename(%s, %s): %m", new_bcpath, path);
+        if (r) {
+            xsyslog(LOG_ERR, "IOERROR: failed to rename bytecode file",
+                    "oldpath=<%s> newpath=<%s>", new_bcpath, path);
+        }
     }
 
     return (r ? SIEVEDIR_IOERROR : SIEVEDIR_OK);
