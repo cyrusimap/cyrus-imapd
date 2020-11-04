@@ -1616,7 +1616,7 @@ EOF
 }
 
 sub test_editheader_encoded_address_list
-    :min_version_3_1
+    :min_version_3_3
     :needs_component_sieve
 {
     my ($self) = @_;

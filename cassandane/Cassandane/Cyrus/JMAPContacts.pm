@@ -3206,7 +3206,7 @@ sub test_contact_copy_overquota
 }
 
 sub test_contact_get_invalid_utf8
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
