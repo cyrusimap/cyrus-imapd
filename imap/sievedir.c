@@ -63,18 +63,24 @@
 #include "util.h"
 #include "xstrlcpy.h"
 
-EXPORTED void sievedir_foreach(const char *sievedir,
-                               int (*func)(const char *sievedir,
-                                           const char *name, struct stat *sbuf,
-                                           const char *target, void *rock),
-                               void *rock)
+EXPORTED int sievedir_foreach(const char *sievedir,
+                              int (*func)(const char *sievedir,
+                                          const char *name, struct stat *sbuf,
+                                          const char *target, void *rock),
+                              void *rock)
 {
     DIR *dp;
     struct dirent *dir;
     char path[PATH_MAX];
     int dir_len;
+    int r = SIEVEDIR_OK;
 
-    if ((dp = opendir(sievedir)) == NULL) return;
+    if ((dp = opendir(sievedir)) == NULL) {
+        if (errno == ENOENT) return SIEVEDIR_OK;
+
+        syslog(LOG_ERR, "IOERROR: opendir(%s): %m", sievedir);
+        return SIEVEDIR_IOERROR;
+    }
 
     dir_len = snprintf(path, sizeof(path), "%s/", sievedir);
 
@@ -100,10 +106,13 @@ EXPORTED void sievedir_foreach(const char *sievedir,
             continue;
         }
 
-        if (func(sievedir, name, &sbuf, target, rock) != 0) break;
+        r = func(sievedir, name, &sbuf, target, rock);
+        if (r != SIEVEDIR_OK) break;
     }
 
     closedir(dp);
+
+    return r;
 }
 
 struct count_rock {
@@ -119,7 +128,7 @@ static int count_cb(const char *sievedir __attribute__((unused)),
     struct count_rock *crock = (struct count_rock *) rock;
     size_t name_len;
 
-    if (!S_ISREG(sbuf->st_mode)) return 0;
+    if (!S_ISREG(sbuf->st_mode)) return SIEVEDIR_OK;
 
     name_len = strlen(name);
     if (name_len > SCRIPT_SUFFIX_LEN &&
@@ -134,7 +143,7 @@ static int count_cb(const char *sievedir __attribute__((unused)),
         }
     }
 
-    return 0;
+    return SIEVEDIR_OK;
 }
 
 /* counts the number of scripts user has that are DIFFERENT from name */

@@ -368,7 +368,7 @@ static int list_cb(const char *sievedir __attribute__((unused)),
         prot_puts(lrock->conn, "\r\n");
     }
 
-    return 0;
+    return SIEVEDIR_OK;
 }
 
 /* list the scripts user has available */

@@ -46,6 +46,7 @@
 #include "util.h"
 
 /* error codes */
+#define SIEVEDIR_DONE      1  /* for short-circuiting sievedir_foreach() */
 #define SIEVEDIR_OK        0
 #define SIEVEDIR_IOERROR  -1
 #define SIEVEDIR_NOTFOUND -2
@@ -58,11 +59,11 @@
 #define SCRIPT_SUFFIX_LEN      7
 #define DEFAULTBC_NAME         "defaultbc"
 
-void sievedir_foreach(const char *sievedir,
-                      int (*func)(const char *sievedir,
-                                  const char *name, struct stat *sbuf,
-                                  const char *link_target, void *rock),
-                      void *rock);
+int sievedir_foreach(const char *sievedir,
+                     int (*func)(const char *sievedir,
+                                 const char *name, struct stat *sbuf,
+                                 const char *link_target, void *rock),
+                     void *rock);
 
 int sievedir_num_scripts(const char *sievedir, const char *name);
 

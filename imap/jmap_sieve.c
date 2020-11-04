@@ -392,7 +392,7 @@ static int list_cb(const char *sievedir __attribute__((unused)),
         }
     }
 
-    return 0;
+    return SIEVEDIR_OK;
 }
 
 static void _listscripts(const char *sievedir, hash_table *scripts)
@@ -768,11 +768,11 @@ static int find_cb(const char *sievedir __attribute__((unused)),
         if (strlen(info->name) == tgt_len &&
             !strncmp(info->name, link_target, tgt_len)) {
             info->id = xstrdup(name + SCRIPT_ID_PREFIX_LEN);
-            return 1;  /* done */
+            return SIEVEDIR_DONE;
         }
     }
 
-    return 0;
+    return SIEVEDIR_OK;
 }
 
 static void set_activate(const char *id, const char *sievedir,

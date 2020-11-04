@@ -962,7 +962,7 @@ static int list_cb(const char *sievedir,
         }
     }
 
-    return 0;
+    return SIEVEDIR_OK;
 }
 
 struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
