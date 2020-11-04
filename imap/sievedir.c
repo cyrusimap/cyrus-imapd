@@ -290,6 +290,15 @@ EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
     char path[PATH_MAX];
     int r;
 
+    /* delete bytecode first, as its non-deterministic */
+    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
+    r = unlink(path);
+    if (r && errno != ENOENT) {
+        xsyslog(LOG_ERR, "IOERROR: failed to delete bytecode file",
+                "path=<%s>", path);
+    }
+
+    /* delete script file last, which determines result */
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
     r = unlink(path);
     if (r) {
@@ -298,13 +307,6 @@ EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
         xsyslog(LOG_ERR, "IOERROR: failed to delete script file",
                 "path=<%s>", path);
         return SIEVEDIR_IOERROR;
-    }
-
-    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-    r = unlink(path);
-    if (r && errno != ENOENT) {
-        xsyslog(LOG_ERR, "IOERROR: failed to delete bytecode file",
-                "path=<%s>", path);
     }
 
     return SIEVEDIR_OK;
