@@ -627,9 +627,10 @@ int main(int argc, char *argv[])
         }
 
         if (do_user)
-            mboxlist_usermboxtree(do_user, expire, &erock, MBOXTREE_DELETED);
+            mboxlist_usermboxtree(do_user, expire, &erock,
+                                  MBOXTREE_DELETED|MBOXTREE_TOMBSTONES);
         else
-            mboxlist_allmbox(find_prefix, expire, &erock, 0);
+            mboxlist_allmbox(find_prefix, expire, &erock, /*incdel*/ 1);
 
         syslog(LOG_NOTICE, "Expired %lu and expunged %lu out of %lu "
                             "messages from %lu mailboxes",
