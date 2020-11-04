@@ -205,7 +205,7 @@ EXPORTED int sievedir_script_exists(const char *sievedir, const char *name)
 
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
 
-    return (stat(path, &sbuf) == 0);
+    return ((stat(path, &sbuf) == 0) && S_ISREG(sbuf.st_mode));
 }
 
 EXPORTED const char *sievedir_get_active(const char *sievedir)
