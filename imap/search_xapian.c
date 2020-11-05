@@ -329,7 +329,9 @@ static strarray_t *activefile_open(const char *mboxname, const char *partition,
         _activefile_init(mboxname, partition, *activefile);
     free(fname);
     if (r) {
-        xsyslog(LOG_ERR, "mappedfile_open %s: %s", fname, error_message(r));
+        xsyslog(LOG_ERR, "mappedfile_open failed",
+                         "fname=<%s> error=<%s>",
+                         fname, error_message(r));
         return NULL;
     }
 
@@ -338,7 +340,9 @@ static strarray_t *activefile_open(const char *mboxname, const char *partition,
     if (type == AF_LOCK_WRITE) r = mappedfile_writelock(*activefile);
     else r = mappedfile_readlock(*activefile);
     if (r) {
-        xsyslog(LOG_ERR, "mappedfile_readlock %s: %s", fname, error_message(r));
+        xsyslog(LOG_ERR, "mappedfile_readlock failed",
+                         "fname=<%s> error=<%s>",
+                         fname, error_message(r));
         return NULL;
     }
 
