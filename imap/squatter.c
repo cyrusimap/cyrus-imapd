@@ -771,6 +771,10 @@ static void do_rolling(const char *channel)
                     /* XXX: alternative, just append to strarray_t *mboxnames ... */
                     sync_log_channel_append(channel, mboxname);
                 }
+                else if (r) {
+                    syslog(LOG_ERR, "IOERROR: squatter failed to index and forgetting %s: %s",
+                           mboxname, error_message(r));
+                }
                 if (sleepmicroseconds)
                     usleep(sleepmicroseconds);
             }
