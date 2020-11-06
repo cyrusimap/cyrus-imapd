@@ -137,7 +137,7 @@ static int parse_zoneinfo(const char *data, int datalen,
     if (version != ZONEINFO_VERSION) return CYRUSDB_IOERROR;
 
     if (p < dend) zi->type = strtoul(p, &p, 10);
-    if (p < dend) zi->dtstamp = strtol(p, &p, 10);
+    if (p < dend) zi->dtstamp = strtotimet(p, &p, 10);
 
     if (all && p < dend) {
         size_t len = dend - ++p;
