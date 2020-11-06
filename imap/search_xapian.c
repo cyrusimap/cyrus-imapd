@@ -315,13 +315,14 @@ static void _activefile_init(const char *mboxname, const char *partition,
     strarray_free(list);
 }
 
-static strarray_t *activefile_open(const char *mboxname, const char *partition,
-                                   struct mappedfile **activefile, enum LockType type)
+static int activefile_open(const char *mboxname, const char *partition,
+                           struct mappedfile **activefile, enum LockType type,
+                           strarray_t **ret)
 {
     char *fname = activefile_fname(mboxname);
     int r;
 
-    if (!fname) return NULL;
+    if (!fname) return IMAP_MAILBOX_NONEXISTENT;
 
     /* try to open the file, and populate with initial values if it's empty */
     r = mappedfile_open(activefile, fname, MAPPEDFILE_CREATE|MAPPEDFILE_RW);
@@ -332,7 +333,7 @@ static strarray_t *activefile_open(const char *mboxname, const char *partition,
         xsyslog(LOG_ERR, "mappedfile_open failed",
                          "fname=<%s> error=<%s>",
                          fname, error_message(r));
-        return NULL;
+        return r;
     }
 
     /* take the requested lock (a better helper API would allow this to be
@@ -343,11 +344,12 @@ static strarray_t *activefile_open(const char *mboxname, const char *partition,
         xsyslog(LOG_ERR, "mappedfile_readlock failed",
                          "fname=<%s> error=<%s>",
                          fname, error_message(r));
-        return NULL;
+        return IMAP_MAILBOX_LOCKED;
     }
 
     /* finally, read the contents */
-    return activefile_read(*activefile);
+    *ret = activefile_read(*activefile);
+    return 0;
 }
 
 static int xapstat(const char *path)
@@ -1047,8 +1049,8 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
 
     /* need to hold a read-only lock on the activefile file
      * to ensure no databases are deleted out from under us */
-    active = activefile_open(mailbox->name, mailbox->part, &lock->activefile, AF_LOCK_READ);
-    if (!active) goto out;
+    r = activefile_open(mailbox->name, mailbox->part, &lock->activefile, AF_LOCK_READ, &active);
+    if (r) goto out;
 
     /* only try to open directories with databases in them */
     lock->activedirs = activefile_resolve(mailbox->name, mailbox->part, active,
@@ -2603,7 +2605,12 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      *  to avoid it happening at least."
      */
     const char *deftier = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
-    active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE);
+    r = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE, &active);
+    if (r) {
+        syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox->name);
+        goto out;
+    }
+
     if (!active) active = strarray_new();
 
     // make sure we're indexing to the default tier
@@ -2614,9 +2621,10 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         r = activefile_write(tr->activefile, active);
         mappedfile_close(&tr->activefile);
         strarray_free(active);
-        active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE);
-        if (!active) {
-            r = IMAP_IOERROR;
+        active = NULL;
+        r = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE, &active);
+        if (r) {
+            syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox->name);
             goto out;
         }
     }
@@ -3119,7 +3127,11 @@ static int list_files(const char *userid, strarray_t *files)
     }
 
     /* Get a readlock on the activefile */
-    active = activefile_open(mboxname, mbentry->partition, &activefile, AF_LOCK_READ);
+    r = activefile_open(mboxname, mbentry->partition, &activefile, AF_LOCK_READ, &active);
+    if (r) {
+        syslog(LOG_ERR, "Couldn't open active file: %s", mboxname);
+        goto out;
+    }
     if (!active) goto out;
     dirs = activefile_resolve(mboxname, mbentry->partition, active, /*dostat*/1, NULL/*resultitems*/);
 
@@ -3696,7 +3708,11 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     }
 
     /* take an exclusive lock on the activefile file */
-    active = activefile_open(mboxname, mbentry->partition, &activefile, AF_LOCK_WRITE);
+    r = activefile_open(mboxname, mbentry->partition, &activefile, AF_LOCK_WRITE, &active);
+    if (r) {
+        syslog(LOG_ERR, "Failed to lock activefile for %s", mboxname);
+        goto out;
+    }
     if (!active || !active->count) goto out;
 
     orig = strarray_dup(active);
