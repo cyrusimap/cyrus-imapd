@@ -262,6 +262,12 @@ AC_DEFINE_UNQUOTED([OFF_T_FMT], ["$cyr_cv_format_off_t"],
 AC_DEFINE_UNQUOTED([strtoofft(a,b,c)], [$cyr_cv_parse_off_t(a,b,c)],
                    [strtol-like parse function for off_t])
 
+CYR_INTTYPE([rlim_t], [#include <sys/resource.h>])
+AC_DEFINE_UNQUOTED([RLIM_T_FMT], ["$cyr_cv_format_rlim_t"],
+                   [printf formatter for rlim_t])
+AC_DEFINE_UNQUOTED([strtorlimt(a,b,c)], [$cyr_cv_parse_rlim_t(a,b,c)],
+                   [strtol-like parse function for rlim_t])
+
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
 
