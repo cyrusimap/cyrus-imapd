@@ -308,7 +308,12 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     }
 
     open = xzmalloc(sizeof(struct conversations_open));
+    open->s.is_shared = shared;
+    open->s.path = xstrdup(fname);
+    open->next = open_conversations;
+    open_conversations = open;
 
+    /* first ensure that the usernamespace is locked */
     if (userid) {
         int haslock = user_isnamespacelocked(userid);
         if (haslock) {
@@ -321,16 +326,12 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     }
 
     /* open db */
-    open->s.is_shared = shared;
     int flags = CYRUSDB_CREATE | (shared ? (CYRUSDB_SHARED|CYRUSDB_NOCRC) : CYRUSDB_CONVERT);
     r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
     if (r || open->s.db == NULL) {
-        free(open);
+        _conv_remove(&open->s);
         return IMAP_IOERROR;
     }
-    open->s.path = xstrdup(fname);
-    open->next = open_conversations;
-    open_conversations = open;
 
     /* load or initialize counted flags */
     cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
