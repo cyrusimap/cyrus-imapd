@@ -698,16 +698,17 @@ AC_ARG_ENABLE(srs,
     [AS_HELP_STRING([--enable-srs], [enable Sender Rewriting Scheme support])],,
     [enable_srs=no])
 AC_MSG_RESULT($enable_srs)
+AM_CONDITIONAL([USE_SRS], [test "${enable_srs}" != "no"])
 if test "x$enable_srs" != xno; then
     AC_CHECK_HEADER([srs2.h],,
         [AC_MSG_ERROR([cannot find SRS headers])])
     AC_CHECK_LIB(srs2, srs_forward,,
         [AC_MSG_ERROR([cannot find SRS lib])])
     LIBS="$LIBS -lsrs2"
+    AC_DEFINE(USE_SRS,[],[Build with srs functionality])
 else
     AC_MSG_NOTICE([Outgoing messages will not support the Sender Rewriting Scheme.  Consider installing libsrs2 and --enable-srs])
 fi
-AM_CONDITIONAL([USE_SRS], [test "${enable_srs}" != "no"])
 
 dnl look for an option to disable sign-comparison warnings (needed for
 dnl flex-generated sieve sources when building with -Werror)
