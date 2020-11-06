@@ -5,20 +5,22 @@
 # DESCRIPTION
 #
 #   Figures out the underlying integer type of TYPE-NAME and the appropriate
-#   printf format string to use for it.
+#   printf format string and strtol-like parse function to use for it.
 #
 #   BUILD-PREREQS is whatever C code is required for this type to be defined.
 #   This is probably a #include statement!
 #
-#   Sets two cache variables:
+#   Sets three cache variables:
 #
 #   * $cyr_cv_type_foo    => the underlying integer type for the type "foo"
 #   * $cyr_cv_format_foo  => the format string to use for type "foo"
+#   * $cyr_cv_parse_foo   => the strtol-like parse function to use for type "foo"
 #
 #   Example:
 #
 #       CYR_INTTYPE([time_t], [#include <time.h>])
 #       AC_DEFINE_UNQUOTED([TIME_T_FMT], ["$cyr_cv_format_time_t"], [...])
+#       AC_DEFINE_UNQUOTED([strtotimet(a,b,c)], [$cyr_cv_parse_time_t(a,b,c)], [...])
 #
 AC_DEFUN([CYR_INTTYPE],[
     dnl First, figure out what type of integer it is, by exploiting the
@@ -68,4 +70,25 @@ AC_DEFUN([CYR_INTTYPE],[
     )
     AS_IF([test "x$AS_TR_SH([cyr_cv_format_$1])" = "xunknown"],
           [AC_MSG_ERROR([Unable to determine printf format string for `$1'])])
+
+    dnl And another quick table lookup to turn the known types into the
+    dnl appropriate strtol-like parse function
+    dnl Note that this cheats a little for int/unsigned int
+    AC_CACHE_CHECK(
+        [strtol-like parse function for `$1'],
+        [AS_TR_SH([cyr_cv_parse_$1])],
+        [
+            AS_CASE([$AS_TR_SH([cyr_cv_type_$1])],
+                ["int"], [eval AS_TR_SH([cyr_cv_parse_$1])=strtol],
+                ["long int"], [eval AS_TR_SH([cyr_cv_parse_$1])=strtol],
+                ["long long int"], [eval AS_TR_SH([cyr_cv_parse_$1])=strtoll],
+                ["unsigned int"], [eval AS_TR_SH([cyr_cv_parse_$1])=strtoul],
+                ["unsigned long int"], [eval AS_TR_SH([cyr_cv_parse_$1])=strtoul],
+                ["unsigned long long int"], [eval AS_TR_SH([cyr_cv_parse_$1])=strtoull],
+                [eval AS_TR_SH([cyr_cv_parse_$1])=unknown]
+            )
+        ]
+    )
+    AS_IF([test "x$AS_TR_SH([cyr_cv_parse_$1])" = "xunknown"],
+          [AC_MSG_ERROR([Unable to determine strtol-like parse function for `$1'])])
 ])
