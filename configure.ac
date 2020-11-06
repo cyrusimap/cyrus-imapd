@@ -247,14 +247,20 @@ AC_FUNC_VPRINTF
 CYR_INTTYPE([time_t], [#include <time.h>])
 AC_DEFINE_UNQUOTED([TIME_T_FMT], ["$cyr_cv_format_time_t"],
                    [printf formatter for time_t])
+AC_DEFINE_UNQUOTED([strtotimet(a,b,c)], [$cyr_cv_parse_time_t(a,b,c)],
+                   [strtol-like parse function for time_t])
 
 CYR_INTTYPE([size_t], [#include <stdlib.h>])
 AC_DEFINE_UNQUOTED([SIZE_T_FMT], ["$cyr_cv_format_size_t"],
                    [printf formatter for size_t])
+AC_DEFINE_UNQUOTED([strtosizet(a,b,c)], [$cyr_cv_parse_size_t(a,b,c)],
+                   [strtol-like parse function for size_t])
 
 CYR_INTTYPE([off_t], [#include <sys/types.h>])
 AC_DEFINE_UNQUOTED([OFF_T_FMT], ["$cyr_cv_format_off_t"],
                    [printf formatter for off_t])
+AC_DEFINE_UNQUOTED([strtoofft(a,b,c)], [$cyr_cv_parse_off_t(a,b,c)],
+                   [strtol-like parse function for off_t])
 
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
