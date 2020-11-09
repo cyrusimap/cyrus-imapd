@@ -2919,6 +2919,11 @@ of the incoming network interface, or if no record is found, the
 { "fastmailsharing", 0, SWITCH, "3.0.0" }
 /* If enabled, use FastMail style sharing (oldschool full server paths) */
 
+{ "normalizeuid", 0, SWITCH }
+/* Lowercase uid and strip leading and trailing blanks. It is recommended
+   to set this to yes, especially if OpenLDAP is used as authentication
+   source. */
+
 /*
 .SH SEE ALSO
 .PP
