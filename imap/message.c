@@ -190,6 +190,8 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
     int munge8bit = config_getswitch(IMAPOPT_MUNGE8BIT);
     int inheader = 1, blankline = 1;
     struct buf tmp = BUF_INITIALIZER;
+    char is_from;
+    static const char * from_header = "From ";
 
     while (size) {
         n = prot_read(from, buf, size > 4096 ? 4096 : size);
@@ -305,13 +307,18 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
                 r = IMAP_MESSAGE_BADHEADER;
                 goto done;
             }
-            if (strstr(buf, "From ") != buf) {
-                for (p = (unsigned char *)buf; *p && *p != ':'; p++) {
-                    if (*p <= ' ') {
-                        r = IMAP_MESSAGE_BADHEADER;
-                        goto done;
-                    }
-                }
+	    p = (unsigned char *) buf;
+	    if (*p == '>') p++;
+	    is_from = (*p == from_header[0])?0:1;
+            for (; *p != ':' && is_from < 5; p++) {
+		if (is_from > 0 && *p != from_header[is_from]) {
+                    is_from = -1;
+		}
+                if (is_from >= 0) {
+                    is_from++;
+                } else {
+                    if (*p <= ' ') return IMAP_MESSAGE_BADHEADER;
+		}
             }
         }
 
