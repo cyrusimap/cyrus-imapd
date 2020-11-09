@@ -58,6 +58,8 @@ extern int lock_reopen_ex(int fd, const char *filename,
 extern int lock_setlock(int fd, int ex, int nb, const char *filename);
 extern int lock_unlock(int fd, const char *filename);
 
+extern void clearlocks(void);
+
 /* compatibility defines for the older API */
 #define lock_blocking(fd, fn) \
     lock_setlock((fd), /*exclusive*/1, /*blocking*/0, (fn))
