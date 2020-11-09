@@ -2145,6 +2145,7 @@ struct xapian_update_receiver
     strarray_t *activetiers;
     hash_table cached_seqs;
     int mode;
+    int flags;
 };
 
 /* receiver used for extracting snippets after a search */
@@ -2159,6 +2160,13 @@ struct xapian_snippet_receiver
     struct xapiandb_lock lock;
     const search_snippet_markup_t *markup;
 };
+
+struct is_indexed_rock {
+    xapian_update_receiver_t *tr;
+    char doctype;
+};
+
+static int is_indexed_cb(const conv_guidrec_t *rec, void *rock);
 
 static const char *xapian_rootdir(const char *tier, const char *partition)
 {
@@ -2471,6 +2479,33 @@ static int compare_segs(const void **v1, const void **v2)
     return r;
 }
 
+static int is_indexed_part(xapian_update_receiver_t *tr, const struct message_guid *guid)
+{
+    if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
+        return xapian_dbw_is_indexed(tr->dbw, guid, XAPIAN_WRAP_DOCTYPE_PART);
+    }
+
+    struct conversations_state *cstate = mailbox_get_cstate(tr->super.mailbox);
+    if (!cstate) {
+        xsyslog(LOG_INFO, "can't open conversations", "mailbox=%s",
+                tr->super.mailbox->name);
+        return 0;
+    }
+
+    int ret = 0;
+    char *guidrep = xstrdup(message_guid_encode(guid));
+    struct is_indexed_rock rock = { tr, XAPIAN_WRAP_DOCTYPE_PART };
+    int r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, &rock);
+    if (r == CYRUSDB_DONE) ret = SEARCH_INDEXLEVEL_BASIC;
+    else if (r) {
+        xsyslog(LOG_ERR, "unexpected return code", "guid=%s r=%d err=%s",
+                message_guid_encode(guid), r, cyrusdb_strerror(r));
+    }
+    free(guidrep);
+
+    return ret;
+}
+
 static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
@@ -2511,10 +2546,16 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
 
         if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
             if (last_guid) {
-                // body parts have no index level
+                // finalize indexing of previous part
                 r = xapian_dbw_end_doc(tr->dbw, SEARCH_INDEXLEVEL_BASIC);
                 if (r) goto out;
                 ++tr->uncommitted;
+                last_guid = NULL;
+            }
+
+            if (!(tr->flags & SEARCH_UPDATE_ALLOW_DUPPARTS) &&
+                    is_indexed_part(tr, &seg->guid)) {
+                continue;
             }
 
             last_guid = &seg->guid;
@@ -2531,6 +2572,16 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
         if (r) goto out;
         ++tr->uncommitted;
     }
+
+    /* start the range back at the first unindexed if necessary */
+    if (!tr->indexed) {
+        tr->indexed = seqset_init(0, SEQ_MERGE);
+        /* we want to say that we indexed the entire gap from last time
+         * up until this first message as well, so our indexed range
+         * isn't gappy */
+        seqset_add(tr->indexed, seqset_firstnonmember(tr->oldindexed), 1);
+    }
+    seqset_add(tr->indexed, tr->super.uid, 1);
 
 out:
     tr->super.uid = 0;
@@ -2560,6 +2611,8 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     int r = IMAP_IOERROR;
     char *namelock_fname = NULL;
     char *userid = NULL;
+
+    tr->flags = flags;
 
     /* not an indexable mailbox, fine - return a code to avoid
      * trying to index each message as well */
@@ -2683,9 +2736,16 @@ static uint32_t first_unindexed_uid(search_text_receiver_t *rx)
 
 static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
 {
-    xapian_update_receiver_t *tr = rock;
+    xapian_update_receiver_t *tr = ((struct is_indexed_rock*)rock)->tr;
+    char doctype = ((struct is_indexed_rock*)rock)->doctype;
 
-    if (rec->part) return 0;
+    if (doctype == XAPIAN_WRAP_DOCTYPE_MSG && rec->part) return 0;
+
+    /* Is this a part in the message we are just indexing? */
+    if (doctype == XAPIAN_WRAP_DOCTYPE_PART && rec->uid == tr->super.uid &&
+            !strcmp(rec->mboxname, tr->super.mailbox->name)) {
+        return 0;
+    }
 
     /* Is this GUID record in the mailbox we are currently indexing? */
     if (!strcmp(tr->super.mailbox->name, rec->mboxname)) {
@@ -2733,10 +2793,6 @@ out:
 
 static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
 {
-    /* XXX caveat: this function returns non-zero if msg already
-     * has been indexed _and marks msg as indexed in any case_.
-     * The current squatter implementation relies on this and
-     * we should probably change this. */
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
     uint32_t uid = 0;
@@ -2761,7 +2817,8 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
         }
 
         char *guidrep = xstrdup(message_guid_encode(guid));
-        int r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, tr);
+        struct is_indexed_rock rock = { tr, XAPIAN_WRAP_DOCTYPE_MSG };
+        int r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, &rock);
         if (r == CYRUSDB_DONE) ret = SEARCH_INDEXLEVEL_BASIC;
         else if (r) {
             syslog(LOG_ERR, "is_indexed %s:%d: unexpected return code: %d (%s)",
@@ -2773,16 +2830,6 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
         // XXX check for all parts of that message?
         ret = xapian_dbw_is_indexed(tr->dbw, guid, XAPIAN_WRAP_DOCTYPE_MSG);
     }
-
-    /* start the range back at the first unindexed if necessary */
-    if (!tr->indexed) {
-        tr->indexed = seqset_init(0, SEQ_MERGE);
-        /* we want to say that we indexed the entire gap from last time
-         * up until this first message as well, so our indexed range
-         * isn't gappy */
-        seqset_add(tr->indexed, seqset_firstnonmember(tr->oldindexed), 1);
-    }
-    seqset_add(tr->indexed, uid, 1);
 
     return ret;
 }
@@ -2834,6 +2881,8 @@ static int end_mailbox_update(search_text_receiver_t *rx,
         strarray_free(tr->activetiers);
         tr->activetiers = NULL;
     }
+
+    tr->flags = 0;
 
     return r;
 }

@@ -1283,14 +1283,10 @@ uint8_t xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid
     std::string key = "cyrusid." + std::string(buf_cstring(&buf));
     buf_free(&buf);
 
-    /* body parts have no index levels */
-    if (doctype == XAPIAN_WRAP_DOCTYPE_PART) {
-        return parse_indexlevel(dbw->database->get_metadata(key));
-    }
-
     /* indexed in the current DB? */
     uint8_t indexlevel = parse_indexlevel(dbw->database->get_metadata(key));
-    if (indexlevel == SEARCH_INDEXLEVEL_BEST) {
+    if (indexlevel == SEARCH_INDEXLEVEL_BEST ||
+            (indexlevel && doctype == XAPIAN_WRAP_DOCTYPE_PART)) {
         return indexlevel;
     }
 
@@ -1298,7 +1294,8 @@ uint8_t xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid
     for (int i = 0; i < dbw->otherdbs.count; i++) {
         Xapian::Database *database = (Xapian::Database *)ptrarray_nth(&dbw->otherdbs, i);
         uint8_t level = parse_indexlevel(database->get_metadata(key));
-        if (level == SEARCH_INDEXLEVEL_BEST) {
+        if (level == SEARCH_INDEXLEVEL_BEST ||
+                (level && doctype == XAPIAN_WRAP_DOCTYPE_PART)) {
             return level;
         }
         else indexlevel = better_indexlevel(indexlevel, level);
