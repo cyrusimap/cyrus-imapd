@@ -552,35 +552,41 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     if (jmap_wantprop(rock->get->props, "myRights")) {
+        int myrights = rights;
         int writerights = DACL_WRITECONT|DACL_WRITEPROPS;
         int mayupdateall = writerights|DACL_CHANGEORG;
         int mayremoveall = DACL_RMRSRC|DACL_CHANGEORG;
 
+        /* Owner may always RSVP */
+        if (!strcmp(rock->req->userid, rock->req->accountid)) {
+            myrights |= JACL_RSVP;
+        }
+
         json_object_set_new(obj, "myRights",
                             json_pack("{s:b s:b s:b s:b s:b s:b s:b s:b s:b s:b s:b}",
                                       "mayReadFreeBusy",
-                                      (rights & JACL_READFB) == JACL_READFB,
+                                      (myrights & JACL_READFB) == JACL_READFB,
                                       "mayReadItems",
-                                      (rights & JACL_READITEMS) == JACL_READITEMS,
+                                      (myrights & JACL_READITEMS) == JACL_READITEMS,
                                       "mayAddItems",
-                                      (rights & JACL_ADDITEMS) == JACL_ADDITEMS,
+                                      (myrights & JACL_ADDITEMS) == JACL_ADDITEMS,
                                       "mayRSVP",
-                                      (rights & JACL_RSVP) == JACL_RSVP,
+                                      (myrights & JACL_RSVP) == JACL_RSVP,
                                       "mayDelete",
-                                      (rights & JACL_DELETE) == JACL_DELETE,
+                                      (myrights & JACL_DELETE) == JACL_DELETE,
                                       "mayAdmin",
-                                      (rights & JACL_ADMIN) == JACL_ADMIN,
-                                      // FIXME the JACL definitions for the following rights are incomplete
+                                      (myrights & JACL_ADMIN) == JACL_ADMIN,
+                                      // FIXME the JACL definitions for the following myrights are incomplete
                                       "mayUpdatePrivate",
-                                      (rights & DACL_PROPRSRC) == DACL_PROPRSRC,
+                                      (myrights & DACL_PROPRSRC) == DACL_PROPRSRC,
                                       "mayUpdateOwn",
-                                      (rights & writerights) == writerights,
+                                      (myrights & writerights) == writerights,
                                       "mayUpdateAll",
-                                      (rights & mayupdateall) == mayupdateall,
+                                      (myrights & mayupdateall) == mayupdateall,
                                       "mayRemoveOwn",
-                                      (rights & DACL_RMRSRC) == DACL_RMRSRC,
+                                      (myrights & DACL_RMRSRC) == DACL_RMRSRC,
                                       "mayRemoveAll",
-                                      (rights & mayremoveall) == mayremoveall));
+                                      (myrights & mayremoveall) == mayremoveall));
     }
 
     if (jmap_wantprop(rock->get->props, "shareWith")) {
