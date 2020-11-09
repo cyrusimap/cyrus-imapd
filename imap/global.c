@@ -156,6 +156,9 @@ static int get_facility(const char *name)
     return SYSLOG_FACILITY;
 }
 
+/* syslog prefix tag */
+static char syslog_prefix[20];
+
 struct cyrus_module {
     void (*done)(void *rock);
     void *rock;
@@ -232,7 +235,9 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         openlog(ident_buf, syslog_opts, SYSLOG_FACILITY);
     }
     else {
-        openlog(config_ident, syslog_opts, SYSLOG_FACILITY);
+	strncpy(syslog_prefix, "cyrus/", sizeof(syslog_prefix));
+	strncat(syslog_prefix, config_ident, sizeof(syslog_prefix) - 7);
+        openlog(syslog_prefix, syslog_opts, SYSLOG_FACILITY);
     }
 
     /* Load configuration file.  This will set config_dir when it finds it */

@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
     cacheid=cache;
   } else
     cacheid=NULL;
-  openlog("pttest", LOG_PID, SYSLOG_FACILITY);
+  openlog("cyrus/pttest", LOG_PID, SYSLOG_FACILITY);
 
   if (!auth_setid(argv[1],cacheid))
     printf ("Auth_memberof(%s,%s) is %d\n", argv[1], argv[2],
