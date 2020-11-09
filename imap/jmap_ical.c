@@ -833,6 +833,7 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
         }
 
         if (json_object_size(jday)) {
+            json_object_set_new(jday, "@type", json_string("NDay"));
             json_array_append_new(jbd, jday);
         } else {
             json_decref(jday);
@@ -2225,7 +2226,7 @@ calendarevent_from_ical(icalcomponent *comp,
     icalproperty* prop = NULL;
     int is_exception = master != NULL;
     hash_table *wantprops = NULL;
-    json_t *event = json_pack("{s:s}", "@type", "jsevent");
+    json_t *event = json_pack("{s:s}", "@type", "JSEvent");
     struct buf buf = BUF_INITIALIZER;
 
     if (jmap_wantprop(props, "recurrenceOverrides") && !is_exception) {
@@ -4098,6 +4099,8 @@ recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser,
             json_int_t nth = 0;
             jmap_parser_push_index(parser, "byDay", i, NULL);
 
+            validate_type(parser, bd, "NDay");
+
             /* day */
             day = xstrdupnull(json_string_value(json_object_get(bd, "day")));
             if (day) {
@@ -4817,7 +4820,7 @@ calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
 
     jprop = json_object_get(event, "@type");
     if (JNOTNULL(jprop) && json_is_string(jprop)) {
-        if (strcmp(json_string_value(jprop), "jsevent")) {
+        if (strcmp(json_string_value(jprop), "JSEvent")) {
             jmap_parser_invalid(parser, "@type");
         }
     } else if (JNOTNULL(jprop)) {
