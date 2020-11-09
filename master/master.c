@@ -1968,7 +1968,7 @@ static void limit_fds(rlim_t x)
     struct rlimit rl;
 
 #ifdef HAVE_GETRLIMIT
-    if (!getrlimit(RLIMIT_NUMFDS, &rl)) {
+    if (getrlimit(RLIMIT_NUMFDS, &rl) >= 0) {
         if (x != RLIM_INFINITY && rl.rlim_max != RLIM_INFINITY && x > rl.rlim_max) {
             syslog(LOG_WARNING,
                    "limit_fds: requested %" PRIu64 ", but capped to %" PRIu64,
@@ -1987,7 +1987,7 @@ static void limit_fds(rlim_t x)
                rl.rlim_cur, rl.rlim_max);
     }
 
-    if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
+    if (setrlimit(RLIMIT_NUMFDS, &rl) < 0 && x != RLIM_INFINITY) {
         syslog(LOG_ERR,
                "setrlimit: Unable to set file descriptors limit to %ld: %m",
                rl.rlim_cur);
