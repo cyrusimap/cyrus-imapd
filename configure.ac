@@ -2133,20 +2133,33 @@ if test "$cyrus_cv_function_nesting" = "yes"; then
   AC_DEFINE(HAVE_FUNCTION_NESTING,[],[Do we have function nesting support?])
 fi
 
-AC_MSG_CHECKING(for optimisation support)
-AC_CACHE_VAL(cyrus_cv_declare_optimize, AC_TRY_COMPILE([
-#include <stdlib.h>
-static inline int numcmp(int n1, int n2)
-    __attribute__((pure, always_inline, optimize("-O3")));
-static int numcmp(int n1, int n2) { return n1 - n2; }
-],[
-    if (numcmp(1, 2)) exit(1);
-],cyrus_cv_declare_optimize=yes, cyrus_cv_declare_optimize=no))
-AC_MSG_RESULT($cyrus_cv_declare_optimize)
-if test "$cyrus_cv_declare_optimize" = "yes"; then
-  AC_DEFINE(HAVE_DECLARE_OPTIMIZE,[],[Do we have support for optimize __attribute__?])
-fi
-
+AC_CACHE_CHECK(
+    [for optimisation support],
+    [cyrus_cv_declare_optimize],
+    [
+        AC_LANG_PUSH([C])
+        saved_CFLAGS="$CFLAGS"
+        CFLAGS="$CFLAGS -Werror"
+        AC_COMPILE_IFELSE(
+            [AC_LANG_PROGRAM(
+                [
+                    #include <stdlib.h>
+                    static inline int numcmp(int n1, int n2)
+                        __attribute__((pure, always_inline, optimize("-O3")));
+                    static int numcmp(int n1, int n2) { return n1 - n2; }
+                ],
+                [ if (numcmp(1, 2)) exit(1); ])
+            ],
+            [cyrus_cv_declare_optimize=yes],
+            [cyrus_cv_declare_optimize=no])
+        CFLAGS="$saved_CFLAGS"
+        AC_LANG_POP([C])
+    ])
+AS_IF(
+    [test "x$cyrus_cv_declare_optimize" = "xyes"],
+    [AC_DEFINE(HAVE_DECLARE_OPTIMIZE,[],
+        [Do we have support for optimize __attribute__?])]
+)
 
 dnl documentation generation (sphinx, perl2rst, gitpython)
 AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
