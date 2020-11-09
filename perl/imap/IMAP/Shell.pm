@@ -483,7 +483,7 @@ sub shell {
                           -mechanism => $mech, -password => $pw,
                           -tlskey => $tlskey, -notls => $notls,
                           -cafile => $cacert, -capath => $capath)
-      or die "cyradm: cannot authenticate to server with $mech as $auth\n";
+      or die "cyradm: cannot authenticate to server" . (defined($mech)?" with $mech":"") . " as $auth\n";
   }
   my $fstk = [*STDIN, *STDOUT, *STDERR];
   if ($dorc && $systemrc ne '' && -f $systemrc) {
