@@ -1088,7 +1088,7 @@ sub normalize_event
     my ($event) = @_;
 
     if (not exists $event->{q{@type}}) {
-        $event->{q{@type}} = 'jsevent';
+        $event->{q{@type}} = 'JSEvent';
     }
     if (not exists $event->{freeBusyStatus}) {
         $event->{freeBusyStatus} = 'busy';
@@ -1202,6 +1202,15 @@ sub normalize_event
             if (not exists $rrule->{skip}) {
                 $rrule->{skip} = 'omit';
             }
+            if (not exists $rrule->{byDay}) {
+                $rrule->{byDay} = undef;
+            } elsif (defined $rrule->{byDay}) {
+                foreach my $nday (@{$rrule->{byDay}}) {
+                    if (not exists $nday->{q{@type}}) {
+                        $nday->{q{@type}} = 'NDay';
+                    }
+                }
+            }
             if (not exists $rrule->{q{@type}}) {
                 $rrule->{q{@type}} = 'RecurrenceRule';
             }
@@ -1222,6 +1231,15 @@ sub normalize_event
             }
             if (not exists $exrule->{skip}) {
                 $exrule->{skip} = 'omit';
+            }
+            if (not exists $exrule->{byDay}) {
+                $exrule->{byDay} = undef;
+            } elsif (defined $exrule->{byDay}) {
+                foreach my $nday (@{$exrule->{byDay}}) {
+                    if (not exists $nday->{q{@type}}) {
+                        $nday->{q{@type}} = 'NDay';
+                    }
+                }
             }
             if (not exists $exrule->{q{@type}}) {
                 $exrule->{q{@type}} = 'RecurrenceRule';
@@ -1366,7 +1384,7 @@ sub test_calendarevent_get_simple
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
-    $self->assert_str_equals('jsevent', $event->{q{@type}});
+    $self->assert_str_equals('JSEvent', $event->{q{@type}});
     $self->assert_str_equals($id, $event->{uid});
     $self->assert_null($event->{relatedTo});
     $self->assert_str_equals("yo", $event->{title});
@@ -1997,20 +2015,26 @@ sub test_calendarevent_get_recurrence
     # This assertion is a bit brittle. It depends on the libical-internal
     # sort order for BYDAY
     $self->assert_deep_equals([{
+                '@type' => 'NDay',
                 "day" => "mo",
                 "nthOfPeriod" => 2,
             }, {
+                '@type' => 'NDay',
                 "day" => "mo",
                 "nthOfPeriod" => 1,
             }, {
+                '@type' => 'NDay',
                 "day" => "tu",
             }, {
+                '@type' => 'NDay',
                 "day" => "th",
                 "nthOfPeriod" => -2,
             }, {
+                '@type' => 'NDay',
                 "day" => "sa",
                 "nthOfPeriod" => -1,
             }, {
+                '@type' => 'NDay',
                 "day" => "su",
                 "nthOfPeriod" => -3,
             }], $event->{recurrenceRules}[0]{byDay});
@@ -2463,7 +2487,7 @@ sub test_calendarevent_set_bymonth
                         ],
                         "count"=> 3,
                 }],
-                "\@type"=> "jsevent",
+                "\@type"=> "JSEvent",
                 "title"=> "",
                 "description"=> "",
                 "locations"=> undef,
@@ -3088,7 +3112,7 @@ sub test_calendarevent_set_recurrence_until
         "useDefaultAlerts" => JSON::false,
         "uid" =>"76f46024-7284-4701-b93f-d9cd812f3f43",
         "title" =>"timed event with non-zero time until",
-        "\@type" =>"jsevent",
+        "\@type" =>"JSEvent",
         "recurrenceRules" => [{
             "frequency" =>"weekly",
             "until" =>"2019-04-20T23:59:59"
@@ -3121,7 +3145,7 @@ sub test_calendarevent_set_recurrence_untilallday
         "useDefaultAlerts" => JSON::false,
         "uid" =>"76f46024-7284-4701-b93f-d9cd812f3f43",
         "title" =>"allday event with non-zero time until",
-        "\@type" =>"jsevent",
+        "\@type" =>"JSEvent",
         "recurrenceRules" => [{
             "frequency" =>"weekly",
             "until" =>"2019-04-20T23:59:59"
@@ -3149,7 +3173,7 @@ sub test_calendarevent_set_recurrence_bymonthday
 		"start" => "2019-01-31T09:00:00",
 		"duration" => "PT1H",
 		"timeZone" => "Australia/Melbourne",
-		"\@type" => "jsevent",
+		"\@type" => "JSEvent",
 		"title" => "Recurrence test",
 		"description" => "",
 		"showWithoutTime" => JSON::false,
