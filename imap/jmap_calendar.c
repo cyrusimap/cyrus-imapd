@@ -2695,7 +2695,7 @@ static void getcalendarevents_filterinstance(json_t *myevent,
     jmap_filterprops(myevent, props);
     json_object_set_new(myevent, "id", json_string(id));
     json_object_set_new(myevent, "uid", json_string(ical_uid));
-    json_object_set_new(myevent, "@type", json_string("jsevent"));
+    json_object_set_new(myevent, "@type", json_string("JSEvent"));
 }
 
 static int getcalendarevents_getinstances(json_t *jsevent,
@@ -3281,7 +3281,7 @@ gotevent:
         jmap_filterprops(jsevent, props);
         json_object_set_new(jsevent, "id", json_string(cdata->ical_uid));
         json_object_set_new(jsevent, "uid", json_string(cdata->ical_uid));
-        json_object_set_new(jsevent, "@type", json_string("jsevent"));
+        json_object_set_new(jsevent, "@type", json_string("JSEvent"));
         json_array_append_new(rock->get->list, jsevent);
     }
     else {
@@ -3294,7 +3294,7 @@ gotevent:
                 jmap_filterprops(myevent, props);
                 json_object_set_new(myevent, "id", json_string(cdata->ical_uid));
                 json_object_set_new(myevent, "uid", json_string(cdata->ical_uid));
-                json_object_set_new(myevent, "@type", json_string("jsevent"));
+                json_object_set_new(myevent, "@type", json_string("JSEvent"));
                 json_array_append_new(rock->get->list, myevent);
             }
         }
