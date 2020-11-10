@@ -3947,11 +3947,12 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
         flags_to_str(record, sysflags);
         syslog(LOG_NOTICE, "auditlog: touched sessionid=<%s> "
                "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> "
-               "modseq=<" MODSEQ_FMT "> oldflags=<%s> sysflags=<%s>",
+               "modseq=<" MODSEQ_FMT "> deletedmodseq=<" MODSEQ_FMT
+               "> oldflags=<%s> sysflags=<%s>",
                session_id(), mailbox->name, mailbox->uniqueid,
                record->uid, message_guid_encode(&record->guid),
                conversation_id_encode(record->cid), record->modseq,
-               oldflags, sysflags);
+               record->deletedmodseq, oldflags, sysflags);
     }
 
     /* expunged tracking */
