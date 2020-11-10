@@ -339,11 +339,11 @@ char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep);
 int sync_sieve_upload(const char *userid, const char *name,
                       time_t last_update, const char *content, size_t len);
 
-int sync_sieve_activate(const char *userid, const char *name);
+int sync_sieve_activate(const char *userid, const char *bcname);
 
 int sync_sieve_deactivate(const char *userid);
 
-int sync_sieve_delete(const char *userid, const char *name);
+int sync_sieve_delete(const char *userid, const char *script);
 
 /* ====================================================================== */
 

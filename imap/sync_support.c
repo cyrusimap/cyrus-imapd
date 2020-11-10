@@ -80,6 +80,7 @@
 #include "xstrlcat.h"
 #include "strarray.h"
 #include "ptrarray.h"
+#include "sievedir.h"
 
 #ifdef USE_CALALARMD
 #include "caldav_alarm.h"
@@ -931,59 +932,51 @@ void sync_sieve_list_free(struct sync_sieve_list **lp)
     *lp = NULL;
 }
 
+struct list_rock {
+    struct sync_sieve_list *list;
+    char *active;
+};
+
+static int list_cb(const char *sievedir,
+                   const char *name, struct stat *sbuf,
+                   const char *link_target, void *rock)
+{
+    struct list_rock *lrock = (struct list_rock *) rock;
+
+    if (S_ISLNK(sbuf->st_mode)) {
+        if (!strcmp(name, DEFAULTBC_NAME) && link_target && *link_target) {
+            lrock->active = xstrdup(link_target);
+        }
+    }
+    else {
+        /* calculate the sha1 on the fly, relatively cheap */
+        struct buf *buf = sievedir_get_script(sievedir, name);
+
+        if (buf_len(buf)) {
+            struct message_guid guid;
+
+            message_guid_generate(&guid, buf_base(buf), buf_len(buf));
+
+            sync_sieve_list_add(lrock->list, name, sbuf->st_mtime, &guid, 0);
+            buf_destroy(buf);
+        }
+    }
+
+    return SIEVEDIR_OK;
+}
+
 struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 {
     struct sync_sieve_list *list = sync_sieve_list_create();
     const char *sieve_path = user_sieve_path(userid);
-    char filename[2048];
-    char active[2048];
-    DIR *mbdir;
-    struct dirent *next = NULL;
-    struct stat sbuf;
-    int count;
+    struct list_rock lrock = { list, NULL };
 
-    mbdir = opendir(sieve_path);
-    if (!mbdir) return list;
+    sievedir_foreach(sieve_path, &list_cb, &lrock);
 
-    active[0] = '\0';
-    while((next = readdir(mbdir)) != NULL) {
-        uint32_t size;
-        char *result;
-        struct message_guid guid;
-        if (!strcmp(next->d_name, ".") || !strcmp(next->d_name, ".."))
-            continue;
-
-        snprintf(filename, sizeof(filename), "%s/%s",
-                 sieve_path, next->d_name);
-
-        if (stat(filename, &sbuf) < 0)
-            continue;
-
-        if (!strcmp(next->d_name, "defaultbc")) {
-            if (sbuf.st_mode & S_IFLNK) {
-                count = readlink(filename, active, 2047);
-
-                if (count >= 0) {
-                    active[count] = '\0';
-                } else {
-                    /* XXX Report problem? */
-                }
-            }
-            continue;
-        }
-
-        /* calculate the sha1 on the fly, relatively cheap */
-        result = sync_sieve_read(userid, next->d_name, &size);
-        if (!result) continue;
-        message_guid_generate(&guid, result, size);
-
-        sync_sieve_list_add(list, next->d_name, sbuf.st_mtime, &guid, 0);
-        free(result);
+    if (lrock.active) {
+        sync_sieve_list_set_active(list, lrock.active);
+        free(lrock.active);
     }
-    closedir(mbdir);
-
-    if (active[0])
-        sync_sieve_list_set_active(list, active);
 
     return list;
 }
@@ -991,42 +984,18 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
 {
     const char *sieve_path = user_sieve_path(userid);
-    char filename[2048];
-    FILE *file;
-    struct stat sbuf;
-    char *result, *s;
-    uint32_t count;
-    int c;
+    struct buf *buf = sievedir_get_script(sieve_path, name);
+    char *result = NULL;
 
-    if (sizep)
+    if (buf) {
+        if (sizep) *sizep = buf_len(buf);
+        result = buf_release(buf);
+        buf_destroy(buf);
+    }
+    else if (sizep)
         *sizep = 0;
 
-    snprintf(filename, sizeof(filename), "%s/%s", sieve_path, name);
-
-    file = fopen(filename, "r");
-    if (!file) return NULL;
-
-    if (fstat(fileno(file), &sbuf) < 0) {
-        fclose(file);
-        return(NULL);
-    }
-
-    count = sbuf.st_size;
-    s = result = xmalloc(count+1);
-
-    if (sizep)
-        *sizep = count;
-
-    while (count > 0) {
-        if ((c=fgetc(file)) == EOF)
-            break;
-        *s++ = c;
-        count--;
-    }
-    fclose(file);
-    *s = '\0';
-
-    return(result);
+    return result;
 }
 
 int sync_sieve_upload(const char *userid, const char *name,
@@ -1094,36 +1063,22 @@ int sync_sieve_upload(const char *userid, const char *name,
     return r;
 }
 
-int sync_sieve_activate(const char *userid, const char *name)
+int sync_sieve_activate(const char *userid, const char *bcname)
 {
     const char *sieve_path = user_sieve_path(userid);
     char target[2048];
-    char active[2048];
-    char tmp[2048+4];  /* +4 for ".NEW" */
-
-    snprintf(target, sizeof(target), "%s", name);
-    snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
-    snprintf(tmp, sizeof(tmp), "%s.NEW", active);
+    int r;
 
 #ifdef USE_SIEVE
-    char *bc_fname = strconcat(sieve_path, "/", target, NULL);
-    sieve_rebuild(NULL, bc_fname, 0, NULL);
-    free(bc_fname);
+    snprintf(target, sizeof(target), "%s/%s", sieve_path, bcname);
+    sieve_rebuild(NULL, target, 0, NULL);
 #endif
 
-    /* N.B symlink() does NOT verify target for anything but string validity,
-     * so activation of a nonexistent script will report success.
-     */
-    if (symlink(target, tmp) < 0) {
-        syslog(LOG_ERR, "IOERROR: unable to symlink %s as %s: %m", target, tmp);
-        return IMAP_IOERROR;
-    }
+    snprintf(target, sizeof(target), "%.*s",
+             (int) strlen(bcname) - BYTECODE_SUFFIX_LEN, bcname);
 
-    if (rename(tmp, active) < 0) {
-        syslog(LOG_ERR, "IOERROR: unable to rename %s to %s: %m", tmp, active);
-        unlink(tmp);
-        return IMAP_IOERROR;
-    }
+    r = sievedir_activate_script(sieve_path, target);
+    if (r) return r;
 
     sync_log_sieve(userid);
 
@@ -1133,62 +1088,29 @@ int sync_sieve_activate(const char *userid, const char *name)
 int sync_sieve_deactivate(const char *userid)
 {
     const char *sieve_path = user_sieve_path(userid);
-    char active[2048];
+    int r = sievedir_deactivate_script(sieve_path);
 
-    snprintf(active, sizeof(active), "%s/defaultbc", sieve_path);
-    unlink(active);
+    if (r) return r;
 
     sync_log_sieve(userid);
 
     return(0);
 }
 
-int sync_sieve_delete(const char *userid, const char *name)
+int sync_sieve_delete(const char *userid, const char *script)
 {
     const char *sieve_path = user_sieve_path(userid);
-    char filename[2048];
-    char active[2048];
-    DIR *mbdir;
-    struct dirent *next = NULL;
-    struct stat sbuf;
-    int is_default = 0;
-    int count;
+    char name[2048];
 
-    if (!(mbdir = opendir(sieve_path)))
-        return(IMAP_IOERROR);
+    snprintf(name, sizeof(name), "%.*s",
+             (int) strlen(script) - SCRIPT_SUFFIX_LEN, script);
 
-    while((next = readdir(mbdir)) != NULL) {
-        if(!strcmp(next->d_name, ".") || !strcmp(next->d_name, ".."))
-            continue;
-
-        snprintf(filename, sizeof(filename), "%s/%s",
-                 sieve_path, next->d_name);
-
-        if (stat(filename, &sbuf) < 0)
-            continue;
-
-        if (!strcmp(next->d_name, "defaultbc")) {
-            if (sbuf.st_mode & S_IFLNK) {
-                count = readlink(filename, active, 2047);
-
-                if (count >= 0) {
-                    active[count] = '\0';
-                    if (!strcmp(active, name))
-                        is_default = 1;
-                }
-            }
-            continue;
-        }
-    }
-    closedir(mbdir);
-
-    if (is_default) {
-        snprintf(filename, sizeof(filename), "%s/defaultbc", sieve_path);
-        unlink(filename);
+    /* XXX  Do we NOT care about errors? */
+    if (sievedir_script_isactive(sieve_path, name)) {
+        sievedir_deactivate_script(sieve_path);
     }
 
-    snprintf(filename, sizeof(filename), "%s/%s", sieve_path, name);
-    unlink(filename);
+    sievedir_delete_script(sieve_path, name);
 
     sync_log_sieve(userid);
 
