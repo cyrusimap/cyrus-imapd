@@ -2487,7 +2487,7 @@ static int is_indexed_part(xapian_update_receiver_t *tr, const struct message_gu
 
     struct conversations_state *cstate = mailbox_get_cstate(tr->super.mailbox);
     if (!cstate) {
-        xsyslog(LOG_INFO, "can't open conversations", "mailbox=%s",
+        xsyslog(LOG_INFO, "can't open conversations", "mailbox=<%s>",
                 tr->super.mailbox->name);
         return 0;
     }
@@ -2498,7 +2498,7 @@ static int is_indexed_part(xapian_update_receiver_t *tr, const struct message_gu
     int r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, &rock);
     if (r == CYRUSDB_DONE) ret = SEARCH_INDEXLEVEL_BASIC;
     else if (r) {
-        xsyslog(LOG_ERR, "unexpected return code", "guid=%s r=%d err=%s",
+        xsyslog(LOG_ERR, "unexpected return code", "guid=<%s> r=<%d> err=<%s>",
                 message_guid_encode(guid), r, cyrusdb_strerror(r));
     }
     free(guidrep);
