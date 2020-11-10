@@ -3349,36 +3349,86 @@ participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *ev
     remove_icalprop(comp, ICAL_ATTENDEE_PROPERTY);
     remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
 
+    json_t *participants = json_object_get(event, "participants");
+    json_t *replyTo = json_incref(json_object_get(event, "replyTo"));
+    if (!JNOTNULL(participants) && !JNOTNULL(replyTo)) {
+        return;
+    }
+
+    struct buf buf = BUF_INITIALIZER;
     json_t *jval = NULL;
     const char *key = NULL;
 
-    /* If participants are set, replyTo must be set */
-    json_t *replyTo = json_object_get(event, "replyTo");
-    if (JNOTNULL(replyTo) && !json_object_size(replyTo)) {
-        jmap_parser_invalid(parser, "replyTo");
-    }
-    json_t *participants = json_object_get(event, "participants");
     if (JNOTNULL(participants) && !json_object_size(participants)) {
         jmap_parser_invalid(parser, "participants");
+        participants = NULL;
     }
-    if (JNOTNULL(replyTo) != JNOTNULL(participants)) {
-        jmap_parser_invalid(parser, "replyTo");
-        jmap_parser_invalid(parser, "participants");
-        return;
-    }
-    else if (!JNOTNULL(replyTo)) return;
 
-    /* OK, there's both replyTo and participants set. */
+    if (JNOTNULL(replyTo)) {
+        /* Validate client-supplied replyTo */
+        if (json_object_size(replyTo)) {
+            jmap_parser_push(parser, "replyTo");
+            json_object_foreach(replyTo, key, jval) {
+                if (!is_valid_rsvpmethod(key) || !json_is_string(jval)) {
+                    jmap_parser_invalid(parser, key);
+                    continue;
+                }
+            }
+            jmap_parser_pop(parser);
+        }
+        else jmap_parser_invalid(parser, "replyTo");
 
-    /* Parse replyTo */
-    jmap_parser_push(parser, "replyTo");
-    json_object_foreach(replyTo, key, jval) {
-        if (!is_valid_rsvpmethod(key) || !json_is_string(jval)) {
-            jmap_parser_invalid(parser, key);
-            continue;
+        if (!JNOTNULL(json_object_get(event, "participants"))) {
+            jmap_parser_invalid(parser, "participants");
         }
     }
-    jmap_parser_pop(parser);
+    else if (participants) {
+        /* Determine replyTo from owner */
+        replyTo = NULL;
+        jmap_parser_push(parser, "participants");
+        json_object_foreach(participants, key, jval) {
+            json_t *roles = json_object_get(jval, "roles");
+            if (!json_boolean_value(json_object_get(roles, "owner"))) {
+                continue;
+            }
+            /* This participant is an owner */
+            jmap_parser_push(parser, key);
+            json_t *sendTo = json_object_get(jval, "sendTo");
+            if (json_object_size(sendTo)) {
+                int is_valid = 1;
+                jmap_parser_push(parser, "sendTo");
+                const char *method;
+                json_t *juri;
+                json_object_foreach(sendTo, method, juri) {
+                    if (!is_valid_rsvpmethod(method) || !json_is_string(juri)) {
+                        jmap_parser_invalid(parser, method);
+                        is_valid = 0;
+                    }
+                }
+                jmap_parser_pop(parser);
+                if (is_valid) {
+                    replyTo = json_deep_copy(sendTo);
+                }
+            }
+            if (!replyTo) {
+                json_t *email = json_object_get(jval, "email");
+                if (json_is_string(email)) {
+                    buf_setcstr(&buf, "mailto:");
+                    buf_appendcstr(&buf, json_string_value(email));
+                    replyTo = json_pack("{s:s}", "imip", buf_cstring(&buf));
+                    buf_reset(&buf);
+                }
+            }
+            jmap_parser_pop(parser);
+            if (replyTo) break;
+        }
+        jmap_parser_pop(parser);
+    }
+
+    if (!json_object_size(replyTo)) {
+        jmap_parser_invalid(parser, "replyTo");
+        goto done;
+    }
 
     /* Map participant ids to their iCalendar CALADDRESS */
     hash_table caladdress_by_participant_id = HASH_TABLE_INITIALIZER;
@@ -3421,17 +3471,15 @@ participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *ev
     icalproperty *orga = icalproperty_new_organizer(orga_uri);
     /* Keep track of the RSVP URIs and their method */
     if (json_object_size(replyTo) > 1 || (strcmp(orga_method, "imip") && strcmp(orga_method, "other"))) {
-        struct buf buf = BUF_INITIALIZER;
         json_object_foreach(replyTo, key, jval) {
             buf_setcstr(&buf, key);
             buf_putc(&buf, ':');
             buf_appendcstr(&buf, json_string_value(jval));
             set_icalxparam(orga, JMAPICAL_XPARAM_RSVP_URI, buf_cstring(&buf), 0);
         }
-        buf_free(&buf);
+        buf_reset(&buf);
     }
     icalcomponent_add_property(comp, orga);
-
 
     /* Process participants */
     jmap_parser_push(parser, "participants");
@@ -3460,8 +3508,11 @@ participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *ev
         jmap_parser_pop(parser);
     }
     jmap_parser_pop(parser);
-
     free_hash_table(&caladdress_by_participant_id, free);
+
+done:
+    json_decref(replyTo);
+    buf_free(&buf);
 }
 
 static int is_valid_regrel(const char *rel)
