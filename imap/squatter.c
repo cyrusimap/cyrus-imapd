@@ -102,6 +102,7 @@ static int recursive_flag = 0;
 static int annotation_flag = 0;
 static int sleepmicroseconds = 0;
 static int allow_partials = 0;
+static int allow_duplicateparts = 0;
 static int reindex_partials = 0;
 static int reindex_minlevel = 0;
 static search_text_receiver_t *rx = NULL;
@@ -278,6 +279,8 @@ static int index_one(const char *name, int blocking)
         flags |= SEARCH_UPDATE_ALLOW_PARTIALS;
     if (reindex_partials)
         flags |= SEARCH_UPDATE_REINDEX_PARTIALS;
+    if (allow_duplicateparts)
+        flags |= SEARCH_UPDATE_ALLOW_DUPPARTS;
 
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &squat_namespace, NULL);
@@ -893,7 +896,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:N:RUBXZT:S:Fde:f:mn:riavpPL:Az:t:ouhl")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:N:RUBXZDT:S:Fde:f:mn:riavpPL:Az:t:ouhl")) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
@@ -936,6 +939,10 @@ int main(int argc, char **argv)
 
         case 'p':
             allow_partials = 1;
+            break;
+
+        case 'D':
+            allow_duplicateparts = 1;
             break;
 
         case 'N':

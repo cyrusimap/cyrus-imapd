@@ -205,6 +205,7 @@ extern void search_end_search(search_builder_t *);
 #define SEARCH_UPDATE_AUDIT (1<<4)
 #define SEARCH_UPDATE_ALLOW_PARTIALS (1<<5)
 #define SEARCH_UPDATE_REINDEX_PARTIALS (1<<6)
+#define SEARCH_UPDATE_ALLOW_DUPPARTS (1<<7)
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox *mailbox,
