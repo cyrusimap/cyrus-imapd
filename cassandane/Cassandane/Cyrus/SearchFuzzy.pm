@@ -1657,4 +1657,57 @@ sub test_squatter_partials
     $self->{instance}->getsyslog();
 }
 
+sub test_fuzzyalways_annot
+    :min_version_3_3 :needs_search_xapian :SearchFuzzyAlways
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message('test', body => 'body') || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Assert IMAP SEARCH uses fuzzy search by default";
+
+    # Fuzzy search uses stemming.
+    my $uids = $imap->search('body', 'bodies') || die;
+    $self->assert_deep_equals([1], $uids);
+    # But does not do substring search.
+    $uids = $imap->search('body', 'bod') || die;
+    $self->assert_deep_equals([], $uids);
+
+    xlog "Disable fuzzy search with annotation";
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/search-fuzzy-always';
+
+    # Must not set any mailbox other than INBOX.
+    $imap->create("INBOX.foo") or die "create INBOX.foo: $@";
+    $imap->setmetadata('INBOX.foo', $entry, 'off');
+    $self->assert_str_equals('no', $imap->get_last_completion_response());
+    # Must set a valid imapd.conf switch value.
+    $imap->setmetadata('INBOX', $entry, 'x');
+    $self->assert_str_equals('no', $imap->get_last_completion_response());
+    # Set annotation value.
+    $imap->setmetadata('INBOX', $entry, 'off');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    xlog "Assert annotation overrides IMAP SEARCH default";
+
+    # Regular search does no stemming.
+    $uids = $imap->search('body', 'bodies') || die;
+    $self->assert_deep_equals([], $uids);
+    # But does substring search.
+    $uids = $imap->search('body', 'bod') || die;
+    $self->assert_deep_equals([1], $uids);
+
+    xlog "Remove annotation and fall back to config";
+    $imap->setmetadata('INBOX', $entry, undef);
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    # Fuzzy search uses stemming.
+    $uids = $imap->search('body', 'bodies') || die;
+    $self->assert_deep_equals([1], $uids);
+    # But does not do substring search.
+    $uids = $imap->search('body', 'bod') || die;
+    $self->assert_deep_equals([], $uids);
+}
+
 1;
