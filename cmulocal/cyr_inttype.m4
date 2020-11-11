@@ -26,6 +26,9 @@ AC_DEFUN([CYR_INTTYPE],[
     dnl First, figure out what type of integer it is, by exploiting the
     dnl behaviour that redefining a variable name as the same type is only
     dnl a warning, but redefining it as a different type is an error.
+    save_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS=""
+
     AC_CACHE_CHECK(
         [underlying integer type of `$1'],
         [AS_TR_SH([cyr_cv_type_$1])],
@@ -91,4 +94,6 @@ AC_DEFUN([CYR_INTTYPE],[
     )
     AS_IF([test "x$AS_TR_SH([cyr_cv_parse_$1])" = "xunknown"],
           [AC_MSG_ERROR([Unable to determine strtol-like parse function for `$1'])])
+
+    CPPFLAGS="$save_CPPFLAGS"
 ])
