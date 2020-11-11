@@ -167,6 +167,9 @@ sub test_get_session
     $self->assert_not_null($session->{apiUrl});
     $self->assert_not_null($session->{downloadUrl});
     $self->assert_not_null($session->{uploadUrl});
+    if ($maj > 3 || ($maj == 3 && $min >= 3)) {
+        $self->assert_not_null($session->{eventSourceUrl});
+    }
     $self->assert_not_null($session->{state});
 
     # Validate server capabilities
@@ -572,6 +575,44 @@ sub test_require_conversations
             "@syslog"
         );
     }
+}
+
+sub test_eventsource
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $http = $self->{instance}->get_service("http");
+
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('200', $RawResponse->{status});
+    my $session = eval { decode_json($RawResponse->{content}) };
+    $self->assert_not_null($session);
+    my $url = $session->{eventSourceUrl};
+    $self->assert_not_null($url);
+
+    $self->assert_num_equals(1, $url =~ s/\{types\}/Email/g);
+    $self->assert_num_equals(1, $url =~ s/\{closeafter\}/state/g);
+    $self->assert_num_equals(1, $url =~ s/\{ping\}/0/g);
+
+    if (not $url =~ /^http/) {
+        $url = "http://".$http->host().":".$http->port().$url;
+    }
+
+    $RawResponse = $jmap->ua->get($url, $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('204', $RawResponse->{status});
 }
 
 1;
