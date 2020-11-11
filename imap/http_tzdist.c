@@ -778,7 +778,7 @@ static int action_capa(struct transaction_t *txn)
      * Extend this to include config file size/mtime if we add run-time options.
      */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld", (long) compile_time);
+    buf_printf(&txn->buf, TIME_T_FMT, compile_time);
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
     etag = message_guid_encode(&guid);
 
@@ -1033,7 +1033,7 @@ static int list_cb(const char *tzid, int tzidlen,
         hash_insert(tzidbuf, (void *) 0xDEADBEEF, lrock->tztable);
     }
 
-    sprintf(etag, "%u-%ld", strhash(tzidbuf), zi->dtstamp);
+    sprintf(etag, "%u-" TIME_T_FMT, strhash(tzidbuf), zi->dtstamp);
     time_to_rfc3339(zi->dtstamp, lastmod, RFC3339_DATETIME_MAX);
 
     tz = json_pack("{s:s s:s s:s s:s s:s}",
@@ -1140,7 +1140,7 @@ static int action_list(struct transaction_t *txn)
         }
 
         /* Parse and sanity check the changedsince token */
-        sscanf(param->s, "%u-%ld", &prefix, &changedsince);
+        sscanf(param->s, "%u-" TIME_T_FMT, &prefix, &changedsince);
         if (prefix != synctoken_prefix || changedsince > info.dtstamp) {
             changedsince = 0;
         }
@@ -1151,7 +1151,7 @@ static int action_list(struct transaction_t *txn)
 
     /* Generate ETag & Last-Modified from info record */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%u-%ld", synctoken_prefix, info.dtstamp);
+    buf_printf(&txn->buf, "%u-" TIME_T_FMT, synctoken_prefix, info.dtstamp);
     lastmod = info.dtstamp;
 
     /* Check any preconditions, including range request */
@@ -1830,7 +1830,7 @@ static int action_get(struct transaction_t *txn)
 
     /* Generate ETag & Last-Modified from info record */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%u-%ld", strhash(tzid), zi.dtstamp);
+    buf_printf(&txn->buf, "%u-" TIME_T_FMT, strhash(tzid), zi.dtstamp);
     lastmod = zi.dtstamp;
     freestrlist(zi.data);
 
@@ -2037,7 +2037,7 @@ static int action_expand(struct transaction_t *txn)
 
     /* Generate ETag & Last-Modified from info record */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%u-%ld", strhash(tzid), zi.dtstamp);
+    buf_printf(&txn->buf, "%u-" TIME_T_FMT, strhash(tzid), zi.dtstamp);
     lastmod = zi.dtstamp;
     freestrlist(zi.data);
 

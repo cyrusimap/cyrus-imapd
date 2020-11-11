@@ -255,7 +255,7 @@ static int action_murder(struct transaction_t *txn)
        and the config file size/mtime */
     assert(!buf_len(&txn->buf));
     stat(config_filename, &sbuf);
-    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
                sbuf.st_mtime, sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
@@ -341,7 +341,7 @@ static int action_menu(struct transaction_t *txn)
      * Extend this to include config file size/mtime if we add run-time options.
      */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld", (long) compile_time);
+    buf_printf(&txn->buf, TIME_T_FMT, compile_time);
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
     etag = message_guid_encode(&guid);
 
@@ -602,7 +602,7 @@ static int action_proc(struct transaction_t *txn)
         char buf[1024];
 
         while (fgets(buf, sizeof(buf), f)) {
-            if (sscanf(buf, "btime %ld\n", &boot_time) == 1) break;
+            if (sscanf(buf, "btime " TIME_T_FMT "\n", &boot_time) == 1) break;
             while (buf[strlen(buf)-1] != '\n' && fgets(buf, sizeof(buf), f)) {
             }
         }
@@ -793,7 +793,7 @@ static int action_df(struct transaction_t *txn)
        and the config file size/mtime */
     assert(!buf_len(&txn->buf));
     stat(config_filename, &sbuf);
-    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
                sbuf.st_mtime, sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
@@ -1125,7 +1125,7 @@ static int action_conf(struct transaction_t *txn)
        and the config file size/mtime */
     assert(!buf_len(&txn->buf));
     stat(config_filename, &sbuf);
-    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
                sbuf.st_mtime, sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));

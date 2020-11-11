@@ -1139,7 +1139,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
     }
 
     buf_reset(&txn->buf);
-    buf_printf(&txn->buf, "<%s-%ld@%s>", resource, time(0), config_servername);
+    buf_printf(&txn->buf, "<%s-" TIME_T_FMT "@%s>", resource, time(0), config_servername);
     spool_replace_header(xstrdup("Message-ID"),
                          buf_release(&txn->buf), txn->req_hdrs);
 

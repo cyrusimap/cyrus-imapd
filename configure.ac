@@ -244,6 +244,30 @@ AC_SUBST(CPPFLAGS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
 
+CYR_INTTYPE([time_t], [#include <time.h>])
+AC_DEFINE_UNQUOTED([TIME_T_FMT], ["$cyr_cv_format_time_t"],
+                   [printf formatter for time_t])
+AC_DEFINE_UNQUOTED([strtotimet(a,b,c)], [$cyr_cv_parse_time_t(a,b,c)],
+                   [strtol-like parse function for time_t])
+
+CYR_INTTYPE([size_t], [#include <stdlib.h>])
+AC_DEFINE_UNQUOTED([SIZE_T_FMT], ["$cyr_cv_format_size_t"],
+                   [printf formatter for size_t])
+AC_DEFINE_UNQUOTED([strtosizet(a,b,c)], [$cyr_cv_parse_size_t(a,b,c)],
+                   [strtol-like parse function for size_t])
+
+CYR_INTTYPE([off_t], [#include <sys/types.h>])
+AC_DEFINE_UNQUOTED([OFF_T_FMT], ["$cyr_cv_format_off_t"],
+                   [printf formatter for off_t])
+AC_DEFINE_UNQUOTED([strtoofft(a,b,c)], [$cyr_cv_parse_off_t(a,b,c)],
+                   [strtol-like parse function for off_t])
+
+CYR_INTTYPE([rlim_t], [#include <sys/resource.h>])
+AC_DEFINE_UNQUOTED([RLIM_T_FMT], ["$cyr_cv_format_rlim_t"],
+                   [printf formatter for rlim_t])
+AC_DEFINE_UNQUOTED([strtorlimt(a,b,c)], [$cyr_cv_parse_rlim_t(a,b,c)],
+                   [strtol-like parse function for rlim_t])
+
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
 
@@ -2333,27 +2357,6 @@ struct sockaddr_storage {
 
 #ifndef HAVE_SHUTDOWN
 #define shutdown(fd, mode) 0
-#endif
-
-/* *printf() macros */
-#if (SIZEOF_SIZE_T == SIZEOF_INT)
-#define SIZE_T_FMT "%u"
-#elif (SIZEOF_SIZE_T == SIZEOF_LONG)
-#define SIZE_T_FMT "%lu"
-#elif (SIZEOF_SIZE_T == SIZEOF_LONG_LONG_INT)
-#define SIZE_T_FMT "%llu"
-#else
-#error dont know what to use for SIZE_T_FMT
-#endif
-
-#if (SIZEOF_OFF_T == SIZEOF_LONG)
-#define OFF_T_FMT "%ld"
-#define strtoofft(nptr, endptr, base) strtol(nptr, endptr, base)
-#elif (SIZEOF_OFF_T == SIZEOF_LONG_LONG_INT)
-#define OFF_T_FMT "%lld"
-#define strtoofft(nptr, endptr, base) strtoll(nptr, endptr, base)
-#else
-#error dont know what to use for OFF_T_FMT
 #endif
 
 #ifndef HAVE_POSIX_FADVISE

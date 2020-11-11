@@ -295,7 +295,7 @@ EXPORTED int seen_write(struct seen *seendb, const char *uniqueid, struct seenda
                seendb->user, uniqueid);
     }
 
-    snprintf(data, sz, "%d %lu %u %lu %s", SEEN_VERSION,
+    snprintf(data, sz, "%d " TIME_T_FMT " %u " TIME_T_FMT " %s", SEEN_VERSION,
             sd->lastread, sd->lastuid,
             sd->lastchange, sd->seenuids);
     datalen = strlen(data);

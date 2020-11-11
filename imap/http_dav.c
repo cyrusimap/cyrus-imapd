@@ -1474,7 +1474,7 @@ void xml_add_lockdisc(xmlNodePtr node, const char *root, struct dav_data *data)
             }
         }
 
-        snprintf(tbuf, sizeof(tbuf), "Second-%lu", data->lock_expire - now);
+        snprintf(tbuf, sizeof(tbuf), "Second-" TIME_T_FMT, data->lock_expire - now);
         xmlNewChild(active, NULL, BAD_CAST "timeout", BAD_CAST tbuf);
 
         node1 = xmlNewChild(active, NULL, BAD_CAST "locktoken", NULL);
@@ -8674,7 +8674,7 @@ static void my_dav_init(struct buf *serverinfo)
     stat(config_filename, &sbuf);
     server_info_lastmod = MAX(compile_time, sbuf.st_mtime);
 
-    buf_printf(&server_info_token, "%ld-%ld-%ld", (long) compile_time,
+    buf_printf(&server_info_token, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
                sbuf.st_mtime, sbuf.st_size);
     message_guid_generate(&guid, buf_cstring(&server_info_token),
                           buf_len(&server_info_token));
