@@ -71,6 +71,8 @@
 #define JMAP_UPLOAD_TPL    "{accountId}/"
 #define JMAP_DOWNLOAD_COL  "download/"
 #define JMAP_DOWNLOAD_TPL  "{accountId}/{blobId}/{name}?accept={type}"
+#define JMAP_EVENTSOURCE_COL  "eventsource/"
+#define JMAP_EVENTSOURCE_TPL  "?types={types}&closeafter={closeafter}&ping={ping}"
 
 struct namespace jmap_namespace;
 
@@ -92,6 +94,7 @@ static int meth_post(struct transaction_t *txn, void *params);
 static int jmap_get_session(struct transaction_t *txn);
 static int jmap_download(struct transaction_t *txn);
 static int jmap_upload(struct transaction_t *txn);
+static int jmap_eventsource(struct transaction_t *txn);
 
 /* WebSocket handler */
 #define JMAP_WS_PROTOCOL   "jmap"
@@ -214,7 +217,8 @@ enum {
     JMAP_ENDPOINT_API,
     JMAP_ENDPOINT_WS,
     JMAP_ENDPOINT_UPLOAD,
-    JMAP_ENDPOINT_DOWNLOAD
+    JMAP_ENDPOINT_DOWNLOAD,
+    JMAP_ENDPOINT_EVENTSOURCE
 };
 
 static int jmap_parse_path(struct transaction_t *txn)
@@ -271,6 +275,11 @@ static int jmap_parse_path(struct transaction_t *txn)
             tgt->flags = JMAP_ENDPOINT_WS;
             tgt->allow = (txn->flags.ver == VER_2) ? ALLOW_CONNECT : ALLOW_READ;
         }
+        else if (!strncmp(tgt->collection,
+                          JMAP_EVENTSOURCE_COL, strlen(JMAP_EVENTSOURCE_COL))) {
+            tgt->flags = JMAP_ENDPOINT_EVENTSOURCE;
+            tgt->allow = ALLOW_READ;
+        }
         else {
             return HTTP_NOT_FOUND;
         }
@@ -304,6 +313,9 @@ static int meth_get(struct transaction_t *txn,
     else if ((txn->req_tgt.flags == JMAP_ENDPOINT_WS) &&
              (txn->flags.upgrade & UPGRADE_WS)) {
         return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
+    }
+    else if (txn->req_tgt.flags == JMAP_ENDPOINT_EVENTSOURCE) {
+        return jmap_eventsource(txn);
     }
 
     return HTTP_NO_CONTENT;
@@ -970,7 +982,8 @@ static int jmap_get_session(struct transaction_t *txn)
             json_string(JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL));
     json_object_set_new(jsession, "uploadUrl",
             json_string(JMAP_BASE_URL JMAP_UPLOAD_COL JMAP_UPLOAD_TPL));
-    /* TODO eventSourceUrl */
+    json_object_set_new(jsession, "eventSourceUrl",
+            json_string(JMAP_BASE_URL JMAP_EVENTSOURCE_COL JMAP_EVENTSOURCE_TPL));
 
     /* state */
     char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
@@ -1068,4 +1081,10 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
     }
 
     return ret;
+}
+
+/* Handle a GET on the eventsource endpoint */
+static int jmap_eventsource(struct transaction_t *txn __attribute__((unused)))
+{
+    return HTTP_NO_CONTENT;
 }
