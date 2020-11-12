@@ -255,6 +255,9 @@ static int annotation_set_mailboxopt(annotate_state_t *state,
 static int annotation_set_pop3showafter(annotate_state_t *state,
                                         struct annotate_entry_list *entry,
                                         int maywrite);
+static int annotation_set_fuzzyalways(annotate_state_t *state,
+                                        struct annotate_entry_list *entry,
+                                        int maywrite);
 static int annotation_set_specialuse(annotate_state_t *state,
                                      struct annotate_entry_list *entry,
                                      int maywrite);
@@ -2248,6 +2251,16 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         NULL,
         NULL
     },{
+        IMAP_ANNOT_NS "search-fuzzy-always",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_fromdb,
+        annotation_set_fuzzyalways,
+        NULL,
+        NULL
+    },{
         IMAP_ANNOT_NS "server",
         /* _get_server does its own access control check */
         ATTRIB_TYPE_STRING | ATTRIB_NO_FETCH_ACL_CHECK,
@@ -3354,6 +3367,25 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
     }
 
     return 0;
+}
+
+static int annotation_set_fuzzyalways(annotate_state_t *state,
+                                        struct annotate_entry_list *entry,
+                                        int maywrite)
+{
+    struct mailbox *mailbox = state->mailbox;
+
+    assert(mailbox);
+
+    if (!mboxname_isusermailbox(mailbox->name, /*isinbox*/1)) {
+        return IMAP_PERMISSION_DENIED;
+    }
+    if (buf_len(&entry->shared) &&
+            config_parse_switch(buf_cstring(&entry->shared)) < 0) {
+        return IMAP_ANNOTATION_BADENTRY;
+    }
+
+    return annotation_set_todb(state, entry, maywrite);
 }
 
 EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
