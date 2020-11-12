@@ -26,9 +26,6 @@ AC_DEFUN([CYR_INTTYPE],[
     dnl First, figure out what type of integer it is, by exploiting the
     dnl behaviour that redefining a variable name as the same type is only
     dnl a warning, but redefining it as a different type is an error.
-    save_CPPFLAGS="$CPPFLAGS"
-    CPPFLAGS=""
-
     AC_CACHE_CHECK(
         [underlying integer type of `$1'],
         [AS_TR_SH([cyr_cv_type_$1])],
@@ -36,6 +33,8 @@ AC_DEFUN([CYR_INTTYPE],[
             AC_LANG_PUSH([C])
             saved_CFLAGS=$CFLAGS
             CFLAGS=-Wno-error
+            saved_CPPFLAGS=$CPPFLAGS
+            CPPFLAGS=-Wno-error
             found=no
             for t in "int" "long int" "long long int" \
                     "unsigned int" "unsigned long int" "unsigned long long int"
@@ -48,6 +47,7 @@ AC_DEFUN([CYR_INTTYPE],[
             AS_IF([test "x$found" != "xyes"],
                   [eval AS_TR_SH([cyr_cv_type_$1])=unknown])
             CFLAGS=$saved_CFLAGS
+            CPPFLAGS=$saved_CPPFLAGS
             AC_LANG_POP([C])
         ]
     )
@@ -94,6 +94,4 @@ AC_DEFUN([CYR_INTTYPE],[
     )
     AS_IF([test "x$AS_TR_SH([cyr_cv_parse_$1])" = "xunknown"],
           [AC_MSG_ERROR([Unable to determine strtol-like parse function for `$1'])])
-
-    CPPFLAGS="$save_CPPFLAGS"
 ])
