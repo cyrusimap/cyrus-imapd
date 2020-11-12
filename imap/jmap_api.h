@@ -577,9 +577,10 @@ extern void jmap_parse_fini(struct jmap_parse *parse);
 extern json_t *jmap_parse_reply(struct jmap_parse *parse);
 
 
-extern json_t *jmap_get_sharewith(const mbentry_t *mbentry);
+extern json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights));
 extern int jmap_set_sharewith(struct mailbox *mbox,
-                              json_t *shareWith, int overwrite);
+                              json_t *shareWith, int overwrite,
+                              int (*patchrights)(int, json_t*));
 extern void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith);
 
 extern void jmap_mbentry_cache_free(jmap_req_t *req);

@@ -326,6 +326,90 @@ static json_t *getcalendar_defaultalerts(const char *userid,
     return alerts;
 }
 
+static json_t *calendarrights_to_jmap(int rights, int is_owner)
+{
+    static int writerights = DACL_WRITECONT|DACL_WRITEPROPS;
+    static int mayupdateprivate = DACL_PROPRSRC|ACL_SETSEEN;
+    static int mayupdateall = DACL_WRITECONT|DACL_WRITEPROPS|DACL_CHANGEORG;
+    static int mayremoveall = DACL_RMRSRC|DACL_CHANGEORG;
+    if (is_owner) rights |= JACL_RSVP;
+
+    return json_pack("{s:b s:b s:b s:b s:b s:b s:b s:b s:b s:b s:b}",
+            "mayReadFreeBusy",
+            (rights & JACL_READFB) == JACL_READFB,
+            "mayReadItems",
+            (rights & JACL_READITEMS) == JACL_READITEMS,
+            "mayAddItems",
+            (rights & JACL_ADDITEMS) == JACL_ADDITEMS,
+            "mayRSVP",
+            (rights & JACL_RSVP) == JACL_RSVP,
+            "mayDelete",
+            (rights & JACL_DELETE) == JACL_DELETE,
+            "mayAdmin",
+            (rights & JACL_ADMIN) == JACL_ADMIN,
+            "mayUpdatePrivate",
+            (rights & mayupdateprivate) == mayupdateprivate,
+            "mayUpdateOwn",
+            (rights & writerights) == writerights,
+            "mayUpdateAll",
+            (rights & mayupdateall) == mayupdateall,
+            "mayRemoveOwn",
+            (rights & DACL_RMRSRC) == DACL_RMRSRC,
+            "mayRemoveAll",
+            (rights & mayremoveall) == mayremoveall);
+}
+
+static json_t *calendarrights_to_sharewith(int rights)
+{
+    return calendarrights_to_jmap(rights, 0);
+}
+
+static int calendar_sharewith_to_rights(int rights, json_t *jsharewith)
+{
+    static int writerights = DACL_WRITECONT|DACL_WRITEPROPS;
+    static int mayupdateprivate = DACL_PROPRSRC|ACL_SETSEEN;
+    static int mayupdateall = DACL_WRITECONT|DACL_WRITEPROPS|DACL_CHANGEORG;
+    static int mayremoveall = DACL_RMRSRC|DACL_CHANGEORG;
+    int newrights = rights;
+
+    json_t *jval;
+    const char *name;
+    json_object_foreach(jsharewith, name, jval) {
+        int mask;
+        if (!strcmp("mayReadFreeBusy", name))
+            mask = JACL_READFB;
+        else if (!strcmp("mayReadItems", name))
+            mask = JACL_READITEMS;
+        else if (!strcmp("mayAddItems", name))
+            mask = JACL_ADDITEMS;
+        else if (!strcmp("mayRSVP", name))
+            mask = JACL_RSVP;
+        else if (!strcmp("mayDelete", name))
+            mask = JACL_DELETE;
+        else if (!strcmp("mayAdmin", name))
+            mask = JACL_ADMIN;
+        else if (!strcmp("mayUpdatePrivate", name))
+            mask = mayupdateprivate;
+        else if (!strcmp("mayUpdateOwn", name))
+            mask = writerights;
+        else if (!strcmp("mayUpdateAll", name))
+            mask = mayupdateall;
+        else if (!strcmp("mayRemoveOwn", name))
+            mask = DACL_RMRSRC;
+        else if (!strcmp("mayRemoveAll", name))
+            mask = mayremoveall;
+        else
+            continue;
+
+        if (json_boolean_value(jval))
+            newrights |= mask;
+        else
+            newrights &= ~mask;
+    }
+
+    return newrights;
+}
+
 static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct getcalendars_rock *rock = vrock;
@@ -552,39 +636,14 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     if (jmap_wantprop(rock->get->props, "myRights")) {
-        int writerights = DACL_WRITECONT|DACL_WRITEPROPS;
-        int mayupdateall = writerights|DACL_CHANGEORG;
-        int mayremoveall = DACL_RMRSRC|DACL_CHANGEORG;
-
         json_object_set_new(obj, "myRights",
-                            json_pack("{s:b s:b s:b s:b s:b s:b s:b s:b s:b s:b s:b}",
-                                      "mayReadFreeBusy",
-                                      (rights & JACL_READFB) == JACL_READFB,
-                                      "mayReadItems",
-                                      (rights & JACL_READITEMS) == JACL_READITEMS,
-                                      "mayAddItems",
-                                      (rights & JACL_ADDITEMS) == JACL_ADDITEMS,
-                                      "mayRSVP",
-                                      (rights & JACL_RSVP) == JACL_RSVP,
-                                      "mayDelete",
-                                      (rights & JACL_DELETE) == JACL_DELETE,
-                                      "mayAdmin",
-                                      (rights & JACL_ADMIN) == JACL_ADMIN,
-                                      // FIXME the JACL definitions for the following rights are incomplete
-                                      "mayUpdatePrivate",
-                                      (rights & DACL_PROPRSRC) == DACL_PROPRSRC,
-                                      "mayUpdateOwn",
-                                      (rights & writerights) == writerights,
-                                      "mayUpdateAll",
-                                      (rights & mayupdateall) == mayupdateall,
-                                      "mayRemoveOwn",
-                                      (rights & DACL_RMRSRC) == DACL_RMRSRC,
-                                      "mayRemoveAll",
-                                      (rights & mayremoveall) == mayremoveall));
+                calendarrights_to_jmap(rights,
+                    !strcmp(rock->req->userid, rock->req->accountid)));
     }
 
     if (jmap_wantprop(rock->get->props, "shareWith")) {
-        json_t *sharewith = jmap_get_sharewith(mbentry);
+        json_t *sharewith = jmap_get_sharewith(mbentry,
+                calendarrights_to_sharewith);
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
@@ -1440,8 +1499,8 @@ static int setcalendar_writeprops(jmap_req_t *req,
 
     /* shareWith */
     if (!r && props->share.With) {
-        r = jmap_set_sharewith(mbox,
-                               props->share.With, props->share.overwrite_acl);
+        r = jmap_set_sharewith(mbox, props->share.With,
+                props->share.overwrite_acl, calendar_sharewith_to_rights);
         if (!r) {
             char *userid = mboxname_to_userid(mailbox_name(mbox));
             r = caldav_update_shareacls(userid);
