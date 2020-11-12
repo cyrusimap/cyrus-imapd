@@ -4834,4 +4834,86 @@ sub test_mailbox_changes_rename
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
 }
 
+sub test_mailbox_set_sharewith
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    my $admin = $self->{adminstore}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    my $inboxId = $self->getinbox()->{id};
+    $self->assert_not_null($inboxId);
+
+    $self->{instance}->create_user("sharee");
+
+    xlog $self, "Overwrite shareWith";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            ids => [$inboxId],
+            properties => ['shareWith'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            update => {
+                $inboxId => {
+                    shareWith => {
+                        sharee => {
+                            mayRead => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R2'],
+        ['Mailbox/get', {
+            ids => [$inboxId],
+            properties => ['shareWith'],
+        }, 'R3'],
+    ], $using);
+
+    $self->assert_null($res->[0][1]{list}[0]{shareWith});
+    $self->assert_deep_equals({
+        sharee => {
+            mayRead => JSON::true,
+            mayWrite => JSON::false,
+            mayAdmin => JSON::false,
+        },
+    }, $res->[2][1]{list}[0]{shareWith});
+    my $acl = $admin->getacl("user.cassandane");
+    my %map = @$acl;
+    $self->assert_str_equals('lr', $map{sharee});
+
+    xlog $self, "Patch shareWith";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $inboxId => {
+                    'shareWith/sharee/mayWrite' => JSON::true,
+                },
+            },
+        }, 'R1'],
+        ['Mailbox/get', {
+            ids => [$inboxId],
+            properties => ['shareWith'],
+        }, 'R2'],
+    ], $using);
+
+    $self->assert_deep_equals({
+        sharee => {
+            mayRead => JSON::true,
+            mayWrite => JSON::true,
+            mayAdmin => JSON::false,
+        },
+    }, $res->[1][1]{list}[0]{shareWith});
+    $acl = $admin->getacl("user.cassandane");
+    %map = @$acl;
+    $self->assert_str_equals('lrswitedn', $map{sharee});
+}
+
 1;
