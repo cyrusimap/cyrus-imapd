@@ -2450,7 +2450,8 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
 
     /* Is this a part in the message we are just indexing? */
     if (doctype == XAPIAN_WRAP_DOCTYPE_PART && rec->uid == tr->super.uid &&
-            !strcmp(rec->mboxname, tr->super.mailbox->name)) {
+         !strcmp(rec->mailbox, (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
+                 tr->super.mailbox->uniqueid : tr->super.mailbox->name)) {
         return 0;
     }
 
