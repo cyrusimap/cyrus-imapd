@@ -386,6 +386,10 @@ sub test_shared
     if ($maj > 3 or ($maj == 3 and ($min > 1))) {
         $specific_entries{'/shared/vendor/cmu/cyrus-imapd/foldermodseq'} = 4;
     }
+    # We introduced vendor/cmu/cyrus-imapd/search-fuzzy-always in 3.3.0
+    if ($maj > 3 or ($maj == 3 and $min >= 3)) {
+        $specific_entries{'/shared/vendor/cmu/cyrus-imapd/search-fuzzy-always'} = undef;
+    }
     $self->assert_deep_equals(\%specific_entries, $r);
 
     # individual item fetch:
@@ -786,6 +790,10 @@ sub test_private
     # We introduced vendor/cmu/cyrus-imapd/sortorder in 3.1.3
     if ($maj > 3 or ($maj == 3 and ($min > 1 or ($min == 1 and $rev >= 3)))) {
         $specific_entries{'/private/vendor/cmu/cyrus-imapd/sortorder'} = undef;
+    }
+    # We introduced vendor/cmu/cyrus-imapd/search-fuzzy-always in 3.3.0
+    if ($maj > 3 or ($maj == 3 and $min >= 3)) {
+        $specific_entries{'/private/vendor/cmu/cyrus-imapd/search-fuzzy-always'} = undef;
     }
     $self->assert_deep_equals(\%specific_entries, $r);
 
