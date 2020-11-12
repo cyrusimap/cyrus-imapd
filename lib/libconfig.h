@@ -71,6 +71,9 @@ extern const char *config_backupstagingpath(void);
  * such as from an overflow string */
 extern int config_parseduration(const char *str, int defunit, int *out_duration);
 
+/* for parsing boolean switch values, returns -1 on error */
+extern int config_parse_switch(const char *p);
+
 /* cached configuration variables accessable to external world */
 extern const char *config_filename;
 extern const char *config_dir;

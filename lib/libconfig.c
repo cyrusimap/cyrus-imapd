@@ -684,6 +684,19 @@ static void config_add_overflowstring(const char *key, const char *value, int li
     }
 }
 
+EXPORTED int config_parse_switch(const char *p)
+{
+    if (*p == '0' || *p == 'n' ||
+            (*p == 'o' && p[1] == 'f') || *p == 'f') {
+        return 0;
+    }
+    else if (*p == '1' || *p == 'y' ||
+            (*p == 'o' && p[1] == 'n') || *p == 't') {
+        return 1;
+    }
+    return -1;
+}
+
 static void config_read_file(const char *filename)
 {
     FILE *infile = NULL;
@@ -906,20 +919,14 @@ static void config_read_file(const char *filename)
             }
             case OPT_SWITCH:
             {
-                if (*p == '0' || *p == 'n' ||
-                    (*p == 'o' && p[1] == 'f') || *p == 'f') {
-                    imapopts[opt].val.b = 0;
-                }
-                else if (*p == '1' || *p == 'y' ||
-                         (*p == 'o' && p[1] == 'n') || *p == 't') {
-                    imapopts[opt].val.b = 1;
-                }
-                else {
+                int b = config_parse_switch(p);
+                if (b < 0) {
                     /* error during conversion */
                     sprintf(errbuf, "non-switch value for %s in line %d",
                             imapopts[opt].optname, lineno);
                     fatal(errbuf, EX_CONFIG);
                 }
+                imapopts[opt].val.b = b;
                 break;
             }
             case OPT_ENUM:
