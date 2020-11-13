@@ -135,6 +135,7 @@ static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
+static unsigned max_msgsize = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -907,6 +908,12 @@ int service_init(int argc, char **argv, char **envp)
     else
         annotate_init(NULL, NULL);
     annotatemore_open();
+
+    /* Determine allowed maximum message size */
+    max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
+
+    /* If max_msgsize is 0, allow any size */
+    if (!max_msgsize) max_msgsize = UINT_MAX;
 
     /* Create a protgroup for input from the client and selected backend */
     protin = protgroup_new(2);
@@ -3648,7 +3655,7 @@ static int catenate_text(FILE *f, unsigned *totalsize, int *binary,
     r = getliteralsize(arg.s, c, &size, binary, parseerr);
     if (r) return r;
 
-    if (*totalsize > UINT_MAX - size) r = IMAP_MESSAGE_TOO_LARGE;
+    if (*totalsize > max_msgsize - size) r = IMAP_MESSAGE_TOO_LARGE;
 
     /* Catenate message part to stage */
     while (size) {
@@ -3717,7 +3724,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
                                  &backend_current, &backend_inbox, imapd_in);
             if (be) {
                 r = proxy_catenate_url(be, &url, f, &size, parseerr);
-                if (*totalsize > UINT_MAX - size)
+                if (*totalsize > max_msgsize - size)
                     r = IMAP_MESSAGE_TOO_LARGE;
                 else
                     *totalsize += size;
@@ -3779,7 +3786,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
         if (r == IMAP_BADURL)
             *parseerr = "No such message part";
         else if (!r) {
-            if (*totalsize > UINT_MAX - size)
+            if (*totalsize > max_msgsize - size)
                 r = IMAP_MESSAGE_TOO_LARGE;
             else
                 *totalsize += size;
@@ -4057,7 +4064,10 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
         else {
             /* Read size from literal */
             r = getliteralsize(arg.s, c, &size, &(curstage->binary), &parseerr);
-            if (!r && size == 0) r = IMAP_ZERO_LENGTH_LITERAL;
+            if (!r) {
+                if (size == 0) r = IMAP_ZERO_LENGTH_LITERAL;
+                else if (size > max_msgsize) r = IMAP_MESSAGE_TOO_LARGE;
+            }
             if (r) goto done;
 
             /* Copy message to stage */
