@@ -10742,6 +10742,9 @@ static void cmd_xrunannotator(const char *tag, const char *sequence,
     r = index_run_annotator(imapd_index, sequence, usinguid,
                             &imapd_namespace, imapd_userisadmin);
 
+    index_release(imapd_index);
+    sync_checkpoint(imapd_in);
+
     snprintf(mytime, sizeof(mytime), "%2.3f",
              (clock() - start) / (double) CLOCKS_PER_SEC);
 
