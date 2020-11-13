@@ -154,3 +154,19 @@ EXPORTED void *dynarray_nth(const struct dynarray *da, int idx)
         return NULL;
     return da->data + idx * da->membsize;
 }
+
+EXPORTED void dynarray_truncate(struct dynarray *da, int newlen)
+{
+    if (newlen == da->count)
+        return;
+
+    if (newlen > da->count) {
+        ensure_alloc(da, newlen);
+    } else {
+        int i;
+        for (i = newlen ; i < da->count ; i++) {
+            memset(da->data + i * da->membsize, 0, da->membsize);
+        }
+    }
+    da->count = newlen;
+}

@@ -35,4 +35,27 @@ static void test_basic(void)
     CU_ASSERT_PTR_NULL(da);
 }
 
+#define CU_ASSERT_MEMEQUAL(actual, expected, sz) \
+    CU_ASSERT_EQUAL(memcmp(actual, expected, sz), 0)
+
+static void test_truncate(void)
+{
+    struct dynarray *da = dynarray_new(sizeof(uint32_t));
+    uint32_t val;
+    for (val = 0; val < 64; val++) dynarray_append(da, &val);
+    CU_ASSERT_EQUAL(64, da->count);
+
+    val = 4;
+    CU_ASSERT_MEMEQUAL(da->data + sizeof(uint32_t)*4, &val, sizeof(uint32_t));
+
+    dynarray_truncate(da, 65);
+    CU_ASSERT_EQUAL(da->count, 65);
+    CU_ASSERT_MEMEQUAL(da->data + sizeof(uint32_t)*4, &val, sizeof(uint32_t));
+
+    dynarray_truncate(da, 3);
+    CU_ASSERT_EQUAL(da->count, 3);
+    val = 0;
+    CU_ASSERT_MEMEQUAL(da->data + sizeof(uint32_t)*4, &val, sizeof(uint32_t));
+}
+
 /* vim: set ft=c: */

@@ -58,6 +58,7 @@ extern void dynarray_append(struct dynarray *da, void *memb);
 extern void dynarray_set(struct dynarray *, int idx, void *memb);
 extern void *dynarray_nth(const struct dynarray *da, int idx);
 extern int dynarray_size(struct dynarray *da);
+extern void dynarray_truncate(struct dynarray *da, int newlen);
 
 
 #endif /* __CYRUS_DYNARRAY_H__ */
