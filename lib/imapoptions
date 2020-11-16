@@ -2164,7 +2164,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The number of messages to be indexed in one batch (default 20).
    Note that long batches may delay user commands or mail delivery. */
 
-{ "search_attachment_extractor_url", NULL, STRING, "3.3.0" }
+{ "search_attachment_extractor_url", NULL, STRING, "3.3.1" }
 /* A HTTP or HTTPS URL to extract search text from rich text attachments
    and other media during search indexing. The server at this URL must
    implement the following protocol:
@@ -2196,7 +2196,7 @@ If all partitions are over that limit, this feature is not used anymore.
    Xapian only.
  */
 
-{ "search_index_language", 0, SWITCH, "3.3.0" }
+{ "search_index_language", 0, SWITCH, "3.3.1" }
 /*
   If enabled, then messages bodies are stemmed by detected language
   in addition to the default English stemmer.
@@ -2624,10 +2624,10 @@ product version in the capabilities
    Default is 8192.  If there are more than this many messages appended
    to the mailbox, generate a synthetic partial state and send that. */
 
-{ "sync_cache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.3.2" }
-/* The cyrusdb backend to use for the replication. */
+{ "sync_cache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.3.1" }
+/* The cyrusdb backend to use for the replication cache. */
 
-{ "sync_cache_db_path", NULL, STRING, "3.3.2" }
+{ "sync_cache_db_path", NULL, STRING, "3.3.1" }
 /* The path for the replication cache.  Prefix with a
    channel name to apply for that channel.  NOTE, it's
    quite important to have a different one per backend! */
@@ -2686,7 +2686,7 @@ product version in the capabilities
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
-{ "sync_rightnow_channel", NULL, STRING, "3.3.0" }
+{ "sync_rightnow_channel", NULL, STRING, "3.3.1" }
 /* if set, run sync_client to this channel immediately.  As with channels,
    set this value to '""' to sync the default channel! */
 
