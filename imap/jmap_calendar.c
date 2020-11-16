@@ -233,6 +233,36 @@ jmap_method_t jmap_calendar_methods_standard[] = {
         &jmap_calendarsharenotification_querychanges,
         JMAP_NEED_CSTATE
     },
+    {
+        "CalendarShareNotification/get",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "CalendarShareNotification/set",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_set,
+        /*flags*/0
+    },
+    {
+        "CalendarShareNotification/changes",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_changes,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "CalendarShareNotification/query",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_query,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "CalendarShareNotification/queryChanges",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_querychanges,
+        JMAP_SHARED_CSTATE
+    },
     { NULL, NULL, NULL, 0}
 };
 
