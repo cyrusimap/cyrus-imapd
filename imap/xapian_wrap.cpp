@@ -554,6 +554,12 @@ int xapian_compact_dbs(const char *dest, const char **sources)
             }
         }
 
+        // add a single document with a single term so compact works.
+        // XXX - can remove when HONEY backend is safe without this
+        Xapian::Document metadoc;
+        metadoc.add_posting(std::string("XC"), 1, 1);
+        metadb.add_document(metadoc);
+
         // commit changes
         metadb.commit();
 
