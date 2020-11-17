@@ -358,6 +358,18 @@ static int xapstat(const char *path)
     int r;
 
     /* is there a glass file? */
+    char *honey = strconcat(path, "/iamhoney", (char *)NULL);
+    r = stat(honey, &sbuf);
+    free(honey);
+
+    /* zero byte file is the same as no database */
+    if (!r && !sbuf.st_size) {
+         r = -1;
+         errno = ENOENT;
+    }
+    if (!r) return 0;
+
+    /* is there a glass file? */
     char *glass = strconcat(path, "/iamglass", (char *)NULL);
     r = stat(glass, &sbuf);
     free(glass);
