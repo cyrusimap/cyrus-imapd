@@ -2945,6 +2945,10 @@ of the incoming network interface, or if no record is found, the
    See \fBcyr_virusscan(8)\fR for specification of the format of this file.
    If not specified, the builtin default template will be used. */
 
+{ "xapian_usehoney", 1, SWITCH, "3.3.1" }
+/* Enable the honey backend for compaction targets when compressing Xapian
+   databases */
+
 { "xbackup_enabled", 0, SWITCH, "3.0.0" }
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin
    users can use this command to provoke a replication of specified users

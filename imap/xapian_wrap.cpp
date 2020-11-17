@@ -569,7 +569,12 @@ int xapian_compact_dbs(const char *dest, const char **sources)
         // Compact database.
         static CyrusMetadataCompactor comp;
         // FULLER because we never write to compression targets again.
-        db.compact(dest, Xapian::Compactor::FULLER | Xapian::DBCOMPACT_MULTIPASS | Xapian::DB_BACKEND_GLASS, 0, comp);
+        int cflags = Xapian::Compactor::FULLER | Xapian::DBCOMPACT_MULTIPASS;
+        if (config_getswitch(IMAPOPT_XAPIAN_USEHONEY))
+            cflags |= Xapian::DB_BACKEND_HONEY;
+        else
+            cflags |= Xapian::DB_BACKEND_GLASS;
+        db.compact(dest, cflags, 0, comp);
         removedir(metadir.c_str());
     }
     catch (const Xapian::Error &err) {
