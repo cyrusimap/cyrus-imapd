@@ -445,7 +445,7 @@ static int do_xconvfetch(struct dlist *cidlist,
                          modseq_t ifchangedsince,
                          struct fetchargs *fetchargs);
 static void cmd_xsnippets(char *tag);
-static void cmd_xstats(char *tag, int c);
+static void cmd_xstats(char *tag);
 
 static void cmd_xapplepushservice(const char *tag,
                                   struct applepushserviceargs *applepushserviceargs);
@@ -1225,6 +1225,8 @@ static void imapd_check(struct backend *be, int usinguid)
     }
 }
 
+#define IS_EOL(c, pin) ((c = (c == '\r') ? prot_getc(pin) : c) == '\n')
+
 /*
  * Top-level command loop parsing
  */
@@ -1372,8 +1374,7 @@ static void cmdloop(void)
                     c = getword(imapd_in, &arg2);
                     if (c == EOF) goto missingargs;
                 }
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 if (imapd_userid) {
                     prot_printf(imapd_out, "%s BAD Already authenticated\r\n", tag.s);
@@ -1399,8 +1400,7 @@ static void cmdloop(void)
 
         case 'C':
             if (!strcmp(cmd.s, "Capability")) {
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_capability(tag.s);
 
                 prometheus_increment(CYRUS_IMAP_CAPABILITY_TOTAL);
@@ -1411,8 +1411,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getword(imapd_in, &arg1);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_compress(tag.s, arg1.s);
 
@@ -1421,8 +1420,7 @@ static void cmdloop(void)
 #endif /* HAVE_ZLIB */
             else if (!strcmp(cmd.s, "Check")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_noop(tag.s, cmd.s);
 
@@ -1439,8 +1437,7 @@ static void cmdloop(void)
                 if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
                 c = getastring(imapd_in, imapd_out, &arg2);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/0);
 
@@ -1457,8 +1454,7 @@ static void cmdloop(void)
                     c = parsecreateargs(&extargs);
                     if (c == EOF) goto badpartition;
                 }
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_create(tag.s, arg1.s, extargs, 0);
                 dlist_free(&extargs);
 
@@ -1466,8 +1462,7 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Close")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_close(tag.s, cmd.s);
 
@@ -1482,8 +1477,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_delete(tag.s, arg1.s, 0, 0);
 
                 prometheus_increment(CYRUS_IMAP_DELETE_TOTAL);
@@ -1495,8 +1489,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg2);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_setacl(tag.s, arg1.s, arg2.s, NULL);
 
                 prometheus_increment(CYRUS_IMAP_DELETEACL_TOTAL);
@@ -1513,8 +1506,7 @@ static void cmdloop(void)
                     uid_start = atoi(arg2.s);
                 }
 
-                if(c == '\r') c = prot_getc(imapd_in);
-                if(c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_dump(tag.s, arg1.s, uid_start);
                 prometheus_increment(CYRUS_IMAP_DUMP_TOTAL);
@@ -1532,8 +1524,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Expunge")) {
                 if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_expunge(tag.s, 0);
 
@@ -1574,8 +1565,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_getacl(tag.s, arg1.s);
 
                 prometheus_increment(CYRUS_IMAP_GETACL_TOTAL);
@@ -1600,8 +1590,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_getquota(tag.s, arg1.s);
 
                 prometheus_increment(CYRUS_IMAP_GETQUOTA_TOTAL);
@@ -1610,8 +1599,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_getquotaroot(tag.s, arg1.s);
 
                 prometheus_increment(CYRUS_IMAP_GETQUOTAROOT_TOTAL);
@@ -1636,8 +1624,7 @@ static void cmdloop(void)
             }
             else if (!imapd_userid) goto nologin;
             else if (!strcmp(cmd.s, "Idle") && idle_enabled()) {
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_idle(tag.s);
 
                 prometheus_increment(CYRUS_IMAP_IDLE_TOTAL);
@@ -1656,8 +1643,7 @@ static void cmdloop(void)
                 /* prometheus stat is counted by cmd_login based on success/failure */
             }
             else if (!strcmp(cmd.s, "Logout")) {
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 prometheus_increment(CYRUS_IMAP_LOGOUT_TOTAL);
 
@@ -1694,8 +1680,7 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg2);
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 memset(&listargs, 0, sizeof(struct listargs));
                 listargs.cmd = LIST_CMD_LSUB;
@@ -1713,8 +1698,7 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg2);
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_listrights(tag.s, arg1.s, arg2.s);
 
                 prometheus_increment(CYRUS_IMAP_LISTRIGHTS_TOTAL);
@@ -1744,8 +1728,7 @@ static void cmdloop(void)
                     c = parsecreateargs(&extargs);
                     if (c == EOF) goto badpartition;
                 }
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_create(tag.s, arg1.s, extargs, 1);
                 dlist_free(&extargs);
 
@@ -1757,8 +1740,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_delete(tag.s, arg1.s, 1, 1);
 
                 /* XXX prometheus_increment(CYRUS_IMAP_DELETE_TOTAL); */
@@ -1771,8 +1753,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_myrights(tag.s, arg1.s);
 
                 prometheus_increment(CYRUS_IMAP_MYRIGHTS_TOTAL);
@@ -1782,8 +1763,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if(c == EOF) goto missingargs;
-                if(c == '\r') c = prot_getc(imapd_in);
-                if(c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_mupdatepush(tag.s, arg1.s);
 
                 prometheus_increment(CYRUS_IMAP_MUPDATEPUSH_TOTAL);
@@ -1799,8 +1779,7 @@ static void cmdloop(void)
                 if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
                 c = getastring(imapd_in, imapd_out, &arg2);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/1);
 
@@ -1810,8 +1789,7 @@ static void cmdloop(void)
 
         case 'N':
             if (!strcmp(cmd.s, "Noop")) {
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_noop(tag.s, cmd.s);
 
@@ -1819,8 +1797,7 @@ static void cmdloop(void)
             }
             else if (!imapd_userid) goto nologin;
             else if (!strcmp(cmd.s, "Namespace")) {
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_namespace(tag.s);
 
                 /* XXX prometheus_increment(CYRUS_IMAP_NAMESPACE_TOTAL); */
@@ -1842,8 +1819,7 @@ static void cmdloop(void)
                     c = getword(imapd_in, &arg3);
                     if (!imparse_isatom(arg3.s)) goto badpartition;
                 }
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
 
                 /* XXX prometheus_increment(CYRUS_IMAP_RENAME_TOTAL); */
@@ -1862,8 +1838,7 @@ static void cmdloop(void)
                     else
                         goto extraargs;
                 }
-                if(c == '\r') c = prot_getc(imapd_in);
-                if(c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_reconstruct(tag.s, arg1.s, recursive);
 
                 /* XXX prometheus_increment(CYRUS_IMAP_RECONSTRUCT_TOTAL); */
@@ -1874,8 +1849,7 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg2);
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 memset(&listargs, 0, sizeof(struct listargs));
                 listargs.sel = LIST_SEL_REMOTE;
@@ -1893,8 +1867,7 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg2);
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 memset(&listargs, 0, sizeof(struct listargs));
                 listargs.cmd = LIST_CMD_LSUB;
@@ -1920,8 +1893,7 @@ static void cmdloop(void)
                     }
                 }
 
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_resetkey(tag.s, have_mbox ? arg1.s : 0,
                              have_mech ? arg2.s : 0);
                 /* XXX prometheus_increment(CYRUS_IMAP_RESETKEY_TOTAL); */
@@ -1937,8 +1909,7 @@ static void cmdloop(void)
                     goto badcmd;
                 }
 
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 /* XXX  discard any input pipelined after STARTTLS */
                 prot_flush(imapd_in);
@@ -2014,8 +1985,7 @@ static void cmdloop(void)
                     c = getastring(imapd_in, imapd_out, &arg2);
                 }
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 if (havenamespace) {
                     cmd_changesub(tag.s, arg1.s, arg2.s, 1);
                 }
@@ -2033,8 +2003,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg3);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s);
 
                 prometheus_increment(CYRUS_IMAP_SETACL_TOTAL);
@@ -2093,8 +2062,7 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg2);
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg3);
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 memset(&listargs, 0, sizeof(struct listargs));
                 listargs.ref = arg1.s;
@@ -2130,8 +2098,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Syncrestart")) {
                 if (!imapd_userisadmin) goto badcmd;
 
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 /* just clear the GUID cache */
                 cmd_syncrestart(tag.s, &reserve_list, 1);
@@ -2204,8 +2171,7 @@ static void cmdloop(void)
                     if (readonly) goto noreadonly;
                     c = getword(imapd_in, &arg1);
                     if (!imparse_issequence(arg1.s)) goto badsequence;
-                    if (c == '\r') c = prot_getc(imapd_in);
-                    if (c != '\n') goto extraargs;
+                    if (!IS_EOL(c, imapd_in)) goto extraargs;
                     cmd_expunge(tag.s, arg1.s);
 
                     prometheus_increment(CYRUS_IMAP_EXPUNGE_TOTAL);
@@ -2222,8 +2188,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Unauthenticate")) {
                 if (!imapd_userisadmin) goto badcmd;
 
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_unauthenticate(tag.s);
 
@@ -2239,8 +2204,7 @@ static void cmdloop(void)
                     c = getastring(imapd_in, imapd_out, &arg2);
                 }
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 if (havenamespace) {
                     cmd_changesub(tag.s, arg1.s, arg2.s, 0);
                 }
@@ -2252,8 +2216,7 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Unselect")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_close(tag.s, cmd.s);
 
@@ -2300,8 +2263,7 @@ static void cmdloop(void)
                     if (c == EOF) goto missingargs;
                 }
 
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_xbackup(tag.s, arg1.s, havechannel ? arg2.s : NULL);
 
@@ -2352,8 +2314,7 @@ static void cmdloop(void)
                     havepartition = 1;
                 }
 
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_xfer(tag.s, arg1.s, arg2.s,
                          (havepartition ? arg3.s : NULL));
@@ -2390,8 +2351,7 @@ static void cmdloop(void)
             xrunannotator:
                 c = getword(imapd_in, &arg1);
                 if (!arg1.len || !imparse_issequence(arg1.s)) goto badsequence;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_xrunannotator(tag.s, arg1.s, usinguid);
                 /* XXX prometheus_increment(CYRUS_IMAP_XRUNANNOTATOR_TOTAL); */
             }
@@ -2403,7 +2363,8 @@ static void cmdloop(void)
                 /* XXX prometheus_increment(CYRUS_IMAP_XSNIPPETS_TOTAL); */
             }
             else if (!strcmp(cmd.s, "Xstats")) {
-                cmd_xstats(tag.s, c);
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
+                cmd_xstats(tag.s);
             }
             else if (!strcmp(cmd.s, "Xwarmup")) {
                 /* XWARMUP doesn't need a mailbox to be selected */
@@ -2415,21 +2376,18 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_xkillmy(tag.s, arg1.s);
             }
             else if (!strcmp(cmd.s, "Xforever")) {
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_xforever(tag.s);
             }
             else if (!strcmp(cmd.s, "Xmeid")) {
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto extraargs;
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_xmeid(tag.s, arg1.s);
             }
 
@@ -2481,8 +2439,7 @@ static void cmdloop(void)
                     }
                 } while (c == ' ');
 
-                if (c == '\r') c = prot_getc(imapd_in);
-                if (c != '\n') goto aps_extraargs;
+                if (!IS_EOL(c, imapd_in)) goto aps_extraargs;
 
                 cmd_xapplepushservice(tag.s, &applepushserviceargs);
             }
@@ -2715,8 +2672,7 @@ static void cmd_login(char *tag, char *user)
     memset(&passwdbuf,0,sizeof(struct buf));
     c = getastring(imapd_in, imapd_out, &passwdbuf);
 
-    if(c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         buf_free(&passwdbuf);
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to LOGIN\r\n",
@@ -3189,8 +3145,7 @@ static void cmd_id(char *tag)
     }
 
     /* check for CRLF */
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Id\r\n", tag);
         eatline(imapd_in, c);
         return;
@@ -3444,8 +3399,7 @@ static void cmd_idle(char *tag)
     imapd_check(NULL, 1);
 
     if (c != EOF) {
-        if (!strcasecmp(arg.s, "Done") &&
-            (c = (c == '\r') ? prot_getc(imapd_in) : c) == '\n') {
+        if (!strcasecmp(arg.s, "Done") && IS_EOL(c, imapd_in)) {
             prot_printf(imapd_out, "%s OK %s\r\n", tag,
                         error_message(IMAP_OK_COMPLETED));
         }
@@ -4088,8 +4042,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
         eatline(imapd_in, c);
     } else {
         /* we should be looking at the end of the line */
-        if (c == '\r') c = prot_getc(imapd_in);
-        if (c != '\n') {
+        if (!IS_EOL(c, imapd_in)) {
             parseerr = "junk after literal";
             r = IMAP_PROTOCOL_ERROR;
             eatline(imapd_in, c);
@@ -4379,8 +4332,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
         c = prot_getc(imapd_in);
     }
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
         eatline(imapd_in, c);
@@ -5174,8 +5126,7 @@ badannotation:
         c = prot_getc(imapd_in);
     }
 
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
         eatline(imapd_in, c);
         goto freeargs;
@@ -5608,8 +5559,7 @@ void cmd_xconvmeta(const char *tag)
     }
 
     c = dlist_parse_asatomlist(&itemlist, 0, imapd_in);
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out, "%s BAD Failed to parse item list\r\n", tag);
         eatline(imapd_in, c);
         goto done;
@@ -6022,8 +5972,7 @@ static void cmd_store(char *tag, char *sequence, int usinguid)
         goto freeflags;
     }
 notflagsdammit:
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
         eatline(imapd_in, c);
         goto freeflags;
@@ -6121,8 +6070,7 @@ static void cmd_search(char *tag, int usinguid)
         return;
     }
 
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Search\r\n", tag);
         eatline(imapd_in, c);
         freesearchargs(searchargs);
@@ -6196,8 +6144,7 @@ static void cmd_sort(char *tag, int usinguid)
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) goto error;
 
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to Sort\r\n", tag);
         goto error;
@@ -6309,8 +6256,7 @@ void cmd_xconvsort(char *tag, int updates)
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) goto error;
 
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to Xconvsort\r\n", tag);
         goto error;
@@ -6430,8 +6376,7 @@ static void cmd_xconvmultisort(char *tag)
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) goto error;
 
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to XconvMultiSort\r\n", tag);
         goto error;
@@ -6508,8 +6453,7 @@ static void cmd_xsnippets(char *tag)
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) goto error;
 
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to Xsnippets\r\n", tag);
         goto error;
@@ -6538,7 +6482,7 @@ error:
     goto out;
 }
 
-static void cmd_xstats(char *tag, int c)
+static void cmd_xstats(char *tag)
 {
     int metric;
 
@@ -6553,17 +6497,6 @@ static void cmd_xstats(char *tag, int c)
         return;
     }
 
-    if (c == EOF) {
-        prot_printf(imapd_out, "%s BAD Syntax error in Xstats arguments\r\n", tag);
-        goto error;
-    }
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
-        prot_printf(imapd_out,
-                    "%s BAD Unexpected extra arguments to Xstats\r\n", tag);
-        goto error;
-    }
-
     prot_printf(imapd_out, "* XSTATS");
     for (metric = 0 ; metric < XSTATS_NUM_METRICS ; metric++)
         prot_printf(imapd_out, " %s %u", xstats_names[metric], xstats[metric]);
@@ -6572,9 +6505,6 @@ static void cmd_xstats(char *tag, int c)
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
                 error_message(IMAP_OK_COMPLETED));
     return;
-
-error:
-    eatline(imapd_in, (c == EOF ? ' ' : c));
 }
 
 /*
@@ -6627,8 +6557,7 @@ static void cmd_thread(char *tag, int usinguid)
         return;
     }
 
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to Thread\r\n", tag);
         eatline(imapd_in, c);
@@ -8216,8 +8145,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
     }
 
     /* check for CRLF */
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to List\r\n", tag);
         eatline(imapd_in, c);
@@ -9021,8 +8949,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
         else if (c != ' ') goto badlist;
     }
     c = prot_getc(imapd_in);
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out, "%s BAD Unexpected extra arguments to SETQUOTA\r\n", tag);
         eatline(imapd_in, c);
         return;
@@ -9407,8 +9334,7 @@ static void cmd_status(char *tag, char *name)
         goto done;
     }
 
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to Status\r\n", tag);
         eatline(imapd_in, c);
@@ -10203,8 +10129,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     }
 
     /* check for CRLF */
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to Getannotation\r\n",
                     tag);
@@ -10597,8 +10522,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     }
 
     /* check for CRLF */
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to Setannotation\r\n",
                     tag);
@@ -10666,8 +10590,7 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     }
 
     /* check for CRLF */
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to Setmetadata\r\n",
                     tag);
@@ -10851,8 +10774,7 @@ syntax_error:
 
     /* we're expecting no more arguments */
     c = prot_getc(imapd_in);
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') goto syntax_error;
+    if (!IS_EOL(c, imapd_in)) goto syntax_error;
 
     r = index_warmup(mbentry, warmup_flags, uids);
 
@@ -14095,8 +14017,7 @@ static void cmd_urlfetch(char *tag)
 
     prot_printf(imapd_out, "\r\n");
 
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to URLFETCH\r\n", tag);
         eatline(imapd_in, c);
@@ -14255,8 +14176,7 @@ static void cmd_genurlauth(char *tag)
 
     if (!first) prot_printf(imapd_out, "\r\n");
 
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to GENURLAUTH\r\n", tag);
         eatline(imapd_in, c);
@@ -14392,8 +14312,7 @@ static void cmd_enable(char *tag)
     } while (c == ' ');
 
     /* check for CRLF */
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to Enable\r\n", tag);
         eatline(imapd_in, c);
