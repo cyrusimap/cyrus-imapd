@@ -531,12 +531,10 @@ sub test_sieve_validate
     $self->assert_str_equals("invalidArguments", $res->[1][1]{type});
 
     $self->assert_str_equals("SieveScript/validate", $res->[2][0]);
-    $self->assert_equals(JSON::false, $res->[2][1]{isValid});
-    $self->assert_not_null($res->[2][1]{errorDescription});
+    $self->assert_str_equals("invalidScript", $res->[2][1]{error}{type});
 
     $self->assert_str_equals("SieveScript/validate", $res->[3][0]);
-    $self->assert_equals(JSON::true, $res->[3][1]{isValid});
-    $self->assert_null($res->[3][1]{errorDescription});
+    $self->assert_null($res->[3][1]{error});
 }
 
 sub test_sieve_test
