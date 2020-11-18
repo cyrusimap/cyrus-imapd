@@ -84,7 +84,7 @@ Internally, the main module for each database sets up struct of pointers
 to the cyrusdb functions it implements, which is registered in
 ``lib/cyrusdb.c``
 
-``lib/cyrus.c`` provides backend-agnostic wrapper functions for
+``lib/cyrusdb.c`` provides backend-agnostic wrapper functions for
 interacting with cyrusdb databases.
 
 A full example
@@ -309,7 +309,7 @@ something like::
 
     static int exists_cb(void rock attribute((unused)), [...])
     {
-        return CYRUSDB_DONE; / one is enough */
+        return CYRUSDB_DONE; /* one is enough */
     }
 
 and then use ``exists_cb`` as your ``foreach_cb`` and check if the
@@ -399,7 +399,7 @@ transaction, does the operation, then commits all within the
 Gotchas!
 --------
 
-*   NULL is permitted in both keys and values, though 'flat' and
+*   ``\0`` is permitted in both keys and values, though 'flat' and
     'quotalegacy' have 8-bit cleanliness issues.
 
 *   zero-length keys are not supported
