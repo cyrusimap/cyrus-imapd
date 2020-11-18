@@ -50,7 +50,7 @@ Internally, the main module for each database sets up struct of pointers
 to the cyrusdb functions it implements, which is registered in
 ``lib/cyrusdb.c``
 
-``lib/cyrus.c`` provides backend-agnostic wrapper functions for
+``lib/cyrusdb.c`` provides backend-agnostic wrapper functions for
 interacting with cyrusdb databases.
 
 A full example
