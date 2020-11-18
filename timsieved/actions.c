@@ -250,6 +250,7 @@ int putscript(struct protstream *conn, const struct buf *name,
   if (verify_only) {
       result = sieve_script_parse_string(interp, buf_cstring(data), &err, &s);
       sieve_script_free(&s);
+      if (result != SIEVE_OK) result = SIEVEDIR_INVALID;
   }
   else {
       /* see if this would put the user over quota */
