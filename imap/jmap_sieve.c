@@ -1230,7 +1230,6 @@ static int jmap_sieve_validate(struct jmap_req *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     const char *key, *content = NULL;
     json_t *arg, *err = NULL;
-    int is_valid = 0;
 
     /* Parse request */
     json_object_foreach(req->args, key, arg) {
@@ -1265,16 +1264,15 @@ static int jmap_sieve_validate(struct jmap_req *req)
     if (s) {
         sieve_script_free(&s);
         err = json_null();
-        is_valid = 1;
     }
     else {
-        err = json_string(errors);
+        err = json_pack("{s:s, s:s}", "type", "invalidScript",
+                        "description", errors);
         free(errors);
     }
 
     /* Build response */
-    json_t *res = json_pack("{s:b s:o}", "isValid", is_valid,
-                            "errorDescription", err);
+    json_t *res = json_pack("{s:o}", "error", err);
     jmap_ok(req, res);
 
 done:
