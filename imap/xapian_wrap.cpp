@@ -514,7 +514,8 @@ int xapian_compact_dbs(const char *dest, const char **sources)
             // Aggregate language counts.
             r = calculate_language_counts(subdb, lang_counts);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: Xapian: compact %s: corrupt language metadata", thispath);
+                xsyslog(LOG_ERR, "IOERROR: corrupt language metadata",
+                                 "path=<%s>", thispath);
                 return r;
             }
         }
@@ -535,8 +536,9 @@ int xapian_compact_dbs(const char *dest, const char **sources)
         write_language_counts(newdb, lang_counts);
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception compact_dbs: %s (%s)",
-                err.get_description().c_str(), thispath);
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s> path=<%s>",
+                         err.get_description().c_str(), thispath);
         r = IMAP_IOERROR;
     }
 
@@ -769,8 +771,9 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode, int nosyn
         r = IMAP_MAILBOX_LOCKED;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception dbw_open: %s (%s)",
-                    err.get_description().c_str(), thispath);
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s> path=<%s>",
+                         err.get_description().c_str(), thispath);
         r = IMAP_IOERROR;
     }
 
@@ -787,8 +790,9 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode, int nosyn
                 ptrarray_append(&dbw->otherdbs, new Xapian::Database{*paths++});
             }
             catch (const Xapian::Error &err) {
-                syslog(LOG_ERR, "IOERROR: Xapian: caught exception dbw_open read: %s (%s)",
-                            err.get_description().c_str(), thispath);
+                xsyslog(LOG_ERR, "IOERROR: reading database",
+                                 "exception=<%s> path=<%s>",
+                                 err.get_description().c_str(), thispath);
             }
         }
     }
@@ -816,8 +820,9 @@ void xapian_dbw_close(xapian_dbw_t *dbw)
         free(dbw);
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception dbw_close: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
     }
 }
 
@@ -828,8 +833,9 @@ int xapian_dbw_begin_txn(xapian_dbw_t *dbw)
         dbw->database->begin_transaction();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception begin_txn: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         r = IMAP_IOERROR;
     }
     return r;
@@ -842,8 +848,9 @@ int xapian_dbw_commit_txn(xapian_dbw_t *dbw)
         dbw->database->commit_transaction();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception commit_txn: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         r = IMAP_IOERROR;
     }
     return r;
@@ -856,8 +863,9 @@ int xapian_dbw_cancel_txn(xapian_dbw_t *dbw)
         dbw->database->cancel_transaction();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception cancel_txn: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         r = IMAP_IOERROR;
     }
     return r;
@@ -882,8 +890,9 @@ int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, cha
         dbw->term_generator->set_termpos(1);
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception begin_doc: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         r = IMAP_IOERROR;
     }
     return r;
@@ -1110,7 +1119,9 @@ int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
         if (config_getswitch(IMAPOPT_SEARCH_INDEX_LANGUAGE)){
             // Index by language.
 #ifndef HAVE_CLD2
-            syslog(LOG_ERR, "IOERROR: Xapian: language indexing requires CLD2 library");
+            // XXX is this really an "IOERROR"?
+            xsyslog(LOG_ERR, "IOERROR: language indexing requires CLD2 library",
+                             NULL);
             return IMAP_IOERROR;
 #else
 
@@ -1203,8 +1214,9 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
         dbw->term_generator->increase_termpos();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception doc_part: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         r = IMAP_IOERROR;
     }
     return r;
@@ -1256,8 +1268,9 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
         dbw->subjects->clear();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception end_doc: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         r = IMAP_IOERROR;
     }
     return r;
@@ -1270,8 +1283,9 @@ unsigned long xapian_dbw_total_length(xapian_dbw_t *dbw)
         res = dbw->database->get_total_length();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception total_size: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
     }
     return res;
 }
@@ -1347,8 +1361,9 @@ static int xapian_db_init(xapian_db_t *db)
         }
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception db_open: %s: %s",
-                "<inmemory>", err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         r = IMAP_IOERROR;
     }
 
@@ -1403,8 +1418,9 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
         if (r) goto done;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception db_open: %s: %s",
-                    thispath, err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s> path=<%s>",
+                         err.get_description().c_str(), thispath);
         r = IMAP_IOERROR;
     }
 
@@ -1455,8 +1471,9 @@ void xapian_db_close(xapian_db_t *db)
     }
     catch (const Xapian::Error &err) {
         /* XXX - memory leak? */
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception db_close: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
     }
 }
 
@@ -1883,8 +1900,9 @@ xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *
         return qq;
 
     } catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception match_internal: %s",
-                err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         return 0;
     }
 }
@@ -1904,8 +1922,11 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
 
     int min_version = *db->db_versions->begin();
     if (min_version < XAPIAN_DB_MIN_SUPPORTED_VERSION) {
-        syslog(LOG_ERR, "IOERROR: Xapian: db versions < %d are deprecated. Reindex your dbs.",
-                XAPIAN_DB_MIN_SUPPORTED_VERSION);
+        xsyslog(LOG_WARNING,
+                "deprecated database version, reindex required",
+                "version=<%d> min_supported_version=<%d> paths=<%s>",
+                min_version, XAPIAN_DB_MIN_SUPPORTED_VERSION,
+                db->paths->c_str());
     }
 
     Xapian::Query *q = xapian_query_new_match_internal(db, partnum, str);
@@ -1951,8 +1972,9 @@ xapian_query_t *xapian_query_new_compound(const xapian_db_t *db __attribute__((u
         return (xapian_query_t *)compound;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception new_compound: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         return 0;
     }
 }
@@ -1973,8 +1995,9 @@ xapian_query_t *xapian_query_new_not(const xapian_db_t *db __attribute__((unused
         return (xapian_query_t *)qq;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception new_not: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         return 0;
     }
 }
@@ -1998,8 +2021,9 @@ xapian_query_t *xapian_query_new_has_doctype(const xapian_db_t *db __attribute__
         return (xapian_query_t *)qq;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception new_filter_doctype: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         return 0;
     }
 }
@@ -2010,8 +2034,9 @@ void xapian_query_free(xapian_query_t *qq)
         delete (Xapian::Query *)qq;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception query_free: %s",
-                    err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
     }
 }
 
@@ -2038,14 +2063,16 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
 
             /* ignore documents with no cyrusid.  Shouldn't happen, but has been seen */
             if (cyrusid.length() != 43) {
-                syslog(LOG_ERR, "IOERROR: Xapian: zero length cyrusid for document id %u in index files %s",
-                                d.get_docid(), db->paths->c_str());
+                xsyslog(LOG_ERR, "IOERROR: skipping document with zero-length cyrusid",
+                                 "documentid=<%u> paths=<%s>",
+                                 d.get_docid(), db->paths->c_str());
                 continue;
             }
             const char *cstr = cyrusid.c_str();
             if (cstr[0] != '*' || !isalpha(cstr[1]) || cstr[2] != '*') {
-                syslog(LOG_ERR, "IOERROR: Xapian: invalid cyrusid %s for document id %u in index files %s",
-                                cstr, d.get_docid(), db->paths->c_str());
+                xsyslog(LOG_ERR, "IOERROR: skipping document with invalid cyrusid",
+                                 "cyrusid=<%s> documentid=<%u> paths=<%s>",
+                                 cstr, d.get_docid(), db->paths->c_str());
                 continue;
             }
             if (n >= size) throw Xapian::DatabaseError("Too many records in MSet");
@@ -2056,9 +2083,10 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
         }
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception query_run: %s [query=%s]",
-                    err.get_description().c_str(),
-                    query ? query->get_description().c_str() : "<null>");
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s> query=<%s>",
+                         err.get_description().c_str(),
+                         query ? query->get_description().c_str() : "");
         free(data);
         return IMAP_IOERROR;
     }
@@ -2229,8 +2257,9 @@ int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
             buf_appendcstr(snipgen->buf, snippet.c_str());
         }
     } catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception doc_part: %s",
-                err.get_description().c_str());
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s>",
+                         err.get_description().c_str());
         r = IMAP_IOERROR;
     }
     return r;
@@ -2409,7 +2438,9 @@ int xapian_filter(const char *dest, const char **sources,
         std::map<const std::string, unsigned> lang_counts;
         r = calculate_language_counts(destdb, lang_counts);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: Xapian: filter %s: corrupt metadata", dest);
+            xsyslog(LOG_ERR, "IOERROR: corrupt metadata",
+                             "filter=<%s>",
+                             dest);
             return r;
         }
         write_language_counts(destdb, lang_counts);
@@ -2418,8 +2449,9 @@ int xapian_filter(const char *dest, const char **sources,
         destdb.commit();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception filter: %s (%s)",
-               err.get_description().c_str(), thispath);
+        xsyslog(LOG_ERR, "IOERROR: caught exception",
+                         "exception=<%s> path=<%s>",
+                         err.get_description().c_str(), thispath);
         r = IMAP_IOERROR;
     }
 
