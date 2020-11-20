@@ -296,6 +296,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    but might be useful in the meantime for supporting old clients that
    do not implement the RFC 5464 IMAP METADATA extension. */
 
+{ "append_maxsize", 0, INT, "3.3.2" }
+/* The size in kilobytes of the largest message that can be appended
+   via IMAP.  If zero, no limit (i.e UINT32_MAX) */
+
 { "aps_topic", NULL, STRING, "3.0.0" }
 /* Topic for Apple Push Service registration. */
 { "aps_topic_caldav", NULL, STRING, "3.0.0" }
