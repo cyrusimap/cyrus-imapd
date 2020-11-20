@@ -1770,6 +1770,7 @@ static void sched_deliver_local(const char *sender, const char *recipient,
         goto done;
     }
     free(mailboxname);
+    mailboxname = NULL;
 
     /* Get METHOD of the iTIP message */
     method = icalcomponent_get_method(sched_data->itip);
