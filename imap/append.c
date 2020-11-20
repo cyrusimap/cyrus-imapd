@@ -1074,7 +1074,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
     /* Write the new message record */
     r = msgrecord_append(msgrec);
-    if (r) return r;
+    if (r) goto out;
 
     if (in_object_storage) {  // must delete local file
         if (unlink(fname) != 0) // unlink should do it.
