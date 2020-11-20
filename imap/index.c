@@ -4550,7 +4550,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
                    unsigned params, const char *section,
                    unsigned long start_octet, unsigned long octet_count,
-                   struct protstream *pout, unsigned long *outsize)
+                   struct protstream *pout, size_t maxsize, unsigned long *outsize)
 {
     /* dumbass eM_Client sends this:
      * A4 APPEND "INBOX.Junk Mail" () "14-Jul-2013 17:01:02 +0000"
@@ -4721,6 +4721,11 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     }
     else if (start_octet + n < start_octet || start_octet + n > size) {
         n = size - start_octet;
+    }
+
+    if (n > maxsize) {
+        r = IMAP_MESSAGE_TOO_LARGE;
+        goto done;
     }
 
     if (outsize) {

@@ -303,7 +303,7 @@ extern struct seqset *index_vanished(struct index_state *state,
 extern int index_urlfetch(struct index_state *state, uint32_t msgno,
                           unsigned params, const char *section,
                           unsigned long start_octet, unsigned long octet_count,
-                          struct protstream *pout, unsigned long *size);
+                          struct protstream *pout, size_t maxsize, unsigned long *size);
 extern char *index_get_msgid(struct index_state *state, uint32_t msgno);
 extern struct nntp_overview *index_overview(struct index_state *state,
                                             uint32_t msgno);
