@@ -865,6 +865,33 @@ out:
     return r;
 }
 
+struct findstage_cb_rock {
+    const char *partition;
+    char *stagefile;
+    size_t size;
+};
+
+static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct findstage_cb_rock *rock = vrock;
+    mbentry_t *mbentry = NULL;
+
+    int r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
+    if (r) return 0;
+
+    if (!strcmp(rock->partition, mbentry->partition)) {
+        strlcpy(rock->stagefile,
+                mboxname_datapath(mbentry->partition, mbentry->name,
+                                  mbentry->uniqueid, rec->uid),
+                rock->size);
+        r = CYRUSDB_DONE;
+    }
+
+    mboxlist_entry_free(&mbentry);
+
+    return r;
+}
+
 /*
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
@@ -892,7 +919,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 #endif
 
     /* for staging */
-    char stagefile[MAX_MAILBOX_PATH+1];
+    char stagefile[MAX_MAILBOX_PATH+1] = "";
 
     assert(stage != NULL && stage->parts.count);
 
@@ -906,6 +933,30 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         else
             r = IMAP_IOERROR;
         if (r) goto out;
+    }
+
+    if (!nolink) {
+        /* attempt to find an existing message with the same guid
+           and use it as the stagefile */
+        struct conversations_state *cstate, *mycstate = NULL;
+
+        cstate = conversations_get_mbox(mailbox->name);
+        if (!cstate) {
+            r = conversations_open_mbox(mailbox->name, 1/*shared*/, &mycstate);
+            cstate = mycstate;
+        }
+
+        if (cstate) {
+            struct findstage_cb_rock rock =
+                { mailbox->part, stagefile, sizeof(stagefile) };
+
+            conversations_guid_foreach(cstate, message_guid_encode(&(*body)->guid),
+                                       findstage_cb, &rock);
+
+            if (mycstate) conversations_abort(&mycstate);
+
+            if (*stagefile) goto have_stagefile;
+        }
     }
 
     /* xxx check errors */
@@ -952,6 +1003,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         strarray_append(&stage->parts, stagefile);
     }
 
+  have_stagefile:
     /* 'stagefile' contains the message and is on the same partition
        as the mailbox we're looking at */
 
