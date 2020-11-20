@@ -3828,6 +3828,8 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
     const char *parseerr = NULL, *url = NULL;
     struct appendstage *curstage;
     mbentry_t *mbentry = NULL;
+    size_t maxsize = config_getint(IMAPOPT_APPEND_MAXSIZE) * 1024;
+    if (!maxsize) maxsize = UINT32_MAX;
 
     memset(&appendstate, 0, sizeof(struct appendstate));
 
@@ -4003,12 +4005,14 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
             size = 0;
             r = append_catenate(curstage->f, cur_name, &size,
                                 &(curstage->binary), &parseerr, &url);
+            if (!r && size > maxsize) r = IMAP_MESSAGE_TOO_LARGE;
             if (r) goto done;
         }
         else {
             /* Read size from literal */
             r = getliteralsize(arg.s, c, &size, &(curstage->binary), &parseerr);
             if (!r && size == 0) r = IMAP_ZERO_LENGTH_LITERAL;
+            if (!r && size > maxsize) r = IMAP_MESSAGE_TOO_LARGE;
             if (r) goto done;
 
             /* Copy message to stage */
