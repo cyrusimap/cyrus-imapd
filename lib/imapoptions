@@ -2539,6 +2539,11 @@ product version in the capabilities
    extending that list in the future or adding your own
    if needed. */
 
+{ "specialuse_nochildren", NULL, STRING, "3.3.2" }
+/* Whitespace separated list of special-use attributes that may not contain
+   child folders.  If set, mailboxes with any of these attributes may not
+   have child folders created. */
+
 { "specialuse_protect", "\\Archive \\Drafts \\Important \\Junk \\Sent \\Trash", STRING, "3.1.7" }
 /* Whitespace separated list of special-use attributes
    to protect the mailboxes for.  If set, don't allow
