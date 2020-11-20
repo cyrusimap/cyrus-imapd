@@ -3533,7 +3533,7 @@ static int isokflag(char *s, int *isseen)
     }
 }
 
-static int getliteralsize(const char *p, int c,
+static int getliteralsize(const char *p, int c, size_t maxsize,
                           unsigned *size, int *binary, const char **parseerr)
 
 {
@@ -3572,6 +3572,9 @@ static int getliteralsize(const char *p, int c,
         return IMAP_PROTOCOL_ERROR;
     }
 
+    if (num > maxsize)
+        return IMAP_MESSAGE_TOO_LARGE;
+
     if (!isnowait) {
         /* Tell client to send the message */
         prot_printf(imapd_out, "+ go ahead\r\n");
@@ -3583,7 +3586,7 @@ static int getliteralsize(const char *p, int c,
     return 0;
 }
 
-static int catenate_text(FILE *f, unsigned *totalsize, int *binary,
+static int catenate_text(FILE *f, size_t maxsize, unsigned *totalsize, int *binary,
                          const char **parseerr)
 {
     int c;
@@ -3596,10 +3599,8 @@ static int catenate_text(FILE *f, unsigned *totalsize, int *binary,
     c = getword(imapd_in, &arg);
 
     /* Read size from literal */
-    r = getliteralsize(arg.s, c, &size, binary, parseerr);
+    r = getliteralsize(arg.s, c, maxsize - *totalsize, &size, binary, parseerr);
     if (r) return r;
-
-    if (*totalsize > UINT_MAX - size) r = IMAP_MESSAGE_TOO_LARGE;
 
     /* Catenate message part to stage */
     while (size) {
@@ -3628,7 +3629,7 @@ static int catenate_text(FILE *f, unsigned *totalsize, int *binary,
 }
 
 static int catenate_url(const char *s, const char *cur_name, FILE *f,
-                        unsigned *totalsize, const char **parseerr)
+                        size_t maxsize, unsigned *totalsize, const char **parseerr)
 {
     struct imapurl url;
     struct index_state *state;
@@ -3667,11 +3668,8 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
                                  proxy_userid, &backend_cached,
                                  &backend_current, &backend_inbox, imapd_in);
             if (be) {
-                r = proxy_catenate_url(be, &url, f, &size, parseerr);
-                if (*totalsize > UINT_MAX - size)
-                    r = IMAP_MESSAGE_TOO_LARGE;
-                else
-                    *totalsize += size;
+                r = proxy_catenate_url(be, &url, f, maxsize - *totalsize, &size, parseerr);
+                *totalsize += size;
             }
             else
                 r = IMAP_SERVER_UNAVAILABLE;
@@ -3726,14 +3724,12 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
         struct protstream *s = prot_new(fileno(f), 1);
 
         r = index_urlfetch(state, msgno, 0, url.section,
-                           url.start_octet, url.octet_count, s, &size);
+                           url.start_octet, url.octet_count, s,
+                           maxsize - *totalsize, &size);
         if (r == IMAP_BADURL)
             *parseerr = "No such message part";
         else if (!r) {
-            if (*totalsize > UINT_MAX - size)
-                r = IMAP_MESSAGE_TOO_LARGE;
-            else
-                *totalsize += size;
+            *totalsize += size;
         }
 
         prot_flush(s);
@@ -3750,7 +3746,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
     return r;
 }
 
-static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
+static int append_catenate(FILE *f, const char *cur_name, size_t maxsize, unsigned *totalsize,
                            int *binary, const char **parseerr, const char **url)
 {
     int c, r = 0;
@@ -3764,7 +3760,7 @@ static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
         }
 
         if (!strcasecmp(arg.s, "TEXT")) {
-            int r1 = catenate_text(f, totalsize, binary, parseerr);
+            int r1 = catenate_text(f, maxsize, totalsize, binary, parseerr);
             if (r1) return r1;
 
             /* if we see a SP, we're trying to catenate more than one part */
@@ -3780,7 +3776,7 @@ static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
             }
 
             if (!r) {
-                r = catenate_url(arg.s, cur_name, f, totalsize, parseerr);
+                r = catenate_url(arg.s, cur_name, f, maxsize, totalsize, parseerr);
                 if (r) {
                     *url = arg.s;
                     return r;
@@ -4003,16 +3999,14 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
 
             /* Catenate the message part(s) to stage */
             size = 0;
-            r = append_catenate(curstage->f, cur_name, &size,
+            r = append_catenate(curstage->f, cur_name, maxsize, &size,
                                 &(curstage->binary), &parseerr, &url);
-            if (!r && size > maxsize) r = IMAP_MESSAGE_TOO_LARGE;
             if (r) goto done;
         }
         else {
             /* Read size from literal */
-            r = getliteralsize(arg.s, c, &size, &(curstage->binary), &parseerr);
+            r = getliteralsize(arg.s, c, maxsize, &size, &(curstage->binary), &parseerr);
             if (!r && size == 0) r = IMAP_ZERO_LENGTH_LITERAL;
-            if (!r && size > maxsize) r = IMAP_MESSAGE_TOO_LARGE;
             if (r) goto done;
 
             /* Copy message to stage */
@@ -14000,7 +13994,7 @@ static void cmd_urlfetch(char *tag)
         } else {
             r = index_urlfetch(state, msgno, params, url.section,
                                url.start_octet, url.octet_count,
-                               imapd_out, NULL);
+                               imapd_out, UINT32_MAX, NULL);
         }
 
     err:
