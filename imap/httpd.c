@@ -385,6 +385,7 @@ extern int opterr;
 
 sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
+static strarray_t *http_log_headers = NULL;
 static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
 char *httpd_authid = NULL;
@@ -751,6 +752,9 @@ int service_init(int argc __attribute__((unused)),
 
     config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
 
+    http_log_headers = strarray_split(config_getstring(IMAPOPT_HTTPLOGHEADERS),
+                                      " ", STRARRAY_TRIM);
+
     if (config_getstring(IMAPOPT_HTTPALLOWCORS)) {
         allow_cors =
             split_wildmats((char *) config_getstring(IMAPOPT_HTTPALLOWCORS),
@@ -1000,6 +1004,8 @@ void shut_down(int code)
     in_shutdown = 1;
 
     if (allow_cors) free_wildmats(allow_cors);
+
+    strarray_free(http_log_headers);
 
     /* Do any namespace specific cleanup */
     for (i = 0; http_namespaces[i]; i++) {
@@ -2549,7 +2555,7 @@ static void write_cachehdr(const char *name, const char *contents,
 
 EXPORTED void response_header(long code, struct transaction_t *txn)
 {
-    int i;
+    int i, size;
     time_t now;
     char datestr[30];
     va_list noargs;
@@ -2608,7 +2614,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         GCC_FALLTHROUGH
 
     case HTTP_EARLY_HINTS:
-        for (i = 0; i < strarray_size(&resp_body->links); i++) {
+        size = strarray_size(&resp_body->links);
+        for (i = 0; i < size; i++) {
             simple_hdr(txn, "Link", "%s", strarray_nth(&resp_body->links, i));
         }
 
@@ -3157,6 +3164,21 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         sep = "; ";
     }
     if (*sep == ';') buf_appendcstr(logbuf, ")");
+
+    /* Add httplogheaders */
+    if ((size = strarray_size(http_log_headers))) {
+        sep = " [headers: ";
+        for (i = 0; i < size; i++) {
+            const char *name = strarray_nth(http_log_headers, i);
+
+            hdr = spool_getheader(txn->req_hdrs, name);
+            if (hdr && *hdr) {
+                buf_printf(logbuf, "%s%s: \"%s\"", sep, name, *hdr);
+                sep = ", ";
+            }
+        }
+        if (*sep == ',') buf_appendcstr(logbuf, "]");
+    }
 
     /* Add timing stats */
     cmdtime_endtimer(&cmdtime, &nettime);

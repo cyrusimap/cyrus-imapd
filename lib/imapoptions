@@ -1029,6 +1029,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
+{ "httplogheaders", NULL, STRING, "3.3.1" }
+/* Space-separated list of HTTP header fields that will be included
+   in the requests logged by httpd(8). */
+
 { "httpmodules", "", BITFIELD("admin", "caldav", "carddav", "cgi", "domainkey", "freebusy", "ischedule", "jmap", "prometheus", "rss", "tzdist", "webdav"), "3.1.7" }
 /* Space-separated list of HTTP modules that will be enabled in
    httpd(8).  This option has no effect on modules that are disabled
