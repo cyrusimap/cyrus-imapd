@@ -1291,8 +1291,12 @@ imap_httpd_SOURCES = \
 	imap/json_support.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
+	imap/sievedir.c \
+	imap/sievedir.h \
 	imap/smtpclient.c \
 	imap/spool.c \
+	imap/sync_support.c \
+        imap/sync_support.h \
 	imap/xcal.c \
 	imap/xcal.h \
 	imap/xml_support.c \
@@ -1332,11 +1336,7 @@ imap_httpd_SOURCES += \
 	imap/jmap_notes.c \
 	imap/jmap_util.c \
 	imap/jmap_util.h \
-	imap/jmap_vacation.c \
-	imap/sievedir.c \
-	imap/sievedir.h \
-	imap/sync_support.c \
-        imap/sync_support.h
+	imap/jmap_vacation.c
 
 if SIEVE
 imap_httpd_SOURCES += \
