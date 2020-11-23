@@ -82,4 +82,12 @@ int proxy_check_input(struct protgroup *protin,
                       struct protstream *serverout,
                       unsigned long timeout_sec);
 
+struct mbox_refer {
+    int (*proc)(mbentry_t *mbentry, void *rock);
+    void *rock;
+};
+
+extern int proxy_mlookup(const char *name, mbentry_t **mbentryp,
+                         void *tid, struct mbox_refer *refer);
+
 #endif /* _PROXY_H */

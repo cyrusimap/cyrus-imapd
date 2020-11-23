@@ -153,12 +153,12 @@ static int lookup_notes_collection(const char *accountid, mbentry_t **mbentry)
 
     /* Locate the mailbox */
     notesname = mbname_intname(mbname);
-    r = http_mlookup(notesname, mbentry, NULL);
+    r = proxy_mlookup(notesname, mbentry, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(accountid, NULL);
 
-        int r1 = http_mlookup(inboxname, mbentry, NULL);
+        int r1 = proxy_mlookup(inboxname, mbentry, NULL, NULL);
         free(inboxname);
         if (r1 == IMAP_MAILBOX_NONEXISTENT) {
             r = IMAP_INVALID_USER;

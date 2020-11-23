@@ -362,7 +362,7 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
             else if (mboxname[len-1] == '.') mboxname[len-1] = '^';
         }
 
-        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    mboxname, error_message(r));
@@ -439,7 +439,7 @@ static int do_list(const char *name, void *rock)
         if (mboxname_isdeletedmailbox(name, NULL)) return 0;
 
         /* Lookup the mailbox and make sure its readable */
-        r = http_mlookup(name, &mbentry, NULL);
+        r = proxy_mlookup(name, &mbentry, NULL, NULL);
         if (r) return 0;
 
         rights = httpd_myrights(httpd_authstate, mbentry);

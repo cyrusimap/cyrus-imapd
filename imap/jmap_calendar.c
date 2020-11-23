@@ -2708,7 +2708,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     /* XXX - fix userid */
 
     /* Locate the mailbox */
-    r = http_mlookup(mbox->name, &txn.req_tgt.mbentry, NULL);
+    r = proxy_mlookup(mbox->name, &txn.req_tgt.mbentry, NULL, NULL);
     if (r) {
         syslog(LOG_ERR, "mlookup(%s) failed: %s", mbox->name, error_message(r));
     }
@@ -3275,7 +3275,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     memset(&txn, 0, sizeof(struct transaction_t));
     txn.req_hdrs = spool_new_hdrcache();
     /* XXX - fix userid */
-    r = http_mlookup(mbox->name, &txn.req_tgt.mbentry, NULL);
+    r = proxy_mlookup(mbox->name, &txn.req_tgt.mbentry, NULL, NULL);
     if (r) {
         syslog(LOG_ERR, "mlookup(%s) failed: %s", mbox->name, error_message(r));
     }

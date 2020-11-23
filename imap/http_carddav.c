@@ -463,7 +463,7 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
         char *inboxname = mboxname_user_mbox(userid, NULL);
         mbentry_t *mbentry = NULL;
 
-        r = http_mlookup(inboxname, &mbentry, NULL);
+        r = proxy_mlookup(inboxname, &mbentry, NULL, NULL);
         free(inboxname);
         if (r == IMAP_MAILBOX_NONEXISTENT) r = IMAP_INVALID_USER;
         if (!r && mbentry->server) {

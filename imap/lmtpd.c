@@ -436,35 +436,6 @@ EXPORTED int fuzzy_match(mbname_t *mbname)
     return 0;
 }
 
-/* proxy mboxlist_lookup; on misses, it asks the listener for this
-   machine to make a roundtrip to the master mailbox server to make
-   sure it's up to date */
-static int mlookup(const char *name, mbentry_t **mbentryptr)
-{
-    int r;
-    mbentry_t *mbentry = NULL;
-
-    /* do a local lookup and kick the slave if necessary */
-    r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
-        kick_mupdate();
-        mboxlist_entry_free(&mbentry);
-        r = mboxlist_lookup(name, &mbentry, NULL);
-    }
-    if (r) return r;
-    if (mbentry->mbtype & MBTYPE_MOVING) {
-        r = IMAP_MAILBOX_MOVED;
-    }
-    else if (mbentry->mbtype & MBTYPE_DELETED) {
-        r = IMAP_MAILBOX_NONEXISTENT;
-    }
-
-    if (mbentryptr && !r) *mbentryptr = mbentry;
-    else mboxlist_entry_free(&mbentry);
-
-    return r;
-}
-
 static int delivery_enabled_for_mailbox(const char *mailboxname)
 {
     struct buf attrib = BUF_INITIALIZER;
@@ -856,7 +827,7 @@ int deliver(message_data_t *msgdata, char *authuser,
                 xstrdup(mbname_intname(mbname));
 
         mbentry_t *mbentry = NULL;
-        int r = mlookup(mboxname, &mbentry);
+        int r = proxy_mlookup(mboxname, &mbentry, NULL, NULL);
         free(mboxname);
         if (r) goto setstatus;
 
@@ -1128,13 +1099,13 @@ static int verify_user(const mbname_t *origmbname,
      * - don't care about ACL on INBOX (always allow post)
      * - don't care about message size (1 msg over quota allowed)
      */
-    r = mlookup(mbname_intname(mbname), &mbentry);
+    r = proxy_mlookup(mbname_intname(mbname), &mbentry, NULL, NULL);
 
 #ifdef USE_AUTOCREATE
     /* If user mailbox does not exist, then invoke autocreate inbox function */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = autocreate_inbox(mbname);
-        if (!r) r = mlookup(mbname_intname(mbname), &mbentry);
+        if (!r) r = proxy_mlookup(mbname_intname(mbname), &mbentry, NULL, NULL);
     }
 #endif // USE_AUTOCREATE
 
@@ -1142,7 +1113,7 @@ static int verify_user(const mbname_t *origmbname,
         config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH)) {
         /* see if we have a mailbox whose name is close */
         if (fuzzy_match(mbname)) {
-            r = mlookup(mbname_intname(mbname), &mbentry);
+            r = proxy_mlookup(mbname_intname(mbname), &mbentry, NULL, NULL);
         }
     }
 
@@ -1245,7 +1216,7 @@ FILE *spoolfile(message_data_t *msgdata)
             mbname_truncate_boxes(mbname, 0);
         }
 
-        r = mlookup(mbname_intname(mbname), &mbentry);
+        r = proxy_mlookup(mbname_intname(mbname), &mbentry, NULL, NULL);
         if (r || !mbentry->server) {
             /* local mailbox -- setup stage for later use by deliver() */
             f = append_newstage(mbname_intname(mbname), now, 0, &stage);

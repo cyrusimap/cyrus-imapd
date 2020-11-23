@@ -272,31 +272,6 @@ static struct protocol_t nntp_protocol =
       { "QUIT", NULL, "205" } } }
 };
 
-/* proxy mboxlist_lookup; on misses, it asks the listener for this
-   machine to make a roundtrip to the master mailbox server to make
-   sure it's up to date */
-static int mlookup(const char *name, mbentry_t **mbentryptr)
-{
-    mbentry_t *mbentry = NULL;
-    int r;
-
-    r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
-        kick_mupdate();
-        mboxlist_entry_free(&mbentry);
-        r = mboxlist_lookup(name, &mbentry, NULL);
-    }
-    if (r) return r;
-    if (mbentry->mbtype & MBTYPE_RESERVE) r = IMAP_MAILBOX_RESERVED;
-    if (mbentry->mbtype & MBTYPE_MOVING) r = IMAP_MAILBOX_MOVED;
-    if (mbentry->mbtype & MBTYPE_DELETED) r = IMAP_MAILBOX_NONEXISTENT;
-
-    if (mbentryptr && !r) *mbentryptr = mbentry;
-    else mboxlist_entry_free(&mbentry);
-
-    return r;
-}
-
 static int read_response(struct backend *s, int force_notfatal, char **result)
 {
     static char buf[2048];
@@ -1707,7 +1682,7 @@ static int open_group(const char *name, int has_prefix, struct backend **ret,
         if (!is_newsgroup(name)) return IMAP_MAILBOX_NONEXISTENT;
     }
 
-    if (!r) r = mlookup(name, &mbentry);
+    if (!r) r = proxy_mlookup(name, &mbentry, NULL, NULL);
 
     if (!r && mbentry->acl) {
         int myrights = cyrus_acl_myrights(nntp_authstate, mbentry->acl);
@@ -2917,7 +2892,7 @@ static void parse_groups(const char *groups, message_data_t *msg)
         if (!is_newsgroup(rcpt)) continue;
 
         /* Only add mailboxes that exist */
-        if (!mlookup(rcpt, NULL)) {
+        if (!proxy_mlookup(rcpt, NULL, NULL, NULL)) {
             strarray_appendm(&msg->rcpt, rcpt);
             rcpt = NULL;
         }
@@ -3273,7 +3248,7 @@ static int deliver(message_data_t *msg)
         mboxlist_entry_free(&mbentry);
 
         /* look it up */
-        r = mlookup(rcpt, &mbentry);
+        r = proxy_mlookup(rcpt, &mbentry, NULL, NULL);
         if (r) return IMAP_MAILBOX_NONEXISTENT;
 
         if (!(mbentry->acl && (myrights = cyrus_acl_myrights(nntp_authstate, mbentry->acl)) &&
@@ -3440,7 +3415,7 @@ static int mvgroup(message_data_t *msg)
     snprintf(newmailboxname, sizeof(newmailboxname), "%s%.*s",
              newsprefix, (int)len, group);
 
-    r = mlookup(oldmailboxname, &mbentry);
+    r = proxy_mlookup(oldmailboxname, &mbentry, NULL, NULL);
     if (r) return r;
 
     r = mboxlist_renamemailbox(mbentry, newmailboxname, NULL, 0,

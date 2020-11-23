@@ -287,3 +287,47 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
 
     return ret;
 }
+
+/* proxy mboxlist_lookup; on misses, it asks the listener for this
+ * machine to make a roundtrip to the master mailbox server to make
+ * sure it's up to date
+ */
+EXPORTED int proxy_mlookup(const char *name, mbentry_t **mbentryp,
+                           void *tid, struct mbox_refer *refer)
+{
+    mbentry_t *mbentry = NULL;
+    int r;
+
+    /* do a local lookup and kick the slave if necessary */
+    r = mboxlist_lookup(name, &mbentry, tid);
+    if ((r == IMAP_MAILBOX_NONEXISTENT ||
+         (!r && (mbentry->mbtype & MBTYPE_RESERVE))) &&
+        config_mupdate_server) {
+        /* It is not currently active, make sure we have the most recent
+         * copy of the database */
+        kick_mupdate();
+        mboxlist_entry_free(&mbentry);
+        r = mboxlist_lookup(name, &mbentry, tid);
+    }
+    if (r) goto done;
+    if (mbentry->mbtype & MBTYPE_RESERVE) {
+        r = IMAP_MAILBOX_RESERVED;
+    }
+    else if (mbentry->mbtype & MBTYPE_MOVING) {
+        if (refer) {
+            r = refer->proc(mbentry, refer->rock);
+        }
+        else {
+            r = IMAP_MAILBOX_MOVED;
+        }
+    }
+    else if (mbentry->mbtype & MBTYPE_DELETED) {
+        r = IMAP_MAILBOX_NONEXISTENT;
+    }
+
+ done:
+    if (!r && mbentryp) *mbentryp = mbentry;
+    else mboxlist_entry_free(&mbentry);
+
+    return r;
+}

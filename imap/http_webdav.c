@@ -343,7 +343,7 @@ static int my_webdav_auth(const char *userid)
         char *inboxname = mboxname_user_mbox(userid, NULL);
         mbentry_t *mbentry = NULL;
 
-        r = http_mlookup(inboxname, &mbentry, NULL);
+        r = proxy_mlookup(inboxname, &mbentry, NULL, NULL);
         free(inboxname);
         if (r == IMAP_MAILBOX_NONEXISTENT) r = IMAP_INVALID_USER;
         if (!r && mbentry->server) {
@@ -526,7 +526,7 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
     }
     else if (*mboxname) {
         /* Locate the mailbox */
-        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
 
         if (r == IMAP_MAILBOX_NONEXISTENT && last) {
             /* Assume that the last segment of the path is a resource */
@@ -537,7 +537,7 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
             /* Adjust collection */
             free(mbname_pop_boxes(mbname));
 
-            r = http_mlookup(mbname_intname(mbname), &tgt->mbentry, NULL);
+            r = proxy_mlookup(mbname_intname(mbname), &tgt->mbentry, NULL, NULL);
         }
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",

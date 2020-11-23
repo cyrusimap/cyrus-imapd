@@ -44,13 +44,12 @@
 #ifndef _HTTP_PROXY_H
 #define _HTTP_PROXY_H
 
-#include "backend.h"
+#include "proxy.h"
 #include "http_h2.h"
 
 
 extern struct protocol_t http_protocol;
 
-extern int http_mlookup(const char *name, mbentry_t **mbentryp, void *tid);
 extern void http_proto_host(hdrcache_t req_hdrs,
                             const char **proto, const char **host);
 extern int http_pipe_req_resp(struct backend *be, struct transaction_t *txn);

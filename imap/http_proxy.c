@@ -514,41 +514,6 @@ static int logout(struct backend *s __attribute__((unused)))
 }
 
 
-/* proxy mboxlist_lookup; on misses, it asks the listener for this
- * machine to make a roundtrip to the master mailbox server to make
- * sure it's up to date
- */
-EXPORTED int http_mlookup(const char *name, mbentry_t **mbentryp, void *tid)
-{
-    mbentry_t *mbentry = NULL;
-    int r;
-
-    r = mboxlist_lookup(name, &mbentry, tid);
-    if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
-        kick_mupdate();
-        r = mboxlist_lookup(name, &mbentry, tid);
-    }
-    if (r) return r;
-    if (mbentry->mbtype & MBTYPE_RESERVE) {
-        r = IMAP_MAILBOX_RESERVED;
-        goto done;
-    }
-    if (mbentry->mbtype & MBTYPE_MOVING) {
-        r = IMAP_MAILBOX_MOVED;
-        goto done;
-    }
-    if (mbentry->mbtype & MBTYPE_DELETED) {
-        r = IMAP_MAILBOX_NONEXISTENT;
-        goto done;
-    }
-
-done:
-    if (!r && mbentryp) *mbentryp = mbentry;
-    else mboxlist_entry_free(&mbentry);
-    return r;
-}
-
-
 /* Fetch protocol and host used for request from headers */
 EXPORTED void http_proto_host(hdrcache_t req_hdrs, const char **proto, const char **host)
 {

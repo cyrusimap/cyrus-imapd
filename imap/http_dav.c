@@ -459,7 +459,7 @@ static int principal_acl_check(const char *userid, struct auth_state *authstate)
         char *mboxname = caldav_mboxname(userid, NULL);
         mbentry_t *mbentry = NULL;
 
-        r = http_mlookup(mboxname, &mbentry, NULL);
+        r = proxy_mlookup(mboxname, &mbentry, NULL, NULL);
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    mboxname, error_message(r));
@@ -560,7 +560,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
     if (tgt->userid) {
         /* Locate the mailbox */
         char *mboxname = caldav_mboxname(tgt->userid, NULL);
-        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
 
         if (r) {
             *resultstr = error_message(r);
@@ -789,7 +789,7 @@ HIDDEN int calcarddav_parse_path(const char *path,
     }
     else if (*mboxname) {
         /* Locate the mailbox */
-        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
 
         if (r) {
             *resultstr = error_message(r);
@@ -4866,7 +4866,7 @@ static int meth_delete_collection(struct transaction_t *txn,
         char *inboxname = mboxname_user_mbox(txn->req_tgt.userid, NULL);
         mbentry_t *mbentry = NULL;
 
-        r = http_mlookup(inboxname, &mbentry, NULL);
+        r = proxy_mlookup(inboxname, &mbentry, NULL, NULL);
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    inboxname, error_message(r));

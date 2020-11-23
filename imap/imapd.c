@@ -695,48 +695,43 @@ static void imapd_refer(const char *tag,
  * returns IMAP_MAILBOX_MOVED if we referred the client */
 /* ext_name is the external name of the mailbox */
 /* you can avoid referring the client by setting tag or ext_name to NULL. */
-static int mlookup(const char *tag, const char *ext_name,
-            const char *name, mbentry_t **mbentryptr)
+struct mbox_refer_rock {
+    const char *tag;
+    const char *ext_name;
+};
+
+static int mbox_refer_proc(mbentry_t *mbentry, void *rock)
 {
+    struct mbox_refer_rock *mrock = (struct mbox_refer_rock *) rock;
     int r;
-    mbentry_t *mbentry = NULL;
 
-    r = mboxlist_lookup(name, &mbentry, NULL);
-    if ((r == IMAP_MAILBOX_NONEXISTENT || (!r && (mbentry->mbtype & MBTYPE_RESERVE))) &&
-        config_mupdate_server) {
-        /* It is not currently active, make sure we have the most recent
-         * copy of the database */
-        kick_mupdate();
-        mboxlist_entry_free(&mbentry);
-        r = mboxlist_lookup(name, &mbentry, NULL);
-    }
-
-    if (r) goto done;
-
-    if (mbentry->mbtype & MBTYPE_RESERVE) {
-        r = IMAP_MAILBOX_RESERVED;
-    }
-    else if (mbentry->mbtype & MBTYPE_DELETED) {
+    /* do we have rights on the mailbox? */
+    if (!imapd_userisadmin &&
+        (!mbentry->acl ||
+         !(cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_LOOKUP))) {
         r = IMAP_MAILBOX_NONEXISTENT;
-    }
-    else if (mbentry->mbtype & MBTYPE_MOVING) {
-        /* do we have rights on the mailbox? */
-        if (!imapd_userisadmin &&
-           (!mbentry->acl || !(cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_LOOKUP))) {
-            r = IMAP_MAILBOX_NONEXISTENT;
-        } else if (tag && ext_name && mbentry->server) {
-            imapd_refer(tag, mbentry->server, ext_name);
-            r = IMAP_MAILBOX_MOVED;
-        } else if (config_mupdate_server) {
-            r = IMAP_SERVER_UNAVAILABLE;
-        } else {
-            r = IMAP_MAILBOX_NOTSUPPORTED;
-        }
+    } else if (mrock->tag && mrock->ext_name && mbentry->server) {
+        imapd_refer(mrock->tag, mbentry->server, mrock->ext_name);
+        r = IMAP_MAILBOX_MOVED;
+    } else if (config_mupdate_server) {
+        r = IMAP_SERVER_UNAVAILABLE;
+    } else {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
     }
 
-done:
-    if (r) mboxlist_entry_free(&mbentry);
-    else if (mbentryptr) *mbentryptr = mbentry;
+    return r;
+}
+
+static int mlookup(const char *tag, const char *ext_name,
+                   const char *name, mbentry_t **mbentryp)
+{
+    mbentry_t *mbentry = NULL;
+    struct mbox_refer_rock rock = { tag, ext_name };
+    struct mbox_refer refer = { &mbox_refer_proc, &rock };
+
+    int r = proxy_mlookup(name, &mbentry, NULL, &refer);
+
+    if (!r && mbentryp) *mbentryp = mbentry;
     else mboxlist_entry_free(&mbentry); /* we don't actually want it! */
 
     return r;

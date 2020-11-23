@@ -340,12 +340,12 @@ static int lookup_notify_collection(const char *userid, mbentry_t **mbentry)
 
     /* Locate the mailbox */
     notifyname = mbname_intname(mbname);
-    r = http_mlookup(notifyname, mbentry, NULL);
+    r = proxy_mlookup(notifyname, mbentry, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(userid, NULL);
 
-        int r1 = http_mlookup(inboxname, mbentry, NULL);
+        int r1 = proxy_mlookup(inboxname, mbentry, NULL, NULL);
         free(inboxname);
         if (r1 == IMAP_MAILBOX_NONEXISTENT) {
             r = IMAP_INVALID_USER;
@@ -1260,7 +1260,7 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
 
     if (*mboxname) {
         /* Locate the mailbox */
-        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    mboxname, error_message(r));
