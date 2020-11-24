@@ -385,7 +385,6 @@ extern int opterr;
 
 sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
-static strarray_t *http_log_headers = NULL;
 static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
 char *httpd_authid = NULL;
@@ -400,6 +399,7 @@ const char *httpd_localip = NULL, *httpd_remoteip = NULL;
 struct protstream *httpd_out = NULL;
 struct protstream *httpd_in = NULL;
 struct protgroup *protin = NULL;
+strarray_t *httpd_log_headers = NULL;
 
 static sasl_ssf_t extprops_ssf = 0;
 int https = 0;
@@ -752,8 +752,8 @@ int service_init(int argc __attribute__((unused)),
 
     config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
 
-    http_log_headers = strarray_split(config_getstring(IMAPOPT_HTTPLOGHEADERS),
-                                      " ", STRARRAY_TRIM);
+    httpd_log_headers = strarray_split(config_getstring(IMAPOPT_HTTPLOGHEADERS),
+                                       " ", STRARRAY_TRIM | STRARRAY_LCASE);
 
     if (config_getstring(IMAPOPT_HTTPALLOWCORS)) {
         allow_cors =
@@ -1005,7 +1005,7 @@ void shut_down(int code)
 
     if (allow_cors) free_wildmats(allow_cors);
 
-    strarray_free(http_log_headers);
+    strarray_free(httpd_log_headers);
 
     /* Do any namespace specific cleanup */
     for (i = 0; http_namespaces[i]; i++) {
@@ -2552,7 +2552,6 @@ static void write_cachehdr(const char *name, const char *contents,
     simple_hdr(txn, name, "%s", contents);
 }
 
-
 EXPORTED void response_header(long code, struct transaction_t *txn)
 {
     int i, size;
@@ -3117,6 +3116,17 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             sep = "; ";
         }
 
+        /* Add httplogheaders */
+        size = strarray_size(httpd_log_headers);
+        for (i = 0; i < size; i++) {
+            const char *name = strarray_nth(httpd_log_headers, i);
+
+            if ((hdr = spool_getheader(txn->req_hdrs, name))) {
+                buf_printf(logbuf, "%s%s=\"%s\"", sep, name, hdr[0]);
+                sep = "; ";
+            }
+        }
+
         if (*sep == ';') buf_appendcstr(logbuf, ")");
     }
 
@@ -3164,21 +3174,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         sep = "; ";
     }
     if (*sep == ';') buf_appendcstr(logbuf, ")");
-
-    /* Add httplogheaders */
-    if ((size = strarray_size(http_log_headers))) {
-        sep = " [headers: ";
-        for (i = 0; i < size; i++) {
-            const char *name = strarray_nth(http_log_headers, i);
-
-            hdr = spool_getheader(txn->req_hdrs, name);
-            if (hdr && *hdr) {
-                buf_printf(logbuf, "%s%s: \"%s\"", sep, name, *hdr);
-                sep = ", ";
-            }
-        }
-        if (*sep == ',') buf_appendcstr(logbuf, "]");
-    }
 
     /* Add timing stats */
     cmdtime_endtimer(&cmdtime, &nettime);
