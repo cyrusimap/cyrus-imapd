@@ -361,6 +361,8 @@ EXPORTED strarray_t *strarray_splitm(char *buf, const char *sep, int flags)
     if (!sep)
         sep = " \t\r\n";
 
+    if (flags & STRARRAY_LCASE) lcase(buf);
+
     for (p = strtok(buf, sep) ; p ; p = strtok(NULL, sep)) {
         if (flags & STRARRAY_TRIM) {
             while (Uisspace(*p)) p++;
