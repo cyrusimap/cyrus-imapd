@@ -1098,6 +1098,11 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
         const char **hdr = spool_getheader(txn->req_hdrs, ":jmap");
 
         if (hdr) buf_printf(logbuf, "; jmap=%s", hdr[0]);
+
+        /* Add logheaders */
+        hdr = spool_getheader(txn->req_hdrs, ":logheaders");
+
+        if (hdr) buf_appendcstr(logbuf, hdr[0]);
     }
 
     if (!ret) {

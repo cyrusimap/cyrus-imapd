@@ -731,6 +731,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     for (i = 0; i < json_array_size(jusing); i++) {
         strarray_add(&using_capabilities, json_string_value(json_array_get(jusing, i)));
     }
+
     /* Push client method calls on call stack */
     json_t *jmethod_calls = json_object_get(jreq, "methodCalls");
     for (i = json_array_size(jmethod_calls); i > 0; i--) {
@@ -915,6 +916,25 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     spool_replace_header(xstrdup(":jmap"),
                          strarray_join(&methods, ","), txn->req_hdrs);
 
+    if ((txn->meth == METH_UNKNOWN) && strarray_size(httpd_log_headers)) {
+        /* API request over WebSocket - add logheaders */
+        json_t *jlogHeaders = json_object_get(jreq, "logHeaders");
+        struct buf logbuf = BUF_INITIALIZER;
+        const char *hdrname;
+        json_t *jval;
+
+        json_object_foreach(jlogHeaders, hdrname, jval) {
+            const char *val = json_string_value(jval);
+
+            if (val &&
+                strarray_find_case(httpd_log_headers, hdrname, 0) >= 0) {
+                buf_printf(&logbuf, "; %s=\"%s\"", hdrname, val);
+            }
+        }
+
+        spool_replace_header(xstrdup(":logheaders"),
+                             buf_release(&logbuf), txn->req_hdrs);
+    }
 
     {
         /* Clean up call stack */
