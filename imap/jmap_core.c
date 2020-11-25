@@ -74,13 +74,13 @@ jmap_method_t jmap_core_methods_standard[] = {
         "Blob/copy",
         JMAP_URN_CORE,
         &jmap_blob_copy,
-        0/*flags*/
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "Core/echo",
         JMAP_URN_CORE,
         &jmap_core_echo,
-        JMAP_NO_CSTATE|JMAP_READ_ONLY
+        0/*flags*/
     },
     { NULL, NULL, NULL, 0}
 };
@@ -90,25 +90,25 @@ jmap_method_t jmap_core_methods_nonstandard[] = {
         "Blob/get",
         JMAP_BLOB_EXTENSION,
         &jmap_blob_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Blob/set",
         JMAP_BLOB_EXTENSION,
         &jmap_blob_set,
-        0 /*flags */
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "Quota/get",
         JMAP_QUOTA_EXTENSION,
         &jmap_quota_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "UserCounters/get",
         JMAP_USERCOUNTERS_EXTENSION,
         &jmap_usercounters_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
 };

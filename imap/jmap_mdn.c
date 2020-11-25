@@ -72,13 +72,13 @@ jmap_method_t jmap_mdn_methods_standard[] = {
         "MDN/send",
         JMAP_URN_MDN,
         &jmap_mdn_send,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "MDN/parse",
         JMAP_URN_MDN,
         &jmap_mdn_parse,
-        /*flags*/0
+        JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
 };

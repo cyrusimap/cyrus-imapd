@@ -103,31 +103,31 @@ static jmap_method_t jmap_mailbox_methods_standard[] = {
         "Mailbox/get",
         JMAP_URN_MAIL,
         &jmap_mailbox_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Mailbox/set",
         JMAP_URN_MAIL,
         &jmap_mailbox_set,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "Mailbox/changes",
         JMAP_URN_MAIL,
         &jmap_mailbox_changes,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Mailbox/query",
         JMAP_URN_MAIL,
         &jmap_mailbox_query,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Mailbox/queryChanges",
         JMAP_URN_MAIL,
         &jmap_mailbox_querychanges,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
 };
