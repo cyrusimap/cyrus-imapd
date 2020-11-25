@@ -114,55 +114,55 @@ jmap_method_t jmap_contact_methods_nonstandard[] = {
         "ContactGroup/get",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contactgroup_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "ContactGroup/changes",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contactgroup_changes,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "ContactGroup/set",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contactgroup_set,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "ContactGroup/query",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contactgroup_query,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Contact/get",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contact_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Contact/changes",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contact_changes,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Contact/query",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contact_query,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Contact/set",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contact_set,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "Contact/copy",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contact_copy,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     { NULL, NULL, NULL, 0}
 };

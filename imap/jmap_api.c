@@ -811,7 +811,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
             continue;
         }
 
-        if (config_getswitch(IMAPOPT_READONLY) && (mp->flags & JMAP_SHARED_CSTATE) == 0) {
+        if (config_getswitch(IMAPOPT_READONLY) && (mp->flags & JMAP_READ_WRITE)) {
             if (!err) err = json_pack("{s:s}", "type", "accountReadOnly");
 
             json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
@@ -820,13 +820,16 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         }
 
         struct conversations_state *cstate = NULL;
-        r = conversations_open_user(accountid, mp->flags & JMAP_SHARED_CSTATE, &cstate);
+        if (mp->flags & JMAP_NEED_CSTATE) {
+            r = conversations_open_user(accountid,
+                                        !(mp->flags & JMAP_READ_WRITE), &cstate);
 
-        if (r) {
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            json_decref(args);
-            goto done;
+            if (r) {
+                txn->error.desc = error_message(r);
+                ret = HTTP_SERVER_ERROR;
+                json_decref(args);
+                goto done;
+            }
         }
 
         /* Initialize request context */

@@ -86,37 +86,37 @@ static jmap_method_t jmap_emailsubmission_methods_standard[] = {
         "EmailSubmission/get",
         JMAP_URN_SUBMISSION,
         &jmap_emailsubmission_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "EmailSubmission/set",
         JMAP_URN_SUBMISSION,
         &jmap_emailsubmission_set,
-       /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "EmailSubmission/changes",
         JMAP_URN_SUBMISSION,
         &jmap_emailsubmission_changes,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "EmailSubmission/query",
         JMAP_URN_SUBMISSION,
         &jmap_emailsubmission_query,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "EmailSubmission/queryChanges",
         JMAP_URN_SUBMISSION,
         &jmap_emailsubmission_querychanges,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Identity/get",
         JMAP_URN_SUBMISSION,
         &jmap_identity_get,
-        JMAP_SHARED_CSTATE
+        /*flags*/0
     },
     { NULL, NULL, NULL, 0}
 };

@@ -176,11 +176,17 @@ typedef struct {
     ptrarray_t getblob_handlers; // array of jmap_getblob_handler
 } jmap_settings_t;
 
+enum jmap_method_flags {
+    JMAP_READ_WRITE  = (1 << 0),  /* user can change state with this method */
+    JMAP_NEED_CSTATE = (1 << 1),  /* conv.db is required for this method
+                                     (lock type determined by r/w flag) */
+};
+
 typedef struct {
     const char *name;
     const char *capability;
     int (*proc)(struct jmap_req *req);
-    int flags;
+    enum jmap_method_flags flags;
 } jmap_method_t;
 
 extern int jmap_api(struct transaction_t *txn, json_t **res,
@@ -190,8 +196,6 @@ extern int jmap_initreq(jmap_req_t *req);
 extern void jmap_finireq(jmap_req_t *req);
 
 extern int jmap_is_using(jmap_req_t *req, const char *capa);
-
-#define JMAP_SHARED_CSTATE 1 << 0
 
 /* Protocol implementations */
 extern void jmap_core_init(jmap_settings_t *settings);

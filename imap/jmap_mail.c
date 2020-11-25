@@ -127,67 +127,67 @@ static jmap_method_t jmap_mail_methods_standard[] = {
         "Email/query",
         JMAP_URN_MAIL,
         &jmap_email_query,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Email/queryChanges",
         JMAP_URN_MAIL,
         &jmap_email_querychanges,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Email/get",
         JMAP_URN_MAIL,
         &jmap_email_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Email/set",
         JMAP_URN_MAIL,
         &jmap_email_set,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "Email/changes",
         JMAP_URN_MAIL,
         &jmap_email_changes,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Email/import",
         JMAP_URN_MAIL,
         &jmap_email_import,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "Email/parse",
         JMAP_URN_MAIL,
         &jmap_email_parse,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Email/copy",
         JMAP_URN_MAIL,
         &jmap_email_copy,
-        /*flags*/ 0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "SearchSnippet/get",
         JMAP_URN_MAIL,
         &jmap_searchsnippet_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Thread/get",
         JMAP_URN_MAIL,
         &jmap_thread_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Thread/changes",
         JMAP_URN_MAIL,
         &jmap_thread_changes,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
 };
@@ -197,7 +197,7 @@ static jmap_method_t jmap_mail_methods_nonstandard[] = {
         "Email/matchMime",
         JMAP_MAIL_EXTENSION,
         &jmap_email_matchmime_method,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
 };

@@ -101,49 +101,49 @@ jmap_method_t jmap_calendar_methods_nonstandard[] = {
         "Calendar/get",
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendar_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Calendar/changes",
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendar_changes,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Calendar/set",
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendar_set,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "CalendarEvent/get",
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendarevent_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "CalendarEvent/changes",
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendarevent_changes,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "CalendarEvent/query",
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendarevent_query,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "CalendarEvent/set",
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendarevent_set,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "CalendarEvent/copy",
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendarevent_copy,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     { NULL, NULL, NULL, 0}
 };

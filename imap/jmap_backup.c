@@ -85,25 +85,25 @@ jmap_method_t jmap_backup_methods_nonstandard[] = {
         "Backup/restoreContacts",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_contacts,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "Backup/restoreCalendars",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_calendars,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "Backup/restoreNotes",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_notes,
-        /*flags*/0
+        JMAP_READ_WRITE
     },
     {
         "Backup/restoreMail",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_mail,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     { NULL, NULL, NULL, 0}
 };
