@@ -325,17 +325,6 @@ EXTRA_DIST = \
 	contrib/deliver-notify-zephyr.patch \
 	contrib/add-cyrus-user \
 	contrib/README \
-	contrib/cyrus-graphtools.1.0 \
-	contrib/cyrus-graphtools.1.0/cgi-bin/cyrus_master.pl \
-	contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db.pl \
-	contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db-sum.pl \
-	contrib/cyrus-graphtools.1.0/html \
-	contrib/cyrus-graphtools.1.0/html/index.html \
-	contrib/cyrus-graphtools.1.0/README \
-	contrib/cyrus-graphtools.1.0/script \
-	contrib/cyrus-graphtools.1.0/script/cyrus.pl \
-	contrib/cyrus-graphtools.1.0/script/run \
-	contrib/cyrus-graphtools.1.0/script/cyrusrc \
 	contrib/cyrusv2.mc \
 	contrib/dkim_canon_ischedule.patch \
 	contrib/notify_unix/notify \
@@ -383,7 +372,6 @@ EXTRA_DIST = \
 	lib/test/cyrusdbtxn.OUTPUT \
 	lib/test/pool.c \
 	lib/test/rnddb.c \
-	master/CYRUS-MASTER.mib \
 	master/README \
 	netnews/inn.diffs \
 	perl/annotator/Daemon.pm \
