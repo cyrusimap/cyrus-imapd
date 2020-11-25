@@ -84,19 +84,19 @@ static jmap_method_t jmap_notes_methods_nonstandard[] = {
         "Notes/get",
         JMAP_NOTES_EXTENSION,
         &jmap_notes_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NO_CSTATE|JMAP_READ_ONLY
     },
     {
         "Notes/set",
         JMAP_NOTES_EXTENSION,
         &jmap_notes_set,
-        /*flags*/0
+        JMAP_READ_ONLY
     },
     {
         "Notes/changes",
         JMAP_NOTES_EXTENSION,
         &jmap_notes_changes,
-        JMAP_SHARED_CSTATE
+        JMAP_NO_CSTATE|JMAP_READ_ONLY
     },
     { NULL, NULL, NULL, 0}
 };

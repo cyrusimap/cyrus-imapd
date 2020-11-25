@@ -96,7 +96,7 @@ jmap_method_t jmap_sieve_methods_nonstandard[] = {
         "SieveScript/get",
         JMAP_SIEVE_EXTENSION,
         &jmap_sieve_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NO_CSTATE|JMAP_READ_ONLY
     },
     {
         "SieveScript/set",
@@ -108,19 +108,19 @@ jmap_method_t jmap_sieve_methods_nonstandard[] = {
         "SieveScript/query",
         JMAP_SIEVE_EXTENSION,
         &jmap_sieve_query,
-        JMAP_SHARED_CSTATE
+        JMAP_NO_CSTATE|JMAP_READ_ONLY
     },
     {
         "SieveScript/validate",
         JMAP_SIEVE_EXTENSION,
         &jmap_sieve_validate,
-        /*flags*/0
+        JMAP_SHARED_CSTATE
     },
     {
         "SieveScript/test",
         JMAP_SIEVE_EXTENSION,
         &jmap_sieve_test,
-        /*flags*/0
+        JMAP_SHARED_CSTATE
     },
     { NULL, NULL, NULL, 0}
 };

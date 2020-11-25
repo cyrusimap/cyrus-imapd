@@ -70,13 +70,13 @@ jmap_method_t jmap_vacation_methods_standard[] = {
         "VacationResponse/get",
         JMAP_URN_VACATION,
         &jmap_vacation_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NO_CSTATE|JMAP_READ_ONLY
     },
     {
         "VacationResponse/set",
         JMAP_URN_VACATION,
         &jmap_vacation_set,
-        /*flags*/0
+        JMAP_NO_CSTATE
     },
     { NULL, NULL, NULL, 0}
 };

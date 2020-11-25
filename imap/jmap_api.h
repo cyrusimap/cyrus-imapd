@@ -191,7 +191,9 @@ extern void jmap_finireq(jmap_req_t *req);
 
 extern int jmap_is_using(jmap_req_t *req, const char *capa);
 
-#define JMAP_SHARED_CSTATE 1 << 0
+#define JMAP_READ_ONLY     (1 << 0)
+#define JMAP_NO_CSTATE     (1 << 1)
+#define JMAP_SHARED_CSTATE (1 << 2) // implies read-only
 
 /* Protocol implementations */
 extern void jmap_core_init(jmap_settings_t *settings);

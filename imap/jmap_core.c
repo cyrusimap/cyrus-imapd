@@ -80,7 +80,7 @@ jmap_method_t jmap_core_methods_standard[] = {
         "Core/echo",
         JMAP_URN_CORE,
         &jmap_core_echo,
-        JMAP_SHARED_CSTATE
+        JMAP_NO_CSTATE|JMAP_READ_ONLY
     },
     { NULL, NULL, NULL, 0}
 };

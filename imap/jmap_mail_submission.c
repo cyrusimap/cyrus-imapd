@@ -116,7 +116,7 @@ static jmap_method_t jmap_emailsubmission_methods_standard[] = {
         "Identity/get",
         JMAP_URN_SUBMISSION,
         &jmap_identity_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NO_CSTATE|JMAP_READ_ONLY
     },
     { NULL, NULL, NULL, 0}
 };
