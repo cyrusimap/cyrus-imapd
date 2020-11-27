@@ -3466,6 +3466,23 @@ EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
             }
         }
 
+        /* some attributes may not be set on mailboxes containing children */
+        if (mboxname && config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN)) {
+            strarray_t *forbidden = strarray_split(
+                config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN),
+                NULL,
+                STRARRAY_TRIM
+            );
+
+            if (strarray_find(forbidden, strarray_nth(valid, j), 0) != -1
+                && mboxlist_haschildren(mboxname))
+            {
+                r = IMAP_MAILBOX_HASCHILDREN;
+            }
+
+            strarray_free(forbidden);
+        }
+
         /* normalise the value */
         strarray_set(new_attribs, i, strarray_nth(valid, j));
     }
