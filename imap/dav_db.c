@@ -174,9 +174,27 @@
     " jmapdata TEXT NOT NULL,"                                          \
     " FOREIGN KEY (rowid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
 
+#define CMD_CREATE_SIEVE                                                \
+    "CREATE TABLE IF NOT EXISTS sieve_scripts ("                        \
+    " rowid INTEGER PRIMARY KEY,"                                       \
+    " creationdate INTEGER,"                                            \
+    " mailbox TEXT NOT NULL,"                                           \
+    " imap_uid INTEGER,"                                                \
+    " modseq INTEGER,"                                                  \
+    " createdmodseq INTEGER,"                                           \
+    " id TEXT NOT NULL,"                                                \
+    " name TEXT NOT NULL,"                                              \
+    " content TEXT NOT NULL,"                                           \
+    " isactive INTEGER,"                                                \
+    " alive INTEGER,"                                                   \
+    " UNIQUE( mailbox, imap_uid ),"                                     \
+    " UNIQUE( id ) );"                                                  \
+    "CREATE INDEX IF NOT EXISTS idx_sieve_name ON sieve_scripts ( name );"
+
 
 #define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_CARD CMD_CREATE_EM CMD_CREATE_GR \
-                   CMD_CREATE_OBJS CMD_CREATE_CALCACHE CMD_CREATE_CARDCACHE
+                   CMD_CREATE_OBJS CMD_CREATE_CALCACHE CMD_CREATE_CARDCACHE   \
+                   CMD_CREATE_SIEVE
 
 /* leaves these unused columns around, but that's life.  A dav_reconstruct
  * will fix them */
@@ -220,6 +238,8 @@
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_vcard_imapuid ON vcard_objs ( mailbox, imap_uid );" \
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_object_imapuid ON dav_objs ( mailbox, imap_uid );"
 
+#define CMD_DBUPGRADEv11 CMD_CREATE_SIEVE
+
 struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
   { 3, CMD_DBUPGRADEv3, NULL },
@@ -230,10 +250,11 @@ struct sqldb_upgrade davdb_upgrade[] = {
   { 8, CMD_DBUPGRADEv8, NULL },
   { 9, CMD_DBUPGRADEv9, NULL },
   { 10, CMD_DBUPGRADEv10, NULL },
+  { 11, CMD_DBUPGRADEv11, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 10
+#define DB_VERSION 11
 
 static sqldb_t *reconstruct_db;
 
@@ -318,6 +339,11 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     case MBTYPE_COLLECTION:
     case MBTYPE_ADDRESSBOOK:
         addproc = &mailbox_add_dav;
+        break;
+#endif
+#ifdef USE_SIEVE
+    case MBTYPE_SIEVE:
+        addproc = &mailbox_add_sieve;
         break;
 #endif
 #ifdef WITH_JMAP
