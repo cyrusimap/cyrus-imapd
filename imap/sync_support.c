@@ -952,7 +952,7 @@ static int list_cb(const char *sievedir,
         /* calculate the sha1 on the fly, relatively cheap */
         struct buf *buf = sievedir_get_script(sievedir, name);
 
-        if (buf_len(buf)) {
+        if (buf && buf_len(buf)) {
             struct message_guid guid;
 
             message_guid_generate(&guid, buf_base(buf), buf_len(buf));
