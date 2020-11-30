@@ -332,6 +332,172 @@ EOF
     $self->assert_num_equals(1, scalar @{$res->[2][1]{list}});
 }
 
+sub test_sieve_set_replication
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $script1 = <<EOF;
+keep;
+EOF
+    $script1 =~ s/\r?\n/\r\n/gs;
+
+    my $script2 = <<EOF;
+# comment
+discard;
+EOF
+    $script2 =~ s/\r?\n/\r\n/gs;
+
+    my $script3 = <<EOF;
+require "imap4flags";
+keep :flags "\\flagged";
+EOF
+    $script3 =~ s/\r?\n/\r\n/gs;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create script";
+    my $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    content => "$script1"
+                },
+                "2" => {
+                    name => JSON::null,
+                    content => "$script2"
+                }
+            },
+            onSuccessActivateScript => "#1"
+         }, "R1"],
+        ['SieveScript/get', {
+            'ids' => [ '#1', '#2' ]
+         }, "R2"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_equals(JSON::true, $res->[0][1]{created}{1}{isActive});
+    $self->assert_equals(JSON::false, $res->[0][1]{created}{2}{isActive});
+
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
+    $self->assert_str_equals('foo', $res->[1][1]{list}[0]{name});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isActive});
+    $self->assert_str_equals($id2, $res->[1][1]{list}[1]{name});
+    $self->assert_equals(JSON::false, $res->[1][1]{list}[1]{isActive});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "attempt to create script with same name";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    content => "$script1"
+                }
+            },
+         }, "R1"],
+        ['SieveScript/get', {
+         }, "R2"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_null($res->[0][1]{created});
+    $self->assert_str_equals('alreadyExists', $res->[0][1]{notCreated}{1}{type});
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "rename and deactivate script";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            update => {
+                $id1 => {
+                    name => "bar"
+                }
+            },
+            onSuccessActivateScript => JSON::null
+         }, "R3"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{notUpdated});
+    $self->assert_equals(JSON::false, $res->[0][1]{updated}{$id1}{isActive});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "rewrite one script and activate another";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            update => {
+                $id1 => {
+                    content => "$script3",
+                }
+            },
+            onSuccessActivateScript => $id2
+         }, "R4"],
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{updated}{$id1});
+    $self->assert_equals(JSON::true, $res->[0][1]{updated}{$id2}{isActive});
+    $self->assert_null($res->[0][1]{notUpdated});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "change active script";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            onSuccessActivateScript => $id1
+         }, "R4"],
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_equals(JSON::true, $res->[0][1]{updated}{$id1}{isActive});
+    $self->assert_equals(JSON::false, $res->[0][1]{updated}{$id2}{isActive});
+    $self->assert_null($res->[0][1]{notUpdated});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "attempt to delete active script";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            destroy => [ $id1 ],
+         }, "R6"],
+        ['SieveScript/get', {
+         }, "R7"]
+    ]);
+    $self->assert_null($res->[0][1]{destroyed});
+    $self->assert_not_null($res->[0][1]{notDestroyed});
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "delete active script";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            onSuccessActivateScript => JSON::null
+         }, "R8"],
+        ['SieveScript/set', {
+            destroy => [ $id1 ],
+         }, "R8.5"],
+        ['SieveScript/get', {
+         }, "R9"]
+    ]);
+    $self->assert_equals(JSON::false, $res->[0][1]{updated}{$id1}{isActive});
+    $self->assert_not_null($res->[1][1]{destroyed});
+    $self->assert_null($res->[1][1]{notDestroyed});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{list}});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+}
+
 sub test_sieve_set_bad_script
     :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
