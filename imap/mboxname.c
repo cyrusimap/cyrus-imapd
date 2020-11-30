@@ -1569,6 +1569,26 @@ EXPORTED int mboxname_isjmapuploadmailbox(const char *name, int mbtype __attribu
     return res;
 }
 
+/*
+ * If (internal) mailbox 'name' is a user's #sieve mailbox
+ * returns boolean
+ */
+EXPORTED int mboxname_issievemailbox(const char *name, int mbtype)
+{
+    if (mbtype & MBTYPE_SIEVE) return 1;  /* Only works on backends */
+    int res = 0;
+
+    mbname_t *mbname = mbname_from_intname(name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_SIEVE_FOLDER);
+
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+        res = 1;
+
+    mbname_free(&mbname);
+    return res;
+}
+
 EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
 {
     if (!userid) return NULL;

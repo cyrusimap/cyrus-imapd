@@ -210,6 +210,12 @@ int mboxname_isjmapuploadmailbox(const char *name, int mbtype);
  */
 int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype);
 
+/*
+ * If (internal) mailbox 'name' is a user's #sieve mailbox
+ * returns boolean
+ */
+int mboxname_issievemailbox(const char *name, int mbtype);
+
 #define mboxname_isnonimapmailbox(name, mbtype)            \
     (mboxname_iscalendarmailbox(name, mbtype)              \
      || mboxname_isaddressbookmailbox(name, mbtype)        \
@@ -218,7 +224,8 @@ int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype);
      || mboxname_issubmissionmailbox(name, mbtype)         \
      || mboxname_ispushsubscriptionmailbox(name, mbtype)   \
      || mboxname_isjmapuploadmailbox(name, mbtype)         \
-     || mboxname_isjmapnotificationsmailbox(name, mbtype))
+     || mboxname_isjmapnotificationsmailbox(name, mbtype)  \
+     || mboxname_issievemailbox(name, mbtype))
 
 #define mboxname_isnondeliverymailbox(name, mbtype)        \
     (mboxname_isnonimapmailbox(name, mbtype)               \
