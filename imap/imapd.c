@@ -3825,7 +3825,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
     const char *parseerr = NULL, *url = NULL;
     struct appendstage *curstage;
     mbentry_t *mbentry = NULL;
-    size_t maxsize = config_getint(IMAPOPT_APPEND_MAXSIZE) * 1024;
+    size_t maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE) * 1024;
     if (!maxsize) maxsize = UINT32_MAX;
 
     memset(&appendstate, 0, sizeof(struct appendstate));
