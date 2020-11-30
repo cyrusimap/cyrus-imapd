@@ -294,9 +294,13 @@ EXPORTED int sieve_script_parse_string(sieve_interp_t *interp, const char *s,
                                        char **errors, sieve_script_t **script)
 {
     struct yy_buffer_state *buffer = sieve_scan_string(s);
+    sieve_script_t *myscript = NULL;
+
+    if (!script) script = &myscript;
 
     int res = _sieve_script_parse_only(interp, errors, script);
 
+    sieve_script_free(&myscript);
     sieve_delete_buffer(buffer);
 
     return res;
