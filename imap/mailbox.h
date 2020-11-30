@@ -288,6 +288,10 @@ struct mailbox {
     struct carddav_db *local_carddav;
     struct webdav_db *local_webdav;
 #endif
+#ifdef USE_SIEVE
+    struct sieve_db *local_sieve;
+    char *sievedir;
+#endif
 
     /* change management */
     int silentchanges;
@@ -699,6 +703,7 @@ extern void mailbox_iter_done(struct mailbox_iter **iterp);
 struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int recalc);
 
 extern int mailbox_add_dav(struct mailbox *mailbox);
+extern int mailbox_add_sieve(struct mailbox *mailbox);
 extern int mailbox_add_email_alarms(struct mailbox *mailbox);
 
 /* Rename a CID.  Note - this is just one mailbox! */
