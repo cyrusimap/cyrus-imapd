@@ -625,6 +625,7 @@ void cmd_logout(struct protstream *sieved_out,
 {
     prot_printf(sieved_out, "OK \"Logout Complete\"\r\n");
     prot_flush(sieved_out);
+    actions_unsetuser();
 }
 
 extern int reset_saslconn(sasl_conn_t **conn);
@@ -641,6 +642,7 @@ static void cmd_unauthenticate(struct protstream *sieved_out,
     prot_unsetsasl(sieved_out);
     prot_unsetsasl(sieved_in);
     authenticated = 0;
+    actions_unsetuser();
 }
 
 static int cmd_authenticate(struct protstream *sieved_out,
