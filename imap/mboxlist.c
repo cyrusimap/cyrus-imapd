@@ -219,6 +219,8 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
         buf_putc(&buf, 'p');
     if (mbtype & MBTYPE_JMAPNOTIFICATION)
         buf_putc(&buf, 'j');
+    if (mbtype & MBTYPE_SIEVE)
+        buf_putc(&buf, 'f');
 
     /* make sure we didn't forget to set a character for every interesting bit */
     if (mbtype) assert(buf_len(&buf));
@@ -343,6 +345,9 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
             break;
         case 'd':
             mbtype |= MBTYPE_DELETED;
+            break;
+        case 'f':
+            mbtype |= MBTYPE_SIEVE;
             break;
         case 'i':
             mbtype |= MBTYPE_INTERMEDIATE;
