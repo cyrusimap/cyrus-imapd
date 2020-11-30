@@ -51,7 +51,6 @@
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
-#include <errno.h>
 
 #include "arrayu64.h"
 #include "cyr_qsort_r.h"
@@ -62,11 +61,11 @@
 #include "json_support.h"
 #include "map.h"
 #include "parseaddr.h"
+#include "sieve_db.h"
 #include "sievedir.h"
 #include "sieve/sieve_interface.h"
 #include "sieve/bc_parse.h"
 #include "strarray.h"
-#include "sync_log.h"
 #include "times.h"
 #include "tok.h"
 #include "user.h"
@@ -194,259 +193,6 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
     json_object_set(account_capabilities, JMAP_SIEVE_EXTENSION, sieve_capabilities);
 }
 
-#define SCRIPT_ID_PREFIX       ".JMAPID:"
-#define SCRIPT_ID_PREFIX_LEN   8
-
-#define SCRIPT_NAME_ONLY (1<<0)
-
-static const char *script_from_id(const char *sievedir, const char *id,
-                                  unsigned flags)
-{
-    static char target[PATH_MAX];
-    char link[PATH_MAX];
-    struct stat sbuf;
-    char *name = NULL;
-
-    snprintf(link, sizeof(link), "%s/%s%s", sievedir, SCRIPT_ID_PREFIX, id);
-
-    if (!stat(link, &sbuf)) {
-        ssize_t tgt_len = readlink(link, target, sizeof(target) - 1);
-
-        target[tgt_len] = '\0';
-
-        if (tgt_len > SCRIPT_SUFFIX_LEN &&
-            !strcmp(target + (tgt_len - SCRIPT_SUFFIX_LEN), SCRIPT_SUFFIX)) {
-            if (flags & SCRIPT_NAME_ONLY)
-                target[tgt_len - SCRIPT_SUFFIX_LEN] = '\0';
-            name = target;
-        }
-    }
-    else if (!lstat(link, &sbuf)) {
-        /* Dead link - remove it
-           (script was probably deleted via ManageSieve) */
-        unlink(link);
-    }
-
-    return name;
-}
-
-static int create_id_link(const char *sievedir, const char *id, const char *name)
-{
-    /* create script id link */
-    char link[PATH_MAX];
-    int r;
-
-    snprintf(link, sizeof(link), "%s/%s%s", sievedir, SCRIPT_ID_PREFIX, id);
-
-    r = unlink(link);
-    if (r) {
-        if (errno == ENOENT) r = 0;
-        else syslog(LOG_ERR, "IOERROR: unlink(%s): %m", link);
-    }
-
-    if (!r) {
-        char target[PATH_MAX];
-        size_t namelen = strlen(name);
-
-        if (namelen <= SCRIPT_SUFFIX_LEN ||
-            strcmp(name + (namelen - SCRIPT_SUFFIX_LEN), SCRIPT_SUFFIX)) {
-            snprintf(target, sizeof(target), "%s%s", name, SCRIPT_SUFFIX);
-            name = target;
-        }
-
-        r = symlink(name, link);
-        if (r) syslog(LOG_ERR, "IOERROR: symlink(%s, %s): %m", name, link);
-    }
-
-    return r;
-}
-
-static void getscript(const char *id, const char *script, int isactive,
-                      const char *sievedir, struct jmap_get *get)
-{
-    if (!script) script = script_from_id(sievedir, id, 0);
-
-    if (script) {
-        json_t *sieve = json_pack("{s:s}", "id", id);
-        struct buf buf = BUF_INITIALIZER;
-
-        if (jmap_wantprop(get->props, "name")) {
-            buf_setmap(&buf, script, strlen(script) - SCRIPT_SUFFIX_LEN);
-            json_object_set_new(sieve, "name", json_string(buf_cstring(&buf)));
-        }
-
-        if (jmap_wantprop(get->props, "isActive")) {
-            if (isactive < 0) {
-                if (!buf_len(&buf))
-                    buf_setmap(&buf, script, strlen(script) - SCRIPT_SUFFIX_LEN);
-                isactive = sievedir_script_isactive(sievedir, buf_cstring(&buf));
-            }
-
-            json_object_set_new(sieve, "isActive", json_boolean(isactive));
-        }
-
-        if (jmap_wantprop(get->props, "blobId")) {
-            buf_reset(&buf);
-            buf_printf(&buf, "S%s", id);
-            json_object_set_new(sieve, "blobId", json_string(buf_cstring(&buf)));
-        }
-
-        buf_free(&buf);
-
-        /* Add object to list */
-        json_array_append_new(get->list, sieve);
-    }
-    else {
-        json_array_append_new(get->not_found, json_string(id));
-    }
-}
-
-typedef struct script_info {
-    char *id;
-    char *name;
-    int isActive;
-} script_info;
-
-static void free_script_info(void *data)
-{
-    script_info *info = (script_info *) data;
-
-    if (!info) return;
-
-    free(info->id);
-    free(info->name);
-    free(info);
-}
-
-struct list_rock {
-    const char *sievedir;
-    struct jmap_get *get;
-};
-
-static void get_cb(const char *script, void *data, void *rock)
-{
-    script_info *info = (script_info *) data;
-    const char *id = info->id;
-    struct list_rock *lrock = (struct list_rock *) rock;
-
-    if (!id) {
-        /* Create script id symlink */
-        id = makeuuid();
-        create_id_link(lrock->sievedir, id, script);
-    }
-
-    getscript(id, script, info->isActive, lrock->sievedir, lrock->get);
-}
-
-static int list_cb(const char *sievedir __attribute__((unused)),
-                   const char *name, struct stat *sbuf,
-                   const char *link_target, void *rock)
-{
-    hash_table *scripts = (hash_table *) rock;
-    size_t namelen = strlen(name);
-    script_info *info = NULL;
-
-    if (S_ISLNK(sbuf->st_mode)) {
-        if (namelen > SCRIPT_ID_PREFIX_LEN &&
-            !strncmp(name, SCRIPT_ID_PREFIX, SCRIPT_ID_PREFIX_LEN)) {
-            /* Script id symlink */
-            const char *id = name + SCRIPT_ID_PREFIX_LEN;
-
-            if (link_target && *link_target) {
-                /* Map script name -> id */
-                info = hash_lookup(link_target, scripts);
-                if (!info) {
-                    info = xzmalloc(sizeof(struct script_info));
-                    hash_insert(link_target, info, scripts);
-                }
-                info->id = xstrdup(id);
-            }
-            else {
-                /* Dead link - remove it
-                   (script was probably deleted via ManageSieve) */
-                char link[PATH_MAX];
-
-                snprintf(link, sizeof(link), "%s/%s", sievedir, name);
-                unlink(link);
-            }
-        }
-        else if (!strcmp(name, DEFAULTBC_NAME) && link_target && *link_target) {
-            /* Active bytecode - check if we have an entry for this name */
-            char active[PATH_MAX];
-
-            snprintf(active, sizeof(active), "%.*s%s",
-                     (int) strlen(link_target) - BYTECODE_SUFFIX_LEN,
-                     link_target, SCRIPT_SUFFIX);
-
-            info = hash_lookup(active, scripts);
-            if (!info) {
-                /* Add script name -> NULL as a placeholder */
-                info = xzmalloc(sizeof(struct script_info));
-                hash_insert(active, info, scripts);
-            }
-            info->isActive = 1;
-        }
-    }
-    else if (namelen > SCRIPT_SUFFIX_LEN &&
-             !strcmp(name + (namelen - SCRIPT_SUFFIX_LEN), SCRIPT_SUFFIX)) {
-        /* Actual script file - check if we have an entry for this name */
-        info = hash_lookup(name, scripts);
-        if (!info) {
-            /* Add script name -> NULL as a placeholder
-               (we will create an id symlink later, if necessary) */
-            info = xzmalloc(sizeof(struct script_info));
-            hash_insert(name, info, scripts);
-        }
-    }
-
-    return SIEVEDIR_OK;
-}
-
-static void _listscripts(const char *sievedir, hash_table *scripts)
-{
-    /* Build a hash of script name -> script id */
-    construct_hash_table(scripts, maxscripts, 0);
-
-    sievedir_foreach(sievedir, SIEVEDIR_IGNORE_JUNK, &list_cb, scripts);
-}
-
-static void listscripts(const char *sievedir, struct jmap_get *get)
-{
-    hash_table scripts = HASH_TABLE_INITIALIZER;
-    struct list_rock lrock = { sievedir, get };
-
-    /* Build a list of scripts */
-    _listscripts(sievedir, &scripts);
-
-    /* Perform a get on each script */
-    hash_enumerate(&scripts, &get_cb, &lrock);
-    free_hash_table(&scripts, &free_script_info);
-}
-
-static char *sieve_state(const char *sievedir)
-{
-    struct buf buf = BUF_INITIALIZER;
-    struct stat sbuf;
-    int r;
-
-    r = stat(sievedir, &sbuf);
-    if (r && errno == ENOENT) {
-        r = cyrus_mkdir(sievedir, 0755);
-        if (!r) {
-            r = mkdir(sievedir, 0755);
-            if (!r) r = stat(sievedir, &sbuf);
-        }
-    }
-
-    if (r) buf_setcstr(&buf, "0");
-    else {
-        buf_printf(&buf, "%ld.%ld-%ld",
-                   sbuf.st_mtim.tv_sec, sbuf.st_mtim.tv_nsec, sbuf.st_size);
-    }
-
-    return buf_release(&buf);
-}
-
 static const jmap_property_t sieve_props[] = {
     {
         "id",
@@ -471,11 +217,41 @@ static const jmap_property_t sieve_props[] = {
     { NULL, NULL, 0 }
 };
 
+static int getscript(void *rock, struct sieve_data *sdata)
+{
+    struct jmap_get *get = (struct jmap_get *) rock;
+    json_t *sieve = json_pack("{s:s}", "id", sdata->id);
+
+    if (jmap_wantprop(get->props, "name")) {
+        json_object_set_new(sieve, "name", json_string(sdata->name));
+    }
+
+    if (jmap_wantprop(get->props, "isActive")) {
+        json_object_set_new(sieve, "isActive", json_boolean(sdata->isactive));
+    }
+
+    if (jmap_wantprop(get->props, "blobId")) {
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_printf(&buf, "S%s", sdata->id);
+        json_object_set_new(sieve, "blobId", json_string(buf_cstring(&buf)));
+        buf_free(&buf);
+    }
+
+    /* Add object to list */
+    json_array_append_new(get->list, sieve);
+
+    return 0;
+}
+
 static int jmap_sieve_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
     json_t *err = NULL;
+    struct mailbox *mailbox = NULL;
+    struct sieve_db *db = NULL;
+    int r = 0;
 
     /* Parse request */
     jmap_get_parse(req, &parser, sieve_props, /*allow_null_ids*/1,
@@ -485,7 +261,14 @@ static int jmap_sieve_get(jmap_req_t *req)
         goto done;
     }
 
-    const char *sievedir = user_sieve_path(req->accountid);
+    r = sieve_open_folder(req->accountid, 0/*write*/, &mailbox);
+    if (r) goto done;
+
+    db = sievedb_open_userid(req->accountid);
+    if (!db) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
 
     /* Does the client request specific responses? */
     if (JNOTNULL(get.ids)) {
@@ -493,68 +276,63 @@ static int jmap_sieve_get(jmap_req_t *req)
         size_t i;
 
         json_array_foreach(get.ids, i, jval) {
-            getscript(json_string_value(jval), NULL, -1, sievedir, &get);
+            const char *id = json_string_value(jval);
+            struct sieve_data *sdata = NULL;
+
+            r = sievedb_lookup_id(db, id, &sdata, 0);
+            if (r || !sdata->imap_uid) {
+                json_array_append_new(get.not_found, json_string(id));
+                r = 0;
+            }
+            else {
+                getscript(&get, sdata);
+            }
         }
     }
     else {
-        listscripts(sievedir, &get);
+        sievedb_foreach(db, &getscript, &get);
     }
 
     /* Build response */
-    get.state = sieve_state(sievedir);
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, mailbox->i.highestmodseq);
+    get.state = buf_release(&buf);
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
+    if (r) jmap_error(req, jmap_server_error(r));
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
+
+    mailbox_close(&mailbox);
+    sievedb_close(db);
 
     return 0;
 }
 
-static int putscript(const char *name, const char *content,
-                     const char *sievedir, json_t **err)
+static int putscript(struct mailbox *mailbox, struct sieve_data *sdata,
+                     json_t **err)
 {
     /* check script size */
-    if ((json_int_t) strlen(content) > maxscriptsize) {
+    if ((json_int_t) strlen(sdata->content) > maxscriptsize) {
         *err = json_pack("{s:s}", "type", "tooLarge");
         return 0;
     }
 
+    /* parse the script */
     char *errors = NULL;
-    int r = sievedir_put_script(sievedir, name, content, &errors);
-
-    switch (r) {
-    case SIEVEDIR_INVALID:
+    int r = sieve_script_parse_string(NULL, sdata->content, &errors, NULL);
+    if (r) {
         *err = json_pack("{s:s, s:s}", "type", "invalidScript",
                          "description", errors);
         free(errors);
-        break;
-    case SIEVEDIR_FAIL:
-        *err = json_pack("{s:s, s:s}", "type", "serverFail",
-                         "description", "bytecode generation failed");
-        break;
-    case SIEVEDIR_IOERROR:
-        *err = json_pack("{s:s, s:s}", "type", "serverFail",
-                         "description", strerror(errno));
-        break;
+        return 0;
     }
 
-    return r;
-}
+    r = sieve_script_store(mailbox, sdata);
+    if (r) *err = jmap_server_error(r);
 
-static int script_setactive(const char *id, const char *sievedir)
-{
-    int r;
-
-    if (id) {
-        const char *script = script_from_id(sievedir, id, SCRIPT_NAME_ONLY);
-        r = sievedir_activate_script(sievedir, script);
-    }
-    else {
-        r = sievedir_deactivate_script(sievedir);
-    }
-
-    return r;
+    return 0;
 }
 
 static const char *script_findblob(struct jmap_req *req, const char *id,
@@ -600,7 +378,8 @@ static const char *script_findblob(struct jmap_req *req, const char *id,
 
 static const char *set_create(struct jmap_req *req,
                               const char *creation_id, json_t *jsieve,
-                              const char *sievedir, struct jmap_set *set)
+                              struct mailbox *mailbox, struct sieve_db *db,
+                              struct jmap_set *set)
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
     const char *id = makeuuid(), *name = NULL, *content = NULL;
@@ -617,17 +396,27 @@ static const char *set_create(struct jmap_req *req,
         json_array_append_new(invalid, json_string("name"));
     else  {
         /* sanity check script name and check for name collision */
+        struct buf buf = BUF_INITIALIZER;
+        struct sieve_data *exists = NULL;
+
         name = json_string_value(arg);
         buf_init_ro_cstr(&buf, name);
         if (!sievedir_valid_name(&buf)) {
             json_array_append_new(invalid, json_string("name"));
         }
-        else if (sievedir_script_exists(sievedir, name)) {
-            err = json_pack("{s:s}", "type", "alreadyExists");
-            goto done;
-        }
         else if (!strcmp(name, "jmap_vacation")) {
             json_array_append_new(invalid, json_string("name"));
+        }
+        else {
+            r = sievedb_lookup_name(db, mailbox->name, name, &exists, 0);
+            if (!r)  {
+                err = json_pack("{s:s}", "type", "alreadyExists");
+                goto done;
+            }
+            else if (r != CYRUSDB_NOTFOUND) {
+                err = jmap_server_error(IMAP_INTERNAL);
+                goto done;
+            }
         }
     }
 
@@ -646,32 +435,28 @@ static const char *set_create(struct jmap_req *req,
         goto done;
     }
 
-    r = putscript(name, content, sievedir, &err);
+    struct sieve_data sdata;
+    memset(&sdata, 0, sizeof(sdata));
+    sdata.id = id;
+    sdata.name = name;
+    sdata.content = content;
+    r = putscript(mailbox, &sdata, &err);
     if (err) goto done;
 
     if (!r) {
-        /* create script id link */
-        r = create_id_link(sievedir, id, name);
-        if (!r) {
-            /* Report script as created, with server-set properties */
-            buf_reset(&buf);
-            buf_printf(&buf, "S%s", id);
+        /* Report script as created, with server-set properties */
+        buf_reset(&buf);
+        buf_printf(&buf, "S%s", id);
 
-            json_t *new_sieve = json_pack("{s:s s:b s:s}",
-                                          "id", id, "isActive", 0,
-                                          "blobId", buf_cstring(&buf));
+        json_t *new_sieve = json_pack("{s:s s:b s:s}",
+                                      "id", id, "isActive", 0,
+                                      "blobId", buf_cstring(&buf));
 
-            if (name == id) {
-                json_object_set_new(new_sieve, "name", json_string(name));
-            }
-
-            json_object_set_new(set->created, creation_id, new_sieve);
+        if (name == id) {
+            json_object_set_new(new_sieve, "name", json_string(name));
         }
-    }
 
-    if (r) {
-        err = json_pack("{s:s, s:s}", "type", "serverFail",
-                        "description", strerror(errno));
+        json_object_set_new(set->created, creation_id, new_sieve);
     }
 
   done:
@@ -687,60 +472,72 @@ static const char *set_create(struct jmap_req *req,
 
 static void set_update(struct jmap_req *req,
                        const char *id, json_t *jsieve,
-                       const char *sievedir, struct jmap_set *set)
+                       struct mailbox *mailbox, struct sieve_db *db,
+                       struct jmap_set *set)
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
-    const char *script, *name = NULL, *content = NULL;
+    const char *name = NULL;
     struct buf buf = BUF_INITIALIZER;
-    char *cur_name = NULL;
-    int r = 0, is_active;
+    struct sieve_data *sdata = NULL;
+    int r = 0;
 
     if (!id) return;
 
-    script = script_from_id(sievedir, id, SCRIPT_NAME_ONLY);
-    if (!script) {
-        err = json_pack("{s:s}", "type", "notFound");
-        goto done;
-    }
-    else if (!strcmp(script, "jmap_vacation")) {
-        err = json_pack("{s:s s:s}", "type", "forbidden",
-                        "description", "MUST use VacationResponse/set method");
-        goto done;
-    }
-
-    cur_name = xstrdup(script);
-    is_active = sievedir_script_isactive(sievedir, cur_name);
-
     arg = json_object_get(jsieve, "name");
     if (arg) {
-        if (json_is_string(arg))
-            name = json_string_value(arg);
-        else if (json_is_null(arg))
-            name = id;
-        else
-            json_array_append_new(invalid, json_string("name"));
-
-        if (name) {
+        if (json_is_string(arg)) {
             /* sanity check script name and check for name collision */
             struct buf buf = BUF_INITIALIZER;
 
+            name = json_string_value(arg);
             buf_init_ro_cstr(&buf, name);
             if (!sievedir_valid_name(&buf)) {
                 json_array_append_new(invalid, json_string("name"));
             }
-            else if (strcmp(name, cur_name) &&
-                     sievedir_script_exists(sievedir, name)) {
-                err = json_pack("{s:s}", "type", "alreadyExists");
+            else if (!strcmp(name, "jmap_vacation")) {
+                err = json_pack("{s:s s:s}", "type", "forbidden",
+                                "description",
+                                "MUST use VacationResponse/set method");
+                r = 0;
                 goto done;
             }
+            else {
+                r = sievedb_lookup_name(db, mailbox->name, name, &sdata, 0);
+                if (!r && strcmp(id, sdata->id))  {
+                    err = json_pack("{s:s}", "type", "alreadyExists");
+                    r = 0;
+                    goto done;
+                }
+                else if (r && r != CYRUSDB_NOTFOUND) {
+                    r = IMAP_INTERNAL;
+                    goto done;
+                }
+            }
         }
+        else if (json_is_null(arg)) {
+            name = id;
+        }
+        else {
+            json_array_append_new(invalid, json_string("name"));
+        }
+    }
+
+    r = sievedb_lookup_id(db, id, &sdata, 0);
+    if (r == CYRUSDB_NOTFOUND) {
+        err = json_pack("{s:s}", "type", "notFound");
+        r = 0;
+        goto done;
+    }
+    else if (r != CYRUSDB_OK) {
+        r = IMAP_INTERNAL;
+        goto done;
     }
 
     arg = json_object_get(jsieve, "isActive");
     if (arg) {
         if (!json_is_boolean(arg))
             json_array_append_new(invalid, json_string("isActive"));
-        else if (json_boolean_value(arg) != is_active) {
+        else if (json_boolean_value(arg) != sdata->isactive) {
             /* isActive MUST be current value, if present */
             json_array_append_new(invalid, json_string("isActive"));
         }
@@ -751,7 +548,8 @@ static void set_update(struct jmap_req *req,
         if (!json_is_string(arg))
             json_array_append_new(invalid, json_string("blobId"));
         else {
-            content = script_findblob(req, json_string_value(arg), &buf, &err);
+            sdata->content = script_findblob(req,
+                                             json_string_value(arg), &buf, &err);
             if (err) goto done;
         }
     }
@@ -763,67 +561,49 @@ static void set_update(struct jmap_req *req,
         goto done;
     }
 
-    if (content) {
-        r = putscript(cur_name, content, sievedir, &err);
-        if (err) goto done;
-    }
-    if (!r && name && strcmp(name, cur_name)) {
-        /* rename script and bytecode; move script id link; move active link */
-        r = sievedir_rename_script(sievedir, cur_name, name);
-        if (!r) {
-            r = create_id_link(sievedir, id, name);
-        }
-    }
-    if (!r) {
-        /* Report script as updated */
-        json_object_set_new(set->updated, id, json_null());
-    }
-    else {
-        err = json_pack("{s:s, s:s}", "type", "serverFail",
-                        "description", strerror(errno));
-    }
+    if (name) sdata->name = name;
+
+    r = putscript(mailbox, sdata, &err);
+    if (err) goto done;
+
+    /* Report script as updated */
+    json_object_set_new(set->updated, id, json_null());
 
   done:
+    if (r) {
+        err = jmap_server_error(r);
+    }
     if (err) {
         json_object_set_new(set->not_updated, id, err);
     }
     json_decref(invalid);
-    free(cur_name);
     buf_free(&buf);
 }
 
 static void set_destroy(const char *id,
-                        const char *sievedir, struct jmap_set *set)
+                        struct mailbox *mailbox, struct sieve_db *db,
+                        struct jmap_set *set)
 {
-    const char *script = script_from_id(sievedir, id, SCRIPT_NAME_ONLY);
+    struct sieve_data *sdata = NULL;
     json_t *err = NULL;
+    int r;
 
-    if (!script) {
+    r = sievedb_lookup_id(db, id, &sdata, 0);
+    if (r == CYRUSDB_NOTFOUND) {
         err = json_pack("{s:s}", "type", "notFound");
     }
-    else if (sievedir_script_isactive(sievedir, script)) {
+    else if (r != CYRUSDB_OK) {
+        r = IMAP_INTERNAL;
+    }
+    else if (sdata->isactive) {
         err = json_pack("{s:s}", "type", "scriptIsActive");
     }
-    else if (!strcmp(script, "jmap_vacation")) {
+    else if (!strcmp(sdata->name, "jmap_vacation")) {
         err = json_pack("{s:s s:s}", "type", "forbidden",
                         "description", "MUST use VacationResponse/set method");
     }
-    else {
-        char path[PATH_MAX];
-        int r;
-
-        snprintf(path, sizeof(path), "%s/%s%s", sievedir, SCRIPT_ID_PREFIX, id);
-        r = unlink(path);
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: unlink(%s): %m", path);
-        }
-        else {
-            r = sievedir_delete_script(sievedir, script);
-        }
-        if (r) {
-            err = json_pack("{s:s, s:s}", "type", "serverFail",
-                            "description", strerror(errno));
-        }
+    else if ((r = sieve_script_remove(mailbox, sdata))) {
+        err = jmap_server_error(r);
     }
 
     if (err) {
@@ -834,67 +614,62 @@ static void set_destroy(const char *id,
     }
 }
 
-static int find_cb(const char *sievedir __attribute__((unused)),
-                   const char *name, struct stat *sbuf,
-                   const char *link_target, void *rock)
-{
-    script_info *info = (script_info *) rock;
-
-    if (S_ISLNK(sbuf->st_mode) &&
-        !strncmp(name, SCRIPT_ID_PREFIX, SCRIPT_ID_PREFIX_LEN)) {
-        size_t tgt_len = strlen(link_target) - SCRIPT_SUFFIX_LEN;
-
-        if (strlen(info->name) == tgt_len &&
-            !strncmp(info->name, link_target, tgt_len)) {
-            info->id = xstrdup(name + SCRIPT_ID_PREFIX_LEN);
-            return SIEVEDIR_DONE;
-        }
-    }
-
-    return SIEVEDIR_OK;
-}
-
-static void set_activate(const char *id, const char *sievedir,
+static void set_activate(const char *id,
+                         struct mailbox *mailbox, struct sieve_db *db,
                          struct jmap_set *set)
 {
-    const char *active;
+    struct sieve_data *sdata = NULL;
     char *old_id = NULL;
     json_t *created = NULL;
     int r;
 
     /* Lookup currently active script */
-    active = sievedir_get_active(sievedir);
-    if (active) {
-        /* get it's id */
-        script_info info = { NULL, (char *) active, 1 };
-
-        sievedir_foreach(sievedir, SIEVEDIR_IGNORE_JUNK, &find_cb, &info);
-        old_id = info.id;
-    }
+    r = sievedb_lookup_active(db, &sdata);
+    if (!r) old_id = xstrdup(sdata->id);
 
     if (id) {
         if (id[0] == '#') {
             /* Resolve creation id */
             created = json_object_get(set->created, id+1);
+            if (!created) {
+                json_object_set_new(set->not_updated, id,
+                                    json_pack("{s:s}", "type", "notFound"));
+                goto done;
+            }
+
             id = json_string_value(json_object_get(created, "id"));
         }
         if (id && json_array_find(set->destroyed, id) >= 0) {
             /* Don't try to activate a destroyed script */
-            id = NULL;
+            goto done;
+        }
+
+        r = sievedb_lookup_id(db, id, &sdata, 0);
+        if (r || !sdata->imap_uid) {
+            json_object_set_new(set->not_updated, id,
+                                json_pack("{s:s}", "type", "notFound"));
+            goto done;
         }
     }
+    else {
+        sdata = NULL;
+    }
 
-    r = script_setactive(id, sievedir);
-    if (r) {
-        /* XXX  How do we report a failure here? */
-        return;
+    if (id || old_id) {
+        r = sieve_script_activate(mailbox, sdata);
+        if (r) {
+            json_object_set_new(set->not_updated, id ? id : old_id,
+                                json_pack("{s:s s:s}",
+                                          "type", "serverFail",
+                                          "description", error_message(r)));
+            goto done;
+        }
     }
 
     if (old_id) {
         /* Report previous active script as updated */
         json_object_set_new(set->updated, old_id,
                             json_pack("{s:b}", "isActive", 0));
-        free(old_id);
     }
 
     if (created) {
@@ -906,6 +681,9 @@ static void set_activate(const char *id, const char *sievedir,
         json_object_set_new(set->updated, id,
                             json_pack("{s:b}", "isActive", 1));
     }
+
+  done:
+    free(old_id);
 }
 
 struct sieve_set_args {
@@ -938,15 +716,24 @@ static int jmap_sieve_set(struct jmap_req *req)
     struct jmap_set set;
     struct sieve_set_args sub_args = { NULL };
     json_t *jerr = NULL;
-
-    const char *sievedir = user_sieve_path(req->accountid);
+    struct mailbox *mailbox = NULL;
+    struct sieve_db *db = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    int r = 0;
 
     /* Parse arguments */
     jmap_set_parse(req, &parser, sieve_props,
                    &_sieve_setargs_parse, &sub_args, &set, &jerr);
+    if (jerr) goto done;
+
+    db = sievedb_open_userid(req->accountid);
+    if (!db) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
 
     /* Validate scriptId in onSuccessActivateScript */
-    if (!jerr && JNOTNULL(sub_args.onSuccessActivate)) {
+    if (JNOTNULL(sub_args.onSuccessActivate)) {
         const char *id = json_string_value(sub_args.onSuccessActivate);
         int found;
 
@@ -956,7 +743,10 @@ static int jmap_sieve_set(struct jmap_req *req)
             found = json_object_get(set.create, id+1) != NULL;
         }
         else if ((found = json_array_find(set.destroy, id) < 0)) {
-            found = script_from_id(sievedir, id, 0) != NULL;
+            struct sieve_data *sdata = NULL;
+
+            r = sievedb_lookup_id(db, id, &sdata, 0);
+            found = (!r && sdata->imap_uid);
         }
 
         if (!found) {
@@ -968,12 +758,13 @@ static int jmap_sieve_set(struct jmap_req *req)
         jmap_parser_pop(&parser);
     }
 
-    if (jerr) {
-        jmap_error(req, jerr);
-        goto done;
-    }
+    if (jerr) goto done;
 
-    set.old_state = sieve_state(sievedir);
+    r = sieve_open_folder(req->accountid, 1/*write*/, &mailbox);
+    if (r) goto done;
+
+    buf_printf(&buf, MODSEQ_FMT, mailbox->i.highestmodseq);
+    set.old_state = buf_release(&buf);
 
     if (set.if_in_state && strcmp(set.if_in_state, set.old_state)) {
         jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
@@ -986,7 +777,13 @@ static int jmap_sieve_set(struct jmap_req *req)
     json_t *val;
     if (json_object_size(set.create)) {
         /* Count existing scripts */
-        int num_scripts = sievedir_num_scripts(sievedir, NULL);
+        int num_scripts;
+
+        r = sievedb_count(db, &num_scripts);
+        if (r) {
+            r = IMAP_INTERNAL;
+            goto done;
+        }
 
         json_object_foreach(set.create, creation_id, val) {
             if (num_scripts >= maxscripts) {
@@ -995,7 +792,7 @@ static int jmap_sieve_set(struct jmap_req *req)
                 continue;
             }
 
-            script_id = set_create(req, creation_id, val, sievedir, &set);
+            script_id = set_create(req, creation_id, val, mailbox, db, &set);
             if (script_id) {
                 /* Register creation id */
                 jmap_add_id(req, creation_id, script_id);
@@ -1012,7 +809,7 @@ static int jmap_sieve_set(struct jmap_req *req)
         script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
         if (!script_id) continue;
 
-        set_update(req, script_id, val, sievedir, &set);
+        set_update(req, script_id, val, mailbox, db, &set);
     }
 
 
@@ -1023,7 +820,7 @@ static int jmap_sieve_set(struct jmap_req *req)
         script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
         if (!script_id) continue;
 
-        set_destroy(script_id, sievedir, &set);
+        set_destroy(script_id, mailbox, db, &set);
     }
 
     if (sub_args.onSuccessActivate &&
@@ -1032,21 +829,28 @@ static int jmap_sieve_set(struct jmap_req *req)
         !json_array_size(set.not_destroyed)) {
 
         id = json_string_value(sub_args.onSuccessActivate);
-        set_activate(id, sievedir, &set);
-    }
-
-    if (json_object_size(set.created) || json_object_size(set.updated) ||
-        json_array_size(set.destroyed)) {
-        sync_log_sieve(req->accountid);
+        set_activate(id, mailbox, db, &set);
     }
 
     /* Build response */
-    set.new_state = sieve_state(sievedir);
+    buf_reset(&buf);
+    buf_printf(&buf, MODSEQ_FMT, mailbox->i.highestmodseq);
+    set.new_state = buf_release(&buf);
     jmap_ok(req, jmap_set_reply(&set));
 
 done:
+    if (r) {
+        jerr = jmap_server_error(r);
+    }
+    if (jerr) {
+        jmap_error(req, jerr);
+    }
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
+
+    mailbox_close(&mailbox);
+    sievedb_close(db);
+
     return 0;
 }
 
@@ -1095,14 +899,14 @@ static int comparator_parse(jmap_req_t *req __attribute__((unused)),
 
 typedef struct filter {
     const char *name;
-    int isActive;
+    int isactive;
 } filter;
 
 static void *filter_build(json_t *arg)
 {
     filter *f = (filter *) xzmalloc(sizeof(struct filter));
 
-    f->isActive = -1;
+    f->isactive = -1;
 
     /* name */
     if (JNOTNULL(json_object_get(arg, "name"))) {
@@ -1111,7 +915,7 @@ static void *filter_build(json_t *arg)
 
     /* isActive */
     if (JNOTNULL(json_object_get(arg, "isActive"))) {
-        jmap_readprop(arg, "isActive", 0, NULL, "b", &f->isActive);
+        jmap_readprop(arg, "isActive", 0, NULL, "b", &f->isactive);
     }
 
     return f;
@@ -1121,44 +925,58 @@ static void *filter_build(json_t *arg)
 static int filter_match(void *vf, void *rock)
 {
     filter *f = (filter *) vf;
-    script_info *info = (script_info *) rock;
+    struct sieve_data *sdata = (struct sieve_data *) rock;
 
     /* name */
-    if (f->name && !strstr(info->name, f->name)) return 0;
+    if (f->name && !strstr(sdata->name, f->name)) return 0;
 
     /* isActive */
-    if (f->isActive != -1 && (info->isActive != f->isActive)) return 0;
+    if (f->isactive != -1 && ((int) sdata->isactive != f->isactive)) return 0;
 
     /* All matched. */
     return 1;
 }
 
+typedef struct script_info {
+    char *id;
+    char *name;
+    int isactive;
+} script_info;
+
+static void free_script_info(void *data)
+{
+    script_info *info = (script_info *) data;
+
+    if (!info) return;
+
+    free(info->id);
+    free(info->name);
+    free(info);
+}
+
 typedef struct filter_rock {
-    const char *sievedir;
     struct jmap_query *query;
     jmap_filter *parsed_filter;
     ptrarray_t matches;
     script_info *anchor;
 } filter_rock;
 
-static void filter_cb(const char *script, void *data, void *rock)
+static int filter_cb(void *rock, struct sieve_data *sdata)
 {
-    script_info *info = (script_info *) data;
     struct filter_rock *frock = (struct filter_rock *) rock;
     struct jmap_query *query = frock->query;
-
-    info->name = xstrdup(script);
-
-    if (!info->id) {
-        /* Create script id symlink */
-        info->id = xstrdup(makeuuid());
-        create_id_link(frock->sievedir, info->id, script);
-    }
+    script_info *info;
 
     if (query->filter &&
-        !jmap_filter_match(frock->parsed_filter, &filter_match, info)) {
-        return;
+        !jmap_filter_match(frock->parsed_filter, &filter_match, sdata)) {
+        return 0;
     }
+
+    info = xmalloc(sizeof(script_info));
+
+    info->id = xstrdup(sdata->id);
+    info->name = xstrdup(sdata->name);
+    info->isactive = sdata->isactive;
 
     /* Add record of the match to our array */
     ptrarray_append(&frock->matches, info);
@@ -1169,6 +987,8 @@ static void filter_cb(const char *script, void *data, void *rock)
     }
 
     query->total++;
+
+    return 0;
 }
 
 enum sieve_sort {
@@ -1195,9 +1015,9 @@ static int sieve_cmp QSORT_R_COMPAR_ARGS(const void *va, const void *vb, void *r
             break;
 
         case SIEVE_SORT_ACTIVE:
-            if (ma->isActive < mb->isActive)
+            if (ma->isactive < mb->isactive)
                 ret = -1;
-            else if (ma->isActive > mb->isActive)
+            else if (ma->isactive > mb->isactive)
                 ret = 1;
             break;
         }
@@ -1214,6 +1034,9 @@ static int jmap_sieve_query(jmap_req_t *req)
     struct jmap_query query;
     jmap_filter *parsed_filter = NULL;
     arrayu64_t sortcrit = ARRAYU64_INITIALIZER;
+    struct mailbox *mailbox = NULL;
+    struct sieve_db *db = NULL;
+    int r = 0;
 
     /* Parse request */
     json_t *err = NULL;
@@ -1251,16 +1074,19 @@ static int jmap_sieve_query(jmap_req_t *req)
         }
     }
 
-    hash_table scripts = HASH_TABLE_INITIALIZER;
-    const char *sievedir = user_sieve_path(req->accountid);
-    filter_rock frock =
-        { sievedir, &query, parsed_filter, PTRARRAY_INITIALIZER, NULL };
+    r = sieve_open_folder(req->accountid, 0/*write*/, &mailbox);
+    if (r) goto done;
 
-    /* Build a list of scripts */
-    _listscripts(sievedir, &scripts);
+    db = sievedb_open_userid(req->accountid);
+    if (!db) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    filter_rock frock = { &query, parsed_filter, PTRARRAY_INITIALIZER, NULL };
 
     /* Filter the scripts */
-    hash_enumerate(&scripts, &filter_cb, &frock);
+    sievedb_foreach(db, &filter_cb, &frock);
 
     /* Sort results */
     if (arrayu64_size(&sortcrit)) {
@@ -1294,21 +1120,29 @@ static int jmap_sieve_query(jmap_req_t *req)
             /* Add the submission identifier */
             json_array_append_new(query.ids, json_string(match->id));
         }
+
+        free_script_info(match);
     }
     ptrarray_fini(&frock.matches);
 
-    free_hash_table(&scripts, &free_script_info);
     if (parsed_filter) jmap_filter_free(parsed_filter, &free);
 
     /* Build response */
-    query.query_state = sieve_state(sievedir);
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, mailbox->i.highestmodseq);
+    query.query_state = buf_release(&buf);
     query.result_position = query.position;
     query.can_calculate_changes = 0;
     jmap_ok(req, jmap_query_reply(&query));
 
 done:
+    if (r) jmap_error(req, jmap_server_error(r));
     jmap_parser_fini(&parser);
     jmap_query_fini(&query);
+
+    mailbox_close(&mailbox);
+    sievedb_close(db);
+
     return 0;
 }
 
@@ -1351,10 +1185,7 @@ static int jmap_sieve_validate(struct jmap_req *req)
 
     /* parse the script */
     char *errors = NULL;
-    sieve_script_t *s = NULL;
-    (void) sieve_script_parse_string(NULL, content, &errors, &s);
-    if (s) {
-        sieve_script_free(&s);
+    if (sieve_script_parse_string(NULL, content, &errors, NULL) == SIEVE_OK) {
         err = json_null();
     }
     else {
@@ -2015,7 +1846,8 @@ static const char *_envelope_address_parse(json_t *addr,
 static int jmap_sieve_test(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    const char *key, *scriptid = NULL, *bcname = NULL, *tmpname = NULL;
+    const char *key, *scriptid = NULL;
+    const char *bcname = NULL, *tmpname = NULL;
     json_t *arg, *emailids = NULL, *envelope = NULL, *err = NULL;
     strarray_t env_from = STRARRAY_INITIALIZER;
     strarray_t env_to = STRARRAY_INITIALIZER;
@@ -2110,14 +1942,25 @@ static int jmap_sieve_test(struct jmap_req *req)
 
     if (scriptid[0] == 'S') {
         const char *sievedir = user_sieve_path(req->accountid);
-        const char *script =
-            script_from_id(sievedir, scriptid + 1, SCRIPT_NAME_ONLY);
+        struct sieve_data *sdata = NULL;
 
-        if (script) {
+        struct sieve_db *db = sievedb_open_userid(req->accountid);
+        if (!db) {
+            err = jmap_server_error(IMAP_INTERNAL);
+            goto done;
+        }
+
+        r = sievedb_lookup_id(db, scriptid+1, &sdata, 0);
+        if (r || !sdata->imap_uid) {
+            err = json_pack("{s:s}", "type", "notFound");
+        }
+        else {
             /* Use pre-compiled bytecode file */
-            buf_printf(&buf, "%s/%s%s", sievedir, script, BYTECODE_SUFFIX);
+            buf_printf(&buf, "%s/%s%s", sievedir, sdata->name, BYTECODE_SUFFIX);
             bcname = buf_cstring(&buf);
         }
+
+        sievedb_close(db);
     }
 
     if (!bcname) {
@@ -2158,9 +2001,9 @@ static int jmap_sieve_test(struct jmap_req *req)
         close(fd);
 
         bcname = tmpname = template;
-
-        if (err) goto done;
     }
+
+    if (err) goto done;
 
     /* load the script */
     r = sieve_script_load(bcname, &exe);
@@ -2305,19 +2148,18 @@ static int jmap_sieve_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     ctx->encoding = xstrdup("8BIT");
 
     /* Lookup scriptid */
-    const char *sievedir =
-        user_sieve_path(ctx->from_accountid ? ctx->from_accountid : req->accountid);
-    const char *script = script_from_id(sievedir, ctx->blobid+1, 0);
-    struct buf *content = NULL;
+    struct sieve_db *db = sievedb_open_userid(ctx->from_accountid ?
+                                              ctx->from_accountid : req->accountid);
+    struct sieve_data *sdata = NULL;
+    int r = HTTP_NOT_FOUND;
 
-    if (script) {
-        /* Load the script */
-        content = sievedir_get_script(sievedir, script);
+    if (db) (void) sievedb_lookup_id(db, ctx->blobid+1, &sdata, 0);
+    if (sdata && sdata->imap_uid) {
+        buf_setcstr(&ctx->blob, sdata->content);
+        r = HTTP_OK;
     }
-    if (!content) return HTTP_NOT_FOUND;
 
-    buf_move(&ctx->blob, content);
-    buf_destroy(content);
+    sievedb_close(db);
 
-    return HTTP_OK;
+    return r;
 }
