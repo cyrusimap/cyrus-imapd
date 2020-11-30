@@ -832,8 +832,7 @@ static int migrate_cb(const char *sievedir,
     return SIEVEDIR_OK;
 }
 
-EXPORTED int sieve_open_folder(const char *userid, int write,
-                               struct mailbox **mailboxptr)
+EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr)
 {
     const char *sievedir = user_sieve_path(userid);
     struct stat sbuf;
@@ -875,8 +874,7 @@ EXPORTED int sieve_open_folder(const char *userid, int write,
     }
 
     if (!r && mailboxptr) {
-        if (write) r = mailbox_open_iwl(mboxname, mailboxptr);
-        else r = mailbox_open_irl(mboxname, mailboxptr);
+        r = mailbox_open_iwl(mboxname, mailboxptr);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
                    mboxname, error_message(r));
@@ -910,9 +908,6 @@ EXPORTED int sieve_open_folder(const char *userid, int write,
     }
 
   done:
-    if (mailboxptr && *mailboxptr && !write) {
-        mailbox_unlock_index(*mailboxptr, NULL);
-    }
     mboxname_release(&namespacelock);
     mbname_free(&mbname);
     return r;

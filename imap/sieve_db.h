@@ -149,6 +149,6 @@ int sieve_script_rename(struct mailbox *mailbox,
 struct buf *sieve_script_fetch(struct mailbox *mailbox,
                                const struct sieve_data *sdata);
 
-int sieve_open_folder(const char *userid, int write, struct mailbox **mailboxptr);
+int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr);
 
 #endif /* SIEVE_DB_H */
