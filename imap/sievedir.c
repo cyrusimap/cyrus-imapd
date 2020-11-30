@@ -166,7 +166,10 @@ EXPORTED struct buf *sievedir_get_script(const char *sievedir,
     buf_printf(&buf, "%s/%s", sievedir, script);
 
     int fd = open(buf_cstring(&buf), 0);
-    if (fd < 0) return NULL;
+    if (fd < 0) {
+        buf_free(&buf);
+        return NULL;
+    }
 
     buf_free(&buf);
     buf_refresh_mmap(&buf, 1, fd, script, MAP_UNKNOWN_LEN, "sieve");
