@@ -142,9 +142,12 @@ int actions_setuser(const char *userid)
     sievedb = sievedb_open_userid(sieved_userid);
     if (!sievedb) return TIMSIEVE_FAIL;
 
-    result = sieve_open_folder(sieved_userid, 0/*write*/, &sieve_mailbox);
+    result = sieve_ensure_folder(sieved_userid, &sieve_mailbox);
+    if (result) return TIMSIEVE_FAIL;
 
-    return (result ? TIMSIEVE_FAIL : TIMSIEVE_OK);
+    mailbox_unlock_index(sieve_mailbox, NULL);
+
+    return TIMSIEVE_OK;
 }
 
 void actions_unsetuser(void)
