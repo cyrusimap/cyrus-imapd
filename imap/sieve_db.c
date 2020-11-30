@@ -835,21 +835,27 @@ static int migrate_cb(const char *sievedir,
 EXPORTED int sieve_open_folder(const char *userid, int write,
                                struct mailbox **mailboxptr)
 {
-    struct mboxlock *namespacelock = NULL;
     const char *sievedir = user_sieve_path(userid);
-    mbname_t *mbname = mbname_from_userid(userid);
     struct stat sbuf;
     int r;
 
     r = stat(sievedir, &sbuf);
     if (r && errno == ENOENT) {
-        if (!mailboxptr) return 0;
+        if (!mailboxptr) {
+            /* Don't bother continuing if sievedir doesn't currently exist */
+            return 0;
+        }
 
         r = cyrus_mkdir(sievedir, 0755);
         if (!r) {
             r = mkdir(sievedir, 0755);
         }
     }
+    if (r) return IMAP_IOERROR;
+
+
+    struct mboxlock *namespacelock = NULL;
+    mbname_t *mbname = mbname_from_userid(userid);
 
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_SIEVE_FOLDER));
 
