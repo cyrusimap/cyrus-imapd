@@ -229,6 +229,9 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
     case MBTYPE_JMAPPUSHSUB:
         buf_putc(&buf, 'p');
         break;
+    case MBTYPE_SIEVE:
+        buf_putc(&buf, 'f');
+        break;
     }
 
     /* mailbox flags */
@@ -460,6 +463,9 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
         switch (*string) {
         case 'd':
             mbtype |= MBTYPE_DELETED;
+            break;
+        case 'f':
+            mbtype |= MBTYPE_SIEVE;
             break;
         case 'i':
             mbtype |= MBTYPE_INTERMEDIATE;
