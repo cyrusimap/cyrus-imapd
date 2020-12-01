@@ -5197,3 +5197,11 @@ EXPORTED int http_read_req_body(struct transaction_t *txn)
     /* Read body from client */
     return http_read_body(txn->conn->pin, txn->req_hdrs, body, &txn->error.desc);
 }
+
+void request_target_fini(struct request_target_t *tgt)
+{
+    if (!tgt) return;
+    free(tgt->userid);
+    tgt->userid = NULL;
+    mboxlist_entry_free(&tgt->mbentry);
+}

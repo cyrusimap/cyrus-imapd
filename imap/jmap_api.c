@@ -2864,8 +2864,14 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
                        strhash(irock->tgt.mbentry->name),
                        strhash(userid));
 
-            r = dav_send_notification(irock->notify->doc,
-                                      userid, buf_cstring(&irock->resource));
+            struct dlist *extradata = dlist_newkvlist(NULL, "ACL");
+            char rights[100];
+            cyrus_acl_masktostr(change->oldrights, rights);
+            dlist_setatom(extradata, "OLD", rights);
+            cyrus_acl_masktostr(change->newrights, rights);
+            dlist_setatom(extradata, "NEW", rights);
+            r = dav_send_notification(irock->notify->doc, extradata,
+                    userid, buf_cstring(&irock->resource));
         }
     }
 }
