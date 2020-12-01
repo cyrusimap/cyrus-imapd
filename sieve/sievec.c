@@ -91,7 +91,7 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    instream = fopen(argv[optind],"r");
+    instream = !strcmp(argv[optind], "-") ? stdin : fopen(argv[optind], "r");
     if(instream == NULL) {
         fprintf(stderr, "Unable to open %s for reading\n", argv[optind]);
         exit(1);
