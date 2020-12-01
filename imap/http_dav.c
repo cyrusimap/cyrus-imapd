@@ -138,8 +138,6 @@ static void my_dav_shutdown(void);
 static int get_server_info(struct transaction_t *txn);
 
 static unsigned long principal_allow_cb(struct request_target_t *tgt);
-static int principal_parse_path(const char *path, struct request_target_t *tgt,
-                                const char **resultstr);
 static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
                                   struct propfind_ctx *fctx,
                                   xmlNodePtr prop, xmlNodePtr resp,
@@ -511,7 +509,7 @@ static unsigned long principal_allow_cb(struct request_target_t *tgt)
 
 
 /* Parse request-target path in DAV principals namespace */
-static int principal_parse_path(const char *path, struct request_target_t *tgt,
+HIDDEN int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **resultstr)
 {
     char *p;

@@ -64,6 +64,7 @@
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
+#include "http_dav_sharing.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "ical_support.h"
@@ -101,6 +102,11 @@ static int jmap_calendarprincipal_changes(struct jmap_req *req);
 static int jmap_calendarprincipal_querychanges(struct jmap_req *req);
 static int jmap_calendarprincipal_set(struct jmap_req *req);
 static int jmap_calendarprincipal_getavailability(struct jmap_req *req);
+static int jmap_calendarsharenotification_get(struct jmap_req *req);
+static int jmap_calendarsharenotification_set(struct jmap_req *req);
+static int jmap_calendarsharenotification_changes(struct jmap_req *req);
+static int jmap_calendarsharenotification_query(struct jmap_req *req);
+static int jmap_calendarsharenotification_querychanges(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
@@ -189,12 +195,72 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "CalendarPrincipal/set",
         JMAP_URN_CALENDARPRINCIPALS,
         &jmap_calendarprincipal_set,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "CalendarPrincipal/getAvailability",
         JMAP_URN_CALENDARPRINCIPALS,
         &jmap_calendarprincipal_getavailability,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarShareNotification/get",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_get,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarShareNotification/set",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_set,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "CalendarShareNotification/changes",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_changes,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarShareNotification/query",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_query,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarShareNotification/queryChanges",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_querychanges,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarShareNotification/get",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_get,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarShareNotification/set",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_set,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "CalendarShareNotification/changes",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_changes,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarShareNotification/query",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_query,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarShareNotification/queryChanges",
+        JMAP_URN_CALENDARPRINCIPALS,
+        &jmap_calendarsharenotification_querychanges,
         JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
@@ -6221,6 +6287,7 @@ static int eventquery_run(jmap_req_t *req,
             0 : ptrarray_size(&matches) + query->position;
     }
     else startpos = query->position;
+    query->result_position = startpos;
 
     /* Build result list */
     size_t i;
@@ -8211,5 +8278,821 @@ done:
     }
     jmap_parser_fini(&parser);
     free(principalid);
+    return 0;
+}
+
+static const jmap_property_t calendarsharenotification_props[] = {
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "created",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "changedBy",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "calendarAccountId",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "calendarId",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "calendarName",
+        NULL,
+        0,
+    },
+    {
+        "oldRights",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "newRights",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    { NULL, NULL, 0 }
+};
+
+static json_t *sharenotification_tojmap(jmap_req_t *req, message_t *msg, hash_table *props)
+{
+    struct buf buf = BUF_INITIALIZER;
+    json_t *jn = NULL;
+    mbname_t *mbname = NULL;
+    struct dlist *dl = NULL;
+    xmlDocPtr doc = NULL;
+
+    /* Read message */
+    uint32_t uid;
+    message_get_uid(msg, &uid);
+
+    const struct message_guid *guid = NULL;
+    if (message_get_guid(msg, &guid)) {
+        goto done;
+    }
+
+    struct index_record record = *msg_record(msg);
+    if ((record.system_flags & FLAG_DELETED) ||
+            (record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        goto done;
+    }
+
+    const struct body *body;
+    int r = message_get_cachebody(msg, &body);
+    if (r) {
+        xsyslog(LOG_ERR, "can't open cachebody", "uid=%d error=%s",
+                uid, error_message(r));
+        goto done;
+    }
+    r = dlist_parsemap(&dl, 1, 0, body->description, strlen(body->description));
+    if (r) {
+        xsyslog(LOG_ERR, "can't parse description", "uid=%d error=%s",
+                uid, error_message(r));
+        goto done;
+    }
+
+    /* Make sure it's a calendar share notification */
+    int is_sharenotif = 0;
+    const char *t;
+    if (dlist_getatom(dl, "T", &t) && !strcmp(t, SHARE_INVITE_NOTIFICATION)) {
+        struct dlist *ddl = dlist_getchild(dl, "D");
+        if (ddl) {
+            const char *mboxname;
+            if (dlist_getatom(ddl, "M", &mboxname) &&
+                    mboxname_iscalendarmailbox(mboxname, 0)) {
+                is_sharenotif = 1;
+            }
+        }
+    }
+    if (!is_sharenotif) goto done;
+
+    struct dlist *ddl = dlist_getchild(dl, "D");
+    if (ddl) {
+        const char *mboxname;
+        if (dlist_getatom(ddl, "M", &mboxname)) {
+            mbname = mbname_from_intname(mboxname);
+        }
+    }
+    if (!mbname) goto done;
+
+    /* Parse XML notification */
+    if (!message_get_body(msg, &buf)) {
+        xmlParserCtxtPtr ctxt = xmlNewParserCtxt();
+        if (ctxt) {
+            doc = xmlCtxtReadMemory(ctxt, buf_base(&buf), buf_len(&buf),
+                    NULL, NULL, XML_PARSE_NOWARNING);
+            xmlFreeParserCtxt(ctxt);
+        }
+        buf_reset(&buf);
+    }
+    if (!doc) goto done;
+    xmlNodePtr root = xmlDocGetRootElement(doc);
+    if (!root) goto done;
+
+    /* id */
+    jn = json_object();
+    json_object_set_new(jn, "id", json_string(message_guid_encode(guid)));
+
+    if (jmap_wantprop(props, "created")) {
+        xmlNodePtr node = xmlFirstElementChild(root);
+        if (node && !xmlStrcmp(node->name, BAD_CAST "dtstamp")) {
+            xmlChar *val = xmlNodeGetContent(node);
+            json_object_set_new(jn, "created", json_string((const char*) val));
+            xmlFree(val);
+        }
+    }
+
+    const char *calid = strarray_nth(mbname_boxes(mbname), -1);
+    if (jmap_wantprop(props, "calendarId")) {
+        json_object_set_new(jn, "calendarId", json_string(calid));
+    }
+    if (jmap_wantprop(props, "calendarAccountId")) {
+        json_object_set_new(jn, "calendarAccountId",
+                json_string(mbname_userid(mbname)));
+    }
+
+    xmlNodePtr node;
+    for (node = xmlFirstElementChild(xmlLastElementChild(root)); node;
+            node = xmlNextElementSibling(node)) {
+
+        if (jmap_wantprop(props, "calendarName") &&
+                !xmlStrcmp(node->name, BAD_CAST "prop")) {
+            xmlNodePtr node2;
+            for (node2 = xmlFirstElementChild(node);
+                    node2; node2 = xmlNextElementSibling(node2)) {
+                if (!xmlStrcmp(node2->name, BAD_CAST "displayname")) {
+                    xmlChar *val = xmlNodeGetContent(node2);
+                    if (val) {
+                        json_object_set_new(jn, "calendarName",
+                                json_string((const char*)val));
+                    }
+                    xmlFree(val);
+                }
+            }
+        }
+        else if (jmap_wantprop(props, "changedBy") &&
+                !xmlStrcmp(node->name, BAD_CAST "principal")) {
+            json_t *changedby = json_object();
+            xmlChar *xhref = NULL;
+            xmlChar *xname = NULL;
+            xmlNodePtr node2;
+            for (node2 = xmlFirstElementChild(node);
+                    node2; node2 = xmlNextElementSibling(node2)) {
+                if (!xmlStrcmp(node2->name, BAD_CAST "href")) {
+                    xhref = xmlNodeGetContent(node2);
+                }
+                else if (!xmlStrcmp(node2->name, BAD_CAST "prop")) {
+                    xmlNodePtr node3 = xmlFirstElementChild(node2);
+                    if (node3 && !xmlStrcmp(node3->name, BAD_CAST "displayname")) {
+                        xname = xmlNodeGetContent(node3);
+                    }
+                }
+            }
+            if (xhref) {
+                const char *href = (const char *) xhref;
+                struct request_target_t tgt = { 0 };
+                tgt.allow = ALLOW_CAL;
+                const char *errstr = NULL;
+                if (principal_parse_path(href, &tgt, &errstr) == 0) {
+                    json_object_set_new(changedby, "calendarPrincipalId",
+                            json_string(tgt.userid));
+
+                    json_t *email = json_null();
+                    char *calhomename = caldav_mboxname(tgt.userid, NULL);
+                    strarray_t addrs = STRARRAY_INITIALIZER;
+                    get_schedule_addresses(NULL, calhomename, tgt.userid, &addrs);
+                    if (strarray_size(&addrs)) {
+                        const char *addr = strarray_nth(&addrs, 0);
+                        if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
+                        if (*addr) email = json_string(strarray_nth(&addrs, 0));
+                    }
+                    json_object_set_new(changedby, "email", email);
+                    strarray_fini(&addrs);
+                    free(calhomename);
+                    request_target_fini(&tgt);
+                }
+            }
+            if (xname) {
+                json_object_set_new(changedby, "name",
+                        json_string((const char *)xname));
+            }
+            if (!json_object_size(changedby)) {
+                json_decref(changedby);
+                changedby = json_null();
+            }
+            json_object_set_new(jn, "changedBy", changedby);
+            xmlFree(xname);
+            xmlFree(xhref);
+        }
+    }
+
+    if (jmap_wantprop(props, "oldRights") || jmap_wantprop(props, "newRights")) {
+        json_t *oldrights = json_null();
+        json_t *newrights = json_null();
+        struct dlist *xl = dlist_getchild(dlist_getchild(dl, "X"), "ACL");
+        if (xl) {
+            const char *aclstr = NULL;
+            int is_owner = !strcmp(req->userid, mbname_userid(mbname));
+            if (dlist_getatom(xl, "OLD", &aclstr) && *aclstr) {
+                int rights;
+                if (cyrus_acl_strtomask(aclstr, &rights) == 0) {
+                    oldrights = calendarrights_to_jmap(rights, is_owner);
+                }
+            }
+            if (dlist_getatom(xl, "NEW", &aclstr) && *aclstr) {
+                int rights;
+                if (cyrus_acl_strtomask(aclstr, &rights) == 0) {
+                    newrights = calendarrights_to_jmap(rights, is_owner);
+                }
+            }
+        }
+        if (jmap_wantprop(props, "oldRights")) {
+            json_object_set_new(jn, "oldRights", oldrights);
+        }
+        else json_decref(oldrights);
+        if (jmap_wantprop(props, "newRights")) {
+            json_object_set_new(jn, "newRights", newrights);
+        }
+        else json_decref(newrights);
+    }
+
+done:
+    if (doc) xmlFreeDoc(doc);
+    mbname_free(&mbname);
+    dlist_free(&dl);
+    buf_free(&buf);
+    return jn;
+}
+
+struct find_folderuid_rock {
+    int foldernum;
+    uint32_t uid;
+};
+
+static int find_folderuid_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct find_folderuid_rock *rock = vrock;
+    if (rec->foldernum != rock->foldernum) {
+        return 0;
+    }
+    if ((rec->system_flags & FLAG_DELETED) ||
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        return 0;
+    }
+    rock->uid = rec->uid;
+    return CYRUSDB_DONE;
+}
+
+static int jmap_calendarsharenotification_get(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
+    struct mailbox *notifmbox = NULL;
+    mbentry_t *notifymb = NULL;
+
+    jmap_get_parse(req, &parser, calendarsharenotification_props,
+                   1, NULL, NULL, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    int r = dav_lookup_notify_collection(req->accountid, &notifymb);
+    if (!r) {
+        if (jmap_hasrights_mbentry(req, notifymb, JACL_READITEMS)) {
+            r = jmap_openmbox(req, notifymb->name, &notifmbox, 0);
+        }
+        else r = IMAP_PERMISSION_DENIED;
+    }
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+
+    if (JNOTNULL(get.ids)) {
+        json_t *jval;
+        size_t i;
+        int foldernum = conversation_folder_number(req->cstate,
+                CONV_FOLDER_KEY_MBE(req->cstate, notifymb), 0);
+        json_array_foreach(get.ids, i, jval) {
+            const char *id = json_string_value(jval);
+            json_t *jn = NULL;
+            struct find_folderuid_rock rock = { foldernum, 0 };
+            conversations_guid_foreach(req->cstate, id, find_folderuid_cb, &rock);
+            if (rock.uid) {
+                message_t *msg = message_new_from_mailbox(notifmbox, rock.uid);
+                if (msg) {
+                    jn = sharenotification_tojmap(req, msg, get.props);
+                    message_unref(&msg);
+                }
+            }
+            if (jn) {
+                json_array_append_new(get.list, jn);
+            }
+            else json_array_append_new(get.not_found, json_string(id));
+        }
+    }
+    else {
+        struct mailbox_iter *iter = mailbox_iter_init(notifmbox, 0, 0);
+        message_t *msg;
+        while ((msg = (message_t *) mailbox_iter_step(iter))) {
+            json_t *jn = sharenotification_tojmap(req, msg, get.props);
+            if (jn) json_array_append_new(get.list, jn);
+        }
+        mailbox_iter_done(&iter);
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, req->counters.davnotificationmodseq);
+    get.state = buf_release(&buf);
+    jmap_ok(req, jmap_get_reply(&get));
+
+done:
+    mboxlist_entry_free(&notifymb);
+    jmap_closembox(req, &notifmbox);
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    return 0;
+}
+
+static void sharenotif_set_destroy(struct jmap_req *req,
+                                   struct jmap_set *set,
+                                   mbentry_t *notifmb,
+                                   json_t **err)
+{
+    if (!json_array_size(set->destroy)) return;
+
+    struct mailbox *notifmbox = NULL;
+    int r = jmap_openmbox(req, notifmb->name, &notifmbox, 1);
+    if (r) {
+        *err = jmap_server_error(r);
+        return;
+    }
+    int foldernum = conversation_folder_number(req->cstate,
+            CONV_FOLDER_KEY_MBE(req->cstate, notifmb), 0);
+
+    size_t i;
+    json_t *jval;
+    json_array_foreach(set->destroy, i, jval) {
+        const char *id = json_string_value(jval);
+
+        struct find_folderuid_rock rock = { foldernum, 0 };
+        struct index_record record;
+        r = conversations_guid_foreach(req->cstate, id, find_folderuid_cb, &rock);
+        if (rock.uid) {
+            r = mailbox_find_index_record(notifmbox, rock.uid, &record);
+            if (!r) {
+                record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+                r = mailbox_rewrite_index_record(notifmbox, &record);
+            }
+        }
+        if (!r && rock.uid) {
+            struct mboxevent *mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+            mboxevent_extract_record(mboxevent, notifmbox, &record);
+            mboxevent_extract_mailbox(mboxevent, notifmbox);
+            mboxevent_set_numunseen(mboxevent, notifmbox, -1);
+            mboxevent_set_access(mboxevent, NULL, NULL,
+                    req->userid, mailbox_name(notifmbox), 0);
+            mboxevent_notify(&mboxevent);
+            mboxevent_free(&mboxevent);
+
+            json_array_append(set->destroyed, jval);
+        }
+        else {
+            json_object_set_new(set->not_destroyed, id,
+                    r ? jmap_server_error(r) : json_pack("{s:s}", "type", "notFound"));
+        }
+    }
+
+    jmap_closembox(req, &notifmbox);
+}
+
+static int jmap_calendarsharenotification_set(struct jmap_req *req)
+{
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+    struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set;
+    json_t *err = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    mbentry_t *notifmb = NULL;
+
+    /* Parse arguments */
+    jmap_set_parse(req, &argparser, NULL, NULL, NULL, &set, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    buf_printf(&buf, MODSEQ_FMT, req->counters.davnotificationmodseq);
+    set.old_state = buf_release(&buf);
+
+    if (set.if_in_state && strcmp(set.old_state, set.if_in_state)) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
+    }
+
+    int r = dav_lookup_notify_collection(req->accountid, &notifmb);
+    if (!r) {
+        static int needrights = JACL_READITEMS|JACL_REMOVEITEMS;
+        if (!jmap_hasrights_mbentry(req, notifmb, needrights)) {
+            r = IMAP_PERMISSION_DENIED;
+        }
+    }
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+
+    const char *id;
+    json_t *jval;
+    json_object_foreach(set.create, id, jval) {
+        json_object_set_new(set.not_created, id,
+                json_pack("{s:s}", "type", "forbidden"));
+    }
+    json_object_foreach(set.update, id, jval) {
+        json_object_set_new(set.not_updated, id,
+                json_pack("{s:s}", "type", "forbidden"));
+    }
+    sharenotif_set_destroy(req, &set, notifmb, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    if (json_array_size(set.destroyed)) {
+        mboxname_read_counters(notifmb->name, &req->counters);
+    }
+    buf_printf(&buf, MODSEQ_FMT, req->counters.davnotificationmodseq);
+    set.new_state = buf_release(&buf);
+    jmap_ok(req, jmap_set_reply(&set));
+
+done:
+    mboxlist_entry_free(&notifmb);
+    mboxname_release(&namespacelock);
+    jmap_parser_fini(&argparser);
+    jmap_set_fini(&set);
+    buf_free(&buf);
+    return 0;
+}
+
+struct sharenotif_entry {
+    struct message_guid guid;
+    int is_expunged;
+    modseq_t modseq;
+    time_t created;
+};
+
+static void sharenotif_search(struct mailbox *notifmbox,
+                              modseq_t since_modseq,
+                              time_t before,
+                              time_t after,
+                              int want_expunged,
+                              struct dynarray *entries)
+{
+    struct mailbox_iter *iter = mailbox_iter_init(notifmbox, 0, 0);
+    message_t *msg;
+    while ((msg = (message_t *) mailbox_iter_step(iter))) {
+        struct sharenotif_entry entry = { { 0 }, 0, 0, 0 };
+
+        if (message_get_modseq(msg, &entry.modseq) ||
+                entry.modseq <= since_modseq) {
+            continue;
+        }
+        if (message_get_internaldate(msg, &entry.created) ||
+                (before && entry.created >= before) ||
+                (after && entry.created < after)) {
+            continue;
+        }
+
+        const struct message_guid *guid = NULL;
+        if (message_get_guid(msg, &guid)) {
+            continue;
+        }
+        entry.guid = *guid;
+
+        uint32_t system_flags;
+        uint32_t internal_flags;
+        if (message_get_systemflags(msg, &system_flags) ||
+            message_get_internalflags(msg, &internal_flags)) {
+            continue;
+        }
+        entry.is_expunged = (system_flags & FLAG_DELETED) ||
+            (internal_flags & FLAG_INTERNAL_EXPUNGED);
+        if (entry.is_expunged && !want_expunged) {
+            continue;
+        }
+
+        dynarray_append(entries, &entry);
+    }
+    mailbox_iter_done(&iter);
+}
+
+static int sharenotif_modseq_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                                     const void *vb,
+                                                     void *rock __attribute__((unused)))
+{
+    const struct sharenotif_entry *a = va;
+    const struct sharenotif_entry *b = vb;
+    if (a->modseq < b->modseq)
+        return -1;
+    else if (a->modseq > b->modseq)
+        return 1;
+    else
+        return 0;
+}
+
+static int jmap_calendarsharenotification_changes(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes;
+    struct buf buf = BUF_INITIALIZER;
+    mbentry_t *notifmb = NULL;
+    struct mailbox *notifmbox = NULL;
+    json_t *err = NULL;
+
+    /* Parse request */
+    jmap_changes_parse(req, &parser, req->counters.davnotificationdeletedmodseq,
+                       NULL, NULL, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    int r = dav_lookup_notify_collection(req->accountid, &notifmb);
+    if (!r) {
+        static int needrights = JACL_READITEMS;
+        if (jmap_hasrights_mbentry(req, notifmb, needrights)) {
+            r = jmap_openmbox(req, notifmb->name, &notifmbox, 0);
+        }
+        else r = IMAP_PERMISSION_DENIED;
+    }
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+
+    if (changes.since_modseq < req->counters.davnotificationdeletedmodseq) {
+        jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+        goto done;
+    }
+
+    /* Lookup and sort entries */
+    struct dynarray *entries = dynarray_new(sizeof(struct sharenotif_entry));
+    sharenotif_search(notifmbox, changes.since_modseq, 0, 0, 1, entries);
+    cyr_qsort_r(entries->data, entries->count, sizeof(struct sharenotif_entry),
+            (int(*)(const void*, const void*, void*))sharenotif_modseq_cmp, NULL);
+
+    /* Clamp entries to maxChanges and determine newState */
+    if (changes.max_changes && changes.max_changes < (size_t) dynarray_size(entries)) {
+        dynarray_truncate(entries, changes.max_changes);
+        struct sharenotif_entry *entry = dynarray_nth(entries, -1);
+        changes.new_modseq = entry->modseq;
+        changes.has_more_changes = 1;
+    }
+    else if (dynarray_size(entries)) {
+        struct sharenotif_entry *entry = dynarray_nth(entries, -1);
+        changes.new_modseq = entry->modseq;
+    }
+    else changes.new_modseq = req->counters.davnotificationmodseq;
+
+    /* Build response */
+    int i;
+    for (i = 0; i < dynarray_size(entries); i++) {
+        struct sharenotif_entry *entry = dynarray_nth(entries, i);
+        json_array_append_new(entry->is_expunged ?
+                changes.destroyed : changes.created,
+                json_string(message_guid_encode(&entry->guid)));
+    }
+    dynarray_free(&entries);
+
+    jmap_ok(req, jmap_changes_reply(&changes));
+
+  done:
+    jmap_closembox(req, &notifmbox);
+    mboxlist_entry_free(&notifmb);
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
+    buf_free(&buf);
+    return 0;
+}
+
+static void sharenotif_validatefilter(jmap_req_t *req __attribute__((unused)),
+                                      struct jmap_parser *parser,
+                                      json_t *filter,
+                                      json_t *unsupported __attribute__((unused)),
+                                      void *rock __attribute__((unused)),
+                                      json_t **err __attribute__((unused)))
+{
+    const char *field;
+    json_t *arg;
+
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "after") || !strcmp(field, "before")) {
+            if (JNOTNULL(arg)) {
+                struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+                const char *s = json_string_value(arg);
+                if (!s || jmapical_utcdatetime_from_string(s, &dt) == -1) {
+                    jmap_parser_invalid(parser, field);
+                }
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, field);
+        }
+    }
+}
+
+static int sharenotif_validatecomparator(jmap_req_t *req __attribute__((unused)),
+                                            struct jmap_comparator *comp,
+                                            void *rock __attribute__((unused)),
+                                            json_t **err __attribute__((unused)))
+{
+    if (comp->collation) {
+        return 0;
+    }
+    if (!strcmp(comp->property, "created")) {
+        return 1;
+    }
+    return 0;
+}
+
+static int sharenotif_created_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                                      const void *vb,
+                                                      void *rock)
+{
+    const struct sharenotif_entry *a = va;
+    const struct sharenotif_entry *b = vb;
+    intptr_t is_ascending = (intptr_t) rock;
+    int sign = is_ascending ? 1 : -1;
+
+    if (a->created < b->created)
+        return -1 * sign;
+    else if (a->created > b->created)
+        return 1 * sign;
+    else
+        return 0;
+}
+
+static int jmap_calendarsharenotification_query(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_query query;
+    struct mailbox *notifmbox = NULL;
+    mbentry_t *notifmb = NULL;
+
+    /* Parse request */
+    json_t *err = NULL;
+    jmap_query_parse(req, &parser, NULL, NULL,
+                     sharenotif_validatefilter, NULL,
+                     sharenotif_validatecomparator, NULL,
+                     &query, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(err, "arguments", parser.invalid);
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Read filter. Only simple FilterCondition is supported. */
+    if (JNOTNULL(json_object_get(query.filter, "op"))) {
+        jmap_error(req, json_pack("{s:s}", "type", "unsupportedFilter"));
+        goto done;
+    }
+    if (json_array_size(query.sort) > 1) {
+        jmap_error(req, json_pack("{s:s}", "type", "unsupportedFilter"));
+        goto done;
+    }
+    time_t after = 0, before = 0;
+    const icaltimezone *utc = icaltimezone_get_utc_timezone();
+    json_t *jval = json_object_get(query.filter, "before");
+    if (json_is_string(jval)) {
+        struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+        if (!jmapical_utcdatetime_from_string(json_string_value(jval), &dt)) {
+            icaltimetype icaldt = jmapical_datetime_to_icaltime(&dt, utc);
+            before = icaltime_as_timet_with_zone(icaldt, utc);
+        }
+    }
+    jval = json_object_get(query.filter, "after");
+    if (json_is_string(jval)) {
+        struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+        if (!jmapical_utcdatetime_from_string(json_string_value(jval), &dt)) {
+            icaltimetype icaldt = jmapical_datetime_to_icaltime(&dt, utc);
+            after = icaltime_as_timet_with_zone(icaldt, utc);
+        }
+    }
+    int is_ascending = 1;
+    jval = json_object_get(json_array_get(query.sort, 0), "isAscending");
+    if (jval) {
+        is_ascending = json_boolean_value(jval);
+    }
+
+    int r = dav_lookup_notify_collection(req->accountid, &notifmb);
+    if (!r) {
+        static int needrights = JACL_READITEMS;
+        if (jmap_hasrights_mbentry(req, notifmb, needrights)) {
+            r = jmap_openmbox(req, notifmb->name, &notifmbox, 0);
+        }
+        else r = IMAP_PERMISSION_DENIED;
+    }
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+
+    /* Find entries */
+    struct dynarray *entries = dynarray_new(sizeof(struct sharenotif_entry));
+    sharenotif_search(notifmbox, 0, before, after, 0, entries);
+    cyr_qsort_r(entries->data, entries->count, sizeof(struct sharenotif_entry),
+            (int(*)(const void*, const void*, void*))sharenotif_created_cmp,
+            (void*)(intptr_t) is_ascending);
+    query.total = dynarray_size(entries);
+
+    /* Apply windowing */
+    size_t startpos = 0;
+    if (query.anchor) {
+        ssize_t j;
+        for (j = 0; j < dynarray_size(entries); j++) {
+            struct sharenotif_entry *entry = dynarray_nth(entries, j);
+            if (!strcmpsafe(query.anchor, message_guid_encode(&entry->guid))) {
+                /* Found anchor */
+                if (query.anchor_offset < 0) {
+                    startpos = -query.anchor_offset > j ?
+                        0 : j + query.anchor_offset;
+                }
+                else {
+                    startpos = j + query.anchor_offset;
+                }
+                break;
+            }
+        }
+    }
+    else if (query.position < 0) {
+        startpos = ((size_t) -query.position) > (size_t) dynarray_size(entries) ?
+            0 : dynarray_size(entries) + query.position;
+    }
+    else startpos = query.position;
+    query.result_position = startpos;
+    /* Build result list */
+    size_t i;
+    for (i = startpos; i < (size_t) dynarray_size(entries); i++) {
+        if (query.have_limit && json_array_size(query.ids) >= query.limit) {
+            break;
+        }
+        struct sharenotif_entry *entry = dynarray_nth(entries, i);
+        json_array_append_new(query.ids,
+                json_string(message_guid_encode(&entry->guid)));
+    }
+    dynarray_free(&entries);
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, req->counters.davnotificationmodseq);
+    query.query_state = buf_release(&buf);
+
+    json_t *res = jmap_query_reply(&query);
+    jmap_ok(req, res);
+
+done:
+    jmap_closembox(req, &notifmbox);
+    mboxlist_entry_free(&notifmb);
+    jmap_query_fini(&query);
+    jmap_parser_fini(&parser);
+    return 0;
+}
+
+static int jmap_calendarsharenotification_querychanges(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_querychanges query;
+
+    json_t *err = NULL;
+    jmap_querychanges_parse(req, &parser, NULL, NULL,
+                            sharenotif_validatefilter, NULL,
+                            sharenotif_validatecomparator, NULL,
+                            &query, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+
+done:
+    jmap_querychanges_fini(&query);
+    jmap_parser_fini(&parser);
     return 0;
 }
