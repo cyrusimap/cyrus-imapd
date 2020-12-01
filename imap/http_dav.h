@@ -819,4 +819,8 @@ int proppatch_todb(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
 int proppatch_restype(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
                       struct propstat propstat[], void *rock);
 
+/* Parse request-target path in DAV principals namespace */
+int principal_parse_path(const char *path, struct request_target_t *tgt,
+                         const char **resultstr);
+
 #endif /* HTTP_DAV_H */
