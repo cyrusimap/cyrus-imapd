@@ -11765,7 +11765,6 @@ static int xfer_finalsync(struct xfer_header *xfer)
     if (!r && xfer->userid) {
         r = sync_do_user_seen(&xfer->sync_cs, xfer->userid, replica_seen);
         if (!r) r = sync_do_user_sub(&xfer->sync_cs, xfer->userid, replica_subs);
-        if (!r) r = sync_do_user_sieve(&xfer->sync_cs, xfer->userid, replica_sieve);
     }
 
   done:

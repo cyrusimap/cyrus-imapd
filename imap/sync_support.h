@@ -321,14 +321,7 @@ struct sync_sieve_list {
 
 struct sync_sieve_list *sync_sieve_list_create(void);
 
-struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l,
-                                     const char *name);
-
 void sync_sieve_list_free(struct sync_sieve_list **lp);
-
-struct sync_sieve_list *sync_sieve_list_generate(const char *userid);
-
-char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep);
 
 int sync_sieve_upload(const char *userid, const char *name,
                       time_t last_update, const char *content, size_t len);
@@ -533,8 +526,6 @@ int sync_do_user_sub(struct sync_client_state *sync_cs, const char *userid,
                      struct sync_name_list *replica_subs);
 int sync_do_user_seen(struct sync_client_state *sync_cs, const char *userid,
                       struct sync_seen_list *replica_seen);
-int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
-                       struct sync_sieve_list *replica_sieve);
 
 int sync_do_restart(struct sync_client_state *sync_cs);
 
