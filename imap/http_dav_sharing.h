@@ -88,8 +88,10 @@ int dav_create_invite(xmlNodePtr *notify, xmlNsPtr *ns,
                       struct request_target_t *tgt,
                       const struct prop_entry *live_props,
                       const char *sharee, int access, xmlChar *content);
-int dav_send_notification(xmlDocPtr doc,
+int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
                           const char *userid, const char *resource);
+
+int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentry);
 
 int notify_post(struct transaction_t *txn);
 
