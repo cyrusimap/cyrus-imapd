@@ -61,7 +61,10 @@
 
 #define SIEVEDIR_MAX_NAME_LEN  1024 - SCRIPT_SUFFIX_LEN - 4 /* for ".NEW" */
 
-int sievedir_foreach(const char *sievedir,
+#define SIEVEDIR_SCRIPTS_ONLY  (1<<0)
+#define SIEVEDIR_IGNORE_JUNK   (1<<1)
+
+int sievedir_foreach(const char *sievedir, unsigned flags,
                      int (*func)(const char *sievedir,
                                  const char *name, struct stat *sbuf,
                                  const char *link_target, void *rock),

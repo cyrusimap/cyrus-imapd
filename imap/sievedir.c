@@ -63,7 +63,7 @@
 #include "util.h"
 #include "xstrlcpy.h"
 
-EXPORTED int sievedir_foreach(const char *sievedir,
+EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
                               int (*func)(const char *sievedir,
                                           const char *name, struct stat *sbuf,
                                           const char *target, void *rock),
@@ -87,27 +87,44 @@ EXPORTED int sievedir_foreach(const char *sievedir,
 
     while ((dir = readdir(dp)) != NULL) {
         const char *name = dir->d_name;
-        const char *dot;
         char target[PATH_MAX] = "";
         struct stat sbuf;
 
         if (!strcmp(name, ".") || !strcmp(name, "..")) continue;
 
-        /* ignore transient .NEW files */
-        if ((dot = strrchr(name, '.')) && !strcmp(dot, ".NEW")) continue;
-
         strlcpy(path + dir_len, name, sizeof(path) - dir_len);
 
         if (lstat(path, &sbuf) < 0) continue;
 
-        if (S_ISLNK(sbuf.st_mode)) {
+        if (S_ISREG(sbuf.st_mode)) {
+            if (flags) {
+                const char *ext = strrchr(name, '.');
+
+                if (!ext || strcmp(ext, SCRIPT_SUFFIX)) {
+                    if (flags & SIEVEDIR_SCRIPTS_ONLY) {
+                        /* ignore non-scripts */
+                        continue;
+                    }
+                    if ((flags & SIEVEDIR_IGNORE_JUNK) &&
+                        strcmp(ext, BYTECODE_SUFFIX)) {
+                        /* ignore non-bytecode */
+                        continue;
+                    }
+                }
+            }
+        }
+        else if (flags & SIEVEDIR_SCRIPTS_ONLY) {
+            /* ignore all other entries */
+            continue;
+        }
+        else if (S_ISLNK(sbuf.st_mode)) {
             /* fetch link target */
             ssize_t tgt_len = readlink(path, target, sizeof(target) - 1);
 
             if (tgt_len > 0) target[tgt_len] = '\0';
         }
-        else if (!S_ISREG(sbuf.st_mode)) {
-            /* ignore irregular files */
+        else if (flags & SIEVEDIR_IGNORE_JUNK) {
+            /* ignore all other entries */
             continue;
         }
 
@@ -126,26 +143,19 @@ struct count_rock {
 };
 
 static int count_cb(const char *sievedir __attribute__((unused)),
-                    const char *name, struct stat *sbuf,
+                    const char *name,
+                    struct stat *sbuf __attribute__((unused)),
                     const char *link_target __attribute__((unused)),
                     void *rock)
 {
     struct count_rock *crock = (struct count_rock *) rock;
-    size_t name_len;
+    size_t name_len = strlen(name) - SCRIPT_SUFFIX_LEN;
 
-    if (!S_ISREG(sbuf->st_mode)) return SIEVEDIR_OK;
-
-    name_len = strlen(name);
-    if (name_len > SCRIPT_SUFFIX_LEN &&
-        !strcmp(name + name_len - SCRIPT_SUFFIX_LEN, SCRIPT_SUFFIX)) {
-        /* is a script */
-        name_len -= SCRIPT_SUFFIX_LEN;
-        if (!crock->myname ||
-            strlen(crock->myname) != name_len ||
-            strncmp(crock->myname, name, name_len)) {
-            /* and it's different from me */
-            crock->count++;
-        }
+    if (!crock->myname ||
+        strlen(crock->myname) != name_len ||
+        strncmp(crock->myname, name, name_len)) {
+        /* and it's different from me */
+        crock->count++;
     }
 
     return SIEVEDIR_OK;
@@ -156,7 +166,7 @@ EXPORTED int sievedir_num_scripts(const char *sievedir, const char *name)
 {
     struct count_rock crock = { 0, name };
 
-    sievedir_foreach(sievedir, &count_cb, &crock);
+    sievedir_foreach(sievedir, SIEVEDIR_SCRIPTS_ONLY, &count_cb, &crock);
 
     return crock.count;
 }

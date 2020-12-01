@@ -932,34 +932,22 @@ void sync_sieve_list_free(struct sync_sieve_list **lp)
     *lp = NULL;
 }
 
-struct list_rock {
-    struct sync_sieve_list *list;
-    char *active;
-};
-
 static int list_cb(const char *sievedir,
                    const char *name, struct stat *sbuf,
-                   const char *link_target, void *rock)
+                   const char *link_target __attribute__((unused)),
+                   void *rock)
 {
-    struct list_rock *lrock = (struct list_rock *) rock;
+    struct sync_sieve_list *list = (struct sync_sieve_list *) rock;
 
-    if (S_ISLNK(sbuf->st_mode)) {
-        if (!strcmp(name, DEFAULTBC_NAME) && link_target && *link_target) {
-            lrock->active = xstrdup(link_target);
-        }
-    }
-    else {
-        /* calculate the sha1 on the fly, relatively cheap */
-        struct buf *buf = sievedir_get_script(sievedir, name);
+    /* calculate the sha1 on the fly, relatively cheap */
+    struct buf *buf = sievedir_get_script(sievedir, name);
 
-        if (buf && buf_len(buf)) {
-            struct message_guid guid;
+    if (buf && buf_len(buf)) {
+        struct message_guid guid;
 
-            message_guid_generate(&guid, buf_base(buf), buf_len(buf));
-
-            sync_sieve_list_add(lrock->list, name, sbuf->st_mtime, &guid, 0);
-            buf_destroy(buf);
-        }
+        message_guid_generate(&guid, buf_base(buf), buf_len(buf));
+        sync_sieve_list_add(list, name, sbuf->st_mtime, &guid, 0);
+        buf_destroy(buf);
     }
 
     return SIEVEDIR_OK;
@@ -969,13 +957,18 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 {
     struct sync_sieve_list *list = sync_sieve_list_create();
     const char *sieve_path = user_sieve_path(userid);
-    struct list_rock lrock = { list, NULL };
+    const char *active = sievedir_get_active(sieve_path);
 
-    sievedir_foreach(sieve_path, &list_cb, &lrock);
+    sievedir_foreach(sieve_path, SIEVEDIR_SCRIPTS_ONLY, &list_cb, list);
 
-    if (lrock.active) {
-        sync_sieve_list_set_active(list, lrock.active);
-        free(lrock.active);
+    if (active) {
+        char target[SIEVEDIR_MAX_NAME_LEN];
+        struct message_guid guid;
+
+        message_guid_set_null(&guid);
+        snprintf(target, sizeof(target), "%s%s", active, BYTECODE_SUFFIX);
+
+        sync_sieve_list_add(list, target, 0, &guid, 1);
     }
 
     return list;

@@ -402,7 +402,7 @@ static void _listscripts(const char *sievedir, hash_table *scripts)
     /* Build a hash of script name -> script id */
     construct_hash_table(scripts, maxscripts, 0);
 
-    sievedir_foreach(sievedir, &list_cb, scripts);
+    sievedir_foreach(sievedir, SIEVEDIR_IGNORE_JUNK, &list_cb, scripts);
 }
 
 static void listscripts(const char *sievedir, struct jmap_get *get)
@@ -791,7 +791,7 @@ static void set_activate(const char *id, const char *sievedir,
         /* get it's id */
         script_info info = { NULL, (char *) active, 1 };
 
-        sievedir_foreach(sievedir, &find_cb, &info);
+        sievedir_foreach(sievedir, SIEVEDIR_IGNORE_JUNK, &find_cb, &info);
         old_id = info.id;
     }
 

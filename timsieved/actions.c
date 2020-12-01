@@ -347,27 +347,22 @@ struct list_rock {
 };
 
 static int list_cb(const char *sievedir __attribute__((unused)),
-                   const char *name, struct stat *sbuf,
+                   const char *name,
+                   struct stat *sbuf __attribute__((unused)),
                    const char *link_target __attribute__((unused)),
                    void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
-    size_t name_len = strlen(name);
+    size_t name_len = strlen(name)- SCRIPT_SUFFIX_LEN;
 
-    if (S_ISREG(sbuf->st_mode) &&
-        name_len > SCRIPT_SUFFIX_LEN &&
-        !strcmp(name + name_len - SCRIPT_SUFFIX_LEN, SCRIPT_SUFFIX)) {
-        /* is a script */
-        name_len -= SCRIPT_SUFFIX_LEN;
-        prot_printf(lrock->conn, "\"%.*s\"", (int) name_len, name);
-        if (lrock->active &&
-            strlen(lrock->active) == name_len &&
-            !strncmp(lrock->active, name, name_len)) {
-            /* is the active script */
-            prot_puts(lrock->conn, " ACTIVE");
-        }
-        prot_puts(lrock->conn, "\r\n");
+    prot_printf(lrock->conn, "\"%.*s\"", (int) name_len, name);
+    if (lrock->active &&
+        strlen(lrock->active) == name_len &&
+        !strncmp(lrock->active, name, name_len)) {
+        /* is the active script */
+        prot_puts(lrock->conn, " ACTIVE");
     }
+    prot_puts(lrock->conn, "\r\n");
 
     return SIEVEDIR_OK;
 }
@@ -377,7 +372,7 @@ int listscripts(struct protstream *conn)
 {
     struct list_rock lrock = { conn, sievedir_get_active(sieve_dir) };
 
-    sievedir_foreach(sieve_dir, &list_cb, &lrock);
+    sievedir_foreach(sieve_dir, SIEVEDIR_SCRIPTS_ONLY, &list_cb, &lrock);
 
     prot_printf(conn,"OK\r\n");
 
