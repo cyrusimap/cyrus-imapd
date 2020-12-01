@@ -79,6 +79,7 @@
 #include "quota.h"
 #include "search_engines.h"
 #include "seen.h"
+#include "sievedir.h"
 #include "sync_log.h"
 #include "user.h"
 #include "util.h"
@@ -169,36 +170,33 @@ EXPORTED const char *user_sieve_path(const char *inuser)
     return sieve_path;
 }
 
+static int delete_cb(const char *sievedir, const char *name,
+                     struct stat *sbuf __attribute__((unused)),
+                     const char *link_target __attribute__((unused)),
+                     void *rock __attribute__((unused)))
+{
+    char path[2048];
+
+    snprintf(path, sizeof(path), "%s/%s", sievedir, name);
+
+    unlink(path);
+
+    return SIEVEDIR_OK;
+}
+
 static int user_deletesieve(const char *user)
 {
     const char *sieve_path;
-    char filename[2048];
-    DIR *mbdir;
-    struct dirent *next = NULL;
 
     /* oh well */
     if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
 
     sieve_path = user_sieve_path(user);
 
-    mbdir = opendir(sieve_path);
+    /* remove contents of sieve_path */
+    sievedir_foreach(sieve_path, 0/*flags*/, &delete_cb, NULL);
 
-    if (mbdir) {
-        while((next = readdir(mbdir)) != NULL) {
-            if (!strcmp(next->d_name, ".")
-                || !strcmp(next->d_name, "..")) continue;
-
-            snprintf(filename, sizeof(filename), "%s/%s",
-                     sieve_path, next->d_name);
-
-            unlink(filename);
-        }
-
-        closedir(mbdir);
-
-        /* remove mbdir */
-        rmdir(sieve_path);
-    }
+    rmdir(sieve_path);
 
     return 0;
 }
