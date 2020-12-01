@@ -10854,4 +10854,483 @@ sub test_calendarprincipal_getavailability_merged
     }], $res->[1][1]{list});
 }
 
+sub test_calendarsharenotification_get
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create sharee
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:calendarprincipals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/get', {
+        }, 'R1']
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    my $state = $res->[0][1]{state};
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    name => 'myname',
+                    "shareWith/manifold" => {
+                        mayReadFreeBusy => JSON::true,
+                        mayReadItems => JSON::true,
+                    },
+                },
+            },
+        }, "R1"]
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/get', {
+        }, 'R1']
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    my $notif = $res->[0][1]{list}[0];
+    # Assert dynamically generated values.
+    my $notifId = $notif->{id};
+    $self->assert_not_null($notifId);
+    delete($notif->{id});
+    $self->assert_not_null($notif->{created});
+    delete($notif->{created});
+    # Assert remaining values.
+    $self->assert_deep_equals({
+        changedBy => {
+            name => 'Test User',
+            email => 'cassandane@example.com',
+            calendarPrincipalId => 'cassandane',
+        },
+        calendarAccountId => 'cassandane',
+        calendarId => 'Default',
+        calendarName => 'myname',
+        oldRights => undef,
+        newRights => {
+            mayReadFreeBusy => JSON::true,
+            mayReadItems => JSON::true,
+            mayAddItems => JSON::false,
+            mayRSVP => JSON::false,
+            mayDelete => JSON::false,
+            mayAdmin => JSON::false,
+            mayUpdatePrivate => JSON::false,
+            mayUpdateOwn => JSON::false,
+            mayUpdateAll => JSON::false,
+            mayRemoveOwn => JSON::false,
+            mayRemoveAll => JSON::false,
+        },
+    }, $notif);
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/get', {
+            ids => [$notifId, 'nope'],
+        }, 'R1']
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
+    $self->assert_str_not_equals($state, $res->[0][1]{state});
+}
+
+sub test_calendarsharenotification_set
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create sharee
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:calendarprincipals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    name => 'myname',
+                    "shareWith/manifold" => {
+                        mayReadFreeBusy => JSON::true,
+                        mayReadItems => JSON::true,
+                    },
+                },
+            },
+        }, "R1"]
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/get', {
+        }, 'R1']
+    ]);
+    my $notif = $res->[0][1]{list}[0];
+    my $notifId = $notif->{id};
+    $self->assert_not_null($notifId);
+    delete($notif->{id});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/set', {
+            create => {
+                newnotif => $notif,
+            },
+            update => {
+                $notifId => $notif,
+            },
+        }, "R1"]
+    ]);
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notCreated}{newnotif}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notUpdated}{$notifId}{type});
+    $self->assert_not_null($res->[0][1]{newState});
+    my $state = $res->[0][1]{newState};
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/set', {
+            destroy => [$notifId, 'unknownId'],
+        }, "R1"]
+    ]);
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+    $self->assert_str_equals('notFound',
+        $res->[0][1]{notDestroyed}{unknownId}{type});
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/get', {
+            ids => [$notifId],
+        }, 'R1']
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals([$notifId], $res->[0][1]{notFound});
+}
+
+sub test_calendarsharenotification_changes
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create sharee
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:calendarprincipals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/get', {
+        }, 'R1']
+    ]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/changes', {
+            sinceState => $state,
+        }, 'R1']
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    "shareWith/manifold" => {
+                        mayReadFreeBusy => JSON::true,
+                        mayReadItems => JSON::true,
+                    },
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/changes', {
+            sinceState => $state,
+        }, 'R1']
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    my $notifId = $res->[0][1]{created}[0];
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]{newState};
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                1 => {
+                    name => 'someCalendar',
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert(exists $res->[0][1]{created}{1});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/set', {
+            destroy => [$notifId],
+        }, "R1"]
+    ]);
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/changes', {
+            sinceState => $state,
+            maxChanges => 1,
+        }, 'R1']
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]{newState};
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/changes', {
+            sinceState => $state,
+        }, 'R1']
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+}
+
+sub test_calendarsharenotification_query
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create sharee
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:calendarprincipals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                A => {
+                    name => 'A',
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{A});
+
+    sleep(1);
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                B => {
+                    name => 'B',
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{B});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/query', {
+        }, 'R1'],
+        ['CalendarShareNotification/query', {
+            sort => [{
+                property => 'created',
+                isAscending => JSON::false,
+            }],
+        }, 'R2'],
+        ['CalendarShareNotification/get', {
+            properties => ['created'],
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{ids}});
+
+    my %notifTimestamps = map { $_->{id} => $_->{created} } @{$res->[2][1]{list}};
+    $self->assert($notifTimestamps{$res->[0][1]{ids}[0]} lt
+                  $notifTimestamps{$res->[0][1]{ids}[1]});
+    $self->assert($notifTimestamps{$res->[1][1]{ids}[0]} gt
+                  $notifTimestamps{$res->[1][1]{ids}[1]});
+
+    my $notifIdT1 = $res->[0][1]{ids}[0];
+    my $timestampT1 = $notifTimestamps{$notifIdT1};
+
+    my $notifIdT2 = $res->[0][1]{ids}[1];
+    my $timestampT2 = $notifTimestamps{$notifIdT2};
+
+    $res = $manjmap->CallMethods([
+        ['CalendarShareNotification/query', {
+            filter => {
+                before => $timestampT2,
+            },
+        }, 'R1'],
+        ['CalendarShareNotification/query', {
+            filter => {
+                after => $timestampT2,
+            },
+        }, 'R2'],
+        ['CalendarShareNotification/query', {
+            position => 1,
+        }, 'R3'],
+        ['CalendarShareNotification/query', {
+            anchor => $notifIdT2,
+            anchorOffset => -1,
+            limit => 1,
+        }, 'R3'],
+    ]);
+    $self->assert_deep_equals([$notifIdT1], $res->[0][1]{ids});
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_deep_equals([$notifIdT2], $res->[1][1]{ids});
+    $self->assert_num_equals(1, $res->[1][1]{total});
+    $self->assert_deep_equals([$notifIdT2], $res->[2][1]{ids});
+    $self->assert_num_equals(2, $res->[2][1]{total});
+    $self->assert_deep_equals([$notifIdT1], $res->[3][1]{ids});
+    $self->assert_num_equals(2, $res->[2][1]{total});
+}
+
+sub test_calendarsharenotification_querychanges
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarShareNotification/queryChanges', {
+            sinceQueryState => 'whatever',
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}
+
 1;
