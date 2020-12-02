@@ -1145,13 +1145,15 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         *requires |= SIEVE_CAPA_DATE;
         generate_token("date", 0, buf);
         generate_index(test.u.hhs.comp.index, requires, buf);
-        generate_comparator(&test.u.dt.comp, requires, buf);
         if (test.u.dt.zone.tag == B_TIMEZONE) {
             buf_printf(buf, " :zone %+02d%02d", test.u.dt.zone.offset / 60,
                        abs(test.u.dt.zone.offset % 60));
         }
-        generate_switch(":originalzone",
-                        test.u.dt.zone.tag == B_ORIGINALZONE, buf);
+        else {
+            generate_switch(":originalzone",
+                            test.u.dt.zone.tag == B_ORIGINALZONE, buf);
+        }
+        generate_comparator(&test.u.dt.comp, requires, buf);
         generate_string(NULL, datepart_to_string(test.u.dt.date_part), buf);
         generate_stringlist(NULL, test.u.dt.kl, buf);
         break;
@@ -1159,11 +1161,11 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
     case BC_CURRENTDATE:
         *requires |= SIEVE_CAPA_DATE;
         generate_token("currentdate", 0, buf);
-        generate_comparator(&test.u.dt.comp, requires, buf);
         if (test.u.dt.zone.tag == B_TIMEZONE) {
-            buf_printf(buf, " :zone %+02d%02d", test.u.dt.zone.offset / 60,
+            buf_printf(buf, " :zone \"%+03d%02d\"", test.u.dt.zone.offset / 60,
                        abs(test.u.dt.zone.offset % 60));
         }
+        generate_comparator(&test.u.dt.comp, requires, buf);
         generate_string(NULL, datepart_to_string(test.u.dt.date_part), buf);
         generate_stringlist(NULL, test.u.dt.kl, buf);
         break;
@@ -1646,7 +1648,7 @@ static void generate_script(bytecode_input_t *d, int bc_len)
         char *sep = "";
         int n;
 
-        printf("requires [");
+        printf("require [");
         for (i = 0, n = 0, capa = 0x1; i < 64; capa <<= 1, i++) {
             if (requires & capa) {
                 if (n && (n > 60)) {
