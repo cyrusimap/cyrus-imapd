@@ -299,59 +299,71 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
 EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
                                  const char *content, char **errors)
 {
-    char new_path[PATH_MAX];
+    char new_bcpath[PATH_MAX];
+    int fd = -1;
 
     /* parse the script */
     sieve_script_t *s = NULL;
-    (void) sieve_script_parse_string(NULL, content, errors, &s);
+    char *myerrors = NULL;
+    int r = sieve_script_parse_string(NULL, content, &myerrors, &s);
+    if (errors) *errors = myerrors;
+    else free(myerrors);
+
     if (!s) return SIEVEDIR_INVALID;
 
     /* generate the bytecode */
     bytecode_info_t *bc = NULL;
     if (sieve_generate_bytecode(&bc, s) == -1) {
-        unlink(new_path);
-        sieve_script_free(&s);
-        return SIEVEDIR_FAIL;
+        r = SIEVEDIR_FAIL;
+        goto done;
     }
 
-    /* open the new bytecode file */
-    char new_bcpath[PATH_MAX];
     snprintf(new_bcpath, sizeof(new_bcpath),
              "%s/%s%s.NEW", sievedir, name, BYTECODE_SUFFIX);
-    int fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+
+    /* make sure no stray hardlink is lying around */
+    unlink(new_bcpath);
+
+    /* open the new bytecode file */
+    fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
     if (fd < 0) {
         xsyslog(LOG_ERR, "IOERROR: failed to open new bytecode file",
                 "newpath=<%s>", new_bcpath);
-        unlink(new_path);
-        sieve_free_bytecode(&bc);
-        sieve_script_free(&s);
-        return SIEVEDIR_IOERROR;
+        r = SIEVEDIR_IOERROR;
+        goto done;
     }
 
     /* emit the bytecode */
     if (sieve_emit_bytecode(fd, bc) == -1) {
-        close(fd);
-        unlink(new_path);
-        unlink(new_bcpath);
-        sieve_free_bytecode(&bc);
-        sieve_script_free(&s);
-        return SIEVEDIR_FAIL;
+        r = SIEVEDIR_FAIL;
+        goto done;
     }
 
-    sieve_free_bytecode(&bc);
-    sieve_script_free(&s);
-
-    close(fd);
+    if (fsync(fd) < 0) {
+        xsyslog(LOG_ERR, "IOERROR: failed to fsync new bytecode file",
+                "newpath=<%s>", new_bcpath);
+        r = SIEVEDIR_IOERROR;
+        goto done;
+    }
 
     /* rename */
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-    int r = rename(new_bcpath, path);
+    r = rename(new_bcpath, path);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: failed to rename bytecode file",
                 "oldpath=<%s> newpath=<%s>", new_bcpath, path);
+        r = SIEVEDIR_IOERROR;
     }
 
-    return (r ? SIEVEDIR_IOERROR : SIEVEDIR_OK);
+ done:
+    if (fd >= 0) {
+        close(fd);
+        if (r) unlink(new_bcpath);
+    }
+    if (bc) sieve_free_bytecode(&bc);
+    if (s) sieve_script_free(&s);
+
+    return (r ? r : SIEVEDIR_OK);
 }
 #endif /* USE_SIEVE */
