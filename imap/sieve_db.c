@@ -51,6 +51,7 @@
 #include "dav_db.h"
 #include <errno.h>
 #include "global.h"
+#include "jmap_api.h"
 #include "libconfig.h"
 #include "mboxlist.h"
 #include "sieve_db.h"
@@ -644,14 +645,14 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata)
         }
 
         if (r) {
-            syslog(LOG_ERR, "append_fromstage() failed");
+            syslog(LOG_ERR, "append_fromstage() failed: %s", error_message(r));
             append_abort(&as);
         }
         else {
             /* Commit the append to the sieve mailbox */
             r = append_commit(&as);
             if (r) {
-                syslog(LOG_ERR, "append_commit() failed");
+                syslog(LOG_ERR, "append_commit() failed: %s", error_message(r));
             }
             else if (old_uid) {
                 /* Now that we have the replacement script in place
@@ -817,13 +818,31 @@ static int migrate_cb(const char *sievedir,
     if (content) {
         struct sieve_data sdata;
         char *myname = xstrndup(fname, strlen(fname) - SCRIPT_SUFFIX_LEN);
+        int deletebc = 0;
 
         memset(&sdata, 0, sizeof(sdata));
-        sdata.name = myname;
+
+        if (!strcmp(myname, "jmap_vacation")) {
+            sdata.id = sdata.name = JMAP_URN_VACATION;
+            deletebc = 1;
+        }
+        else {
+            sdata.name = myname;
+        }
         sdata.content = buf_cstring(content);
         sdata.isactive = !strcmpnull(myname, mrock->active);
 
-        store_script(mrock->mailbox, &sdata);
+        if (!store_script(mrock->mailbox, &sdata)) {
+            char path[PATH_MAX];
+
+            /* delete script */
+            snprintf(path, sizeof(path), "%s/%s", sievedir, fname);
+            unlink(path);
+
+            if (deletebc) {
+                sievedir_delete_script(sievedir, myname);
+            }
+        }
 
         buf_destroy(content);
         free(myname);
