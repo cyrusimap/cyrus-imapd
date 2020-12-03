@@ -1652,8 +1652,7 @@ EOF
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/To: =\?UTF-8\?Q\?"=E2=88=97"\?= <aaa\@example.com>, =\?UTF-8\?Q\?"BBB"\?=\r\n/, $msg1);
-    $self->assert_matches(qr/ <bbb\@example.net>, ccc\@example.com\r\n/, $msg1);
+    $self->assert_matches(qr/To: =\?UTF-8\?Q\?=22=E2=88=97=22\?= <aaa\@example.com>,\s+"BBB" <bbb\@example.net>,\s+ccc\@example.com\r\n/, $msg1);
     $self->assert_matches(qr/X-Foo: =\?UTF-8\?Q\?must_encode_star_\(=E2=88=97\)\?=\r\n/, $msg1);
     $self->assert_matches(qr/X-Bar: don't need to encode this\r\n/, $msg1);
     $self->assert_matches(qr/X-Blah: =\?UTF-8\?Q\?can_encode_<ddd\@example.com>_in_non-list_=E2=88=97\?=\r\n\r\n/, $msg1);
