@@ -3187,7 +3187,11 @@ static char *qp_encode(const char *data, size_t len, int isheader,
 
     if (need_quote) {
         int cnt = 0;
-        size_t next_addr = 0, addr_len = 0;
+
+        if (isheader) {
+            buf_appendcstr(&buf, "=?UTF-8?Q?");
+            cnt = 10;
+        }
 
         for (n = 0; n < len; n++) {
             unsigned char this = data[n];
@@ -3195,53 +3199,6 @@ static char *qp_encode(const char *data, size_t len, int isheader,
 
             /* Insert line break before exceeding line length limits */
             if (isheader) {
-                if (!next_addr) {
-                    /* Find next email address (addr-spec) */
-                    const char *addr = find_addr(data + n, len - n, &addr_len);
-
-                    next_addr = addr ? (size_t) (addr - data) : len;
-
-                    if (n < next_addr) {
-                        /* display-name precedes address */
-                        need_quote = 1;
-                        if (cnt + 10 >= ENCODED_MAX_LINE_LEN) {
-                            buf_appendcstr(&buf, "\r\n ");
-                            cnt = 1;
-                        }
-                        buf_appendcstr(&buf, "=?UTF-8?Q?");
-                        cnt += 10;
-                    }
-                    else need_quote = 0;
-                }
-
-                if (n == next_addr) {
-                    /* we don't encode an address */
-                    if (need_quote) {
-                        need_quote = 0;
-                        buf_appendcstr(&buf, "?=");
-                        cnt += 2;
-                    }
-
-                    /* don't fold in the middle of an address */
-                    if (cnt + addr_len >= ENCODED_MAX_LINE_LEN) {
-                        buf_appendcstr(&buf, "\r\n");
-                        cnt = 0;
-
-                        if (!isspace(data[n])) {
-                            buf_putc(&buf, ' ');
-                            cnt += 1;
-                        }
-                    }
-                    buf_appendmap(&buf, data + n, addr_len);
-                    cnt += addr_len;
-
-                    next_addr = 0;
-
-                    /* jump to end of address */
-                    n += addr_len - 1;
-                    continue;
-                }
-
                 /* RFC 2047 forbids splitting multi-octet characters */
                 int needbytes;
                 if (this < 0x80) needbytes = 0;
@@ -3303,7 +3260,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             }
         }
 
-        if (isheader && need_quote) buf_appendcstr(&buf, "?=");
+        if (isheader) buf_appendcstr(&buf, "?=");
     }
     else if (need_fold) {
         /* fold header every 78 characters (if possible) */
@@ -3345,6 +3302,67 @@ EXPORTED char *charset_qpencode_mimebody(const char *msg_base, size_t len,
 }
 
 
+static void encode_mimephrase(const char *data, size_t len,
+                              struct buf *buf, int *cnt);
+
+static char *encode_addrheader(const char *header, size_t len, int force_quote,
+                               const char *addr, size_t addr_len)
+{
+    struct buf buf = BUF_INITIALIZER;
+    size_t n = 0;
+    int cnt = 0;
+
+    do {
+        size_t phrase_len = addr ? (size_t) (addr - (header + n)) : len - n;
+
+        if (phrase_len) {
+            /* display-name precedes address */
+            const char *phrase = header + n;
+            int need_encode = 0, need_bytes = phrase_len;
+            const char *c;
+
+            for (c = phrase; c < addr; c++) {
+                if (force_quote || (*c & 0x80)) {
+                    need_encode = 1;
+                    need_bytes = 3 * phrase_len + 12;  // assume max size
+                    break;
+                }
+            }
+
+            /* don't fold in the middle of a phrase */
+            if (cnt + need_bytes >= ENCODED_MAX_LINE_LEN) {
+                buf_appendcstr(&buf, "\r\n ");
+                cnt = 1;
+            }
+
+            if (need_encode) {
+                encode_mimephrase(phrase, phrase_len, &buf, &cnt);
+            }
+            else {
+                buf_appendmap(&buf, phrase, phrase_len);
+                cnt += phrase_len;
+            }
+        }
+
+        if (addr) {
+            /* don't fold in the middle of an address */
+            if (cnt + addr_len >= ENCODED_MAX_LINE_LEN) {
+                buf_appendcstr(&buf, "\r\n ");
+                cnt = 1;
+            }
+
+            buf_appendmap(&buf, addr, addr_len);
+            cnt += addr_len;
+        }
+
+        /* jump to end of address */
+        n += phrase_len + addr_len;
+
+    } while ((addr = find_addr(header + n , len - n, &addr_len)) || n < len);
+
+    return buf_release(&buf);
+}
+
 /* "Q" encode the header field body (per RFC 2047) of 'len' bytes
  * located at 'header'.
  * Returns a buffer which the caller must free.
@@ -3355,6 +3373,14 @@ EXPORTED char *charset_encode_mimeheader(const char *header, size_t len, int for
 
     if (!len) len = strlen(header);
 
+    size_t addr_len = 0;
+    const char *addr = find_addr(header, len, &addr_len);
+
+    if (addr) {
+        /* "Q" encode as an address header */
+        return encode_addrheader(header, len, force_quote, addr, addr_len);
+    }
+    
     return qp_encode(header, len, 1, force_quote, NULL);
 }
 
@@ -3364,15 +3390,15 @@ EXPORTED char *charset_encode_mimeheader(const char *header, size_t len, int for
  * Returns a buffer which the caller must free.
  * Returns the number of encoded bytes in 'outlen'.
  */
-EXPORTED char *charset_encode_mimephrase(const char *data)
+static void encode_mimephrase(const char *data, size_t len,
+                              struct buf *buf, int *cnt)
 {
-    struct buf buf = BUF_INITIALIZER;
     size_t n;
 
-    buf_setcstr(&buf, "=?UTF-8?Q?");
-    int cnt = 10;
+    buf_appendcstr(buf, "=?UTF-8?Q?");
+    *cnt += 10;
 
-    for (n = 0; data[n]; n++) {
+    for (n = 0; n < len; n++) {
         unsigned char this = data[n];
 
         /* RFC 2047 forbids splitting multi-octet characters */
@@ -3383,29 +3409,37 @@ EXPORTED char *charset_encode_mimephrase(const char *data)
         else if (this < 0xf0) needbytes = 6;
         else if (this < 0xf8) needbytes = 9;
         else needbytes = 0; // impossible UTF-8 encoding
-        if (cnt + needbytes >= ENCODED_MAX_LINE_LEN) {
-            buf_appendcstr(&buf, "?=\r\n =?UTF-8?Q?");
-            cnt = 11;
+        if (*cnt + needbytes >= ENCODED_MAX_LINE_LEN) {
+            buf_appendcstr(buf, "?=\r\n =?UTF-8?Q?");
+            *cnt = 11;
         }
 
         if (QPMIMEPHRASESAFECHAR[this]) {
             /* literal representation */
-            buf_putc(&buf, (char)this);
-            cnt++;
+            buf_putc(buf, (char)this);
+            *cnt += 1;
         }
         else if (this == ' ') {
             /* per RFC 2047: represent SP in header as '_' for legibility */
-            buf_putc(&buf, '_');
-            cnt++;
+            buf_putc(buf, '_');
+            *cnt += 1;
         }
         else {
             /* 8-bit representation */
-            buf_printf(&buf, "=%02X", this);
-            cnt += 3;
+            buf_printf(buf, "=%02X", this);
+            *cnt += 3;
         }
     }
 
-    buf_appendcstr(&buf, "?=");
+    buf_appendcstr(buf, "?=");
+}
+
+EXPORTED char *charset_encode_mimephrase(const char *data)
+{
+    struct buf buf = BUF_INITIALIZER;
+    int cnt = 0;
+
+    encode_mimephrase(data, strlen(data), &buf, &cnt);
 
     return buf_release(&buf);
 }
