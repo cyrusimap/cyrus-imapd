@@ -463,6 +463,7 @@ static int send_rejection(const char *userid,
     buf_printf(&msgbuf, "Date: %s\r\n", datestr);
 
     buf_printf(&msgbuf, "X-Sieve: %s\r\n", SIEVE_VERSION);
+    buf_appendcstr(&msgbuf, "X-Sieve-Action: reject\r\n");
     buf_printf(&msgbuf, "From: Mail Sieve Subsystem <%s>\r\n",
             config_getstring(IMAPOPT_POSTMASTER));
     buf_printf(&msgbuf, "To: <%s>\r\n", rejto);
@@ -789,6 +790,8 @@ static int send_forward(sieve_redirect_context_t *rc,
     }
 
     if (srs_return_path) free(srs_return_path);
+
+    buf_setcstr(&msgbuf, "X-Sieve-Action: redirect\r\n");
 
     prot_rewind(file);
     while (prot_fgets(buf, sizeof(buf), file)) {
@@ -1685,6 +1688,7 @@ static int send_response(void *ac, void *ic,
     buf_printf(&msgbuf, "Date: %s\r\n", datestr);
 
     buf_printf(&msgbuf, "X-Sieve: %s\r\n", SIEVE_VERSION);
+    buf_appendcstr(&msgbuf, "X-Sieve-Action: vacation\r\n");
 
     if (strchr(src->fromaddr, '<'))
         buf_printf(&msgbuf, "From: %s\r\n", src->fromaddr);
