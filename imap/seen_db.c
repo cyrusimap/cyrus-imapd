@@ -138,7 +138,7 @@ EXPORTED int seen_open(const char *user,
             syslog(level, "DBERROR: opening %s: %s", fname,
                    cyrusdb_strerror(r));
         }
-        r = IMAP_IOERROR;
+        r = r == CYRUSDB_NOTFOUND ? IMAP_NOTFOUND : IMAP_IOERROR;
         free(seendb);
         free(fname);
         return r;
