@@ -774,6 +774,12 @@ static void do_rolling(const char *channel)
                     /* XXX: alternative, just append to strarray_t *mboxnames ... */
                     sync_log_channel_append(channel, mboxname);
                 }
+                else if (r == IMAP_MAILBOX_NONEXISTENT) {
+                    /* should_index() checked for this, but we lost a race.
+                     * not an IOERROR, just annoying!
+                     */
+                    syslog(LOG_DEBUG, "skipping nonexistent mailbox: %s", mboxname);
+                }
                 else if (r) {
                     syslog(LOG_ERR, "IOERROR: squatter failed to index and forgetting %s: %s",
                            mboxname, error_message(r));
