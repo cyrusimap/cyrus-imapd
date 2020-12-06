@@ -57,6 +57,7 @@
 #include "bytecode.h"
 #include "bc_parse.h"
 
+#include "gmtoff.h"
 #include "charset.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -1057,7 +1058,33 @@ envelope_err:
 
         /* timezone offset */
         if (zone == B_TIMEZONE) {
-            timezone_offset = test.u.dt.zone.offset;
+            const char *offset = test.u.dt.zone.offset;
+
+            if (offset) {
+                char sign;
+                int hours;
+                int minutes;
+
+                if (requires & BFE_VARIABLES) {
+                    offset = parse_string(offset, variables);
+                }
+
+                if (3 != sscanf(offset, "%c%02d%02d",
+                                &sign, &hours, &minutes)) {
+                    res = 0;
+                    goto date_err;
+                }
+
+                timezone_offset =
+                    (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
+            }
+            else {
+                struct tm tm;
+                time_t now = time(NULL);
+
+                localtime_r(&now, &tm);
+                timezone_offset = gmtoff_of(&tm, now) / 60;
+            }
         }
 
         /* comparator */

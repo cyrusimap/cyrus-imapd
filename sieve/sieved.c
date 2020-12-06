@@ -274,6 +274,16 @@ static const char *datepart_to_string(int part)
     }
 }
 
+static void print_zone(struct Zone *zone)
+{
+    if (zone->tag == B_TIMEZONE) {
+        print_string("ZONE", zone->offset);
+    }
+    else {
+        printf(" ZONE(ORIGINAL)");
+    }
+}
+
 static void print_test(test_t *test)
 {
     switch (test->type) {
@@ -334,28 +344,24 @@ static void print_test(test_t *test)
         print_stringlist(" PATTERNS", test->u.b.pl);
         break;
 
+    case BC_DATE_ORIG:
     case BC_DATE:
         printf("DATE");
         if (test->u.dt.comp.index) {
             printf(" INDEX(%d %s)", abs(test->u.dt.comp.index),
                    (test->u.dt.comp.index < 0) ? "[LAST]" : "");
         }
-        if (test->u.dt.zone.tag == B_TIMEZONE)
-            printf(" ZONE(%+dmin)", test->u.dt.zone.offset);
-        else
-            printf(" ZONE(ORIGINAL)");
+        print_zone(&test->u.dt.zone);
         print_comparator(&test->u.dt.comp);
         printf("\n\tDATEPART(%s)", datepart_to_string(test->u.dt.date_part));
         print_string(" HEADER", test->u.dt.header_name);
         print_stringlist(" KEYS", test->u.dt.kl);
         break;
 
+    case BC_CURRENTDATE_ORIG:
     case BC_CURRENTDATE:
         printf("CURRENTDATE");
-        if (test->u.dt.zone.tag == B_TIMEZONE)
-            printf(" ZONE(%+dmin)", test->u.dt.zone.offset);
-        else
-            printf(" ZONE(ORIGINAL)");
+        print_zone(&test->u.dt.zone);
         print_comparator(&test->u.dt.comp);
         printf("\n\tDATEPART(%s)", datepart_to_string(test->u.dt.date_part));
         print_stringlist(" KEYS", test->u.dt.kl);
@@ -1044,6 +1050,17 @@ static void generate_fileinto(struct Fileinto *f,
     }
 }
 
+static void generate_zone(struct Zone *zone, struct buf *buf)
+{
+    if (zone->tag == B_TIMEZONE) {
+        generate_string(":zone", zone->offset, buf);
+    }
+    else {
+        generate_switch(":originalzone",
+                        zone->tag == B_ORIGINALZONE, buf);
+    }
+}
+
 
 #define INSERT_FOLD(indent, buf) buf_printf(buf, "\n%*s", indent, "");
 
@@ -1141,30 +1158,22 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         generate_stringlist(NULL, test.u.b.pl, buf);
         break;
 
+    case BC_DATE_ORIG:
     case BC_DATE:
         *requires |= SIEVE_CAPA_DATE;
         generate_token("date", 0, buf);
         generate_index(test.u.hhs.comp.index, requires, buf);
-        if (test.u.dt.zone.tag == B_TIMEZONE) {
-            buf_printf(buf, " :zone %+02d%02d", test.u.dt.zone.offset / 60,
-                       abs(test.u.dt.zone.offset % 60));
-        }
-        else {
-            generate_switch(":originalzone",
-                            test.u.dt.zone.tag == B_ORIGINALZONE, buf);
-        }
+        generate_zone(&test.u.dt.zone, buf);
         generate_comparator(&test.u.dt.comp, requires, buf);
         generate_string(NULL, datepart_to_string(test.u.dt.date_part), buf);
         generate_stringlist(NULL, test.u.dt.kl, buf);
         break;
 
+    case BC_CURRENTDATE_ORIG:
     case BC_CURRENTDATE:
         *requires |= SIEVE_CAPA_DATE;
         generate_token("currentdate", 0, buf);
-        if (test.u.dt.zone.tag == B_TIMEZONE) {
-            buf_printf(buf, " :zone \"%+03d%02d\"", test.u.dt.zone.offset / 60,
-                       abs(test.u.dt.zone.offset % 60));
-        }
+        generate_zone(&test.u.dt.zone, buf);
         generate_comparator(&test.u.dt.comp, requires, buf);
         generate_string(NULL, datepart_to_string(test.u.dt.date_part), buf);
         generate_stringlist(NULL, test.u.dt.kl, buf);

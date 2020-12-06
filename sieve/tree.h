@@ -91,7 +91,7 @@ struct Comp {
 
 struct Zone {
     int tag;
-    int offset;     /* time-zone offset in minutes */
+    char *offset;   /* time-zone offset string (+/-hhmm) */
 };
 
 struct Test {

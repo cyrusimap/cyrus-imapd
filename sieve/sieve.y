@@ -64,7 +64,6 @@
 #include "sieve/grammar.h"
 #include "sieve/sieve_err.h"
 
-#include "lib/gmtoff.h"
 #include "util.h"
 #include "imparse.h"
 #include "libconfig.h"
@@ -74,7 +73,6 @@
 #define ERR_BUF_SIZE 1024
 
 int encoded_char = 0;    /* used to send encoded-character feedback to lexer */
-int getdatepart = 0;     /* used to send start state feedback to lexer */
 static comp_t *ctags;    /* used for accessing comp_t* in a test/command union */
 static int *copy;        /* used for accessing copy flag in a command union */
 static int *create;      /* used for accessing create flag in a command union */
@@ -138,7 +136,7 @@ static test_t *build_stringt(sieve_script_t*, test_t *t,
 static test_t *build_hasflag(sieve_script_t*, test_t *t,
                              strarray_t *sl, strarray_t *pl);
 static test_t *build_date(sieve_script_t*, test_t *t,
-                          char *hn, int part, strarray_t *kl);
+                          char *hn, char *part, strarray_t *kl);
 static test_t *build_ihave(sieve_script_t*, strarray_t *sa);
 static test_t *build_mbox_meta(sieve_script_t*, test_t *t, char *extname,
                                char *keyname, strarray_t *keylist);
@@ -265,11 +263,7 @@ extern void sieverestart(FILE *f);
 
 /* date - RFC 5260 */
 %token DATE CURRENTDATE ORIGINALZONE ZONE
-%token <nval> TZOFFSET
-%token <nval> YEARP MONTHP DAYP DATEP JULIAN
-%token <nval> HOURP MINUTEP SECONDP TIMEP ISO8601 STD11 ZONEP WEEKDAYP
 %type <test> dttags cdtags
-%type <nval> datepart
 
 /* index - RFC 5260 */
 %token INDEX LAST
@@ -1331,12 +1325,12 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
         | HASFLAG hftags stringlist
                                  { $$ = build_hasflag(sscript, $2, NULL, $3); }
 
-        /* getdatepart variable is used to change the start state of the lexer */
-        | DATE dttags string { getdatepart = 1; } datepart stringlist
-                                 { $$ = build_date(sscript, $2, $3, $5, $6); }
+        | DATE dttags string string stringlist
+                                 { $$ = build_date(sscript, $2, $3, $4, $5); }
 
-        | CURRENTDATE cdtags datepart stringlist
+        | CURRENTDATE cdtags string stringlist
                                  { $$ = build_date(sscript, $2, NULL, $3, $4); }
+
         | VALIDNOTIFYMETHOD stringlist
                                  {
                                      $$ = new_test(BC_VALIDNOTIFYMETHOD, sscript);
@@ -1749,7 +1743,7 @@ dttags: /* empty */              {
 
 
 /* :zone */
-zone: ZONE TZOFFSET              {
+zone: ZONE string                {
                                      /* $0 refers to a test_t* ([CURRENT]DATE)*/
                                      test_t *test = $<test>0;
 
@@ -1773,23 +1767,6 @@ cdtags: /* empty */              {
         | cdtags zone
         | cdtags matchtype
         | cdtags comparator
-        ;
-
-
-/* date-parts */
-datepart: YEARP                  { $$ = B_YEAR;    }
-        | MONTHP                 { $$ = B_MONTH;   }
-        | DAYP                   { $$ = B_DAY;     }
-        | DATEP                  { $$ = B_DATE;    }
-        | JULIAN                 { $$ = B_JULIAN;  }
-        | HOURP                  { $$ = B_HOUR;    }
-        | MINUTEP                { $$ = B_MINUTE;  }
-        | SECONDP                { $$ = B_SECOND;  }
-        | TIMEP                  { $$ = B_TIME;    }
-        | ISO8601                { $$ = B_ISO8601; }
-        | STD11                  { $$ = B_STD11;   }
-        | ZONEP                  { $$ = B_ZONE;    }
-        | WEEKDAYP               { $$ = B_WEEKDAY; }
         ;
 
 
@@ -2327,8 +2304,8 @@ static unsigned bc_precompile(cmdarg_t args[], const char *fmt, ...)
             args[n].u.i = z->tag;
 
             if (z->tag == B_TIMEZONE) {
-                args[++n].type = AT_INT;
-                args[n].u.i = z->offset;
+                args[++n].type = AT_STR;
+                args[n].u.s = z->offset;
             }
             break;
         }
@@ -3043,8 +3020,41 @@ static test_t *build_body(sieve_script_t *sscript,
     return t;
 }
 
+static const struct {
+    const char *name;
+    unsigned bytecode;
+} date_parts[] = {
+    { "year",    B_YEAR    },
+    { "month",   B_MONTH   },
+    { "day",     B_DAY     },
+    { "date",    B_DATE    },
+    { "julian",  B_JULIAN  },
+    { "hour",    B_HOUR    },
+    { "minute",  B_MINUTE  },
+    { "second",  B_SECOND  },
+    { "time",    B_TIME    },
+    { "iso8601", B_ISO8601 },
+    { "std11",   B_STD11   },
+    { "zone",    B_ZONE    },
+    { "weekday", B_WEEKDAY },
+    { NULL,      0         }
+};
+
+static int verify_date_part(sieve_script_t *sscript, char *part)
+{
+    int i;
+
+    for (i = 0; date_parts[i].name && strcasecmp(date_parts[i].name, part); i++);
+
+    if (!date_parts[i].name) {
+        sieveerror_f(sscript, "invalid date-part '%s'", part);
+    }
+
+    return date_parts[i].bytecode;
+}
+
 static test_t *build_date(sieve_script_t *sscript,
-                          test_t *t, char *hn, int part, strarray_t *kl)
+                          test_t *t, char *hn, char *part, strarray_t *kl)
 {
     assert(t && (t->type == BC_DATE || t->type == BC_CURRENTDATE));
 
@@ -3059,15 +3069,10 @@ static test_t *build_date(sieve_script_t *sscript,
     }
 
     if (t->u.dt.zone.tag == -1) {
-        struct tm tm;
-        time_t now = time(NULL);
-
-        localtime_r(&now, &tm);
-        t->u.dt.zone.offset = gmtoff_of(&tm, now) / 60;
         t->u.dt.zone.tag = B_TIMEZONE;
     }
 
-    t->u.dt.date_part = part;
+    t->u.dt.date_part = verify_date_part(sscript, part);
     t->u.dt.header_name = hn;
     t->u.dt.kl = kl;
 

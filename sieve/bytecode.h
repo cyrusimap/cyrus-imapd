@@ -142,8 +142,9 @@ typedef union
  * version 0x1C scripts added :tzid argument to vnd.cyrus.snooze
  * version 0x1D scripts re-implemented Snooze per draft-ietf-extra-sieve-snooze-00
  *                      and Fcc per draft-ietf-extra-sieve-mailboxid-01
+ * version 0x1E scripts store [current]date :zone argument as a string
  */
-#define BYTECODE_VERSION 0x1D
+#define BYTECODE_VERSION 0x1E
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -458,13 +459,13 @@ enum bytecode_comps {
                                    <content-types: string-list>
                                    <patterns: string-list>                     */
 
-    BC_DATE,                    /* require ["date", "index"]
+    BC_DATE_ORIG,               /* require ["date", "index"]
 
                                    <index: int> <zonetag: int> <tzoffset: int>
                                    <COMPARATOR> <date-part: int>
                                    <header-name: string> <patterns: string-list> */
 
-    BC_CURRENTDATE,             /* require "date"
+    BC_CURRENTDATE_ORIG,        /* require "date"
 
                                    <zonetag: int> <tzoffset: int>
                                    <COMPARATOR> <date-part: int>
@@ -547,6 +548,18 @@ enum bytecode_comps {
     BC_JMAPQUERY,               /* require "vnd.cyrus.jmapquery"
 
                                    <query: string>                             */
+
+    BC_DATE,                    /* require ["date", "index"]
+
+                                   <index: int> <zonetag: int> <tzoffset: string>
+                                   <COMPARATOR> <date-part: int>
+                                   <header-name: string> <patterns: string-list> */
+
+    BC_CURRENTDATE,             /* require "date"
+
+                                   <zonetag: int> <tzoffset: string>
+                                   <COMPARATOR> <date-part: int>
+                                   <patterns: string-list>                     */
 
     /*****  insert new tests above this line  *****/
     BC_ILLEGAL_VALUE    /* any value >= this code is illegal */

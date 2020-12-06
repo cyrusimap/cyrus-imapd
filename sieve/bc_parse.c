@@ -320,7 +320,7 @@ static const struct args_t test_args_table[] = {
         offsetof(struct Test, u.b.content_types),
         offsetof(struct Test, u.b.pl)
       } },
-    { BC_DATE,                   "iZCisS",                               /* 11 */
+    { BC_DATE_ORIG,              "izCisS",                               /* 11 */
       { offsetof(struct Test, u.dt.comp.index),
         offsetof(struct Test, u.dt.zone),
         offsetof(struct Test, u.dt.comp),
@@ -328,7 +328,7 @@ static const struct args_t test_args_table[] = {
         offsetof(struct Test, u.dt.header_name),
         offsetof(struct Test, u.dt.kl)
       } },
-    { BC_CURRENTDATE,            "ZCiS",                                 /* 12 */
+    { BC_CURRENTDATE_ORIG,       "zCiS",                                 /* 12 */
       { offsetof(struct Test, u.dt.zone),
         offsetof(struct Test, u.dt.comp),
         offsetof(struct Test, u.dt.date_part),
@@ -414,6 +414,20 @@ static const struct args_t test_args_table[] = {
       } },
     { BC_JMAPQUERY,              "s",                                    /* 30 */
       { offsetof(struct Test, u.jquery)
+      } },
+    { BC_DATE,                   "iZCisS",                               /* 31 */
+      { offsetof(struct Test, u.dt.comp.index),
+        offsetof(struct Test, u.dt.zone),
+        offsetof(struct Test, u.dt.comp),
+        offsetof(struct Test, u.dt.date_part),
+        offsetof(struct Test, u.dt.header_name),
+        offsetof(struct Test, u.dt.kl)
+      } },
+    { BC_CURRENTDATE,            "ZCiS",                                 /* 32 */
+      { offsetof(struct Test, u.dt.zone),
+        offsetof(struct Test, u.dt.comp),
+        offsetof(struct Test, u.dt.date_part),
+        offsetof(struct Test, u.dt.kl)
       } },
 };
 
@@ -595,13 +609,31 @@ static int bc_args_parse(bytecode_input_t *bc, int pos, const char *fmt,
             break;
         }
 
-            /* zonetag [tzoffset] */
+            /* zonetag [tzoffset (as integer)] */
+        case 'z': {
+            zone_t *z = base + *offsets++;
+
+            z->tag = ntohl(bc[pos++].value);
+
+            if (z->tag == B_TIMEZONE) {
+                int offset = ntohl(bc[pos++].value);
+                struct buf buf = BUF_INITIALIZER;
+
+                buf_printf(&buf, "%+03d%02u", offset / 60, abs(offset % 60));
+                z->offset = buf_release(&buf);
+            }
+            break;
+        }
+
+
+            /* zonetag [tzoffset (as string)] */
         case 'Z': {
             zone_t *z = base + *offsets++;
 
             z->tag = ntohl(bc[pos++].value);
 
-            if (z->tag == B_TIMEZONE) z->offset = ntohl(bc[pos++].value);
+            if (z->tag == B_TIMEZONE)
+                pos = bc_string_parse(bc, pos, &z->offset);
             break;
         }
 
