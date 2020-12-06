@@ -2066,8 +2066,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
     int c;
 
     if ((c = getword(in, &response)) == EOF) {
-        syslog(LOG_ERR, "IOERROR: zero length response to %s (%s)",
-               cmd, prot_error(in));
+        xsyslog(LOG_ERR, "IOERROR: zero length response",
+                         "command=<%s> prot_error=<%s>",
+                         cmd, prot_error(in));
         return IMAP_PROTOCOL_ERROR;
     }
 
@@ -2145,8 +2146,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
  parse_err:
     dlist_free(&kl);
     sync_getline(in, &errmsg);
-    syslog(LOG_ERR, "IOERROR: %s received %s response: %s",
-           cmd, response.s, errmsg.s);
+    xsyslog(LOG_ERR, "IOERROR: received bad response",
+                     "command=<%s> response=<%s> errmsg=<%s>",
+                     cmd, response.s, errmsg.s);
     return IMAP_PROTOCOL_ERROR;
 }
 
@@ -2176,16 +2178,18 @@ int sync_append_copyfile(struct mailbox *mailbox,
             record->internal_flags |= FLAG_INTERNAL_UNLINKED;
             goto just_write;
         }
-        syslog(LOG_ERR, "IOERROR: failed to parse %s: %s",
-               message_guid_encode(&record->guid),
-               error_message(r));
+        xsyslog(LOG_ERR, "IOERROR: parse failed",
+                         "guid=<%s> error=<%s>",
+                         message_guid_encode(&record->guid),
+                         error_message(r));
         return r;
     }
 
     /* record->guid was rewritten in the parse, see if it changed */
     if (!message_guid_equal(&tmp_guid, &record->guid)) {
-        syslog(LOG_ERR, "IOERROR: guid mismatch on parse %s (%s)",
-               item->fname, message_guid_encode(&record->guid));
+        xsyslog(LOG_ERR, "IOERROR: guid mismatch on parse",
+                         "filename=<%s> guid=<%s>",
+                         item->fname, message_guid_encode(&record->guid));
         return IMAP_IOERROR;
     }
 
@@ -2201,8 +2205,9 @@ int sync_append_copyfile(struct mailbox *mailbox,
     cyrus_mkdir(destname, 0755);
     r = mailbox_copyfile(item->fname, destname, 0);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: Failed to copy %s to %s",
-               item->fname, destname);
+        xsyslog(LOG_ERR, "IOERROR: copy file failed",
+                         "filename=<%s> destination=<%s>",
+                         item->fname, destname);
         return r;
     }
 
@@ -2310,19 +2315,22 @@ redo:
         memset(&record2, 0, sizeof(struct index_record));
         r = message_parse(mailbox_msg_path, &record2);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: Unable to parse %s",
-                   mailbox_msg_path);
+            xsyslog(LOG_ERR, "IOERROR: parse failed"
+                             "filename=<%s>",
+                             mailbox_msg_path);
             continue;
         }
         if (!message_guid_equal(&record->guid, &record2.guid)) {
-            syslog(LOG_ERR, "IOERROR: GUID mismatch on parse for %s",
-                   mailbox_msg_path);
+            xsyslog(LOG_ERR, "IOERROR: guid mismatch on parse",
+                            "filename=<%s>",
+                            mailbox_msg_path);
             continue;
         }
 
         if (mailbox_copyfile(mailbox_msg_path, stage_msg_path, 0) != 0) {
-            syslog(LOG_ERR, "IOERROR: Unable to link %s -> %s: %m",
-                   mailbox_msg_path, stage_msg_path);
+            xsyslog(LOG_ERR, "IOERROR: link failed",
+                             "mailbox_msg_path=<%s> stage_msg_path=<%s>",
+                             mailbox_msg_path, stage_msg_path);
             continue;
         }
 
@@ -2575,8 +2583,9 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.ignorelimits = 1;
             r = mailbox_rewrite_index_record(mailbox, &copy);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to rewrite record %s %u",
-                       mailbox->name, rrecord->recno);
+                xsyslog(LOG_ERR, "IOERROR: rewrite record failed",
+                                 "mboxname=<%s> recno=<%u>",
+                                 mailbox->name, rrecord->recno);
                 goto out;
             }
         }
@@ -2598,8 +2607,9 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             mrecord.silentupdate = 1;
             r = sync_append_copyfile(mailbox, &mrecord, mannots, part_list);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to append file %s %d",
-                       mailbox->name, mrecord.uid);
+                xsyslog(LOG_ERR, "IOERROR: append file failed",
+                                 "mboxname=<%s> uid=<%d>",
+                                 mailbox->name, mrecord.uid);
                 goto out;
             }
 
@@ -4155,8 +4165,9 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
         }
 
         if (r) {
-            syslog(LOG_ERR, "IOERROR: Failed to open %s: %s",
-                   mbox->name, error_message(r));
+            xsyslog(LOG_ERR, "IOERROR: mailbox open failed",
+                             "mboxname=<%s> error=<%s>",
+                             mbox->name, error_message(r));
             goto bail;
         }
 
@@ -4164,8 +4175,9 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
         if (mailbox_has_conversations(mailbox)) {
             r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: Failed to get xconvmodseq %s: %s",
-                       mbox->name, error_message(r));
+                xsyslog(LOG_ERR, "IOERROR: get xconvmodseq failed",
+                                 "mboxname=<%s> error=<%s>",
+                                 mbox->name, error_message(r));
                 goto bail;
             }
         }
@@ -4862,7 +4874,9 @@ static int copy_local(struct mailbox *mailbox, unsigned uid)
 
     if (mailbox_find_index_record(mailbox, uid, &oldrecord)) {
         /* not finding the record is an error! (should never happen) */
-        syslog(LOG_ERR, "IOERROR: copy_local didn't find the record for %u", uid);
+        xsyslog(LOG_ERR, "IOERROR: couldn't find index record",
+                         "uid=<%u>",
+                         uid);
         return IMAP_MAILBOX_NONEXISTENT;
     }
 
@@ -4935,13 +4949,17 @@ static int fetch_file(struct sync_client_state *sync_cs,
 
     r = sync_parse_response(cmd, sync_cs->backend->in, &kin);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: fetch_file failed %s", error_message(r));
+        xsyslog(LOG_ERR, "IOERROR: parse response failed",
+                         "error=<%s>",
+                         error_message(r));
         return r;
     }
 
     if (!dlist_tofile(kin->head, NULL, &guid, (unsigned long *) &size, &fname)) {
         r = IMAP_MAILBOX_NONEXISTENT;
-        syslog(LOG_ERR, "IOERROR: fetch_file failed tofile %s", error_message(r));
+        xsyslog(LOG_ERR, "IOERROR: dlist_tofile failed",
+                         "error=<%s>",
+                         error_message(r));
         goto done;
     }
 
@@ -4954,7 +4972,9 @@ static int fetch_file(struct sync_client_state *sync_cs,
     }
     else {
         r = IMAP_MAILBOX_NONEXISTENT;
-        syslog(LOG_ERR, "IOERROR: fetch_file GUID MISMATCH %s", error_message(r));
+        xsyslog(LOG_ERR, "IOERROR: GUID MISMATCH",
+                         "error=<%s>",
+                         error_message(r));
         r = IMAP_IOERROR;
     }
 
@@ -4974,7 +4994,9 @@ static int copy_remote(struct mailbox *mailbox, uint32_t uid,
     for (ki = kr->head; ki; ki = ki->next) {
         r = parse_upload(ki, mailbox, &record, &annots);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to parse upload for %u", uid);
+            xsyslog(LOG_ERR, "IOERROR: parse_upload failed",
+                             "uid=<%u>",
+                             uid);
             return r;
         }
         if (record.uid == uid) {
@@ -4991,7 +5013,9 @@ static int copy_remote(struct mailbox *mailbox, uint32_t uid,
         sync_annot_list_free(&annots);
     }
     /* not finding the record is an error! (should never happen) */
-    syslog(LOG_ERR, "IOERROR: copy_remote didn't find the record for %u", uid);
+    xsyslog(LOG_ERR, "IOERROR: couldn't find index record",
+                     "uid=<%u>",
+                     uid);
     return IMAP_MAILBOX_NONEXISTENT;
 }
 
@@ -6045,7 +6069,8 @@ int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname)
     r = annotatemore_findall(mboxname, 0, "*", /*modseq*/0, &do_annotation_cb,
                              master_annot, /*flags*/0);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: fetching annotations for %s", mboxname);
+        xsyslog(LOG_ERR, "IOERROR: fetching annotations failed",
+                         "mboxname=<%s>", mboxname);
         r = IMAP_IOERROR;
         goto bail;
     }
@@ -6453,8 +6478,10 @@ static int do_user_main(struct sync_client_state *sync_cs,
     sync_name_list_free(&info.quotalist);
 
     if (r && r != IMAP_AGAIN) {
-        syslog(LOG_ERR, "IOERROR: do_user_main: %s for %s to %s (%s)", error_message(r),
-               userid, sync_cs->channel, sync_cs->servername);
+        xsyslog(LOG_ERR, "IOERROR: user replication failed",
+                         "error=<%s> userid=<%s> channel=<%s> servername=<%s>",
+                         error_message(r), userid,
+                         sync_cs->channel, sync_cs->servername);
     }
 
     return r;
@@ -6470,7 +6497,8 @@ int sync_do_user_sub(struct sync_client_state *sync_cs, const char *userid,
     /* Includes subsidiary nodes automatically */
     strarray_t *msubs = mboxlist_sublist(userid);
     if (!msubs) {
-        syslog(LOG_ERR, "IOERROR: fetching subscriptions for %s", userid);
+        xsyslog(LOG_ERR, "IOERROR: fetching subscriptions failed",
+                         "userid=<%s>", userid);
         r = IMAP_IOERROR;
         goto bail;
     }
