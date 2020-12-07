@@ -314,6 +314,10 @@ struct mboxname_counters {
     modseq_t carddavfoldersdeletedmodseq;
     modseq_t notesfoldersdeletedmodseq;
     modseq_t submissionfoldersdeletedmodseq;
+    modseq_t davnotificationmodseq;
+    modseq_t davnotificationdeletedmodseq;
+    modseq_t davnotificationfoldersmodseq;
+    modseq_t davnotificationfoldersdeletedmodseq;
     uint32_t uidvalidity;
 };
 
