@@ -2315,7 +2315,7 @@ redo:
         memset(&record2, 0, sizeof(struct index_record));
         r = message_parse(mailbox_msg_path, &record2);
         if (r) {
-            xsyslog(LOG_ERR, "IOERROR: parse failed"
+            xsyslog(LOG_ERR, "IOERROR: parse failed",
                              "filename=<%s>",
                              mailbox_msg_path);
             continue;
