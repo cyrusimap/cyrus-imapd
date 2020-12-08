@@ -1951,6 +1951,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
     icalcomponent *ical = NULL;
     struct buf buf = BUF_INITIALIZER;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+    int is_draft = record->system_flags & FLAG_DRAFT;
     int r = 0;
 
     /* Only process deletes on regular calendar collections */
@@ -1986,7 +1987,6 @@ static int caldav_delete_cal(struct transaction_t *txn,
          * cancellation if deleting a record which was never replied to... */
 
         char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
-        int is_draft = record->system_flags & FLAG_DRAFT;
         if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && !is_draft)
@@ -2001,6 +2001,21 @@ static int caldav_delete_cal(struct transaction_t *txn,
 
         free(userid);
     }
+
+#ifdef WITH_JMAP
+    if (!ical) ical = record_to_ical(mailbox, record, &schedule_addresses);
+    if (ical) {
+        icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+        if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+            int r2 = jmap_create_caldaveventnotif(txn, mailbox->name,
+                    cdata->ical_uid, &schedule_addresses, is_draft, ical, NULL);
+            if (r2) {
+                xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
+                        "error=%s", error_message(r2));
+            }
+        }
+    }
+#endif
 
   done:
     if (ical) icalcomponent_free(ical);
@@ -4553,6 +4568,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct caldav_data *cdata;
+    char *sched_userid = NULL;
+    int is_draft = 0;
 
     /* Validate the iCal data */
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
@@ -4729,7 +4746,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     case ICAL_VPOLL_COMPONENT:
         if (organizer) {
             /* Scheduling object resource */
-            int is_draft = 0;
 
             syslog(LOG_DEBUG, "caldav_put: organizer: %s", organizer);
 
@@ -4770,9 +4786,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
                                    txn->req_tgt.userid, &schedule_addresses);
 
-            char *userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
+            sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
                 xstrdup(txn->req_tgt.userid) :
                 mboxname_to_userid(txn->req_tgt.mbentry->name);
+
             if (strarray_find_case(&schedule_addresses, organizer, 0) >= 0) {
                 /* Organizer scheduling object resource */
                 if (ret) {
@@ -4780,7 +4797,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
                 else {
                     if (_scheduling_enabled(txn, mailbox) && !is_draft)
-                        sched_request(userid, &schedule_addresses, organizer, oldical, ical);
+                        sched_request(sched_userid, &schedule_addresses, organizer, oldical, ical);
                 }
             }
             else {
@@ -4798,10 +4815,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif
                 else {
                     if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
-                        sched_reply(userid, &schedule_addresses, oldical, ical);
+                        sched_reply(sched_userid, &schedule_addresses, oldical, ical);
                 }
             }
-            free(userid);
 
             if (ret) goto done;
 
@@ -4827,11 +4843,28 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                                     cdata->dav.createdmodseq,
                                     db, flags, NULL, NULL, httpd_userid,
                                     &schedule_addresses);
+#ifdef WITH_JMAP
+        if (kind == ICAL_VEVENT_COMPONENT) {
+            if (!oldical && cdata->dav.imap_uid) {
+                syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
+                /* Load message containing the resource and parse iCal data */
+                oldical = caldav_record_to_ical(mailbox, cdata,
+                        NULL, NULL);
+            }
+            int r2 = jmap_create_caldaveventnotif(txn, mailbox->name, uid,
+                    &schedule_addresses, is_draft, oldical, ical);
+            if (r2) {
+                xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
+                        "error=%s", error_message(r2));
+            }
+        }
+#endif
     }
 
   done:
     if (oldical) icalcomponent_free(oldical);
     strarray_fini(&schedule_addresses);
+    free(sched_userid);
     buf_free(&buf);
 
     return ret;
