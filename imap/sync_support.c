@@ -7076,7 +7076,6 @@ int sync_do_restart(struct sync_client_state *sync_cs)
 
 struct split_user_mailboxes_rock {
     struct sync_client_state *sync_cs;
-    struct sync_name_list *mboxname_list;
     struct sync_action_list *user_list;
     int r;
 };
@@ -7088,26 +7087,25 @@ static void split_user_mailboxes(const char *key __attribute__((unused)),
     struct split_user_mailboxes_rock *smrock =
         (struct split_user_mailboxes_rock *) rock;
     struct sync_action_list *mailbox_list = (struct sync_action_list *) data;
+    struct sync_name_list *mboxname_list = sync_name_list_create();;
     struct sync_action *action;
 
     for (action = mailbox_list->head; action; action = action->next) {
         if (!action->active)
             continue;
 
-        sync_name_list_add(smrock->mboxname_list, action->name);
+        sync_name_list_add(mboxname_list, action->name);
     }
 
-    if (smrock->mboxname_list->count >= 1000) {
+    if (mboxname_list->count) {
         syslog(LOG_NOTICE, "sync_mailboxes: doing %lu",
-                           smrock->mboxname_list->count);
-        smrock->r = do_mailboxes(smrock->sync_cs, smrock->mboxname_list,
+                           mboxname_list->count);
+        smrock->r = do_mailboxes(smrock->sync_cs, mboxname_list,
                                  smrock->user_list, smrock->sync_cs->flags);
-        if (smrock->r) return;
-        smrock->r = sync_do_restart(smrock->sync_cs);
-        if (smrock->r) return;
-        sync_name_list_free(&smrock->mboxname_list);
-        smrock->mboxname_list = sync_name_list_create();
+        if (!smrock->r) smrock->r = sync_do_restart(smrock->sync_cs);
     }
+
+    sync_name_list_free(&mboxname_list);
 }
 
 /* need this lil wrapper for free_hash_table callback */
@@ -7251,7 +7249,6 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
     if (hash_numrecords(&user_mailboxes)) {
         struct split_user_mailboxes_rock smrock;
         smrock.sync_cs = sync_cs;
-        smrock.mboxname_list = sync_name_list_create();
         smrock.user_list = user_list;
         smrock.r = 0;
 
@@ -7260,14 +7257,6 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         hash_enumerate(&user_mailboxes, split_user_mailboxes, &smrock);
         r = smrock.r;
 
-        /* process any stragglers (<1000 remaining) */
-        if (!r)
-            r = do_mailboxes(sync_cs, smrock.mboxname_list,
-                             user_list, sync_cs->flags);
-        if (!r)
-            r = sync_do_restart(sync_cs);
-
-        sync_name_list_free(&smrock.mboxname_list);
         if (r) goto cleanup;
     }
 
