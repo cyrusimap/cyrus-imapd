@@ -19581,8 +19581,7 @@ sub test_email_query_emailaddress
             domain => 'local',
         ),
         to => Cassandane::Address->new(
-#            localpart => 't"u "x',      XXX  Is this even legal?
-            localpart => 'tux',
+            localpart => '"tu x"',
             domain => "example.com"
         ),
         body => "msg3"
@@ -19669,11 +19668,11 @@ EOF
         to => 'example.com',
         wantIds => [$ids[0], $ids[1], $ids[2], $ids[3]],
     }, {
-#        to => 't"u "x@example.com',
-#        wantIds => [$ids[2]],
-#    }, {
-        to => 'tux@example.com',
+        to => '"tu x"@example.com',
         wantIds => [$ids[2]],
+    }, {
+        to => 'tux@example.com',
+        wantIds => [],
     }, {
         to => 'Jane Doe <foo.baz+bla@yyy.example.com>',
         wantIds => [$ids[1]],
