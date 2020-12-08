@@ -1863,6 +1863,162 @@ struct convert_rock *striphtml_init(struct convert_rock *next)
     return rock;
 }
 
+struct unorm_state {
+    const UNormalizer2 *unorm;
+    UChar *u16buf;
+    int32_t u16cap;
+    UChar32 *u32buf;
+    int32_t u32cap;
+    int32_t u32len;
+    int32_t spanlen;
+};
+
+static void unorm_append(struct unorm_state *st, uint32_t c)
+{
+    if (st->u32len == st->u32cap) {
+        st->u32cap += 8;
+        st->u32buf = xrealloc(st->u32buf, sizeof(UChar32) * st->u32cap);
+    }
+    if (!st->spanlen && !unorm2_getCombiningClass(st->unorm, c)) {
+        /* End of the first span of composable codepoints */
+        st->spanlen = st->u32len;
+    }
+    st->u32buf[st->u32len++] = c;
+}
+
+static void unorm_drain(struct convert_rock *rock, int is_flush)
+{
+    struct unorm_state *st = rock->state;
+
+    /* Have we reached the end of a composable span? */
+    if (!st->spanlen) {
+        if (!is_flush) {
+            return;
+        }
+        st->spanlen = st->u32len;
+    }
+    if (!st->spanlen) return;
+
+    /* Insertion-sort span by combining class */
+    int i;
+    for (i = 1; i < st->spanlen; i++) {
+        UChar32 c = st->u32buf[i];
+        int j = i - 1;
+        while (j >= 0) {
+            if (unorm2_getCombiningClass(st->unorm, st->u32buf[j]) <=
+                    unorm2_getCombiningClass(st->unorm, c)) {
+                break;
+            }
+            st->u32buf[j+1] = st->u32buf[j];
+            j = j - 1;
+        }
+        st->u32buf[j+1] = c;
+    }
+
+    /* Emit composed codepoints in span */
+    UChar32 u1 = st->u32buf[0];
+    for (i = 1; i < st->spanlen; i++) {
+        UChar32 u2 = unorm2_composePair(st->unorm, u1, st->u32buf[i]);
+        if (u2 < 0) {
+            convert_putc(rock->next, u1);
+            u1 = st->u32buf[i];
+        }
+        else u1 = u2;
+    }
+    convert_putc(rock->next, u1);
+
+    /* Keep any remaining code points */
+    int j;
+    for (i = 0, j = st->spanlen; j < st->u32len; j++) {
+        st->u32buf[i++] = st->u32buf[j];
+    }
+    st->u32len -= st->spanlen;
+    st->spanlen = 0;
+    for (i = 0; i < st->u32len; i++) {
+        if (!unorm2_getCombiningClass(st->unorm, st->u32buf[i])) {
+            st->spanlen = i;
+            break;
+        }
+    }
+
+    /* In case of flush, drain all we got */
+    if (is_flush && st->u32len) {
+        unorm_drain(rock, is_flush);
+    }
+}
+
+static void unorm_free(struct convert_rock *rock)
+{
+    if (!rock) return;
+    struct unorm_state *st = rock->state;
+    if (st) {
+        free(st->u16buf);
+        free(st->u32buf);
+        free(st);
+    }
+    free(rock);
+}
+
+static void unorm_flush(struct convert_rock *rock)
+{
+    unorm_drain(rock, 1);
+}
+
+static void unorm_convert(struct convert_rock *rock, uint32_t c)
+{
+    struct unorm_state *st = rock->state;
+    UErrorCode err = U_ZERO_ERROR;
+
+    int32_t len = unorm2_getDecomposition(st->unorm, c, NULL, 0, &err);
+
+    if (len > 0) {
+        /* Decompose c into NFD */
+        if (len > st->u16cap) {
+            st->u16buf = xrealloc(st->u16buf, sizeof(UChar) * len);
+            st->u16cap = len;
+        }
+        err = U_ZERO_ERROR;
+        unorm2_getDecomposition(st->unorm, c, st->u16buf, st->u16cap, &err);
+        /* Append NFD codepoints */
+        if (U_SUCCESS(err)) {
+            int32_t i = 0;
+            while (i < len) {
+                U16_NEXT(st->u16buf, i, len, c);
+                unorm_append(st, c);
+            }
+        }
+    }
+
+    if (len < 0 || U_FAILURE(err)) {
+        /* Append verbatim */
+        unorm_append(st, c);
+    }
+
+    unorm_drain(rock, 0);
+}
+
+static struct convert_rock *unorm_init(struct convert_rock *next)
+{
+    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
+
+    struct unorm_state *st = xzmalloc(sizeof(struct unorm_state));
+    UErrorCode err = U_ZERO_ERROR;
+    st->unorm = unorm2_getNFCInstance(&err);
+    assert(U_SUCCESS(err));
+
+    st->u16cap = 8;
+    st->u16buf = xmalloc(sizeof(UChar) * st->u16cap);
+    st->u32cap = 8;
+    st->u32buf = xmalloc(sizeof(UChar32) * st->u32cap);
+
+    rock->f = unorm_convert;
+    rock->flush = unorm_flush;
+    rock->cleanup = unorm_free;
+    rock->next = next;
+    rock->state = st;
+    return rock;
+}
+
 static char* convert_to_name(const char *to, charset_t charset,
                              const char *src, size_t len)
 {
@@ -2080,6 +2236,9 @@ EXPORTED char *charset_convert(const char *s, charset_t charset, int flags)
     tobuffer = buffer_init(0);
     input = convert_init(utf8, 0/*to_uni*/, tobuffer);
     input = canon_init(flags, input);
+    if (flags & CHARSET_UNORM_NFC) {
+        input = unorm_init(input);
+    }
     input = convert_init(charset, 1/*to_uni*/, input);
 
     /* do the conversion */
