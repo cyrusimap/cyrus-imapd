@@ -1476,6 +1476,25 @@ EXPORTED int mboxname_isdavnotificationsmailbox(const char *name, int mbtype)
 }
 
 /*
+ * If (internal) mailbox 'name' is a JMAPNOTIFICATIONS mailbox
+ * returns boolean
+ */
+EXPORTED int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype)
+{
+    if (mbtype & MBTYPE_JMAPNOTIFICATION) return 1;  /* Only works on backends */
+    int res = 0;
+
+    mbname_t *mbname = mbname_from_intname(name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_JMAPNOTIFICATIONFOLDER);
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+        res = 1;
+
+    mbname_free(&mbname);
+    return res;
+}
+
+/*
  * If (internal) mailbox 'name' is a user's "Notes" mailbox
  * returns boolean
  */
@@ -2847,6 +2866,14 @@ static modseq_t mboxname_domodseq(const char *mboxname,
             foldersmodseqp = isdelete ?
                 &counters.davnotificationfoldersdeletedmodseq :
                 &counters.davnotificationfoldersmodseq;
+        }
+        else if (mboxname_isjmapnotificationsmailbox(mboxname, mbtype)) {
+            typemodseqp = isdelete ?
+                &counters.jmapnotificationdeletedmodseq :
+                &counters.jmapnotificationmodseq;
+            foldersmodseqp = isdelete ?
+                &counters.jmapnotificationfoldersdeletedmodseq :
+                &counters.jmapnotificationfoldersmodseq;
         }
         else {
             typemodseqp = isdelete ?
