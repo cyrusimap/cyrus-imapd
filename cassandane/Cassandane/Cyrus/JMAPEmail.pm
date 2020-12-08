@@ -17805,6 +17805,7 @@ sub test_email_query_guidsearch_only_email_mailboxes
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
