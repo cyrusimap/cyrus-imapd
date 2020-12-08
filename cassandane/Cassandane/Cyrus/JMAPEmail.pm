@@ -20041,5 +20041,176 @@ EOF
     $self->assert_null($res->[1][1]{list}[0]{attachments});
 }
 
+sub test_email_query_header
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+use utf8;
+
+    $self->make_message("xhdr1",
+        extra_headers => [['X-hdr', 'val1'], ['X-hdr', 'val2']],
+        body => "xhdr1"
+    ) || die;
+    $self->make_message("xhdr2",
+        extra_headers => [['X-hdr', 'val1']],
+        body => "xhdr2"
+    ) || die;
+    $self->make_message("xhdr3",
+        extra_headers => [['X-hdr', " s\xc3\xa4ge   "]],
+        body => "xhdr3"
+    ) || die;
+    $self->make_message("subject1",
+        body => "subject1"
+    ) || die;
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-Z');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'subject' ],
+        }, 'R2'],
+    ]);
+    my %id = map { $_->{subject} => $_->{id} } @{$res->[1][1]{list}};
+
+    my @testCases = ({
+        desc => 'xhdr equals',
+        header => ['x-hdr', 'val2', 'equals'],
+        wantIds => [$id{'xhdr1'}],
+    }, {
+        desc => 'xhdr startsWith',
+        header => ['x-hdr', 'val', 'startsWith'],
+        wantIds => [$id{'xhdr1'}, $id{'xhdr2'}],
+    }, {
+        desc => 'xhdr endsWith',
+        header => ['x-hdr', 'al1', 'endsWith'],
+        wantIds => [$id{'xhdr1'}, $id{'xhdr2'}],
+    }, {
+        desc => 'xhdr contains',
+        header => ['x-hdr', 'al', 'contains'],
+        wantIds => [$id{'xhdr1'}, $id{'xhdr2'}],
+    }, {
+        desc => 'xhdr contains utf8 value',
+        header => ['x-hdr', 'SaGE', 'contains'],
+        wantIds => [$id{'xhdr3'}],
+    }, {
+        desc => 'subject contains ASCII',
+        header => ['subject', 'ubjec', 'contains'],
+        wantIds => [$id{'subject1'}],
+    });
+
+    foreach (@testCases) {
+        xlog "Running test: $_->{desc}";
+        $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => {
+                    header => $_->{header},
+                },
+                sort => [{ property => 'subject' }],
+            }, 'R1'],
+        ]);
+        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
+    }
+
+no utf8;
+}
+
+sub test_email_query_header_cost
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message() || die;
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-Z');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                header => ['x-hdr', 'foo', 'contains'],
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                header => ['subject', 'foo', 'contains'],
+            },
+        }, 'R2'],
+    ], $using);
+    $self->assert_deep_equals(['body'],
+        $res->[0][1]{performance}{details}{filters});
+    $self->assert_deep_equals(['cache'],
+        $res->[1][1]{performance}{details}{filters});
+}
+
+sub test_email_query_header_sieve
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    $imap->create("matches") or die;
+
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+    "header" : [ "subject", "zzz", "endsWith" ]
+  }
+.
+  )
+{
+  fileinto "matches";
+}
+EOF
+    );
+
+    xlog "Deliver matching message";
+    my $msg1 = $self->{gen}->generate(
+        subject => 'xxxyyyzzz',
+        body => "msg1"
+    );
+    $self->{instance}->deliver($msg1);
+
+    xlog "Assert that message got moved into INBOX.matches";
+    $self->{store}->set_folder('matches');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog $self, "Deliver a non-matching message";
+    my $msg2 = $self->{gen}->generate(
+        subject => 'zzzyyyyxxx',
+        body => "msg2"
+    );
+    $self->{instance}->deliver($msg2);
+    $msg2->set_attribute(uid => 1);
+
+    xlog "Assert that message got moved into INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg2 }, check_guid => 0);
+}
 
 1;
