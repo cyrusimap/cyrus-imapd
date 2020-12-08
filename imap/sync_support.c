@@ -7594,7 +7594,11 @@ EXPORTED int sync_checkpoint(struct protstream *clientin)
     sync_log_reader_t *slr = sync_log_reader_create_with_content(buf_cstring(buf));
 
     int r = sync_log_reader_begin(slr);
-    if (!r) sync_do_reader(&rightnow_sync_cs, slr);
+    if (!r) r = sync_do_reader(&rightnow_sync_cs, slr);
+    if (r) {
+        syslog(LOG_ERR, "SYNCERROR sync_rightnow: error syncing to: %s (%s)",
+               rightnow_sync_cs.servername, error_message(r));
+    }
 
     sync_log_reader_end(slr);
     sync_log_reader_free(slr);
