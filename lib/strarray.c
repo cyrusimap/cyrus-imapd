@@ -446,6 +446,7 @@ EXPORTED int strarray_find_case(const strarray_t *sa, const char *match, int sta
 
 EXPORTED int strarray_intersect(const strarray_t *sa, const strarray_t *sb)
 {
+    /* XXX O(n^2)... but we don't have a proper set type */
     int i;
     for (i = 0; i < sa->count; i++)
         if (strarray_find(sb, strarray_nth(sa, i), 0) >= 0)
@@ -455,6 +456,7 @@ EXPORTED int strarray_intersect(const strarray_t *sa, const strarray_t *sb)
 
 EXPORTED int strarray_intersect_case(const strarray_t *sa, const strarray_t *sb)
 {
+    /* XXX O(n^2)... but we don't have a proper set type */
     int i;
     for (i = 0; i < sa->count; i++)
         if (strarray_find_case(sb, strarray_nth(sa, i), 0) >= 0)
