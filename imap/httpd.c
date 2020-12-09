@@ -2887,7 +2887,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             simple_hdr(txn, "Content-Language", "%s", resp_body->lang);
         }
         if (resp_body->loc) {
-            simple_hdr(txn, "Content-Location", "%s", resp_body->loc);
+            xmlChar *uri = xmlURIEscapeStr(BAD_CAST resp_body->loc, BAD_CAST ":/?=");
+            simple_hdr(txn, "Content-Location", "%s", (const char *) uri);
+            free(uri);
+
             if (txn->flags.cors) Access_Control_Expose("Content-Location");
         }
         if (resp_body->md5) {
