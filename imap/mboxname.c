@@ -2249,7 +2249,7 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
     return fileval;
 }
 
-#define MV_VERSION 7
+#define MV_VERSION 8
 
 #define MV_OFF_GENERATION 0
 #define MV_OFF_VERSION 4
@@ -2280,9 +2280,13 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
 #define MV_OFF_DAVNOTIFICATIONDELETEDMODSEQ 200
 #define MV_OFF_DAVNOTIFICATIONFOLDERSMODSEQ 208
 #define MV_OFF_DAVNOTIFICATIONFOLDERSDELETEDMODSEQ 216
-#define MV_OFF_UIDVALIDITY 224
-#define MV_OFF_CRC 228
-#define MV_LENGTH 232
+#define MV_OFF_JMAPNOTIFICATIONMODSEQ 224
+#define MV_OFF_JMAPNOTIFICATIONDELETEDMODSEQ 232
+#define MV_OFF_JMAPNOTIFICATIONFOLDERSMODSEQ 240
+#define MV_OFF_JMAPNOTIFICATIONFOLDERSDELETEDMODSEQ 248
+#define MV_OFF_UIDVALIDITY 256
+#define MV_OFF_CRC 260
+#define MV_LENGTH 264
 
 /* NOTE: you need a MV_LENGTH byte base here */
 static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxname_counters *vals)
@@ -2458,6 +2462,45 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         vals->uidvalidity = ntohl(*((uint32_t *)(base+224)));
         break;
 
+    case 8:
+        if (len != 264) return IMAP_MAILBOX_CHECKSUM;
+        if (crc32_map(base, 260) != ntohl(*((uint32_t *)(base+260))))
+            return IMAP_MAILBOX_CHECKSUM;
+
+        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
+        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
+        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
+        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
+        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
+        vals->mailfoldersmodseq = ntohll(*((uint64_t *)(base+48)));
+        vals->caldavfoldersmodseq = ntohll(*((uint64_t *)(base+56)));
+        vals->carddavfoldersmodseq = ntohll(*((uint64_t *)(base+64)));
+        vals->notesfoldersmodseq = ntohll(*((uint64_t *)(base+72)));
+        vals->quotamodseq = ntohll(*((uint64_t *)(base+80)));
+        vals->raclmodseq = ntohll(*((uint64_t *)(base+88)));
+        vals->submissionmodseq = ntohll(*((uint64_t *)(base+96)));
+        vals->submissionfoldersmodseq = ntohll(*((uint64_t *)(base+104)));
+        vals->maildeletedmodseq = ntohll(*((uint64_t *)(base+112)));
+        vals->caldavdeletedmodseq = ntohll(*((uint64_t *)(base+120)));
+        vals->carddavdeletedmodseq = ntohll(*((uint64_t *)(base+128)));
+        vals->notesdeletedmodseq = ntohll(*((uint64_t *)(base+136)));
+        vals->submissiondeletedmodseq = ntohll(*((uint64_t *)(base+144)));
+        vals->mailfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+152)));
+        vals->caldavfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+160)));
+        vals->carddavfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+168)));
+        vals->notesfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+176)));
+        vals->submissionfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+184)));
+        vals->davnotificationmodseq = ntohll(*((uint64_t *)(base+192)));
+        vals->davnotificationdeletedmodseq = ntohll(*((uint64_t *)(base+200)));
+        vals->davnotificationfoldersmodseq = ntohll(*((uint64_t *)(base+208)));
+        vals->davnotificationfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+216)));
+        vals->jmapnotificationmodseq = ntohll(*((uint64_t *)(base+224)));
+        vals->jmapnotificationdeletedmodseq = ntohll(*((uint64_t *)(base+232)));
+        vals->jmapnotificationfoldersmodseq = ntohll(*((uint64_t *)(base+240)));
+        vals->jmapnotificationfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+248)));
+        vals->uidvalidity = ntohl(*((uint32_t *)(base+256)));
+        break;
+
     default:
         return IMAP_MAILBOX_BADFORMAT;
     }
@@ -2507,6 +2550,14 @@ static void mboxname_counters_to_buf(const struct mboxname_counters *vals, char 
                  vals->davnotificationfoldersmodseq);
     align_htonll(base+MV_OFF_DAVNOTIFICATIONFOLDERSDELETEDMODSEQ,
                  vals->davnotificationfoldersdeletedmodseq);
+    align_htonll(base+MV_OFF_JMAPNOTIFICATIONMODSEQ,
+                 vals->jmapnotificationmodseq);
+    align_htonll(base+MV_OFF_JMAPNOTIFICATIONDELETEDMODSEQ,
+                 vals->jmapnotificationdeletedmodseq);
+    align_htonll(base+MV_OFF_JMAPNOTIFICATIONFOLDERSMODSEQ,
+                 vals->jmapnotificationfoldersmodseq);
+    align_htonll(base+MV_OFF_JMAPNOTIFICATIONFOLDERSDELETEDMODSEQ,
+                 vals->jmapnotificationfoldersdeletedmodseq);
     *((uint32_t *)(base+MV_OFF_UIDVALIDITY)) = htonl(vals->uidvalidity);
     *((uint32_t *)(base+MV_OFF_CRC)) = htonl(crc32_map(base, MV_OFF_CRC));
 }
