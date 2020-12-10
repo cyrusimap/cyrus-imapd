@@ -62,6 +62,7 @@ typedef int (*search_hitguid_cb_t)(const conv_guidrec_t *rec, size_t nguids,
 
 typedef int (*search_snippet_cb_t)(struct mailbox *, uint32_t uid,
                                    /* SEARCH_PART_* constants */int part,
+                                   const char *bodypartid,
                                    const char *snippet, void *rock);
 
 typedef struct search_builder search_builder_t;
@@ -100,13 +101,19 @@ extern search_snippet_markup_t default_snippet_markup;
 /* The functions in search_text_receiver_t get called at least once for each part of every message.
    The invocations form a sequence:
        begin_message(message_t)
-       receiver->begin_part(<part1>, <contentid>)
+
+       (1 or more times)
+       receiver->begin_bodypart(<bodypart1>, <contentid>)
+       receiver->begin_part(<part1>)
        receiver->append_text(<text>)     (1 or more times)
        receiver->end_part(<part1>)
+       receiver->end_bodypart(<bodypart1>)
        ...
        receiver->begin_part(<partN>)
        receiver->append_text(<text>)     (1 or more times)
        receiver->end_part(<partN>)
+       receiver->begin_bodypart(<bodypart1>)
+
        receiver->end_message()
 
    The parts need not arrive in any particular order, but each part
@@ -123,10 +130,13 @@ struct search_text_receiver {
      * are broken by choosing the index level without the partial bit set */
     uint8_t (*is_indexed)(search_text_receiver_t *, message_t *msg);
     int (*begin_message)(search_text_receiver_t *, message_t *msg);
-    void (*begin_part)(search_text_receiver_t *, int part,
-                       const struct message_guid *content_guid);
+    int (*begin_bodypart)(search_text_receiver_t *, const char *partid,
+                          const struct message_guid *content_guid,
+                          const char *type, const char *subtype);
+    void (*begin_part)(search_text_receiver_t *, int part);
     void (*append_text)(search_text_receiver_t *, const struct buf *);
     void (*end_part)(search_text_receiver_t *, int part);
+    void (*end_bodypart)(search_text_receiver_t *);
 #define SEARCH_INDEXLEVEL_BASIC 1
 #define SEARCH_INDEXLEVEL_ATTACH 3
 #define SEARCH_INDEXLEVEL_PARTIAL 0x80 /*  high bit indicates a partial */

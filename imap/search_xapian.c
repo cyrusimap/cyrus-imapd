@@ -96,6 +96,7 @@ struct segment
     char doctype;
     int sequence;       /* forces stable sort order JIC */
     int is_finished;
+    char *partid;
     struct buf text;
 };
 
@@ -2124,6 +2125,7 @@ struct xapian_receiver
     time_t internaldate;
     int part;
     const struct message_guid *part_guid;
+    const char *partid;
     unsigned int parts_total;
     int truncate_warning;
     ptrarray_t segs;
@@ -2365,6 +2367,7 @@ static void free_segments(xapian_receiver_t *tr)
     for (i = 0 ; i < tr->segs.count ; i++) {
         seg = (struct segment *)ptrarray_nth(&tr->segs, i);
         buf_free(&seg->text);
+        free(seg->partid);
         free(seg);
     }
     ptrarray_truncate(&tr->segs, 0);
@@ -2387,13 +2390,23 @@ static int begin_message(search_text_receiver_t *rx, message_t *msg)
     return 0;
 }
 
-static void begin_part(search_text_receiver_t *rx, int part,
-                       const struct message_guid *content_guid)
+static int begin_bodypart(search_text_receiver_t *rx,
+                          const char *partid,
+                          const struct message_guid *content_guid,
+                          const char *type __attribute__((unused)),
+                          const char *subtype __attribute__((unused)))
+{
+    xapian_receiver_t *tr = (xapian_receiver_t *)rx;
+    tr->partid = partid;
+    tr->part_guid = content_guid;
+    return 0;
+}
+
+static void begin_part(search_text_receiver_t *rx, int part)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
 
     tr->part = part;
-    tr->part_guid = content_guid;
 }
 
 static void append_text(search_text_receiver_t *rx,
@@ -2420,7 +2433,8 @@ static void append_text(search_text_receiver_t *rx,
                 seg = (struct segment *)xzmalloc(sizeof(*seg));
                 seg->sequence = tr->segs.count;
                 seg->part = tr->part;
-                if (tr->part_guid) {
+                seg->partid = xstrdupnull(tr->partid);
+                if (tr->part_guid && search_part_is_body(tr->part)) {
                     message_guid_copy(&seg->guid, tr->part_guid);
                     seg->doctype = XAPIAN_WRAP_DOCTYPE_PART;
                 } else {
@@ -2452,6 +2466,13 @@ static void end_part(search_text_receiver_t *rx,
     tr->part = 0;
 }
 
+static void end_bodypart(search_text_receiver_t *rx __attribute__((unused)))
+{
+    xapian_receiver_t *tr = (xapian_receiver_t *)rx;
+    tr->partid = NULL;
+    tr->part_guid = NULL;
+}
+
 static int doctype_cmp(char doctype1, char doctype2)
 {
     if (doctype1 == XAPIAN_WRAP_DOCTYPE_MSG &&
@@ -2472,6 +2493,8 @@ static int compare_segs(const void **v1, const void **v2)
     r = doctype_cmp(s1->doctype, s2->doctype);
     if (!r)
         r = message_guid_cmp(&s1->guid, &s2->guid);
+    if (!r)
+        r = strcmpsafe(s1->partid, s2->partid);
     if (!r)
         r = s1->part - s2->part;
     if (!r)
@@ -2909,9 +2932,11 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.first_unindexed_uid = first_unindexed_uid;
     tr->super.super.is_indexed = is_indexed;
     tr->super.super.begin_message = begin_message;
+    tr->super.super.begin_bodypart = begin_bodypart;
     tr->super.super.begin_part = begin_part;
     tr->super.super.append_text = append_text;
     tr->super.super.end_part = end_part;
+    tr->super.super.end_bodypart = end_bodypart;
     tr->super.super.end_message = end_message_update;
     tr->super.super.end_mailbox = end_mailbox_update;
     tr->super.super.flush = flush;
@@ -3030,19 +3055,24 @@ static int flush_snippets(search_text_receiver_t *rx)
     ptrarray_sort(&tr->super.segs, compare_segs);
 
     const struct message_guid *last_guid = NULL;
+    const char *last_partid = NULL;
 
     for (i = 0 ; i < tr->super.segs.count ; i++) {
         seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
 
-        if (!last_guid || message_guid_cmp(last_guid, &seg->guid) || seg->part != last_part) {
-            /* In contrast to the update code, we start and end a document
-             * for each search part of the same message. This is due to
-             * the way the snippet callbacks are implemented. */
-            r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
-
-            if (!r && snippets.len)
-                r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
-            if (r) goto out;
+        if (!last_guid || message_guid_cmp(last_guid, &seg->guid) ||
+                strcmpsafe(seg->partid, last_partid) || seg->part != last_part) {
+            if (i) {
+                /* In contrast to the update code, we start and end a document
+                 * for each search part of the same message. This is due to
+                 * the way the snippet callbacks are implemented. */
+                r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
+                if (!r && snippets.len) {
+                    r = tr->proc(tr->super.mailbox, tr->super.uid, last_part,
+                                 last_partid, snippets.s, tr->rock);
+                }
+                if (r) goto out;
+            }
 
             if (search_part_is_body(seg->part)) {
                 r = xapian_snipgen_begin_doc(tr->snipgen, &seg->guid,
@@ -3060,6 +3090,7 @@ static int flush_snippets(search_text_receiver_t *rx)
         }
 
         r = xapian_snipgen_doc_part(tr->snipgen, &seg->text, seg->part);
+        last_partid = seg->partid;
         last_part = seg->part;
         if (r) break;
     }
@@ -3067,7 +3098,8 @@ static int flush_snippets(search_text_receiver_t *rx)
     if (last_part != -1) {
         r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
         if (!r && snippets.len)
-            r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
+            r = tr->proc(tr->super.mailbox, tr->super.uid, last_part,
+                    last_partid, snippets.s, tr->rock);
     }
 
     free_segments(&tr->super);
@@ -3110,9 +3142,11 @@ static search_text_receiver_t *begin_snippets(void *internalised,
     tr = xzmalloc(sizeof(xapian_snippet_receiver_t));
     tr->super.super.begin_mailbox = begin_mailbox_snippets;
     tr->super.super.begin_message = begin_message;
+    tr->super.super.begin_bodypart = begin_bodypart;
     tr->super.super.begin_part = begin_part;
     tr->super.super.append_text = append_text;
     tr->super.super.end_part = end_part;
+    tr->super.super.end_bodypart = end_bodypart;
     tr->super.super.end_message = end_message_snippets;
     tr->super.super.end_mailbox = end_mailbox_snippets;
     tr->super.super.flush = flush_snippets;
