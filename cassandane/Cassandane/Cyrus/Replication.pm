@@ -1684,4 +1684,33 @@ sub test_sync_log_mailbox_with_spaces
     # in the sync log :)
 }
 
+sub test_intermediate_rename
+    :AllowMoves :Replication :NoStartInstances :DelayedDelete :min_version_3_3
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('sync_log' => 1);
+    $self->_start_instances();
+
+    my $mtalk = $self->{master_store}->get_client();
+
+    $mtalk->create('INBOX.a.b');
+
+    # replicate and check initial state
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+
+    # reconnect
+    $mtalk = $self->{master_store}->get_client();
+
+    $mtalk->create('INBOX.a');
+    $mtalk->rename('INBOX.a', 'INBOX.new');
+
+    #$self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->run_replication();
+
+    $self->check_replication('cassandane');
+}
+
 1;
