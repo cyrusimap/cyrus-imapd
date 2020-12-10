@@ -4834,26 +4834,184 @@ done:
     return 0;
 }
 
+struct snippet_receiver {
+    search_text_receiver_t tr;
+    search_text_receiver_t *next;
+    json_t *snippet;
+    json_t *attachmatch;
+    int search_part;
+    struct buf buf;
+    strarray_t *partids;
+};
+
 static int _snippet_get_cb(struct mailbox *mbox __attribute__((unused)),
                            uint32_t uid __attribute__((unused)),
-                           int part, const char *s, void *rock)
+                           int part, const char *part_id,
+                           const char *s, void *rock)
 {
-    const char *propname = NULL;
-    json_t *snippet = rock;
+    struct snippet_receiver *sr = rock;
 
     if (part == SEARCH_PART_SUBJECT) {
-        propname = "subject";
+        json_object_set_new(sr->snippet, "subject", json_string(s));
     }
-    else if (part == SEARCH_PART_BODY || part == SEARCH_PART_ATTACHMENTBODY) {
-        propname = "preview";
+    else if (part == SEARCH_PART_BODY ||
+                part == SEARCH_PART_ATTACHMENTBODY) {
+        json_object_set_new(sr->snippet, "preview", json_string(s));
     }
-
-    if (propname) {
-        json_object_set_new(snippet, propname, json_string(s));
+    else if (sr->partids && part == SEARCH_PART_ATTACHMENTNAME && part_id) {
+        json_t *jattachments = json_object_get(sr->snippet, "attachments");
+        json_t *jmatch = json_object_get(jattachments, part_id);
+        if (jmatch) {
+            json_object_set_new(jmatch, "name", json_string(s));
+            strarray_append(sr->partids, part_id);
+        }
     }
 
     /* Avoid costly attachment body snippets, if possible */
     return part == SEARCH_PART_BODY ? IMAP_OK_COMPLETED : 0;
+}
+
+static int _snippet_tr_begin_mailbox(search_text_receiver_t *rx,
+                                       struct mailbox *mailbox,
+                                       int incremental)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    return sr->next->begin_mailbox ?
+        sr->next->begin_mailbox(sr->next, mailbox, incremental) : 0;
+}
+
+static uint32_t _snippet_tr_first_unindexed_uid(search_text_receiver_t *rx)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    return sr->next->first_unindexed_uid ?
+        sr->next->first_unindexed_uid(sr->next) : 0;
+}
+
+static uint8_t _snippet_tr_is_indexed(search_text_receiver_t *rx, message_t *msg)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    return sr->next->is_indexed ?
+        sr->next->is_indexed(sr->next, msg) : 0;
+}
+
+static int _snippet_tr_begin_message(search_text_receiver_t *rx, message_t *msg)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    return sr->next->begin_message ?
+        sr->next->begin_message(sr->next, msg) : 0;
+}
+
+static int _snippet_tr_begin_bodypart(search_text_receiver_t *rx,
+                                      const char *part_id,
+                                      const struct message_guid *content_guid,
+                                      const char *type, const char *subtype)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+
+    if (sr->partids && part_id) {
+        char blob_id[JMAP_BLOBID_SIZE];
+        jmap_set_blobid(content_guid, blob_id);
+
+        buf_setcstr(&sr->buf, type);
+        buf_putc(&sr->buf, '/');
+        buf_appendcstr(&sr->buf, subtype);
+        buf_lcase(&sr->buf);
+
+        sr->attachmatch = json_pack("{s:s s:s s:s}",
+                "partId", part_id,
+                "blobId", blob_id,
+                "type", buf_cstring(&sr->buf));
+
+        buf_reset(&sr->buf);
+    }
+
+    return sr->next->begin_bodypart ?
+        sr->next->begin_bodypart(sr->next, part_id, content_guid, type, subtype) : 0;
+}
+
+static void _snippet_tr_begin_part(search_text_receiver_t *rx, int part)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    sr->search_part = part;
+    if (sr->next->begin_part) sr->next->begin_part(sr->next, part);
+}
+
+static void _snippet_tr_append_text(search_text_receiver_t *rx,
+                                    const struct buf *text)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+
+    if (sr->search_part == SEARCH_PART_ATTACHMENTNAME) {
+        if (sr->attachmatch) {
+            json_object_set_new(sr->attachmatch, "name",
+                    json_string(buf_cstring(text)));
+        }
+    }
+    if (sr->next->append_text) sr->next->append_text(sr->next, text);
+}
+
+static void _snippet_tr_end_part(search_text_receiver_t *rx, int part)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    sr->search_part = -1;
+    if (sr->next->end_part) sr->next->end_part(sr->next, part);
+}
+
+static void _snippet_tr_end_bodypart(search_text_receiver_t *rx)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    if (sr->partids && sr->attachmatch) {
+        if (json_object_size(sr->attachmatch) == 4) {
+            json_t *jpart_id = json_object_get(sr->attachmatch, "partId");
+            json_t *attachments = json_object_get(sr->snippet, "attachments");
+            json_object_set_new(attachments,
+                    json_string_value(jpart_id), sr->attachmatch);
+            json_object_del(sr->attachmatch, "partId");
+        }
+        else {
+            json_decref(sr->attachmatch);
+        }
+        sr->attachmatch = NULL;
+    }
+    if (sr->next->end_bodypart) sr->next->end_bodypart(sr->next);
+}
+
+static int _snippet_tr_end_message(search_text_receiver_t *rx, uint8_t indexlevel)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    return sr->next->end_message ?
+        sr->next->end_message(sr->next, indexlevel) : 0;
+}
+
+static int _snippet_tr_end_mailbox(search_text_receiver_t *rx, struct mailbox *mailbox)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    return sr->next->end_mailbox ?
+        sr->next->end_mailbox(sr->next, mailbox) : 0;
+}
+
+static int _snippet_tr_flush(search_text_receiver_t *rx)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    return sr->next->flush ? sr->next->flush(sr->next) : 0;
+}
+
+static int _snippet_tr_audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
+{
+    struct snippet_receiver *sr = (struct snippet_receiver*) rx;
+    return sr->next->audit_mailbox ?
+        sr->next->audit_mailbox(sr->next, unindexed) : 0;
+}
+
+static int _snippet_tr_index_charset_flags(int base_flags)
+{
+    return base_flags | CHARSET_KEEPCASE;
+}
+
+static int _snippet_tr_index_message_format(int format __attribute__((unused)),
+                                            int is_snippet __attribute__((unused)))
+{
+    return MESSAGE_SNIPPET;
 }
 
 static int _snippet_get(jmap_req_t *req, json_t *filter,
@@ -4877,6 +5035,28 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
 
     *snippets = json_pack("[]");
     *notfound = json_pack("[]");
+
+    /* Set up custom search text receiver */
+    struct snippet_receiver sr = {
+        {
+            _snippet_tr_begin_mailbox,
+            _snippet_tr_first_unindexed_uid,
+            _snippet_tr_is_indexed,
+            _snippet_tr_begin_message,
+            _snippet_tr_begin_bodypart,
+            _snippet_tr_begin_part,
+            _snippet_tr_append_text,
+            _snippet_tr_end_part,
+            _snippet_tr_end_bodypart,
+            _snippet_tr_end_message,
+            _snippet_tr_end_mailbox,
+            _snippet_tr_flush,
+            _snippet_tr_audit_mailbox,
+            _snippet_tr_index_charset_flags,
+            _snippet_tr_index_message_format
+        },
+        NULL, NULL, NULL, 0, BUF_INITIALIZER, NULL
+    };
 
     /* Build searchargs */
     strarray_t perf_filters = STRARRAY_INITIALIZER;
@@ -4915,13 +5095,18 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
         goto done;
     }
 
-    /* Set up snippet callback context */
+    /* Initialize snippet callback context */
     snippet = json_pack("{}");
-    rx = search_begin_snippets(intquery, 0, &markup, _snippet_get_cb, snippet);
+    struct search_text_receiver *srx = (struct search_text_receiver*) &sr;
+    rx = search_begin_snippets(intquery, 0, &markup, _snippet_get_cb, &sr);
     if (!rx) {
         r = IMAP_INTERNAL;
         goto done;
     }
+    sr.next = rx;
+    sr.snippet = snippet;
+    if (jemailpartids) sr.partids = &partids;
+
 
     /* Convert the snippets */
     json_array_foreach(messageids, i, val) {
@@ -4941,7 +5126,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
         }
 
         r = jmap_openmbox(req, mboxname, &mbox, 0);
-        if (r) goto done;
+        if (r) goto doneloop;
 
         r = msgrecord_find(mbox, uid, &mr);
         if (r) goto doneloop;
@@ -4960,20 +5145,36 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
         json_object_set_new(snippet, "emailId", json_string(msgid));
         json_object_set_new(snippet, "subject", json_null());
         json_object_set_new(snippet, "preview", json_null());
+        json_object_set_new(snippet, "attachments", json_object());
+        sr.snippet = snippet;
 
-        r = rx->begin_mailbox(rx, mbox, /*incremental*/0);
-        if (!r) r = index_getsearchtext(msg, jpartids ? &partids : NULL, rx,
+        r = srx->begin_mailbox(srx, mbox, /*incremental*/0);
+        if (!r) r = index_getsearchtext(msg, jpartids ? &partids : NULL, srx,
                                         INDEX_GETSEARCHTEXT_SNIPPET);
         if (!r || r == IMAP_OK_COMPLETED) {
+            // prune attachments
+            json_t *jattachments = json_object_get(snippet, "attachments");
+            json_t *jmatch;
+            const char *part_id;
+            void *tmp;
+            json_object_foreach_safe(jattachments, tmp, part_id, jmatch){
+                if (strarray_find(&partids, part_id, 0) < 0) {
+                    json_object_del(jattachments, part_id);
+                }
+            }
+            if (!json_object_size(jattachments)) {
+                json_object_set_new(snippet, "attachments", json_null());
+            }
             json_array_append_new(*snippets, json_deep_copy(snippet));
             r = 0;
         }
-        int r2 = rx->end_mailbox(rx, mbox);
+        int r2 = srx->end_mailbox(srx, mbox);
         if (!r) r = r2;
 
         json_object_clear(snippet);
         strarray_truncate(&partids, 0);
         msgrecord_unref(&mr);
+        buf_reset(&sr.buf);
 
 doneloop:
         if (mr) msgrecord_unref(&mr);
@@ -4997,7 +5198,7 @@ done:
     if (searchargs) freesearchargs(searchargs);
     strarray_fini(&partids);
     index_close(&state);
-
+    buf_free(&sr.buf);
     return r;
 }
 

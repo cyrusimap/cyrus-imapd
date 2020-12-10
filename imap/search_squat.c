@@ -584,8 +584,16 @@ static int begin_message(search_text_receiver_t *rx,
     return 0;
 }
 
-static void begin_part(search_text_receiver_t *rx, int part,
-                       const struct message_guid *content_guid __attribute__((unused)))
+static int begin_bodypart(search_text_receiver_t *rx __attribute__((unused)),
+                          const char *partid __attribute__((unused)),
+                          const struct message_guid *content_guid __attribute__((unused)),
+                          const char *type __attribute__((unused)),
+                          const char *subtype __attribute__((unused)))
+{
+    return 0;
+}
+
+static void begin_part(search_text_receiver_t *rx, int part)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
     char part_char = 0;
@@ -694,6 +702,11 @@ static void end_part(search_text_receiver_t *rx,
     d->doc_is_open = 0;
     buf_reset(&d->pending_text);
 }
+
+static void end_bodypart(search_text_receiver_t *rx __attribute__((unused)))
+{
+}
+
 
 static int end_message(search_text_receiver_t *rx,
                        uint8_t indexlevel __attribute__((unused)))
@@ -984,9 +997,11 @@ static search_text_receiver_t *begin_update(int verbose)
     d->super.first_unindexed_uid = first_unindexed_uid;
     d->super.is_indexed = is_indexed;
     d->super.begin_message = begin_message;
+    d->super.begin_bodypart = begin_bodypart;
     d->super.begin_part = begin_part;
     d->super.append_text = append_text;
     d->super.end_part = end_part;
+    d->super.end_bodypart = end_bodypart;
     d->super.end_message = end_message;
     d->super.end_mailbox = end_mailbox;
     d->super.index_charset_flags = squat_charset_flags;

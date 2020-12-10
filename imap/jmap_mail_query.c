@@ -401,9 +401,18 @@ static int _matchmime_tr_begin_message(search_text_receiver_t *rx, message_t *ms
     return xapian_dbw_begin_doc(tr->dbw, guid, 'G');
 }
 
+static int _matchmime_tr_begin_bodypart(search_text_receiver_t *rx __attribute__((unused)),
+                                        const char *partid __attribute__((unused)),
+                                        const struct message_guid *content_guid __attribute__((unused)),
+                                        const char *type __attribute__((unused)),
+                                        const char *subtype __attribute__((unused)))
+
+{
+    return 0;
+}
+
 static void _matchmime_tr_begin_part(search_text_receiver_t *rx __attribute__((unused)),
-                                     int part __attribute__((unused)),
-                                     const struct message_guid *content_guid __attribute__((unused)))
+                                     int part __attribute__((unused)))
 {
 }
 
@@ -426,6 +435,10 @@ static void _matchmime_tr_end_part(search_text_receiver_t *rx, int part)
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
     xapian_dbw_doc_part(tr->dbw, &tr->buf, part);
     buf_reset(&tr->buf);
+}
+
+static void _matchmime_tr_end_bodypart(search_text_receiver_t *rx __attribute__((unused)))
+{
 }
 
 static int _matchmime_tr_end_message(search_text_receiver_t *rx, uint8_t indexlevel)
@@ -973,9 +986,11 @@ HIDDEN matchmime_t *jmap_email_matchmime_init(const struct buf *mime, json_t **e
             _matchmime_tr_first_unindexed_uid,
             _matchmime_tr_is_indexed,
             _matchmime_tr_begin_message,
+            _matchmime_tr_begin_bodypart,
             _matchmime_tr_begin_part,
             _matchmime_tr_append_text,
             _matchmime_tr_end_part,
+            _matchmime_tr_end_bodypart,
             _matchmime_tr_end_message,
             _matchmime_tr_end_mailbox,
             _matchmime_tr_flush,
