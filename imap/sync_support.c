@@ -6159,7 +6159,7 @@ static int do_folders(struct sync_client_state *sync_cs,
 
         /* does it need a rename? partition change is a rename too */
         part = topart ? topart : mfolder->part;
-        if (strcmp(mfolder->name, rfolder->name) || strcmpsafe(part, rfolder->part)) {
+        if (strcmp(mfolder->name, rfolder->name) || (rfolder->part && strcmpsafe(part, rfolder->part))) {
             sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
                                  mfolder->name, part, mfolder->uidvalidity);
         }
