@@ -160,7 +160,7 @@ struct striphtml_state {
 
 #define CHARSET_ICUBUF_BUFFER_SIZE 4096
 
-struct charset_converter {
+struct charset_charset {
     /* An open ICU converter for ICU backed converters. Or NULL.  */
     UConverter *conv;
 
@@ -198,21 +198,22 @@ struct convert_rock;
 
 static void icu_reset(struct convert_rock *rock, int to_uni);
 static void icu_flush(struct convert_rock *rock);
-static void icu_free(struct convert_rock *rock);
+static void icu_cleanup(struct convert_rock *rock, int is_free);
 
 static void table_reset(struct convert_rock *rock, int to_uni);
-static void table_free(struct convert_rock *rock);
+static void table_cleanup(struct convert_rock *rock, int is_free);
 
 typedef void convertproc_t(struct convert_rock *rock, uint32_t c);
-typedef void freeconvert_t(struct convert_rock *rock);
+typedef void cleanupconvert_t(struct convert_rock *rock, int is_free);
 typedef void flushproc_t(struct convert_rock *rock);
 
 struct convert_rock {
     convertproc_t *f;
-    freeconvert_t *cleanup;
+    cleanupconvert_t *cleanup;
     flushproc_t *flush;
     struct convert_rock *next;
     void *state;
+    int dont_free_state;  /* flag for basic_free */
 };
 
 #define GROWSIZE 100
@@ -711,7 +712,7 @@ static void byte2buffer(struct convert_rock *rock, uint32_t c)
  */
 static void icu2uni(struct convert_rock *rock, uint32_t c)
 {
-    struct charset_converter *s = (struct charset_converter*) rock->state;
+    struct charset_charset *s = (struct charset_charset*) rock->state;
     UErrorCode err;
 
     /* Assert a sane state. */
@@ -779,7 +780,7 @@ static void icu2uni(struct convert_rock *rock, uint32_t c)
  * its octets. During a flush, c is ignored. */
 static void uni2icu(struct convert_rock *rock, uint32_t c)
 {
-    struct charset_converter *s = (struct charset_converter*) rock->state;
+    struct charset_charset *s = (struct charset_charset*) rock->state;
     UErrorCode err;
 
     UChar *src_next = (UChar*) s->src_next;
@@ -839,7 +840,7 @@ static void uni2icu(struct convert_rock *rock, uint32_t c)
  * code point */
 static void utf8_2uni(struct convert_rock *rock, uint32_t c)
 {
-    struct charset_converter *s = (struct charset_converter *)rock->state;
+    struct charset_charset *s = (struct charset_charset *)rock->state;
 
     if (c == U_REPLACEMENT) {
 emit_replacement:
@@ -963,7 +964,7 @@ static void uni2utf8(struct convert_rock *rock, uint32_t c)
  * Unicode codepoint. */
 static void table2uni(struct convert_rock *rock, uint32_t c)
 {
-    struct charset_converter *s = (struct charset_converter *)rock->state;
+    struct charset_charset *s = (struct charset_charset *)rock->state;
     struct charmap *map;
 
     if (c == U_REPLACEMENT) {
@@ -1554,7 +1555,7 @@ static const char *convert_name(struct convert_rock *rock)
 
 /* Extract a cstring from a buffer.  NOTE: caller must free the memory
  * themselves once this is called.  Resets the state.  If you don't
- * call this function then buffer_free will clean up */
+ * call this function then buffer_cleanup will clean up */
 static char *buffer_cstring(struct convert_rock *rock)
 {
     struct buf *buf = (struct buf *)rock->state;
@@ -1580,14 +1581,14 @@ static inline int search_havematch(struct convert_rock *rock)
 static void basic_free(struct convert_rock *rock)
 {
     if (rock) {
-        if (rock->state) free(rock->state);
+        if (!rock->dont_free_state) free(rock->state);
         free(rock);
     }
 }
 
 static void icu_flush(struct convert_rock *rock)
 {
-    struct charset_converter *s = (struct charset_converter *) rock->state;
+    struct charset_charset *s = (struct charset_charset *) rock->state;
     s->flush = 1;
     if (rock->f == icu2uni) {
         icu2uni(rock, -1);
@@ -1598,17 +1599,17 @@ static void icu_flush(struct convert_rock *rock)
     s->flush = 0;
 }
 
-static void icu_free(struct convert_rock *rock)
+static void icu_cleanup(struct convert_rock *rock, int is_free)
 {
     if (rock) {
         if (rock->state) icu_reset(rock, -1 /*don't care*/);
-        free(rock);
+        if (is_free) free(rock);
     }
 }
 
 static void icu_reset(struct convert_rock *rock, int to_uni)
 {
-    struct charset_converter *s = (struct charset_converter *)rock->state;
+    struct charset_charset *s = (struct charset_charset *)rock->state;
     size_t buf_size = CHARSET_ICUBUF_BUFFER_SIZE;
 
     if (s->buf_size < buf_size) {
@@ -1626,17 +1627,17 @@ static void icu_reset(struct convert_rock *rock, int to_uni)
 
     rock->f = to_uni ? icu2uni : uni2icu;
     rock->flush = icu_flush;
-    rock->cleanup = icu_free;
+    rock->cleanup = icu_cleanup;
 }
 
-static void table_free(struct convert_rock *rock)
+static void table_cleanup(struct convert_rock *rock, int is_free)
 {
-    if (rock) free(rock);
+    if (is_free) free(rock);
 }
 
 static void table_reset(struct convert_rock *rock, int to_uni)
 {
-    struct charset_converter *s = (struct charset_converter *)rock->state;
+    struct charset_charset *s = (struct charset_charset *)rock->state;
 
     if (chartables_charset_table[s->num].table) {
         s->initialtable = chartables_charset_table[s->num].table;
@@ -1656,12 +1657,12 @@ static void table_reset(struct convert_rock *rock, int to_uni)
     s->mode = 0;
     s->num_bits = 0;
 
-    rock->cleanup = table_free;
+    rock->cleanup = table_cleanup;
 }
 
 static void convert_switch(struct convert_rock *rock, charset_t to, int to_uni)
 {
-    struct charset_converter *s = (struct charset_converter *) rock->state;
+    struct charset_charset *s = (struct charset_charset *) rock->state;
 
     /* make sure that the new state is sane */
     assert((to->conv == NULL) != (to->num == -1));
@@ -1683,53 +1684,66 @@ static void convert_switch(struct convert_rock *rock, charset_t to, int to_uni)
     }
 }
 
-static void search_free(struct convert_rock *rock)
+static void search_cleanup(struct convert_rock *rock, int is_free)
 {
     if (rock && rock->state) {
         struct search_state *s = (struct search_state *)rock->state;
-        if (s->starts) free(s->starts);
+        if (s->starts && !is_free) {
+            int i;
+            for (i = 0; i < s->max_start; i++) {
+                s->starts[i] = -1;
+            }
+        }
+        else free(s->starts);
     }
-    basic_free(rock);
+    if (is_free) basic_free(rock);
 }
 
-static void buffer_free(struct convert_rock *rock)
+static void buffer_cleanup(struct convert_rock *rock, int is_free)
 {
     if (rock && rock->state) {
         struct buf *buf = (struct buf *)rock->state;
-        buf_free(buf);
+        if (is_free)
+            buf_free(buf);
+        else
+            buf_reset(buf);
     }
-    basic_free(rock);
+    if (is_free) basic_free(rock);
 }
 
-static void dont_free(struct convert_rock *rock)
+static void dont_free(struct convert_rock *rock, int is_free)
 {
+    if (!rock || !is_free) return;
     /* NULL out state owned by caller, so we won't free in basic_free */
     if (rock) rock->state = NULL;
     basic_free(rock);
 }
 
-static void striphtml_free(struct convert_rock *rock)
+static void striphtml_cleanup(struct convert_rock *rock, int is_free)
 {
     if (rock && rock->state) {
         struct striphtml_state *s = (struct striphtml_state *)rock->state;
-        buf_free(&s->name);
+        if (is_free)
+            buf_free(&s->name);
+        else
+            buf_reset(&s->name);
     }
-    basic_free(rock);
+    if (is_free) basic_free(rock);
 }
 
-static void convert_nfree(struct convert_rock *rock, int n) {
+static void convert_ncleanup(struct convert_rock *rock, int n, int is_free) {
     struct convert_rock *next;
     int i = 0;
     while (rock && (!n || (i++ < n))) {
         next = rock->next;
         if (rock->cleanup)
-            rock->cleanup(rock);
-        else
+            rock->cleanup(rock, is_free);
+        else if (is_free)
             basic_free(rock);
         rock = next;
     }
 }
-#define convert_free(rock) convert_nfree(rock, 0)
+#define convert_free(rock) convert_ncleanup(rock, 0, 1)
 
 /* converter initialisation routines */
 
@@ -1779,7 +1793,7 @@ static struct convert_rock *canon_init(int flags, struct convert_rock *next)
     return rock;
 }
 
-static struct convert_rock *convert_init(struct charset_converter *s,
+static struct convert_rock *convert_init(struct charset_charset *s,
                                          int to_uni,
                                          struct convert_rock *next)
 {
@@ -1820,7 +1834,7 @@ static struct convert_rock *search_init(const char *substr, comp_pat *pat) {
 
     /* set up the rock */
     rock->f = byte2search;
-    rock->cleanup = search_free;
+    rock->cleanup = search_cleanup;
     rock->state = (void *)s;
 
     return rock;
@@ -1834,8 +1848,22 @@ static struct convert_rock *buffer_init(size_t hint)
     if (hint) buf_ensure(buf, hint);
 
     rock->f = byte2buffer;
-    rock->cleanup = buffer_free;
+    rock->cleanup = buffer_cleanup;
     rock->state = (void *)buf;
+
+    return rock;
+}
+
+static struct convert_rock *buffer_initm(size_t hint, struct buf *buf)
+{
+    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
+
+    if (hint) buf_ensure(buf, hint);
+
+    rock->f = byte2buffer;
+    rock->cleanup = buffer_cleanup;
+    rock->state = (void *)buf;
+    rock->dont_free_state = 1;
 
     return rock;
 }
@@ -1858,7 +1886,7 @@ struct convert_rock *striphtml_init(struct convert_rock *next)
     html_push(s, HDATA);
     rock->state = (void *)s;
     rock->f = striphtml2uni;
-    rock->cleanup = striphtml_free;
+    rock->cleanup = striphtml_cleanup;
     rock->next = next;
     return rock;
 }
@@ -1947,16 +1975,27 @@ static void unorm_drain(struct convert_rock *rock, int is_flush)
     }
 }
 
-static void unorm_free(struct convert_rock *rock)
+static void unorm_cleanup(struct convert_rock *rock, int is_free)
 {
-    if (!rock) return;
+    if (!rock || !rock->state) return;
+
     struct unorm_state *st = rock->state;
-    if (st) {
+    if (is_free) {
         free(st->u16buf);
         free(st->u32buf);
         free(st);
+        free(rock);
     }
-    free(rock);
+    else {
+        int32_t i;
+        for (i = 0; i < st->u16cap; i++) {
+            st->u16buf[i] = 0;
+        }
+        for (i = 0; i < st->u32cap; i++) {
+            st->u32buf[i] = 0;
+        }
+        st->u32len = 0;
+    }
 }
 
 static void unorm_flush(struct convert_rock *rock)
@@ -2013,7 +2052,7 @@ static struct convert_rock *unorm_init(struct convert_rock *next)
 
     rock->f = unorm_convert;
     rock->flush = unorm_flush;
-    rock->cleanup = unorm_free;
+    rock->cleanup = unorm_cleanup;
     rock->next = next;
     rock->state = st;
     return rock;
@@ -2131,12 +2170,12 @@ done:
 EXPORTED charset_t charset_lookupname(const char *name)
 {
     int i;
-    struct charset_converter *cs;
+    struct charset_charset *cs;
     UErrorCode err;
     UConverter *conv;
 
     /* create the converter */
-    cs = xzmalloc(sizeof(struct charset_converter));
+    cs = xzmalloc(sizeof(struct charset_charset));
     cs->num = -1;
 
     if (!name) {
@@ -2192,7 +2231,7 @@ EXPORTED charset_t charset_lookupname(const char *name)
 EXPORTED void charset_free(charset_t *charsetp)
 {
     if (charsetp && *charsetp != CHARSET_UNKNOWN_CHARSET) {
-        struct charset_converter *s = *charsetp;
+        struct charset_charset *s = *charsetp;
         /* Close the ICU converter */
         if (s->conv) ucnv_close(s->conv);
         /* Free up memory. */
@@ -2215,6 +2254,62 @@ EXPORTED charset_t charset_lookupnumid(int id)
     return charset_lookupname(chartables_charset_table[id].name);
 }
 
+struct charset_conv {
+    struct convert_rock *input;
+    charset_t charset;
+    charset_t utf8;
+    struct buf dst;
+};
+
+EXPORTED charset_conv_t *charset_conv_new(charset_t charset, int flags)
+{
+    struct charset_conv *conv = xzmalloc(sizeof(struct charset_conv));
+
+    conv->charset = charset;
+    conv->utf8 = charset_lookupname("utf-8");
+
+    /* set up the conversion path */
+    struct convert_rock *input, *tobuffer;
+    tobuffer = buffer_initm(0, &conv->dst);
+    input = convert_init(conv->utf8, 0/*to_uni*/, tobuffer);
+    input = canon_init(flags, input);
+    if (flags & CHARSET_UNORM_NFC) {
+        input = unorm_init(input);
+    }
+    input = convert_init(conv->charset, 1/*to_uni*/, input);
+
+    conv->input = input;
+
+    return conv;
+}
+
+EXPORTED const char *charset_conv_convert(charset_conv_t *conv, const char *s)
+{
+    if (!s) return NULL;
+
+    convert_ncleanup(conv->input, 0, 0);
+    buf_reset(&conv->dst);
+
+    if (conv->charset == CHARSET_UNKNOWN_CHARSET)
+        buf_setcstr(&conv->dst, "X");
+    else
+        convert_cat(conv->input, s);
+
+    return buf_cstring(&conv->dst);
+}
+
+EXPORTED void charset_conv_free(charset_conv_t **convp)
+{
+    if (!convp || !*convp) return;
+
+    charset_conv_t *conv = *convp;
+    convert_free(conv->input);
+    charset_free(&conv->utf8);
+    buf_free(&conv->dst);
+    free(conv);
+    *convp = NULL;
+}
+
 /*
  * Convert the string 's' in the character set numbered 'charset'
  * into canonical searching form.  Returns a newly allocated string
@@ -2222,36 +2317,13 @@ EXPORTED charset_t charset_lookupnumid(int id)
  */
 EXPORTED char *charset_convert(const char *s, charset_t charset, int flags)
 {
-    struct convert_rock *input, *tobuffer;
-    char *res;
-    charset_t utf8;
-
-    if (!s) return 0;
-
-    if (charset == CHARSET_UNKNOWN_CHARSET) return xstrdup("X");
-
-    utf8 = charset_lookupname("utf-8");
-
-    /* set up the conversion path */
-    tobuffer = buffer_init(0);
-    input = convert_init(utf8, 0/*to_uni*/, tobuffer);
-    input = canon_init(flags, input);
-    if (flags & CHARSET_UNORM_NFC) {
-        input = unorm_init(input);
+    charset_conv_t *conv = charset_conv_new(charset, flags);
+    char *ret = NULL;
+    if (charset_conv_convert(conv, s)) {
+        ret = buf_release(&conv->dst);
     }
-    input = convert_init(charset, 1/*to_uni*/, input);
-
-    /* do the conversion */
-    convert_cat(input, s);
-
-    /* extract the result */
-    res = buffer_cstring(tobuffer);
-
-    /* clean up */
-    convert_free(input);
-    charset_free(&utf8);
-
-    return res;
+    charset_conv_free(&conv);
+    return ret;
 }
 
 /* Convert from a given charset and encoding into IMAP UTF-7 */
@@ -2584,7 +2656,6 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
 
             /* Reset decoder pipeline */
             charset_free(&lastcs);
-            lastcs = CHARSET_UNKNOWN_CHARSET;
             lastenc = ENCODING_UNKNOWN;
             basic_free(extract);
             extract = NULL;
@@ -2652,7 +2723,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
 
     /* just free the first two items, the rest can be cleaned up by the sender */
     basic_free(unfold);
-    convert_nfree(input, 1);
+    convert_ncleanup(input, 1, 1);
     charset_free(&defaultcs);
     charset_free(&lastcs);
     basic_free(extract);
