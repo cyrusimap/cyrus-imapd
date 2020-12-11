@@ -811,43 +811,26 @@ static int _email_matchmime_evaluate(json_t *filter,
 
     /* header */
     if (JNOTNULL((jval = json_object_get(filter, "header")))) {
-        const char *hdr, *val;
+        const char *hdr = NULL, *val = "", *cmp = NULL;
 
-        if (json_array_size(jval) == 2) {
-            hdr = json_string_value(json_array_get(jval, 0));
-            val = json_string_value(json_array_get(jval, 1));
-        } else {
-            hdr = json_string_value(json_array_get(jval, 0));
-            val = NULL; // match any value
+        switch (json_array_size(jval)) {
+            case 3:
+                cmp = json_string_value(json_array_get(jval, 2));
+                GCC_FALLTHROUGH
+            case 2:
+                val = json_string_value(json_array_get(jval, 1));
+                GCC_FALLTHROUGH
+            case 1:
+                hdr = json_string_value(json_array_get(jval, 0));
+                break;
+            default:
+                return 0;
         }
 
-        int matches = 0;
+        struct jmap_headermatch *hm = jmap_headermatch_new(hdr, val, cmp);
+        int matches = jmap_headermatch_match(hm, m);
+        jmap_headermatch_free(&hm);
 
-        /* Replicate match_header logic in search_expr.c */
-        char *lhdr = lcase(xstrdup(hdr));
-        struct buf buf = BUF_INITIALIZER;
-        int r = message_get_field(m, lhdr,
-                MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE, &buf);
-        if (!r) {
-            if (val) {
-                charset_t utf8 = charset_lookupname("utf-8");
-                char *v = NULL;
-                if ((v = charset_convert(val, utf8, charset_flags))) {
-                    comp_pat *pat = charset_compilepat(v);
-                    if (pat) {
-                        matches = charset_searchstring(v, pat, buf.s, buf.len, charset_flags);
-                    }
-                    charset_freepat(pat);
-                }
-                free(v);
-                charset_free(&utf8);
-            }
-            else {
-                matches = buf_len(&buf) > 0;
-            }
-        }
-        buf_free(&buf);
-        free(lhdr);
         if (matches) {
             have_matches++;
         } else return 0;
@@ -1110,3 +1093,169 @@ done:
 
 #endif /* WITH_DAV */
 
+static void headermatch_normalize(struct jmap_headermatch *hm, struct buf *val)
+{
+    if (!buf_len(val)) return;
+
+    buf_cstring(val);
+    buf_trim(val);
+
+    /* Fast-path ASCII without consecutive whitespace */
+    char *s;
+    for (s = val->s; *s; s++) {
+        if (!isascii(*s)) {
+            break;
+        }
+        if (isspace(s[0]) && isspace(s[1])) {
+            break;
+        }
+        *s = toupper(*s);
+    }
+    if (!*s) return;
+
+    /* Convert value */
+    buf_setcstr(val, charset_conv_convert(hm->conv, buf_cstring(val)));
+}
+
+static void jmap_headermatch_init(struct jmap_headermatch *hm)
+{
+    hm->utf8 = charset_lookupname("utf8");
+    hm->conv = charset_conv_new(hm->utf8,
+            CHARSET_SKIPDIACRIT|
+            CHARSET_MERGESPACE|
+            CHARSET_TRIMWS|
+            CHARSET_UNORM_NFC);
+}
+
+HIDDEN struct jmap_headermatch *jmap_headermatch_new(const char *header,
+                                                     const char *value,
+                                                     const char *strop)
+{
+    struct jmap_headermatch *hm = xzmalloc(sizeof(struct jmap_headermatch));
+    jmap_headermatch_init(hm);
+
+    struct buf *val = &hm->tmp[0];
+
+    if (!strcmpsafe(strop, "equals")) {
+        hm->op = HEADERMATCH_EQUALS;
+    }
+    else if (!strcmpsafe(strop, "startsWith")) {
+        hm->op = HEADERMATCH_STARTS;
+    }
+    else if (!strcmpsafe(strop, "endsWith")) {
+        hm->op = HEADERMATCH_ENDS;
+    }
+    else {
+        hm->op = HEADERMATCH_CONTAINS;
+    }
+    hm->header = lcase(xstrdup(header));
+    buf_setcstr(val, value);
+    headermatch_normalize(hm, val);
+    hm->len = buf_len(val);
+    hm->value = xstrdup(buf_cstring(val));
+
+    buf_reset(&hm->tmp[1]);
+    buf_reset(&hm->tmp[0]);
+    return hm;
+}
+
+HIDDEN void jmap_headermatch_free(struct jmap_headermatch **hmp)
+{
+    if (!hmp || !*hmp) return;
+
+    struct jmap_headermatch *hm = *hmp;
+
+    free(hm->header);
+    free(hm->value);
+    buf_free(&hm->tmp[0]);
+    buf_free(&hm->tmp[1]);
+    buf_free(&hm->tmp[2]);
+    charset_conv_free(&hm->conv);
+    charset_free(&hm->utf8);
+    free(hm);
+    *hmp = NULL;
+}
+
+HIDDEN struct jmap_headermatch *jmap_headermatch_dup(struct jmap_headermatch *hm)
+{
+    if (!hm) return NULL;
+
+    struct jmap_headermatch *hm2 = xzmalloc(sizeof(struct jmap_headermatch));
+    jmap_headermatch_init(hm2);
+    hm2->op = hm->op;
+    hm2->header = xstrdup(hm->header);
+    hm2->value = xstrdup(hm->value);
+    hm2->len = hm->len;
+    return hm2;
+}
+
+HIDDEN int jmap_headermatch_match(struct jmap_headermatch *hm, message_t *msg)
+{
+    int match = 0;
+
+    struct buf *msgbuf = &hm->tmp[0];
+
+    if (!message_get_field(msg, hm->header,
+                MESSAGE_RAW|MESSAGE_APPEND|MESSAGE_MULTIPLE, msgbuf)) {
+
+        if (!buf_len(msgbuf)) {
+            match = 0;
+            goto done;
+        }
+        else if (!*hm->value) {
+            match = 1;
+            goto done;
+        }
+
+        /* Iterate header values until match found */
+        const char *p = buf_cstring(msgbuf);
+        do {
+            struct buf *val = &hm->tmp[1];
+
+            /* Extract value, including optional line folds */
+            const char *q;
+            for (q = p; *q; q++) {
+                if (*q == '\r') {
+                    if (q[1] == '\n' && (q[2] == '\t' || q[2] == ' ')) {
+                        q++;
+                    }
+                    else {
+                        break;
+                    }
+                }
+            }
+            buf_setmap(val, p, q - p);
+
+            /* Match header value */
+            headermatch_normalize(hm, val);
+            if (buf_len(val) >= hm->len) {
+                const char *v = buf_cstring(val);
+                switch (hm->op) {
+                    case HEADERMATCH_EQUALS:
+                        match = !strcmp(v, hm->value);
+                        break;
+                    case HEADERMATCH_STARTS:
+                        match = !strncmp(v, hm->value, hm->len);
+                        break;
+                    case HEADERMATCH_ENDS:
+                        match = !strcmp(v + buf_len(val) - hm->len, hm->value);
+                        break;
+                    default:
+                        match = strstr(v, hm->value) != NULL;
+                }
+            }
+
+            /* Find next header value, if any */
+            if (*q) q += (q[1] == '\n') ? 2 : 1;
+            p = q;
+            q = strchr(p, ':');
+            if (q) p = q + 1;
+        } while(!match && *p);
+    }
+
+done:
+    buf_reset(&hm->tmp[0]);
+    buf_reset(&hm->tmp[1]);
+    buf_reset(&hm->tmp[2]);
+    return match;
+}

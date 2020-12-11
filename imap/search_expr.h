@@ -76,6 +76,7 @@ union search_value {
     char *s;
     struct searchannot *annot;
     strarray_t *list;
+    void *v;
 };
 
 /* search_attr.flags */

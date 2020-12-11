@@ -1853,6 +1853,116 @@ static const search_attr_t _emailsearch_folders_otherthan_attr = {
     (void*)1 /*is_otherthan*/
 };
 
+static void _emailsearch_headermatch_internalise(struct index_state *state __attribute__((unused)),
+                                                 const union search_value *v __attribute__((unused)),
+                                                 void **internalisedp __attribute__((unused)))
+{
+}
+
+static int _emailsearch_headermatch_match(message_t *msg,
+                                          const union search_value *v,
+                                          void *internalised __attribute__((unused)),
+                                          void *data1 __attribute__((unused)))
+{
+    return jmap_headermatch_match((struct jmap_headermatch *)v->v, msg);
+}
+
+static void _emailsearch_headermatch_serialise(struct buf *buf,
+                                               const union search_value *v)
+{
+    struct jmap_headermatch *hm = v->v;
+    struct dlist *dl = dlist_newlist(NULL, NULL);
+    dlist_setatom(dl, NULL, hm->header);
+    switch (hm->op) {
+        case HEADERMATCH_EQUALS:
+            dlist_setatom(dl, NULL, "equals");
+            break;
+        case HEADERMATCH_STARTS:
+            dlist_setatom(dl, NULL, "starts");
+            break;
+        case HEADERMATCH_ENDS:
+            dlist_setatom(dl, NULL, "ends");
+            break;
+        default:
+            dlist_setatom(dl, NULL, "contains");
+    }
+    dlist_setatom(dl, NULL, hm->value);
+    dlist_printbuf(dl, 0, buf);
+    dlist_free(&dl);
+}
+
+static int _emailsearch_headermatch_unserialise(struct protstream* prot,
+                                                union search_value *v)
+{
+    struct dlist *dl = NULL;
+
+    int c = dlist_parse_asatomlist(&dl, 0, prot);
+    if (c == EOF) return EOF;
+
+    struct buf header = BUF_INITIALIZER;
+    struct buf op = BUF_INITIALIZER;
+    struct buf value = BUF_INITIALIZER;
+    struct dlist_print_iter *iter = dlist_print_iter_new(dl, 0);
+    dlist_print_iter_step(iter, &header);
+    dlist_print_iter_step(iter, &op);
+    dlist_print_iter_step(iter, &value);
+    struct jmap_headermatch *hm =
+        jmap_headermatch_new(buf_cstring(&header), buf_cstring(&op),
+                             buf_cstring(&value));
+    v->v = hm;
+    buf_free(&value);
+    buf_free(&op);
+    buf_free(&header);
+    dlist_print_iter_free(&iter);
+
+    dlist_free(&dl);
+    return c;
+}
+
+static void _emailsearch_headermatch_duplicate(union search_value *new,
+                                               const union search_value *old)
+{
+    new->v = jmap_headermatch_dup((struct jmap_headermatch *)old->v);
+}
+
+static void _emailsearch_headermatch_free(union search_value *v)
+{
+    struct jmap_headermatch *hm = v->v;
+    jmap_headermatch_free(&hm);
+    v->v = NULL;
+}
+
+static const search_attr_t _emailsearch_headermatch_attr_uncached = {
+    "jmap_headermatch_uncached",
+    /*flags*/0,
+    SEARCH_PART_NONE,
+    SEARCH_COST_BODY,
+    _emailsearch_headermatch_internalise,
+    /*cmp*/NULL,
+    _emailsearch_headermatch_match,
+    _emailsearch_headermatch_serialise,
+    _emailsearch_headermatch_unserialise,
+    /*get_countability*/NULL,
+    _emailsearch_headermatch_duplicate,
+    _emailsearch_headermatch_free,
+    NULL
+};
+
+static const search_attr_t _emailsearch_headermatch_attr_cached = {
+    "jmap_headermatch_cached",
+    /*flags*/0,
+    SEARCH_PART_NONE,
+    SEARCH_COST_CACHE,
+    _emailsearch_headermatch_internalise,
+    /*cmp*/NULL,
+    _emailsearch_headermatch_match,
+    _emailsearch_headermatch_serialise,
+    _emailsearch_headermatch_unserialise,
+    /*get_countability*/NULL,
+    _emailsearch_headermatch_duplicate,
+    _emailsearch_headermatch_free,
+    NULL
+};
 
 /* ====================================================================== */
 
@@ -1962,24 +2072,32 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             _email_search_type(this, s, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
-            const char *k, *v;
-            charset_t utf8 = charset_lookupname("utf-8");
+            const char *hdr, *str = "", *cmp = NULL;
             search_expr_t *e;
 
-            if (json_array_size(val) == 2) {
-                k = json_string_value(json_array_get(val, 0));
-                v = json_string_value(json_array_get(val, 1));
-            } else {
-                k = json_string_value(json_array_get(val, 0));
-                v = ""; /* Empty string matches any value */
+            switch (json_array_size(val)) {
+                case 3:
+                    cmp = json_string_value(json_array_get(val, 2));
+                    GCC_FALLTHROUGH
+                case 2:
+                    str = json_string_value(json_array_get(val, 1));
+                    GCC_FALLTHROUGH
+                case 1:
+                    hdr = json_string_value(json_array_get(val, 0));
+                    break;
+                default:
+                    assert(0); // validation must reject this
             }
 
             e = search_expr_new(this, SEOP_MATCH);
-            e->attr = search_attr_find_field(k);
-            e->value.s = xstrdup(v);
+            // use the right cost, the query optimizer will need it
+            const search_attr_t *attr = search_attr_find_field(hdr);
+            e->attr = attr->cost == SEARCH_COST_CACHE ?
+                &_emailsearch_headermatch_attr_cached :
+                &_emailsearch_headermatch_attr_uncached;
+            e->value.v = jmap_headermatch_new(hdr, str, cmp);
 
             _email_search_perf_attr(e->attr, perf_filters);
-            charset_free(&utf8);
         }
         if ((val = json_object_get(filter, "inMailbox"))) {
             strarray_t *folders = strarray_new();
