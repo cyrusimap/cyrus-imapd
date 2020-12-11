@@ -131,6 +131,31 @@ extern int jmap_email_matchmime(matchmime_t *matchmime,
                                 time_t internaldate,
                                 json_t **err);
 
+struct jmap_headermatch {
+    enum headermatch_op {
+        HEADERMATCH_EQUALS,
+        HEADERMATCH_STARTS,
+        HEADERMATCH_ENDS,
+        HEADERMATCH_CONTAINS
+    } op;
+    char *header;
+    char *value;
+    size_t len;
+    charset_t utf8;
+    charset_conv_t *conv;
+    struct buf tmp[3];
+};
+
+extern struct jmap_headermatch *jmap_headermatch_new(const char *header,
+                                                     const char *value,
+                                                     const char *strop);
+
+extern void jmap_headermatch_free(struct jmap_headermatch **hmp);
+
+extern struct jmap_headermatch *jmap_headermatch_dup(struct jmap_headermatch *hm);
+
+extern int jmap_headermatch_match(struct jmap_headermatch *hm, message_t *msg);
+
 
 #endif /* WITH_DAV */
 
