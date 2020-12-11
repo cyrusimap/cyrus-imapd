@@ -75,12 +75,19 @@ typedef int comp_pat;
  * * Instances are not safe to use for two simultaneous conversions. It is safe
  *   (and recommended) to reuse an instance for consecutive conversions.
  */
-typedef struct charset_converter* charset_t;
+typedef struct charset_charset* charset_t;
 
 extern int encoding_lookupname(const char *name);
 extern const char *encoding_name(int);
 
-/* ensure up to MAXTRANSLATION times expansion into buf */
+/* Converter converts to UTF-8 search form as parametrized by flags.
+ * It is safe (and recommended) to reuse an instance for consecutive
+ * conversions. */
+typedef struct charset_conv charset_conv_t;
+extern charset_conv_t *charset_conv_new(charset_t fromcharset, int flags);
+extern const char *charset_conv_convert(charset_conv_t *conv, const char *s);
+extern void charset_conv_free(charset_conv_t **convp);
+
 extern char *charset_convert(const char *s, charset_t charset, int flags);
 extern char *charset_decode_mimeheader(const char *s, int flags);
 extern char *charset_parse_mimeheader(const char *s, int flags);
