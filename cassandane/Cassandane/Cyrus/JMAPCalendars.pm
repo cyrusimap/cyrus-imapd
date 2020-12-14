@@ -12479,4 +12479,40 @@ EOF
     $self->assert_num_equals(0, scalar @{$res->[2][1]{destroyed}});
 }
 
+sub test_account_get_capabilities
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $http = $self->{instance}->get_service("http");
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "Get session object";
+
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('200', $RawResponse->{status});
+    my $session = eval { decode_json($RawResponse->{content}) };
+    $self->assert_not_null($session);
+
+    my $capas = $session->{accounts}{cassandane}{accountCapabilities}{'urn:ietf:params:jmap:calendars'};
+    $self->assert_not_null($capas);
+
+    $self->assert_not_null($capas->{minDateTime});
+    $self->assert_not_null($capas->{maxDateTime});
+    $self->assert_not_null($capas->{maxExpandedQueryDuration});
+    $self->assert(exists $capas->{maxParticipantsPerEvent});
+    $self->assert_equals(JSON::true, $capas->{mayCreateCalendar});
+}
+
+
 1;
