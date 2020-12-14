@@ -254,7 +254,9 @@ extern void jmap_mdn_capabilities(json_t *account_capabilities);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_contact_capabilities(json_t *account_capabilities);
 extern void jmap_calendar_capabilities(json_t *account_capabilities,
-                                       const char *current_principalid);
+                                       struct auth_state *authstate,
+                                       const char *authuserid,
+                                       const char *accountid);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_backup_capabilities(json_t *account_capabilities);
 extern void jmap_notes_capabilities(json_t *account_capabilities);
