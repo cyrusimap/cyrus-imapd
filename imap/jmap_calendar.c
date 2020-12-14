@@ -303,16 +303,54 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
 }
 
 HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
-                                       const char *current_principalid)
+                                       struct auth_state *authstate,
+                                       const char *authuserid,
+                                       const char *accountid)
 {
-    json_object_set_new(account_capabilities, JMAP_URN_CALENDARS, json_object());
+    json_t *calcapa = json_object();
+    int is_main_account = !strcmpsafe(authuserid, accountid);
 
+    /* minDateTime, maxDateTime */
+    char timebuf[RFC3339_DATETIME_MAX+1];
+    time_to_rfc3339(caldav_epoch + 1, timebuf, RFC3339_DATETIME_MAX);
+    timebuf[RFC3339_DATETIME_MAX] = '\0';
+    json_object_set_new(calcapa, "minDateTime", json_string(timebuf));
+    time_to_rfc3339(caldav_eternity - 1, timebuf, RFC3339_DATETIME_MAX);
+    timebuf[RFC3339_DATETIME_MAX] = '\0';
+    json_object_set_new(calcapa, "maxDateTime", json_string(timebuf));
 
-    json_object_set_new(account_capabilities, JMAP_URN_CALENDARS, json_object());
+    /* maxExpandedQueryDuration - we don't really care */
+    json_object_set_new(calcapa, "maxExpandedQueryDuration", json_string("P365D"));
+
+    /* maxParticipantsPerEvent */
+    json_object_set_new(calcapa, "maxParticipantsPerEvent", json_null());
+
+    /* mayCreateCalendar */
+    if (is_main_account) {
+        json_object_set_new(calcapa, "mayCreateCalendar", json_true());
+    }
+    else {
+        json_t *maycreate = json_false();
+        if (accountid)  {
+            char *calhomename = caldav_mboxname(accountid, NULL);
+            mbentry_t *mbentry = NULL;
+            if (!mboxlist_lookup(calhomename, &mbentry, NULL)) {
+                int rights = httpd_myrights(authstate, mbentry);
+                if (rights & JACL_CREATECHILD) {
+                    maycreate = json_true();
+                }
+            }
+            mboxlist_entry_free(&mbentry);
+            free(calhomename);
+        }
+        json_object_set_new(calcapa, "mayCreateCalendar", maycreate);
+    }
+
+    json_object_set_new(account_capabilities, JMAP_URN_CALENDARS, calcapa);
 
     json_object_set_new(account_capabilities, JMAP_URN_CALENDARPRINCIPALS,
-            json_pack("{s:o}", "currentUserPrincipalId", current_principalid ?
-                json_string(current_principalid) : json_null()));
+            json_pack("{s:o}", "currentUserPrincipalId", is_main_account ?
+                json_string(accountid) : json_null()));
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities, JMAP_CALENDARS_EXTENSION, json_object());
