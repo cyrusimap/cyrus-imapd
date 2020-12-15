@@ -72,6 +72,7 @@
 #include <pwd.h>
 #include <grp.h>
 
+#include "bsearch.h"
 #include "util.h"
 #include "global.h"
 #include "mailbox.h"
@@ -188,8 +189,9 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
 {
     const char *path = NULL;
     mbentry_t *mbentry = NULL;
-    int r;
     struct list_rock lrock = { opts, 0, NULL };
+    strarray_t names = STRARRAY_INITIALIZER;
+    int r, i;
 
     r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
     if (!r) {
@@ -224,22 +226,30 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
             while ((dirent = readdir(dirp))) {
                 if (dirent->d_name[0] == '.') continue;
 
-                if (opts->longlist) {
-                    long_list(dirent->d_name, NULL);
-                }
-                else {
-                    printf("%c%s",
-                           !(lrock.count++ % lrock.opts->columns) ? '\n' : '\t',
-                           dirent->d_name);
-                }
+                strarray_append(&names, dirent->d_name);
             }
             closedir(dirp);
         }
+
+        strarray_sort(&names, cmpstringp_raw);
+        for (i = 0; i < strarray_size(&names); i++) {
+            const char *name = strarray_nth(&names, i);
+
+            if (opts->longlist) {
+                long_list(name, NULL);
+            }
+            else {
+                printf("%c%s",
+                       !(lrock.count++ % lrock.opts->columns) ? '\n' : '\t',
+                       name);
+            }
+        }
+        strarray_fini(&names);
     }
 
     if (!r) {
         /* List children */
-        if (opts->recurse) lrock.children = strarray_new();
+        if (opts->recurse) lrock.children = &names;
 
         mbname_push_boxes(mbname, "%");
         mboxlist_findall(&cyr_ls_namespace,
@@ -248,8 +258,6 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
         printf("\n");
 
         if (opts->recurse) {
-            int i;
-
             for (i = 0; i < strarray_size(lrock.children); i++) {
                 mbname_t *mbname =
                     mbname_from_extname(strarray_nth(lrock.children, i),
@@ -257,7 +265,7 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
                 do_list(mbname, opts);
                 mbname_free(&mbname);
             }
-            strarray_free(lrock.children);
+            strarray_fini(&names);
         }
     }
 }
