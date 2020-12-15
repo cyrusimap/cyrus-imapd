@@ -2105,57 +2105,126 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
     return this;
 }
 
-static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
-                                         hash_table *contactgroups,
-                                         strarray_t *perf_filters)
+static int is_single_jmap_folderexpr(search_expr_t *e)
 {
-    search_expr_t *root = _email_buildsearchexpr(req, filter, /*parent*/NULL,
-                                                 contactgroups, perf_filters);
+    return e->op == SEOP_MATCH &&
+        !strcmp(e->attr->name, "jmap_folders") &&
+        e->attr->data1 == 0 &&
+        strarray_size(e->value.list) == 1;
+}
 
-    /* The search API internally optimises for IMAP folder queries
-     * and we'd like to benefit from this also for JMAP. To do so,
-     * we try to convert as many inMailboxId expressions to IMAP
-     * mailbox matches as possible. This includes the first
-     * inMailboxId that is part of a positive AND and any inMailboxId
-     * that is part of a positive OR expression. */
-    ptrarray_t todo = PTRARRAY_INITIALIZER;
-    int found_and_match = 0;
-    struct work {
-        search_expr_t *e;
-        int in_or;
-    };
-    struct work *w = xmalloc(sizeof(struct work));
-    w->e = root;
-    w->in_or = 0;
-    ptrarray_push(&todo, w);
-    while ((w = ptrarray_pop(&todo))) {
-        if (w->e->op == SEOP_MATCH) {
-            if (!strcmp(w->e->attr->name, "jmap_folders") &&
-                w->e->attr->data1 == 0 &&
-                strarray_size(w->e->value.list) == 1) {
-                /* Its's an inMailboxId expression */
-                if (w->in_or || !found_and_match) {
-                    char *folder = strarray_pop(w->e->value.list);
-                    _emailsearch_folders_free(&w->e->value);
-                    const search_attr_t *attr = search_attr_find("folder");
-                    w->e->value.s = folder;
-                    w->e->attr = attr;
-                    found_and_match = !w->in_or;
+static int convert_foldermatch(search_expr_t *e,
+                               strarray_t *preferred_folders,
+                               int only_preferred)
+{
+    if (!is_single_jmap_folderexpr(e)) return 0;
+
+    const char *folder = strarray_nth(e->value.list, 0);
+    int is_preferred = strarray_find(preferred_folders, folder, 0) >= 0;
+    if (!is_preferred && only_preferred) {
+        return 0;
+    }
+    else if (!is_preferred) {
+        strarray_append(preferred_folders, folder);
+    }
+
+    char *folderm = strarray_pop(e->value.list);
+    _emailsearch_folders_free(&e->value);
+    const search_attr_t *attr = search_attr_find("folder");
+    e->value.s = folderm;
+    e->attr = attr;
+    return 1;
+}
+
+static void convert_folderclause(search_expr_t *clause,
+                                 strarray_t *preferred_folders,
+                                 int *is_imapfolderptr)
+{
+    assert(clause->op != SEOP_OR);
+
+    if (clause->op == SEOP_AND) {
+        int found_foldermatch = 0;
+        /* First pass. Convert preferred folder expression. */
+        search_expr_t *c;
+        for (c = clause->children; c; c = c->next) {
+            if (convert_foldermatch(c, preferred_folders, 1)) {
+                found_foldermatch = 1;
+                break;
+            }
+        }
+        if (!found_foldermatch) {
+            /* Second pass. Convert any folder expression. */
+            for (c = clause->children; c; c = c->next) {
+                if (convert_foldermatch(c, preferred_folders, 0)) {
+                    found_foldermatch = 1;
+                    break;
                 }
             }
         }
-        else if (w->e->op == SEOP_AND || w->e->op == SEOP_OR) {
-            search_expr_t *c;
-            for (c = w->e->children; c; c = c->next) {
-                struct work *ww = xmalloc(sizeof(struct work));
-                ww->e = c;
-                ww->in_or = w->in_or || w->e->op == SEOP_OR;
-                ptrarray_push(&todo, ww);
-            }
+        if (found_foldermatch) {
+            if (is_imapfolderptr) *is_imapfolderptr = 1;
+            return;
         }
-        free(w);
     }
-    ptrarray_fini(&todo);
+    else if (convert_foldermatch(clause, preferred_folders, 0)) {
+        if (is_imapfolderptr) *is_imapfolderptr = 1;
+    }
+}
+
+static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
+                                         hash_table *contactgroups,
+                                         strarray_t *perf_filters,
+                                         int *is_imapfolderptr)
+{
+    search_expr_t *root = _email_buildsearchexpr(req, filter, /*parent*/NULL,
+                                                 contactgroups, perf_filters);
+    if (is_imapfolderptr) *is_imapfolderptr = 0;
+    if (!root) return NULL;
+
+    /* Is there any JMAP folder expression we could optimize? */
+    int has_jmapfolder_expr = 0;
+    ptrarray_t work = PTRARRAY_INITIALIZER;
+    ptrarray_push(&work, root);
+    search_expr_t *e;
+    while ((e = ptrarray_pop(&work))) {
+        if (is_single_jmap_folderexpr(e)) {
+            has_jmapfolder_expr = 1;
+            break;
+        }
+        search_expr_t *c;
+        for (c = e->children; c; c = c->next) {
+            ptrarray_push(&work, c);
+        }
+    }
+    ptrarray_fini(&work);
+    if (!has_jmapfolder_expr) {
+        return root;
+    }
+
+    /* Convert tree to DNF, it will converted in search_query anyway */
+    search_expr_t *original = search_expr_duplicate(root);
+    if (search_expr_normalise(&root) < 0) {
+        search_expr_free(root);
+        return original;
+    }
+    else {
+        search_expr_free(original);
+        original = NULL;
+    }
+
+    /* Now convert at most one inMailboxId expression in each clause to an
+     * IMAP folder search expression. Prefer to convert the same folders. */
+    strarray_t preferred_folders = STRARRAY_INITIALIZER;
+    if (root->op == SEOP_OR) {
+        search_expr_t *c;
+        for (c = root->children; c; c = c->next) {
+            convert_folderclause(c, &preferred_folders, is_imapfolderptr);
+        }
+    }
+    else {
+        convert_folderclause(root, &preferred_folders, is_imapfolderptr);
+    }
+    strarray_fini(&preferred_folders);
 
     return root;
 }
@@ -2339,6 +2408,7 @@ struct emailsearch {
     char *hash;
     strarray_t perf_filters;
     int sort_savedate;
+    int is_imapfolder;
     /* Internal state for UID search */
     search_query_t *query;
     struct searchargs *args;
@@ -2423,7 +2493,8 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
 {
     struct emailsearch* search = xzmalloc(sizeof(struct emailsearch));
 
-    search->expr = _email_buildsearch(req, filter, contactgroups, &search->perf_filters);
+    search->expr = _email_buildsearch(req, filter, contactgroups,
+            &search->perf_filters, &search->is_imapfolder);
 
     if (json_array_size(jsort)) {
         search->sort = _email_buildsort(jsort, &search->sort_savedate);
@@ -4032,6 +4103,11 @@ static void _email_query(jmap_req_t *req, struct jmap_emailquery *q,
     q->super.can_calculate_changes = _email_query_can_calculate_changes(search);
     q->super.query_state = _email_make_querystate(modseq, 0, addrbook_modseq);
 
+    if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
+        json_object_set_new(req->perf_details, "isImapFolderSearch",
+                json_boolean(search->is_imapfolder));
+    }
+
 done:
     if (r && *err == NULL) {
         if (r == IMAP_SEARCH_SLOW) {
@@ -4886,7 +4962,8 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     strarray_t perf_filters = STRARRAY_INITIALIZER;
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = _email_buildsearch(req, filter, /*contactgroups*/NULL, &perf_filters);
+    searchargs->root = _email_buildsearch(req, filter, /*contactgroups*/NULL,
+            &perf_filters, NULL);
     strarray_fini(&perf_filters);
 
     /* Build the search query */
