@@ -160,6 +160,8 @@ static int list_cb(struct findall_data *data, void *rock)
     /* don't want partial matches */
     if (!data || !data->is_exactmatch) return 0;
 
+    const char *child_name = strarray_nth(mbname_boxes(data->mbname), -1);
+
     if (lrock->opts->longlist) {
         const char *path;
 
@@ -173,11 +175,11 @@ static int list_cb(struct findall_data *data, void *rock)
                                      data->mbentry->name,
                                      data->mbentry->uniqueid, 0);
         }
-        long_list(path, strrchr(data->extname, cyr_ls_namespace.hier_sep)+1);
+        long_list(path, child_name);
     }
     else {
         printf("%c%s", !(lrock->count++ % lrock->opts->columns) ? '\n' : '\t',
-               strrchr(data->extname, cyr_ls_namespace.hier_sep)+1);
+               child_name);
     }
 
     if (lrock->children) strarray_append(lrock->children, data->extname);
