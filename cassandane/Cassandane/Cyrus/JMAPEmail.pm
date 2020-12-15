@@ -20213,4 +20213,159 @@ EOF
     $self->check_messages({ 1 => $msg2 }, check_guid => 0);
 }
 
+sub test_email_query_mailbox_andor
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+                mboxC => {
+                    name => 'C',
+                },
+            }
+        }, 'R1'],
+        ['Email/set', {
+            create => {
+                emailAB => {
+                    mailboxIds => {
+                        '#mboxA' => JSON::true,
+                        '#mboxB' => JSON::true,
+                    },
+                    subject => 'emailAB',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'emailAB',
+                        }
+                    },
+                },
+            },
+        }, 'R2'],
+    ], $using);
+    my $mboxA = $res->[0][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    my $mboxC = $res->[0][1]{created}{mboxC}{id};
+    $self->assert_not_null($mboxC);
+    my $emailId = $res->[1][1]{created}{emailAB}{id};
+    $self->assert_not_null($emailId);
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    inMailbox => $mboxA,
+                }, {
+                    operator => 'OR',
+                    conditions => [{
+                        inMailbox => $mboxB,
+                    }, {
+                        inMailbox => $mboxC,
+                    }],
+                }],
+            },
+        }, 'R1'],
+    ], $using);
+
+    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
+    $self->assert_equals(JSON::true,
+        $res->[0][1]{performance}{details}{isImapFolderSearch});
+}
+
+sub test_email_querychanges_mailbox_or
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    subject => 'email',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'email',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Mailbox/query', {
+        }, 'R2'],
+    ], $using);
+    my $emailId = $res->[0][1]{created}{email}{id};
+    $self->assert_not_null($emailId);
+    my $inboxId = $res->[1][1]{ids}[0];
+    $self->assert_not_null($inboxId);
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'OR',
+                conditions => [{
+                    inMailbox => $inboxId,
+                }],
+            },
+        }, 'R1'],
+    ], $using);
+
+    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
+    $self->assert_equals(JSON::true, $res->[0][1]{canCalculateChanges});
+    my $queryState = $res->[0][1]{queryState};
+
+    $res = $jmap->CallMethods([
+        ['Email/queryChanges', {
+            filter => {
+                operator => 'OR',
+                conditions => [{
+                    inMailbox => $inboxId,
+                }],
+            },
+            sinceQueryState => $queryState,
+        }, 'R1'],
+    ], $using);
+    $self->assert_deep_equals([], $res->[0][1]{added});
+    $self->assert_deep_equals([], $res->[0][1]{removed});
+}
+
 1;
