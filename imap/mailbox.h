@@ -729,4 +729,6 @@ extern struct dlist *mailbox_acl_to_dlist(const char *aclstr);
 extern int mailbox_changequotaroot(struct mailbox *mailbox,
                                    const char *root, int silent);
 
+extern int mailbox_parse_datafilename(const char *name, uint32_t *uidp);
+
 #endif /* INCLUDED_MAILBOX_H */
