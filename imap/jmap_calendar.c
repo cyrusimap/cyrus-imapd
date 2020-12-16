@@ -307,6 +307,16 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
                                        const char *authuserid,
                                        const char *accountid)
 {
+    char *calhomename = caldav_mboxname(accountid, NULL);
+    mbentry_t *mbentry = NULL;
+    int r = mboxlist_lookup(calhomename, &mbentry, NULL);
+    if (r) {
+        xsyslog(LOG_ERR, "can't lookup calendar home",
+                "calhomename=%s error=%s",
+                calhomename, error_message(r));
+        return;
+    }
+
     json_t *calcapa = json_object();
     int is_main_account = !strcmpsafe(authuserid, accountid);
 
@@ -330,21 +340,19 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
         json_object_set_new(calcapa, "mayCreateCalendar", json_true());
     }
     else {
-        json_t *maycreate = json_false();
-        if (accountid)  {
-            char *calhomename = caldav_mboxname(accountid, NULL);
-            mbentry_t *mbentry = NULL;
-            if (!mboxlist_lookup(calhomename, &mbentry, NULL)) {
-                int rights = httpd_myrights(authstate, mbentry);
-                if (rights & JACL_CREATECHILD) {
-                    maycreate = json_true();
-                }
-            }
-            mboxlist_entry_free(&mbentry);
-            free(calhomename);
-        }
-        json_object_set_new(calcapa, "mayCreateCalendar", maycreate);
+        int rights = httpd_myrights(authstate, mbentry);
+        json_object_set_new(calcapa, "mayCreateCalendar",
+                json_boolean(rights & JACL_CREATECHILD));
     }
+
+    /* shareesActAs */
+    static const char *annot =
+        DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">sharees-act-as";
+    struct buf val = BUF_INITIALIZER;
+    annotatemore_lookup_mbe(mbentry, annot, "", &val);
+    if (!buf_len(&val)) buf_setcstr(&val, "self");
+    json_object_set_new(calcapa, "shareesActAs", json_string(buf_cstring(&val)));
+    buf_free(&val);
 
     json_object_set_new(account_capabilities, JMAP_URN_CALENDARS, calcapa);
 
@@ -355,6 +363,9 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities, JMAP_CALENDARS_EXTENSION, json_object());
     }
+
+    free(calhomename);
+    mboxlist_entry_free(&mbentry);
 }
 
 /* Helper flags for CalendarEvent/set */
@@ -757,17 +768,6 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
-    if (jmap_wantprop(rock->get->props, "shareesActAs")) {
-        const char *annotname =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-        buf_reset(&attrib);
-        r = annotatemore_lookupmask_mbe(mbentry, annotname,
-                                    rock->req->accountid, &attrib);
-        json_object_set_new(obj, "shareesActAs",
-                json_string(!r && buf_len(&attrib) ? "secretary" : "self"));
-        buf_free(&attrib);
-    }
-
     if (jmap_wantprop(rock->get->props, "participantIdentities")) {
         json_object_set_new(obj, "participantIdentities",
             get_participant_identities(rock->req->userid, mbentry->name));
@@ -851,11 +851,6 @@ static const jmap_property_t calendar_props[] = {
         "shareWith",
         NULL,
         0
-    },
-    {
-        "shareesActAs",
-        NULL,
-        JMAP_PROP_IMMUTABLE
     },
     {
         "myRights",
