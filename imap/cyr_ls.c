@@ -130,7 +130,7 @@ static void long_list(const char *path, const char *name,
     char datestr[13];
 
     memset(&sbuf, 0, sizeof(struct stat));
-    if (stat(path, &sbuf) != 0) color = ANSI_COLOR_RED;
+    if (stat(path, &sbuf) != 0 && *color) color = ANSI_COLOR_RED;
 
     pwd = getpwuid(sbuf.st_uid);
     grp = getgrgid(sbuf.st_gid);
@@ -164,6 +164,7 @@ struct list_opts {
     int longlist;
     int meta;
     int columns;
+    int colorize;
 };
 
 struct list_rock {
@@ -181,7 +182,7 @@ static int list_cb(struct findall_data *data, void *rock)
     if (!data || !data->is_exactmatch) return 0;
 
     const char *child_name = strarray_nth(mbname_boxes(data->mbname), -1);
-    const char *color = ANSI_COLOR_BR_BLUE;
+    const char *color = "";
     const char *path;
 
     if (lrock->opts->meta) {
@@ -195,8 +196,9 @@ static int list_cb(struct findall_data *data, void *rock)
                                  data->mbentry->uniqueid, 0);
     }
 
-    if (mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL) {
-        color = ANSI_COLOR_MAGENTA;
+    if (lrock->opts->colorize) {
+        color = (mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL) ?
+            ANSI_COLOR_MAGENTA : ANSI_COLOR_BR_BLUE;
     }
 
     if (lrock->opts->longlist) {
@@ -204,9 +206,11 @@ static int list_cb(struct findall_data *data, void *rock)
                   lrock->opts->ids ? data->mbentry->uniqueid : NULL, color);
     }
     else {
-        struct stat sbuf;
+        if (lrock->opts->colorize) {
+            struct stat sbuf;
 
-        if (stat(path, &sbuf) != 0) color = ANSI_COLOR_RED;
+            if (stat(path, &sbuf) != 0) color = ANSI_COLOR_RED;
+        }
 
         printf("%c", !(lrock->count++ % lrock->opts->columns) ? '\n' : '\t');
         if (lrock->opts->ids) printf("%-40s ", data->mbentry->uniqueid);
@@ -267,7 +271,7 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
 
         strarray_sort(&names, cmpstringp_raw);
 
-        if (opts->ids || opts->expunged) {
+        if (opts->ids || (opts->expunged && opts->colorize)) {
             mailbox_open_irl(mbentry->name, &mailbox);
         }
 
@@ -284,8 +288,10 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
 
                 if (opts->ids) id = message_guid_encode(&record.guid);
 
-                if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
+                if (opts->colorize &&
+                    (record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
                     color = ANSI_COLOR_GRAY;
+                }
             }
 
             if (opts->longlist) {
@@ -333,7 +339,8 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     // capture options
-    struct list_opts opts = { 0, 0, 0, 0, 0, 4 /* default to 4 columns */ };
+    struct list_opts opts =
+        { 0, 0, 0, 0, 0, 4 /* default to 4 columns */, isatty(STDOUT_FILENO) };
 
     while ((opt = getopt(argc, argv, "C:mielR1")) != EOF) {
         switch(opt) {
