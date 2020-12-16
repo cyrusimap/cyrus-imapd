@@ -107,7 +107,18 @@ static int usage(const char *error)
 
 #define SECONDS_PER_YEAR 31536000  /* 365 * 24 * 60 * 60 */
 
-static void long_list(const char *path, const char *name, const char *id)
+#define ANSI_COLOR_RESET   "\x1b[0m"
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+
+#define ANSI_COLOR_BR_BLUE "\x1b[94m"
+
+static void long_list(const char *path, const char *name,
+                      const char *id, const char *color)
 {
     struct stat sbuf;
     struct group *grp;
@@ -117,7 +128,8 @@ static void long_list(const char *path, const char *name, const char *id)
     char datestr[13];
 
     memset(&sbuf, 0, sizeof(struct stat));
-    stat(path, &sbuf);
+    if (stat(path, &sbuf) != 0) color = ANSI_COLOR_RED;
+
     pwd = getpwuid(sbuf.st_uid);
     grp = getgrgid(sbuf.st_gid);
 
@@ -127,7 +139,7 @@ static void long_list(const char *path, const char *name, const char *id)
 
     printf("\n");
     if (id) printf("%-40s ", id);
-    printf("%c%c%c%c%c%c%c%c%c%c %lu %-8s %-8s % 10ld %s %s",
+    printf("%c%c%c%c%c%c%c%c%c%c %lu %-8s %-8s % 10ld %s %s%s" ANSI_COLOR_RESET,
            S_ISDIR(sbuf.st_mode) ? 'd' : '-',
            (sbuf.st_mode & S_IRUSR) ? 'r' : '-',
            (sbuf.st_mode & S_IWUSR) ? 'w' : '-',
@@ -139,7 +151,7 @@ static void long_list(const char *path, const char *name, const char *id)
            (sbuf.st_mode & S_IWOTH) ? 'w' : '-',
            (sbuf.st_mode & S_IXOTH) ? 'x' : '-',
            sbuf.st_nlink, pwd->pw_name, grp->gr_name,
-           sbuf.st_size, datestr, name ? name : path);
+           sbuf.st_size, datestr, color, name ? name : path);
 }
 
 struct list_opts {
@@ -165,26 +177,36 @@ static int list_cb(struct findall_data *data, void *rock)
     if (!data || !data->is_exactmatch) return 0;
 
     const char *child_name = strarray_nth(mbname_boxes(data->mbname), -1);
+    const char *color = ANSI_COLOR_BR_BLUE;
+    const char *path;
 
-    if (lrock->opts->longlist) {
-        const char *path;
-
-        if (lrock->opts->meta) {
-            path = mboxname_metapath(data->mbentry->partition,
-                                     data->mbentry->name,
-                                     data->mbentry->uniqueid, 0, 0);
-        }
-        else {
-            path = mboxname_datapath(data->mbentry->partition,
-                                     data->mbentry->name,
-                                     data->mbentry->uniqueid, 0);
-        }
-        long_list(path, child_name, data->mbentry->uniqueid);
+    if (lrock->opts->meta) {
+        path = mboxname_metapath(data->mbentry->partition,
+                                 data->mbentry->name,
+                                 data->mbentry->uniqueid, 0, 0);
     }
     else {
+        path = mboxname_datapath(data->mbentry->partition,
+                                 data->mbentry->name,
+                                 data->mbentry->uniqueid, 0);
+    }
+
+    if (mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL) {
+        color = ANSI_COLOR_MAGENTA;
+    }
+
+    if (lrock->opts->longlist) {
+        long_list(path, child_name,
+                  lrock->opts->ids ? data->mbentry->uniqueid : NULL, color);
+    }
+    else {
+        struct stat sbuf;
+
+        if (stat(path, &sbuf) != 0) color = ANSI_COLOR_RED;
+
         printf("%c", !(lrock->count++ % lrock->opts->columns) ? '\n' : '\t');
         if (lrock->opts->ids) printf("%-40s ", data->mbentry->uniqueid);
-        printf("%s", child_name);
+        printf("%s%s" ANSI_COLOR_RESET, color, child_name);
     }
 
     if (lrock->children) strarray_append(lrock->children, data->extname);
@@ -262,7 +284,7 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
             }
 
             if (opts->longlist) {
-                long_list(name, NULL, id);
+                long_list(name, NULL, id, ANSI_COLOR_RESET);
             }
             else {
                 printf("%c",
