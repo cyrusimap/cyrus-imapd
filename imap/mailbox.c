@@ -6329,7 +6329,7 @@ static void free_found(struct found_uids *ff)
     ff->pos = 0;
 }
 
-static int parse_datafilename(const char *name, uint32_t *uidp)
+EXPORTED int mailbox_parse_datafilename(const char *name, uint32_t *uidp)
 {
     const char *p = name;
 
@@ -6388,7 +6388,7 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
             if (*p == '.') continue; /* dot files */
             if (!strncmp(p, "cyrus.", 6)) continue; /* cyrus.* files */
 
-            r = parse_datafilename(p, &uid);
+            r = mailbox_parse_datafilename(p, &uid);
 
             if (r) {
                 /* check if it's a directory */
