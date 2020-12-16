@@ -261,6 +261,8 @@ int service_init(int argc __attribute__((unused)),
         fatal(error_message(r), EX_CONFIG);
     }
 
+    mboxevent_setnamespace(sync_namespacep);
+
     return 0;
 }
 
