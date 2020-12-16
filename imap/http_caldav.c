@@ -305,6 +305,8 @@ static const char *begin_icalendar(struct buf *buf, struct mailbox *mailbox,
                                    const char *desc, const char *color);
 static void end_icalendar(struct buf *buf);
 
+static int caldav_is_secretarymode(const char *mboxname);
+
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
 
 static struct mime_type_t caldav_mime_types[] = {
@@ -1120,6 +1122,8 @@ HIDDEN int caldav_is_personalized(struct mailbox *mailbox,
                                   const char *userid,
                                   struct buf *userdata)
 {
+    if (caldav_is_secretarymode(mailbox->name)) return 0;
+
     if (cdata->comp_flags.shared) {
         /* Lookup per-user calendar data */
         int r = mailbox_get_annotate_state(mailbox, cdata->dav.imap_uid, NULL);
@@ -7646,6 +7650,27 @@ static int proppatch_defaultalarm(xmlNodePtr prop, unsigned set,
     return 0;
 }
 
+static int caldav_is_secretarymode(const char *mboxname)
+{
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    int is_secretarymode = 0;
+
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0))) {
+        mbname_truncate_boxes(mbname, 1);
+        static const char *annot =
+            DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">sharees-act-as";
+        struct buf val = BUF_INITIALIZER;
+        annotatemore_lookup(mbname_intname(mbname), annot, "", &val);
+        is_secretarymode = !strcmp(buf_cstring(&val), "secretary");
+        buf_free(&val);
+    }
+
+    mbname_free(&mbname);
+    return is_secretarymode;
+}
+
 static int propfind_shareesactas(const xmlChar *name, xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop __attribute__((unused)),
@@ -8787,6 +8812,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     uint32_t newuid = 0;
     strarray_t myimapflags = STRARRAY_INITIALIZER;
     int usedefaultalerts = 0; // for per-user data
+    int is_secretarymode = caldav_is_secretarymode(mailbox->name);
 
     /* Copy add_imapflags, we might need to add some flags */
     if (add_imapflags) strarray_cat(&myimapflags, add_imapflags);
@@ -8859,7 +8885,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     else if (mailbox->i.options & OPT_IMAP_SHAREDSEEN) {
         cdata->comp_flags.shared = 0;
     }
-    else if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
+    else if (userid && (namespace_calendar.allow & ALLOW_USERDATA) && !is_secretarymode) {
         usedefaultalerts = icalcomponent_read_usedefaultalerts(ical) > 0;
         ret = personalize_resource(txn, mailbox, ical,
                                    cdata, userid, &store_ical, &userdata);
@@ -8973,18 +8999,20 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                                   mailbox, newuid, NULL);
             }
 
-            int r = write_personal_data(userid, mailbox, newuid,
-                                        mailbox->i.highestmodseq+1,
-                                        usedefaultalerts, userdata);
-            if (r) {
-                /* XXX  We have already written the stripped resource
-                   so we're pretty screwed.  All message annotations
-                   need to be handled (properly) in append_fromstage()
-                   so storing resource and annotations is atomic.
-                */
-                txn->error.desc = error_message(r);
-                ret = HTTP_SERVER_ERROR;
-                goto done;
+            if (!is_secretarymode) {
+                int r = write_personal_data(userid, mailbox, newuid,
+                        mailbox->i.highestmodseq+1,
+                        usedefaultalerts, userdata);
+                if (r) {
+                    /* XXX  We have already written the stripped resource
+                       so we're pretty screwed.  All message annotations
+                       need to be handled (properly) in append_fromstage()
+                       so storing resource and annotations is atomic.
+                       */
+                    txn->error.desc = error_message(r);
+                    ret = HTTP_SERVER_ERROR;
+                    goto done;
+                }
             }
 
             if (store_ical) {
