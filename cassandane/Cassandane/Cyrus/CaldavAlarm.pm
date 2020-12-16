@@ -2358,4 +2358,162 @@ EOF
                          {summary => 'Simple', userId => 'cassandane', alarmTime => $start, start => $start});
 }
 
+sub test_simple_multiuser_secretary
+    :min_version_3_3 :needs_component_calalarmd :NoAltNameSpace :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $AdminTalk = $self->{adminstore}->get_client();
+    $AdminTalk->create("user.foo");
+    $AdminTalk->setacl("user.cassandane.#calendars.$CalendarId", "foo", "lrswipkxtecdn789");
+
+    my $foostore = $self->{instance}->get_service('imap')->create_store(
+                        username => "foo");
+    my $footalk = $foostore->get_client();
+    $footalk->subscribe("user.cassandane.#calendars.$CalendarId");
+
+    my $service = $self->{instance}->get_service("http");
+    my $FooDAV = Net::CalDAVTalk->new(
+        user => 'foo',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $cal = $FooDAV->GetCalendar("cassandane.$CalendarId");
+    $self->assert_not_null($cal);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    my $latedt = $startdt->clone();
+    $latedt->add(DateTime::Duration->new(seconds => 300));
+    my $late = $latedt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $cardtmpl = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND;TZID=Australia/Sydney:$end
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART;TZID=Australia/Sydney:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+XXALARMDATAXX
+END:VEVENT
+
+END:VCALENDAR
+EOF
+
+    my $alarm = <<EOF;
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm cassandane
+DESCRIPTION:My alarm has triggered
+END:VALARM
+EOF
+
+    my $latealarm = <<EOF;
+BEGIN:VALARM
+TRIGGER:PT5M
+ACTION:DISPLAY
+SUMMARY: My alarm foo
+DESCRIPTION:My latealarm has triggered
+END:VALARM
+EOF
+
+    my $card = $cardtmpl;
+    $card =~ s/XXALARMDATAXX/$alarm/;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    my $Events = $CalDAV->GetEvents("$CalendarId");
+    my $FooEvents = $FooDAV->GetEvents("cassandane.$CalendarId");
+    $self->assert_num_equals(1, scalar @$Events);
+    $self->assert_num_equals(1, scalar @$FooEvents);
+    $self->assert_not_null($Events->[0]{alerts});
+    # foo event does not yet have alarms
+    $self->assert_null($FooEvents->[0]{alerts});
+
+    my $foocard = $cardtmpl;
+    $foocard =~ s/XXALARMDATAXX/$latealarm/;
+    $FooDAV->Request('PUT', $FooEvents->[0]{href}, $foocard, 'Content-Type' => 'text/calendar');
+
+    $Events = $CalDAV->GetEvents("$CalendarId");
+    $FooEvents = $FooDAV->GetEvents("cassandane.$CalendarId");
+    $self->assert_num_equals(1, scalar @$Events);
+    $self->assert_num_equals(1, scalar @$FooEvents);
+    $self->assert_not_null($Events->[0]{alerts});
+    # foo event has alarms
+    $self->assert_not_null($FooEvents->[0]{alerts});
+
+    # set secretary mode
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:JMAP="urn:ietf:params:jmap:calendars">
+  <D:set>
+    <D:prop>
+      <JMAP:sharees-act-as>secretary</JMAP:sharees-act-as>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane", $xml,
+        'Content-Type' => 'text/xml');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    $self->assert_alarms({summary => 'Simple', userId => 'cassandane', alarmTime => $start, start => $start});
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 600 );
+
+    $self->assert_alarms();
+}
+
 1;
