@@ -1066,7 +1066,7 @@ static int process_valarms(struct mailbox *mailbox,
 
     /* Determine JMAP secretary mode for this account */
     int is_secretarymode = 0;
-    mbname_t *mbname = mbname_from_intname(mailbox->name);
+    mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
     const strarray_t *boxes = mbname_boxes(mbname);
     const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
     if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0))) {
