@@ -952,6 +952,7 @@ struct process_alarms_rock {
     struct lastalarm_data *alarm;
     time_t runtime;
     int dryrun;
+    int is_secretarymode;
 };
 
 static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
@@ -969,8 +970,10 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
         ((prock->mbox_options & OPT_IMAP_SHAREDSEEN) ||
-         mboxlist_checksub(mailbox, userid) != 0)) {
-        /* No per-user-data, or sharee has unsubscribed from this calendar */
+         mboxlist_checksub(mailbox, userid) != 0 ||
+         prock->is_secretarymode)) {
+        /* No per-user-data, or sharee has unsubscribed from this calendar,
+         * or calendar is in secretary mode */
         return 0;
     }
 
@@ -1060,9 +1063,26 @@ static int process_valarms(struct mailbox *mailbox,
                                     floatingtz, ical, data.lastrun, runtime, dryrun);
     free(userid);
 
+
+    /* Determine JMAP secretary mode for this account */
+    int is_secretarymode = 0;
+    mbname_t *mbname = mbname_from_intname(mailbox->name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0))) {
+        mbname_truncate_boxes(mbname, 1);
+        static const char *annot =
+            DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">sharees-act-as";
+        struct buf val = BUF_INITIALIZER;
+        annotatemore_lookup(mbname_intname(mbname), annot, "", &val);
+        is_secretarymode = !strcmp(buf_cstring(&val), "secretary");
+        buf_free(&val);
+    }
+    mbname_free(&mbname);
+
     /* Process VALARMs in per-user-cal-data */
     struct process_alarms_rock prock =
-        { mailbox->i.options, ical, &data, runtime, dryrun };
+        { mailbox->i.options, ical, &data, runtime, dryrun, is_secretarymode };
 
     syslog(LOG_DEBUG, "processing per-user alarms");
 
