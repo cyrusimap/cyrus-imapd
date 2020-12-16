@@ -8740,6 +8740,164 @@ sub test_calendarevent_set_peruser
 
 }
 
+sub test_calendarevent_set_peruser_secretary
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog 'Create sharee and share cassandane calendar';
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user('sharee');
+    $admintalk->setacl('user.cassandane.#calendars.Default', 'sharee', 'lrsiwntex') or die;
+    my $service = $self->{instance}->get_service('http');
+    my $shareejmap = Mail::JMAPTalk->new(
+        user => 'sharee',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $shareejmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:calendars',
+    ]);
+
+    xlog 'Set calendar home to secretary mode';
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:JMAP="urn:ietf:params:jmap:calendars">
+  <D:set>
+    <D:prop>
+      <JMAP:sharees-act-as>secretary</JMAP:sharees-act-as>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/calendars/user/cassandane", $xml,
+        'Content-Type' => 'text/xml');
+
+    xlog 'Create an event with per-user props as owner';
+    my $perUserProps = {
+        freeBusyStatus => 'free',
+        color => 'blue',
+        keywords => {
+            'ownerKeyword' => JSON::true,
+        },
+        useDefaultAlerts => JSON::true,
+        alerts => {
+            alert1 => {
+                '@type' => 'Alert',
+                trigger => {
+                    '@type' => 'OffsetTrigger',
+                    relativeTo => 'start',
+                    offset => '-PT5M',
+                },
+                action => 'email',
+            },
+        },
+    };
+    my @proplist = keys %$perUserProps;
+
+    my $event = {
+        uid => 'eventuid1',
+        calendarId => 'Default',
+        title => 'event1',
+        start => '2019-12-10T23:30:00',
+        duration => 'PT1H',
+        timeZone => 'Australia/Melbourne',
+    };
+    $event = { %$event, %$perUserProps };
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => $event,
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+
+    xlog 'assert per-user properties for owner and sharee';
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => \@proplist,
+        }, 'R1']
+    ]);
+    $event = $res->[0][1]{list}[0];
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals($perUserProps, $event);
+
+    $res = $shareejmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => \@proplist,
+        }, 'R1']
+    ]);
+    $event = $res->[0][1]{list}[0];
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals($perUserProps, $event);
+
+    xlog 'Update per-user props as sharee';
+    $perUserProps = {
+        freeBusyStatus => 'busy',
+        color => 'red',
+        keywords => {
+            'shareeKeyword' => JSON::true,
+        },
+        useDefaultAlerts => JSON::false,
+        alerts => {
+            alert1 => {
+                '@type' => 'Alert',
+                trigger => {
+                    '@type' => 'OffsetTrigger',
+                    relativeTo => 'start',
+                    offset => '-PT10M',
+                },
+                action => 'display',
+            },
+        },
+    };
+    $res = $shareejmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => $perUserProps,
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog 'assert per-user properties for owner and sharee';
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => \@proplist,
+        }, 'R1']
+    ]);
+    $event = $res->[0][1]{list}[0];
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals($perUserProps, $event);
+
+    $res = $shareejmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => \@proplist,
+        }, 'R1']
+    ]);
+    $event = $res->[0][1]{list}[0];
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals($perUserProps, $event);
+}
+
 sub test_calendarevent_set_linkblobid
     :min_version_3_1 :needs_component_jmap
 {
