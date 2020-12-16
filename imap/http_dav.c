@@ -107,6 +107,7 @@ static const struct dav_namespace_t {
     { XML_NS_MECOM, "MC" },
     { XML_NS_MOBME, "MM" },
     { XML_NS_CYRUS, "CY" },
+    { XML_NS_JMAPCAL, "JMAPCAL" },
     { XML_NS_USERFLAG, "UF" },
     { XML_NS_SYSFLAG, "SF" },
 };
@@ -1327,6 +1328,10 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
                               (const char *) nsDef->prefix);
                 else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CYRUS))
                     ensure_ns(respNs, NS_CYRUS, root,
+                              (const char *) nsDef->href,
+                              (const char *) nsDef->prefix);
+                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_JMAPCAL))
+                    ensure_ns(respNs, NS_JMAPCAL, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
                 else
