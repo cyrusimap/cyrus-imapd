@@ -17844,7 +17844,9 @@ sub test_email_query_guidsearch_only_email_mailboxes
         ['CalendarEvent/set', {
             create => {
                 '2' => {
-                    calendarId => 'Default',
+                    calendarIds => {
+                        Default => JSON::true
+                    },
                     start => '2020-02-25T11:00:00',
                     timeZone => 'Australia/Melbourne',
                     title => 'test',
