@@ -10205,7 +10205,7 @@ sub test_calendar_set_inbox
     $self->assert_str_equals('inbox', $res->[1][1]{list}[0]{role});
 }
 
-sub test_calendar_get_sharees_act_as
+sub test_account_get_shareesactas
     :min_version_3_3 :needs_component_jmap
 {
     my ($self) = @_;
@@ -10214,122 +10214,60 @@ sub test_calendar_get_sharees_act_as
     my $http = $self->{instance}->get_service("http");
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog $self, "create shared account";
-    $admintalk->create("user.sharer");
-    my $sharercaldav = Net::CalDAVTalk->new(
-        user => "sharer",
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
-    $admintalk->setacl('user.sharer.#calendars.Default',
-        'cassandane' => 'lrswipkxtecdn') or die;
-
-    # Act as self
-
-    my $res = $jmap->CallMethods([
-        ['Calendar/get', {
-            accountId => 'sharer',
-            properties => ['shareesActAs', 'participantIdentities'],
-        }, 'R1']
-    ]);
-    $self->assert_str_equals('self', $res->[0][1]{list}[0]{shareesActAs});
-    $self->assert_deep_equals([{
-        name => '', type => 'imip', uri => 'mailto:cassandane@example.com'
-    }], $res->[0][1]{list}[0]{participantIdentities});
-
-    $self->{instance}->getnotify();
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            accountId => 'sharer',
-            create => {
-                1 => {
-                    calendarId => 'Default',
-                    title => 'test',
-                    start => '2015-10-06T16:45:00',
-                    timeZone => 'Etc/UTC',
-                    duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
-                    participants => {
-                        someone => {
-                            sendTo => {
-                                'imip' => 'mailto:someone@local',
-                            },
-                        },
-                    },
-                }
+    my $getCapas = sub {
+        my $RawRequest = {
+            headers => {
+                'Authorization' => $jmap->auth_header(),
             },
-        }, 'R1']
-    ]);
-    my $notifydata = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$notifydata;
-    my $payload = decode_json($imip->{MESSAGE});
-    $self->assert_str_equals('someone@local', $payload->{recipient});
-    $self->assert_str_equals('cassandane@example.com', $payload->{sender});
+            content => '',
+        };
+        my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+        if ($ENV{DEBUGJMAP}) {
+            warn "JMAP " . Dumper($RawRequest, $RawResponse);
+        }
+        $self->assert_str_equals('200', $RawResponse->{status});
+        my $session = eval { decode_json($RawResponse->{content}) };
+        $self->assert_not_null($session);
+        return $session->{accounts}{cassandane}{accountCapabilities}{'urn:ietf:params:jmap:calendars'};
+    };
 
-    # Act as secretary
+    xlog "Sharees act as self";
+    my $capas = $getCapas->();
+    $self->assert_str_equals('self', $capas->{shareesActAs});
+
+    xlog "Sharees act as secretary";
 
     my $xml = <<EOF;
 <?xml version="1.0" encoding="UTF-8"?>
-<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+<D:propertyupdate xmlns:D="DAV:" xmlns:JMAP="urn:ietf:params:jmap:calendars">
   <D:set>
     <D:prop>
-      <C:calendar-user-address-set>
-        <D:href>mailto:test\@example.com</D:href>
-      </C:calendar-user-address-set>
+      <JMAP:sharees-act-as>secretary</JMAP:sharees-act-as>
     </D:prop>
   </D:set>
 </D:propertyupdate>
 EOF
-    $sharercaldav->Request('PROPPATCH', "/dav/calendars/user/sharer/Default", $xml,
+    $caldav->Request('PROPPATCH', "/dav/calendars/user/cassandane", $xml,
         'Content-Type' => 'text/xml');
 
-    $res = $jmap->CallMethods([
-        ['Calendar/get', {
-            accountId => 'sharer',
-            properties => ['shareesActAs', 'participantIdentities'],
-        }, 'R1']
-    ]);
-    $self->assert_str_equals('secretary', $res->[0][1]{list}[0]{shareesActAs});
-    $self->assert_deep_equals([{
-        name => '', type => 'imip', uri => 'mailto:test@example.com'
-    }], $res->[0][1]{list}[0]{participantIdentities});
+    $capas = $getCapas->();
+    $self->assert_str_equals('secretary', $capas->{shareesActAs});
 
-    $self->{instance}->getnotify();
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            accountId => 'sharer',
-            create => {
-                1 => {
-                    calendarId => 'Default',
-                    title => 'test',
-                    start => '2016-10-06T16:45:00',
-                    timeZone => 'Etc/UTC',
-                    duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:test@example.com',
-                    },
-                    participants => {
-                        someone => {
-                            sendTo => {
-                                'imip' => 'mailto:someone@local',
-                            },
-                        },
-                    },
-                }
-            },
-        }, 'R1']
-    ]);
-    $notifydata = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$notifydata;
-    $payload = decode_json($imip->{MESSAGE});
-    $self->assert_str_equals('someone@local', $payload->{recipient});
-    $self->assert_str_equals('test@example.com', $payload->{sender});
+    $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:JMAP="urn:ietf:params:jmap:calendars">
+  <D:set>
+    <D:prop>
+      <JMAP:sharees-act-as>self</JMAP:sharees-act-as>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/calendars/user/cassandane", $xml,
+        'Content-Type' => 'text/xml');
+
+    $capas = $getCapas->();
+    $self->assert_str_equals('self', $capas->{shareesActAs});
 }
 
 sub test_calendarprincipal_get

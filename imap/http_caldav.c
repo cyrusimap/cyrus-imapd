@@ -277,7 +277,13 @@ static int propfind_defaultalarm(const xmlChar *name, xmlNsPtr ns,
 static int proppatch_defaultalarm(xmlNodePtr prop, unsigned set,
                                   struct proppatch_ctx *pctx,
                                   struct propstat propstat[], void *rock);
-
+static int propfind_shareesactas(const xmlChar *name, xmlNsPtr ns,
+                                 struct propfind_ctx *fctx,
+                                 xmlNodePtr prop, xmlNodePtr resp,
+                                 struct propstat propstat[], void *rock);
+static int proppatch_shareesactas(xmlNodePtr prop, unsigned set,
+                                  struct proppatch_ctx *pctx,
+                                  struct propstat propstat[], void *rock);
 
 static int report_cal_query(struct transaction_t *txn,
                             struct meth_params *rparams,
@@ -568,6 +574,11 @@ static const struct prop_entry caldav_props[] = {
     { "default-alarm-vevent-date", NS_CALDAV,
       PROP_COLLECTION | PROP_PERUSER,
       propfind_defaultalarm, proppatch_defaultalarm, NULL },
+
+    /* JMAP calendar properties */
+    { "sharees-act-as", NS_JMAPCAL,
+        PROP_COLLECTION,
+        propfind_shareesactas, proppatch_shareesactas, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
@@ -6578,6 +6589,99 @@ static int proppatch_defaultalarm(xmlNodePtr prop, unsigned set,
     return 0;
 }
 
+static int propfind_shareesactas(const xmlChar *name, xmlNsPtr ns,
+                                 struct propfind_ctx *fctx,
+                                 xmlNodePtr prop __attribute__((unused)),
+                                 xmlNodePtr resp __attribute__((unused)),
+                                 struct propstat propstat[],
+                                 void *rock __attribute__((unused)))
+{
+    if (fctx->txn->req_tgt.collection || !fctx->txn->req_tgt.userid) {
+        /* Only allow PROPFIND on calendar home */
+        return HTTP_NOT_FOUND;
+    }
+
+    struct buf attrib = BUF_INITIALIZER;
+    xmlNodePtr node;
+    int r = 0;
+
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
+               (const char *) ns->href, name);
+
+    if (fctx->mbentry) {
+        r = annotatemore_lookupmask(fctx->mbentry->name,
+                buf_cstring(&fctx->buf), httpd_userid, &attrib);
+    }
+
+    if (r) return HTTP_SERVER_ERROR;
+    if (!buf_len(&attrib)) buf_setcstr(&attrib, "self");
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                        name, ns, NULL, 0);
+    xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
+                                       BAD_CAST buf_cstring(&attrib),
+                                       buf_len(&attrib)));
+    return 0;
+}
+
+static int proppatch_shareesactas(xmlNodePtr prop, unsigned set,
+                                  struct proppatch_ctx *pctx,
+                                  struct propstat propstat[],
+                                  void *rock __attribute__((unused)))
+{
+    int is_valid = 0;
+
+    if (!pctx->txn->req_tgt.collection && pctx->txn->req_tgt.userid) {
+        int have_rights = mboxname_userownsmailbox(httpd_userid, mailbox_name(pctx->mailbox)) ||
+                    (cyrus_acl_myrights(httpd_authstate, mailbox_acl(pctx->mailbox)) & DACL_ADMIN);
+        if (have_rights) {
+            xmlChar *freeme = xmlNodeGetContent(prop);
+            const char *val = (const char *) freeme;
+            if (!strcmpsafe("self", val)) {
+                is_valid = 1;
+                set = 0;
+            }
+            else if (!strcmpsafe("secretary", val)) {
+                is_valid = 1;
+            }
+            if (is_valid) {
+                annotate_state_t *astate = NULL;
+                struct buf value = BUF_INITIALIZER;
+                int r;
+
+                buf_reset(&pctx->buf);
+                buf_printf(&pctx->buf, DAV_ANNOT_NS "<%s>%s",
+                        (const char *) prop->ns->href, prop->name);
+
+                if (set) buf_init_ro_cstr(&value, val);
+
+                /* write as shared annotation */
+                r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
+                if (!r) r = annotate_state_writemask(astate,
+                        buf_cstring(&pctx->buf), "", &value);
+                if (!r) {
+                    xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                            prop->name, prop->ns, NULL, 0);
+                }
+                else {
+                    xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
+                            &propstat[PROPSTAT_ERROR], prop->name, prop->ns, NULL, 0);
+                }
+
+                buf_free(&value);
+            }
+            if (freeme) xmlFree(freeme);
+        }
+    }
+    if (!is_valid) {
+        xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
+        *pctx->ret = HTTP_FORBIDDEN;
+    }
+
+    return 0;
+}
 
 /* mboxlist_findall() callback to run calendar-query on a collection */
 static int calquery_by_collection(const mbentry_t *mbentry, void *rock)
