@@ -78,6 +78,7 @@
 #define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
 #define XML_NS_DAVMOUNT "http://purl.org/NET/webdav/mount/"
+#define XML_NS_JMAPCAL  "urn:ietf:params:jmap:calendars"
 
 #define USER_COLLECTION_PREFIX  "user"
 #define GROUP_COLLECTION_PREFIX "group"
@@ -98,8 +99,11 @@ enum {
     NS_MECOM,
     NS_MOBME,
     NS_CYRUS,
+    NS_JMAPCAL,
+    NS_USERFLAG,
+    NS_SYSFLAG
 };
-#define NUM_NAMESPACE 8
+#define NUM_NAMESPACE 9
 
 /* Cyrus-specific privileges */
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */

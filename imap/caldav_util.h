@@ -158,6 +158,7 @@ extern int jmap_create_caldaveventnotif(struct transaction_t *txn,
                                         int is_draft,
                                         icalcomponent *oldical,
                                         icalcomponent *newical);
+
 #endif
 
 #endif /* HTTP_CALDAV_H */
