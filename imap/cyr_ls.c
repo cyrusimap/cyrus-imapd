@@ -91,10 +91,11 @@ static struct namespace cyr_ls_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-m] [-i] [-l] [-R] [-1] [mailbox name]\n");
+    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-m] [-i] [-e] [-l] [-R] [-1] [mailbox name]\n");
     fprintf(stderr, "\n");
     fprintf(stderr,"\t-m\tlist the contents of the metadata directory (if different from the data directory)\n");
-    fprintf(stderr,"\t-i\tprint ID of each item\n");
+    fprintf(stderr,"\t-i\tprint ID of each item (requires opening mailbox)\n");
+    fprintf(stderr,"\t-e\tcolorize expunged messages (requires opening mailbox)\n");
     fprintf(stderr,"\t-l\tlong listing format\n");
     fprintf(stderr,"\t-R\tlist submailboxes recursively\n");
     fprintf(stderr,"\t-1\tlist one file per line\n");
@@ -115,6 +116,7 @@ static int usage(const char *error)
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 
+#define ANSI_COLOR_GRAY    "\x1b[90m"
 #define ANSI_COLOR_BR_BLUE "\x1b[94m"
 
 static void long_list(const char *path, const char *name,
@@ -139,7 +141,7 @@ static void long_list(const char *path, const char *name,
 
     printf("\n");
     if (id) printf("%-40s ", id);
-    printf("%c%c%c%c%c%c%c%c%c%c %lu %-8s %-8s % 10ld %s %s%s" ANSI_COLOR_RESET,
+    printf("%c%c%c%c%c%c%c%c%c%c %lu %-8s %-8s % 10ld %s %s%s%s",
            S_ISDIR(sbuf.st_mode) ? 'd' : '-',
            (sbuf.st_mode & S_IRUSR) ? 'r' : '-',
            (sbuf.st_mode & S_IWUSR) ? 'w' : '-',
@@ -151,12 +153,14 @@ static void long_list(const char *path, const char *name,
            (sbuf.st_mode & S_IWOTH) ? 'w' : '-',
            (sbuf.st_mode & S_IXOTH) ? 'x' : '-',
            sbuf.st_nlink, pwd->pw_name, grp->gr_name,
-           sbuf.st_size, datestr, color, name ? name : path);
+           sbuf.st_size, datestr,
+           color, name ? name : path, *color ? ANSI_COLOR_RESET : "");
 }
 
 struct list_opts {
     int recurse;
     int ids;
+    int expunged;
     int longlist;
     int meta;
     int columns;
@@ -206,7 +210,7 @@ static int list_cb(struct findall_data *data, void *rock)
 
         printf("%c", !(lrock->count++ % lrock->opts->columns) ? '\n' : '\t');
         if (lrock->opts->ids) printf("%-40s ", data->mbentry->uniqueid);
-        printf("%s%s" ANSI_COLOR_RESET, color, child_name);
+        printf("%s%s%s", color, child_name, *color ? ANSI_COLOR_RESET : "");
     }
 
     if (lrock->children) strarray_append(lrock->children, data->extname);
@@ -263,34 +267,35 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
 
         strarray_sort(&names, cmpstringp_raw);
 
-        if (opts->ids) {
+        if (opts->ids || opts->expunged) {
             mailbox_open_irl(mbentry->name, &mailbox);
         }
 
         for (i = 0; i < strarray_size(&names); i++) {
             const char *name = strarray_nth(&names, i);
-            const char *id = NULL;
+            const char *id = opts->ids ? "" : NULL;
+            const char *color = "";
+            struct index_record record;
+            uint32_t uid;
 
-            if (opts->ids) {
-                struct index_record record;
-                uint32_t uid;
+            if (mailbox &&
+                !mailbox_parse_datafilename(name, &uid) &&
+                !mailbox_find_index_record(mailbox, uid, &record)) {
 
-                if (mailbox &&
-                    !mailbox_parse_datafilename(name, &uid) &&
-                    !mailbox_find_index_record(mailbox, uid, &record)) {
-                    id = message_guid_encode(&record.guid);
-                }
-                else id = "";
+                if (opts->ids) id = message_guid_encode(&record.guid);
+
+                if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
+                    color = ANSI_COLOR_GRAY;
             }
 
             if (opts->longlist) {
-                long_list(name, NULL, id, ANSI_COLOR_RESET);
+                long_list(name, NULL, id, color);
             }
             else {
                 printf("%c",
                        !(lrock.count++ % lrock.opts->columns) ? '\n' : '\t');
                 if (id) printf("%-40s ", id);
-                printf("%s", name);
+                printf("%s%s%s", color, name, *color ? ANSI_COLOR_RESET : "");
             }
         }
         mailbox_close(&mailbox);
@@ -328,9 +333,9 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     // capture options
-    struct list_opts opts = { 0, 0, 0, 0, 4 /* default to 4 columns */ };
+    struct list_opts opts = { 0, 0, 0, 0, 0, 4 /* default to 4 columns */ };
 
-    while ((opt = getopt(argc, argv, "C:milR1")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:mielR1")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -343,6 +348,10 @@ int main(int argc, char **argv)
         case 'i':
             opts.ids = 1;
             if (opts.columns > 1) opts.columns = 2;
+            break;
+
+        case 'e':
+            opts.expunged = 1;
             break;
 
         case 'l':
