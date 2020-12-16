@@ -534,6 +534,7 @@ static int calendar_sharewith_to_rights(int rights, json_t *jsharewith)
 static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct getcalendars_rock *rock = vrock;
+    jmap_req_t *req = rock->req;
     mbname_t *mbname = NULL;
     int r = 0;
 
@@ -598,7 +599,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
         r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
-                                        httpd_userid, &attrib);
+                                        req->userid, &attrib);
         /* fall back to last part of mailbox name */
         if (r || !attrib.len) buf_setcstr(&attrib, id);
         json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
@@ -610,7 +611,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         static const char *description_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">description";
         r = annotatemore_lookupmask_mbe(mbentry, description_annot,
-                                    httpd_userid, &attrib);
+                                    req->userid, &attrib);
         json_object_set_new(obj, "description", buf_len(&attrib) ?
                             json_string(buf_cstring(&attrib)) : json_null());
         buf_free(&attrib);
@@ -621,7 +622,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
         r = annotatemore_lookupmask_mbe(mbentry, color_annot,
-                                        httpd_userid, &attrib);
+                                        req->userid, &attrib);
         if (!r && attrib.len)
             json_object_set_new(obj, "color", json_string(buf_cstring(&attrib)));
         buf_free(&attrib);
@@ -633,7 +634,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         static const char *order_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
         r = annotatemore_lookupmask_mbe(mbentry, order_annot,
-                                        httpd_userid, &attrib);
+                                        req->userid, &attrib);
         if (!r && attrib.len) {
             char *ptr;
             long val = strtol(buf_cstring(&attrib), &ptr, 10);
@@ -656,7 +657,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         static const char *visible_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
         r = annotatemore_lookupmask_mbe(mbentry, visible_annot,
-                                        httpd_userid, &attrib);
+                                        req->userid, &attrib);
         if (!r && attrib.len) {
             const char *val = buf_cstring(&attrib);
             if (!strncmp(val, "true", 4) || !strncmp(val, "1", 1)) {
@@ -676,13 +677,13 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
 
     if (jmap_wantprop(rock->get->props, "isSubscribed")) {
         int is_subscribed;
-        if (mboxname_userownsmailbox(httpd_userid, mbentry->name)) {
+        if (mboxname_userownsmailbox(req->userid, mbentry->name)) {
             /* Users always subscribe their own calendars */
             is_subscribed = 1;
         }
         else {
             /* Lookup mailbox subscriptions */
-            is_subscribed = mboxlist_checksub(mbentry->name, httpd_userid) == 0;
+            is_subscribed = mboxlist_checksub(mbentry->name, req->userid) == 0;
         }
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
@@ -692,7 +693,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         static const char *transp_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
         r = annotatemore_lookupmask_mbe(mbentry, transp_annot,
-                                    httpd_userid, &attrib);
+                                    req->userid, &attrib);
         if (!strcmpsafe(buf_cstring(&attrib), "transparent")) {
             json_object_set_new(obj, "includeInAvailability",
                                 json_string("none"));
@@ -712,14 +713,14 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         static const char *annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-datetime";
         json_object_set_new(obj, "defaultAlertsWithTime",
-                getcalendar_defaultalerts(httpd_userid, mbentry->name, annot));
+                getcalendar_defaultalerts(req->userid, mbentry->name, annot));
     }
 
     if (jmap_wantprop(rock->get->props, "defaultAlertsWithoutTime")) {
         static const char *annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-date";
         json_object_set_new(obj, "defaultAlertsWithoutTime",
-                getcalendar_defaultalerts(httpd_userid, mbentry->name, annot));
+                getcalendar_defaultalerts(req->userid, mbentry->name, annot));
     }
 
     if (jmap_wantprop(rock->get->props, "timeZone")) {
@@ -727,7 +728,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         static const char *tzid_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
         r = annotatemore_lookupmask_mbe(mbentry, tzid_annot,
-                                    httpd_userid, &attrib);
+                                    req->userid, &attrib);
         if (buf_len(&attrib)) {
             json_object_set_new(obj, "timeZone",
                                 json_string(buf_cstring(&attrib)));
@@ -736,7 +737,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             static const char *tz_annot =
                 DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
             r = annotatemore_lookupmask_mbe(mbentry, tz_annot,
-                                    httpd_userid, &attrib);
+                                    req->userid, &attrib);
             if (buf_len(&attrib)) {
                 icalcomponent *ical, *vtz;
                 icalproperty *tzid;
@@ -1371,7 +1372,7 @@ static void setcalendar_readprops(jmap_req_t *req,
         jmap_parser_invalid(parser, "myRights");
     }
 
-    char *emailalert_recipient = _emailalert_defaultrecipient(httpd_userid);
+    char *emailalert_recipient = _emailalert_defaultrecipient(req->userid);
 
     /* defaultAlertsWithTime */
     jprop = json_object_get(arg, "defaultAlertsWithTime");
@@ -1759,12 +1760,12 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
     if (mboxlist_delayed_delete_isenabled()) {
         r = mboxlist_delayed_deletemailbox(mboxname,
                 httpd_userisadmin || httpd_userisproxyadmin,
-                httpd_userid, req->authstate, mboxevent,
+                req->userid, req->authstate, mboxevent,
                 MBOXLIST_DELETE_CHECKACL|MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     } else {
         r = mboxlist_deletemailbox(mboxname,
                 httpd_userisadmin || httpd_userisproxyadmin,
-                httpd_userid, req->authstate, mboxevent,
+                req->userid, req->authstate, mboxevent,
                 MBOXLIST_DELETE_CHECKACL|MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     }
     mboxevent_free(&mboxevent);
@@ -2908,7 +2909,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
                     r = jmap_openmbox(req, mbentry->name, &rock->mailbox, 0);
                     if (r) goto done;
                 }
-                myical = caldav_record_to_ical(rock->mailbox, cdata, httpd_userid, NULL);
+                myical = caldav_record_to_ical(rock->mailbox, cdata, req->userid, NULL);
                 if (!myical) {
                     syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
                             cdata->dav.imap_uid, mailbox_name(rock->mailbox));
@@ -3266,7 +3267,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Load message containing the resource and parse iCal data */
-    ical = caldav_record_to_ical(rock->mailbox, cdata, httpd_userid, &schedule_addresses);
+    ical = caldav_record_to_ical(rock->mailbox, cdata, req->userid, &schedule_addresses);
     if (!ical) {
         syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
                 cdata->dav.imap_uid, mailbox_name(rock->mailbox));
@@ -3719,7 +3720,7 @@ static void cachecalendarevents_cb(uint64_t rowid, void *payload, void *vrock)
 
     // there's no way to return errors, but luckily it doesn't matter if we
     // fail to cache
-    caldav_write_jmapcache(rock->db, rowid, httpd_userid,
+    caldav_write_jmapcache(rock->db, rowid, rock->req->userid,
                            JMAPCACHE_CALVERSION, eventrep);
 }
 
@@ -3840,7 +3841,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
             const char *uid = hash_iter_key(iter);
             size_t nseen = json_array_size(get.list) + json_array_size(get.not_found);
             rock.want_eventids = hash_iter_val(iter);
-            r = caldav_get_events(db, httpd_userid, NULL, uid, &getcalendarevents_cb, &rock);
+            r = caldav_get_events(db, req->userid, NULL, uid, &getcalendarevents_cb, &rock);
             if (r) break;
             if (nseen == json_array_size(get.list) + json_array_size(get.not_found)) {
                 /* caldavdb silently ignores non-existent uids */
@@ -3867,7 +3868,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         free_hash_table(&eventids_by_uid, NULL);
     } else if (json_is_null(get.ids) || get.ids == NULL) {
         /* Return all visible events */
-        r = caldav_get_events(db, httpd_userid, NULL, NULL, &getcalendarevents_cb, &rock);
+        r = caldav_get_events(db, req->userid, NULL, NULL, &getcalendarevents_cb, &rock);
     }
     if (r) goto done;
 
@@ -4683,7 +4684,7 @@ static int setcalendarevents_create(jmap_req_t *req,
         strarray_t add_imapflags = STRARRAY_INITIALIZER;
         if (is_draft) strarray_append(&add_imapflags, "\\draft");
         r = caldav_store_resource(&txn, ical, mbox, resource, 0,
-                                  db, 0, httpd_userid,
+                                  db, 0, req->userid,
                                   &add_imapflags, /*del_imapflags*/NULL,
                                   &schedule_addresses);
         strarray_fini(&add_imapflags);
@@ -5298,7 +5299,7 @@ static int setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     /* Load VEVENT from record, personalizing as needed. */
-    oldical = caldav_record_to_ical(mbox, cdata, httpd_userid, &schedule_addresses);
+    oldical = caldav_record_to_ical(mbox, cdata, req->userid, &schedule_addresses);
     if (!oldical) {
         syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
                 cdata->dav.imap_uid, mailbox_name(mbox));
@@ -5441,7 +5442,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
     else {
         r = caldav_store_resource(&txn, ical, mbox, resource, record.createdmodseq,
-                                  db, 0, httpd_userid,
+                                  db, 0, req->userid,
                                   NULL, &del_imapflags, &schedule_addresses);
         if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
             json_t *patch_copy = json_deep_copy(event_patch);
@@ -7039,7 +7040,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     /* Read source event */
     r = jmap_openmbox(req, mbentry->name, &src_mbox, /*rw*/0);
     if (r) goto done;
-    src_ical = caldav_record_to_ical(src_mbox, cdata, httpd_userid, &schedule_addresses);
+    src_ical = caldav_record_to_ical(src_mbox, cdata, req->userid, &schedule_addresses);
     if (!src_ical) {
         syslog(LOG_ERR, "calendarevent_copy: can't convert %s to JMAP", src_id);
         r = IMAP_INTERNAL;
