@@ -91,9 +91,10 @@ static struct namespace cyr_ls_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-m] [-l] [-R] [-1] [mailbox name]\n");
+    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-m] [-i] [-l] [-R] [-1] [mailbox name]\n");
     fprintf(stderr, "\n");
     fprintf(stderr,"\t-m\tlist the contents of the metadata directory (if different from the data directory)\n");
+    fprintf(stderr,"\t-i\tprint ID of each item\n");
     fprintf(stderr,"\t-l\tlong listing format\n");
     fprintf(stderr,"\t-R\tlist submailboxes recursively\n");
     fprintf(stderr,"\t-1\tlist one file per line\n");
@@ -106,7 +107,7 @@ static int usage(const char *error)
 
 #define SECONDS_PER_YEAR 31536000  /* 365 * 24 * 60 * 60 */
 
-static void long_list(const char *path, const char *name)
+static void long_list(const char *path, const char *name, const char *id)
 {
     struct stat sbuf;
     struct group *grp;
@@ -124,7 +125,9 @@ static void long_list(const char *path, const char *name)
 
     strftime(datestr, 13, datefmt, localtime(&(sbuf.st_ctime)));
 
-    printf("\n%c%c%c%c%c%c%c%c%c%c %lu %-8s %-8s % 10ld %s %s",
+    printf("\n");
+    if (id) printf("%-40s ", id);
+    printf("%c%c%c%c%c%c%c%c%c%c %lu %-8s %-8s % 10ld %s %s",
            S_ISDIR(sbuf.st_mode) ? 'd' : '-',
            (sbuf.st_mode & S_IRUSR) ? 'r' : '-',
            (sbuf.st_mode & S_IWUSR) ? 'w' : '-',
@@ -141,6 +144,7 @@ static void long_list(const char *path, const char *name)
 
 struct list_opts {
     int recurse;
+    int ids;
     int longlist;
     int meta;
     int columns;
@@ -175,11 +179,12 @@ static int list_cb(struct findall_data *data, void *rock)
                                      data->mbentry->name,
                                      data->mbentry->uniqueid, 0);
         }
-        long_list(path, child_name);
+        long_list(path, child_name, data->mbentry->uniqueid);
     }
     else {
-        printf("%c%s", !(lrock->count++ % lrock->opts->columns) ? '\n' : '\t',
-               child_name);
+        printf("%c", !(lrock->count++ % lrock->opts->columns) ? '\n' : '\t');
+        if (lrock->opts->ids) printf("%-40s ", data->mbentry->uniqueid);
+        printf("%s", child_name);
     }
 
     if (lrock->children) strarray_append(lrock->children, data->extname);
@@ -217,11 +222,12 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
     else {
         fprintf(stderr, "Invalid mailbox name\n");
     }
-    mboxlist_entry_free(&mbentry);
 
     /* Scan the directory */
     if (path) {
+        struct mailbox *mailbox = NULL;
         DIR *dirp;
+
         if (!chdir(path) && (dirp = opendir("."))) {
             struct dirent *dirent;
 
@@ -234,20 +240,41 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
         }
 
         strarray_sort(&names, cmpstringp_raw);
+
+        if (opts->ids) {
+            mailbox_open_irl(mbentry->name, &mailbox);
+        }
+
         for (i = 0; i < strarray_size(&names); i++) {
             const char *name = strarray_nth(&names, i);
+            const char *id = NULL;
+
+            if (opts->ids) {
+                struct index_record record;
+                uint32_t uid;
+
+                if (mailbox &&
+                    !mailbox_parse_datafilename(name, &uid) &&
+                    !mailbox_find_index_record(mailbox, uid, &record)) {
+                    id = message_guid_encode(&record.guid);
+                }
+                else id = "";
+            }
 
             if (opts->longlist) {
-                long_list(name, NULL);
+                long_list(name, NULL, id);
             }
             else {
-                printf("%c%s",
-                       !(lrock.count++ % lrock.opts->columns) ? '\n' : '\t',
-                       name);
+                printf("%c",
+                       !(lrock.count++ % lrock.opts->columns) ? '\n' : '\t');
+                if (id) printf("%-40s ", id);
+                printf("%s", name);
             }
         }
+        mailbox_close(&mailbox);
         strarray_fini(&names);
     }
+    mboxlist_entry_free(&mbentry);
 
     if (!r) {
         /* List children */
@@ -279,9 +306,9 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     // capture options
-    struct list_opts opts = { 0, 0, 0, 4 /* default to 4 columns */ };
+    struct list_opts opts = { 0, 0, 0, 0, 4 /* default to 4 columns */ };
 
-    while ((opt = getopt(argc, argv, "C:mlR1")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:milR1")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -289,6 +316,11 @@ int main(int argc, char **argv)
 
         case 'R':
             opts.recurse = 1;
+            break;
+
+        case 'i':
+            opts.ids = 1;
+            if (opts.columns > 1) opts.columns = 2;
             break;
 
         case 'l':
