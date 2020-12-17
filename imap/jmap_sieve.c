@@ -56,6 +56,7 @@
 #include "arrayu64.h"
 #include "cyr_qsort_r.h"
 #include "hash.h"
+#include "http_err.h"
 #include "http_jmap.h"
 #include "jmap_mail.h"
 #include "jmap_mail_query.h"
@@ -83,6 +84,9 @@ static int jmap_sieve_set(jmap_req_t *req);
 static int jmap_sieve_query(jmap_req_t *req);
 static int jmap_sieve_validate(jmap_req_t *req);
 static int jmap_sieve_test(jmap_req_t *req);
+
+static int jmap_sieve_getblob(jmap_req_t *req,
+                              const char *blobid, const char *accept);
 
 static int maxscripts = 0;
 static json_int_t maxscriptsize = 0;
@@ -140,6 +144,8 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
             hash_insert(mp->name, mp, &settings->methods);
         }
     }
+
+    ptrarray_append(&settings->getblob_handlers, jmap_sieve_getblob);
 
     maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
     maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE) * 1024;
@@ -280,12 +286,12 @@ static void getscript(const char *id, const char *script, int isactive,
             json_object_set_new(sieve, "isActive", json_boolean(isactive));
         }
 
-        if (jmap_wantprop(get->props, "content")) {
-            struct buf *content = sievedir_get_script(sievedir, script);
-            json_object_set_new(sieve, "content",
-                                json_string(buf_cstring(content)));
-            buf_destroy(content);
+        if (jmap_wantprop(get->props, "blobId")) {
+            buf_reset(&buf);
+            buf_printf(&buf, "S%s", id);
+            json_object_set_new(sieve, "blobId", json_string(buf_cstring(&buf)));
         }
+
         buf_free(&buf);
 
         /* Add object to list */
@@ -463,6 +469,11 @@ static const jmap_property_t sieve_props[] = {
         NULL,
         0
     },
+    {
+        "blobId",
+        NULL,
+        0
+    },
     { NULL, NULL, 0 }
 };
 
@@ -557,6 +568,7 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
     const char *id = makeuuid(), *name = NULL, *content = NULL;
+    struct buf buf = BUF_INITIALIZER;
     int r;
 
     arg = json_object_get(jsieve, "id");
@@ -569,8 +581,6 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
         json_array_append_new(invalid, json_string("name"));
     else  {
         /* sanity check script name and check for name collision */
-        struct buf buf = BUF_INITIALIZER;
-
         name = json_string_value(arg);
         buf_init_ro_cstr(&buf, name);
         if (!sievedir_valid_name(&buf)) {
@@ -602,8 +612,17 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
         /* create script id link */
         r = create_id_link(sievedir, id, name);
         if (!r) {
-            /* Report script as created */
-            json_t *new_sieve = json_pack("{s:s s:b}", "id", id, "isActive", 0);
+            /* Report script as created, with server-set properties */
+            buf_reset(&buf);
+            buf_printf(&buf, "S%s", id);
+
+            json_t *new_sieve = json_pack("{s:s s:b s:s}",
+                                          "id", id, "isActive", 0,
+                                          "blobId", buf_cstring(&buf));
+
+            if (name == id) {
+                json_object_set_new(new_sieve, "name", json_string(name));
+            }
 
             json_object_set_new(set->created, creation_id, new_sieve);
         }
@@ -620,6 +639,7 @@ static const char *set_create(const char *creation_id, json_t *jsieve,
         id = NULL;
     }
     json_decref(invalid);
+    buf_free(&buf);
 
     return id;
 }
@@ -2224,4 +2244,40 @@ done:
         unlink(tmpname);
     }
     return 0;
+}
+
+static int jmap_sieve_getblob(jmap_req_t *req,
+                              const char *blobid, const char *accept_mime)
+{
+    if (*blobid != 'S') return 0;
+
+    /* Make sure client can handle blob type. */
+    if (accept_mime) {
+        if (strcmp(accept_mime, "application/octet-stream") &&
+            strcmp(accept_mime, "application/sieve")) {
+            return HTTP_NOT_ACCEPTABLE;
+        }
+
+        req->txn->resp_body.type = accept_mime;
+    }
+    else req->txn->resp_body.type = "application/sieve";
+
+    /* Lookup scriptid */
+    const char *sievedir = user_sieve_path(req->accountid);
+    const char *script = script_from_id(sievedir, blobid+1, 0);
+    struct buf *content = NULL;
+
+    if (script) {
+        /* Load the script */
+        content = sievedir_get_script(sievedir, script);
+    }
+    if (!content) return HTTP_NOT_FOUND;
+
+    /* Write body */
+    req->txn->resp_body.len = buf_len(content);
+    write_body(HTTP_OK, req->txn, buf_base(content), buf_len(content));
+
+    buf_destroy(content);
+
+    return HTTP_OK;
 }
