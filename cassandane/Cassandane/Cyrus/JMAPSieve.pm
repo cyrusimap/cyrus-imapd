@@ -110,6 +110,20 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub download
+{
+    my ($self, $accountid, $blobid) = @_;
+    my $jmap = $self->{jmap};
+
+    my $uri = $jmap->downloaduri($accountid, $blobid);
+    my %Headers;
+    $Headers{'Authorization'} = $jmap->auth_header();
+    my %getopts = (headers => \%Headers);
+    my $res = $jmap->ua->get($uri, \%getopts);
+    xlog $self, "JMAP DOWNLOAD @_ " . Dumper($res);
+    return $res;
+}
+
 sub test_sieve_get
     :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
@@ -151,7 +165,13 @@ EOF
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
     $self->assert_str_equals('test1', $res->[0][1]{list}[0]{name});
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isActive});
-    $self->assert_str_equals($script, $res->[0][1]{list}[0]{content});
+
+    my $blobId = $res->[0][1]{list}[0]{blobId};
+
+    xlog $self, "download script blob";
+    $res = $self->download('cassandane', $blobId);
+    $self->assert_str_equals('200', $res->{status});
+    $self->assert_str_equals($script, $res->{content});
 }
 
 sub test_sieve_set
@@ -830,8 +850,14 @@ sub test_sieve_blind_replace_active
 
     $self->assert_num_equals(1, scalar @{$res->[3][1]{list}});
     $self->assert_str_equals($id1, $res->[3][1]{list}[0]{name});
-    $self->assert_str_equals('keep;', $res->[3][1]{list}[0]{content});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{isActive});
+
+    my $blobId = $res->[3][1]{list}[0]{blobId};
+
+    xlog $self, "download script blob";
+    $res = $self->download('cassandane', $blobId);
+    $self->assert_str_equals('200', $res->{status});
+    $self->assert_str_equals('keep;', $res->{content});
 
     xlog "replace active script";
     $res = $jmap->CallMethods([
@@ -874,8 +900,14 @@ sub test_sieve_blind_replace_active
 
     $self->assert_num_equals(1, scalar @{$res->[3][1]{list}});
     $self->assert_str_equals($id2, $res->[3][1]{list}[0]{name});
-    $self->assert_str_equals('discard;', $res->[3][1]{list}[0]{content});
     $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{isActive});
+
+    $blobId = $res->[3][1]{list}[0]{blobId};
+
+    xlog $self, "download script blob";
+    $res = $self->download('cassandane', $blobId);
+    $self->assert_str_equals('200', $res->{status});
+    $self->assert_str_equals('discard;', $res->{content});
 }
 
 1;
