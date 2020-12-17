@@ -823,7 +823,7 @@ static json_t* recurrence_byX_fromical(short byX[], size_t nmemb, int (*conv)(in
     size_t n = i;
     qsort(tmp, n, sizeof(int), compare_int);
     for (i = 0; i < n; i++) {
-        json_array_append_new(jbd, json_pack("i", tmp[i]));
+        json_array_append_new(jbd, json_integer(tmp[i]));
     }
 
     return jbd;
@@ -848,7 +848,7 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
     json_object_set_new(recur, "frequency", json_string(s));
     free(s);
 
-    json_object_set_new(recur, "interval", json_pack("i", rrule.interval));
+    json_object_set_new(recur, "interval", json_integer(rrule.interval));
 
 #ifdef HAVE_RSCALE
     /* rscale */
