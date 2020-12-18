@@ -1018,6 +1018,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);
     json_object_set(primary_accounts, JMAP_SIEVE_EXTENSION, jprimary);
 #endif
+    json_object_set(primary_accounts, JMAP_URN_PRINCIPALS, jprimary);
     json_decref(jprimary);
 
     /* Clean up */
