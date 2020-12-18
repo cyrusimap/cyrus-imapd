@@ -198,17 +198,25 @@ EOF
 
     my $jmap = $self->{jmap};
 
+    my $res = $jmap->Upload($script1, "application/sieve");
+    my $blobid = $res->{blobId};
+
     xlog "create script";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
+        ['Blob/set', {
+            create => {
+               "A" => { content => $script2 }
+            }
+         }, "R0"],
         ['SieveScript/set', {
             create => {
                 "1" => {
                     name => "foo",
-                    content => "$script1"
+                    blobId => $blobid
                 },
                 "2" => {
                     name => JSON::null,
-                    content => "$script2"
+                    blobId => "#A"
                 }
             },
             onSuccessActivateScript => "#1"
@@ -218,17 +226,17 @@ EOF
          }, "R2"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_equals(JSON::true, $res->[0][1]{created}{1}{isActive});
-    $self->assert_equals(JSON::false, $res->[0][1]{created}{2}{isActive});
+    $self->assert_equals(JSON::true, $res->[1][1]{created}{1}{isActive});
+    $self->assert_equals(JSON::false, $res->[1][1]{created}{2}{isActive});
 
-    my $id1 = $res->[0][1]{created}{"1"}{id};
-    my $id2 = $res->[0][1]{created}{"2"}{id};
+    my $id1 = $res->[1][1]{created}{"1"}{id};
+    my $id2 = $res->[1][1]{created}{"2"}{id};
 
-    $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
-    $self->assert_str_equals('foo', $res->[1][1]{list}[0]{name});
-    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isActive});
-    $self->assert_str_equals($id2, $res->[1][1]{list}[1]{name});
-    $self->assert_equals(JSON::false, $res->[1][1]{list}[1]{isActive});
+    $self->assert_num_equals(2, scalar @{$res->[2][1]{list}});
+    $self->assert_str_equals('foo', $res->[2][1]{list}[0]{name});
+    $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{isActive});
+    $self->assert_str_equals($id2, $res->[2][1]{list}[1]{name});
+    $self->assert_equals(JSON::false, $res->[2][1]{list}[1]{isActive});
 
     xlog "attempt to create script with same name";
     $res = $jmap->CallMethods([
@@ -236,7 +244,7 @@ EOF
             create => {
                 "1" => {
                     name => "foo",
-                    content => "$script1"
+                    blobId => $blobid
                 }
             },
          }, "R1"],
@@ -265,19 +273,24 @@ EOF
 
     xlog "rewrite one script and activate another";
     $res = $jmap->CallMethods([
+        ['Blob/set', {
+            create => {
+               "B" => { content => $script3 }
+            }
+         }, "R0"],
         ['SieveScript/set', {
             update => {
                 $id1 => {
-                    content => "$script3",
+                    blobId => "#B",
                 }
             },
             onSuccessActivateScript => $id2
          }, "R4"],
     ]);
-    $self->assert_not_null($res->[0][1]{updated});
-    $self->assert_null($res->[0][1]{updated}{$id1});
-    $self->assert_equals(JSON::true, $res->[0][1]{updated}{$id2}{isActive});
-    $self->assert_null($res->[0][1]{notUpdated});
+    $self->assert_not_null($res->[1][1]{updated});
+    $self->assert_null($res->[1][1]{updated}{$id1});
+    $self->assert_equals(JSON::true, $res->[1][1]{updated}{$id2}{isActive});
+    $self->assert_null($res->[1][1]{notUpdated});
 
     xlog "change active script";
     $res = $jmap->CallMethods([
@@ -327,12 +340,15 @@ sub test_sieve_set_bad_script
     my $jmap = $self->{jmap};
 
     xlog "create bad script";
-    my $res = $jmap->CallMethods([
-        ['SieveScript/set', {
+    my $res = $jmap->Upload("keepme;", "application/sieve");
+    my $blobid = $res->{blobId};
+
+    $res = $jmap->CallMethods([
+         ['SieveScript/set', {
             create => {
                 "1" => {
                     name => "foo",
-                    content => "keepme;\r\n"
+                    blobId => $blobid
                 }
             }
          }, "R1"]
@@ -343,16 +359,21 @@ sub test_sieve_set_bad_script
 
     xlog "update bad script";
     $res = $jmap->CallMethods([
+        ['Blob/set', {
+            create => {
+               "A" => { content => "keep;" }
+            }
+         }, "R0"],
         ['SieveScript/set', {
             create => {
                 "1" => {
                     name => "foo",
-                    content => "keep;\r\n"
+                    blobId => "#A"
                 }
             },
             update => {
                 "#1" => {
-                    content => "keepme;\r\n"
+                    blobId => $blobid
                 }
             },
             destroy => [ "#1" ]
@@ -360,13 +381,13 @@ sub test_sieve_set_bad_script
     ]);
     $self->assert_not_null($res);
 
-    my $id = $res->[0][1]{created}{"1"}{id};
+    my $id = $res->[1][1]{created}{"1"}{id};
 
-    $self->assert_null($res->[0][1]{updated});
-    $self->assert_str_equals('invalidScript', $res->[0][1]{notUpdated}{$id}{type});
-    $self->assert_not_null($res->[0][1]{destroyed});
-    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
-    $self->assert_null($res->[0][1]{notDestroyed});
+    $self->assert_null($res->[1][1]{updated});
+    $self->assert_str_equals('invalidScript', $res->[1][1]{notUpdated}{$id}{type});
+    $self->assert_not_null($res->[1][1]{destroyed});
+    $self->assert_str_equals($id, $res->[1][1]{destroyed}[0]);
+    $self->assert_null($res->[1][1]{notDestroyed});
 }
 
 sub test_sieve_query
@@ -378,33 +399,41 @@ sub test_sieve_query
 
     xlog "create script";
     my $res = $jmap->CallMethods([
+        ['Blob/set', {
+            create => {
+               "A" => { content => "keep;" },
+               "B" => { content => "discard;" },
+               "C" => { content => "redirect \"test\@example.com\";" },
+               "D" => { content => "stop;"}
+            }
+         }, "R0"],
         ['SieveScript/set', {
             create => {
                 "1" => {
                     name => "foo",
-                    content => "keep;"
+                    blobId => "#A"
                 },
                 "2" => {
                     name => "bar",
-                    content => "discard;"
+                    blobId => "#B"
                 },
                 "3" => {
                     name => "pooh",
-                    content => "redirect \"test\@example.com\";"
+                    blobId => "#C"
                 },
                 "4" => {
                     name => "abc",
-                    content => "stop;"
+                    blobId => "#D"
                 }
             },
             onSuccessActivateScript => "#1"
          }, "R1"],
     ]);
     $self->assert_not_null($res);
-    my $id1 = $res->[0][1]{created}{"1"}{id};
-    my $id2 = $res->[0][1]{created}{"2"}{id};
-    my $id3 = $res->[0][1]{created}{"3"}{id};
-    my $id4 = $res->[0][1]{created}{"4"}{id};
+    my $id1 = $res->[1][1]{created}{"1"}{id};
+    my $id2 = $res->[1][1]{created}{"2"}{id};
+    my $id3 = $res->[1][1]{created}{"3"}{id};
+    my $id4 = $res->[1][1]{created}{"4"}{id};
 
     xlog $self, "get unfiltered list";
     $res = $jmap->CallMethods([ ['SieveScript/query', { }, "R1"] ]);
@@ -528,33 +557,39 @@ sub test_sieve_validate
 
     xlog "validating scripts";
     my $res = $jmap->CallMethods([
+        ['Blob/set', {
+            create => {
+               "A" => { content => "keepme;" },
+               "B" => { content => "keep;" }
+            }
+         }, "R0"],
         ['SieveScript/validate', {
-            content => JSON::null
+            blobId => JSON::null
          }, "R1"],
         ['SieveScript/validate', {
-            content => "keepme;\r\n",
-            content => JSON::null
+            blobId => "#A",
+            blobId => JSON::null
          }, "R2"],
         ['SieveScript/validate', {
-            content => "keepme;\r\n"
+            blobId => "#A"
          }, "R3"],
         ['SieveScript/validate', {
-            content => "keep;\r\n"
+            blobId => "#B"
          }, "R4"],
     ]);
     $self->assert_not_null($res);
 
-    $self->assert_str_equals("error", $res->[0][0]);
-    $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
-
     $self->assert_str_equals("error", $res->[1][0]);
     $self->assert_str_equals("invalidArguments", $res->[1][1]{type});
 
-    $self->assert_str_equals("SieveScript/validate", $res->[2][0]);
-    $self->assert_str_equals("invalidScript", $res->[2][1]{error}{type});
+    $self->assert_str_equals("error", $res->[2][0]);
+    $self->assert_str_equals("invalidArguments", $res->[2][1]{type});
 
     $self->assert_str_equals("SieveScript/validate", $res->[3][0]);
-    $self->assert_null($res->[3][1]{error});
+    $self->assert_str_equals("invalidScript", $res->[3][1]{error}{type});
+
+    $self->assert_str_equals("SieveScript/validate", $res->[4][0]);
+    $self->assert_null($res->[4][1]{error});
 }
 
 sub test_sieve_test
@@ -576,18 +611,23 @@ EOF
 
     xlog "create script";
     my $res = $jmap->CallMethods([
+        ['Blob/set', {
+            create => {
+               "A" => { content => $script }
+            }
+         }, "R0"],
         ['SieveScript/set', {
             create => {
                 "1" => {
                     name => "foo",
-                    content => "$script"
+                    blobId => "#A"
                 }
             }
          }, "R1"]
     ]);
     $self->assert_not_null($res);
 
-    my $scriptid = $res->[0][1]{created}{"1"}{id};
+    my $scriptid = $res->[1][1]{created}{"1"}{blobId};
 
     xlog "create email";
     $res = $jmap->CallMethods([['Mailbox/get', { properties => ["id"] }, "R1"]]);
@@ -611,7 +651,7 @@ EOF
     xlog "test script";
     $res = $jmap->CallMethods([
         ['SieveScript/test', {
-            scriptId => "$scriptid",
+            scriptBlobId => "$scriptid",
             emailBlobIds => [ "$emailid" ],
             envelope => JSON::null,
             lastVacationResponse => JSON::null
@@ -668,7 +708,6 @@ else {
 }
 EOF
     $script =~ s/\r?\n/\r\n/gs;
-    $script =~ s/\\/\\\\/gs;
 
     my $jmap = $self->{jmap};
 
@@ -678,11 +717,14 @@ EOF
     $res = $jmap->Upload($email2, "message/rfc822");
     my $emailid2 = $res->{blobId};
 
+    $res = $jmap->Upload($script, "application/sieve");
+    my $scriptid = $res->{blobId};
+
     xlog "test script";
     $res = $jmap->CallMethods([
         ['SieveScript/test', {
             emailBlobIds => [ $emailid1, 'foobar', $emailid2 ],
-            scriptContent => $script,
+            scriptBlobId => $scriptid,
             envelope => {
                 mailFrom => {
                     email => 'foo@example.com',
@@ -765,10 +807,11 @@ EOF
             create => {
                 "1" => { content => $email1 },
                 "3" => { content => $email2 },
+                "2" => { content => $script },
             }}, 'R0'],
         ['SieveScript/test', {
             emailBlobIds => [ '#1', 'foobar', '#3' ],
-            scriptContent => $script,
+            scriptBlobId => '#2',
             envelope => {
                 mailFrom => {
                     email => 'foo@example.com',
@@ -811,11 +854,16 @@ sub test_sieve_blind_replace_active
 
     xlog "create initial script";
     my $res = $jmap->CallMethods([
+        ['Blob/set', {
+            create => {
+               "A" => { content => "keep;" }
+            }
+         }, "R0"],
         ['SieveScript/set', {
             create => {
                 "1" => {
                     name => JSON::null,
-                    content => "keep;"
+                    blobId => "#A"
                 }
             },
             onSuccessActivateScript => "#1"
@@ -836,23 +884,23 @@ sub test_sieve_blind_replace_active
          }, "R4"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_equals(JSON::true, $res->[0][1]{created}{1}{isActive});
-    $self->assert_null($res->[0][1]{updated});
-    $self->assert_null($res->[0][1]{destroyed});
+    $self->assert_equals(JSON::true, $res->[1][1]{created}{1}{isActive});
+    $self->assert_null($res->[1][1]{updated});
+    $self->assert_null($res->[1][1]{destroyed});
 
-    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id1 = $res->[1][1]{created}{"1"}{id};
 
-    $self->assert_deep_equals([], $res->[1][1]{ids});
+    $self->assert_deep_equals([], $res->[2][1]{ids});
 
-    $self->assert_null($res->[2][1]{created});
-    $self->assert_null($res->[2][1]{updated});
-    $self->assert_null($res->[2][1]{destroyed});
+    $self->assert_null($res->[3][1]{created});
+    $self->assert_null($res->[3][1]{updated});
+    $self->assert_null($res->[3][1]{destroyed});
 
-    $self->assert_num_equals(1, scalar @{$res->[3][1]{list}});
-    $self->assert_str_equals($id1, $res->[3][1]{list}[0]{name});
-    $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{isActive});
+    $self->assert_num_equals(1, scalar @{$res->[4][1]{list}});
+    $self->assert_str_equals($id1, $res->[4][1]{list}[0]{name});
+    $self->assert_equals(JSON::true, $res->[4][1]{list}[0]{isActive});
 
-    my $blobId = $res->[3][1]{list}[0]{blobId};
+    my $blobId = $res->[4][1]{list}[0]{blobId};
 
     xlog $self, "download script blob";
     $res = $self->download('cassandane', $blobId);
@@ -861,11 +909,16 @@ sub test_sieve_blind_replace_active
 
     xlog "replace active script";
     $res = $jmap->CallMethods([
+        ['Blob/set', {
+            create => {
+               "B" => { content => "discard;" }
+            }
+         }, "R0"],
         ['SieveScript/set', {
             create => {
                 "2" => {
                     name => JSON::null,
-                    content => "discard;"
+                    blobId => "#B"
                 }
             },
             onSuccessActivateScript => "#2"
@@ -886,23 +939,23 @@ sub test_sieve_blind_replace_active
          }, "R4"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_equals(JSON::true, $res->[0][1]{created}{2}{isActive});
-    $self->assert_equals(JSON::false, $res->[0][1]{updated}{$id1}{isActive});
-    $self->assert_null($res->[0][1]{destroyed});
+    $self->assert_equals(JSON::true, $res->[1][1]{created}{2}{isActive});
+    $self->assert_equals(JSON::false, $res->[1][1]{updated}{$id1}{isActive});
+    $self->assert_null($res->[1][1]{destroyed});
 
-    my $id2 = $res->[0][1]{created}{"2"}{id};
+    my $id2 = $res->[1][1]{created}{"2"}{id};
 
-    $self->assert_deep_equals([$id1], $res->[1][1]{ids});
+    $self->assert_deep_equals([$id1], $res->[2][1]{ids});
 
-    $self->assert_null($res->[2][1]{created});
-    $self->assert_null($res->[2][1]{updated});
-    $self->assert_deep_equals([$id1], $res->[2][1]{destroyed});
+    $self->assert_null($res->[3][1]{created});
+    $self->assert_null($res->[3][1]{updated});
+    $self->assert_deep_equals([$id1], $res->[3][1]{destroyed});
 
-    $self->assert_num_equals(1, scalar @{$res->[3][1]{list}});
-    $self->assert_str_equals($id2, $res->[3][1]{list}[0]{name});
-    $self->assert_equals(JSON::true, $res->[3][1]{list}[0]{isActive});
+    $self->assert_num_equals(1, scalar @{$res->[4][1]{list}});
+    $self->assert_str_equals($id2, $res->[4][1]{list}[0]{name});
+    $self->assert_equals(JSON::true, $res->[4][1]{list}[0]{isActive});
 
-    $blobId = $res->[3][1]{list}[0]{blobId};
+    $blobId = $res->[4][1]{list}[0]{blobId};
 
     xlog $self, "download script blob";
     $res = $self->download('cassandane', $blobId);
