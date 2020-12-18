@@ -17,23 +17,22 @@ Synopsis
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
         [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-G** ] [ **-R** ] [ **-o** ]
-        [ **-O** ] [ **-M** ] [ **-V** *version* ] *mailbox*...
+        [ **-O** ] [ **-M** ] *mailbox*...
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
         [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-G** ] [ **-R** ] [ **-o** ]
-        [ **-O** ] [ **-M** ] [ **-u** ] *users*...
+        [ **-O** ] [ **-M** ] **-u** *user*...
 
-    **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
-        [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-G** ] [ **-R** ] [ **-o** ]
-        [ **-O** ] [ **-M** ] **-V** *<version>* [ **-u** *users* ]
+    **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-r** ]
+        [ **-q** ] **-V** *version* *mailbox*...
 
-    **reconstruct** [ **-C** *config-file* ] **-m**
+    **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-r** ]
+        [ **-q** ] **-V** *version* **-u** *user*...
 
 Description
 ===========
 
-**reconstruct** rebuilds one or more IMAP mailboxes.  When invoked with
-the **-m** switch, it rebuilds the master mailboxes file.  It can be
+**reconstruct** rebuilds one or more IMAP mailboxes.  It can be
 used to recover from almost any sort of data corruption.
 
 If **reconstruct** can find existing header and index files, it
@@ -54,7 +53,10 @@ root files.
 
 When upgrading versions of Cyrus software, it may be necessary to run
 **reconstruct** with the **-V** option, to rebuild indexes to a
-given version, (or *max* for the most recent).
+given version (or *max* for the most recent).  Note that the **-V**
+option cannot be combined with most other reconstruct options.  If
+a mailbox needs reconstructing you should do that first, and then
+upgrade it with **-V** once it's good.
 
 Options
 =======
@@ -102,8 +104,7 @@ Options
 
 .. option:: -n
 
-    Don't make any changes.  This gives equivalent behaviour to
-    :cyrusman:`chk_cyrus(8)` where problems are reported, but not fixed.
+    Don't make any changes.  Problems are reported, but not fixed.
 
 .. option:: -G
 
@@ -150,7 +151,7 @@ Options
     uniqueid from the mailboxes.db into the header file rather than the
     other way around.  |v3-new-feature|
 
-.. option:: -V  version
+.. option:: -V version
 
     Change the ``cyrus.index`` minor version to a specific *version*.
     This can be useful for upgrades or downgrades. Use a magical
@@ -160,15 +161,6 @@ Options
 .. option:: -u
 
     Instead of mailbox prefixes, give usernames on the command line
-
-.. option:: -m
-
-    NOTE:
-    CURRENTLY UNAVAILABLE
-
-    Rebuild the *mailboxes* file.  Use whatever data in the existing
-    *mailboxes* file it can scavenge, then scans all partitions listed
-    in the :cyrusman:`imapd.conf(5)` file for additional mailboxes.
 
 Examples
 ========
