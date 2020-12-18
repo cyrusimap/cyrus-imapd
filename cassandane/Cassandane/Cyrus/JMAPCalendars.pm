@@ -109,7 +109,7 @@ sub set_up
     $self->{jmap}->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 }
@@ -10178,151 +10178,8 @@ sub test_calendarevent_get_recurrenceoverrides_before_after
     }, $res->[1][1]{list}[0]{recurrenceOverrides});
 }
 
-sub test_calendar_set_participantidentities
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
 
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
-
-    my $res = $jmap->CallMethods([
-        ['Calendar/get', {
-            ids => ['Default'],
-            properties => ['participantIdentities'],
-        }, 'R1'],
-    ]);
-
-    # Apple, Thunderbird et al set the default address last.
-    $caldav->Request(
-      'PROPPATCH',
-      'Default',
-      x('D:propertyupdate', $caldav->NS(),
-        x('D:set',
-          x('D:prop',
-            x('C:calendar-user-address-set',
-              x('D:href', 'mailto:baz@local'),
-              x('D:href', 'mailto:bar@local'),
-              x('D:href', 'mailto:foo@local'),
-            )
-          )
-        )
-      )
-    );
-    my $participantIdentities = [{
-        name => '',
-        type => 'imip',
-        uri => 'mailto:foo@local',
-    }, {
-        name => '',
-        type => 'imip',
-        uri => 'mailto:bar@local',
-    }, {
-        name => '',
-        type => 'imip',
-        uri => 'mailto:baz@local',
-    }];
-
-    xlog "cet current participantIdentities value";
-    $res = $jmap->CallMethods([
-        ['Calendar/get', {
-            ids => ['Default'],
-            properties => ['participantIdentities'],
-        }, 'R1'],
-    ]);
-    $self->assert_deep_equals($participantIdentities,
-        $res->[0][1]{list}[0]{participantIdentities});
-
-    # JMAP Calendars spec defines participantIdentities to be server-set,
-    # which means it can be only set with its current value. But we allow
-    # setting it to a new value, if the calendars extension is used.
-
-    my $using = [
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-    ];
-
-    xlog "Set participantIdentities to current value";
-    $res = $jmap->CallMethods([
-        ['Calendar/set', {
-            update => {
-                Default => {
-                    participantIdentities => $participantIdentities,
-                }
-            },
-        }, 'R1'],
-        ['Calendar/get', {
-            ids => ['Default'],
-            properties => ['participantIdentities'],
-        }, 'R2'],
-    ], $using);
-    $self->assert(exists $res->[0][1]{updated}{Default});
-    $self->assert_deep_equals($participantIdentities,
-        $res->[1][1]{list}[0]{participantIdentities});
-
-    $participantIdentities = [{
-        name => '',
-        type => 'imip',
-        uri => 'mailto:xxx@local',
-    }, {
-        name => '',
-        type => 'imip',
-        uri => 'mailto:yyy@local',
-    }];
-
-    xlog "Set participantIdentities without extension capability";
-    $res = $jmap->CallMethods([
-        ['Calendar/set', {
-            update => {
-                Default => {
-                    participantIdentities => $participantIdentities,
-                }
-            },
-        }, 'R1'],
-    ], $using);
-    $self->assert_str_equals('participantIdentities',
-        $res->[0][1]{notUpdated}{Default}{properties}[0]);
-
-    $using = [
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-        'https://cyrusimap.org/ns/jmap/calendars',
-    ];
-
-    xlog "Set participantIdentities with extension capability";
-    $res = $jmap->CallMethods([
-        ['Calendar/set', {
-            update => {
-                Default => {
-                    participantIdentities => $participantIdentities,
-                }
-            },
-        }, 'R1'],
-        ['Calendar/get', {
-            ids => ['Default'],
-            properties => ['participantIdentities'],
-        }, 'R2'],
-    ], $using);
-    $self->assert(exists $res->[0][1]{updated}{Default});
-    $self->assert_deep_equals($participantIdentities,
-        $res->[1][1]{list}[0]{participantIdentities});
-
-    $res = $caldav->Request(
-        'PROPFIND',
-        'Default',
-        x('D:propfind', $caldav->NS(),
-            x('D:prop',
-                x('C:calendar-user-address-set'),
-            ),
-        ),
-        Depth => 0,
-    );
-    my $addressSet = $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-user-address-set'}{'{DAV:}href'};
-    $self->assert_str_equals('mailto:yyy@local', $addressSet->[0]{content});
-    $self->assert_str_equals('mailto:xxx@local', $addressSet->[1]{content});
-}
-
-sub test_calendarevent_get_reduceparticipants
+sub test_calendarevent_get_reducepartitipants
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -10400,30 +10257,33 @@ sub test_calendarevent_get_reduceparticipants
             values %{$res->[1][1]{list}[0]{participants}};
     $self->assert_deep_equals($wantUris, \%haveUris);
 
+    $caldav->Request(
+      'PROPPATCH',
+      '',
+      x('D:propertyupdate', $caldav->NS(),
+        x('D:set',
+          x('D:prop',
+            x('C:calendar-user-address-set',
+              x('D:href', 'attendee1@example.com'),
+            )
+          )
+        )
+      )
+    );
+
     $res = $jmap->CallMethods([
-        ['Calendar/set', {
-            update => {
-                Default => {
-                    participantIdentities => [{
-                        name => '',
-                        type => 'imip',
-                        uri => 'mailto:attendee1@example.com',
-                    }],
-                }
-            },
-        }, 'R1'],
         ['CalendarEvent/get', {
             ids => [$eventId],
             reduceParticipants => JSON::true,
             properties => ['participants'],
-        }, 'R2'],
+        }, 'R1'],
     ]);
     $wantUris = {
         'mailto:owner@example.com' => 1,
         'mailto:attendee1@example.com' => 1,
     };
     %haveUris = map { $_->{sendTo}{imip} => 1 }
-            values %{$res->[1][1]{list}[0]{participants}};
+            values %{$res->[0][1]{list}[0]{participants}};
     $self->assert_deep_equals($wantUris, \%haveUris);
 }
 
@@ -10769,7 +10629,7 @@ EOF
 
 
     my $res = $jmap->CallMethods([
-        ['CalendarPrincipal/get', {
+        ['Principal/get', {
             ids => ['cassandane', 'nope'],
         }, 'R1']
     ]);
@@ -10818,7 +10678,7 @@ sub test_calendarprincipal_query
 
     xlog "test filters";
     my $res = $jmap->CallMethods([
-        ['CalendarPrincipal/query', {
+        ['Principal/query', {
             filter => {
                 name => 'Test',
                 email => 'cassandane@example.com',
@@ -10830,12 +10690,12 @@ sub test_calendarprincipal_query
 
     xlog "test sorting";
     $res = $jmap->CallMethods([
-        ['CalendarPrincipal/query', {
+        ['Principal/query', {
             sort => [{
                 property => 'id',
             }],
         }, 'R1'],
-        ['CalendarPrincipal/query', {
+        ['Principal/query', {
             sort => [{
                 property => 'id',
                 isAscending => JSON::false,
@@ -10853,7 +10713,7 @@ sub test_calendarprincipal_changes
     my $jmap = $self->{jmap};
 
     my $res = $jmap->CallMethods([
-        ['CalendarPrincipal/changes', {
+        ['Principal/changes', {
         }, 'R1']
     ]);
     $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
@@ -10866,7 +10726,7 @@ sub test_calendarprincipal_querychanges
     my $jmap = $self->{jmap};
 
     my $res = $jmap->CallMethods([
-        ['CalendarPrincipal/queryChanges', {
+        ['Principal/queryChanges', {
             sinceQueryState => 'whatever',
         }, 'R1']
     ]);
@@ -10880,7 +10740,7 @@ sub test_calendarprincipal_set
     my $jmap = $self->{jmap};
 
     my $res = $jmap->CallMethods([
-        ['CalendarPrincipal/set', {
+        ['Principal/set', {
             create => {
                 principal1 => {
                     timeZone => 'America/New_York',
@@ -10911,18 +10771,18 @@ sub test_calendarprincipal_set
         $res->[0][1]{notUpdated}{cassandane}{properties});
 
     $res = $jmap->CallMethods([
-        ['CalendarPrincipal/get', {
+        ['Principal/get', {
             ids => ['cassandane'],
             properties => ['timeZone'],
         }, 'R1'],
-        ['CalendarPrincipal/set', {
+        ['Principal/set', {
             update => {
                 cassandane => {
                     timeZone => 'Australia/Melbourne',
                 },
             },
         }, 'R2'],
-        ['CalendarPrincipal/get', {
+        ['Principal/get', {
             ids => ['cassandane'],
             properties => ['timeZone'],
         }, 'R3']
@@ -10938,7 +10798,7 @@ sub test_calendarprincipal_set
 
     my $oldState = $res->[1][1]{oldState};
     $res = $jmap->CallMethods([
-        ['CalendarPrincipal/set', {
+        ['Principal/set', {
             ifInState => $oldState,
             update => {
                 cassandane => {
@@ -11036,7 +10896,7 @@ sub test_calendarprincipal_getavailability_showdetails
                 },
             },
         }, 'R1'],
-        ['CalendarPrincipal/getAvailability', {
+        ['Principal/getAvailability', {
             id => 'cassandane',
             utcStart => '2020-08-01T00:00:00Z',
             utcEnd => '2020-09-01T00:00:00Z',
@@ -11195,7 +11055,7 @@ sub test_calendarprincipal_getavailability_merged
                 },
             },
         }, 'R1'],
-        ['CalendarPrincipal/getAvailability', {
+        ['Principal/getAvailability', {
             id => 'cassandane',
             utcStart => '2020-08-01T00:00:00Z',
             utcEnd => '2020-09-01T00:00:00Z',
@@ -11267,12 +11127,12 @@ sub test_calendarsharenotification_get
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
     my $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/get', {
+        ['ShareNotification/get', {
         }, 'R1']
     ]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
@@ -11294,7 +11154,7 @@ sub test_calendarsharenotification_get
     $self->assert(exists $res->[0][1]{updated}{Default});
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/get', {
+        ['ShareNotification/get', {
         }, 'R1']
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
@@ -11311,11 +11171,11 @@ sub test_calendarsharenotification_get
         changedBy => {
             name => 'Test User',
             email => 'cassandane@example.com',
-            calendarPrincipalId => 'cassandane',
+            principalId => 'cassandane',
         },
-        calendarAccountId => 'cassandane',
-        calendarId => 'Default',
-        calendarName => 'myname',
+        objectType => 'Calendar',
+        objectAccountId => 'cassandane',
+        objectId => 'Default',
         oldRights => undef,
         newRights => {
             mayReadFreeBusy => JSON::true,
@@ -11333,7 +11193,7 @@ sub test_calendarsharenotification_get
     }, $notif);
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/get', {
+        ['ShareNotification/get', {
             ids => [$notifId, 'nope'],
         }, 'R1']
     ]);
@@ -11373,7 +11233,7 @@ sub test_calendarsharenotification_set
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -11393,7 +11253,7 @@ sub test_calendarsharenotification_set
     $self->assert(exists $res->[0][1]{updated}{Default});
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/get', {
+        ['ShareNotification/get', {
         }, 'R1']
     ]);
     my $notif = $res->[0][1]{list}[0];
@@ -11402,7 +11262,7 @@ sub test_calendarsharenotification_set
     delete($notif->{id});
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/set', {
+        ['ShareNotification/set', {
             create => {
                 newnotif => $notif,
             },
@@ -11419,7 +11279,7 @@ sub test_calendarsharenotification_set
     my $state = $res->[0][1]{newState};
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/set', {
+        ['ShareNotification/set', {
             destroy => [$notifId, 'unknownId'],
         }, "R1"]
     ]);
@@ -11430,7 +11290,7 @@ sub test_calendarsharenotification_set
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/get', {
+        ['ShareNotification/get', {
             ids => [$notifId],
         }, 'R1']
     ]);
@@ -11469,19 +11329,19 @@ sub test_calendarsharenotification_changes
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
     my $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/get', {
+        ['ShareNotification/get', {
         }, 'R1']
     ]);
     my $state = $res->[0][1]{state};
     $self->assert_not_null($state);
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/changes', {
+        ['ShareNotification/changes', {
             sinceState => $state,
         }, 'R1']
     ]);
@@ -11507,7 +11367,7 @@ sub test_calendarsharenotification_changes
     $self->assert(exists $res->[0][1]{updated}{Default});
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/changes', {
+        ['ShareNotification/changes', {
             sinceState => $state,
         }, 'R1']
     ]);
@@ -11538,14 +11398,14 @@ sub test_calendarsharenotification_changes
     $self->assert(exists $res->[0][1]{created}{1});
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/set', {
+        ['ShareNotification/set', {
             destroy => [$notifId],
         }, "R1"]
     ]);
     $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/changes', {
+        ['ShareNotification/changes', {
             sinceState => $state,
             maxChanges => 1,
         }, 'R1']
@@ -11559,7 +11419,7 @@ sub test_calendarsharenotification_changes
     $state = $res->[0][1]{newState};
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/changes', {
+        ['ShareNotification/changes', {
             sinceState => $state,
         }, 'R1']
     ]);
@@ -11602,7 +11462,7 @@ sub test_calendarsharenotification_query
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -11643,15 +11503,15 @@ sub test_calendarsharenotification_query
     $self->assert_not_null($res->[0][1]{created}{B});
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/query', {
+        ['ShareNotification/query', {
         }, 'R1'],
-        ['CalendarShareNotification/query', {
+        ['ShareNotification/query', {
             sort => [{
                 property => 'created',
                 isAscending => JSON::false,
             }],
         }, 'R2'],
-        ['CalendarShareNotification/get', {
+        ['ShareNotification/get', {
             properties => ['created'],
         }, 'R3'],
     ]);
@@ -11672,20 +11532,20 @@ sub test_calendarsharenotification_query
     my $timestampT2 = $notifTimestamps{$notifIdT2};
 
     $res = $manjmap->CallMethods([
-        ['CalendarShareNotification/query', {
+        ['ShareNotification/query', {
             filter => {
                 before => $timestampT2,
             },
         }, 'R1'],
-        ['CalendarShareNotification/query', {
+        ['ShareNotification/query', {
             filter => {
                 after => $timestampT2,
             },
         }, 'R2'],
-        ['CalendarShareNotification/query', {
+        ['ShareNotification/query', {
             position => 1,
         }, 'R3'],
-        ['CalendarShareNotification/query', {
+        ['ShareNotification/query', {
             anchor => $notifIdT2,
             anchorOffset => -1,
             limit => 1,
@@ -11708,7 +11568,7 @@ sub test_calendarsharenotification_querychanges
     my $jmap = $self->{jmap};
 
     my $res = $jmap->CallMethods([
-        ['CalendarShareNotification/queryChanges', {
+        ['ShareNotification/queryChanges', {
             sinceQueryState => 'whatever',
         }, 'R1']
     ]);
@@ -11744,7 +11604,7 @@ sub test_calendareventnotification_get
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -11879,7 +11739,7 @@ sub test_calendareventnotification_set
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -11998,7 +11858,7 @@ sub test_calendareventnotification_query
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -12244,7 +12104,7 @@ sub test_calendareventnotification_changes_shared
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -12331,7 +12191,7 @@ sub test_calendareventnotification_aclcheck
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -12443,7 +12303,7 @@ sub test_calendareventnotification_caldav
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -12649,7 +12509,7 @@ sub test_calendareventnotification_set_destroy
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:calendarprincipals',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -12907,6 +12767,20 @@ sub test_account_get_capabilities
     $self->assert(exists $capas->{maxParticipantsPerEvent});
     $self->assert_equals(JSON::true, $capas->{mayCreateCalendar});
     $self->assert_num_equals(1, $capas->{maxCalendarsPerEvent});
+
+    $capas = $session->{accounts}{cassandane}{accountCapabilities}{'urn:ietf:params:jmap:principals'};
+    $self->assert_not_null($capas);
+    $self->assert_str_equals('cassandane', $capas->{currentUserPrincipalId});
+    $self->assert_str_equals('cassandane',
+        $capas->{'urn:ietf:params:jmap:calendars'}{accountId});
+    $self->assert_equals(JSON::true,
+        $capas->{'urn:ietf:params:jmap:calendars'}{mayGetAvailability});
+    $self->assert_not_null($capas->{'urn:ietf:params:jmap:calendars'}{sendTo});
+
+    $capas = $session->{accounts}{cassandane}{accountCapabilities}{'urn:ietf:params:jmap:principals:owner'};
+    $self->assert_not_null($capas);
+    $self->assert_str_equals('cassandane', $capas->{accountIdForPrincipal});
+    $self->assert_str_equals('cassandane', $capas->{principalId});
 }
 
 sub test_calendarevent_set_links_dupids
@@ -13060,6 +12934,103 @@ sub test_calendarevent_set_participant_links_dir
 
     $res = $caldav->Request('GET', $icshref);
     $self->assert_matches(qr/DIR="https:\/\/local\/attendee\/dir2"/, $res->{content});
+}
+
+sub test_participantidentity_get
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $res = $jmap->CallMethods([
+        ['ParticipantIdentity/get', {
+        }, 'R1'],
+    ]);
+
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals({
+        imip => 'mailto:cassandane@example.com',
+    }, $res->[0][1]{list}[0]{sendTo});
+    my $partId1 = $res->[0][1]{list}[0]{id};
+
+    $caldav->Request(
+      'PROPPATCH',
+      '',
+      x('D:propertyupdate', $caldav->NS(),
+        x('D:set',
+          x('D:prop',
+            x('C:calendar-user-address-set',
+              x('D:href', 'mailto:cassandane@example.com'),
+              x('D:href', 'mailto:foo@local'),
+            )
+          )
+        )
+      )
+    );
+
+    $res = $jmap->CallMethods([
+        ['ParticipantIdentity/get', {
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
+
+    $res = $jmap->CallMethods([
+        ['ParticipantIdentity/get', {
+            ids => [$partId1, 'nope'],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals({
+        imip => 'mailto:cassandane@example.com',
+    }, $res->[0][1]{list}[0]{sendTo});
+    $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
+}
+
+sub test_participantidentity_changes
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['ParticipantIdentity/changes', {
+            sinceState => '0',
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}
+
+sub test_participantidentity_set
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['ParticipantIdentity/set', {
+            create => {
+                partid1 => {
+                    sendTo => {
+                        imip => 'mailto:foo@local',
+                    },
+                },
+            },
+            update => {
+                partid2 => {
+                    name => 'bar',
+                },
+            },
+            destroy => ['partid3'],
+        }, 'R1']
+    ]);
+
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notCreated}{partid1}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notUpdated}{partid2}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notDestroyed}{partid3}{type});
 }
 
 1;
