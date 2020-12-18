@@ -97,17 +97,12 @@ static int jmap_calendarevent_query(struct jmap_req *req);
 static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 static int jmap_calendarevent_parse(jmap_req_t *req);
-static int jmap_calendarprincipal_get(struct jmap_req *req);
-static int jmap_calendarprincipal_query(struct jmap_req *req);
-static int jmap_calendarprincipal_changes(struct jmap_req *req);
-static int jmap_calendarprincipal_querychanges(struct jmap_req *req);
-static int jmap_calendarprincipal_set(struct jmap_req *req);
-static int jmap_calendarprincipal_getavailability(struct jmap_req *req);
-static int jmap_calendarsharenotification_get(struct jmap_req *req);
-static int jmap_calendarsharenotification_set(struct jmap_req *req);
-static int jmap_calendarsharenotification_changes(struct jmap_req *req);
-static int jmap_calendarsharenotification_query(struct jmap_req *req);
-static int jmap_calendarsharenotification_querychanges(struct jmap_req *req);
+static int jmap_principal_get(struct jmap_req *req);
+static int jmap_principal_query(struct jmap_req *req);
+static int jmap_principal_changes(struct jmap_req *req);
+static int jmap_principal_querychanges(struct jmap_req *req);
+static int jmap_principal_set(struct jmap_req *req);
+static int jmap_principal_getavailability(struct jmap_req *req);
 static int jmap_calendareventnotification_get(struct jmap_req *req);
 static int jmap_calendareventnotification_set(struct jmap_req *req);
 static int jmap_calendareventnotification_changes(struct jmap_req *req);
@@ -116,6 +111,11 @@ static int jmap_calendareventnotification_querychanges(struct jmap_req *req);
 static int jmap_participantidentity_get(struct jmap_req *req);
 static int jmap_participantidentity_set(struct jmap_req *req);
 static int jmap_participantidentity_changes(struct jmap_req *req);
+static int jmap_sharenotification_get(struct jmap_req *req);
+static int jmap_sharenotification_set(struct jmap_req *req);
+static int jmap_sharenotification_changes(struct jmap_req *req);
+static int jmap_sharenotification_query(struct jmap_req *req);
+static int jmap_sharenotification_querychanges(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
@@ -177,72 +177,6 @@ jmap_method_t jmap_calendar_methods_standard[] = {
         JMAP_NEED_CSTATE
     },
     {
-        "CalendarPrincipal/get",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarprincipal_get,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CalendarPrincipal/query",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarprincipal_query,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CalendarPrincipal/changes",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarprincipal_changes,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CalendarPrincipal/queryChanges",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarprincipal_querychanges,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CalendarPrincipal/set",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarprincipal_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
-    },
-    {
-        "CalendarPrincipal/getAvailability",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarprincipal_getavailability,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CalendarShareNotification/get",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarsharenotification_get,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CalendarShareNotification/set",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarsharenotification_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
-    },
-    {
-        "CalendarShareNotification/changes",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarsharenotification_changes,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CalendarShareNotification/query",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarsharenotification_query,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CalendarShareNotification/queryChanges",
-        JMAP_URN_CALENDARPRINCIPALS,
-        &jmap_calendarsharenotification_querychanges,
-        JMAP_NEED_CSTATE
-    },
-    {
         "CalendarEventNotification/get",
         JMAP_URN_CALENDARS,
         &jmap_calendareventnotification_get,
@@ -290,6 +224,72 @@ jmap_method_t jmap_calendar_methods_standard[] = {
         &jmap_participantidentity_set,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
+    {
+        "Principal/get",
+        JMAP_URN_PRINCIPALS,
+        &jmap_principal_get,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Principal/query",
+        JMAP_URN_PRINCIPALS,
+        &jmap_principal_query,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Principal/changes",
+        JMAP_URN_PRINCIPALS,
+        &jmap_principal_changes,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Principal/queryChanges",
+        JMAP_URN_PRINCIPALS,
+        &jmap_principal_querychanges,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Principal/set",
+        JMAP_URN_PRINCIPALS,
+        &jmap_principal_set,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "Principal/getAvailability",
+        JMAP_URN_PRINCIPALS,
+        &jmap_principal_getavailability,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "ShareNotification/get",
+        JMAP_URN_PRINCIPALS,
+        &jmap_sharenotification_get,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "ShareNotification/set",
+        JMAP_URN_PRINCIPALS,
+        &jmap_sharenotification_set,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "ShareNotification/changes",
+        JMAP_URN_PRINCIPALS,
+        &jmap_sharenotification_changes,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "ShareNotification/query",
+        JMAP_URN_PRINCIPALS,
+        &jmap_sharenotification_query,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "ShareNotification/queryChanges",
+        JMAP_URN_PRINCIPALS,
+        &jmap_sharenotification_querychanges,
+        JMAP_NEED_CSTATE
+    },
     { NULL, NULL, NULL, 0}
 };
 
@@ -309,7 +309,7 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
             JMAP_URN_CALENDARS, json_object());
 
     json_object_set_new(settings->server_capabilities,
-            JMAP_URN_CALENDARPRINCIPALS, json_object());
+            JMAP_URN_PRINCIPALS, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
@@ -337,6 +337,8 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
                 calhomename, error_message(r));
         return;
     }
+    int rights = httpd_myrights(authstate, mbentry);
+    struct buf buf = BUF_INITIALIZER;
 
     json_t *calcapa = json_object();
     int is_main_account = !strcmpsafe(authuserid, accountid);
@@ -361,7 +363,6 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
         json_object_set_new(calcapa, "mayCreateCalendar", json_true());
     }
     else {
-        int rights = httpd_myrights(authstate, mbentry);
         json_object_set_new(calcapa, "mayCreateCalendar",
                 json_boolean(rights & JACL_CREATECHILD));
     }
@@ -369,27 +370,62 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
     /* shareesActAs */
     static const char *annot =
         DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">sharees-act-as";
-    struct buf val = BUF_INITIALIZER;
-    annotatemore_lookup(calhomename, annot, "", &val);
-    if (!buf_len(&val)) buf_setcstr(&val, "self");
-    json_object_set_new(calcapa, "shareesActAs", json_string(buf_cstring(&val)));
-    buf_free(&val);
+    annotatemore_lookup(calhomename, annot, "", &buf);
+    if (!buf_len(&buf)) buf_setcstr(&buf, "self");
+    json_object_set_new(calcapa, "shareesActAs", json_string(buf_cstring(&buf)));
+    buf_reset(&buf);
 
     /* maxCalendarsPerEvent */
     json_object_set_new(calcapa, "maxCalendarsPerEvent", json_integer(1));
 
     json_object_set_new(account_capabilities, JMAP_URN_CALENDARS, calcapa);
 
-    json_object_set_new(account_capabilities, JMAP_URN_CALENDARPRINCIPALS,
-            json_pack("{s:o}", "currentUserPrincipalId", is_main_account ?
-                json_string(accountid) : json_null()));
-
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities, JMAP_CALENDARS_EXTENSION, json_object());
     }
 
+    /* urn:ietf:params:jmap:principals */
+    json_t *principalcap = json_object();
+    json_object_set_new(principalcap, "currentUserPrincipalId",
+            is_main_account ? json_string(accountid) : json_null());
+
+    json_t *calprincipalcap = json_object();
+    json_object_set_new(calprincipalcap, "accountId", json_string(accountid));
+    json_object_set_new(calprincipalcap, "account", json_null());
+    json_object_set_new(calprincipalcap, "mayGetAvailability",
+            is_main_account ? json_true() : json_boolean(rights & JACL_READFB));
+
+    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+    get_schedule_addresses(NULL, calhomename, accountid, &schedule_addresses);
+    if (strarray_size(&schedule_addresses)) {
+        const char *addr = strarray_nth(&schedule_addresses, 0);
+        if (strncasecmp(addr, "mailto:", 7)) {
+            buf_setcstr(&buf, "mailto:");
+        }
+        buf_appendcstr(&buf, addr);
+        json_object_set_new(calprincipalcap, "sendTo",
+                json_pack("{s:s}", "imip", buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+    else json_object_set_new(calprincipalcap, "sendTo", json_null());
+    strarray_fini(&schedule_addresses);
+
+    json_object_set_new(principalcap, JMAP_URN_CALENDARS, calprincipalcap);
+
+    json_object_set_new(account_capabilities, JMAP_URN_PRINCIPALS, principalcap);
+
+    /* urn:ietf:params:jmap:principals:owner */
+    json_t *ownercap = json_object();
+    json_object_set_new(ownercap, "accountIdForPrincipal",
+            json_string(accountid));
+    json_object_set_new(ownercap, "principalId",
+            json_string(accountid));
+    json_object_set_new(account_capabilities,
+           "urn:ietf:params:jmap:principals:owner", ownercap);
+
     free(calhomename);
     mboxlist_entry_free(&mbentry);
+    buf_free(&buf);
 }
 
 /* Helper flags for CalendarEvent/set */
@@ -7358,7 +7394,7 @@ static int principal_get_cb(jmap_req_t *req, const char *accountid,
     return 0;
 }
 
-static int jmap_calendarprincipal_get(struct jmap_req *req)
+static int jmap_principal_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -7844,7 +7880,7 @@ done:
     return 0;
 }
 
-static int jmap_calendarprincipal_query(struct jmap_req *req)
+static int jmap_principal_query(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -7882,7 +7918,7 @@ done:
     return 0;
 }
 
-static int jmap_calendarprincipal_changes(struct jmap_req *req)
+static int jmap_principal_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -7901,7 +7937,7 @@ static int jmap_calendarprincipal_changes(struct jmap_req *req)
     return 0;
 }
 
-static int jmap_calendarprincipal_querychanges(jmap_req_t *req)
+static int jmap_principal_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
@@ -7923,7 +7959,7 @@ done:
     return 0;
 }
 
-static int jmap_calendarprincipal_set(struct jmap_req *req)
+static int jmap_principal_set(struct jmap_req *req)
 {
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -8447,7 +8483,7 @@ done:
     jmap_calendarcontext_fini(&jmapctx);
 }
 
-static int jmap_calendarprincipal_getavailability(struct jmap_req *req)
+static int jmap_principal_getavailability(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     char *principalid = NULL;
@@ -9098,7 +9134,7 @@ done:
 }
 
 
-static const jmap_property_t calendarsharenotification_props[] = {
+static const jmap_property_t sharenotification_props[] = {
     {
         "id",
         NULL,
@@ -9115,19 +9151,19 @@ static const jmap_property_t calendarsharenotification_props[] = {
         JMAP_PROP_SERVER_SET
     },
     {
-        "calendarAccountId",
+        "objectType",
         NULL,
         JMAP_PROP_SERVER_SET
     },
     {
-        "calendarId",
+        "objectAccountId",
         NULL,
         JMAP_PROP_SERVER_SET
     },
     {
-        "calendarName",
+        "objectId",
         NULL,
-        0,
+        JMAP_PROP_SERVER_SET
     },
     {
         "oldRights",
@@ -9225,11 +9261,14 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
     }
 
     const char *calid = strarray_nth(mbname_boxes(mbname), -1);
-    if (jmap_wantprop(props, "calendarId")) {
-        json_object_set_new(jn, "calendarId", json_string(calid));
+    if (jmap_wantprop(props, "objectType")) {
+        json_object_set_new(jn, "objectType", json_string("Calendar"));
     }
-    if (jmap_wantprop(props, "calendarAccountId")) {
-        json_object_set_new(jn, "calendarAccountId",
+    if (jmap_wantprop(props, "objectId")) {
+        json_object_set_new(jn, "objectId", json_string(calid));
+    }
+    if (jmap_wantprop(props, "objectAccountId")) {
+        json_object_set_new(jn, "objectAccountId",
                 json_string(mbname_userid(mbname)));
     }
 
@@ -9237,22 +9276,7 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
     for (node = xmlFirstElementChild(xmlLastElementChild(root)); node;
             node = xmlNextElementSibling(node)) {
 
-        if (jmap_wantprop(props, "calendarName") &&
-                !xmlStrcmp(node->name, BAD_CAST "prop")) {
-            xmlNodePtr node2;
-            for (node2 = xmlFirstElementChild(node);
-                    node2; node2 = xmlNextElementSibling(node2)) {
-                if (!xmlStrcmp(node2->name, BAD_CAST "displayname")) {
-                    xmlChar *val = xmlNodeGetContent(node2);
-                    if (val) {
-                        json_object_set_new(jn, "calendarName",
-                                json_string((const char*)val));
-                    }
-                    xmlFree(val);
-                }
-            }
-        }
-        else if (jmap_wantprop(props, "changedBy") &&
+        if (jmap_wantprop(props, "changedBy") &&
                 !xmlStrcmp(node->name, BAD_CAST "principal")) {
             json_t *changedby = json_object();
             xmlChar *xhref = NULL;
@@ -9275,7 +9299,7 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
                 struct request_target_t tgt;
                 const char *errstr = NULL;
                 if (principal_parse_path(href, &tgt, &errstr) == 0) {
-                    json_object_set_new(changedby, "calendarPrincipalId",
+                    json_object_set_new(changedby, "principalId",
                             json_string(tgt.userid));
 
                     json_t *email = json_null();
@@ -9345,14 +9369,14 @@ done:
     return jn;
 }
 
-static int jmap_calendarsharenotification_get(struct jmap_req *req)
+static int jmap_sharenotification_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
     json_t *err = NULL;
     mbentry_t *notifymb = NULL;
 
-    jmap_get_parse(req, &parser, calendarsharenotification_props,
+    jmap_get_parse(req, &parser, sharenotification_props,
                    1, NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -9387,7 +9411,7 @@ done:
     return 0;
 }
 
-static int jmap_calendarsharenotification_set(struct jmap_req *req)
+static int jmap_sharenotification_set(struct jmap_req *req)
 {
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
@@ -9436,7 +9460,7 @@ done:
     return 0;
 }
 
-static int jmap_calendarsharenotification_changes(struct jmap_req *req)
+static int jmap_sharenotification_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -9501,6 +9525,16 @@ static void sharenotif_validatefilter(jmap_req_t *req __attribute__((unused)),
                 }
             }
         }
+        else if (!strcmp(field, "objectType")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "objectAccountId")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
         else {
             jmap_parser_invalid(parser, field);
         }
@@ -9521,24 +9555,55 @@ static int sharenotif_validatecomparator(jmap_req_t *req __attribute__((unused))
     return 0;
 }
 
-static int sharenotif_match(message_t *msg __attribute__((unused)),
-                            struct notifsearch_entry *entry, void *rock)
+struct sharenotif_match_rock {
+    time_t before;
+    time_t after;
+    const char *objectaccountid;
+};
+
+static int sharenotif_match(message_t *msg, struct notifsearch_entry *entry, void *vrock)
 {
-    time_t *t = rock;
+    struct sharenotif_match_rock *rock = vrock;
 
     /* before */
-    if (t[0] && entry->created >= t[0]) {
+    if (rock->before && entry->created >= rock->before) {
         return 0;
     }
     /* after */
-    if (t[1] && entry->created < t[1]) {
+    if (rock->after && entry->created < rock->after) {
         return 0;
+    }
+    /* objectAccountId */
+    if (rock->objectaccountid) {
+        const struct body *body;
+        int r = message_get_cachebody(msg, &body);
+        if (r) return 0;
+
+        struct dlist *dl;
+        r = dlist_parsemap(&dl, 1, 0, body->description, strlen(body->description));
+        if (r) return 0;
+
+        int matches = 0;
+        struct dlist *ddl = dlist_getchild(dl, "D");
+        if (ddl) {
+            const char *mboxname;
+            if (dlist_getatom(ddl, "M", &mboxname) &&
+                    mboxname_iscalendarmailbox(mboxname, 0)) {
+                mbname_t *mbname = mbname_from_intname(mboxname);
+                if (mbname) {
+                    matches = !strcmp(mbname_userid(mbname), rock->objectaccountid);
+                }
+                mbname_free(&mbname);
+            }
+        }
+        dlist_free(&dl);
+        return matches;
     }
 
     return 1;
 }
 
-static int jmap_calendarsharenotification_query(struct jmap_req *req)
+static int jmap_sharenotification_query(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -9589,6 +9654,12 @@ static int jmap_calendarsharenotification_query(struct jmap_req *req)
             after = icaltime_as_timet_with_zone(icaldt, utc);
         }
     }
+
+    jval = json_object_get(query.filter, "objectType");
+    const char *objecttype = json_string_value(jval);
+    jval = json_object_get(query.filter, "objectAccountId");
+    const char *objectaccountid = json_string_value(jval);
+
     int is_ascending = 1;
     jval = json_object_get(json_array_get(query.sort, 0), "isAscending");
     if (jval) {
@@ -9608,17 +9679,23 @@ static int jmap_calendarsharenotification_query(struct jmap_req *req)
         goto done;
     }
 
+    /* Ignore anything but calendar share notifications */
+    if (objecttype && strcmp(objecttype, "Calendar")) {
+        jmap_ok(req, jmap_query_reply(&query));
+        goto done;
+    }
+
     /* Run query */
-    time_t matchrock[2];
-    matchrock[0] = before;
-    matchrock[1] = after;
+    struct sharenotif_match_rock rock = {
+        before, after, objectaccountid
+    };
 
     struct notifsearch search = {
         SHARE_INVITE_NOTIFICATION,
         0, /* want_expunged */
         0, /* since_modseq */
         sharenotif_match,
-        matchrock,
+        &rock,
         notifsearch_entry_created_cmp,
         (void*)(intptr_t) is_ascending,
         0 /* check_seen */
@@ -9644,7 +9721,7 @@ done:
     return 0;
 }
 
-static int jmap_calendarsharenotification_querychanges(jmap_req_t *req)
+static int jmap_sharenotification_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
