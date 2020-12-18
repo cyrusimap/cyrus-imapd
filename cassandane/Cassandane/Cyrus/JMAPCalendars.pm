@@ -1123,6 +1123,11 @@ sub normalize_event
             if (not exists $loc->{q{@type}}) {
                 $loc->{q{@type}} = 'Location';
             }
+            foreach my $link (values %{$loc->{links}}) {
+                if (not exists $link->{q{@type}}) {
+                    $link->{q{@type}} = 'Link';
+                }
+            }
         }
     }
     if (not exists $event->{virtualLocations}) {
@@ -1185,6 +1190,11 @@ sub normalize_event
             }
             if (not exists $p->{q{@type}}) {
                 $p->{q{@type}} = 'Participant';
+            }
+            foreach my $link (values %{$p->{links}}) {
+                if (not exists $link->{q{@type}}) {
+                    $link->{q{@type}} = 'Link';
+                }
             }
         }
     }
@@ -1320,6 +1330,9 @@ sub normalize_event
 
     if (not exists $event->{calendarIds}) {
         $event->{calendarIds} = undef;
+    }
+    if (not exists $event->{timeZone}) {
+        $event->{timeZone} = undef;
     }
 
     # undefine dynamically generated values
@@ -2201,13 +2214,13 @@ sub test_calendarevent_get_locations_uri
 
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
-    my $links = $event->{links};
     $self->assert_num_equals(1, scalar @locations);
-    $self->assert_str_equals("On planet Earth", $locations[0]{name});
 
-    my @linkIds = keys %{$locations[0]{linkIds}};
-    $self->assert_num_equals(1, scalar @linkIds);
-    $self->assert_equals("skype:foo", $links->{$linkIds[0]}->{href});
+    $self->assert_str_equals("On planet Earth", $locations[0]->{name});
+
+    my @links = values %{$locations[0]->{links}};
+    $self->assert_num_equals(1, scalar @links);
+    $self->assert_equals("skype:foo", $links[0]->{href});
 }
 
 sub test_calendarevent_get_locations_geo
@@ -2881,9 +2894,15 @@ sub test_calendarevent_set_locations
         },
         locE => {
             name => "location E",
-            linkIds => {
-                'link1' => JSON::true,
-                'link2' => JSON::true,
+            links => {
+                link1 => {
+                    href => 'https://foo.local',
+                    rel => "enclosure",
+                },
+                link2 => {
+                    href => 'https://bar.local',
+                    rel => "enclosure",
+                },
             },
         },
         # A full-blown location
@@ -2892,10 +2911,6 @@ sub test_calendarevent_set_locations
             description => "a description",
             timeZone => "Europe/Vienna",
             coordinates => "geo:48.2010,16.3695,183",
-            linkIds => {
-                'link1' => JSON::true,
-                'link2' => JSON::true,
-            },
         },
         # A location with name that needs escaping
         locH => {
@@ -2925,10 +2940,6 @@ sub test_calendarevent_set_locations
         "freeBusyStatus"=> "free",
         "locations" => $locations,
         "virtualLocations" => $virtualLocations,
-        "links" => {
-            link1 => { href => 'https://foo.local', rel => "enclosure" },
-            link2 => { href => 'https://bar.local', rel => "enclosure" },
-        },
     };
 
     my $ret = $self->createandget_event($event);
@@ -3337,8 +3348,11 @@ sub test_calendarevent_set_participants
                 locationId => 'loc1',
                 participationStatus => 'accepted',
                 expectReply => JSON::false,
-                linkIds => {
-                    'link1' => JSON::true,
+                links => {
+                    link1 => {
+                        href => 'https://somelink.local',
+                        rel => "enclosure",
+                    },
                 },
                 participationComment => 'Sure; see you "soon"!',
                 sendTo => {
@@ -3360,8 +3374,11 @@ sub test_calendarevent_set_participants
                 memberOf => {
                     'group' => JSON::true,
                 },
-                linkIds => {
-                    'link1' => JSON::true,
+                links => {
+                    link1 => {
+                        href => 'https://somelink.local',
+                        rel => "enclosure",
+                    },
                 },
                 email => 'bar2@local', # different email than sendTo
                 sendTo => {
@@ -3423,12 +3440,6 @@ sub test_calendarevent_set_participants
             },
             loc2 => {
                 name => 'location2',
-            },
-        },
-        links => {
-            link1 => {
-                href => 'https://somelink.local',
-                rel => "enclosure",
             },
         },
         method => 'request',
@@ -12898,5 +12909,157 @@ sub test_account_get_capabilities
     $self->assert_num_equals(1, $capas->{maxCalendarsPerEvent});
 }
 
+sub test_calendarevent_set_links_dupids
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $event =  {
+        calendarIds => {
+            Default => JSON::true,
+        },
+        title => 'event1',
+        calendarIds => {
+            Default => JSON::true,
+        },
+        start => '2011-01-01T04:05:06',
+        duration => 'PT1H',
+        links => {
+            link1 => {
+                href => 'https://local/link1',
+                title => 'link1',
+            },
+            link2 => {
+                href => 'https://local/link2',
+                title => 'link2',
+            },
+        },
+        locations => {
+            loc1 => {
+                name => 'loc1',
+                links => {
+                    link1 => {
+                        href => 'https://local/loc1/link1',
+                        title => 'loc1link1',
+                    },
+                    link2 => {
+                        href => 'https://local/loc1/link2',
+                        title => 'loc1link2',
+                    },
+                },
+            },
+            loc2 => {
+                name => 'loc2',
+                links => {
+                    link1 => {
+                        href => 'https://local/loc2/link1',
+                        title => 'loc2link1',
+                    },
+                    link2 => {
+                        href => 'https://local/loc2/link2',
+                        title => 'loc2link2',
+                    },
+                },
+            },
+        },
+        replyTo => {
+            imip => 'mailto:orga@local',
+        },
+        participants => {
+            part1 => {
+                email => 'part1@local',
+                sendTo => {
+                    imip => 'mailto:part1@local',
+                },
+                roles => {
+                    attendee => JSON::true,
+                },
+                links => {
+                    link1 => {
+                        href => 'https://local/part1/link1',
+                        title => 'part1link1',
+                    },
+                    link2 => {
+                        href => 'https://local/part1/link2',
+                        title => 'part1link2',
+                    },
+                },
+            },
+            part2 => {
+                email => 'part2@local',
+                sendTo => {
+                    imip => 'mailto:part2@local',
+                },
+                roles => {
+                    attendee => JSON::true,
+                },
+                links => {
+                    link1 => {
+                        href => 'https://local/part2/link1',
+                        title => 'part2link1',
+                    },
+                    link2 => {
+                        href => 'https://local/part2/link2',
+                        title => 'part2link2',
+                    },
+                },
+            },
+            orga => {
+                email => 'orga@local',
+                sendTo => {
+                    imip => 'mailto:orga@local',
+                },
+                roles => {
+                    owner => JSON::true,
+                    attendee => JSON::true,
+                },
+            },
+        }
+    };
+    my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($event, $ret);
+}
+
+sub test_calendarevent_set_participant_links_dir
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my ($id, $ical) = $self->icalfile('attendeedir');
+
+    my $icshref = '/dav/calendars/user/cassandane/Default/attendeedir.ics';
+    $caldav->Request('PUT', $icshref, $ical, 'Content-Type' => 'text/calendar');
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+        }, 'R1'],
+    ]);
+    my $event = $res->[0][1]{list}[0];
+    $self->assert_not_null($event);
+
+    # Links generated from DIR parameter loop back to DIR.
+
+    my $linkId = (keys %{$event->{participants}{attendee}{links}})[0];
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $event->{id} => {
+                    'participants/attendee/links' => {
+                        $linkId => {
+                            href => 'https://local/attendee/dir2',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$event->{id}});
+
+    $res = $caldav->Request('GET', $icshref);
+    $self->assert_matches(qr/DIR="https:\/\/local\/attendee\/dir2"/, $res->{content});
+}
 
 1;
