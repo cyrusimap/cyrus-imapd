@@ -1647,6 +1647,14 @@ static json_t *participant_from_ical(icalproperty *prop,
         partstat = "needs-action";
     json_object_set_new(p, "participationStatus", json_string(partstat));
 
+    /* description */
+    const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
+    if (desc) {
+        unescape_ical_text(&buf, desc);
+        json_object_set_new(p, "description", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
     /* expectReply */
     int expect_reply = 0;
     param = icalproperty_get_first_parameter(prop, ICAL_RSVP_PARAMETER);
@@ -3561,6 +3569,15 @@ participant_to_ical(icalcomponent *comp,
         jmap_parser_invalid(parser, "language");
     }
 
+    /* description */
+    json_t *description = json_object_get(jpart, "description");
+    if (json_is_string(description)) {
+        const char *s = json_string_value(description);
+        if (*s) set_icalxparam(prop, JMAPICAL_XPARAM_DESCRIPTION, s, 0);
+    }
+    else if (JNOTNULL(description)) {
+        jmap_parser_invalid(parser, "description");
+    }
 
     /* participationStatus */
     icalparameter_partstat ps = ICAL_PARTSTAT_NONE;
