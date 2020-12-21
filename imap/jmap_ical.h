@@ -62,6 +62,7 @@ extern "C" {
 
 /* Custom iCalendar properties */
 #define JMAPICAL_XPROP_LOCATION      "X-JMAP-LOCATION"
+#define JMAPICAL_XPROP_SHOWWITHOUTTIME "X-JMAP-SHOW-WITHOUT-TIME"
 
 /* Custom iCalendar parameters */
 #define JMAPICAL_XPARAM_CID           "X-JMAP-CID"
