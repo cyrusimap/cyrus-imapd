@@ -1598,6 +1598,13 @@ static json_t *participant_from_ical(icalproperty *prop,
     }
     json_object_set_new(p, "expectReply", json_boolean(expect_reply));
 
+    /* language */
+    param = icalproperty_get_first_parameter(prop, ICAL_LANGUAGE_PARAMETER);
+    if (param) {
+        const char *l = icalparameter_get_language(param);
+        json_object_set_new(p, "language", json_string(l));
+    }
+
     /* delegatedTo */
     json_t *delegatedTo = json_object();
     for (param = icalproperty_get_first_parameter(prop, ICAL_DELEGATEDTO_PARAMETER);
@@ -3489,6 +3496,20 @@ participant_to_ical(icalcomponent *comp,
     else if (JNOTNULL(locationId)) {
         jmap_parser_invalid(parser, "locationId");
     }
+
+    /* language */
+    json_t *language = json_object_get(jpart, "language");
+    if (json_is_string(language)) {
+        const char *l = json_string_value(language);
+        if (*l) {
+            icalproperty_add_parameter(prop, icalparameter_new_language(l));
+        }
+
+    }
+    else if (JNOTNULL(language)) {
+        jmap_parser_invalid(parser, "language");
+    }
+
 
     /* participationStatus */
     icalparameter_partstat ps = ICAL_PARTSTAT_NONE;
