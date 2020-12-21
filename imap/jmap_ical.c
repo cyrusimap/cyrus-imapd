@@ -1515,8 +1515,6 @@ static json_t *participant_from_ical(icalproperty *prop,
     icalparameter *param;
     struct buf buf = BUF_INITIALIZER;
 
-    /* FIXME invitedBy */
-
     /* sendTo */
     json_t *sendTo = rsvpto_from_ical(prop);
     json_object_set_new(p, "sendTo", sendTo ? sendTo : json_null());
@@ -2229,9 +2227,6 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc)
         const char *name = icalproperty_get_property_name(prop);
 
         /* X-APPLE-STRUCTURED-LOCATION */
-        /* FIXME Most probably,
-         * a X-APPLE-STRUCTURED-LOCATION may occur only once and
-         * always comes with a LOCATION. But who knows for sure? */
         if (!strcmp(name, "X-APPLE-STRUCTURED-LOCATION")) {
             const char *title, *uri;
             icalvalue *val;
@@ -2971,7 +2966,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
         /* Check recurrence frequency */
         json_t *jrrules = json_object_get(event, "recurrenceRules");
         if (json_array_size(jrrules)) {
-            json_t *jrrule = json_array_get(jrrules, 0); // FIXME
+            json_t *jrrule = json_array_get(jrrules, 0);
             if (json_is_object(jrrule)) {
                 const char *freq = json_string_value(json_object_get(jrrule, "frequency"));
                 if (!strcmpsafe(freq, "hourly") ||
@@ -3440,6 +3435,13 @@ participant_to_ical(icalcomponent *comp,
     icalproperty *orga = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     int is_orga = orga_uri ? match_uri(caladdress, orga_uri) : 0;
     if (is_orga) icalproperty_set_xparam(orga, JMAPICAL_XPARAM_ID, partid, 1);
+
+    /* FIXME invitedBy */
+    /* FIXME scheduleAgent */
+    /* FIXME scheduleForceSend */
+    /* FIXME scheduleSequence */
+    /* FIXME scheduleStatus */
+    /* FIXME scheduleUpdated */
 
     /* name */
     json_t *jname = json_object_get(jpart, "name");
@@ -4003,8 +4005,7 @@ description_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *jse
     jprop = json_object_get(jsevent, "descriptionContentType");
     if (json_is_string(jprop)) {
         const char *content_type = json_string_value(jprop);
-        /* FIXME
-         * We'd like to support HTML descriptions, but with iCalendar being
+        /* We'd like to support HTML descriptions, but with iCalendar being
          * our storage format there really isn't a good way to deal with
          * that. We can't rely on iCalendar clients correctly handling the
          * ALTREP parameters on DESCRIPTION, and we don't want to make the
@@ -4574,7 +4575,7 @@ keywords_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *keywor
             jmap_parser_pop(parser);
             continue;
         }
-        // FIXME known bug: libical doesn't properly
+        // known bug: libical doesn't properly
         // handle multi-values separated by comma,
         // if a single entry contains a comma.
         prop = icalproperty_new_categories(keyword);
@@ -5398,6 +5399,10 @@ static void calendarevent_to_ical(icalcomponent *comp,
     } else if (jprop) {
         jmap_parser_invalid(parser, "alerts");
     }
+
+    /* FIXME localizations */
+    /* FIXME timeZones */
+    /* FIXME categories */
 
     /* recurrenceOverrides - must be last to apply patches */
     jprop = json_object_get(event, "recurrenceOverrides");
