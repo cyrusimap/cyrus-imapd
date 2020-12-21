@@ -4965,6 +4965,7 @@ overrides_to_ical(icalcomponent *comp,
                     !strcmp(key, "recurrenceRules") ||
                     !strcmp(key, "recurrenceOverrides") ||
                     !strcmp(key, "excludedRecurrenceRules") ||
+                    !strcmp(key, "excluded") ||
                     !strcmp(key, "replyTo")) {
 
                     json_object_del(myoverride, key);
@@ -5063,12 +5064,6 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
     /* start, duration, timeZone */
     startend_to_ical(comp, parser, event);
-
-    /* excluded - validate, but ignore */
-    jprop = json_object_get(event, "excluded");
-    if (jprop && !json_is_boolean(jprop)) {
-        jmap_parser_invalid(parser, "excluded");
-    }
 
     /* relatedTo */
     jprop = json_object_get(event, "relatedTo");
