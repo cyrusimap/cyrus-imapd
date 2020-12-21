@@ -2050,6 +2050,23 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links)
     const char *coord = get_icalxparam_value(prop, JMAPICAL_XPARAM_GEO);
     if (coord) json_object_set_new(loc, "coordinates", json_string(coord));
 
+    /* locationTypes */
+    json_t *loctypes = NULL;
+    for (param = icalproperty_get_first_parameter(prop, ICAL_ANY_PARAMETER);
+         param;
+         param = icalproperty_get_next_parameter(prop, ICAL_ANY_PARAMETER)) {
+
+        if (!strcasecmpsafe(icalparameter_get_xname(param),
+                            JMAPICAL_XPARAM_LOCATIONTYPE)) {
+            const char *loctype = icalparameter_get_xvalue(param);
+            if (loctype) {
+                if (!loctypes) loctypes = json_object();
+                json_object_set_new(loctypes, loctype, json_true());
+            }
+        }
+    }
+    if (loctypes) json_object_set_new(loc, "locationTypes", loctypes);
+
     /* links (including altrep) */
     param = icalproperty_get_first_parameter(prop, ICAL_ALTREP_PARAMETER);
     if (param) {
@@ -4578,15 +4595,35 @@ validate_location(json_t *loc, struct jmap_parser *parser, json_t *links)
         jmap_parser_invalid(parser, "timeZone");
     }
 
+    /* locationTypes */
+    json_t *loctypes = json_object_get(loc, "locationTypes");
+    if (json_object_size(loctypes)) {
+        jmap_parser_push(parser, "locationTypes");
+        const char *loctype;
+        json_t *jval;
+        json_object_foreach(loctypes, loctype, jval) {
+            const char *p;
+            for (p = loctype; isalpha(*p) || *p == '-'; p++) {}
+            if (jval != json_true() || *p || p == loctype) {
+                jmap_parser_invalid(parser, loctype);
+            }
+        }
+        jmap_parser_pop(parser);
+    }
+    else if (JNOTNULL(loctypes)) {
+        jmap_parser_invalid(parser, "locationTypes");
+    }
+
     /* linkIds */
-    const char *id;
-    json_t *jval;
     json_t *linkids = json_object_get(loc, "linkIds");
     if (JNOTNULL(linkids) && json_is_object(linkids)) {
+        const char *linkid;
+        json_t *jval;
         jmap_parser_push(parser, "linkIds");
-        json_object_foreach(linkids, id, jval) {
-            if (!is_valid_jmapid(id) || !json_object_get(links, id) || jval != json_true()) {
-                jmap_parser_invalid(parser, id);
+        json_object_foreach(linkids, linkid, jval) {
+            if (!is_valid_jmapid(linkid) || !json_object_get(links, linkid) ||
+                    jval != json_true()) {
+                jmap_parser_invalid(parser, linkid);
             }
         }
         jmap_parser_pop(parser);
@@ -4637,6 +4674,16 @@ location_to_ical(icalcomponent *comp, struct jmap_parser *parser,
     if (s) set_icalxparam(prop, JMAPICAL_XPARAM_TZID, s, 0);
     s = json_string_value(json_object_get(loc, "coordinates"));
     if (s) set_icalxparam(prop, JMAPICAL_XPARAM_GEO, s, 0);
+
+    /* locationTypes */
+    json_t *loctypes = json_object_get(loc, "locationTypes");
+    if (json_is_object(loctypes)) {
+        const char *loctype;
+        json_t *jval;
+        json_object_foreach(loctypes, loctype, jval) {
+            set_icalxparam(prop, JMAPICAL_XPARAM_LOCATIONTYPE, loctype, 0);
+        }
+    }
 
     /* links */
     json_t *links = json_object_get(loc, "links");
