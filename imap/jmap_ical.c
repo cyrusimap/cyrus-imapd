@@ -4269,7 +4269,6 @@ recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser,
         size_t i;
         json_t *bd;
 
-        jmap_parser_push(parser, "byDay");
         buf_appendcstr(&buf, ";BYDAY=");
         json_array_foreach(byday, i, bd) {
             char *day = NULL;
