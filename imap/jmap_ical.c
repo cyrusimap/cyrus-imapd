@@ -1478,7 +1478,7 @@ static json_t *participant_from_ical(icalproperty *prop,
     if (param) {
         name = icalparameter_get_cn(param);
     }
-    if (name) json_object_set_new(p, "name", json_string(name));
+    if (name && *name) json_object_set_new(p, "name", json_string(name));
 
     /* kind */
     const char *kind = NULL;
@@ -1720,7 +1720,7 @@ participant_from_icalorganizer(icalproperty *orga)
     if ((param = icalproperty_get_first_parameter(orga, ICAL_CN_PARAMETER))) {
         name = icalparameter_get_cn(param);
     }
-    json_object_set_new(jorga, "name", json_string(name ? name : ""));
+    if (name && *name) json_object_set_new(jorga, "name", json_string(name));
 
     /* roles */
     json_object_set_new(jorga, "roles", json_pack("{s:b}", "owner", 1));
