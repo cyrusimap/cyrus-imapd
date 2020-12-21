@@ -2380,7 +2380,8 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     /* showWithoutTime */
     if (jmap_wantprop(props, "showWithoutTime")) {
         int show_without_time = 0;
-        const char *strval = get_icalxprop_value(comp, "SHOW-WITHOUT-TIME");
+
+        const char *strval = get_icalxprop_value(comp, JMAPICAL_XPROP_SHOWWITHOUTTIME);
         if (strval) {
             show_without_time = !strcasecmp(strval, "TRUE");
         }
@@ -2991,7 +2992,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
         /* Only set in iCalendar if it isn't implied by DTSTART value type */
         if ((is_date == 0) != (show_without_time == 0)) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, "SHOW-WITHOUT-TIME");
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_SHOWWITHOUTTIME);
             icalvalue *icalval = icalvalue_new_boolean(show_without_time);
             icalproperty_set_value(prop, icalval);
             icalcomponent_add_property(comp, prop);
