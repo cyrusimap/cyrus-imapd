@@ -1131,6 +1131,7 @@ overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
         json_object_del(diff, "recurrenceId");
         json_object_del(diff, "recurrenceRules");
         json_object_del(diff, "recurrenceOverrides");
+        json_object_del(diff, "excludedRecurrenceRules");
         json_object_del(diff, "replyTo");
         if (json_is_null(json_object_get(diff, "start"))) {
             json_object_del(diff, "start");
@@ -4784,6 +4785,7 @@ overrides_to_ical(icalcomponent *comp, icalcomponent *oldical,
     if (!master) return;
     json_object_del(master, "recurrenceRules");
     json_object_del(master, "recurrenceOverrides");
+    json_object_del(master, "excludedRecurrenceRules");
 
     jmap_parser_push(parser, "recurrenceOverrides");
     json_t *joverride;
@@ -4836,6 +4838,7 @@ overrides_to_ical(icalcomponent *comp, icalcomponent *oldical,
                     !strcmp(key, "recurrenceId") ||
                     !strcmp(key, "recurrenceRules") ||
                     !strcmp(key, "recurrenceOverrides") ||
+                    !strcmp(key, "excludedRecurrenceRules") ||
                     !strcmp(key, "replyTo")) {
 
                     json_object_del(myoverride, key);
