@@ -1964,6 +1964,7 @@ relatedto_from_ical(icalcomponent *comp)
 {
     icalproperty* prop;
     json_t *ret = json_object();
+    struct buf buf = BUF_INITIALIZER;
 
     for (prop = icalcomponent_get_first_property(comp, ICAL_RELATEDTO_PROPERTY);
          prop;
@@ -1978,13 +1979,31 @@ relatedto_from_ical(icalcomponent *comp)
              param;
              param = icalproperty_get_next_parameter(prop, ICAL_RELTYPE_PARAMETER)) {
 
-            const char *reltype = icalparameter_get_xvalue(param);
-            if (reltype && *reltype) {
-                char *s = lcase(xstrdup(reltype));
-                json_object_set_new(relation, s, json_true());
-                free(s);
+            switch (icalparameter_get_reltype(param)) {
+                case ICAL_RELTYPE_PARENT:
+                    buf_setcstr(&buf, "parent");
+                    break;
+                case ICAL_RELTYPE_CHILD:
+                    buf_setcstr(&buf, "child");
+                    break;
+                case ICAL_RELTYPE_SIBLING:
+                    buf_setcstr(&buf, "sibling");
+                    break;
+                default:
+                    {
+                        const char *reltypestr = icalparameter_get_xvalue(param);
+                        if (reltypestr) {
+                            buf_setcstr(&buf, reltypestr);
+                            buf_lcase(&buf);
+                            buf_trim(&buf);
+                        }
+                    }
             }
-            else json_object_set_new(relation, "parent", json_true());
+            if (buf_len(&buf)) {
+                json_object_set_new(relation, buf_cstring(&buf), json_true());
+            }
+
+            buf_reset(&buf);
         }
 
         json_object_set_new(ret, uid, json_pack("{s:s s:o}",
@@ -1997,6 +2016,7 @@ relatedto_from_ical(icalcomponent *comp)
         ret = json_null();
     }
 
+    buf_free(&buf);
     return ret;
 }
 
