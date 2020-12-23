@@ -60,6 +60,7 @@
 #include "global.h"
 
 struct mupdate_handle_s {
+    sasl_callback_t *sasl_cb;
     struct backend *conn;
 
     /* For keeping track of what tag # is next */
