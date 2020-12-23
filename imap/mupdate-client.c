@@ -96,7 +96,6 @@ EXPORTED int mupdate_connect(const char *server,
                     sasl_callback_t *cbs)
 {
     mupdate_handle *h = NULL;
-    int local_cbs = 0;
     const char *status = NULL;
 
     if (!handle) {
@@ -115,21 +114,21 @@ EXPORTED int mupdate_connect(const char *server,
     h = xzmalloc(sizeof(mupdate_handle));
     *handle = h;
 
+    h->sasl_cb = NULL;
     if (!cbs) {
-        local_cbs = 1;
         cbs = mysasl_callbacks(config_getstring(IMAPOPT_MUPDATE_USERNAME),
                                config_getstring(IMAPOPT_MUPDATE_AUTHNAME),
                                config_getstring(IMAPOPT_MUPDATE_REALM),
                                config_getstring(IMAPOPT_MUPDATE_PASSWORD));
+        h->sasl_cb = cbs;
     }
 
     h->conn = backend_connect(NULL, server, &mupdate_protocol,
                               "", cbs, &status, -1);
 
-    /* xxx unclear that this is correct, but it prevents a memory leak */
-    if (local_cbs) free_callbacks(cbs);
-
     if (!h->conn) {
+        free_callbacks(h->sasl_cb);
+        h->sasl_cb = NULL;
         syslog(LOG_ERR, "mupdate_connect failed: %s", status ? status : "no auth status");
         return MUPDATE_NOCONN;
     }
@@ -149,6 +148,9 @@ EXPORTED void mupdate_disconnect(mupdate_handle **hp)
 
     backend_disconnect(h->conn);
     free(h->conn);
+
+    free_callbacks(h->sasl_cb);
+    h->sasl_cb = NULL;
 
     buf_free(&(h->tag));
     buf_free(&(h->cmd));
