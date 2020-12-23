@@ -312,9 +312,12 @@ static int jmap_vacation_get(jmap_req_t *req)
     }
 
     r = sievedb_lookup_id(db, JMAP_URN_VACATION, &sdata, 0);
-    if (r && r != CYRUSDB_NOTFOUND) {
-        r = IMAP_INTERNAL;
-        goto done;
+    if (r) {
+        if (r == CYRUSDB_NOTFOUND) r = 0;
+        else {
+            r = IMAP_INTERNAL;
+            goto done;
+        }
     }
 
     /* Does the client request specific responses? */
@@ -547,9 +550,12 @@ static int jmap_vacation_set(struct jmap_req *req)
     }
 
     r = sievedb_lookup_id(db, JMAP_URN_VACATION, &sdata, 0);
-    if (r && r != CYRUSDB_NOTFOUND) {
-        r = IMAP_INTERNAL;
-        goto done;
+    if (r) {
+        if (r == CYRUSDB_NOTFOUND) r = 0;
+        else {
+            r = IMAP_INTERNAL;
+            goto done;
+        }
     }
 
     struct buf buf = BUF_INITIALIZER;
