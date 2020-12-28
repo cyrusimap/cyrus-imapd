@@ -699,7 +699,8 @@ static int do_synclogfile(const char *synclogfile)
         if (r == IMAP_MAILBOX_LOCKED || r == IMAP_AGAIN) {
             nskipped++;
             if (nskipped > 10000) {
-                syslog(LOG_ERR, "IOERROR: skipped too many times at %s", mboxname);
+                xsyslog(LOG_ERR, "IOERROR: skipped too many times",
+                                 "mailbox=<%s>", mboxname);
                 break;
             }
             r = 0;
@@ -707,8 +708,9 @@ static int do_synclogfile(const char *synclogfile)
             strarray_append(mboxnames, mboxname);
         }
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to index %s: %s",
-                   mboxname, error_message(r));
+            xsyslog(LOG_ERR, "IOERROR: failed to index",
+                             "mailbox=<%s> error=<%s>",
+                             mboxname, error_message(r));
             break;
         }
         if (sleepmicroseconds)
@@ -781,8 +783,9 @@ static void do_rolling(const char *channel)
                     syslog(LOG_DEBUG, "skipping nonexistent mailbox: %s", mboxname);
                 }
                 else if (r) {
-                    syslog(LOG_ERR, "IOERROR: squatter failed to index and forgetting %s: %s",
-                           mboxname, error_message(r));
+                    xsyslog(LOG_ERR, "IOERROR: failed to index and forgetting",
+                                     "mailbox=<%s> error=<%s>",
+                                     mboxname, error_message(r));
                 }
                 if (sleepmicroseconds)
                     usleep(sleepmicroseconds);
