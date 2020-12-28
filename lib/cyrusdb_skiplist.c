@@ -1350,8 +1350,8 @@ static int mystore(struct dbengine *db,
     lseek(tid->syncfd, tid->logend, SEEK_SET);
     r = retry_writev(tid->syncfd, iov, num_iov);
     if (r < 0) {
-        /* XXX is there a filename or something we can log here */
-        xsyslog(LOG_ERR, "DBERROR: retry_writev failed", NULL);
+        xsyslog(LOG_ERR, "DBERROR: retry_writev failed",
+                         "filename=<%s>", db->fname);
         myabort(db, tid);
         return CYRUSDB_IOERROR;
     }
@@ -1442,8 +1442,8 @@ static int mydelete(struct dbengine *db,
         /* update end-of-log */
         r = retry_write(tid->syncfd, (char *) writebuf, 8);
         if (r < 0) {
-            /* XXX is there a filename or something we can log here */
-            xsyslog(LOG_ERR, "DBERROR: retry_write failed", NULL);
+            xsyslog(LOG_ERR, "DBERROR: retry_write failed",
+                             "filename=<%s>", db->fname);
             myabort(db, tid);
             return CYRUSDB_IOERROR;
         }
