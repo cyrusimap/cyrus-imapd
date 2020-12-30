@@ -1,8 +1,8 @@
 :tocdepth: 3
 
-==========================
+=================================
 Cyrus IMAP 3.5.0-alpha0 Tag Notes
-==========================
+=================================
 
 Unavailable for download as this is a development branch only.
 
