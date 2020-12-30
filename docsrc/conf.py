@@ -530,6 +530,7 @@ extlinks = {
         'cyrus-2.5':('https://www.cyrusimap.org/2.5%s',None),
         'cyrus-3.0':('https://www.cyrusimap.org/3.0%s',None),
         'cyrus-3.2':('https://www.cyrusimap.org/3.2%s',None),
+        'cyrus-3.4':('https://www.cyrusimap.org/3.4%s',None),
         'cyrus-dev':('https://www.cyrusimap.org/dev%s',None),
         'cyrus-stable': ('https://www.cyrusimap.org%s',None),
         'github-release':
