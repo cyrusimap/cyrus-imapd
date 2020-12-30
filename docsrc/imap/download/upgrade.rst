@@ -354,7 +354,7 @@ Your upgrade is complete! We have a super-quick survey (3 questions only,
 anonymous responses) we would love for you to fill out, so we can get a feel for
 how many Cyrus installations are out there, and how the upgrade process went.
 
-|3.3 survey link|
+|3.4 survey link|
 
 .. |3.4 survey link| raw:: html
 
