@@ -56,7 +56,6 @@
 #include "arrayu64.h"
 #include "cyr_qsort_r.h"
 #include "hash.h"
-#include "http_err.h"
 #include "http_jmap.h"
 #include "jmap_mail.h"
 #include "jmap_mail_query.h"
@@ -77,6 +76,7 @@
 #include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
 #include "imap/imap_err.h"
 
 static int jmap_sieve_get(jmap_req_t *req);
