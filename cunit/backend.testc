@@ -316,7 +316,7 @@ static void test_backend_version(void)
         { "Cyrus IMAP 3.2.8", 16 },
         { "Cyrus IMAP 3.2.9", 16 },
 
-        /* 3.3 supported 17..?? but we don't bother detecting that microscopically */
+        /* 3.3 had just one */
         { "Cyrus IMAP 3.3.0", 17 },
         { "Cyrus IMAP 3.3.1", 17 },
         { "Cyrus IMAP 3.3.2", 17 },
@@ -327,6 +327,30 @@ static void test_backend_version(void)
         { "Cyrus IMAP 3.3.7", 17 },
         { "Cyrus IMAP 3.3.8", 17 },
         { "Cyrus IMAP 3.3.9", 17 },
+
+        /* 3.4 had just one */
+        { "Cyrus IMAP 3.4.0", 17 },
+        { "Cyrus IMAP 3.4.1", 17 },
+        { "Cyrus IMAP 3.4.2", 17 },
+        { "Cyrus IMAP 3.4.3", 17 },
+        { "Cyrus IMAP 3.4.4", 17 },
+        { "Cyrus IMAP 3.4.5", 17 },
+        { "Cyrus IMAP 3.4.6", 17 },
+        { "Cyrus IMAP 3.4.7", 17 },
+        { "Cyrus IMAP 3.4.8", 17 },
+        { "Cyrus IMAP 3.4.9", 17 },
+
+        /* 3.5 supported 17..?? but we don't bother detecting that microscopically */
+        { "Cyrus IMAP 3.5.0", 17 },
+        { "Cyrus IMAP 3.5.1", 17 },
+        { "Cyrus IMAP 3.5.2", 17 },
+        { "Cyrus IMAP 3.5.3", 17 },
+        { "Cyrus IMAP 3.5.4", 17 },
+        { "Cyrus IMAP 3.5.5", 17 },
+        { "Cyrus IMAP 3.5.6", 17 },
+        { "Cyrus IMAP 3.5.7", 17 },
+        { "Cyrus IMAP 3.5.8", 17 },
+        { "Cyrus IMAP 3.5.9", 17 },
     };
 
     default_conditions();
