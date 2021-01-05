@@ -314,6 +314,9 @@ magic(SearchSetForceScanMode => sub {
 magic(SearchFuzzyAlways => sub {
     shift->config_set(search_fuzzy_always => '1');
 });
+magic(SearchEngineSquat => sub {
+    shift->config_set(search_engine => 'squat');
+});
 magic(TLS => sub {
     # XXX Here be dragons.  Check existing tests that use this magic
     # XXX for some of the hoops you may still need to jump through!
