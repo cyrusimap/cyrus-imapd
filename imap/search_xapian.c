@@ -4169,6 +4169,11 @@ out:
     return r;
 }
 
+static int can_match(enum search_op matchop, int partnum)
+{
+    return matchop == SEOP_FUZZYMATCH && partnum != SEARCH_PART_NONE;
+}
+
 const struct search_engine xapian_search_engine = {
     "Xapian",
     SEARCH_FLAG_CAN_BATCH | SEARCH_FLAG_CAN_GUIDSEARCH,
@@ -4184,6 +4189,7 @@ const struct search_engine xapian_search_engine = {
     compact_dbs,
     delete_user,  /* XXX: fixme */
     check_config,
-    langstats
+    langstats,
+    can_match
 };
 
