@@ -1046,9 +1046,10 @@ static int is_indexed_node(const search_expr_t *e)
 {
     if (e->op == SEOP_NOT)
         return is_indexed_node(e->children);
-    return (e->op == SEOP_FUZZYMATCH &&
-            e->attr &&
-            e->attr->part != SEARCH_PART_NONE);
+
+    return e->attr &&
+        ((e->op == SEOP_FUZZYMATCH && e->attr->part != SEARCH_PART_NONE) ||
+         (e->op == SEOP_MATCH && search_can_match(e->op, e->attr->part)));
 }
 
 static int is_folder_or_indexed(search_expr_t *e, void *rock __attribute__((unused)))

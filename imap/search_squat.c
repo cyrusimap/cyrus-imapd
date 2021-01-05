@@ -93,17 +93,22 @@ typedef struct {
 static const char *squat_strerror(int err);
 
 static const char * const doctypes_by_part[SEARCH_NUM_PARTS] = {
-    "mh",
-    "f",
-    "t",
-    "c",
-    "b",
-    "s",
-    "h",
-    "m",
-    "o",
-    "a",
-    "ab"
+    "msh", // SEARCH_PART_ANY
+    "f",   // SEARCH_PART_FROM
+    "t",   // SEARCH_PART_TO
+    "c",   // SEARCH_PART_CC
+    "b",   // SEARCH_PART_BCC
+    "s",   // SEARCH_PART_SUBJECT
+    NULL,  // SEARCH_PART_LISTID
+    NULL,  // SEARCH_PART_TYPE
+    "h",   // SEARCH_PART_HEADERS
+    "m",   // SEARCH_PART_BODY
+    "o",   // SEARCH_PART_LOCATION
+    "a",   // SEARCH_PART_ATTACHMENTNAME
+    NULL,  // SEARCH_PART_ATTACHMENTBODY
+    NULL,  // SEARCH_PART_DELIVEREDTO
+    NULL,  // SEARCH_PART_LANGUAGE
+    NULL   // SEARCH_PART_PRIORITY
 };
 
 /* The document name is of the form
@@ -432,10 +437,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     unsigned int uid;
     int r = 0;
 
-#if DEBUG
-    if (bb->verbose > 1)
-        syslog(LOG_NOTICE, "Squat end_search()");
-#endif
+    syslog(bb->verbose > 1 ? LOG_NOTICE : LOG_DEBUG, "Squat run()");
 
     /* check we had balanced ->begin_boolean and ->end_boolean calls */
     if (bb->depth != 1)
@@ -1013,6 +1015,12 @@ static int end_update(search_text_receiver_t *rx)
     return 0;
 }
 
+static int can_match(enum search_op matchop, int partnum)
+{
+    return (matchop == SEOP_MATCH || matchop == SEOP_FUZZYMATCH) &&
+        doctypes_by_part[partnum];
+}
+
 const struct search_engine squat_search_engine = {
     "SQUAT",
     0,
@@ -1028,6 +1036,7 @@ const struct search_engine squat_search_engine = {
     /* compact */NULL,
     /* deluser */NULL,
     /* check_config */NULL,
-    /* langstats */NULL
+    /* langstats */NULL,
+    can_match
 };
 
