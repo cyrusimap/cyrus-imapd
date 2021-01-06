@@ -406,7 +406,7 @@ static const char *set_create(struct jmap_req *req,
         if (!sievedir_valid_name(&buf)) {
             json_array_append_new(invalid, json_string("name"));
         }
-        else if (!strcmp(name, "jmap_vacation")) {
+        else if (!strcmp(name, JMAP_URN_VACATION)) {
             json_array_append_new(invalid, json_string("name"));
         }
         else {
@@ -496,7 +496,7 @@ static void set_update(struct jmap_req *req,
             if (!sievedir_valid_name(&buf)) {
                 json_array_append_new(invalid, json_string("name"));
             }
-            else if (!strcmp(name, "jmap_vacation")) {
+            else if (!strcmp(name, JMAP_URN_VACATION)) {
                 err = json_pack("{s:s s:s}", "type", "forbidden",
                                 "description",
                                 "MUST use VacationResponse/set method");
@@ -600,7 +600,7 @@ static void set_destroy(const char *id,
     else if (sdata->isactive) {
         err = json_pack("{s:s}", "type", "scriptIsActive");
     }
-    else if (!strcmp(sdata->name, "jmap_vacation")) {
+    else if (!strcmp(sdata->name, JMAP_URN_VACATION)) {
         err = json_pack("{s:s s:s}", "type", "forbidden",
                         "description", "MUST use VacationResponse/set method");
     }
