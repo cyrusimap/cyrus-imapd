@@ -4593,8 +4593,7 @@ EXPORTED strarray_t *mboxlist_sublist(const char *userid)
     r = mboxlist_opensubs(userid, &subs);
     if (r) goto done;
 
-    /* faster to do it all in a single slurp! */
-    r = cyrusdb_foreach(subs, "", 0, subsadd_cb, NULL, list, 0);
+    r = cyrusdb_foreach(subs, "", 0, NULL, subsadd_cb, list, 0);
 
     mboxlist_closesubs(subs);
 
