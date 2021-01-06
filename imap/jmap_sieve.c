@@ -627,6 +627,9 @@ static const char *set_create(struct jmap_req *req,
             err = json_pack("{s:s}", "type", "alreadyExists");
             goto done;
         }
+        else if (!strcmp(name, "jmap_vacation")) {
+            json_array_append_new(invalid, json_string("name"));
+        }
     }
 
     arg = json_object_get(jsieve, "blobId");
@@ -698,6 +701,11 @@ static void set_update(struct jmap_req *req,
     script = script_from_id(sievedir, id, SCRIPT_NAME_ONLY);
     if (!script) {
         err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+    else if (!strcmp(script, "jmap_vacation")) {
+        err = json_pack("{s:s s:s}", "type", "forbidden",
+                        "description", "MUST use VacationResponse/set method");
         goto done;
     }
 
@@ -796,6 +804,10 @@ static void set_destroy(const char *id,
     }
     else if (sievedir_script_isactive(sievedir, script)) {
         err = json_pack("{s:s}", "type", "scriptIsActive");
+    }
+    else if (!strcmp(script, "jmap_vacation")) {
+        err = json_pack("{s:s s:s}", "type", "forbidden",
+                        "description", "MUST use VacationResponse/set method");
     }
     else {
         char path[PATH_MAX];
