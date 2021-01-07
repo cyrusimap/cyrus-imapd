@@ -5200,7 +5200,6 @@ EXPORTED int mailbox_create(const char *name,
     int n;
     int createfnames[] = { META_INDEX, META_HEADER, 0 };
     struct mailboxlist *listitem;
-    strarray_t *initial_flags = NULL;
 
     if (!uniqueid) uniqueid = makeuuid();
 
@@ -5342,20 +5341,6 @@ EXPORTED int mailbox_create(const char *name,
 
     mailbox->header_dirty = 1;
 
-    /* pre-set any required permanent flags */
-    if (config_getstring(IMAPOPT_MAILBOX_INITIAL_FLAGS)) {
-        const char *val = config_getstring(IMAPOPT_MAILBOX_INITIAL_FLAGS);
-        int i;
-
-        initial_flags = strarray_split(val, NULL, 0);
-
-        for (i = 0; i < initial_flags->count; i++) {
-            const char *flag = strarray_nth(initial_flags, i);
-            r = mailbox_user_flag(mailbox, flag, NULL, /*create*/1);
-            if (r) goto done;
-        }
-    }
-
     r = seen_create_mailbox(NULL, mailbox);
     if (r) goto done;
     r = mailbox_commit(mailbox);
@@ -5372,8 +5357,6 @@ done:
         *mailboxptr = mailbox;
     else
         mailbox_close(&mailbox);
-
-    strarray_free(initial_flags);
 
     return r;
 }
