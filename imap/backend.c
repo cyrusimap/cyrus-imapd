@@ -651,6 +651,7 @@ static int backend_authenticate(struct backend *s, const char *userid,
     if (iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60) != 0)
         return SASL_FAIL;
 
+    s->sasl_cb = NULL;
     if (!cb) {
         strlcpy(optstr, s->hostname, sizeof(optstr));
         p = strchr(optstr, '.');
@@ -670,10 +671,18 @@ static int backend_authenticate(struct backend *s, const char *userid,
                         (userid  && *userid ? SASL_NEED_PROXY : 0) |
                         (prot->u.std.sasl_cmd.parse_success ? SASL_SUCCESS_DATA : 0),
                         &s->saslconn);
-    if (r != SASL_OK) return r;
+    if (r != SASL_OK) {
+        free_callbacks(s->sasl_cb);
+        s->sasl_cb = NULL;
+        return r;
+    }
 
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
-    if (r != SASL_OK) return r;
+    if (r != SASL_OK) {
+        free_callbacks(s->sasl_cb);
+        s->sasl_cb = NULL;
+        return r;
+    }
 
     /* Get SASL mechanism list.  We can force a particular
        mechanism using a <shorthost>_mechs option */
