@@ -1990,6 +1990,8 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 static int sieve_find_script(const char *user, const char *domain,
                              const char *script, char *fname, size_t size)
 {
+    const char *bc_fname = fname;
+    char *freeme = NULL;
     char *ext = NULL;
 
     if (!user && !script) {
@@ -2010,43 +2012,29 @@ static int sieve_find_script(const char *user, const char *domain,
         /* check ~USERNAME/.sieve */
         snprintf(fname, size, "%s/%s", pent->pw_dir, script ? script : ".sieve");
     } else { /* look in sieve_dir */
-        size_t len = strlcpy(fname, sieve_dir, size);
+        struct buf buf = BUF_INITIALIZER;
 
-        if (domain) {
-            char dhash = (char) dir_hash_c(domain, config_fulldirhash);
-            len += snprintf(fname+len, size-len, "%s%c/%s",
-                            FNAME_DOMAINDIR, dhash, domain);
-        }
+        if (user) buf_setcstr(&buf, user);
+        if (domain) buf_printf(&buf, "@%s", domain);
+        
+        size_t len = strlcpy(fname, user_sieve_path(buf_cstring(&buf)), size);
+        buf_free(&buf);
 
-        if (!user) { /* global script */
-            len = strlcat(fname, "/global/", size);
+        if (!script) { /* default script */
+            strlcat(fname, "/defaultbc", size);
+            bc_fname = freeme = sieve_getdefaultbcfname(fname);
         }
         else {
-            char hash = (char) dir_hash_c(user, config_fulldirhash);
-            len += snprintf(fname+len, size-len, "/%c/%s/", hash, user);
-
-            if (!script) { /* default script */
-                char *bc_fname;
-
-                strlcat(fname, "defaultbc", size);
-
-                bc_fname = sieve_getdefaultbcfname(fname);
-                if (bc_fname) {
-                    sieve_rebuild(NULL, bc_fname, 0, NULL);
-                    free(bc_fname);
-                }
-
-                return 0;
-            }
+            snprintf(fname+len, size-len, "/%s.bc", script);
         }
-
-        snprintf(fname+len, size-len, "%s.bc", script);
     }
 
     /* don't do this for ~username ones */
-    ext = strrchr(fname, '.');
+    ext = strrchr(bc_fname, '.');
     if (ext && !strcmp(ext, ".bc"))
-        sieve_rebuild(NULL, fname, 0, NULL);
+        sieve_rebuild(NULL, bc_fname, 0, NULL);
+
+    free(freeme);
 
     return 0;
 }
