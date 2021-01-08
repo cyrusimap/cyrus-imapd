@@ -83,6 +83,8 @@
 #include "sync_log.h"
 #include "user.h"
 #include "util.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 #include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
@@ -137,6 +139,7 @@ static int user_deleteacl(char *name, int matchlen, int category, void* rock)
 EXPORTED const char *user_sieve_path(const char *inuser)
 {
     static char sieve_path[2048];
+    size_t len, size = sizeof(sieve_path);
     char hash, *domain;
     char *user = xstrdupnull(inuser);
     char *p;
@@ -150,20 +153,22 @@ EXPORTED const char *user_sieve_path(const char *inuser)
             *p = '.';
     }
 
+    len = strlcpy(sieve_path, config_getstring(IMAPOPT_SIEVEDIR), size);
+
     if (config_virtdomains && (domain = strchr(user, '@'))) {
         char d = (char) dir_hash_c(domain+1, config_fulldirhash);
         *domain = '\0';  /* split user@domain */
-        hash = (char) dir_hash_c(user, config_fulldirhash);
-        snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
-                 config_getstring(IMAPOPT_SIEVEDIR),
-                 FNAME_DOMAINDIR, d, domain+1, hash, user);
-        *domain = '@';  /* reassemble user@domain */
+        len += snprintf(sieve_path + len, size - len, "%s%c/%s",
+                        FNAME_DOMAINDIR, d, domain+1);
     }
-    else {
+
+    if (user && *user) {
         hash = (char) dir_hash_c(user, config_fulldirhash);
 
-        snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-                 config_getstring(IMAPOPT_SIEVEDIR), hash, user);
+        snprintf(sieve_path + len, size - len, "/%c/%s", hash, user);
+    }
+    else {
+        strlcat(sieve_path, "/global", size);
     }
 
     free(user);
