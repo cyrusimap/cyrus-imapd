@@ -913,21 +913,22 @@ void sync_sieve_list_free(struct sync_sieve_list **lp)
 }
 
 int sync_sieve_upload(const char *userid, const char *name,
-                      time_t last_update, const char *content,
+                      time_t last_update __attribute__((unused)),
+                      const char *content,
                       size_t len)
 {
     const char *sieve_path = user_sieve_path(userid);
-    char tmpname[2048];
     char newname[2048];
     char *ext;
-    FILE *file;
     int   r = 0;
     struct stat sbuf;
-    struct utimbuf utimbuf;
+    struct sieve_db *db = NULL;
+    struct mailbox *mailbox = NULL;
+    struct sieve_data *sdata = NULL;
 
     ext = strrchr(name, '.');
-    if (ext && !strcmp(ext, ".bc")) {
-        /* silently ignore attempts to upload compiled bytecode */
+    if (!ext || strcmp(ext, SCRIPT_SUFFIX)) {
+        /* silently ignore attempts to upload anything other than a script */
         return 0;
     }
 
@@ -939,40 +940,38 @@ int sync_sieve_upload(const char *userid, const char *name,
         }
     }
 
-    snprintf(tmpname, sizeof(tmpname), "%s/sync_tmp-%lu",
-             sieve_path, (unsigned long)getpid());
-    snprintf(newname, sizeof(newname), "%s/%s", sieve_path, name);
-
-    if ((file=fopen(tmpname, "w")) == NULL) {
-        return IMAP_IOERROR;
+    db = sievedb_open_userid(userid);
+    if (!db) {
+        syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
+        r = IMAP_INTERNAL;
+        goto done;
     }
 
-    /* XXX - error handling */
-    fwrite(content, 1, len, file);
-
-    if ((fflush(file) != 0) || (fsync(fileno(file)) < 0))
-        r = IMAP_IOERROR;
-
-    fclose(file);
-
-    utimbuf.actime  = time(NULL);
-    utimbuf.modtime = last_update;
-
-    if (!r && (utime(tmpname, &utimbuf) < 0))
-        r = IMAP_IOERROR;
-
-    if (!r && (rename(tmpname, newname) < 0))
-        r = IMAP_IOERROR;
-
-#ifdef USE_SIEVE
-    if (!r) {
-        r = sieve_rebuild(newname, NULL, /*force*/ 1, NULL);
-        if (r == SIEVE_PARSE_ERROR || r == SIEVE_FAIL)
-            r = IMAP_SYNC_BADSIEVE;
+    r = sieve_ensure_folder(userid, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
+        goto done;
     }
-#endif
 
-    sync_log_sieve(userid);
+    r = sievedb_lookup_name(db, mailbox->name, newname, &sdata, 0);
+    if (!r || r == CYRUSDB_NOTFOUND) {
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_init_ro(&buf, content, len);
+        snprintf(newname, sizeof(newname), "%.*s", (int) (ext - name), name);
+        sdata->name = newname;
+        sdata->content = buf_cstring(&buf);
+
+        r = sieve_script_store(mailbox, sdata);
+        buf_free(&buf);
+    }
+
+    if (!r) sync_log_sieve(userid);
+    else if (r == CYRUSDB_IOERROR) r = IMAP_IOERROR;
+
+  done:
+    mailbox_close(&mailbox);
+    sievedb_close(db);
 
     return r;
 }
