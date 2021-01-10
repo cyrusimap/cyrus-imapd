@@ -502,6 +502,8 @@ static int foreach(struct dbengine *db,
 
     struct buf prefixbuf = BUF_INITIALIZER;
 
+    assert(cb);
+
     r = starttxn_or_refetch(db, mytid);
     if (r) return r;
 
