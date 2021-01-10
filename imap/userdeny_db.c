@@ -333,7 +333,7 @@ EXPORTED int denydb_foreach(denydb_proc_t proc, void *rock)
     dr.rock = rock;
 
     return cyrusdb_foreach(denydb, "", 0,
-                           denydb_foreach_cb, NULL, &dr,
+                           NULL, denydb_foreach_cb, &dr,
                            /* txn */NULL);
 }
 
