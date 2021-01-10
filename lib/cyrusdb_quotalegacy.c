@@ -581,6 +581,8 @@ static int foreach(struct dbengine *db,
     int i;
     char *tmpprefix = NULL, *p = NULL;
 
+    assert(cb);
+
     /* if we need to truncate the prefix, do so */
     if (prefix[prefixlen] != '\0') {
         tmpprefix = xmalloc(prefixlen + 1);
