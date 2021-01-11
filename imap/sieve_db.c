@@ -217,23 +217,24 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
     memset(sdata, 0, sizeof(struct sieve_data));
 
-    sdata->modseq = sqlite3_column_int64(stmt, 4);
-    sdata->createdmodseq = sqlite3_column_int64(stmt, 5);
-    sdata->alive = sqlite3_column_int(stmt, 10);
+    sdata->modseq = sqlite3_column_int64(stmt, 5);
+    sdata->createdmodseq = sqlite3_column_int64(stmt, 6);
+    sdata->alive = sqlite3_column_int(stmt, 11);
     if (!rrock->tombstones && !sdata->alive)
         return 0;
 
     sdata->rowid = sqlite3_column_int(stmt, 0);
     sdata->creationdate = sqlite3_column_int(stmt, 1);
-    sdata->imap_uid = sqlite3_column_int(stmt, 3);
-    sdata->isactive = sqlite3_column_int(stmt, 9);
+    sdata->lastupdated = sqlite3_column_int(stmt, 2);
+    sdata->imap_uid = sqlite3_column_int(stmt, 4);
+    sdata->isactive = sqlite3_column_int(stmt, 10);
 
     if (rrock->cb) {
         /* We can use the column data directly for the callback */
-        sdata->mailbox = (const char *) sqlite3_column_text(stmt, 2);
-        sdata->id = (const char *) sqlite3_column_text(stmt, 6);
-        sdata->name = (const char *) sqlite3_column_text(stmt, 7);
-        sdata->content = (const char *) sqlite3_column_text(stmt, 8);
+        sdata->mailbox = (const char *) sqlite3_column_text(stmt, 3);
+        sdata->id = (const char *) sqlite3_column_text(stmt, 7);
+        sdata->name = (const char *) sqlite3_column_text(stmt, 8);
+        sdata->content = (const char *) sqlite3_column_text(stmt, 9);
         r = rrock->cb(rrock->rock, sdata);
     }
     else {
@@ -241,16 +242,16 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
          * we need to make a copy of the column data before
          * it gets flushed by sqlite3_step() or sqlite3_reset() */
         sdata->mailbox =
-            column_text_to_buf((const char *) sqlite3_column_text(stmt, 2),
+            column_text_to_buf((const char *) sqlite3_column_text(stmt, 3),
                                &db->mailbox);
         sdata->id =
-            column_text_to_buf((const char *) sqlite3_column_text(stmt, 6),
+            column_text_to_buf((const char *) sqlite3_column_text(stmt, 7),
                                &db->id);
         sdata->name =
-            column_text_to_buf((const char *) sqlite3_column_text(stmt, 7),
+            column_text_to_buf((const char *) sqlite3_column_text(stmt, 8),
                                &db->name);
         sdata->content =
-            column_text_to_buf((const char *) sqlite3_column_text(stmt, 8),
+            column_text_to_buf((const char *) sqlite3_column_text(stmt, 9),
                                &db->content);
     }
 
@@ -258,8 +259,8 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 }
 
 #define CMD_GETFIELDS                                                       \
-    "SELECT rowid, creationdate, mailbox, imap_uid, modseq, createdmodseq," \
-    "  id, name, content, isactive, alive"                                  \
+    "SELECT rowid, creationdate, lastupdated, mailbox, imap_uid,"           \
+    "  modseq, createdmodseq, id, name, content, isactive, alive"           \
     " FROM sieve_scripts"
 
 
@@ -372,14 +373,15 @@ EXPORTED int sievedb_foreach(struct sieve_db *sievedb,
 
 #define CMD_INSERT                                                      \
     "INSERT INTO sieve_scripts ("                                       \
-    "  creationdate, mailbox, imap_uid, modseq, createdmodseq,"         \
-    "  id, name, content, isactive, alive )"                           \
+    "  creationdate, lastupdated, mailbox, imap_uid,"                   \
+    "  modseq, createdmodseq,  id, name, content, isactive, alive )"    \
     " VALUES ("                                                         \
-    "  :creationdate, :mailbox, :imap_uid, :modseq, :createdmodseq,"    \
-    "  :id, :name, :content, :isactive, :alive );"
+    "  :creationdate, :lastupdated, :mailbox, :imap_uid,"               \
+    "  :modseq, :createdmodseq,  :id, :name, :content, :isactive, :alive );"
 
 #define CMD_UPDATE                       \
     "UPDATE sieve_scripts SET"           \
+    "  lastupdated   = :lastupdated,"    \
     "  imap_uid      = :imap_uid,"       \
     "  modseq        = :modseq,"         \
     "  name          = :name,"           \
@@ -391,6 +393,7 @@ EXPORTED int sievedb_foreach(struct sieve_db *sievedb,
 EXPORTED int sievedb_write(struct sieve_db *sievedb, struct sieve_data *sdata)
 {
     struct sqldb_bindval bval[] = {
+        { ":lastupdated",   SQLITE_INTEGER, { .i = sdata->lastupdated   } },
         { ":imap_uid",      SQLITE_INTEGER, { .i = sdata->imap_uid      } },
         { ":modseq",        SQLITE_INTEGER, { .i = sdata->modseq        } },
         { ":name",          SQLITE_TEXT,    { .s = sdata->name          } },
@@ -408,25 +411,25 @@ EXPORTED int sievedb_write(struct sieve_db *sievedb, struct sieve_data *sdata)
     if (sdata->rowid) {
         cmd = CMD_UPDATE;
 
-        bval[6].name = ":rowid";
-        bval[6].type = SQLITE_INTEGER;
-        bval[6].val.i = sdata->rowid;
+        bval[7].name = ":rowid";
+        bval[7].type = SQLITE_INTEGER;
+        bval[7].val.i = sdata->rowid;
     }
     else {
         cmd = CMD_INSERT;
 
-        bval[6].name = ":creationdate";
-        bval[6].type = SQLITE_INTEGER;
-        bval[6].val.i = sdata->creationdate;
-        bval[7].name = ":createdmodseq";
+        bval[7].name = ":creationdate";
         bval[7].type = SQLITE_INTEGER;
-        bval[7].val.i = sdata->createdmodseq;
-        bval[8].name = ":id";
-        bval[8].type = SQLITE_TEXT;
-        bval[8].val.s = sdata->id;
-        bval[9].name = ":mailbox";
+        bval[7].val.i = sdata->creationdate;
+        bval[8].name = ":createdmodseq";
+        bval[8].type = SQLITE_INTEGER;
+        bval[8].val.i = sdata->createdmodseq;
+        bval[9].name = ":id";
         bval[9].type = SQLITE_TEXT;
-        bval[9].val.s = sdata->mailbox;
+        bval[9].val.s = sdata->id;
+        bval[10].name = ":mailbox";
+        bval[10].type = SQLITE_TEXT;
+        bval[10].val.s = sdata->mailbox;
     }
 
     r = sqldb_exec(sievedb->db, cmd, bval, NULL, NULL);

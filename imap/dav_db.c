@@ -178,6 +178,7 @@
     "CREATE TABLE IF NOT EXISTS sieve_scripts ("                        \
     " rowid INTEGER PRIMARY KEY,"                                       \
     " creationdate INTEGER,"                                            \
+    " lastupdated INTEGER,"                                             \
     " mailbox TEXT NOT NULL,"                                           \
     " imap_uid INTEGER,"                                                \
     " modseq INTEGER,"                                                  \
