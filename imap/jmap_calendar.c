@@ -8961,7 +8961,7 @@ static void notifsearch_run(const char *userid,
     struct mailbox_iter *iter = mailbox_iter_init(notifmbox, 0, 0);
     message_t *msg;
     while ((msg = (message_t *) mailbox_iter_step(iter))) {
-        struct notifsearch_entry entry = { 0 };
+        struct notifsearch_entry entry = { MESSAGE_GUID_INITIALIZER, 0, 0, 0 };
 
         if (search->notiftype) {
             if (message_get_subject(msg, &buf) ||
