@@ -2023,6 +2023,8 @@ static int sieve_find_script(const char *user, const char *domain,
         if (!script) { /* default script */
             strlcat(fname, "/defaultbc", size);
             bc_fname = freeme = sieve_getdefaultbcfname(fname);
+
+            if (!bc_fname) return 0;  /* no default */
         }
         else {
             snprintf(fname+len, size-len, "/%s.bc", script);
