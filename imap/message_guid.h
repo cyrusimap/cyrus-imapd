@@ -60,6 +60,8 @@ struct message_guid {
     unsigned char value[MESSAGE_GUID_SIZE];
 };
 
+#define MESSAGE_GUID_INITIALIZER { GUID_UNKNOWN, { 0 } }
+
 /* Generate GUID from message */
 void message_guid_generate(struct message_guid *guid,
                            const char *msg_base, unsigned long msg_len);
