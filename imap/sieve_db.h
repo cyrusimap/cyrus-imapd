@@ -56,6 +56,7 @@ struct sieve_db;
 struct sieve_data {
     unsigned rowid;
     time_t creationdate;
+    time_t lastupdated;
     const char *mailbox;
     uint32_t imap_uid;
     modseq_t modseq;
