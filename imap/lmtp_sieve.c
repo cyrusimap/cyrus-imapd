@@ -70,7 +70,8 @@
 #include "prometheus.h"
 #include "prot.h"
 #include "times.h"
-#include "sieve/sieve_interface.h"
+#include "sieve_db.h"
+#include "sievedir.h"
 #include "smtpclient.h"
 #include "strhash.h"
 #include "tok.h"
@@ -1987,10 +1988,6 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 static int sieve_find_script(const char *user, const char *domain,
                              const char *script, char *fname, size_t size)
 {
-    const char *bc_fname = fname;
-    char *freeme = NULL;
-    char *ext = NULL;
-
     if (!user && !script) {
         return -1;
     }
@@ -2008,32 +2005,30 @@ static int sieve_find_script(const char *user, const char *domain,
 
         /* check ~USERNAME/.sieve */
         snprintf(fname, size, "%s/%s", pent->pw_dir, script ? script : ".sieve");
-    } else { /* look in sieve_dir */
-        struct buf buf = BUF_INITIALIZER;
 
-        if (user) buf_setcstr(&buf, user);
-        if (domain) buf_printf(&buf, "@%s", domain);
-        
-        size_t len = strlcpy(fname, user_sieve_path(buf_cstring(&buf)), size);
-        buf_free(&buf);
-
-        if (!script) { /* default script */
-            strlcat(fname, "/defaultbc", size);
-            bc_fname = freeme = sieve_getdefaultbcfname(fname);
-
-            if (!bc_fname) return 0;  /* no default */
-        }
-        else {
-            snprintf(fname+len, size-len, "/%s.bc", script);
-        }
+        return 0;
     }
 
-    /* don't do this for ~username ones */
-    ext = strrchr(bc_fname, '.');
-    if (ext && !strcmp(ext, ".bc"))
-        sieve_rebuild(NULL, bc_fname, 0, NULL);
+    /* look in sieve_dir */        
+    struct buf buf = BUF_INITIALIZER;
 
-    free(freeme);
+    if (user) buf_setcstr(&buf, user);
+    if (domain) buf_printf(&buf, "@%s", domain);
+
+    const char *userid = buf_cstring(&buf);
+    const char *sievedir = user_sieve_path(userid);
+
+    if (!script) { /* default script */
+        script = sievedir_get_active(sievedir);
+
+        if (!script) return 0;  /* no default */
+    }
+
+    snprintf(fname, size, "%s/%s.bc", sievedir, script);
+
+    sieve_script_rebuild(userid, sievedir, script);
+
+    buf_free(&buf);
 
     return 0;
 }

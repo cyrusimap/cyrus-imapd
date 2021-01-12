@@ -956,13 +956,12 @@ int sync_sieve_activate(const char *userid, const char *bcname)
     char target[2048];
     int r;
 
-#ifdef USE_SIEVE
-    snprintf(target, sizeof(target), "%s/%s", sieve_path, bcname);
-    sieve_rebuild(NULL, target, 0, NULL);
-#endif
-
     snprintf(target, sizeof(target), "%.*s",
              (int) strlen(bcname) - BYTECODE_SUFFIX_LEN, bcname);
+
+#ifdef USE_SIEVE
+    sieve_script_rebuild(userid, sieve_path, target);
+#endif
 
     r = sievedir_activate_script(sieve_path, target);
     if (r) return r;
