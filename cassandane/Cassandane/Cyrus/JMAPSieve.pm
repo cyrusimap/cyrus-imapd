@@ -87,6 +87,7 @@ sub new
     return $class->SUPER::new({
         config => $config,
         jmap => 1,
+        deliver => 1,
         adminstore => 1,
         services => [ 'imap', 'sieve', 'http' ]
     }, @args);
@@ -1140,6 +1141,65 @@ sub test_sieve_blind_replace_active
     $res = $self->download('cassandane', $blobId);
     $self->assert_str_equals('200', $res->{status});
     $self->assert_str_equals('discard;', $res->{content});
+}
+
+sub test_deliver_compile
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $target = "INBOX.target";
+
+    xlog $self, "Create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($target)
+         or die "Cannot create $target: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog $self, "Install a sieve script filing all mail into the target folder";
+    my $res = $jmap->CallMethods([
+        ['Blob/set', {
+            create => {
+               "A" => { content => "require [\"fileinto\"];\r\nfileinto \"$target\";\r\n" }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => JSON::null,
+                    blobId => "#A"
+                }
+            },
+            onSuccessActivateScript => "#1"
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_equals(JSON::true, $res->[1][1]{created}{1}{isActive});
+    $self->assert_null($res->[1][1]{updated});
+    $self->assert_null($res->[1][1]{destroyed});
+
+    my $id = $res->[1][1]{created}{"1"}{id};
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Delete the compiled bytecode";
+    my $sieve_dir = $self->{instance}->get_sieve_script_dir('cassandane');
+    my $fname = "$sieve_dir/$id.bc";
+    unlink $fname or die "Cannot unlink $fname: $!";
+
+    sleep 1; # so the two deliveries get different syslog timestamps
+
+    xlog $self, "Deliver another message - lmtpd should rebuild the missing bytecode";
+    my $msg2 = $self->{gen}->generate(subject => "Message 2");
+    $self->{instance}->deliver($msg2);
+
+    xlog $self, "Check that both messages made it to the target";
+    $self->{store}->set_folder($target);
+    $self->check_messages({ 1 => $msg1, 2 => $msg2 }, check_guid => 0);
 }
 
 1;
