@@ -61,6 +61,11 @@
 #include "util.h"
 #include "xmalloc.h"
 
+#include "sieve/bytecode.h"
+#include "sieve/bc_parse.h"
+#include "sieve/script.h"
+#include "sieve/sieve_interface.h"
+
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
@@ -265,7 +270,8 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
 
 #define CMD_SELNAME CMD_GETFIELDS                                           \
-    " WHERE mailbox = :mailbox AND name = :name;"
+    " WHERE name = :name;"
+//    " WHERE mailbox = :mailbox AND name = :name;"
 
 EXPORTED int sievedb_lookup_name(struct sieve_db *sievedb,
                                  const char *mailbox, const char *name,
@@ -932,5 +938,106 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
   done:
     mboxname_release(&namespacelock);
     mbname_free(&mbname);
+    return r;
+}
+
+EXPORTED int sieve_script_rebuild(const char *userid,
+                                  const char *sievedir, const char *script)
+{
+    struct buf namebuf = BUF_INITIALIZER, *content_buf = NULL;
+    struct sieve_data *sdata = NULL;
+    struct sieve_db *db = NULL;
+    const char *content = NULL;
+    time_t lastupdated;
+    struct stat bc_stat;
+    int r;
+
+    db = sievedb_open_userid(userid);
+    if (!db) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Lookup script in Sieve DB */
+    r = sievedb_lookup_name(db, NULL, script, &sdata, 0);
+    if (!r) {
+        lastupdated = sdata->lastupdated;
+        content = sdata->content;
+    }
+    else if (r == CYRUSDB_NOTFOUND) {
+        /* Get mtime of script file */
+        struct stat sbuf;
+
+        buf_printf(&namebuf, "%s/%s%s", sievedir, script, SCRIPT_SUFFIX);
+        r = stat(buf_cstring(&namebuf), &sbuf);
+        if (!r) {
+            lastupdated = sbuf.st_mtime;
+        }
+        else {
+            syslog(LOG_ERR, "IOERROR: stat %s: %m", buf_cstring(&namebuf));
+        }
+    }
+
+    if (r) {
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
+    /* Get mtime of bytecode file */
+    buf_reset(&namebuf);
+    buf_printf(&namebuf, "%s/%s%s", sievedir, script, BYTECODE_SUFFIX);
+    r = stat(buf_cstring(&namebuf), &bc_stat);
+    if (r && errno != ENOENT) {
+        syslog(LOG_ERR, "IOERROR: stat %s: %m", buf_cstring(&namebuf));
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
+    if (!r && bc_stat.st_mtime >= lastupdated) {
+        /* Check version of bytecode file */
+        sieve_execute_t *exe = NULL;
+        int version = -1;
+
+        r = sieve_script_load(buf_cstring(&namebuf), &exe);
+
+        if (!r) {
+            bc_header_parse((bytecode_input_t *) exe->bc_cur->data,
+                            &version, NULL);
+        }
+
+        sieve_script_unload(&exe);
+
+        if (version == BYTECODE_VERSION) {
+            syslog(LOG_DEBUG,
+                   "%s: %s is up to date\n", __func__, buf_cstring(&namebuf));
+            goto done;
+        }
+    }
+
+    if (!content) {
+        /* Fetch content from script file */
+        buf_reset(&namebuf);
+        buf_printf(&namebuf, "%s%s", script, SCRIPT_SUFFIX);
+
+        content_buf = sievedir_get_script(sievedir, buf_cstring(&namebuf));
+                                          
+        if (!content_buf) {
+            r = IMAP_IOERROR;
+            goto done;
+        }
+
+        content = buf_cstring(content_buf);
+    }
+
+    /* Update bytecode */
+    char *errors = NULL;
+    r = sievedir_put_script(sievedir, script, content, &errors);
+    free(errors);
+
+  done:
+    buf_destroy(content_buf);
+    buf_free(&namebuf);
+    sievedb_close(db);
+
     return r;
 }

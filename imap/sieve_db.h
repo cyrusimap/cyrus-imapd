@@ -152,4 +152,7 @@ struct buf *sieve_script_fetch(struct mailbox *mailbox,
 
 int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr);
 
+int sieve_script_rebuild(const char *userid,
+                         const char *sievedir, const char *script);
+
 #endif /* SIEVE_DB_H */
