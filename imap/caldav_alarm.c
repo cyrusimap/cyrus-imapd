@@ -1207,6 +1207,8 @@ done:
     mailbox_close(&mailbox);
 }
 
+#define MAX_CONSECUTIVE_ALARMS_PER_USER 50
+
 /* process alarms with triggers before a given time */
 EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp)
 {
@@ -1233,14 +1235,30 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp)
 
     caldav_alarm_close(alarmdb);
 
-    int i;
+    int i, cnt = 0;
+    char *prev_userid = NULL;
     for (i = 0; i < rock.list.count; i++) {
         struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
+        char *userid = mboxname_to_userid(data->mboxname);
+
+        if (strcmpnull(userid, prev_userid)) {
+            /* different user - reset counter */
+            free(prev_userid);
+            prev_userid = userid;
+            cnt = 1;
+        }
+        else if (++cnt >= MAX_CONSECUTIVE_ALARMS_PER_USER) {
+            /* exceeded per-user limit - move this alarm to end of list */
+            ptrarray_append(&rock.list, data);
+            continue;
+        }
+
         process_one_record(data, runtime);
         caldav_alarm_fini(data);
         free(data);
     }
     ptrarray_fini(&rock.list);
+    free(prev_userid);
 
     syslog(LOG_DEBUG, "done");
 
