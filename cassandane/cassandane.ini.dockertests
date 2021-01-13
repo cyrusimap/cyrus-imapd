@@ -58,7 +58,6 @@ suppress = Rename.rename_inbox JMAPBackup Sieve.snooze_tzid MboxEvent.tls_login_
 [config]
 # need to revert the defaults for now because tests were built do old defaults.
 # remove this when they're fixed!
-altnamespace = no
 unixhierarchysep = no
 zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
 
