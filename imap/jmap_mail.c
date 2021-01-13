@@ -5247,7 +5247,8 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
             _snippet_tr_flush,
             _snippet_tr_audit_mailbox,
             _snippet_tr_index_charset_flags,
-            _snippet_tr_index_message_format
+            _snippet_tr_index_message_format,
+            NULL
         },
         NULL, NULL, NULL, 0, BUF_INITIALIZER, NULL
     };

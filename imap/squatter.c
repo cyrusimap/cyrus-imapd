@@ -106,6 +106,8 @@ static int allow_duplicateparts = 0;
 static int reindex_partials = 0;
 static int reindex_minlevel = 0;
 static search_text_receiver_t *rx = NULL;
+static struct seqset *index_uids = NULL;
+static char *indexdir = NULL;
 
 static strarray_t *skip_domains = NULL;
 static strarray_t *skip_users = NULL;
@@ -136,6 +138,9 @@ __attribute__((noreturn)) static int usage(const char *name)
             "  -N name     index mailbox names starting with name\n"
             "  -S seconds  sleep seconds between indexing mailboxes\n"
             "  -Z          Xapian: use internal index rather than cyrus.indexed.db\n"
+            "(experimental):\n"
+            "  -M seqset   index message if UID is in seqset (can be specified multiple times)\n"
+            "  -D dir      create search database and metadata in directory dir\n"
             "\n"
             "Index sources:\n"
             "  none        all mailboxes (default)\n"
@@ -353,7 +358,7 @@ again:
         printf("Indexing mailbox %s... ", extname);
     }
 
-    r = search_update_mailbox(rx, mailbox, reindex_minlevel, flags);
+    r = search_update_mailbox(rx, mailbox, index_uids, reindex_minlevel, flags);
 
     mailbox_close(&mailbox);
 
@@ -411,6 +416,16 @@ static int do_indexer(const strarray_t *mboxnames)
     if (rx == NULL)
         return 0;       /* no indexer defined */
 
+    /* Set user-specified basedir */
+    if (indexdir) {
+        if (!rx->set_basedir) {
+            syslog(LOG_ERR, "search backend does not support custom basedir");
+            r = IMAP_INTERNAL;
+            goto done;
+        }
+        rx->set_basedir(rx, indexdir);
+    }
+
     for (i = 0 ; i < strarray_size(mboxnames) ; i++) {
         const char *mboxname = strarray_nth(mboxnames, i);
         if (!should_index(mboxname)) continue;
@@ -424,6 +439,7 @@ static int do_indexer(const strarray_t *mboxnames)
             usleep(sleepmicroseconds);
     }
 
+done:
     search_end_update(rx);
 
     return r;
@@ -905,7 +921,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:N:RUBXZDT:S:Fde:f:mn:riavpPL:Az:t:ouhl")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:N:RUBXZD:T:S:M:I:Fde:f:mn:riavpPL:Az:t:ouhl")) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
@@ -942,6 +958,10 @@ int main(int argc, char **argv)
             xapindexed_mode = 1;
             break;
 
+        case 'I':
+            indexdir = xstrdup(optarg);
+            break;
+
         case 'Z':
             xapindexed_mode = 1;
             break;
@@ -952,6 +972,20 @@ int main(int argc, char **argv)
 
         case 'D':
             allow_duplicateparts = 1;
+            break;
+
+        case 'M':
+            {
+                struct seqset *seq = seqset_parse(optarg, NULL, 0);
+                if (!seq) {
+                    fprintf(stderr, "%s: %s: invalid sequence\n", argv[0], optarg);
+                    exit(EX_USAGE);
+                }
+                if (index_uids) {
+                    seqset_join(index_uids, seq);
+                }
+                else index_uids = seq;
+            }
             break;
 
         case 'N':

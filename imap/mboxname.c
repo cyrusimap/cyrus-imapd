@@ -2132,7 +2132,9 @@ EXPORTED int mboxname_contains_parent(const char *mboxname, const char *prev)
 
 /* NOTE: caller must free, which is different from almost every
  * other interface in the whole codebase.  Grr */
-EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
+EXPORTED char *mboxname_conf_getpath_confdir(const mbname_t *mbname,
+                                             const char *suffix,
+                                             const char *confdir)
 {
     char *fname = NULL;
     char c[2], d[2];
@@ -2140,7 +2142,7 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
     if (mbname->domain) {
         if (mbname->localpart) {
             if (suffix) {
-                fname = strconcat(config_dir,
+                fname = strconcat(confdir,
                                   FNAME_DOMAINDIR,
                                   dir_hash_b(mbname->domain, config_fulldirhash, d),
                                   "/", mbname->domain,
@@ -2150,7 +2152,7 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
                                   (char *)NULL);
             }
             else {
-                fname = strconcat(config_dir,
+                fname = strconcat(confdir,
                                   FNAME_DOMAINDIR,
                                   dir_hash_b(mbname->domain, config_fulldirhash, d),
                                   "/", mbname->domain,
@@ -2161,7 +2163,7 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
         }
         else {
             if (suffix) {
-                fname = strconcat(config_dir,
+                fname = strconcat(confdir,
                                   FNAME_DOMAINDIR,
                                   dir_hash_b(mbname->domain, config_fulldirhash, d),
                                   "/", mbname->domain,
@@ -2169,7 +2171,7 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
                                   (char *)NULL);
             }
             else {
-                fname = strconcat(config_dir,
+                fname = strconcat(confdir,
                                   FNAME_DOMAINDIR,
                                   dir_hash_b(mbname->domain, config_fulldirhash, d),
                                   "/", mbname->domain,
@@ -2180,14 +2182,14 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
     else {
         if (mbname->localpart) {
             if (suffix) {
-                fname = strconcat(config_dir,
+                fname = strconcat(confdir,
                                   FNAME_USERDIR,
                                   dir_hash_b(mbname->localpart, config_fulldirhash, c),
                                   "/", mbname->localpart, ".", suffix,
                                   (char *)NULL);
             }
             else {
-                fname = strconcat(config_dir,
+                fname = strconcat(confdir,
                                   FNAME_USERDIR,
                                   dir_hash_b(mbname->localpart, config_fulldirhash, c),
                                   (char *)NULL);
@@ -2195,17 +2197,23 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
         }
         else {
             if (suffix) {
-                fname = strconcat(config_dir,
+                fname = strconcat(confdir,
                                   "/", FNAME_SHAREDPREFIX, ".", suffix,
                                   (char *)NULL);
             }
             else {
-                fname = xstrdup(config_dir);
+                fname = xstrdup(confdir);
             }
         }
     }
 
     return fname;
+}
+
+EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname,
+                                     const char *suffix)
+{
+    return mboxname_conf_getpath_confdir(mbname, suffix, config_dir);
 }
 
 /* ========================= COUNTERS ============================ */

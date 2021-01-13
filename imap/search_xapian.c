@@ -218,11 +218,28 @@ static strarray_t *activefile_filter(const strarray_t *active, const strarray_t 
 }
 
 /* the activefile file is a per-user meta file */
-static char *activefile_fname(const char *mboxname)
+static char *activefile_fname(const char *mboxname, const char *basedir)
 {
     char *userid = mboxname_to_userid(mboxname);
     if (!userid) return NULL;
-    char *res = user_hash_meta(userid, ACTIVEFILE_METANAME);
+    char *res;
+    if (basedir) {
+        struct buf confdir = BUF_INITIALIZER;
+        buf_setcstr(&confdir, basedir);
+        if (confdir.len && confdir.s[confdir.len-1] != '/') {
+            buf_putc(&confdir, '/');
+        }
+        buf_appendcstr(&confdir, "conf");
+        mbname_t *mbname = NULL;
+        mbname = mbname_from_userid(userid);
+        res = mboxname_conf_getpath_confdir(mbname, ACTIVEFILE_METANAME,
+                                            buf_cstring(&confdir));
+        mbname_free(&mbname);
+        buf_free(&confdir);
+    }
+    else {
+        res = user_hash_meta(userid, ACTIVEFILE_METANAME);
+    }
     free(userid);
     return res;
 }
@@ -317,10 +334,11 @@ static void _activefile_init(const char *mboxname, const char *partition,
 }
 
 static int activefile_open(const char *mboxname, const char *partition,
+                           const char *basedir, 
                            struct mappedfile **activefile, enum LockType type,
                            strarray_t **ret)
 {
-    char *fname = activefile_fname(mboxname);
+    char *fname = activefile_fname(mboxname, basedir);
     int r;
 
     if (!fname) return IMAP_MAILBOX_NONEXISTENT;
@@ -388,17 +406,28 @@ static int xapstat(const char *path)
  * to calculate the user, find the path.  If dostat is true, also stat the
  * path and return NULL if it doesn't exist (used for filtering databases
  * to actually search in */
-static char *activefile_path(const char *mboxname, const char *part, const char *item, int dostat)
+static char *activefile_path(const char *mboxname, const char *part, const char *item,
+                             const char *basedir, int dostat)
 {
-    char *basedir = NULL;
+    char *xbasedir = NULL;
     struct buf buf = BUF_INITIALIZER;
     char *dest = NULL;
     struct activeitem *ai = activeitem_parse(item);
+    char *root = NULL;
 
-    xapian_basedir(ai->tier, mboxname, part, NULL, &basedir);
-    if (!basedir) goto out;
-    buf_printf(&buf, "%s%s", basedir, XAPIAN_DIRNAME);
-    free(basedir);
+    if (basedir) {
+        buf_setcstr(&buf, basedir);
+        if (buf.len && buf.s[buf.len-1] != '/') {
+            buf_putc(&buf, '/');
+        }
+        buf_appendcstr(&buf, "search"); // ignore tier
+        root = buf_release(&buf);
+    }
+
+    xapian_basedir(ai->tier, mboxname, part, root, &xbasedir);
+    if (!xbasedir) goto out;
+    buf_printf(&buf, "%s%s", xbasedir, XAPIAN_DIRNAME);
+    free(xbasedir);
 
     if (ai->generation)
         buf_printf(&buf, ".%d", ai->generation);
@@ -417,6 +446,7 @@ static char *activefile_path(const char *mboxname, const char *part, const char 
 out:
     buf_free(&buf);
     activeitem_free(ai);
+    free(root);
     return dest;
 }
 
@@ -426,7 +456,9 @@ out:
  * exist in order and cardinality of the returned string array value.
  */
 static strarray_t *activefile_resolve(const char *mboxname, const char *part,
-                                      const strarray_t *items, int dostat,
+                                      const strarray_t *items,
+                                      const char *basedir,
+                                      int dostat,
                                       strarray_t **itemsptr)
 
 {
@@ -440,7 +472,7 @@ static strarray_t *activefile_resolve(const char *mboxname, const char *part,
     for (i = 0; i < items->count; i++) {
         int statthis = (dostat == 1 || (dostat == 2 && i));
         const char *item = strarray_nth(items, i);
-        char *dir = activefile_path(mboxname, part, item, statthis);
+        char *dir = activefile_path(mboxname, part, item, basedir, statthis);
         if (dir) {
             strarray_appendm(result, dir);
             if (itemsptr) {
@@ -1050,12 +1082,12 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
 
     /* need to hold a read-only lock on the activefile file
      * to ensure no databases are deleted out from under us */
-    r = activefile_open(mailbox->name, mailbox->part, &lock->activefile, AF_LOCK_READ, &active);
+    r = activefile_open(mailbox->name, mailbox->part, NULL, &lock->activefile, AF_LOCK_READ, &active);
     if (r) goto out;
 
     /* only try to open directories with databases in them */
     lock->activedirs = activefile_resolve(mailbox->name, mailbox->part, active,
-            /*dostat*/1, &lock->activetiers);
+            /*basedir*/NULL, /*dostat*/1, &lock->activetiers);
 
     /* open the databases */
     if (lock->activedirs->count) {
@@ -1897,6 +1929,7 @@ struct xapian_update_receiver
     hash_table cached_seqs;
     int mode;
     int flags;
+    char *basedir;
 };
 
 /* receiver used for extracting snippets after a search */
@@ -2378,7 +2411,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
                                 int flags)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-    char *fname = activefile_fname(mailbox->name);
+    char *fname = activefile_fname(mailbox->name, tr->basedir);
     strarray_t *active = NULL;
     int r = IMAP_IOERROR;
     char *namelock_fname = NULL;
@@ -2430,7 +2463,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      *  to avoid it happening at least."
      */
     const char *deftier = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
-    r = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE, &active);
+    r = activefile_open(mailbox->name, mailbox->part, tr->basedir, &tr->activefile, AF_LOCK_WRITE, &active);
     if (r) {
         syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox->name);
         goto out;
@@ -2447,7 +2480,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         mappedfile_close(&tr->activefile);
         strarray_free(active);
         active = NULL;
-        r = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE, &active);
+        r = activefile_open(mailbox->name, mailbox->part, tr->basedir, &tr->activefile, AF_LOCK_WRITE, &active);
         if (r) {
             syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox->name);
             goto out;
@@ -2462,7 +2495,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     /* doesn't matter if the first one doesn't exist yet, we'll create it. Only stat the others if we're going
      * to be opening them */
     int dostat = tr->mode == XAPIAN_DBW_XAPINDEXED ? 2 : 0;
-    tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, dostat, &tr->activetiers);
+    tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, tr->basedir, dostat, &tr->activetiers);
     // this should never be able to fail here, because the first item will always exist!
     assert(tr->activedirs && tr->activedirs->count);
 
@@ -2670,6 +2703,13 @@ static int xapian_message_format(int format __attribute__((unused)),
     return MESSAGE_SNIPPET;
 }
 
+static void set_basedir(search_text_receiver_t *rx, const char *basedir)
+{
+    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
+    free(tr->basedir);
+    tr->basedir = xstrdupnull(basedir);
+}
+
 static search_text_receiver_t *begin_update(int verbose)
 {
     xapian_update_receiver_t *tr;
@@ -2692,6 +2732,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.audit_mailbox = audit_mailbox;
     tr->super.super.index_charset_flags = xapian_charset_flags;
     tr->super.super.index_message_format = xapian_message_format;
+    tr->super.super.set_basedir = set_basedir;
 
     tr->super.verbose = verbose;
 
@@ -2711,6 +2752,7 @@ static int end_update(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     free_hash_table(&tr->cached_seqs, (void(*)(void*))seqset_free);
+    free(tr->basedir);
 
     free_receiver(&tr->super);
 
@@ -2959,13 +3001,14 @@ static int list_files(const char *userid, strarray_t *files)
     }
 
     /* Get a readlock on the activefile */
-    r = activefile_open(mboxname, mbentry->partition, &activefile, AF_LOCK_READ, &active);
+    r = activefile_open(mboxname, mbentry->partition, NULL, &activefile, AF_LOCK_READ, &active);
     if (r) {
         syslog(LOG_ERR, "Couldn't open active file: %s", mboxname);
         goto out;
     }
     if (!active) goto out;
-    dirs = activefile_resolve(mboxname, mbentry->partition, active, /*dostat*/1, NULL/*resultitems*/);
+    dirs = activefile_resolve(mboxname, mbentry->partition, active, /*basedir*/NULL,
+                              /*dostat*/1, NULL/*resultitems*/);
 
     for (i = 0; i < dirs->count; i++) {
         const char *basedir = strarray_nth(dirs, i);
@@ -3456,7 +3499,7 @@ static void cleanup_xapiandirs(const char *mboxname, const char *partition, stra
 
     for (i = 0; i < strarray_size(&found); i++) {
         const char *item = strarray_nth(&found, i);
-        char *path = activefile_path(mboxname, partition, item, /*dostat*/0);
+        char *path = activefile_path(mboxname, partition, item, NULL, /*dostat*/0);
         if (verbose)
             printf("Removing unreferenced item %s (%s)\n", item, path);
         removedir(path);
@@ -3540,7 +3583,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     }
 
     /* take an exclusive lock on the activefile file */
-    r = activefile_open(mboxname, mbentry->partition, &activefile, AF_LOCK_WRITE, &active);
+    r = activefile_open(mboxname, mbentry->partition, NULL, &activefile, AF_LOCK_WRITE, &active);
     if (r) {
         syslog(LOG_ERR, "Failed to lock activefile for %s", mboxname);
         goto out;
@@ -3571,7 +3614,8 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     }
 
     /* find out which items actually exist from the set to be compressed - first pass */
-    srcdirs = activefile_resolve(mboxname, mbentry->partition, tochange, /*dostat*/1, NULL/*resultitems*/);
+    srcdirs = activefile_resolve(mboxname, mbentry->partition, tochange,
+                                 /*basedir*/NULL, /*dostat*/1, NULL/*resultitems*/);
     if (!srcdirs || !srcdirs->count) goto out;
     /* NOTE: it's safe to keep this list even over the unlock/relock because we
      * always write out a new first item if necessary, so these will never be
@@ -3607,7 +3651,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
         strarray_unshiftm(active, newstart);
     }
 
-    destdir = activefile_path(mboxname, mbentry->partition, newdest, /*dostat*/0);
+    destdir = activefile_path(mboxname, mbentry->partition, newdest, NULL, /*dostat*/0);
     tempdestdir = strconcat(destdir, ".NEW", (char *)NULL);
 
     /* write the new file and release the exclusive lock */
@@ -3677,7 +3721,8 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
         strarray_t *existing = strarray_dup(orig);
         for (i = 0; i < tochange->count; i++)
             strarray_remove_all(existing, strarray_nth(tochange, i));
-        newdirs = activefile_resolve(mboxname, mbentry->partition, existing, /*dostat*/1, &newtiers);
+        newdirs = activefile_resolve(mboxname, mbentry->partition, existing,
+                                     /*basedir*/NULL, /*dostat*/1, &newtiers);
         strarray_free(existing);
         /* we'll be prepending the final target directory to newdirs before compacting,
          * so also add the new tier so the indexes match up */
@@ -3689,7 +3734,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
             toreindex = strarray_dup(srcdirs);
         }
         else {
-            toreindex = activefile_resolve(mboxname, mbentry->partition, reindexitems, 0, NULL);
+            toreindex = activefile_resolve(mboxname, mbentry->partition, reindexitems, NULL, 0, NULL);
             xapian_check_if_needs_reindex(srcdirs, toreindex, flags & SEARCH_COMPACT_ONLYUPGRADE);
             for (i = 0; i < srcdirs->count; i++) {
                 const char *thisdir = strarray_nth(srcdirs, i);
@@ -3886,7 +3931,7 @@ static void delete_one(const char *key, const char *val __attribute__((unused)),
 static int delete_user(const char *userid)
 {
     char *mboxname = mboxname_user_mbox(userid, /*subfolder*/NULL);
-    char *activename = activefile_fname(mboxname);
+    char *activename = activefile_fname(mboxname, NULL);
     struct mappedfile *activefile = NULL;
     struct mboxlock *xapiandb_namelock = NULL;
     char *namelock_fname = NULL;

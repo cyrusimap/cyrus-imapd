@@ -148,6 +148,7 @@ struct search_text_receiver {
     int (*audit_mailbox)(search_text_receiver_t *, bitvector_t *unindexed);
     int (*index_charset_flags)(int base_flags);
     int (*index_message_format)(int format, int is_snippet);
+    void (*set_basedir)(search_text_receiver_t *, const char *dir);
 };
 
 struct search_langstat {
@@ -220,6 +221,7 @@ extern void search_end_search(search_builder_t *);
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox *mailbox,
+                          struct seqset *uids, // or NULL
                           int min_indexlevel, int flags);
 int search_end_update(search_text_receiver_t *rx);
 
