@@ -81,6 +81,7 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
+    NULL,
     NULL
 };
 
@@ -342,4 +343,10 @@ const char *search_op_as_string(int op)
         snprintf(buf, sizeof(buf), "(%d)", op);
         return buf;
     }
+}
+
+EXPORTED int search_can_match(enum search_op matchop, int partnum)
+{
+    const struct search_engine *se = search_engine();
+    return (se->can_match ? se->can_match(matchop, partnum) : 0);
 }
