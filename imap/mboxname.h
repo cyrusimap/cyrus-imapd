@@ -286,6 +286,10 @@ int mboxname_make_parent(char *namebuf);
 char *mboxname_conf_getpath(const mbname_t *mbname,
                             const char *suffix);
 
+char *mboxname_conf_getpath_confdir(const mbname_t *mbname,
+                                    const char *suffix,
+                                    const char *confdir);
+
 /* ======================== COUNTERS ==================== */
 
 struct mboxname_counters {

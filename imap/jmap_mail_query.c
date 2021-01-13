@@ -979,7 +979,8 @@ HIDDEN matchmime_t *jmap_email_matchmime_init(const struct buf *mime, json_t **e
             _matchmime_tr_flush,
             _matchmime_tr_audit_mailbox,
             _matchmime_tr_index_charset_flags,
-            _matchmime_tr_index_message_format
+            _matchmime_tr_index_message_format,
+            NULL /* set_basedir */
         },
         matchmime->dbw, BUF_INITIALIZER
     };
