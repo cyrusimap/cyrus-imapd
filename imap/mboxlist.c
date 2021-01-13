@@ -220,6 +220,9 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
     if (mbtype & MBTYPE_JMAPNOTIFICATION)
         buf_putc(&buf, 'j');
 
+    /* make sure we didn't forget to set a character for every interesting bit */
+    if (mbtype) assert(buf_len(&buf));
+
     return buf_cstring(&buf);
 }
 
@@ -366,6 +369,9 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
             break;
         }
     }
+
+    /* make sure we didn't forget to set a character for every interesting bit */
+    assert(mbtype);
 
     return mbtype;
 }
