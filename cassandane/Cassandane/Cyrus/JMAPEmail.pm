@@ -19861,7 +19861,7 @@ sub test_email_parse_embedded_toplevel
 }
 
 sub test_searchsnippet_get_attachments
-    :min_version_3_3 :needs_component_jmap :SearchAttachmentExtractor :JMAPExtensions
+    :min_version_3_5 :needs_component_jmap :SearchAttachmentExtractor :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20042,7 +20042,7 @@ EOF
 }
 
 sub test_email_query_header
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20126,7 +20126,7 @@ no utf8;
 }
 
 sub test_email_query_header_cost
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20165,7 +20165,7 @@ sub test_email_query_header_cost
 }
 
 sub test_email_query_header_sieve
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
