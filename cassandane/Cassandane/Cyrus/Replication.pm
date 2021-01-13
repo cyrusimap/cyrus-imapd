@@ -724,11 +724,19 @@ sub assert_sieve_matches
     $self->assert(( -f $bcname ));
 
     # compile $scriptcontent and compare digests of bytecode
+    my (undef, $tmp) = tempfile('scriptXXXXX', OPEN => 0,
+                                DIR => $instance->{basedir} . "/tmp");
+    open my $f, '>', $tmp or die "open: $!";
+    print $f $scriptcontent;
+    close $f;
+
     my (undef, $filename) = tempfile('tmpXXXXXX', OPEN => 0,
         DIR => $instance->{basedir} . "/tmp");
 
-    $self->{instance}->run_command({redirects => {stdin => \$scriptcontent}},
-                                   'sievec', '-', "$filename");
+    $instance->run_command({ redirects => {stdin => \$scriptcontent},
+                             cyrus => 1,
+                           },
+                           'sievec', $tmp, "$filename");
     $self->assert_str_equals(digest_file_hex($bcname, "MD5"),
                              digest_file_hex($filename, "MD5"));
 }
