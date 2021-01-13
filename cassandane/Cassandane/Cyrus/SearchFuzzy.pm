@@ -1657,6 +1657,79 @@ sub test_squatter_partials
     $self->{instance}->getsyslog();
 }
 
+sub test_squatter_skip422
+    :min_version_3_3 :needs_search_xapian :SearchAttachmentExtractor
+{
+    my ($self) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
+
+    xlog "Start extractor server";
+    my $nrequests = 0;
+    my $handler = sub {
+        my ($conn, $req) = @_;
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } else {
+            $conn->send_error(422);
+        }
+    };
+    $instance->start_httpd($handler, $uri->port());
+
+    xlog "Append emails with PDF attachments to trigger extractor";
+    $self->make_message("msg1",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/pdf\r\n"
+        ."\r\n"
+        ."attach1"
+        ."\r\n--123456789abcdef--\r\n"
+    ) || die;
+    $self->make_message("msg2",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/pdf\r\n"
+        ."\r\n"
+        ."attach2"
+        ."\r\n--123456789abcdef--\r\n"
+    ) || die;
+
+    xlog "Run squatter and allow partials";
+    $self->{instance}->{ignore_syslog} = 1;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-p', '-Z');
+
+    xlog "Assert text bodies of both messages are indexed";
+    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1,2], $uids);
+
+    xlog "Assert attachment of first message is not indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attach1');
+    $self->assert_deep_equals([], $uids);
+
+    xlog "Assert attachment of second message is not indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attach2');
+    $self->assert_deep_equals([], $uids);
+
+    # clear syslog to not fail for expected IOERROR messages
+    $self->{instance}->getsyslog();
+}
+
 sub test_fuzzyalways_annot
     :min_version_3_3 :needs_search_xapian :SearchFuzzyAlways
 {
