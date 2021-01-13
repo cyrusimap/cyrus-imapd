@@ -2072,7 +2072,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             _email_search_type(this, s, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
-            const char *hdr, *str = "", *cmp = NULL;
+            const char *hdr = NULL, *str = "", *cmp = NULL;
             search_expr_t *e;
 
             switch (json_array_size(val)) {
