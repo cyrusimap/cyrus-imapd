@@ -217,6 +217,8 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
         buf_putc(&buf, 's');
     if (mbtype & MBTYPE_PUSHSUBSCRIPTION)
         buf_putc(&buf, 'p');
+    if (mbtype & MBTYPE_JMAPNOTIFICATION)
+        buf_putc(&buf, 'j');
 
     return buf_cstring(&buf);
 }
@@ -340,6 +342,9 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
             break;
         case 'i':
             mbtype |= MBTYPE_INTERMEDIATE;
+            break;
+        case 'j':
+            mbtype |= MBTYPE_JMAPNOTIFICATION;
             break;
         case 'm':
             mbtype |= MBTYPE_MOVING;
