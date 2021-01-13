@@ -1457,99 +1457,6 @@ static int normalise_dnfclause(const struct opnode *expr, struct opnode **normal
     return 0;
 }
 
-static int split_legacyv4_query(xapian_builder_t *bb,
-                                const struct opnode *expr,
-                                ptrarray_t *clauses)
-{
-    struct opnode *root = NULL;
-    int r = normalise_dnfclause(expr, &root);
-    if (r) return r;
-
-    assert(root->op == SEARCH_OP_AND);
-
-    /* Split clause into subclauses for top-level guid
-     * search, body part search and any part. */
-
-    struct opnode *qguid = opnode_new(SEARCH_OP_AND, NULL);
-    struct opnode *qpart = opnode_new(SEARCH_OP_AND, NULL);
-    struct opnode *qany = opnode_new(SEARCH_OP_AND, NULL);
-
-    struct opnode *child = root->children;
-    while (child) {
-        struct opnode *next = child->next;
-        opnode_detach_child(root, child);
-
-        int part = child->op == SEARCH_OP_NOT ? child->children->op : child->op;
-
-        if (child->op == SEARCH_OP_NOT && part == SEARCH_PART_ANY) {
-            struct opnode *clone = opnode_deep_copy(child);
-            opnode_append_child(qguid, child);
-            opnode_append_child(qpart, clone);
-        }
-        else {
-            switch (part) {
-                /* Map search parts to their document type queries.
-                 * It's annoying that this mapping must be kept in
-                 * sync with the search part indexing in index.c */
-                case SEARCH_PART_ANY:
-                    opnode_append_child(qany, child);
-                    break;
-                case SEARCH_PART_FROM:
-                case SEARCH_PART_TO:
-                case SEARCH_PART_CC:
-                case SEARCH_PART_BCC:
-                case SEARCH_PART_SUBJECT:
-                case SEARCH_PART_LISTID:
-                case SEARCH_PART_TYPE:
-                case SEARCH_PART_HEADERS:
-                case SEARCH_PART_ATTACHMENTNAME:
-                    opnode_append_child(qguid, child);
-                    break;
-                case SEARCH_PART_BODY:
-                case SEARCH_PART_LOCATION:
-                case SEARCH_PART_ATTACHMENTBODY:
-                    opnode_append_child(qpart, child);
-                    break;
-                default:
-                    syslog(LOG_ERR, "search_xapian: ignoring unexpected part: %s",
-                                     search_part_as_string(part));
-                    opnode_delete(child);
-                    child = NULL;
-            }
-        }
-        child = next;
-    }
-
-    /* Create Xapian queries for each subquery */
-
-    if (qguid->children) {
-        optimise_nodes(NULL, qguid);
-        xapian_query_t *xq = opnode_to_query(bb->lock.db, qguid, bb->opts);
-        if (xq) xq = xapian_query_new_has_doctype(bb->lock.db, XAPIAN_WRAP_DOCTYPE_MSG, xq);
-        if (xq) ptrarray_append(clauses, xq);
-    }
-    if (qpart->children) {
-        optimise_nodes(NULL, qpart);
-        xapian_query_t *xq = opnode_to_query(bb->lock.db, qpart, bb->opts);
-        if (xq) xq = xapian_query_new_has_doctype(bb->lock.db, XAPIAN_WRAP_DOCTYPE_PART, xq);
-        if (xq) ptrarray_append(clauses, xq);
-    }
-
-    for (child = qany->children; child; child = child->next) {
-        optimise_nodes(NULL, child);
-        xapian_query_t *xq = opnode_to_query(bb->lock.db, child, bb->opts);
-        if (xq) ptrarray_append(clauses, xq);
-    }
-
-    /* Clean up */
-
-    opnode_delete(qguid);
-    opnode_delete(qpart);
-    opnode_delete(qany);
-    opnode_delete(root);
-    return 0;
-}
-
 struct xapian_match {
     bitvector_t uids;
     hashu64_table partids_by_uid;
@@ -1655,147 +1562,6 @@ static int xapian_run_guidsearch_cb(void *data, size_t nmemb, void *rock)
                                     xapian_run_guidsearch_guid_cb, &xrock);
 }
 
-static int run_legacy_v4_query(xapian_builder_t *bb)
-{
-    int i, r = 0;
-    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
-    if (!cstate) {
-        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                bb->mailbox->name);
-        return IMAP_NOTFOUND;
-    }
-    uint32_t num_folders = conversations_num_folders(cstate);
-    struct xapian_match *result = NULL;
-    ptrarray_t clauses = PTRARRAY_INITIALIZER;
-
-    if (is_dnfclause(bb->root)) {
-        /* Split into sub queries for each document type */
-        r = split_legacyv4_query(bb, bb->root, &clauses);
-        if (r) goto out;
-    }
-    else if (is_orclause(bb->root)) {
-        xapian_query_t *xq = opnode_to_query(bb->lock.db, bb->root, bb->opts);
-        ptrarray_append(&clauses, xq);
-    }
-    else {
-        struct buf buf = BUF_INITIALIZER;
-        opnode_serialise(&buf, bb->root);
-        syslog(LOG_ERR, "search_xapian: expected DNF or OR clause, got %s",
-                         buf_cstring(&buf));
-        buf_free(&buf);
-        r = IMAP_INTERNAL;
-        goto out;
-    }
-
-    /* Run clauses and intersect results */
-    for (i = 0; i < ptrarray_size(&clauses); i++) {
-        struct xapian_match *matches = xzmalloc(sizeof(struct xapian_match) * num_folders);
-
-        struct xapian_run_rock xrock = { bb, matches };
-        xapian_query_t *xq = ptrarray_nth(&clauses, i);
-        // sort the response by GUID for more efficient later handling
-        r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/1,
-                             xapian_run_cb, &xrock);
-        if (r) {
-            uint32_t j;
-            for (j = 0; j < num_folders; j++) {
-                xapian_match_reset(matches + j);
-            }
-            free(matches);
-            goto out;
-        }
-
-        /* First clause, use as initial result */
-        if (result == NULL) {
-            result = matches;
-            continue;
-        }
-
-        /* Intersect mailbox names */
-        uint32_t j;
-        for (j = 0; j < num_folders; j++) {
-            if (!bv_count(&matches[j].uids)) {
-                xapian_match_reset(result + j);
-            }
-        }
-
-        /* Intersect UIDs */
-        for (j = 0; j < num_folders; j++) {
-            struct xapian_match *result_match = result + j;
-            struct xapian_match *clause_match = matches + j;
-            if (bv_count(&result_match->uids)) {
-                bv_andeq(&result_match->uids, &clause_match->uids);
-                if (result_match->partids_by_uid.size && clause_match->partids_by_uid.size) {
-                    /* Intersect partids */
-                    int uid;
-                    for (uid = bv_next_set(&result_match->uids, 0); uid != -1;
-                            uid = bv_next_set(&result_match->uids, uid+1)) {
-                        strarray_t *result_partids = hashu64_lookup(uid, &result_match->partids_by_uid);
-                        strarray_t *clause_partids = hashu64_lookup(uid, &clause_match->partids_by_uid);
-                        if (result_partids && clause_partids) {
-                            int i = 0, newlen = 0;
-                            for (i = 0; i < strarray_size(result_partids); i++) {
-                                const char *partid = strarray_nth(result_partids, i);
-                                if (strarray_find(clause_partids, partid, 0) >= 0) {
-                                    strarray_swap(result_partids, i, newlen);
-                                    newlen++;
-                                }
-                            }
-                            if (newlen) {
-                                strarray_truncate(result_partids, newlen);
-                            }
-                            else {
-                                hashu64_del(uid, &result_match->partids_by_uid);
-                                strarray_free(result_partids);
-                            }
-                        }
-                    }
-                }
-            }
-            xapian_match_reset(clause_match);
-        }
-        free(matches);
-    }
-
-    /* Return results */
-    if (result) {
-        r = 0;
-        uint32_t j;
-        for (j = 0; j < num_folders; j++) {
-            struct xapian_match *match = result + j;
-            if (bv_count(&match->uids)) {
-                const char *mboxname = conversations_folder_name(cstate, j);
-                int uid;
-                for (uid = bv_next_set(&match->uids, 0); uid != -1;
-                        uid = bv_next_set(&match->uids, uid+1)) {
-                    strarray_t *partids = NULL;
-                    if (match->partids_by_uid.size) {
-                        partids = hashu64_lookup(uid, &match->partids_by_uid);
-                    }
-                    r = bb->proc(mboxname, /*uidvalidity*/0, uid, partids, bb->rock);
-                    if (r) break;
-                }
-            }
-        }
-        if (r) goto out;
-    }
-
-out:
-    if (result) {
-        uint32_t j;
-        for (j = 0; j < num_folders; j++) {
-            xapian_match_reset(result + j);
-        }
-        free(result);
-    }
-    if (ptrarray_size(&clauses)) {
-        xapian_query_t *xq;
-        while ((xq = ptrarray_pop(&clauses))) xapian_query_free(xq);
-    }
-    ptrarray_fini(&clauses);
-    return r;
-}
-
 static int validate_query(xapian_db_t *db, struct opnode *on)
 {
     if (!on) return 0;
@@ -1822,8 +1588,7 @@ static int run_query(xapian_builder_t *bb)
         xq = opnode_to_query(bb->lock.db, bb->root, bb->opts);
         if (!xq) goto out;
 
-        r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0,
-                             xapian_run_guidsearch_cb, bb);
+        r = xapian_query_run(bb->lock.db, xq, xapian_run_guidsearch_cb, bb);
         goto out;
     }
 
@@ -1892,8 +1657,7 @@ static int run_query(xapian_builder_t *bb)
     struct xapian_match *result = xzmalloc(sizeof(struct xapian_match) * num_folders);
     struct xapian_run_rock xrock = { bb, result };
     // sort the response by GUID for more efficient later handling
-    r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0,
-                         xapian_run_cb, &xrock);
+    r = xapian_query_run(bb->lock.db, xq, xapian_run_cb, &xrock);
 
     if (result) {
         r = 0;
@@ -1947,7 +1711,7 @@ static int run_internal(xapian_builder_t *bb)
     /* Sanity check builder */
     assert((bb->proc == NULL) != (bb->proc_guidsearch == NULL));
 
-    if (!bb->lock.db) goto out; // no index for this user
+    if (!bb->lock.db) return 0; // no index for this user
 
     /* Validate config */
     r = check_config(NULL);
@@ -1958,20 +1722,7 @@ static int run_internal(xapian_builder_t *bb)
     /* Stem using any languages explicitly requested by the user. */
     add_stemmers(bb->lock.db, bb->root);
 
-    /* A database can contain sub-databases of multiple versions */
-    if (xapian_db_has_otherthan_v4_index(bb->lock.db)) {
-        // all but version 4 databases index header and body together
-        r = run_query(bb);
-        if (r) goto out;
-    }
-    if (xapian_db_has_legacy_v4_index(bb->lock.db)) {
-        // legacy version 4 databases index headers and body separately
-        r = run_legacy_v4_query(bb);
-        if (r) goto out;
-    }
-
-out:
-    return r;
+    return run_query(bb);
 }
 
 static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
@@ -1987,9 +1738,7 @@ static int run_guidsearch(search_builder_t *bx, search_hitguid_cb_t proc, void *
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     bb->proc_guidsearch = proc;
     bb->rock = rock;
-    // we can't do GUIDSEARCH on v4 databases
-    if (!bb->lock.db || xapian_db_has_legacy_v4_index(bb->lock.db))
-        return IMAP_SEARCH_NOT_SUPPORTED;
+    if (!bb->lock.db) return IMAP_SEARCH_NOT_SUPPORTED;
     return run_internal(bb);
 }
 

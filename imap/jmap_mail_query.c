@@ -762,7 +762,7 @@ static int _email_matchmime_evaluate(json_t *filter,
         int matches = 0;
         xapian_query_t *xq = xapian_query_new_compound(db, /*is_or*/0,
                 (xapian_query_t **) xqs.data, xqs.count);
-        xapian_query_run(db, xq, 0, _email_matchmime_evaluate_xcb, &matches);
+        xapian_query_run(db, xq, _email_matchmime_evaluate_xcb, &matches);
         xapian_query_free(xq);
         size_t xqs_count = xqs.count;
         ptrarray_fini(&xqs);
