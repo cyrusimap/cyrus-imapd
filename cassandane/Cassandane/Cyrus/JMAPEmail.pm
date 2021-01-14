@@ -20214,7 +20214,7 @@ EOF
 }
 
 sub test_email_query_mailbox_andor
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
