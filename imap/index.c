@@ -5756,15 +5756,16 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
 
         r = extract_attachment(type, subtype, type_params, data, encoding,
                                content_guid, str);
-        if (r == IMAP_IOERROR && (str->flags & INDEX_GETSEARCHTEXT_PARTIALS)) {
-            /* mark message as partially indexed and continue */
-            str->indexlevel |= SEARCH_INDEXLEVEL_PARTIAL;
-            r = 0;
-        }
-        else if (r) {
+        if (r) {
             syslog(LOG_ERR, "IOERROR index: can't extract attachment %s (%s/%s): %s",
                     message_guid_encode(content_guid),
                     type, subtype, error_message(r));
+
+            if (str->flags & INDEX_GETSEARCHTEXT_PARTIALS) {
+                /* mark message as partially indexed and continue */
+                str->indexlevel |= SEARCH_INDEXLEVEL_PARTIAL;
+                r = 0;
+            }
         }
     }
 
