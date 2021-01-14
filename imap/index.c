@@ -5998,14 +5998,22 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     /* Finalize message. */
     r = receiver->end_message(receiver, str.indexlevel);
 
-    /* Log partially indexed message */
-    if (!r && (str.indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) {
-        struct mailbox *mailbox = msg_mailbox(msg);
+    if (r == IMAP_OK_COMPLETED) r = 0;
+
+    /* Log erroneous or partially indexed message */
+    if (r || (str.indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) {
+        struct mailbox *mbox = msg_mailbox(msg);
         uint32_t uid = 0;
         message_get_uid(msg, &uid);
-        if (uid && mailbox) {
-            syslog(LOG_ERR, "IOERROR: index: partially indexed %s:%d",
-                    mailbox->name, uid);
+        const char *mboxname = mbox ? mbox->name : "";
+        if (r) {
+            xsyslog(LOG_ERR, "IOERROR: failed to index msg",
+                    "mailbox=<%s> uid=<%d> r=<%s>",
+                    mboxname, uid, error_message(r));
+        }
+        else {
+            xsyslog(LOG_ERR,  "IOERROR: partially indexed msg",
+                    "mailbox=<%s> uid=<%d>", mboxname, uid);
         }
     }
 
