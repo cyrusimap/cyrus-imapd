@@ -2285,8 +2285,6 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
     struct segment *seg;
     int r = 0;
 
-    if (!ptrarray_size(&tr->super.segs)) goto out;
-
     if (!tr->dbw) {
         r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode, /*nosync*/0);
         if (r) goto out;
