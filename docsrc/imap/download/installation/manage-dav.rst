@@ -35,7 +35,7 @@ Its feature set is limited to:
     * Allows synchronization of mail clients via the JSON Mail Access Protocol (JMAP).
 * Other (RSS, static content)
     * Serves static content (such as the RSS feed list template and the
-      CalDAV/CardDAV web GUIs ).
+      CalDAV/CardDAV web GUIs).
     * Serves IMAP mailboxes as RSS feeds.
 
 HTTPD Configuration
@@ -69,9 +69,9 @@ Authentication
 As with other Cyrus services, the Cyrus httpd service uses
 :ref:`Cyrus SASL <cyrussasl:sasl-index>` to perform
 its authentication. Cyrus supports the following HTTP authentication schemes:
-Basic, Digest, Negotiate (Kerberos only), and NTLM. While Basic and NTLM are available in
-all versions of SASL, the remaining schemes are only available in Cyrus SASL
-2.1.16 (and higher).
+Basic, Digest, Negotiate (Kerberos only), NTLM, SCRAM-SHA-1, and SCRAM-SHA-256.
+While Basic and NTLM are available in all versions of SASL, the remaining schemes
+are only available in Cyrus SASL 2.1.16 (and higher).
 
 .. sidebar:: allowplaintext
 
@@ -88,9 +88,9 @@ whether the client has connected over a TLS protected connection (HTTPS).
 
 The availability of the other HTTP authentication schemes is controlled by the
 :ref:`SASL mech_list option <cyrussasl:options>` option. For Cyrus httpd
-the DIGEST-MD5, GSS-SPNEGO, and NTLM SASL
-plugins support the Digest, Negotiate, and NTLM authentication schemes
-respectively, provided that these plugins are installed on the server.
+the DIGEST-MD5, GSS-SPNEGO, NTLM, SCRAM-SHA-1, and SCRAM-SHA-256 values enable
+support for the Digest, Negotiate, NTLM, SCRAM-SHA-1, and SCRAM-SHA-256 authentication
+schemes respectively, provided that the plugins are installed on the server.
 
 Module-specific information
 ===========================
