@@ -6,7 +6,7 @@ Changes to the Cyrus IMAP Server since 2.0.16
 
 *   migrated to SASLv2 (Rob Siemborski)
 *   altnamespace: it is now possible to display user mailboxes as siblings to the INBOX at the top-level (Ken Murchison)
-*   unixhierarchysep: it is now possible possible to use slash as the hierarchy seperator, instead of a period. (Ken Murchison, inspired by David Fuchs, dfuchs@uniserve.com)
+*   unixhierarchysep: it is now possible to use slash as the hierarchy separator, instead of a period. (Ken Murchison, inspired by David Fuchs, dfuchs@uniserve.com)
 *   SSL/TLS session caching (Ken Murchison)
 *   support for IMAP CHILDREN & LISTEXT extensions (Ken Murchison, work in progress)
 *   check recipient quota & ACL at time of RCPT TO: in lmtpd (Ken Murchison)

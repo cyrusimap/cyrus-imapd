@@ -1281,7 +1281,7 @@ explicitly via the C<error> method.
 
 =item new($server[, $flags])
 
-Instantiates a B<cyradm> object.  This is in fact an Cyrus::IMAP object with
+Instantiates a B<cyradm> object.  This is in fact a Cyrus::IMAP object with
 a few additional methods, so all Cyrus::IMAP methods are available if needed.
 (In particular, you will always want to use the C<authenticate> method.)
 
