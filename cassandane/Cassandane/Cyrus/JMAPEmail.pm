@@ -20165,7 +20165,7 @@ sub test_email_query_header_cost
 }
 
 sub test_email_query_header_sieve
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :AltNamespace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
