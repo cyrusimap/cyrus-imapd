@@ -215,14 +215,28 @@ static ptrarray_t *icalcomps_by_uid(struct icalcomps *comps, const char *uid)
     return hash_lookup(uid, &comps->by_uid);
 }
 
+typedef struct jstimezones {
+    hash_table bytzid;
+    hash_table byjstzid;
+    ptrarray_t tzs;
+} jstimezones_t;
+
+#define JSTIMEZONES_INITIALIZER { \
+    HASH_TABLE_INITIALIZER, \
+    HASH_TABLE_INITIALIZER, \
+    PTRARRAY_INITIALIZER \
+}
+
 /* Forward declarations */
 static json_t *calendarevent_from_ical(icalcomponent *comp, hash_table *props,
                                        int is_override, ptrarray_t *overrides,
+                                       jstimezones_t *jtzcache,
                                        struct jmapical_jmapcontext *jmapctx);
 
 static void calendarevent_to_ical(icalcomponent *comp,
                                   struct jmap_parser *parser, json_t *jsevent,
                                   struct icalcomps *oldcomps,
+                                  jstimezones_t *jtzcache,
                                   struct jmapical_jmapcontext *jmapctx);
 
 #define JMAPICAL_SHA1KEY_LEN (2*SHA1_DIGEST_LENGTH+1)
@@ -413,6 +427,172 @@ static icalproperty* findprop_byid(icalcomponent *comp, const char *id,
     }
 
     return prop;
+}
+
+static void jstimezones_add_icaltz(jstimezones_t *jstzones,
+                                   const char *jstzid,
+                                   icaltimezone *tz)
+{
+    if (!jstzones->tzs.count) {
+        construct_hash_table(&jstzones->bytzid, 128, 0);
+        construct_hash_table(&jstzones->byjstzid, 128, 0);
+
+    }
+
+    const char *tzid = icaltimezone_get_tzid(tz);
+    if (!strcasecmp(tzid, "UTC")) {
+        tzid = "Etc/UTC";
+    }
+    hash_insert(tzid, tz, &jstzones->bytzid);
+    hash_insert(jstzid ? jstzid : tzid, tz, &jstzones->byjstzid);
+    ptrarray_append(&jstzones->tzs, tz);
+}
+
+HIDDEN icaltimezone *jstimezones_lookup_tzid(jstimezones_t *jstzones, const char *tzid)
+{
+    if (!tzid) return NULL;
+
+    /* UTC is special */
+    if (!strcasecmp(tzid, "UTC")) {
+        tzid = "Etc/UTC";
+    }
+
+    /* Lookup in custom timezones */
+    if (jstzones && jstzones->tzs.count) {
+        icaltimezone *tz = hash_lookup(tzid, &jstzones->bytzid);
+        if (tz) return tz;
+    }
+
+    /* Lookup in standard timezones */
+    return icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+}
+
+static icaltimezone *jstimezones_lookup_jstzid(jstimezones_t *jstzones, const char *jstzid)
+{
+    if (!jstzid) return NULL;
+
+    if (*jstzid == '/') {
+        if (jstzones && jstzones->tzs.count) {
+            return hash_lookup(jstzid, &jstzones->byjstzid);
+        }
+        else return NULL;
+    }
+    else {
+        // matches tzid: lookup in standard timezones only
+        return jstimezones_lookup_tzid(NULL, jstzid);
+    }
+}
+
+static const char *jstimezones_get_jstzid(jstimezones_t *jstzones, const char *tzid)
+{
+    if (!tzid) return NULL;
+
+    /* UTC is special */
+    if (!strcasecmp(tzid, "Etc/UTC")) {
+        return tzid;
+    }
+
+    if (jstzones && jstzones->tzs.count) {
+        icaltimezone *tz = hash_lookup(tzid, &jstzones->bytzid);
+        if (tz) {
+            icalcomponent *tzcomp = icaltimezone_get_component(tz);
+            if (tzcomp) {
+                const char *jstzid = get_icalxprop_value(tzcomp, JMAPICAL_XPROP_ID);
+                if (jstzid) return jstzid;
+            }
+        }
+    }
+
+    const char *jstzid = NULL;
+    icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+    if (tz) {
+        jstzid = icaltimezone_get_location(tz);
+        if (!jstzid) icaltimezone_get_tzid(tz);
+    }
+    return jstzid;
+}
+
+static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *ical)
+{
+    icalcomponent *tzcomp;
+    icalproperty *prop;
+
+    size_t count = 0;
+    for (tzcomp = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+         tzcomp;
+         tzcomp = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
+        count++;
+    }
+
+    struct buf idbuf = BUF_INITIALIZER;
+
+    for (tzcomp = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+         tzcomp;
+         tzcomp = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
+
+        prop = icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
+        if (!prop) continue;
+
+        /* Ignore IANA and Windows timezone ids */
+        const char *tzid = icalproperty_get_tzid(prop);
+        if (!tzid || !*tzid || icaltimezone_get_cyrus_timezone_from_tzid(tzid)) {
+            continue;
+        }
+
+
+        icalcomponent *mytzcomp = icalcomponent_clone(tzcomp);
+        prop = icalproperty_new_x(tzid);
+        icalproperty_set_x_name(prop, "X-LIC-LOCATION");
+        icalcomponent_add_property(mytzcomp, prop);
+
+        const char *jstzid = get_icalxprop_value(mytzcomp, JMAPICAL_XPROP_ID);
+        if (!jstzid || *jstzid != '/') {
+            buf_reset(&idbuf);
+            buf_putc(&idbuf, '/');
+            buf_appendcstr(&idbuf, jstzid ? jstzid : tzid);
+            jstzid = buf_cstring(&idbuf);
+            prop = icalproperty_new_x(jstzid);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
+            icalcomponent_add_property(mytzcomp, prop);
+        }
+        icaltimezone *tz = icaltimezone_new();
+        icaltimezone_set_component(tz, mytzcomp);
+
+        jstimezones_add_icaltz(jstzones, jstzid, tz);
+    }
+
+    buf_free(&idbuf);
+}
+
+static void jstimezones_fini(jstimezones_t *jstzones)
+{
+    if (jstzones->byjstzid.size) {
+        free_hash_table(&jstzones->byjstzid, NULL);
+    }
+    if (jstzones->bytzid.size) {
+        free_hash_table(&jstzones->bytzid, NULL);
+    }
+
+    icaltimezone *tz;
+    while ((tz = ptrarray_pop(&jstzones->tzs))) {
+        icaltimezone_free(tz, 1);
+    }
+    ptrarray_fini(&jstzones->tzs);
+}
+
+HIDDEN jstimezones_t *jstimezones_new(icalcomponent *ical)
+{
+    jstimezones_t *jstzones = xzmalloc(sizeof(struct jstimezones));
+    jstimezones_add_vtimezones(jstzones, ical);
+    return jstzones;
+}
+
+HIDDEN void jstimezones_free(jstimezones_t **jstzonesptr)
+{
+    if (!jstzonesptr || !*jstzonesptr) return;
+    jstimezones_fini(*jstzonesptr);
+    free(*jstzonesptr);
+    *jstzonesptr = NULL;
 }
 
 HIDDEN int jmapical_datetime_has_zero_time(const struct jmapical_datetime *dt)
@@ -714,16 +894,18 @@ HIDDEN void jmapical_duration_as_string(const struct jmapical_duration *dur, str
     buf_cstring(buf);
 }
 
-/* Determine the Olson TZID, if any, of the ical property prop. */
-static const char *tzid_from_icalprop(icalproperty *prop, int guess) {
+/* Determine the TZID, if any, of the ical property prop. */
+static const char *tzid_from_icalprop(icalproperty *prop, int guess,
+                                      jstimezones_t *jstzones)
+{
     const char *tzid = NULL;
     icalparameter *param = NULL;
 
     if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
     if (param) tzid = icalparameter_get_tzid(param);
-    /* Check if the tzid already corresponds to an Olson name. */
+    /* Check if the tzid already corresponds to an existing timezone. */
     if (tzid) {
-        icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+        icaltimezone *tz = jstimezones_lookup_tzid(jstzones, tzid);
         if (!tz && guess) {
             /* Try to guess the timezone. */
             icalvalue *val = icalproperty_get_value(prop);
@@ -747,24 +929,27 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess) {
 /* Determine the Olson TZID, if any, of the first ical property of
  * kind in component comp. */
 static const char *tzid_from_ical(icalcomponent *comp,
-                                  icalproperty_kind kind) {
+                                  icalproperty_kind kind,
+                                  jstimezones_t *jstzones)
+{
     icalproperty *prop = icalcomponent_get_first_property(comp, kind);
     if (!prop) {
         return NULL;
     }
-    return tzid_from_icalprop(prop, 1/*guess*/);
+    return tzid_from_icalprop(prop, 1, jstzones);
 }
 
-static struct icaltimetype dtstart_from_ical(icalcomponent *comp)
+static struct icaltimetype dtstart_from_ical(icalcomponent *comp,
+                                             jstimezones_t *jstzones)
 {
     struct icaltimetype dt = icalcomponent_get_dtstart(comp);
 
-    const char *tzid = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
+    const char *tzid = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY, jstzones);
     /* Seen in the wild: a floating DTSTART and a DTEND with TZID */
-    if (!tzid) tzid = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
+    if (!tzid) tzid = tzid_from_ical(comp, ICAL_DTEND_PROPERTY, jstzones);
     if (!tzid) return dt;
 
-    icaltimezone* tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+    icaltimezone *tz = jstimezones_lookup_tzid(jstzones, tzid);
     if (tz && tz != dt.zone) {
         icaltimezone *utc = icaltimezone_get_utc_timezone();
         if (dt.zone != utc) {
@@ -780,17 +965,18 @@ static struct icaltimetype dtstart_from_ical(icalcomponent *comp)
     return dt;
 }
 
-static struct icaltimetype dtend_from_ical(icalcomponent *comp)
+static struct icaltimetype dtend_from_ical(icalcomponent *comp,
+                                           jstimezones_t *jstzones)
 {
     struct icaltimetype dtend = icaltime_null_time();
     icalproperty *end_prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
     icalproperty *dur_prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
-    struct icaltimetype dtstart = dtstart_from_ical(comp);
+    struct icaltimetype dtstart = dtstart_from_ical(comp, jstzones);
 
     if (end_prop) {
         dtend = icalproperty_get_dtend(end_prop);
-        const char *tzid = tzid_from_icalprop(end_prop, 1);
-        icaltimezone* tz = tzid ? icaltimezone_get_cyrus_timezone_from_tzid(tzid) : NULL;
+        const char *tzid = tzid_from_icalprop(end_prop, 1, jstzones);
+        icaltimezone* tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
         if (tz && tz != dtend.zone) {
             icaltimezone *utc = icaltimezone_get_utc_timezone();
             if (dtend.zone != utc) {
@@ -1042,7 +1228,9 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 }
 
 /* Convert the ical recurrence recur to a JMAP recurrenceRule */
-static json_t* recurrencerules_from_ical(icalcomponent *comp, icalproperty_kind kind)
+static json_t* recurrencerules_from_ical(icalcomponent *comp,
+                                         icalproperty_kind kind,
+                                         jstimezones_t *jstzones)
 {
 
     json_t *jrrules = json_array();
@@ -1056,7 +1244,7 @@ static json_t* recurrencerules_from_ical(icalcomponent *comp, icalproperty_kind 
             icalproperty_get_first_parameter(dtstart_prop, ICAL_TZID_PARAMETER);
         if (tzid_param) tzid = icalparameter_get_tzid(tzid_param);
     }
-    icaltimezone *untiltz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+    icaltimezone *untiltz = jstimezones_lookup_tzid(jstzones, tzid);
 
     icalproperty *prop;
     for (prop = icalcomponent_get_first_property(comp, kind);
@@ -1123,15 +1311,16 @@ override_rdate_from_ical(icalproperty *prop)
 }
 
 static json_t*
-override_exdate_from_ical(icalproperty *prop, const char *tzid_start)
+override_exdate_from_ical(icalproperty *prop, const char *tzid_start,
+                          jstimezones_t *jstzones)
 {
     json_t *override = json_object();
     icaltimetype exdate = icalproperty_get_exdate(prop);
 
-    const char *tzid_xdate = tzid_from_icalprop(prop, 1);
+    const char *tzid_xdate = tzid_from_icalprop(prop, 1, jstzones);
     if (tzid_start && tzid_xdate && strcmp(tzid_start, tzid_xdate)) {
-        icaltimezone *tz_xdate = icaltimezone_get_cyrus_timezone_from_tzid(tzid_xdate);
-        icaltimezone *tz_start = icaltimezone_get_cyrus_timezone_from_tzid(tzid_start);
+        icaltimezone *tz_xdate = jstimezones_lookup_tzid(jstzones, tzid_xdate);
+        icaltimezone *tz_start = jstimezones_lookup_tzid(jstzones, tzid_start);
         if (tz_xdate && tz_start) {
             if (exdate.zone) exdate.zone = tz_xdate;
             exdate = icaltime_convert_to_zone(exdate, tz_start);
@@ -1158,6 +1347,7 @@ override_exdate_from_ical(icalproperty *prop, const char *tzid_start)
 static json_t*
 overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
                     json_t *event, const char *tzid_start,
+                    jstimezones_t *jstzones,
                     struct jmapical_jmapcontext *jmapctx)
 {
     icalproperty *prop;
@@ -1180,7 +1370,7 @@ overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_EXDATE_PROPERTY)) {
 
-        json_t *override = override_exdate_from_ical(prop, tzid_start);
+        json_t *override = override_exdate_from_ical(prop, tzid_start, jstzones);
         if (override) {
             json_object_update(overrides, override);
             json_decref(override);
@@ -1195,7 +1385,7 @@ overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
         icalcomponent *excomp = ptrarray_nth(icaloverrides, i);
 
         /* Convert VEVENT exception to JMAP */
-        json_t *ex = calendarevent_from_ical(excomp, NULL, 1, NULL, jmapctx);
+        json_t *ex = calendarevent_from_ical(excomp, NULL, 1, NULL, jstzones, jmapctx);
         if (!ex) continue;
 
         /* Recurrence-id */
@@ -1211,7 +1401,7 @@ overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
                 if (tzid_param) {
                     const char *start_tzid = icalparameter_get_tzid(tzid_param);
                     if (start_tzid) {
-                        icaltimezone *start_tz = icaltimezone_get_cyrus_timezone_from_tzid(start_tzid);
+                        icaltimezone *start_tz = jstimezones_lookup_tzid(jstzones, start_tzid);
                         if (start_tz) {
                             icalrecurid = icaltime_convert_to_zone(icalrecurid, start_tz);
                         }
@@ -1856,7 +2046,6 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
         free(uri);
     }
 
-
     /* Map ATTENDEE to JSCalendar */
     icalproperty *orga = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
@@ -2093,7 +2282,8 @@ relatedto_from_ical(icalcomponent *comp)
     return ret;
 }
 
-static json_t* location_from_ical(icalproperty *prop, json_t *links)
+static json_t* location_from_ical(icalproperty *prop, json_t *links,
+                                  jstimezones_t *jstzones)
 {
     icalparameter *param;
     json_t *loc = json_pack("{s:s}", "@type", "Location");
@@ -2116,8 +2306,10 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links)
     }
 
     /* timeZone */
-    const char *tzid = get_icalxparam_value(prop, JMAPICAL_XPARAM_TZID);
-    if (tzid) json_object_set_new(loc, "timeZone", json_string(tzid));
+    const char *timezone = get_icalxparam_value(prop, JMAPICAL_XPARAM_TZID);
+    if (jstimezones_lookup_jstzid(jstzones, timezone)) {
+        json_object_set_new(loc, "timeZone", json_string(timezone));
+    }
 
     /* coordinates */
     const char *coord = get_icalxparam_value(prop, JMAPICAL_XPARAM_GEO);
@@ -2180,20 +2372,25 @@ static json_t *coordinates_from_ical(icalproperty *prop)
 }
 
 static json_t*
-locations_from_ical(icalcomponent *comp, json_t *linksbyloc)
+locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
+                    jstimezones_t *jstzones)
 {
     icalproperty* prop;
     json_t *loc, *locations = json_object();
+    struct buf buf = BUF_INITIALIZER;
     char *id;
 
     /* Handle end locations */
-    const char *tzidstart = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
-    const char *tzidend = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
+    const char *tzidstart = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY, jstzones);
+    const char *tzidend = tzid_from_ical(comp, ICAL_DTEND_PROPERTY, jstzones);
     if (tzidstart && tzidend && strcmp(tzidstart, tzidend)) {
         prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
         id = xjmapid_from_ical(prop);
-        loc = json_pack("{s:s s:s}", "timeZone", tzidend, "relativeTo", "end");
-        json_object_set_new(locations, id, loc);
+        const char *jstzid = jstimezones_get_jstzid(jstzones, tzidend);
+        if (jstzid) {
+            loc = json_pack("{s:s s:s}", "timeZone", jstzid, "relativeTo", "end");
+            json_object_set_new(locations, id, loc);
+        }
         free(id);
     }
 
@@ -2201,7 +2398,7 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc)
     if ((prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY))) {
         id = xjmapid_from_ical(prop);
         json_t *links = json_incref(json_object_get(linksbyloc, id));
-        if ((loc = location_from_ical(prop, links))) {
+        if ((loc = location_from_ical(prop, links, jstzones))) {
             json_object_set_new(locations, id, loc);
         }
         else json_decref(links);
@@ -2259,7 +2456,7 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc)
         id = xjmapid_from_ical(prop);
 
         json_t *links = json_incref(json_object_get(linksbyloc, id));
-        if ((loc = location_from_ical(prop, links))) {
+        if ((loc = location_from_ical(prop, links, jstzones))) {
             json_object_set_new(locations, id, loc);
         }
         else json_decref(links);
@@ -2270,6 +2467,7 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc)
         json_decref(locations);
         locations = json_null();
     }
+    buf_free(&buf);
 
     return locations;
 }
@@ -2316,10 +2514,11 @@ virtuallocations_from_ical(icalcomponent *comp)
     return locations;
 }
 
-static void duration_from_vevent(icalcomponent *comp, struct jmapical_duration *dur)
+static void duration_from_vevent(icalcomponent *comp, struct jmapical_duration *dur,
+                                 jstimezones_t *jstzones)
 {
-    struct icaltimetype dtstart = dtstart_from_ical(comp);
-    struct icaltimetype dtend = dtend_from_ical(comp);
+    struct icaltimetype dtstart = dtstart_from_ical(comp, jstzones);
+    struct icaltimetype dtend = dtend_from_ical(comp, jstzones);
     if (!icaltime_is_null_time(dtend)) {
         time_t tstart = icaltime_as_timet_with_zone(dtstart, dtstart.zone);
         time_t tend = icaltime_as_timet_with_zone(dtend, dtend.zone);
@@ -2350,6 +2549,292 @@ locale_from_ical(icalcomponent *comp)
     return lang ? json_string(lang) : json_null();
 }
 
+static void format_tzoffset(struct buf *buf, int offset)
+{
+    if (offset < 0) {
+        buf_putc(buf, '-');
+        offset *= -1;
+    }
+    else buf_putc(buf, '+');
+
+    int hours = offset / 3600;
+    offset %= 3600;
+    int minutes = offset / 60;
+    offset %= 60;
+    int seconds = offset;
+    buf_printf(buf, "%02d", hours);
+    buf_printf(buf, "%02d", minutes);
+    if (seconds) buf_printf(buf, "%02d", seconds);
+}
+
+static json_t *timezonerule_from_ical(icalcomponent *tzrule)
+{
+    json_t *jtzrule = json_object();
+    struct buf buf = BUF_INITIALIZER;
+    icalproperty *prop;
+
+    json_object_set_new(jtzrule, "@type", json_string("TimeZoneRule"));
+
+    prop = icalcomponent_get_first_property(tzrule, ICAL_DTSTART_PROPERTY);
+    if (prop) {
+        icaltimetype dtstart = icalproperty_get_dtstart(prop);
+        struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+        jmapical_datetime_from_icaltime(dtstart, &dt);
+        jmapical_localdatetime_as_string(&dt, &buf);
+        json_object_set_new(jtzrule, "start", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
+    prop = icalcomponent_get_first_property(tzrule, ICAL_TZOFFSETFROM_PROPERTY);
+    if (prop) {
+        format_tzoffset(&buf, icalproperty_get_tzoffsetfrom(prop));
+        json_object_set_new(jtzrule, "offsetFrom", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
+    prop = icalcomponent_get_first_property(tzrule, ICAL_TZOFFSETTO_PROPERTY);
+    if (prop) {
+        format_tzoffset(&buf, icalproperty_get_tzoffsetto(prop));
+        json_object_set_new(jtzrule, "offsetTo", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
+    json_t *rrules = json_array();
+    for (prop = icalcomponent_get_first_property(tzrule, ICAL_RRULE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(tzrule, ICAL_RRULE_PROPERTY)) {
+
+        json_t *rrule = recurrencerule_from_ical(prop, NULL);
+        if (rrule) json_array_append_new(rrules, rrule);
+    }
+    if (!json_array_size(rrules)) {
+        json_decref(rrules);
+        rrules = NULL;
+    }
+    if (rrules) json_object_set_new(jtzrule, "recurrenceRules", rrules);
+
+    json_t *overrides = json_object();
+    for (prop = icalcomponent_get_first_property(tzrule, ICAL_RDATE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(tzrule, ICAL_RDATE_PROPERTY)) {
+
+        struct icaldatetimeperiodtype rdate = icalproperty_get_rdate(prop);
+        if (!icaltime_is_null_time(rdate.time)) {
+            struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+            jmapical_datetime_from_icaltime(rdate.time, &dt);
+
+            jmapical_localdatetime_as_string(&dt, &buf);
+            json_object_set_new(jtzrule, buf_cstring(&buf), json_object());
+            buf_reset(&buf);
+        }
+    }
+    if (!json_object_size(overrides)) {
+        json_decref(overrides);
+        overrides = NULL;
+    }
+    if (overrides) json_object_set_new(jtzrule, "recurrenceOverrides", overrides);
+
+    json_t *names = json_object();
+    for (prop = icalcomponent_get_first_property(tzrule, ICAL_TZNAME_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(tzrule, ICAL_TZNAME_PROPERTY)) {
+
+        const char *tzname = icalproperty_get_tzname(prop);
+        if (tzname && *tzname) {
+            json_object_set_new(names, tzname, json_true());
+        }
+    }
+    if (!json_object_size(names)) {
+        json_decref(names);
+        names = NULL;
+    }
+    if (names) json_object_set_new(jtzrule, "names", names);
+
+    json_t *comments = json_array();
+    for (prop = icalcomponent_get_first_property(tzrule, ICAL_COMMENT_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(tzrule, ICAL_COMMENT_PROPERTY)) {
+
+        const char *comment = icalproperty_get_comment(prop);
+        if (comment && *comment) {
+            json_array_append_new(comments, json_string(comment));
+        }
+    }
+    if (!json_array_size(comments)) {
+        json_decref(comments);
+        comments = NULL;
+    }
+    if (comments) json_object_set_new(jtzrule, "comments", comments);
+
+    buf_free(&buf);
+    return jtzrule;
+}
+
+static void read_custom_jstzids(json_t *jsevent, strarray_t *tzids)
+{
+    ptrarray_t work = PTRARRAY_INITIALIZER;
+    const char *pname;
+    json_t *jval;
+
+    /* Prepare to process both the main event and overrides */
+    ptrarray_append(&work, jsevent);
+    json_object_foreach(jsevent, pname, jval) {
+        if (!strcmp(pname, "recurrenceOverrides")) {
+            ptrarray_append(&work, jval);
+        }
+    }
+
+    /* Find all all timeZone property values */
+    json_t *jpatch;
+    while ((jpatch = ptrarray_pop(&work))) {
+        json_object_foreach(jpatch, pname, jval) {
+            const char *tzid = NULL;
+            if (!strcmp(pname, "timeZone")) {
+                tzid = json_string_value(jval);
+            }
+            else if (!strcmp(pname, "location")) {
+                tzid = json_string_value(json_object_get(jval, "timeZone"));
+            }
+            else if (!strncmp(pname, "locations/", 10)) {
+                pname += 10;
+                const char *p = strchr(pname, '/');
+                if (!strcmp(p + 1, "timeZone")) {
+                    tzid = json_string_value(jval);
+                }
+            }
+            if (tzid && *tzid == '/') {
+                strarray_add(tzids, tzid);
+            }
+        }
+    }
+
+    ptrarray_fini(&work);
+}
+
+static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
+{
+    if (!jstzones || !jstzones->tzs.count) return NULL;
+
+    strarray_t want_tzids = STRARRAY_INITIALIZER;
+    read_custom_jstzids(jsevent, &want_tzids);
+    if (!strarray_size(&want_tzids)) return NULL;
+
+    json_t *jtimezones = json_object();
+    struct buf buf = BUF_INITIALIZER;
+    hash_iter *iter = hash_table_iter(&jstzones->byjstzid);
+
+    while (hash_iter_next(iter)) {
+        buf_reset(&buf);
+
+        const char *jstzid = hash_iter_key(iter);
+        icaltimezone *tz = hash_iter_val(iter);
+
+        /* Skip orphaned timezones */
+        if (strarray_find(&want_tzids, jstzid, 0) < 0) {
+            continue;
+        }
+
+        /* Add timezone */
+        json_t *jtimezone = json_object();
+        json_object_set_new(jtimezone, "@type", json_string("TimeZone"));
+        json_object_set_new(jtimezones, jstzid, jtimezone);
+        /* Populate timezone properties */
+
+        icalcomponent *tzcomp = icaltimezone_get_component(tz);
+        icalproperty *prop;
+
+        prop = icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
+        if (prop) {
+            json_object_set_new(jtimezone, "tzId",
+                    json_string(icalproperty_get_tzid(prop)));
+        }
+
+        prop = icalcomponent_get_first_property(tzcomp, ICAL_TZURL_PROPERTY);
+        if (prop) {
+            json_object_set_new(jtimezone, "url",
+                    json_string(icalproperty_get_url(prop)));
+        }
+
+        prop = icalcomponent_get_first_property(tzcomp, ICAL_LASTMODIFIED_PROPERTY);
+        if (prop) {
+            icaltimetype icaldt = icalproperty_get_lastmodified(prop);
+            struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+            jmapical_datetime_from_icaltime(icaldt, &dt);
+            jmapical_utcdatetime_as_string(&dt, &buf);
+            json_object_set_new(jtimezone, "updated",
+                    json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+
+        prop = icalcomponent_get_first_property(tzcomp, ICAL_TZUNTIL_PROPERTY);
+        if (prop) {
+            icaltimetype icaldt = icalproperty_get_tzuntil(prop);
+            struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+            jmapical_datetime_from_icaltime(icaldt, &dt);
+            jmapical_utcdatetime_as_string(&dt, &buf);
+            json_object_set_new(jtimezone, "validUntil",
+                    json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+
+        json_t *jaliases = json_object();
+        for (prop = icalcomponent_get_first_property(tzcomp, ICAL_TZIDALIASOF_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(tzcomp, ICAL_TZIDALIASOF_PROPERTY)) {
+            const char *alias = icalproperty_get_tzidaliasof(prop);
+            if (alias && *alias) {
+                json_object_set_new(jaliases, alias, json_true());
+            }
+        }
+        if (!json_object_size(jaliases)) {
+            json_decref(jaliases);
+            jaliases = NULL;
+        }
+        if (jaliases) json_object_set_new(jtimezone, "aliases", jaliases);
+
+        icalcomponent *tzrule;
+
+        json_t *standard = json_array();
+        for (tzrule = icalcomponent_get_first_component(tzcomp, ICAL_XSTANDARD_COMPONENT);
+             tzrule;
+             tzrule = icalcomponent_get_next_component(tzcomp, ICAL_XSTANDARD_COMPONENT)) {
+
+            json_t *jtzrule = timezonerule_from_ical(tzrule);
+            if (jtzrule) json_array_append_new(standard, jtzrule);
+        }
+        if (!json_array_size(standard)) {
+            json_decref(standard);
+            standard = NULL;
+        }
+        if (standard) json_object_set_new(jtimezone, "standard", standard);
+
+        json_t *daylight = json_array();
+        for (tzrule = icalcomponent_get_first_component(tzcomp, ICAL_XDAYLIGHT_COMPONENT);
+             tzrule;
+             tzrule = icalcomponent_get_next_component(tzcomp, ICAL_XDAYLIGHT_COMPONENT)) {
+
+            json_t *jtzrule = timezonerule_from_ical(tzrule);
+            if (jtzrule) json_array_append_new(daylight, jtzrule);
+        }
+        if (!json_array_size(daylight)) {
+            json_decref(daylight);
+            daylight = NULL;
+        }
+        if (daylight) json_object_set_new(jtimezone, "daylight", daylight);
+    }
+
+    /* Clean up state */
+    hash_iter_free(&iter);
+    if (!json_object_size(jtimezones)) {
+        json_decref(jtimezones);
+        jtimezones = NULL;
+    }
+    buf_free(&buf);
+    strarray_fini(&want_tzids);
+
+    return jtimezones;
+}
+
 /* Convert the libical VEVENT comp to a CalendarEvent 
  *
  * master: if not NULL, treat comp as a VEVENT exception
@@ -2358,12 +2843,21 @@ locale_from_ical(icalcomponent *comp)
 static json_t*
 calendarevent_from_ical(icalcomponent *comp, hash_table *props,
                         int is_override, ptrarray_t *overrides,
+                        jstimezones_t *jstzones,
                         struct jmapical_jmapcontext *jmapctx)
 {
     icalproperty* prop = NULL;
     hash_table *wantprops = NULL;
     json_t *event = json_pack("{s:s}", "@type", "JSEvent");
     struct buf buf = BUF_INITIALIZER;
+    jstimezones_t myjstzones = JSTIMEZONES_INITIALIZER;
+
+    /* Read custom timezones */
+    if (!jstzones) {
+        icalcomponent *ical = icalcomponent_get_parent(comp);
+        jstimezones_add_vtimezones(&myjstzones, ical);
+        jstzones = &myjstzones;
+    }
 
     if (jmap_wantprop(props, "recurrenceOverrides") && !is_override) {
         /* Fetch all properties if recurrenceOverrides are requested,
@@ -2373,16 +2867,19 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     }
 
     /* Handle bogus mix of floating and time zoned types */
-    char *tzid_start = xstrdupnull(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
+    // use jstzid?
+    char *tzid_start = xstrdupnull(tzid_from_ical(comp,
+                ICAL_DTSTART_PROPERTY, jstzones));
     if (!tzid_start) {
-        tzid_start = xstrdupnull(tzid_from_ical(comp, ICAL_DTEND_PROPERTY));
+        tzid_start = xstrdupnull(tzid_from_ical(comp,
+                    ICAL_DTEND_PROPERTY, jstzones));
     }
 
     /* start */
     if (jmap_wantprop(props, "start")) {
         struct jmapical_datetime start = JMAPICAL_DATETIME_INITIALIZER;
         if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
-            icaltimetype dtstart = dtstart_from_ical(comp);
+            icaltimetype dtstart = dtstart_from_ical(comp, jstzones);
             jmapical_datetime_from_icaltime(dtstart, &start);
         }
         jmapical_localdatetime_as_string(&start, &buf);
@@ -2392,14 +2889,15 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
 
     /* timeZone */
     if (jmap_wantprop(props, "timeZone")) {
-        json_object_set_new(event, "timeZone", tzid_start ?
-                json_string(tzid_start) : json_null());
+        const char *jstzid = jstimezones_get_jstzid(jstzones, tzid_start);
+        json_object_set_new(event, "timeZone",
+                jstzid ? json_string(jstzid) : json_null());
     }
 
     /* duration */
     if (jmap_wantprop(props, "duration")) {
         struct jmapical_duration dur = JMAPICAL_DURATION_INITIALIZER;
-        duration_from_vevent(comp, &dur);
+        duration_from_vevent(comp, &dur, jstzones);
         jmapical_duration_as_string(&dur, &buf);
         json_object_set_new(event, "duration", json_string(buf_cstring(&buf)));
         buf_reset(&buf);
@@ -2557,7 +3055,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
         if (jmap_wantprop(props, "locations")) {
             json_object_set_new(event, "locations",
                     locations_from_ical(comp,
-                        json_object_get(linksbyprop, "locations")));
+                        json_object_get(linksbyprop, "locations"), jstzones));
         }
         /* participants */
         if (jmap_wantprop(props, "participants")) {
@@ -2585,13 +3083,13 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     /* recurrenceRules */
     if (jmap_wantprop(props, "recurrenceRules") && !is_override) {
         json_object_set_new(event, "recurrenceRules",
-                recurrencerules_from_ical(comp, ICAL_RRULE_PROPERTY));
+                recurrencerules_from_ical(comp, ICAL_RRULE_PROPERTY, jstzones));
     }
 
     /* excludedRecurrenceRules */
     if (jmap_wantprop(props, "excludedRecurrenceRules") && !is_override) {
         json_object_set_new(event, "excludedRecurrenceRules",
-                recurrencerules_from_ical(comp, ICAL_EXRULE_PROPERTY));
+                recurrencerules_from_ical(comp, ICAL_EXRULE_PROPERTY, jstzones));
     }
 
     /* status */
@@ -2671,16 +3169,30 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
         json_object_set_new(event, "alerts", alerts_from_ical(comp));
     }
 
-    /* recurrenceOverrides - must be last to generate patches */
-    if (jmap_wantprop(props, "recurrenceOverrides") && !is_override) {
-        json_object_set_new(event, "recurrenceOverrides",
-                overrides_from_ical(comp, overrides, event, tzid_start, jmapctx));
+    if (!is_override) {
+        /* must go go last, we need all other properties to be set */
+
+        /* recurrenceOverrides */
+        if (jmap_wantprop(props, "recurrenceOverrides")) {
+            json_object_set_new(event, "recurrenceOverrides",
+                    overrides_from_ical(comp, overrides, event,
+                        tzid_start, jstzones, jmapctx));
+        }
+
+        /* timeZones - requires overrides set in the event already */
+        if (jmap_wantprop(props, "timeZones")) {
+            json_t *jtimezones = timezones_from_ical(event, jstzones);
+            if (JNOTNULL(jtimezones)) {
+                json_object_set_new(event, "timeZones", jtimezones);
+            }
+        }
     }
 
     if (wantprops) {
         jmap_filterprops(event, wantprops);
     }
 
+    if (jstzones == &myjstzones) jstimezones_fini(&myjstzones);
     free(tzid_start);
     buf_free(&buf);
     return event;
@@ -2751,7 +3263,8 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
             const char *uid = icalcomponent_get_uid(comp);
             overrides = hash_lookup(uid, &overrides_by_uid);
         }
-        json_t *jsevent = calendarevent_from_ical(comp, props, 0, overrides, jmapctx);
+        json_t *jsevent = calendarevent_from_ical(comp,
+                props, 0, overrides, NULL, jmapctx);
         if (jsevent) json_array_append_new(events, jsevent);
     }
 
@@ -2876,7 +3389,9 @@ static int location_is_endtimezone(json_t *loc)
 /* Update the start and end properties of VEVENT comp, as defined by
  * the JMAP calendarevent event. */
 static void
-startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
+startend_to_ical(icalcomponent *comp, struct jmap_parser *parser,
+                 json_t *event,
+                 jstimezones_t *jstzones)
 {
     json_t *jprop;
 
@@ -2884,8 +3399,8 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     icaltimezone *tzstart = NULL;
     jprop = json_object_get(event, "timeZone");
     if (json_is_string(jprop)) {
-        const char *val = json_string_value(jprop);
-        tzstart = icaltimezone_get_cyrus_timezone_from_tzid(val);
+        const char *jstzid = json_string_value(jprop);
+        tzstart = jstimezones_lookup_jstzid(jstzones, jstzid);
         if (!tzstart) {
             jmap_parser_invalid(parser, "timeZone");
         }
@@ -2908,9 +3423,9 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
             /* Pick the first location with timeZone and rel=end */
             jmap_parser_push(parser, id);
             endzone_location_id = id;
-            json_t *timeZone = json_object_get(jval, "timeZone");
-            if (json_is_string(timeZone)) {
-                tzend = icaltimezone_get_cyrus_timezone_from_tzid(json_string_value(timeZone));
+            const char *jstzid = json_string_value(json_object_get(jval, "timeZone"));
+            if (timezone) {
+                tzend = jstimezones_lookup_jstzid(jstzones, jstzid);
                 if (!tzend || !tzstart) {
                     jmap_parser_invalid(parser, "timeZone");
                 }
@@ -3575,7 +4090,7 @@ participant_to_ical(icalcomponent *comp,
     json_t *description = json_object_get(jpart, "description");
     if (json_is_string(description)) {
         const char *s = json_string_value(description);
-        if (*s) set_icalxparam(prop, JMAPICAL_XPARAM_DESCRIPTION, s, 0);
+        if (*s) icalproperty_set_xparam(prop, JMAPICAL_XPARAM_DESCRIPTION, s, 0);
     }
     else if (JNOTNULL(description)) {
         jmap_parser_invalid(parser, "description");
@@ -4277,7 +4792,8 @@ static void recurrence_byX_to_ical(json_t *rrule,
  * JMAP recurrence. */
 static void
 recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser,
-                       icalproperty_kind kind, json_t *rrule)
+                       icalproperty_kind kind, json_t *rrule,
+                       jstimezones_t *jstzones)
 {
     struct buf buf = BUF_INITIALIZER;
 
@@ -4476,8 +4992,8 @@ recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser,
         struct jmapical_datetime until = JMAPICAL_DATETIME_INITIALIZER;
         if (jmapical_localdatetime_from_string(json_string_value(jprop), &until) >= 0) {
             int is_date = icalcomponent_get_dtstart(comp).is_date;
-            icaltimezone *tzstart =
-                icaltimezone_get_cyrus_timezone_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
+            const char *tzidstart = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY, jstzones);
+            icaltimezone *tzstart = jstimezones_lookup_tzid(jstzones, tzidstart);
             icaltimetype untilutc;
             if (is_date) {
                 untilutc = jmapical_datetime_to_icaldate(&until);
@@ -4521,7 +5037,8 @@ recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser,
  * JMAP recurrence. */
 static void
 recurrencerules_to_ical(icalcomponent *comp, struct jmap_parser *parser,
-                        icalproperty_kind kind, json_t *rrules)
+                        icalproperty_kind kind, json_t *rrules,
+                        jstimezones_t *jstzones)
 {
     /* Purge existing RRULE. */
     icalproperty *prop, *next;
@@ -4542,7 +5059,7 @@ recurrencerules_to_ical(icalcomponent *comp, struct jmap_parser *parser,
     json_t *rrule;
     json_array_foreach(rrules, i, rrule) {
         jmap_parser_push_index(parser, NULL, i, NULL);
-        recurrencerule_to_ical(comp, parser, kind, rrule);
+        recurrencerule_to_ical(comp, parser, kind, rrule, jstzones);
         jmap_parser_pop(parser);
     }
 
@@ -4645,7 +5162,8 @@ relatedto_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *relat
 }
 
 static int
-validate_location(json_t *loc, struct jmap_parser *parser, json_t *links)
+validate_location(json_t *loc, struct jmap_parser *parser, json_t *links,
+                  jstimezones_t *jstzones)
 {
     size_t invalid_cnt = json_array_size(parser->invalid);
     json_t *jprop = NULL;
@@ -4681,8 +5199,10 @@ validate_location(json_t *loc, struct jmap_parser *parser, json_t *links)
 
     jprop = json_object_get(loc, "timeZone");
     if (json_is_string(jprop)) {
-        if (!icaltimezone_get_cyrus_timezone_from_tzid(json_string_value(jprop)))
+        const char *jstzid = json_string_value(jprop);
+        if (!jstimezones_lookup_jstzid(jstzones, jstzid)) {
             jmap_parser_invalid(parser, "timeZone");
+        }
     }
     else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "timeZone");
@@ -4766,7 +5286,10 @@ location_to_ical(icalcomponent *comp, struct jmap_parser *parser,
     const char *s = json_string_value(json_object_get(loc, "description"));
     if (s && *s) icalproperty_set_xparam(prop, JMAPICAL_XPARAM_DESCRIPTION, s, 0);
     s = json_string_value(json_object_get(loc, "timeZone"));
-    if (s && *s) icalproperty_set_xparam(prop, JMAPICAL_XPARAM_TZID, s, 0);
+    if (s) {
+        if (*s == '/') s++;
+        icalproperty_set_xparam(prop, JMAPICAL_XPARAM_TZID, s, 0); 
+    }
     s = json_string_value(json_object_get(loc, "coordinates"));
     if (s && *s) icalproperty_set_xparam(prop, JMAPICAL_XPARAM_GEO, s, 0);
 
@@ -4776,7 +5299,7 @@ location_to_ical(icalcomponent *comp, struct jmap_parser *parser,
         const char *loctype;
         json_t *jval;
         json_object_foreach(loctypes, loctype, jval) {
-            set_icalxparam(prop, JMAPICAL_XPARAM_LOCATIONTYPE, loctype, 0);
+            icalproperty_set_xparam(prop, JMAPICAL_XPARAM_LOCATIONTYPE, loctype, 0);
         }
     }
 
@@ -4795,6 +5318,7 @@ location_to_ical(icalcomponent *comp, struct jmap_parser *parser,
 static void
 locations_to_ical(icalcomponent *comp, struct jmap_parser *parser,
                   json_t *locations, json_t *links,
+                  jstimezones_t *jstzones,
                   struct jmapical_jmapcontext *jmapctx)
 {
     json_t *loc;
@@ -4821,7 +5345,7 @@ locations_to_ical(icalcomponent *comp, struct jmap_parser *parser,
         }
         jmap_parser_push(parser, id);
         /* Validate and add location */
-        if (validate_location(loc, parser, links)) {
+        if (validate_location(loc, parser, links, jstzones)) {
             location_to_ical(comp, parser, "locations", id, loc, jmapctx);
         }
         jmap_parser_pop(parser);
@@ -4914,12 +5438,313 @@ static void set_language_icalprop(icalcomponent *comp, icalproperty_kind kind,
     icalproperty_add_parameter(prop, param);
 }
 
-static void
-overrides_to_ical(icalcomponent *comp,
-                  struct jmap_parser *parser,
-                  json_t *overrides,
-                  struct icalcomps *oldcomps,
-                  struct jmapical_jmapcontext *jmapctx)
+static int parse_tzoffset(const char *str, int *offsetp)
+{
+    /* sign */
+    int sign = *str == '+' ? 1 : *str == '-' ? -1 : 0;
+    int offset = 0;
+    if (!sign) return -1;
+    str++;
+
+    /* time-hour */
+    if (isdigit(str[0]) && isdigit(str[1])) {
+        int val = (str[0] - '0') * 10 + (str[1] - '0');
+        if (val > 23) return -1;
+        offset += val * 60 * 60;
+    }
+    else return -1;
+    str += 2;
+
+    /* time-minute */
+    if (isdigit(str[0]) && isdigit(str[1])) {
+        int val = (str[0] - '0') * 10 + (str[1] - '0');
+        if (val > 59) return -1;
+        offset += val * 60;
+    }
+    else return -1;
+    str += 2;
+
+    if (*str) {
+        /* time-second */
+        if (isdigit(str[0]) && isdigit(str[1])) {
+            int val = (str[0] - '0') * 10 + (str[1] - '0');
+            if (val > 60) return -1;
+            offset += val;
+        }
+        else return -1;
+        str += 2;
+    }
+
+    if (*str) return -1;
+
+    *offsetp = offset * sign;
+    return 0;
+}
+
+static void timezonerule_to_ical(icalcomponent *tzrule, struct jmap_parser *parser,
+                                 json_t *jtzrule)
+{
+    validate_type(parser, jtzrule, "TimeZoneRule");
+
+    json_t *jprop = json_object_get(jtzrule, "start");
+    if (json_is_string(jprop)) {
+        struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+        if (jmapical_localdatetime_from_string(json_string_value(jprop), &dt) >= 0) {
+                icaltimetype icaldt = jmapical_datetime_to_icaltime(&dt, NULL);
+                icalcomponent_add_property(tzrule,
+                        icalproperty_new_dtstart(icaldt));
+        }
+        else jmap_parser_invalid(parser, "start");
+    }
+    else jmap_parser_invalid(parser, "start");
+
+    jprop = json_object_get(jtzrule, "offsetFrom");
+    if (json_is_string(jprop)) {
+        int offset;
+        if (parse_tzoffset(json_string_value(jprop), &offset) >= 0) {
+            icalcomponent_add_property(tzrule,
+                    icalproperty_new_tzoffsetfrom(offset));
+        }
+        else jmap_parser_invalid(parser, "offsetFrom");
+    }
+    else jmap_parser_invalid(parser, "offsetFrom");
+
+    jprop = json_object_get(jtzrule, "offsetTo");
+    if (json_is_string(jprop)) {
+        int offset;
+        if (parse_tzoffset(json_string_value(jprop), &offset) >= 0) {
+            icalcomponent_add_property(tzrule,
+                    icalproperty_new_tzoffsetto(offset));
+        }
+        else jmap_parser_invalid(parser, "offsetTo");
+    }
+    else jmap_parser_invalid(parser, "offsetTo");
+
+    jprop = json_object_get(jtzrule, "recurrenceRules");
+    if (json_is_array(jprop)) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(jprop, i, jval) {
+            jmap_parser_push_index(parser, "recurrenceRules", i, NULL);
+            recurrencerule_to_ical(tzrule, parser, ICAL_RRULE_PROPERTY, jval, NULL);
+            jmap_parser_pop(parser);
+        }
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "recurrenceRules");
+    }
+
+    jprop = json_object_get(jtzrule, "recurrenceOverrides");
+    if (json_is_object(jprop)) {
+        jmap_parser_push(parser, "recurrenceoverrides");
+        const char *recurid;
+        json_t *jval;
+        json_object_foreach(jprop, recurid, jval) {
+            struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+            if ((jmapical_localdatetime_from_string(json_string_value(jprop), &dt) >= 0) &&
+                    json_is_object(jval) && !json_object_size(jval)) {
+
+                struct icaldatetimeperiodtype val = {
+                    jmapical_datetime_to_icaltime(&dt, NULL),
+                    icalperiodtype_null_period()
+                };
+                icalcomponent_add_property(tzrule, icalproperty_new_rdate(val));
+            }
+            else jmap_parser_invalid(parser, recurid);
+        }
+        jmap_parser_pop(parser);
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "recurrenceOverrides");
+    }
+
+    jprop = json_object_get(jtzrule, "names");
+    if (json_is_object(jprop)) {
+        jmap_parser_push(parser, "names");
+        const char *name;
+        json_t *jval;
+        json_object_foreach(jprop, name, jval) {
+            if (jval == json_true()) {
+                icalcomponent_add_property(tzrule, icalproperty_new_tzname(name));
+            }
+            else jmap_parser_invalid(parser, name);
+        }
+        jmap_parser_pop(parser);
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "names");
+    }
+
+    jprop = json_object_get(jtzrule, "comments");
+    if (json_is_array(jprop)) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(jprop, i, jval) {
+            if (json_is_string(jval)) {
+                icalcomponent_add_property(tzrule,
+                        icalproperty_new_comment(json_string_value(jval)));
+            }
+            else {
+                jmap_parser_push_index(parser, "comments", i, NULL);
+                jmap_parser_invalid(parser, NULL);
+                jmap_parser_pop(parser);
+            }
+        }
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "comments");
+    }
+}
+
+static void timezones_to_ical(icalcomponent *ical,
+                              struct jmap_parser *parser,
+                              json_t *jevent,
+                              json_t *jtimezones)
+{
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+    jmap_parser_push(parser, "timeZones");
+
+    /* Check for orphaned timezones */
+    strarray_t custom_jstzids = STRARRAY_INITIALIZER;
+    read_custom_jstzids(jevent, &custom_jstzids);
+
+    json_t *jtimezone;
+    const char *jstzid;
+    json_object_foreach(jtimezones, jstzid, jtimezone) {
+
+        jmap_parser_push(parser, jstzid);
+
+        size_t invalid_count = json_array_size(parser->invalid);
+
+        icalcomponent *tzcomp = icalcomponent_new_vtimezone();
+
+        validate_type(parser, jtimezone, "TimeZone");
+
+        const char *tzid = json_string_value(json_object_get(jtimezone, "tzId"));
+        /* Don't allow IANA and Windows timezone ids */
+        if (icaltimezone_get_cyrus_timezone_from_tzid(tzid)) {
+            jmap_parser_invalid(parser, "tzId");
+        }
+        else if (tzid) {
+            icalcomponent_add_property(tzcomp, icalproperty_new_tzid(tzid));
+        }
+        else jmap_parser_invalid(parser, "tzId");
+
+        icalproperty *prop = icalproperty_new_x(jstzid);
+        icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
+        icalcomponent_add_property(tzcomp, prop);
+
+        json_t *jprop = json_object_get(jtimezone, "updated");
+        if (json_is_string(jprop)) {
+            struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+            if (jmapical_utcdatetime_from_string(json_string_value(jprop), &dt) >= 0) {
+                icaltimetype icaldt = jmapical_datetime_to_icaltime(&dt, utc);
+                icalcomponent_add_property(tzcomp,
+                        icalproperty_new_lastmodified(icaldt));
+            }
+            else jmap_parser_invalid(parser, "updated");
+        }
+        else if (JNOTNULL(jprop)) {
+            jmap_parser_invalid(parser, "url");
+        }
+
+        jprop = json_object_get(jtimezone, "url");
+        if (json_is_string(jprop)) {
+            icalcomponent_add_property(tzcomp,
+                    icalproperty_new_tzurl(json_string_value(jprop)));
+        }
+        else if (JNOTNULL(jprop)) {
+            jmap_parser_invalid(parser, "url");
+        }
+
+        jprop = json_object_get(jtimezone, "validUntil");
+        if (json_is_string(jprop)) {
+            struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+            if (jmapical_utcdatetime_from_string(json_string_value(jprop), &dt) >= 0) {
+                icaltimetype icaldt = jmapical_datetime_to_icaltime(&dt, utc);
+                icalcomponent_add_property(tzcomp,
+                        icalproperty_new_tzuntil(icaldt));
+            }
+            else jmap_parser_invalid(parser, "validUntil");
+        }
+        else if (JNOTNULL(jprop)) {
+            jmap_parser_invalid(parser, "validUntil");
+        }
+
+
+        jprop = json_object_get(jtimezone, "aliases");
+        if (json_is_object(jprop)) {
+            jmap_parser_push(parser, "aliases");
+            const char *alias;
+            json_t *jval;
+            json_object_foreach(jprop, alias, jval) {
+                if (jval == json_true()) {
+                    icalcomponent_add_property(tzcomp,
+                            icalproperty_new_tzidaliasof(alias));
+                }
+                else jmap_parser_invalid(parser, alias);
+            }
+            jmap_parser_pop(parser);
+        }
+        else if (JNOTNULL(jprop)) {
+            jmap_parser_invalid(parser, "aliases");
+        }
+
+        jprop = json_object_get(jtimezone, "standard");
+        if (json_is_array(jprop)) {
+            size_t i;
+            json_t *jval;
+            json_array_foreach(jprop, i, jval) {
+                jmap_parser_push_index(parser, "standard", i, NULL);
+                icalcomponent *tzrule = icalcomponent_new_xstandard();
+                timezonerule_to_ical(tzrule, parser, jval);
+                icalcomponent_add_component(tzcomp, tzrule);
+                jmap_parser_pop(parser);
+            }
+        }
+        else if (JNOTNULL(jprop)) {
+            jmap_parser_invalid(parser, "standard");
+        }
+
+        jprop = json_object_get(jtimezone, "daylight");
+        if (json_is_array(jprop)) {
+            size_t i;
+            json_t *jval;
+            json_array_foreach(jprop, i, jval) {
+                jmap_parser_push_index(parser, "daylight", i, NULL);
+                icalcomponent *tzrule = icalcomponent_new_xdaylight();
+                timezonerule_to_ical(tzrule, parser, jval);
+                icalcomponent_add_component(tzcomp, tzrule);
+                jmap_parser_pop(parser);
+            }
+        }
+        else if (JNOTNULL(jprop)) {
+            jmap_parser_invalid(parser, "daylight");
+        }
+
+        if (invalid_count == json_array_size(parser->invalid)) {
+            if (strarray_find(&custom_jstzids, jstzid, 0) < 0) {
+                jmap_parser_invalid(parser, NULL);
+            }
+        }
+
+        jmap_parser_pop(parser);
+
+        icalcomponent_add_component(ical, tzcomp);
+    }
+
+    strarray_fini(&custom_jstzids);
+
+    jmap_parser_pop(parser);
+}
+
+static void overrides_to_ical(icalcomponent *comp,
+                              struct jmap_parser *parser,
+                              json_t *overrides,
+                              struct icalcomps *oldcomps,
+                              jstimezones_t *jstzones,
+                              struct jmapical_jmapcontext *jmapctx)
 {
     icalcomponent *excomp, *next, *ical;
 
@@ -4942,11 +5767,11 @@ overrides_to_ical(icalcomponent *comp,
 
     /* Determine value type of main event DTSTART */
     int is_date = icalcomponent_get_dtstart(comp).is_date;
-    icaltimezone *tzstart =
-        icaltimezone_get_cyrus_timezone_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
+    const char *tzidstart = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY, jstzones);
+    icaltimezone *tzstart = jstimezones_lookup_tzid(jstzones, tzidstart);
 
     /* Convert current master event to JMAP */
-    json_t *master = calendarevent_from_ical(comp, NULL, 0, NULL, jmapctx);
+    json_t *master = calendarevent_from_ical(comp, NULL, 0, NULL, jstzones, jmapctx);
     if (!master) return;
     json_object_del(master, "recurrenceRules");
     json_object_del(master, "recurrenceOverrides");
@@ -5052,7 +5877,7 @@ overrides_to_ical(icalcomponent *comp,
             else if (jrecurrenceId) {
                 jmap_parser_invalid(parser, "recurrenceId");
             }
-            calendarevent_to_ical(excomp, parser, ex, oldcomps, jmapctx);
+            calendarevent_to_ical(excomp, parser, ex, oldcomps, jstzones, jmapctx);
             jmap_parser_pop(parser);
 
             /* Add the exception */
@@ -5074,10 +5899,12 @@ static void calendarevent_to_ical(icalcomponent *comp,
                                   struct jmap_parser *parser,
                                   json_t *event,
                                   struct icalcomps *oldcomps,
+                                  jstimezones_t *jstzones,
                                   struct jmapical_jmapcontext *jmapctx)
 {
     icalproperty *prop = NULL;
     icaltimezone *utc = icaltimezone_get_utc_timezone();
+    jstimezones_t myjstzones = JSTIMEZONES_INITIALIZER;
 
     /* Caller must set UID and RECURRENCEID in iCalendar */
     const char *uid = icalcomponent_get_uid(comp);
@@ -5101,8 +5928,21 @@ static void calendarevent_to_ical(icalcomponent *comp,
         jmap_parser_invalid(parser, "@type");
     }
 
+    /* timeZones */
+    icalcomponent *ical = icalcomponent_get_parent(comp);
+    jprop = json_object_get(event, "timeZones");
+    if (json_is_object(jprop)) {
+        timezones_to_ical(ical, parser, event, jprop);
+    } else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "timeZones");
+    }
+    if (!jstzones) {
+        jstimezones_add_vtimezones(&myjstzones, ical);
+        jstzones = &myjstzones;
+    }
+
     /* start, duration, timeZone */
-    startend_to_ical(comp, parser, event);
+    startend_to_ical(comp, parser, event, jstzones);
 
     /* relatedTo */
     jprop = json_object_get(event, "relatedTo");
@@ -5272,7 +6112,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "locations");
     if (json_is_null(jprop) || json_object_size(jprop)) {
         json_t *links = json_object_get(event, "links");
-        locations_to_ical(comp, parser, jprop, links, jmapctx);
+        locations_to_ical(comp, parser, jprop, links, jstzones, jmapctx);
     } else if (jprop) {
         jmap_parser_invalid(parser, "locations");
     }
@@ -5289,7 +6129,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "recurrenceRules");
     if (json_is_null(jprop) || json_is_array(jprop)) {
         if (!is_exc) recurrencerules_to_ical(comp, parser,
-                ICAL_RRULE_PROPERTY, jprop);
+                ICAL_RRULE_PROPERTY, jprop, jstzones);
     } else if (jprop) {
         jmap_parser_invalid(parser, "recurrenceRules");
     }
@@ -5298,7 +6138,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "excludedRecurrenceRules");
     if (json_is_null(jprop) || json_is_array(jprop)) {
         if (!is_exc) recurrencerules_to_ical(comp, parser,
-                ICAL_EXRULE_PROPERTY, jprop);
+                ICAL_EXRULE_PROPERTY, jprop, jstzones);
     } else if (jprop) {
         jmap_parser_invalid(parser, "excludedRecurrenceRules");
     }
@@ -5401,21 +6241,22 @@ static void calendarevent_to_ical(icalcomponent *comp,
     }
 
     /* FIXME localizations */
-    /* FIXME timeZones */
     /* FIXME categories */
 
     /* recurrenceOverrides - must be last to apply patches */
     jprop = json_object_get(event, "recurrenceOverrides");
     if (json_is_null(jprop) || json_is_object(jprop)) {
-        overrides_to_ical(comp, parser, jprop, oldcomps, jmapctx);
+        overrides_to_ical(comp, parser, jprop, oldcomps, jstzones, jmapctx);
     } else if (jprop) {
         jmap_parser_invalid(parser, "recurrenceOverrides");
     }
+
+    if (jstzones == &myjstzones) jstimezones_fini(&myjstzones);
 }
 
 icalcomponent*
 jmapical_toical(json_t *jsevent, icalcomponent *oldical, json_t *invalid,
-		struct jmapical_jmapcontext *jmapctx)
+                struct jmapical_jmapcontext *jmapctx)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     icalcomponent *ical = NULL;
@@ -5446,7 +6287,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical, json_t *invalid,
         icalcomponent_add_component(ical, comp);
 
         /* Convert the JMAP calendar event to ical. */
-        calendarevent_to_ical(comp, &parser, jsevent, &oldcomps, jmapctx);
+        calendarevent_to_ical(comp, &parser, jsevent, &oldcomps, NULL, jmapctx);
         icalcomponent_add_required_timezones(ical);
     }
     else jmap_parser_invalid(&parser, "uid");
