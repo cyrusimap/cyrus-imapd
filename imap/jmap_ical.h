@@ -61,6 +61,7 @@ extern "C" {
 #define JMAPICAL_ERROR_UID      5
 
 /* Custom iCalendar properties */
+#define JMAPICAL_XPROP_ID            "X-JMAP-ID"
 #define JMAPICAL_XPROP_LOCATION      "X-JMAP-LOCATION"
 #define JMAPICAL_XPROP_SHOWWITHOUTTIME "X-JMAP-SHOW-WITHOUT-TIME"
 
@@ -120,7 +121,7 @@ json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
  * Returns a new ical component, or NULL on error.
  */
 icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
-			       json_t *invalid,
+                               json_t *invalid,
                                struct jmapical_jmapcontext *jmapctx);
 
 
@@ -137,6 +138,26 @@ extern icalcomponent *jmapical_alert_to_ical(json_t *alert, struct jmap_parser *
 
 
 void icalcomponent_add_required_timezones(icalcomponent *ical);
+
+/* jstimezones allows to resolve standard and non-standard timezone
+ * identifiers to ical timezones. It mainly is useful to handle
+ * iCalendar data that embeds non-standard VTIMEZONES */
+typedef struct jstimezones jstimezones_t;
+
+/* Create a resolver for VTIMEZONEs embedded in VCALENDAR ical. */
+extern jstimezones_t *jstimezones_new(icalcomponent *ical);
+
+/* Resolve tzid to a timezone.
+ *
+ * If jstzones is not NULL, first look up the timezones in the custom
+ * resolver. If not found, lookup tzid in the standard timezones.
+ *
+ * Returns NULL if no timezone is found.
+ */
+extern icaltimezone *jstimezones_lookup_tzid(jstimezones_t* jstzones, const char *tzid);
+
+/* Free a timezone resolver */
+extern void jstimezones_free(jstimezones_t **jstzonesptr);
 
 /* for CalDAV content negotiation */
 struct buf *icalcomponent_as_jevent_string(icalcomponent *ical);
