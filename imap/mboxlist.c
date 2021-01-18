@@ -1058,6 +1058,38 @@ static int mboxlist_create_namecheck(const char *mboxname,
             r = quota_check_useds(root, qdiffs);
             if (r) goto done;
         }
+
+        /* make sure parent isn't forbidden from containing children */
+        if ((!isadmin || mboxname_userownsmailbox(userid, mboxname))
+            && config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN))
+        {
+            struct buf attrib = BUF_INITIALIZER;
+            mbname_t *mbname;
+
+            mbname = mbname_from_intname(mbentry->name);
+            annotatemore_lookup(mbentry->name, "/specialuse",
+                                mbname_userid(mbname), &attrib);
+            mbname_free(&mbname);
+
+            if (buf_len(&attrib)) {
+                strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
+
+                strarray_t *forbidden = strarray_split(
+                    config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN),
+                    NULL,
+                    STRARRAY_TRIM
+                );
+
+                if (strarray_intersect(uses, forbidden))
+                    r = IMAP_PERMISSION_DENIED;
+
+                strarray_free(forbidden);
+                strarray_free(uses);
+            }
+
+            buf_free(&attrib);
+            if (r) goto done;
+        }
     }
     else if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* no parent mailbox */
