@@ -20171,7 +20171,7 @@ sub test_email_query_header_sieve
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    $imap->create("matches") or die;
+    $imap->create("INBOX.matches") or die;
 
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
@@ -20184,7 +20184,7 @@ if
 .
   )
 {
-  fileinto "matches";
+  fileinto "INBOX.matches";
 }
 EOF
     );
@@ -20197,7 +20197,7 @@ EOF
     $self->{instance}->deliver($msg1);
 
     xlog "Assert that message got moved into INBOX.matches";
-    $self->{store}->set_folder('matches');
+    $self->{store}->set_folder("INBOX.matches");
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 
     xlog $self, "Deliver a non-matching message";
