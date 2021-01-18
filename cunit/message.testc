@@ -1296,4 +1296,61 @@ static void test_cache_appleheaders(void)
     message_free_body(&body);
 }
 
+static void test_cache_quotedaddr(void)
+{
+    static const char msg[] =
+"From: \"Fred (Bloggs)\" <fbloggs@fastmail.fm>\r\n"
+"To: Sarah Smith <sjsmith@gmail.com>\r\n"
+"Cc: \"Al \\\"Scarface\\\" Capone\" <al@speakeasy.com>\r\n"
+"Bcc: =?ISO-8859-1?q?Caf=E9_del_Mar?= <cafe@delmar>\r\n"
+"Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
+"Subject: Trivial testing email\r\n"
+"Message-ID: <fake800@fastmail.fm>\r\n"
+"Content-Type: text/plain\r\n"
+"X-Mailer: Norman\r\n"
+"\r\n"
+"Hello, World\n";
+    int r;
+    struct body *body = xzmalloc(sizeof(struct body));
+
+    memset(body, 0x45, sizeof(struct body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, body, NULL);
+
+    CU_ASSERT_EQUAL(r, 0);
+
+    struct index_record record;
+    r = message_write_cache(&record, body);
+    CU_ASSERT_EQUAL(r, 0);
+
+    message_free_body(body);
+    free(body);
+
+    struct buf buf = BUF_INITIALIZER;
+
+    /* Needs quotes */
+    struct cacheitem item = record.crec.item[CACHE_FROM];
+    buf_setmap(&buf, record.crec.buf->s + item.offset, item.len);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "\"Fred (Bloggs)\" <fbloggs@fastmail.fm>");
+
+    item = record.crec.item[CACHE_CC];
+    buf_setmap(&buf, record.crec.buf->s + item.offset, item.len);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "\"Al \\\"Scarface\\\" Capone\" <al@speakeasy.com>");
+
+    /* Needs quotes, with UTF-8 */
+    item = record.crec.item[CACHE_BCC];
+    buf_setmap(&buf, record.crec.buf->s + item.offset, item.len);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "\"Café del Mar\" <cafe@delmar>");
+    struct address *addr = NULL;
+    parseaddr_list(buf_cstring(&buf), &addr);
+    CU_ASSERT_STRING_EQUAL(addr->name, "Café del Mar");
+    parseaddr_free(addr);
+
+    /* Does not need quotes */
+    item = record.crec.item[CACHE_TO];
+    buf_setmap(&buf, record.crec.buf->s + item.offset, item.len);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "Sarah Smith <sjsmith@gmail.com>");
+
+    buf_free(&buf);
+}
+
 /* vim: set ft=c: */

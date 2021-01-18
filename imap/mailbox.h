@@ -80,7 +80,7 @@
  * versions placed this function in imapd.c FYI!
  */
 #define MAILBOX_MINOR_VERSION   17
-#define MAILBOX_CACHE_MINOR_VERSION 10
+#define MAILBOX_CACHE_MINOR_VERSION 11
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
