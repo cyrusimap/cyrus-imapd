@@ -5028,6 +5028,12 @@ recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser,
             syslog(LOG_ERR, "jmap_ical: generated bogus RRULE: %s", buf_cstring(&buf));
             jmap_parser_invalid(parser, NULL);
         }
+        // XXX this should go to libical
+        if (rt.rscale) {
+            free(rt.rscale);
+            rt.rscale = NULL;
+        }
+        icalrecurrencetype_clear(&rt);
     }
 
     buf_free(&buf);
