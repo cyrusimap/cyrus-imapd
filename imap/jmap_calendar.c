@@ -2671,7 +2671,7 @@ struct getcalendarevents_rock {
     hashu64_table jmapcache;
     ptrarray_t *want_eventids;
     int check_acl;
-    hash_table utctimes_fallbacktz_by_mboxname;
+    hash_table floatingtz_by_mboxname;
     struct jmapical_datetime overrides_before;
     struct jmapical_datetime overrides_after;
     int reduce_participants;
@@ -2763,8 +2763,9 @@ static int _recurid_is_instanceof(icaltimetype recurid, icalcomponent *ical, int
 static void getcalendarevents_get_utctimes_internal(json_t *jsevent,
                                                     const char *startstr,
                                                     const char *durstr,
-                                                    const char *tzid,
-                                                    icaltimezone *utctimes_fallbacktz)
+                                                    const char *jstzid,
+                                                    jstimezones_t *jstzones,
+                                                    icaltimezone *floatingtz)
 {
     icaltimezone *utc = icaltimezone_get_utc_timezone();
 
@@ -2774,8 +2775,10 @@ static void getcalendarevents_get_utctimes_internal(json_t *jsevent,
 
     /* Read timeZone */
     icaltimezone *tz = NULL;
-    if (tzid) tz = icaltimezone_lookup_tzid(tzid);
-    if (!tz) tz = utctimes_fallbacktz;
+    if (jstzid) {
+        tz = jstimezones_lookup_tzid(jstzones, jstzid);
+    }
+    if (!tz) tz = floatingtz;
     if (!tz) tz = utc;
 
     /* Read duration */
@@ -2822,14 +2825,16 @@ static void getcalendarevents_get_utctimes_internal(json_t *jsevent,
 }
 
 static void getcalendarevents_get_utctimes(json_t *jsevent,
-                                           icaltimezone *utctimes_fallbacktz)
+                                           jstimezones_t *jstzones,
+                                           icaltimezone *floatingtz)
 {
     const char *start = json_string_value(json_object_get(jsevent, "start"));
     const char *dur = json_string_value(json_object_get(jsevent, "duration"));
-    const char *tzid = json_string_value(json_object_get(jsevent, "timeZone"));
+    const char *jstzid = json_string_value(json_object_get(jsevent, "timeZone"));
 
     /* Set utcStart, utcEnd on main event */
-    getcalendarevents_get_utctimes_internal(jsevent, start, dur, tzid, utctimes_fallbacktz);
+    getcalendarevents_get_utctimes_internal(jsevent, start, dur,
+            jstzid, jstzones, floatingtz);
 
     /* Set utcStart, utcEnd on recurrence overrides, if any */
     json_t *joverrides = json_object_get(jsevent, "recurrenceOverrides");
@@ -2841,10 +2846,10 @@ static void getcalendarevents_get_utctimes(json_t *jsevent,
             if (!startovr) startovr = recurid;
             const char *durovr = json_string_value(json_object_get(jovr, "duration"));
             if (!durovr) durovr = dur;
-            const char *tzidovr = json_string_value(json_object_get(jovr, "tzid"));
-            if (!tzidovr) tzidovr = tzid;
+            const char *jstzidovr = json_string_value(json_object_get(jovr, "timeZone"));
+            if (!jstzidovr) jstzidovr = jstzid;
             getcalendarevents_get_utctimes_internal(jovr, startovr, durovr,
-                                                    tzidovr, utctimes_fallbacktz);
+                                                    jstzidovr, jstzones, floatingtz);
         }
     }
 }
@@ -2866,7 +2871,8 @@ static void getcalendarevents_filterinstance(json_t *myevent,
 static int getcalendarevents_getinstances(json_t *jsevent,
                                            struct caldav_data *cdata,
                                            icalcomponent *ical,
-                                           icaltimezone *utctimes_fallbacktz,
+                                           jstimezones_t *jstzones,
+                                           icaltimezone *floatingtz,
                                            struct getcalendarevents_rock *rock)
 {
     jmap_req_t *req = rock->req;
@@ -2936,7 +2942,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
             json_t *myevent = json_deep_copy(jsevent);
             json_object_set_new(myevent, "start", jstart);
             if (jmap_wantprop(props, "utcStart") || jmap_wantprop(props, "utcEnd")) {
-                getcalendarevents_get_utctimes(myevent, utctimes_fallbacktz);
+                getcalendarevents_get_utctimes(myevent, jstzones, floatingtz);
             }
             getcalendarevents_filterinstance(myevent, props, eid->raw, cdata->ical_uid);
             json_object_set_new(myevent, "recurrenceId", json_string(eid->recurid));
@@ -3155,14 +3161,15 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     hash_table *props = rock->get->props;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     msgrecord_t *mr = NULL;
-    icaltimezone *utctimes_fallbacktz =
-        hash_lookup(cdata->dav.mailbox, &rock->utctimes_fallbacktz_by_mboxname);
+    icaltimezone *floatingtz =
+        hash_lookup(cdata->dav.mailbox, &rock->floatingtz_by_mboxname);
+    jstimezones_t *jstzones = NULL;
 
     /* Initialize fallback timezone for UTC times */
-    if (!utctimes_fallbacktz) {
-        utctimes_fallbacktz = caldav_get_calendar_tz(cdata->dav.mailbox, req->userid);
-        hash_insert(cdata->dav.mailbox, utctimes_fallbacktz,
-                &rock->utctimes_fallbacktz_by_mboxname);
+    if (!floatingtz) {
+        floatingtz = caldav_get_calendar_tz(cdata->dav.mailbox, req->userid);
+        hash_insert(cdata->dav.mailbox, floatingtz,
+                &rock->floatingtz_by_mboxname);
     }
 
     struct jmapical_jmapcontext jmapctx;
@@ -3177,7 +3184,9 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
         return 0;
     }
 
-    if (cdata->jmapversion == JMAPCACHE_CALVERSION) {
+    int need_ical = jmap_wantprop(props, "utcStart") || jmap_wantprop(props, "utcEnd");
+
+    if (cdata->jmapversion == JMAPCACHE_CALVERSION && !need_ical) {
         json_error_t jerr;
         jsevent = json_loads(cdata->jmapdata, 0, &jerr);
         if (jsevent) goto gotevent;
@@ -3198,6 +3207,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
         r = IMAP_INTERNAL;
         goto done;
     }
+    jstzones = jstimezones_new(ical);
 
     /* Convert to JMAP */
     jsevent = jmapical_tojmap(ical, NULL, &jmapctx);
@@ -3270,7 +3280,7 @@ gotevent:
     /* Set utcStart and utcEnd */
     if (jmap_wantprop(props, "utcStart") || jmap_wantprop(props, "utcEnd")) {
         /* Lookup fall-back time zone on calendar collection */
-        getcalendarevents_get_utctimes(jsevent, utctimes_fallbacktz);
+        getcalendarevents_get_utctimes(jsevent, jstzones, floatingtz);
     }
 
     /* Process recurrenceOverrides[Before,After] */
@@ -3284,7 +3294,7 @@ gotevent:
             icaltimezone *utc = icaltimezone_get_utc_timezone();
             icaltimezone *tz = NULL;
             if (tzid) tz = icaltimezone_lookup_tzid(tzid);
-            if (!tz) tz = utctimes_fallbacktz;
+            if (!tz) tz = floatingtz;
             if (!tz) tz = utc;
 
             /* Filter overrides */
@@ -3377,12 +3387,14 @@ gotevent:
             }
         }
         /* Expand instances, if requested */
-        r = getcalendarevents_getinstances(jsevent, cdata, ical, utctimes_fallbacktz, rock);
+        r = getcalendarevents_getinstances(jsevent, cdata, ical,
+                jstzones, floatingtz, rock);
         json_decref(jsevent);
         if (r) goto done;
     }
 
 done:
+    jstimezones_free(&jstzones);
     strarray_fini(&schedule_addresses);
     if (ical) icalcomponent_free(ical);
     jmap_calendarcontext_fini(&jmapctx);
@@ -3558,6 +3570,11 @@ static const jmap_property_t event_props[] = {
         NULL,
         0
     },
+    {
+        "timeZones",
+        NULL,
+        0
+    },
 
     /* JSEvent properties */
     {
@@ -3691,14 +3708,14 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            HASHU64_TABLE_INITIALIZER, /* cache */
                                            NULL, /* want_eventids */
                                            checkacl,
-                                           HASH_TABLE_INITIALIZER, /* utctimes_fallbacktz */
+                                           HASH_TABLE_INITIALIZER, /* floatingtz */
                                            JMAPICAL_DATETIME_INITIALIZER,
                                            JMAPICAL_DATETIME_INITIALIZER,
                                            0 /* reduce_participants */
     };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
-    construct_hash_table(&rock.utctimes_fallbacktz_by_mboxname, 64, 0);
+    construct_hash_table(&rock.floatingtz_by_mboxname, 64, 0);
 
     /* Parse request */
     jmap_get_parse(req, &parser, event_props, /*allow_null_ids*/1,
@@ -3795,13 +3812,13 @@ done:
     if (db) caldav_close(db);
     if (rock.mailbox) jmap_closembox(req, &rock.mailbox);
     free_hashu64_table(&rock.jmapcache, free);
-    if (rock.utctimes_fallbacktz_by_mboxname.size) {
-        hash_iter *it = hash_table_iter(&rock.utctimes_fallbacktz_by_mboxname);
+    if (rock.floatingtz_by_mboxname.size) {
+        hash_iter *it = hash_table_iter(&rock.floatingtz_by_mboxname);
         while ((hash_iter_next(it))) {
             icaltimezone_free((icaltimezone*) hash_iter_val(it), 1);
         }
         hash_iter_free(&it);
-        free_hash_table(&rock.utctimes_fallbacktz_by_mboxname, NULL);
+        free_hash_table(&rock.floatingtz_by_mboxname, NULL);
     }
     return r;
 }
@@ -4756,13 +4773,14 @@ static int setcalendarevents_apply_patch(struct jmapical_jmapcontext *jmapctx,
                                          json_t *invalid,
                                          strarray_t *schedule_addresses,
                                          icalcomponent **newical,
-                                         icaltimezone *utctimes_fallbacktz,
+                                         icaltimezone *floatingtz,
                                          json_t *update,
                                          json_t **err)
 {
     json_t *new_event = NULL;
     strarray_t participant_ids = STRARRAY_INITIALIZER;
     int r = 0;
+    jstimezones_t *jstzones = jstimezones_new(oldical);
 
     if (schedule_addresses) {
         json_t *jparticipants = json_object_get(old_event, "participants");
@@ -4817,7 +4835,7 @@ static int setcalendarevents_apply_patch(struct jmapical_jmapcontext *jmapctx,
             if (json_object_get(event_patch, "utcEnd") && !json_object_get(event_patch, "duration")) {
                 json_object_del(new_instance, "duration");
             }
-            setcalendarevents_set_utctimes(new_instance, utctimes_fallbacktz, invalid);
+            setcalendarevents_set_utctimes(new_instance, floatingtz, invalid);
         }
 
         json_object_del(new_instance, "recurrenceRules");
@@ -4983,7 +5001,7 @@ static int setcalendarevents_apply_patch(struct jmapical_jmapcontext *jmapctx,
             json_t *jnew_overrides = json_object_get(new_event, "recurrenceOverrides");
             if (JNOTNULL(jnew_overrides)) {
                 /* Reject UTC times if they differ from old event */
-                getcalendarevents_get_utctimes(old_event, utctimes_fallbacktz);
+                getcalendarevents_get_utctimes(old_event, jstzones, floatingtz);
                 json_t *jnew_utcStart = json_object_get(new_event, "utcStart");
                 json_t *jnew_utcEnd = json_object_get(new_event, "utcEnd");
                 if (JNOTNULL(jnew_utcStart)) {
@@ -5037,7 +5055,7 @@ static int setcalendarevents_apply_patch(struct jmapical_jmapcontext *jmapctx,
                 if (json_object_get(event_patch, "utcEnd") && !json_object_get(event_patch, "duration")) {
                     json_object_del(new_event, "duration");
                 }
-                setcalendarevents_set_utctimes(new_event, utctimes_fallbacktz, invalid);
+                setcalendarevents_set_utctimes(new_event, floatingtz, invalid);
             }
         }
     }
@@ -5060,6 +5078,7 @@ static int setcalendarevents_apply_patch(struct jmapical_jmapcontext *jmapctx,
     *newical = jmapical_toical(new_event, oldical, invalid, jmapctx);
 
 done:
+    jstimezones_free(&jstzones);
     json_decref(new_event);
     strarray_fini(&participant_ids);
     return r;
@@ -5187,7 +5206,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
 
     /* Read UTC times fallback timezone from source mailbox */
-    icaltimezone *utctimes_fallbacktz =
+    icaltimezone *floatingtz =
         caldav_get_calendar_tz(mbox->name, req->userid);
 
     /* Apply patch */
@@ -5203,8 +5222,8 @@ static int setcalendarevents_update(jmap_req_t *req,
             old_event, event_patch,
             oldical, eid->recurid,
             invalid, &schedule_addresses,
-            &ical, utctimes_fallbacktz, update, err);
-    icaltimezone_free(utctimes_fallbacktz, 1);
+            &ical, floatingtz, update, err);
+    icaltimezone_free(floatingtz, 1);
     jmap_calendarcontext_fini(&jmapctx);
 
     if (json_array_size(parser.invalid)) {
