@@ -1095,6 +1095,7 @@ static int myforeach(struct dbengine *db,
     int need_unlock = 0;
 
     assert(db != NULL);
+    assert(cb);
 
     /* Hacky workaround:
      *

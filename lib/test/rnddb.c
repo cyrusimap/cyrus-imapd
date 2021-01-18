@@ -211,11 +211,11 @@ int main(int argc, char *argv[])
             count = 0;
             victim = NULL;
             txn = NULL;
-            TRY(cyrusdb_foreach(db, NULL, 0, &countem, NULL, NULL, &txn));
+            TRY(cyrusdb_foreach(db, NULL, 0, NULL, &countem, NULL, &txn));
 
             if (count == 0) continue;
 
-            TRY(cyrusdb_foreach(db, NULL, 0, &findvictim, NULL, NULL, &txn));
+            TRY(cyrusdb_foreach(db, NULL, 0, NULL, &findvictim, NULL, &txn));
 
             assert(victim != NULL);
 
@@ -245,11 +245,11 @@ int main(int argc, char *argv[])
             count = 0;
             victim = NULL;
             txn = NULL;
-            TRY(cyrusdb_foreach(db, NULL, 0, &countem, NULL, NULL, &txn));
+            TRY(cyrusdb_foreach(db, NULL, 0, NULL, &countem, NULL, &txn));
 
             if (count == 0) continue;
 
-            TRY(cyrusdb_foreach(db, NULL, 0, &findvictim, NULL, NULL, &txn));
+            TRY(cyrusdb_foreach(db, NULL, 0, NULL, &findvictim, NULL, &txn));
             assert(victim != NULL);
 
             /* delete it */
