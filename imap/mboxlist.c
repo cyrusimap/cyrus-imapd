@@ -442,11 +442,13 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
         case 'z':
             mbtype |= MBTYPE_RESERVE;
             break;
+
+        default:
+            /* make sure we didn't forget to handle every expected character */
+            assert(0);
+            break;
         }
     }
-
-    /* make sure we didn't forget to set a character for every interesting bit */
-    assert(mbtype);
 
     return mbtype;
 }
