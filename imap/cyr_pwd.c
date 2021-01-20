@@ -49,17 +49,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sysexits.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/param.h>
 
-#include "util.h"
 #include "global.h"
-#include "mailbox.h"
-#include "xmalloc.h"
-#include "mboxlist.h"
-#include "user.h"
+#include "mboxname.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -72,11 +64,11 @@ static struct namespace cyr_pwd_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: cyr_pwd [-C <alt_config>]\n");
+    fprintf(stderr, "usage: cyr_pwd [-C <alt_config>]\n");
     fprintf(stderr, "\n");
     if (error) {
-        fprintf(stderr,"\n");
-        fprintf(stderr,"ERROR: %s", error);
+        fprintf(stderr, "\n");
+        fprintf(stderr, "ERROR: %s", error);
     }
     exit(-1);
 }
@@ -106,15 +98,18 @@ int main(int argc, char **argv)
     }
 
     /* Translate mailboxname */
-    char cwd[MAX_MAILBOX_PATH+1];
     mbname_t *mbname = NULL;
-
-    getcwd(cwd, MAX_MAILBOX_PATH);
+    const char *extname = NULL;
 
     mbname = mbname_from_path(".", &cyr_pwd_namespace);
 
-    printf("%s (%s)\n",
-           cwd, mbname_extname(mbname, &cyr_pwd_namespace, "cyrus"));
+    if (mbname) 
+        extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
+
+    if (extname)
+        printf("%s\n", extname);
+    else
+        fprintf(stderr, "ERROR: not in Cyrus UUID mailbox directory\n");
 
     mbname_free(&mbname);
 
