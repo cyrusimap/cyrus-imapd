@@ -7328,6 +7328,10 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
         }
         syslog(LOG_ERR, "%s:  zero highestmodseq", mailbox->name);
     }
+    else {
+        mboxname_setmodseq(mailbox->name, mailbox->i.highestmodseq, mailbox->mbtype,
+                           MBOXMODSEQ_ISFOLDER);
+    }
 
     if (make_changes) {
         r = mailbox_commit(mailbox);
