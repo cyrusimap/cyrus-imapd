@@ -128,6 +128,7 @@ EXPORTED struct imapopt_s imapopts[] =
 EOF
     ;
 
+my $__warned_unreleased = 0;
 sub parse_last_modified
 {
     my ($version) = @_;
@@ -140,6 +141,23 @@ sub parse_last_modified
         die "revision too large: $rev" if $rev > 255;
 
         return sprintf "0x%2.2X%2.2X%2.2X00", $maj, $min, $rev;
+    }
+    elsif ($version eq 'UNRELEASED') {
+        if (not $__warned_unreleased) {
+            # This warning is to remind the release manager to replace
+            # "UNRELEASED" strings in lib/imapoptions with the version
+            # number that is about to be released.
+            # If you're not building a release, ignore it. :)
+            my $w = join q{ },
+                    "$0:",
+                    -t STDERR ? "\033[33;1mwarning:\033[0m" : 'warning:',
+                    'build contains UNRELEASED config options';
+            print STDERR "$w\n";
+
+            $__warned_unreleased ++;
+        }
+
+        return "0xFFFFFFFF";
     }
     else {
         die "unparseable version: $version";
@@ -301,15 +319,19 @@ while (<STDIN>) {
             # option is deprecated
             if ($6 =~ m|
                     ,\s*            # comma and optional whitespace
-                    (\"[^,]+\")     # $1: 'deprecated since' version string
+                    \"([^,]+)\"     # $1: 'deprecated since' version string
                     \s*             # optional whitespace
                     (               # $2: (unused)
                         ,\s*        # comma and optional whitespace
                         \"(.+)\"    # $3: 'in favour of' option name
                     )?
                 |x) {
-                $depver = $1;
+                $depver = qq{"$1"};
                 $newopt = $3 if $3;
+
+                # we don't use the parsed value here, but we do still want to
+                # detect and report if "UNRELEASED" is seen
+                (undef) = parse_last_modified($1);
             } else {
                 #chomp;
                 #print "rejected '$6'\n";
