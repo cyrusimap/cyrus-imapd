@@ -7098,7 +7098,7 @@ static void split_user_mailboxes(const char *key __attribute__((unused)),
     }
 
     if (mboxname_list->count) {
-        syslog(LOG_NOTICE, "sync_mailboxes: doing %lu",
+        syslog(LOG_DEBUG, "sync_mailboxes: doing %lu",
                            mboxname_list->count);
         smrock->r = do_mailboxes(smrock->sync_cs, mboxname_list,
                                  smrock->user_list, smrock->sync_cs->flags);
