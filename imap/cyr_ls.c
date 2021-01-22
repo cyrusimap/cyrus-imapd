@@ -91,11 +91,10 @@ static struct namespace cyr_ls_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-m] [-i] [-e] [-l] [-R] [-1] [mailbox name]\n");
+    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-m] [-i] [-l] [-R] [-1] [mailbox name]\n");
     fprintf(stderr, "\n");
     fprintf(stderr,"\t-m\tlist the contents of the metadata directory (if different from the data directory)\n");
-    fprintf(stderr,"\t-i\tprint ID of each item (requires opening mailbox)\n");
-    fprintf(stderr,"\t-e\tcolorize expunged messages (requires opening mailbox)\n");
+    fprintf(stderr,"\t-i\tprint ID of each mailbox\n");
     fprintf(stderr,"\t-l\tlong listing format\n");
     fprintf(stderr,"\t-R\tlist submailboxes recursively\n");
     fprintf(stderr,"\t-1\tlist one file per line\n");
@@ -160,7 +159,6 @@ static void long_list(const char *path, const char *name,
 struct list_opts {
     int recurse;
     int ids;
-    int expunged;
     int longlist;
     int meta;
     int columns;
@@ -212,9 +210,9 @@ static int list_cb(struct findall_data *data, void *rock)
             if (stat(path, &sbuf) != 0) color = ANSI_COLOR_RED;
         }
 
-        printf("%c", !(lrock->count++ % lrock->opts->columns) ? '\n' : '\t');
+        printf("%c", !(lrock->count++ % lrock->opts->columns) ? '\n' : ' ');
         if (lrock->opts->ids) printf("%-40s ", data->mbentry->uniqueid);
-        printf("%s%s%s", color, child_name, *color ? ANSI_COLOR_RESET : "");
+        printf("%s%-19s%s", color, child_name, *color ? ANSI_COLOR_RESET : "");
     }
 
     if (lrock->children) strarray_append(lrock->children, data->extname);
@@ -224,7 +222,6 @@ static int list_cb(struct findall_data *data, void *rock)
 
 static void do_list(mbname_t *mbname, struct list_opts *opts)
 {
-    const char *path = NULL;
     mbentry_t *mbentry = NULL;
     struct list_rock lrock = { opts, 0, NULL };
     strarray_t names = STRARRAY_INITIALIZER;
@@ -239,74 +236,13 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
         else if (mbentry->mbtype & MBTYPE_REMOTE) {
             printf("Non-local mailbox: %s!%s\n",
                    mbentry->server, mbentry->partition);
-        }
-        else if (opts->meta) {
-            path = mboxname_metapath(mbentry->partition,
-                                     mbentry->name, mbentry->uniqueid, 0, 0);
-        }
-        else {
-            path = mboxname_datapath(mbentry->partition,
-                                     mbentry->name, mbentry->uniqueid, 0);
+            r = IMAP_MAILBOX_NOTSUPPORTED;
         }
     }
     else {
         fprintf(stderr, "Invalid mailbox name\n");
     }
 
-    /* Scan the directory */
-    if (path) {
-        struct mailbox *mailbox = NULL;
-        DIR *dirp;
-
-        if (!chdir(path) && (dirp = opendir("."))) {
-            struct dirent *dirent;
-
-            while ((dirent = readdir(dirp))) {
-                if (dirent->d_name[0] == '.') continue;
-
-                strarray_append(&names, dirent->d_name);
-            }
-            closedir(dirp);
-        }
-
-        strarray_sort(&names, cmpstringp_raw);
-
-        if (opts->ids || (opts->expunged && opts->colorize)) {
-            mailbox_open_irl(mbentry->name, &mailbox);
-        }
-
-        for (i = 0; i < strarray_size(&names); i++) {
-            const char *name = strarray_nth(&names, i);
-            const char *id = opts->ids ? "" : NULL;
-            const char *color = "";
-            struct index_record record;
-            uint32_t uid;
-
-            if (mailbox &&
-                !mailbox_parse_datafilename(name, &uid) &&
-                !mailbox_find_index_record(mailbox, uid, &record)) {
-
-                if (opts->ids) id = message_guid_encode(&record.guid);
-
-                if (opts->colorize &&
-                    (record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-                    color = ANSI_COLOR_GRAY;
-                }
-            }
-
-            if (opts->longlist) {
-                long_list(name, NULL, id, color);
-            }
-            else {
-                printf("%c",
-                       !(lrock.count++ % lrock.opts->columns) ? '\n' : '\t');
-                if (id) printf("%-40s ", id);
-                printf("%s%s%s", color, name, *color ? ANSI_COLOR_RESET : "");
-            }
-        }
-        mailbox_close(&mailbox);
-        strarray_fini(&names);
-    }
     mboxlist_entry_free(&mbentry);
 
     if (!r) {
@@ -340,9 +276,9 @@ int main(int argc, char **argv)
 
     // capture options
     struct list_opts opts =
-        { 0, 0, 0, 0, 0, 4 /* default to 4 columns */, isatty(STDOUT_FILENO) };
+        { 0, 0, 0, 0, 4 /* default to 4 columns */, isatty(STDOUT_FILENO) };
 
-    while ((opt = getopt(argc, argv, "C:mielR1")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:milR1")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -354,11 +290,7 @@ int main(int argc, char **argv)
 
         case 'i':
             opts.ids = 1;
-            if (opts.columns > 1) opts.columns = 2;
-            break;
-
-        case 'e':
-            opts.expunged = 1;
+            if (opts.columns > 1) opts.columns = 1;
             break;
 
         case 'l':
