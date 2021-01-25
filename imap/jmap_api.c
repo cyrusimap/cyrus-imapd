@@ -2117,8 +2117,13 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
     }
-    else if (!have_sincemodseq || changes->since_modseq < minmodseq) {
-        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+    else if (!have_sincemodseq) {
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                      "description", "no sinceModseq");
+    }
+    else if (changes->since_modseq < minmodseq) {
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                      "description", "outdated sinceModseq");
     }
 }
 
