@@ -172,7 +172,12 @@ EXPORTED search_expr_t *search_expr_new(search_expr_t *parent, enum search_op op
 static int complexity_check(int r)
 {
     unsigned max = (unsigned)config_getint(IMAPOPT_SEARCH_NORMALISATION_MAX);
-    return (max && nnodes >= max ? -1 : r);
+    if (max && nnodes >= max) {
+        xsyslog(LOG_WARNING, "nnodes exceeds normalisation_max",
+                "nnodes=%d normalisation_max=%d", nnodes, max);
+        return -1;
+    }
+    return r;
 }
 
 /*
