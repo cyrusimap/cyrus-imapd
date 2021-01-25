@@ -2777,7 +2777,7 @@ done:
     return 0;
 }
 
-static int _email_query_can_calculate_changes(struct emailsearch *search)
+static int _email_query_is_mutable_search(struct emailsearch *search)
 {
     /* can calculate changes for mutable sort, but not mutable search */
     return search->is_mutable > 1 ? 0 : 1;
@@ -4100,7 +4100,7 @@ static void _email_query(jmap_req_t *req, struct jmap_emailquery *q,
         r = _email_query_uidsearch(req, q, search, err);
     }
 
-    q->super.can_calculate_changes = _email_query_can_calculate_changes(search);
+    q->super.can_calculate_changes = _email_query_is_mutable_search(search);
     q->super.query_state = _email_make_querystate(modseq, 0, addrbook_modseq);
 
     if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
@@ -4245,20 +4245,18 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
     modseq_t addrbook_modseq = 0;
-    int is_guidsearch = 0;
 
     if (!_email_read_querystate(query->since_querystate,
                                 &since_modseq, &since_uid,
                                 &addrbook_modseq)) {
-        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                      "description", "invalid query state");
         return;
     }
     if (addrbook_modseq && addrbook_modseq != jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK)) {
-        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
-        return;
-    }
-    if (is_guidsearch) {
-        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                      "description", "addressbook changed");
+
         return;
     }
 
@@ -4271,8 +4269,9 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
     }
-    if (!_email_query_can_calculate_changes(search)) {
-        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+    if (!_email_query_is_mutable_search(search)) {
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                      "description", "mutable search");
         goto done;
     }
 
@@ -4281,8 +4280,8 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     int r = _emailsearch_run_uidsearch(req, search, &msgdata);
     if (r) {
         if (r == IMAP_SEARCH_SLOW) {
-            *err = json_pack("{s:s, s:s}", "type", "cannotCalculateChanges",
-                                           "description", "search too slow");
+            *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                          "description", "search too slow");
         }
         else {
             *err = jmap_server_error(r);
@@ -4464,20 +4463,17 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
     modseq_t addrbook_modseq = 0;
-    int is_guidsearch = 0;
 
     if (!_email_read_querystate(query->since_querystate,
                                 &since_modseq, &since_uid,
                                 &addrbook_modseq)) {
-        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                      "description", "invalid query state");
         return;
     }
     if (addrbook_modseq && addrbook_modseq != jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK)) {
-        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
-        return;
-    }
-    if (is_guidsearch) {
-        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                      "description", "addressbook changed");
         return;
     }
 
@@ -4490,8 +4486,9 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
     }
-    if (!_email_query_can_calculate_changes(search)) {
-        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+    if (!_email_query_is_mutable_search(search)) {
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                      "description", "mutable search");
         goto done;
     }
 
@@ -4500,8 +4497,8 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     int r = _emailsearch_run_uidsearch(req, search, &msgdata);
     if (r) {
         if (r == IMAP_SEARCH_SLOW) {
-            *err = json_pack("{s:s, s:s}", "type", "cannotCalculateChanges",
-                                           "description", "search too slow");
+            *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                          "description", "search too slow");
         }
         else {
             *err = jmap_server_error(r);
