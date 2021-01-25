@@ -314,8 +314,9 @@ static int mboxlist_read(const char *name, const char **dataptr, size_t *datalen
         break;
 
     default:
-        syslog(LOG_ERR, "DBERROR: error fetching mboxlist %s: %s",
-               name, cyrusdb_strerror(r));
+        xsyslog(LOG_ERR, "DBERROR: error fetching mboxlist",
+                         "mailbox=<%s> error=<%s>",
+                         name, cyrusdb_strerror(r));
         return IMAP_IOERROR;
         break;
     }
@@ -906,14 +907,15 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
     if (tid) {
         if (r) {
             r2 = cyrusdb_abort(mbdb, tid);
+            if (r2)
+                xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
+                                 "error=<%s>", cyrusdb_strerror(r2));
         } else {
             r2 = cyrusdb_commit(mbdb, tid);
+            if (r2)
+                xsyslog(LOG_ERR, "DBERROR: error committing transaction",
+                                 "error=<%s>", cyrusdb_strerror(r2));
         }
-    }
-
-    if (r2) {
-        syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_update: %s",
-               r ? "aborting" : "committing", cyrusdb_strerror(r2));
     }
 
     return r;
@@ -1439,8 +1441,9 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     }
 
     if (r) {
-        syslog(LOG_ERR, "DBERROR: failed to insert to mailboxes list %s: %s",
-               mboxname, cyrusdb_strerror(r));
+        xsyslog(LOG_ERR, "DBERROR: failed to insert to mailboxes list",
+                         "mailbox=<%s> error=<%s>",
+                         mboxname, cyrusdb_strerror(r));
         r = IMAP_IOERROR;
     }
 
@@ -1628,8 +1631,9 @@ EXPORTED int mboxlist_insertremote(mbentry_t *mbentry,
         abort(); /* shouldn't happen ! */
         break;
     default:
-        syslog(LOG_ERR, "DBERROR: error updating database %s: %s",
-               mbentry->name, cyrusdb_strerror(r));
+        xsyslog(LOG_ERR, "DBERROR: error updating database",
+                         "mailbox=<%s> error=<%s>",
+                         mbentry->name, cyrusdb_strerror(r));
         r = IMAP_IOERROR;
         break;
     }
@@ -1680,8 +1684,9 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
 
     r = mboxlist_update_entry(name, NULL, tid);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
-               name, cyrusdb_strerror(r));
+        xsyslog(LOG_ERR, "DBERROR: error deleting entry",
+                         "mailbox=<%s> error=<%s>",
+                         name, cyrusdb_strerror(r));
         r = IMAP_IOERROR;
     }
 
@@ -1689,8 +1694,9 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     if (!in_tid) {
         r = cyrusdb_commit(mbdb, *tid);
         if (r) {
-            syslog(LOG_ERR, "DBERROR: failed on commit: %s",
-                   cyrusdb_strerror(r));
+            xsyslog(LOG_ERR, "DBERROR: failed on commit",
+                             "error=<%s>",
+                             cyrusdb_strerror(r));
             r = IMAP_IOERROR;
         }
         tid = NULL;
@@ -1907,16 +1913,18 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
             }
             r = mboxlist_update(newmbentry, /*localonly*/1);
             if (r) {
-                syslog(LOG_ERR, "DBERROR: error marking deleted %s: %s",
-                       name, cyrusdb_strerror(r));
+                xsyslog(LOG_ERR, "DBERROR: error marking deleted",
+                                 "mailbox=<%s> error=<%s>",
+                                 name, cyrusdb_strerror(r));
             }
             mboxlist_entry_free(&newmbentry);
         }
         else {
             r = mboxlist_update_entry(name, NULL, 0);
             if (r) {
-                syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
-                       name, cyrusdb_strerror(r));
+                xsyslog(LOG_ERR, "DBERROR: error deleting",
+                                 "mailbox=<%s> error=<%s>",
+                                 name, cyrusdb_strerror(r));
             }
         }
         goto done;
@@ -2001,8 +2009,9 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
          * to keep that rubbish around) */
         r = mboxlist_update_entry(name, NULL, 0);
         if (r) {
-            syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
-                   name, cyrusdb_strerror(r));
+            xsyslog(LOG_ERR, "DBERROR: error deleting",
+                             "mailbox=<%s> error=<%s>",
+                             name, cyrusdb_strerror(r));
             r = IMAP_IOERROR;
             if (!force) goto done;
         }
@@ -2425,8 +2434,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             tid = NULL;
             break;
         default:
-            syslog(LOG_ERR, "DBERROR: rename failed on store %s %s: %s",
-                   oldname, newname, cyrusdb_strerror(r));
+            xsyslog(LOG_ERR, "DBERROR: rename failed on store",
+                             "oldname=<%s> newname=<%s> error=<%s>",
+                             oldname, newname, cyrusdb_strerror(r));
             r = IMAP_IOERROR;
             goto done;
             break;
@@ -2440,8 +2450,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
     tid = NULL;
     if (r) {
-        syslog(LOG_ERR, "DBERROR: rename failed on commit %s %s: %s",
-               oldname, newname, cyrusdb_strerror(r));
+        xsyslog(LOG_ERR, "DBERROR: rename failed on commit",
+                         "oldname=<%s> newname=<%s> error=<%s>",
+                         oldname, newname, cyrusdb_strerror(r));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -2513,10 +2524,13 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             tid = NULL;
             if (r) {
                 /* XXX HOWTO repair this mess! */
-                syslog(LOG_ERR, "DBERROR: failed DB rollback on mailboxrename %s %s: %s",
-                       oldname, newname, cyrusdb_strerror(r));
-                syslog(LOG_ERR, "DBERROR: mailboxdb on mupdate and backend ARE NOT CONSISTENT");
-                syslog(LOG_ERR, "DBERROR: mailboxdb on mupdate has entry for %s, mailboxdb on backend has entry for %s and files are on the old position", oldname, newname);
+                xsyslog(LOG_ERR, "DBERROR: failed DB rollback on mailboxrename",
+                                 "oldname=<%s> newname=<%s> error=<%s>",
+                                 oldname, newname, cyrusdb_strerror(r));
+                xsyslog(LOG_ERR, "DBERROR: mailboxdb on mupdate and backend"
+                                 " ARE NOT CONSISTENT",
+                                 "mupdate_entry=<%s> backend_entry=<%s>",
+                                 oldname, newname);
                 r = IMAP_IOERROR;
             } else {
                 r = mupdatecommiterror;
@@ -2776,8 +2790,9 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
         r = mboxlist_update_entry(name, mbentry, &tid);
 
         if (r) {
-            syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
-                   name, cyrusdb_strerror(r));
+            xsyslog(LOG_ERR, "DBERROR: error updating acl",
+                             "mailbox=<%s> error=<%s>",
+                             name, cyrusdb_strerror(r));
             r = IMAP_IOERROR;
         }
 
@@ -2803,8 +2818,9 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     /* 5. Commit transaction */
     if (!r) {
         if((r = cyrusdb_commit(mbdb, tid)) != 0) {
-            syslog(LOG_ERR, "DBERROR: failed on commit: %s",
-                   cyrusdb_strerror(r));
+            xsyslog(LOG_ERR, "DBERROR: failed on commit",
+                             "error=<%s>",
+                             cyrusdb_strerror(r));
             r = IMAP_IOERROR;
         }
         tid = NULL;
@@ -2910,8 +2926,9 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
     r = mboxlist_update_entry(name, mbentry, &tid);
 
     if (r) {
-        syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
-               name, cyrusdb_strerror(r));
+        xsyslog(LOG_ERR, "DBERROR: error updating acl",
+                         "mailbox=<%s> error=<%s>",
+                         name, cyrusdb_strerror(r));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -2919,8 +2936,9 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
     /* 3. Commit transaction */
     r = cyrusdb_commit(mbdb, tid);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: failed on commit %s: %s",
-               name, cyrusdb_strerror(r));
+        xsyslog(LOG_ERR, "DBERROR: failed on commit",
+                         "mailbox=<%s> error=<%s>",
+                         name, cyrusdb_strerror(r));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -4446,8 +4464,9 @@ EXPORTED void mboxlist_open(const char *fname)
 
     ret = cyrusdb_open(DB, fname, flags, &mbdb);
     if (ret != 0) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(ret));
+        xsyslog(LOG_ERR, "DBERROR: error opening mailboxes list",
+                         "fname=<%s> error=<%s>",
+                         fname, cyrusdb_strerror(ret));
             /* Exiting TEMPFAIL because Sendmail thinks this
                EX_OSFILE == permanent failure. */
         fatal("can't read mailboxes file", EX_TEMPFAIL);
@@ -4468,8 +4487,9 @@ EXPORTED void mboxlist_close(void)
     if (mboxlist_dbopen) {
         r = cyrusdb_close(mbdb);
         if (r) {
-            syslog(LOG_ERR, "DBERROR: error closing mailboxes: %s",
-                   cyrusdb_strerror(r));
+            xsyslog(LOG_ERR, "DBERROR: error closing mailboxes",
+                             "error=<%s>",
+                             cyrusdb_strerror(r));
         }
         mboxlist_dbopen = 0;
     }
