@@ -375,8 +375,8 @@ You can now configure a mail client to access your new mailserver and
 connect to the mailbox for example@localhost via IMAP and see the
 message.
 
-Checking CardDAV and CardDAV
-============================
+Checking CardDAV and CalDAV
+===========================
 
 Modify ``/etc/cyrus.conf`` and add (or uncomment) this line in the
 SERVICES section::
