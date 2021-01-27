@@ -118,42 +118,71 @@ static int usage(const char *error)
 #define ANSI_COLOR_GRAY    "\x1b[90m"
 #define ANSI_COLOR_BR_BLUE "\x1b[94m"
 
-static void long_list(const char *path, const char *name,
-                      const char *id, const char *color)
+#define SPECIALS           " !\"#$&'()*,;<>?[\\]^`{|}~"
+
+static int print_name(const char *name)
 {
-    struct stat sbuf;
+    size_t n = strcspn(name, SPECIALS);
+
+    if (n == strlen(name)) {
+        /* No specials */
+        n = printf(" %s", name);
+    }
+    else if (strchr(name + n, '\'')) {
+        if (strchr(name + n, '"')) {
+            /* Need to escape single quote */
+            putchar('\'');
+
+            for (n = 0; *name; name++, n++) {
+                if (*name == '\'') printf("\\'");
+                else putchar(*name);
+            }
+
+            putchar('\'');
+
+            n += 2;
+        }
+        else {
+            /* Use double quotes */
+            n = printf("\"%s\"", name);
+        }
+    }
+    else {
+        /* Use single quotes */
+        n = printf("'%s'", name);
+    }
+
+    return n;
+}
+
+static void long_list(struct stat *statp)
+{
     struct group *grp;
     struct passwd *pwd;
     time_t now = time(0);
     const char *datefmt = "%b %d %k:%M";
     char datestr[13];
 
-    memset(&sbuf, 0, sizeof(struct stat));
-    if (stat(path, &sbuf) != 0 && *color) color = ANSI_COLOR_RED;
+    pwd = getpwuid(statp->st_uid);
+    grp = getgrgid(statp->st_gid);
 
-    pwd = getpwuid(sbuf.st_uid);
-    grp = getgrgid(sbuf.st_gid);
+    if (now - statp->st_ctime > SECONDS_PER_YEAR) datefmt = "%b %d  %Y";
 
-    if (now - sbuf.st_ctime > SECONDS_PER_YEAR) datefmt = "%b %d  %Y";
+    strftime(datestr, 13, datefmt, localtime(&(statp->st_ctime)));
 
-    strftime(datestr, 13, datefmt, localtime(&(sbuf.st_ctime)));
-
-    printf("\n");
-    if (id) printf("%-40s ", id);
-    printf("%c%c%c%c%c%c%c%c%c%c %lu %-8s %-8s % 10ld %s %s%s%s",
-           S_ISDIR(sbuf.st_mode) ? 'd' : '-',
-           (sbuf.st_mode & S_IRUSR) ? 'r' : '-',
-           (sbuf.st_mode & S_IWUSR) ? 'w' : '-',
-           (sbuf.st_mode & S_IXUSR) ? 'x' : '-',
-           (sbuf.st_mode & S_IRGRP) ? 'r' : '-',
-           (sbuf.st_mode & S_IWGRP) ? 'w' : '-',
-           (sbuf.st_mode & S_IXGRP) ? 'x' : '-',
-           (sbuf.st_mode & S_IROTH) ? 'r' : '-',
-           (sbuf.st_mode & S_IWOTH) ? 'w' : '-',
-           (sbuf.st_mode & S_IXOTH) ? 'x' : '-',
-           sbuf.st_nlink, pwd->pw_name, grp->gr_name,
-           sbuf.st_size, datestr,
-           color, name ? name : path, *color ? ANSI_COLOR_RESET : "");
+    printf("%c%c%c%c%c%c%c%c%c%c %lu %-8s %-8s % 10ld %s ",
+           S_ISDIR(statp->st_mode) ? 'd' : '-',
+           (statp->st_mode & S_IRUSR) ? 'r' : '-',
+           (statp->st_mode & S_IWUSR) ? 'w' : '-',
+           (statp->st_mode & S_IXUSR) ? 'x' : '-',
+           (statp->st_mode & S_IRGRP) ? 'r' : '-',
+           (statp->st_mode & S_IWGRP) ? 'w' : '-',
+           (statp->st_mode & S_IXGRP) ? 'x' : '-',
+           (statp->st_mode & S_IROTH) ? 'r' : '-',
+           (statp->st_mode & S_IWOTH) ? 'w' : '-',
+           (statp->st_mode & S_IXOTH) ? 'x' : '-',
+           statp->st_nlink, pwd->pw_name, grp->gr_name,
+           statp->st_size, datestr);
 }
 
 struct list_opts {
@@ -161,8 +190,9 @@ struct list_opts {
     int ids;
     int longlist;
     int meta;
-    int columns;
     int colorize;
+    int columns;
+    int column_size;
 };
 
 struct list_rock {
@@ -194,30 +224,42 @@ static int list_cb(struct findall_data *data, void *rock)
                                  data->mbentry->uniqueid, 0);
     }
 
-    if (lrock->opts->colorize) {
-        color = (mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL) ?
-            ANSI_COLOR_MAGENTA : ANSI_COLOR_BR_BLUE;
-    }
+    printf("%s", !(lrock->count++ % lrock->opts->columns) ? "\n" : "    ");
 
-    if (lrock->opts->longlist) {
-        long_list(path, child_name,
-                  lrock->opts->ids ? data->mbentry->uniqueid : NULL, color);
-    }
-    else {
+    if (lrock->opts->ids) printf("%-40s ", data->mbentry->uniqueid);
+
+    if (lrock->opts->longlist || lrock->opts->colorize) {
+        struct stat sbuf;
+
+        memset(&sbuf, 0, sizeof(struct stat));
+        r = stat(path, &sbuf);
+
+        if (lrock->opts->longlist) long_list(&sbuf);
+
         if (lrock->opts->colorize) {
-            struct stat sbuf;
-
-            if (stat(path, &sbuf) != 0) color = ANSI_COLOR_RED;
+            if (r != 0)
+                color = ANSI_COLOR_RED;
+            else if (mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL)
+                color = ANSI_COLOR_MAGENTA;
+            else
+                color = ANSI_COLOR_BR_BLUE;
         }
+    }
 
-        printf("%c", !(lrock->count++ % lrock->opts->columns) ? '\n' : ' ');
-        if (lrock->opts->ids) printf("%-40s ", data->mbentry->uniqueid);
-        printf("%s%-19s%s", color, child_name, *color ? ANSI_COLOR_RESET : "");
+    printf("%s", color);
+    r = print_name(child_name);
+    if (*color) printf("%s", ANSI_COLOR_RESET);
+
+    if (lrock->opts->column_size) {
+        /* fill column */
+        int fill = lrock->opts->column_size - r;
+
+        printf("%-*s", fill > 0 ? fill : 0, "");
     }
 
     if (lrock->children) strarray_append(lrock->children, data->extname);
 
-    return r;
+    return 0;
 }
 
 static void do_list(mbname_t *mbname, struct list_opts *opts)
@@ -276,7 +318,7 @@ int main(int argc, char **argv)
 
     // capture options
     struct list_opts opts =
-        { 0, 0, 0, 0, 4 /* default to 4 columns */, isatty(STDOUT_FILENO) };
+        { 0, 0, 0, 0, isatty(STDOUT_FILENO), 4 /* default to 4 columns */, 0 };
 
     while ((opt = getopt(argc, argv, "C:milR1")) != EOF) {
         switch(opt) {
@@ -290,11 +332,12 @@ int main(int argc, char **argv)
 
         case 'i':
             opts.ids = 1;
-            if (opts.columns > 1) opts.columns = 1;
+            opts.columns = 1;
             break;
 
         case 'l':
             opts.longlist = 1;
+            opts.columns = 1;
             break;
 
         case 'm':
@@ -309,6 +352,8 @@ int main(int argc, char **argv)
             usage(NULL);
         }
     }
+
+    if (opts.columns > 1) opts.column_size = 76 / opts.columns;
 
     cyrus_init(alt_config, "cyr_ls", 0, 0);
 
