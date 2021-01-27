@@ -1135,6 +1135,7 @@ static int filter_match(void *vf, void *rock)
 }
 
 typedef struct filter_rock {
+    const char *sievedir;
     struct jmap_query *query;
     jmap_filter *parsed_filter;
     ptrarray_t matches;
@@ -1148,6 +1149,12 @@ static void filter_cb(const char *script, void *data, void *rock)
     struct jmap_query *query = frock->query;
 
     info->name = xstrdup(script);
+
+    if (!info->id) {
+        /* Create script id symlink */
+        info->id = xstrdup(makeuuid());
+        create_id_link(frock->sievedir, info->id, script);
+    }
 
     if (query->filter &&
         !jmap_filter_match(frock->parsed_filter, &filter_match, info)) {
@@ -1247,7 +1254,8 @@ static int jmap_sieve_query(jmap_req_t *req)
 
     hash_table scripts = HASH_TABLE_INITIALIZER;
     const char *sievedir = user_sieve_path(req->accountid);
-    filter_rock frock = { &query, parsed_filter, PTRARRAY_INITIALIZER, NULL };
+    filter_rock frock =
+        { sievedir, &query, parsed_filter, PTRARRAY_INITIALIZER, NULL };
 
     /* Build a list of scripts */
     _listscripts(sievedir, &scripts);
