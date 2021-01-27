@@ -2325,7 +2325,7 @@ static int jmap_sieve_getblob(jmap_req_t *req,
 
         req->txn->resp_body.type = accept_mime;
     }
-    else req->txn->resp_body.type = "application/sieve";
+    else req->txn->resp_body.type = "application/sieve; charset=utf-8";
 
     /* Lookup scriptid */
     const char *sievedir = user_sieve_path(req->accountid);
