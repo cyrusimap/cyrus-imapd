@@ -70,7 +70,6 @@
 static search_expr_t **the_rootp;
 static search_expr_t *the_focus;
 #endif
-static unsigned nnodes = 0;
 
 static void split(search_expr_t *e,
                   void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
@@ -114,6 +113,21 @@ EXPORTED void search_expr_detach(search_expr_t *parent, search_expr_t *child)
 }
 
 /*
+ * Create a new node in a search expression tree, with the given
+ * operation.  If 'parent' is not NULL, the new node is attached as the
+ * last child of 'parent'.  If 'nnodes' is not NULL then it is incremented by one.
+ * Returns a new node, never returns NULL.
+ */
+static search_expr_t *search_expr_new_nnodes(search_expr_t *parent, enum search_op op, unsigned *nnodes)
+{
+    search_expr_t *e = xzmalloc(sizeof(search_expr_t));
+    e->op = op;
+    if (parent) append(parent, e);
+    if (nnodes && *nnodes < UINT_MAX) *nnodes += 1;
+    return e;
+}
+
+/*
  * Detach the node '*prevp' from the tree, and reparent its children to
  * '*prevp' parent, preserving '*prevp's location and its children's
  * order.
@@ -141,9 +155,9 @@ static search_expr_t *elide(search_expr_t **prevp)
     return e;
 }
 
-static search_expr_t *interpolate(search_expr_t **prevp, enum search_op op)
+static search_expr_t *interpolate(search_expr_t **prevp, enum search_op op, unsigned *nnodes)
 {
-    search_expr_t *e = search_expr_new(NULL, op);
+    search_expr_t *e = search_expr_new_nnodes(NULL, op, nnodes);
 
     e->parent = (*prevp)->parent;
     e->children = (*prevp);
@@ -162,19 +176,15 @@ static search_expr_t *interpolate(search_expr_t **prevp, enum search_op op)
  */
 EXPORTED search_expr_t *search_expr_new(search_expr_t *parent, enum search_op op)
 {
-    search_expr_t *e = xzmalloc(sizeof(search_expr_t));
-    e->op = op;
-    if (parent) append(parent, e);
-    nnodes++;
-    return e;
+    return search_expr_new_nnodes(parent, op, NULL);
 }
 
-static int complexity_check(int r)
+static int complexity_check(int r, unsigned *nnodes)
 {
     unsigned max = (unsigned)config_getint(IMAPOPT_SEARCH_NORMALISATION_MAX);
-    if (max && nnodes >= max) {
+    if (max && nnodes && *nnodes >= max) {
         xsyslog(LOG_WARNING, "nnodes exceeds normalisation_max",
-                "nnodes=%d normalisation_max=%d", nnodes, max);
+                "nnodes=%d normalisation_max=%d", *nnodes, max);
         return -1;
     }
     return r;
@@ -213,12 +223,12 @@ EXPORTED void search_expr_free(search_expr_t *e)
  * Create and return a new search expression tree which is an
  * exact duplicate of the given tree.
  */
-EXPORTED search_expr_t *search_expr_duplicate(const search_expr_t *e)
+static search_expr_t *search_expr_duplicate_nnodes(const search_expr_t *e, unsigned *nnodes)
 {
     search_expr_t *newe;
     search_expr_t *child;
 
-    newe = search_expr_new(NULL, e->op);
+    newe = search_expr_new_nnodes(NULL, e->op, nnodes);
     newe->attr = e->attr;
     if (newe->attr && newe->attr->duplicate)
         newe->attr->duplicate(&newe->value, &e->value);
@@ -226,9 +236,18 @@ EXPORTED search_expr_t *search_expr_duplicate(const search_expr_t *e)
         newe->value = e->value;
 
     for (child = e->children ; child ; child = child->next)
-        append(newe, search_expr_duplicate(child));
+        append(newe, search_expr_duplicate_nnodes(child, nnodes));
 
     return newe;
+}
+
+/*
+ * Create and return a new search expression tree which is an
+ * exact duplicate of the given tree.
+ */
+EXPORTED search_expr_t *search_expr_duplicate(const search_expr_t *e)
+{
+    return search_expr_duplicate_nnodes(e, NULL);
 }
 
 /*
@@ -505,7 +524,7 @@ static int has_enough_children(const search_expr_t *e)
     return 0;
 }
 
-static int apply_demorgan(search_expr_t **ep, search_expr_t **prevp)
+static int apply_demorgan(search_expr_t **ep, search_expr_t **prevp, unsigned *nnodes)
 {
     search_expr_t *child = *prevp;
     search_expr_t **grandp;
@@ -516,13 +535,13 @@ static int apply_demorgan(search_expr_t **ep, search_expr_t **prevp)
 
     child->op = (child->op == SEOP_AND ? SEOP_OR : SEOP_AND);
     for (grandp = &child->children ; *grandp ; grandp = &(*grandp)->next)
-        interpolate(grandp, SEOP_NOT);
+        interpolate(grandp, SEOP_NOT, nnodes);
     search_expr_free(elide(ep));
 
-    return complexity_check(1);
+    return complexity_check(1, nnodes);
 }
 
-static int apply_distribution(search_expr_t **ep, search_expr_t **prevp)
+static int apply_distribution(search_expr_t **ep, search_expr_t **prevp, unsigned *nnodes)
 {
     search_expr_t *newor;
     search_expr_t *or;
@@ -531,14 +550,14 @@ static int apply_distribution(search_expr_t **ep, search_expr_t **prevp)
     search_expr_t *newand;
     int r = 1;
 
-    newor = interpolate(ep, SEOP_OR);
+    newor = interpolate(ep, SEOP_OR, nnodes);
     and = detachp(&newor->children);
     or = detachp(prevp);
 
-    while (complexity_check(r) >= 0) {
+    while (complexity_check(r, nnodes) >= 0) {
         orchild = detachp(&or->children);
         if (orchild == NULL) break;
-        newand = search_expr_duplicate(and);
+        newand = search_expr_duplicate_nnodes(and, nnodes);
         append(newand, orchild);
         append(newor, newand);
     }
@@ -546,15 +565,15 @@ static int apply_distribution(search_expr_t **ep, search_expr_t **prevp)
     search_expr_free(and);
     search_expr_free(or);
 
-    return complexity_check(r);
+    return complexity_check(r, nnodes);
 }
 
-static int invert(search_expr_t **ep, search_expr_t **prevp)
+static int invert(search_expr_t **ep, search_expr_t **prevp, unsigned *nnodes)
 {
     if ((*ep)->op == SEOP_NOT)
-        return apply_demorgan(ep, prevp);
+        return apply_demorgan(ep, prevp, nnodes);
     else
-        return apply_distribution(ep, prevp);
+        return apply_distribution(ep, prevp, nnodes);
 }
 
 /* combine compatible boolean parent and child nodes */
@@ -578,7 +597,7 @@ static void combine(search_expr_t **ep, search_expr_t **prevp)
  * Top-level normalisation step.  Returns 1 if it changed the subtree, 0
  * if it didn't, and -1 on error (such as exceeding a complexity limit).
  */
-static int normalise(search_expr_t **ep)
+static int normalise(search_expr_t **ep, unsigned *nnodes)
 {
     search_expr_t **prevp;
     int depth;
@@ -613,16 +632,16 @@ restart:
             goto restart;
         }
         if (child_depth < depth) {
-            r = invert(ep, prevp);
+            r = invert(ep, prevp, nnodes);
             if (r < 0) return -1;
             goto restart;
         }
-        r = normalise(prevp);
+        r = normalise(prevp, nnodes);
         if (r < 0) return -1;
         if (r > 0) goto restart;
     }
 
-    return complexity_check(changed);
+    return complexity_check(changed, nnodes);
 }
 
 static void *getnext(void *p)
@@ -773,20 +792,25 @@ static void sort_children(search_expr_t *e)
  * Returns 1 if the subtree was changed, 0 if it wasn't, and -1 on error
  * (such as exceeding a complexity limit).
  */
-EXPORTED int search_expr_normalise(search_expr_t **ep)
+static int search_expr_normalise_nnodes(search_expr_t **ep, unsigned *nnodes)
 {
     int r;
 
 #if DEBUG
     the_rootp = ep;
 #endif
-    r = normalise(ep);
+    r = normalise(ep, nnodes);
     sort_children(*ep);
 #if DEBUG
     the_rootp = NULL;
     the_focus = NULL;
 #endif
     return r;
+}
+
+EXPORTED int search_expr_normalise(search_expr_t **ep)
+{
+    return search_expr_normalise_nnodes(ep, NULL);
 }
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
@@ -1144,8 +1168,8 @@ EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
     }
 
     copy = search_expr_duplicate(e);
-    nnodes = 0;
-    if (search_expr_normalise(&copy) < 0)
+    unsigned nnodes = 0;
+    if (search_expr_normalise_nnodes(&copy, &nnodes) < 0)
     {
         /* We blew the complexity limit because the expression has too
          * many ORs.  Rats.  Give up and scan folders with the original

@@ -1,0 +1,11 @@
+Description:
+
+Prevents a bug in search, where queries may exceed the search normalization limit.
+
+Config changes:
+
+None. Implementations may want to revisit their search_normalisation_max settings, but its default value 1000 is a good conversative choice. Current server-grade hardware may use 20000 or more.
+
+Upgrade instructions:
+
+None.
