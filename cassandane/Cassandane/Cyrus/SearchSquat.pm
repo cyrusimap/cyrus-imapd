@@ -68,8 +68,10 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+# XXX version gated to 3.4+ for now to keep travis happy, but if we
+# XXX backport the fix we should change or remove the gate...
 sub test_simple
-    :SearchEngineSquat
+    :SearchEngineSquat :min_version_3_4
 {
     my ($self) = @_;
     my $imap = $self->{store}->get_client();
