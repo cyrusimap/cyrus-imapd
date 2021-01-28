@@ -329,9 +329,8 @@ the time zone information up to date then falls upon the Cyrus administrator.
 TZDist is optional: without Cyrus having TZDist enabled, calendar clients should
 still be able to get their timezone information from their client or their OS.
 
-TZDist is also required if you want the CalDAV server to strip known VTIMEZONEs
-from incoming iCalendar data (as advertised by the ``calendar-no-timezone`` DAV
-option from :rfc:`7809`).
+TZDist strips known VTIMEZONEs from incoming iCalendar data (as
+advertised by the ``calendar-no-timezone`` DAV option from :rfc:`7809`).
 
 Configuration
 -------------
@@ -369,10 +368,14 @@ Administration
 The TZDist module is designed to use the IANA Time Zone Database data (a.k.a.
 Olson Database) converted to the iCalendar format.
 
-We provide a modified `vzic <https://github.com/libical/vzic>`_ to convert IANA
-formatted data into iCalendar format, in the `cyrus-timezones package
-<https://github.com/cyrusimap/cyrus-timezones>`_ to make the following steps
-easier.
+`vzic <https://github.com/libical/vzic>`_ does convert the IANA TZ DB to iCalendar
+format.  For each time zone it creates a separate file with its own TZID property.
+The TZID property can have a vendor prefix, that is fixed when compiling vzic by the
+``TZID_PREFIX`` Makefile variable, which defaults to `/citadel.org/%D_1/`.  Cyrus
+IMAP requires that the vendor prefix is the empty string.
+
+The `cyrus-timezones package<https://github.com/cyrusimap/cyrus-timezones>`_ provides
+a vzic, which sets TZID_PREFIX to the emtpy string.
 
 The steps to populate the ``zoneinfo_dir`` directory are:
 
@@ -384,7 +387,9 @@ The steps to populate the ``zoneinfo_dir`` directory are:
 
 3. Expand the downloaded time zone data into a temporary directory of your choice.
 
-4. Populate ``zoneinfo_dir`` with iCalendar data:
+4. Copy leap-seconds.list from the temporary directory to ``<zoneinfo_dir>``.
+
+5. Populate ``zoneinfo_dir`` with iCalendar data:
 
    *Initial Install Only*
 
@@ -405,14 +410,14 @@ The steps to populate the ``zoneinfo_dir`` directory are:
       by running vzic-merge.pl in your current location:
       ``vzic-merge.pl``
 
-5. Rebuild the Cyrus zoneinfo index by running :cyrusman:`ctl_zoneinfo(8)` as
+6. Rebuild the Cyrus zoneinfo index by running :cyrusman:`ctl_zoneinfo(8)` as
    follows:
    ``ctl_zoneinfo -r <version-string>``
 
    where <version-string> contains description of the recently downloaded time
    zone data, colon, and the version of the data (e.g. "IANA Time Zone Database:2020a").
 
-6. Check that the zoneinfo index database and all iCalendar data files/links
+7. Check that the zoneinfo index database and all iCalendar data files/links
    are readable by the cyrus user.
 
 iSchedule
