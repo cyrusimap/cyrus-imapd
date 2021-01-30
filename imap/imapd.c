@@ -135,6 +135,7 @@ static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
+static size_t maxsize = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -306,7 +307,7 @@ static struct capa_struct base_capabilities[] = {
  * this is kept sorted, so that it can be easily compared to https://www.iana.org/assignments/imap-capabilities/imap-capabilities.xhtml */
     { "ACL",                   2 }, /* RFC 4314 */
     { "ANNOTATE-EXPERIMENT-1", 2 }, /* RFC 5257 */
-    /* ANNOTATELIMIT    RFC 7889 is not implemented */
+    /* APPENDLIMIT=     RFC 7889 is announced in capa_response() */
     /* AUTH=            RFC 3501 is announced conditionally in capa_response() */
     { "BINARY",                2 }, /* RFC 3516 */
     { "CATENATE",              2 }, /* RFC 4469 */
@@ -907,6 +908,9 @@ int service_init(int argc, char **argv, char **envp)
     protin = protgroup_new(2);
 
     prometheus_increment(CYRUS_IMAP_READY_LISTENERS);
+
+    maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE) * 1024;
+    if (!maxsize) maxsize = UINT32_MAX;
 
     return 0;
 }
@@ -3490,6 +3494,8 @@ static void capa_response(int flags)
     if (idle_enabled()) {
         prot_printf(imapd_out, " IDLE");
     }
+
+    prot_printf(imapd_out, " APPENDLIMIT=%zu", maxsize);
 }
 
 /*
@@ -3824,8 +3830,6 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
     const char *parseerr = NULL, *url = NULL;
     struct appendstage *curstage;
     mbentry_t *mbentry = NULL;
-    size_t maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE) * 1024;
-    if (!maxsize) maxsize = UINT32_MAX;
 
     memset(&appendstate, 0, sizeof(struct appendstate));
 
