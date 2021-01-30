@@ -339,6 +339,7 @@ static struct capa_struct base_capabilities[] = {
     { "NAMESPACE",             2 }, /* RFC 2342 */
     /* NOTIFY           RFC 5465 is not implemented */
     { "OBJECTID",              2 }, /* draft-ietf-extra-imap-objectid, see also RFC 8474 */
+    /* PREVIEW          RFC 8970 is not implemented */
     { "QRESYNC",               2 }, /* RFC 7162, but the implementation is likely from RFC 4551 and RFC 5162 */
     { "QUOTA",                 2 }, /* RFC 2087 */
     /* REPLACE          RFC 8508 is not implemented */
