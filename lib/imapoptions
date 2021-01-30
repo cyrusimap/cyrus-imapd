@@ -1354,7 +1354,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Path to a directory with CA (Certificate Authority) certificates. */
 
 { "ldap_ca_file", NULL, STRING, "2.5.0" }
-/* Patch to a file containing CA (Certificate Authority) certificate(s). */
+/* Path to a file containing CA (Certificate Authority) certificate(s). */
 
 { "ldap_ciphers", NULL, STRING, "2.5.0" }
 /* List of SSL/TLS ciphers to allow.  The format of the string is
