@@ -763,10 +763,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     CalDAV: Time Zones by Reference
 
-:rfc:`7889`
-
-    The IMAP APPENDLIMIT Extension
-
 :rfc:`7932`
 
     Brotli Compressed Data Format
@@ -953,6 +949,10 @@ RFC Wishlist
 :rfc:`7888`
 
     IMAP4 Non-synchronizing Literals
+
+:rfc:`7889`
+
+    The IMAP APPENDLIMIT Extension
 
 :rfc:`8288`
 
