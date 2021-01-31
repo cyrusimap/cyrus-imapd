@@ -529,7 +529,10 @@ static int sieve_fileinto(void *ac,
     char namebuf[MAX_MAILBOX_BUFFER];
     int ret;
 
-    char *intname = mboxname_from_external(fc->mailbox, sd->ns, mbname_userid(sd->mbname));
+    char *intname = mboxname_from_external(fc->mailbox, sd->ns,
+                                           mbname_recipient(sd->mbname,
+                                                            sd->ns));
+
     strncpy(namebuf, intname, sizeof(namebuf));
     free(intname);
 
