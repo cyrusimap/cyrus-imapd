@@ -750,7 +750,7 @@ static void test_delete(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
-    buf_printf(&path, "%s/data/%c/%c/%s/cyrus.annotations", DBDIR,
+    buf_printf(&path, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
                mailbox->uniqueid[0], mailbox->uniqueid[1], mailbox->uniqueid);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path)), 0);
     mailbox_close(&mailbox);
@@ -884,9 +884,9 @@ static void test_rename(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
-    buf_printf(&path1, "%s/data/%c/%c/%s/cyrus.annotations", DBDIR,
+    buf_printf(&path1, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
                mailbox1->uniqueid[0], mailbox1->uniqueid[1], mailbox1->uniqueid);
-    buf_printf(&path3, "%s/data/%c/%c/%s/cyrus.annotations", DBDIR,
+    buf_printf(&path3, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
                mailbox3->uniqueid[0], mailbox3->uniqueid[1], mailbox3->uniqueid);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), 0);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path3)), -ENOENT);
@@ -1175,9 +1175,9 @@ static void test_msg_copy(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
 
-    buf_printf(&path1, "%s/data/%c/%c/%s/cyrus.annotations", DBDIR,
+    buf_printf(&path1, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
                mailbox1->uniqueid[0], mailbox1->uniqueid[1], mailbox1->uniqueid);
-    buf_printf(&path2, "%s/data/%c/%c/%s/cyrus.annotations", DBDIR,
+    buf_printf(&path2, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
                mailbox2->uniqueid[0], mailbox2->uniqueid[1], mailbox2->uniqueid);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), 0);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path2)), 0);
