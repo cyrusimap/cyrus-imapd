@@ -1883,7 +1883,7 @@ EXPORTED void mboxname_id_hash(char *dest, size_t destlen,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    buf_printf(&buf, "%s/%c/%c/%s", root, id[0], id[1], id);
+    buf_printf(&buf, "%s/uuid/%c/%c/%s", root, id[0], id[1], id);
 
     /* for now, keep API even though we're doing a buffer inside here */
     strncpy(dest, buf_cstring(&buf), destlen);
