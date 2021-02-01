@@ -207,6 +207,31 @@ static int parseheader(struct protstream *fin, FILE *fout,
             break;
 
         case BODY_START:
+            /* leading whitespace might be folded too */
+            /* XXX mostly copied from BODY, below. could be deduped */
+            if (c == '\r' || c == '\n') {
+                int peek;
+
+                peek = prot_getc(fin);
+
+                if (!skip) buf_appendcstr(&raw, "\r\n");
+                /* we should peek ahead to see if it's folded whitespace */
+                if (c == '\r' && peek == '\n') {
+                    c = prot_getc(fin);
+                }
+                else {
+                    c = peek;
+                }
+
+                if (c != ' ' && c != '\t') {
+                    /* not folded leading ws, actually end of header! */
+                    buf_cstring(&body);
+                    buf_cstring(&raw);
+                    prot_ungetc(c, fin);
+                    goto got_header;
+                }
+            }
+
             if (c == ' ' || c == '\t') /* eat the whitespace */
                 break;
             buf_reset(&body);
