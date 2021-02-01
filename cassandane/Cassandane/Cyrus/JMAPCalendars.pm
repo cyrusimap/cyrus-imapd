@@ -3787,12 +3787,15 @@ sub test_calendarevent_set_participantid
     my $ret = $self->createandget_event($event);
     $event->{id} = $ret->{id};
     $event->{calendarIds} = $ret->{calendarIds};
+    delete($ret->{participants}{foo}{scheduleStatus});
 
     $self->assert_normalized_event_equals($event, $ret);
 
     # check that we can fetch again a second time and still have the same data
     my $res = $jmap->CallMethods([['CalendarEvent/get', { ids => [ $event->{id} ] }, 'R1']]);
-    $self->assert_normalized_event_equals($event, $res->[0][1]{list}[0]);
+    $ret = $res->[0][1]{list}[0];
+    delete($ret->{participants}{foo}{scheduleStatus});
+    $self->assert_normalized_event_equals($event, $ret);
 }
 
 sub test_calendarevent_set_participants_justorga
@@ -13625,6 +13628,50 @@ sub test_calendarevent_query_custom_timezones
     $self->assert_not_null($res->[0][1]{created}{event1});
     $self->assert_num_equals(1, scalar @{$res->[1][1]{ids}});
     $self->assert_num_equals(0, scalar @{$res->[2][1]{ids}});
+}
+
+sub test_calendarevent_set_schedulestatus
+    :min_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'JSEvent',
+                    title => 'test',
+                    replyTo => {
+                        imip => 'mailto:orga@local',
+                    },
+                    participants => {
+                        part1 => {
+                            '@type' => 'Participant',
+                            sendTo => {
+                                imip => 'mailto:part1@local',
+                            },
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            scheduleStatus => ['2.0', '2.4'],
+                        },
+                    },
+                    start => '2021-01-01T01:00:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals(['2.0', '2.4'],
+        $res->[1][1]{list}[0]{participants}{part1}{scheduleStatus});
 }
 
 1;

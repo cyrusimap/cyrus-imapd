@@ -1958,6 +1958,23 @@ static json_t *participant_from_ical(icalproperty *prop,
         }
     }
 
+    /* scheduleStatus */
+    param = icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER);
+    if (param) {
+        json_t *jschedstat = json_array();
+        const char *str = icalparameter_get_schedulestatus(param);
+        strarray_t *vals = strarray_split(str, ",", STRARRAY_TRIM);
+        if (strarray_size(vals)) {
+            int i;
+            for (i = 0; i < strarray_size(vals); i++) {
+                json_array_append_new(jschedstat,
+                        json_string(strarray_nth(vals, i)));
+            }
+        }
+        strarray_free(vals);
+        if (jschedstat) json_object_set_new(p, "scheduleStatus", jschedstat);
+    }
+
     /* participationComment */
     const char *comment = get_icalxparam_value(prop, JMAPICAL_XPARAM_COMMENT);
     if (comment) {
@@ -3952,11 +3969,6 @@ participant_to_ical(icalcomponent *comp,
     if (is_orga) icalproperty_set_xparam(orga, JMAPICAL_XPARAM_ID, partid, 1);
 
     /* FIXME invitedBy */
-    /* FIXME scheduleAgent */
-    /* FIXME scheduleForceSend */
-    /* FIXME scheduleSequence */
-    /* FIXME scheduleStatus */
-    /* FIXME scheduleUpdated */
 
     /* name */
     json_t *jname = json_object_get(jpart, "name");
@@ -4269,6 +4281,46 @@ participant_to_ical(icalcomponent *comp,
     }
     else if (JNOTNULL(scheduleUpdated)) {
         jmap_parser_invalid(parser, "scheduleSequence");
+    }
+
+    /* FIXME scheduleAgent */
+    /* FIXME scheduleForceSend */
+
+    /* scheduleStatus */
+    json_t *scheduleStatus = json_object_get(jpart, "scheduleStatus");
+    if (json_array_size(scheduleStatus)) {
+        struct buf buf = BUF_INITIALIZER;
+        size_t i;
+        json_t *jval;
+        json_array_foreach(scheduleStatus, i, jval) {
+            const char *str = json_string_value(jval);
+            int is_valid = 0;
+            /* RFC5545, 3.8.8.3: statcode = 1*DIGIT 1*2("." 1*DIGIT) */
+            if (str && isdigit(str[0]) &&
+                (!str[1] ||
+                 (str[1] == '.' && isdigit(str[2]) &&
+                    (!str[3] ||
+                     (str[3] == '.' && isdigit(str[4]) && !str[5]))))) {
+                is_valid = 1;
+            }
+            if (is_valid) {
+                if (i) buf_putc(&buf, ',');
+                buf_appendcstr(&buf, str);
+            }
+            else {
+                jmap_parser_push_index(parser, "scheduleStatus", i, NULL);
+                jmap_parser_invalid(parser, NULL);
+                jmap_parser_pop(parser);
+            }
+        }
+        if (buf_len(&buf)) {
+            icalproperty_add_parameter(prop,
+                    icalparameter_new_schedulestatus(buf_cstring(&buf)));
+        }
+        buf_free(&buf);
+    }
+    else if (JNOTNULL(scheduleStatus)) {
+        jmap_parser_invalid(parser, "scheduleStatus");
     }
 
     /* participationComment */
