@@ -279,6 +279,124 @@ static void test_folded_headers(void)
     unlink(tempfile);
 }
 
+static void test_empty_headers(void)
+{
+    static const char MSG[] =
+"From: " HFROM "\r\n"
+"Message-ID: " HMESSAGEID "\r\n"
+"Empty1:\r\n"                               /* not even a leading space */
+"Empty2: \r\n"                              /* leading space */
+"Empty3:\r\n \r\n"                          /* folded leading space */
+"Empty4:\r"                                 /* same, with bare CR */
+"Empty5: \r"
+"Empty6:\r \r"
+"Empty7:\n"                                 /* same, with bare LF */
+"Empty8: \n"
+"Empty9:\n \n"
+"\r\n"
+"Hello, World\r\n";
+
+    hdrcache_t cache;
+    const char **val;
+    int fd;
+    char tempfile[32];
+    int r;
+    struct protstream *pin;
+    FILE *fout;
+
+    /* Setup @pin to point to the start of a file open for (at least)
+     * reading containing the message. */
+    strcpy(tempfile, "/tmp/spooltestAXXXXXX");
+    fd = mkstemp(tempfile);
+    CU_ASSERT(fd >= 0);
+    r = retry_write(fd, MSG, sizeof(MSG)-1);
+    CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
+    lseek(fd, SEEK_SET, 0);
+    pin = prot_new(fd, /*read*/0);
+    CU_ASSERT_PTR_NOT_NULL(pin);
+
+    /* Setup @fout to ignore data written to it */
+    fout = fopen("/dev/null", "w");
+    CU_ASSERT_PTR_NOT_NULL(fout);
+
+    cache = spool_new_hdrcache();
+    CU_ASSERT_PTR_NOT_NULL(cache);
+
+    /* TODO: test non-NULL skipheaders */
+    r = spool_fill_hdrcache(pin, fout, cache, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+
+    val = spool_getheader(cache, "Nonesuch");
+    CU_ASSERT_PTR_NULL(val);
+    val = spool_getheader(cache, "From");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+    val = spool_getheader(cache, "fRoM");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+    val = spool_getheader(cache, "from");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "message-id");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HMESSAGEID);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "empty1");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], "");
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "empty2");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], "");
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "empty3");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], "");
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "empty4");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], "");
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "empty5");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], "");
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "empty6");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], "");
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "empty7");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], "");
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "empty8");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], "");
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "empty9");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], "");
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    spool_free_hdrcache(cache);
+    fclose(fout);
+    prot_free(pin);
+    unlink(tempfile);
+}
+
 /* BZ3640: headers with NULL bytes shall be rejected. */
 static void test_fill_null(void)
 {
