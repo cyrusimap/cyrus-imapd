@@ -103,9 +103,10 @@ typedef enum {
 /* we don't have to worry about dotstuffing here, since it's illegal
    for a header to begin with a dot!
 
-   returns 0 on success, filling in 'headname' and 'contents' with a static
-   pointer (blech).
-   on end of headers, returns 0 with NULL 'headname' and NULL 'contents'
+   returns 0 on success, filling in 'headname', 'contents', and 'rawvalue'
+   with malloced pointers (caller must free!).
+   on end of headers, returns 0 with NULL 'headname', NULL 'contents', and
+   NULL 'rawvalue'
 
    on error, returns < 0
 */
