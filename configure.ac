@@ -1585,9 +1585,6 @@ AM_CONDITIONAL([HTTPD], [test "$enable_http" != "no"])
 
 HTTP_CPPFLAGS=
 HTTP_LIBS=
-with_xml2=no
-with_ical=no
-with_shapelib=no
 if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
@@ -1722,10 +1719,13 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
         HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
         HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
 else
-        with_brotli="no (httpd is not build)"
-        with_wslay="no (httpd is not build)"
-        with_nghttp2="no (httpd is not build)"
-        with_zstd="no (httpd is not build)"
+        with_nghttp2="no (httpd is not built)"
+        with_wslay="no (httpd is not built)"
+        with_brotli="no (httpd is not built)"
+        with_zstd="no (httpd is not built)"
+        with_xml2="no (httpd is not built)"
+        with_ical="no (httpd is not built)"
+        with_shapelib="no (httpd is not built)"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
@@ -2484,8 +2484,8 @@ External dependencies:
    zstd:               $with_zstd
    xml2:               $with_xml2
    ical:               $with_ical
-   icu4c:              $with_icu4c
    shapelib:           $with_shapelib
+   icu4c:              $with_icu4c
    chardet:            $with_chardet
    cld2:               $with_cld2
 
