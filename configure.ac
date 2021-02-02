@@ -379,7 +379,7 @@ dnl which means if your sqlite is in a non-default location and you need httpd
 dnl or object storage etc, you're suddenly also supporting it as a cyrusdb
 dnl backend, possibly unexpectedly.
 AC_ARG_WITH(sqlite,
-        [AS_HELP_STRING([--with-sqlite=DIR], [use SQLite (in DIR) [no]])],
+        [AS_HELP_STRING([--with-sqlite=DIR], [use SQLite (in DIR) (check)])],
         with_sqlite=$withval, with_sqlite=check)
 
 case "$with_sqlite" in
@@ -1588,8 +1588,6 @@ HTTP_LIBS=
 with_xml2=no
 with_ical=no
 with_shapelib=no
-with_brotli=no
-with_zstd=no
 if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
@@ -1680,21 +1678,33 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ])
         fi
 
+        AC_ARG_WITH(brotli, [AS_HELP_STRING([--without-brotli], [disable brotli compression (check)])])
+        if test "x$with_brotli" = xyes -o "${with_brotli+x}" != x; then
+                PKG_CHECK_MODULES([BROTLI], [libbrotlienc], [
+                        AC_DEFINE(HAVE_BROTLI,[],
+                                [Build Brotli compression support into httpd?])
+                        with_brotli=yes
+                ], [
+                        if test "x$with_brotli" = xyes; then
+                                AC_MSG_ERROR([brotli compression explicitly requested, but libbrotlienc was not found])
+                        fi
+                        with_brotli="no (libbrotlienc not found)"
+                ])
+        fi
 
-        PKG_CHECK_MODULES([BROTLI], [libbrotlienc], [
-                AC_DEFINE(HAVE_BROTLI,[],
-                        [Build Brotli compression support into httpd?])
-                with_brotli=yes
-                ],
-                AC_MSG_NOTICE([httpd will not have support for Brotli compression.  Consider installing libbrotli]))
-
-
-        PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0], [
-                AC_DEFINE(HAVE_ZSTD,[],
-                        [Build Zstandard compression support into httpd?])
-                with_zstd=yes
-                ],
-                AC_MSG_NOTICE([httpd will not have support for Zstandard compression.  Consider installing libzstd]))
+        AC_ARG_WITH(zstd, [AS_HELP_STRING([--without-zstd], [disable Zstandard compression (check)])])
+        if test "x$with_zstd" = xyes -o "${with_zstd+x}" != x; then
+                PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0], [
+                        AC_DEFINE(HAVE_ZSTD,[],
+                                [Build Zstandard compression support into httpd?])
+                        with_zstd=yes
+                ], [
+                        if test "x$with_zstd" = xyes; then
+                                AC_MSG_ERROR([Zstandard compression explicitly requested, but libzstd was not found])
+                        fi
+                        with_zstd="no (libzstd >= 1.4.0 not found)"
+               ])
+        fi
 
         dnl httpd needs libmath in a few places
         dnl XXX really should check for this properly but AC_SEARCH_LIBS/AC_CHECK_LIB
@@ -1711,6 +1721,11 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
 
         HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
         HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
+else
+        with_brotli="no (httpd is not build)"
+        with_wslay="no (httpd is not build)"
+        with_nghttp2="no (httpd is not build)"
+        with_zstd="no (httpd is not build)"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
