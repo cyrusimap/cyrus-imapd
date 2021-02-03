@@ -7074,6 +7074,8 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     }
 
 localcreate:
+#if 0  /* XXX  Do we want a config option for this?
+          XXX  Regardless, will will have to update Cassandane tests */
     // find the nearest ancestor to see if we have to fill out the branch
     r = mboxlist_findparent(mbname_intname(mbname), &parent);
     if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
@@ -7084,7 +7086,7 @@ localcreate:
         int youngest = strarray_size(boxes) - 1;
 
         // any missing ancestors?
-        if (oldest > youngest) {
+        if (youngest > oldest) {
             // verify that we can create the requested mailbox
             // before creating its ancestors
             r = mboxlist_createmailboxcheck(mbname_intname(mbname),
@@ -7117,6 +7119,7 @@ localcreate:
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
         goto done;
     }
+#endif
 
     // now create the requested mailbox
     r = mboxlist_createmailbox_opts(
