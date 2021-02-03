@@ -339,7 +339,7 @@ static struct capa_struct base_capabilities[] = {
     /* MULTISEARCH      RFC 7377 is not implemented */
     { "NAMESPACE",             2 }, /* RFC 2342 */
     /* NOTIFY           RFC 5465 is not implemented */
-    { "OBJECTID",              2 }, /* draft-ietf-extra-imap-objectid, see also RFC 8474 */
+    { "OBJECTID",              2 }, /* RFC 8474 */
     /* PREVIEW          RFC 8970 is not implemented */
     { "QRESYNC",               2 }, /* RFC 7162, but the implementation is likely from RFC 4551 and RFC 5162 */
     { "QUOTA",                 2 }, /* RFC 2087 */
@@ -4867,7 +4867,7 @@ badannotation:
             if (!strcmp(fetchatt.s, "ENVELOPE")) {
                 fa->fetchitems |= FETCH_ENVELOPE;
             }
-            else if (!strcmp(fetchatt.s, "EMAILID")) {
+            else if (!strcmp(fetchatt.s, "EMAILID")) {   /* RFC 8474 */
                 fa->fetchitems |= FETCH_EMAILID;
             }
             else goto badatt;
@@ -5035,7 +5035,7 @@ badannotation:
             break;
 
         case 'T':
-            if (!strcmp(fetchatt.s, "THREADID")) {
+            if (!strcmp(fetchatt.s, "THREADID")) {   /* RFC 8474 */
                 fa->fetchitems |= FETCH_THREADID;
             }
             else goto badatt;

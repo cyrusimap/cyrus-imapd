@@ -834,6 +834,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Bootstrapping WebSockets with HTTP/2
 
+:rfc:`8474`
+
+    IMAP Extension for Object Identifiers
+
 :rfc:`8478`
 
     Zstandard Compression and the application/zstd Media Type
@@ -993,14 +997,6 @@ RFC Wishlist
 :rfc:`8470`
 
     Using Early Data in HTTP
-
-:rfc:`8474`
-
-    IMAP Extension for Object Identifiers
-
-    .. NOTE::
-
-       This is implemented as draft-ietf-extra-imap-objectid.
 
 :rfc:`8508`
 

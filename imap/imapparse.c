@@ -986,7 +986,7 @@ static int get_search_criterion(struct protstream *pin,
         break;
 
     case 'e':
-        if (!strcmp(criteria.s, "emailid")) {   /* draft-gondwana-imap-uniqueid */
+        if (!strcmp(criteria.s, "emailid")) {   /* RFC 8474 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
             if (c == EOF) goto missingarg;
@@ -1263,7 +1263,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto missingarg;
             string_match(parent, arg.s, criteria.s, base);
         }
-        else if (!strcmp(criteria.s, "threadid")) {   /* draft-gondwana-imap-uniqueid */
+        else if (!strcmp(criteria.s, "threadid")) {   /* RFC 8474 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
             if (c == EOF) goto missingarg;
