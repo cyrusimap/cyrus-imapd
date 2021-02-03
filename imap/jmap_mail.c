@@ -4962,8 +4962,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     strarray_t perf_filters = STRARRAY_INITIALIZER;
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = _email_buildsearch(req, filter, /*contactgroups*/NULL,
-            &perf_filters, NULL);
+    searchargs->root = _email_buildsearchexpr(req, filter, NULL, NULL, &perf_filters);
     strarray_fini(&perf_filters);
 
     /* Build the search query */
