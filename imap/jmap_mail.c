@@ -3752,8 +3752,11 @@ static int _email_query_uidsearch(jmap_req_t *req,
     if (r) {
         switch (r) {
             case IMAP_SEARCH_NOT_SUPPORTED:
-            case IMAP_SEARCH_SLOW:
                 *err = json_pack("{s:s}", "type", "unsupportedFilter");
+                break;
+            case IMAP_SEARCH_SLOW:
+                *err = json_pack("{s:s s:s}", "type", "unsupportedFilter",
+                        "description", "search too slow");
                 break;
             default:
                 *err = jmap_server_error(r);
@@ -4032,7 +4035,8 @@ static void _email_query(jmap_req_t *req, struct jmap_emailquery *q,
 done:
     if (r && *err == NULL) {
         if (r == IMAP_SEARCH_SLOW) {
-            *err = json_pack("{s:s}", "type", "unsupportedFilter");
+            *err = json_pack("{s:s s:s}", "type", "unsupportedFilter",
+                    "description", "search too slow");
         }
         else *err = jmap_server_error(r);
     }
