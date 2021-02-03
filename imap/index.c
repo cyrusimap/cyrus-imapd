@@ -830,8 +830,16 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 state->mailbox->i.uidvalidity);
     prot_printf(state->out, "* OK [UIDNEXT %lu] Ok\r\n",
                 state->last_uid + 1);
+
+    /* RFC 7162 */
     prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] Ok\r\n",
                 state->highestmodseq);
+
+    /* RFC 8474 */
+    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n",
+                state->mailbox->uniqueid);
+
+    /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
 
     /*
