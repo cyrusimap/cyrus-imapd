@@ -810,7 +810,8 @@ static int search_expr_normalise_nnodes(search_expr_t **ep, unsigned *nnodes)
 
 EXPORTED int search_expr_normalise(search_expr_t **ep)
 {
-    return search_expr_normalise_nnodes(ep, NULL);
+    unsigned nnodes = 0;
+    return search_expr_normalise_nnodes(ep, &nnodes);
 }
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
@@ -1168,8 +1169,7 @@ EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
     }
 
     copy = search_expr_duplicate(e);
-    unsigned nnodes = 0;
-    if (search_expr_normalise_nnodes(&copy, &nnodes) < 0)
+    if (search_expr_normalise(&copy) < 0)
     {
         /* We blew the complexity limit because the expression has too
          * many ORs.  Rats.  Give up and scan folders with the original
