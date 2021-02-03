@@ -317,6 +317,12 @@ magic(SearchFuzzyAlways => sub {
 magic(SearchEngineSquat => sub {
     shift->config_set(search_engine => 'squat');
 });
+magic(SearchNormalizationMax20000 => sub {
+    shift->config_set(search_normalisation_max => 20000);
+});
+magic(SearchMaxtime1Sec => sub {
+    shift->config_set(search_maxtime => 1);
+});
 magic(TLS => sub {
     # XXX Here be dragons.  Check existing tests that use this magic
     # XXX for some of the hoops you may still need to jump through!
