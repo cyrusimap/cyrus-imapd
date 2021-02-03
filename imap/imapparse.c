@@ -1156,13 +1156,13 @@ static int get_search_criterion(struct protstream *pin,
         break;
 
     case 's':
-        if (!strcmp(criteria.s, "savedatesupported")) {   /* draft-ietf-extra-imap-savedate */
+        if (!strcmp(criteria.s, "savedatesupported")) {   /* RFC 8514 */
             // savedate is supported in index version 15+
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("indexversion");
             e->value.u = 15;
         }
-        else if (!strcmp(criteria.s, "savedbefore")) {   /* draft-ietf-extra-imap-savedate */
+        else if (!strcmp(criteria.s, "savedbefore")) {   /* RFC 8514 */
             if (c != ' ') goto missingarg;
             c = get_search_date(pin, &start, &end);
             if (c == EOF) goto baddate;
@@ -1170,13 +1170,13 @@ static int get_search_criterion(struct protstream *pin,
             e->attr = search_attr_find("savedate");
             e->value.u = start;
         }
-        else if (!strcmp(criteria.s, "savedon")) {   /* draft-ietf-extra-imap-savedate */
+        else if (!strcmp(criteria.s, "savedon")) {   /* RFC 8514 */
             if (c != ' ') goto missingarg;
             c = get_search_date(pin, &start, &end);
             if (c == EOF) goto baddate;
             date_range(parent, "savedate", start, end);
         }
-        else if (!strcmp(criteria.s, "savedsince")) {    /* draft-ietf-extra-imap-savedate */
+        else if (!strcmp(criteria.s, "savedsince")) {    /* RFC 8514 */
             if (c != ' ') goto missingarg;
             c = get_search_date(pin, &start, &end);
             if (c == EOF) goto baddate;

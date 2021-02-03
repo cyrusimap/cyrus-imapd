@@ -346,7 +346,7 @@ static struct capa_struct base_capabilities[] = {
     /* REPLACE          RFC 8508 is not implemented */
     { "RIGHTS=kxten",          2 }, /* RFC 4314 */
     /* SASL-IR          RFC 4959 is announced in capa_response() */
-    { "SAVEDATE",              2 }, /* draft-ietf-extra-imap-savedate, see also RFC 8514 */
+    { "SAVEDATE",              2 }, /* RFC 8514 */
     { "SEARCH=FUZZY",          2 }, /* RFC 6203 */
     /* SEARCHRES        RFC 5182 is not implemented */
     { "SORT",                  2 }, /* RFC 5256 */

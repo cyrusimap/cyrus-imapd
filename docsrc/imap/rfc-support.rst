@@ -818,6 +818,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Zstandard Compression and the application/zstd Media Type
 
+:rfc:`8514`
+
+    Internet Message Access Protocol (IMAP) - SAVEDATE Extension
+
 :rfc:`8579`
 
     Sieve Email Filtering: Delivering to Special-Use Mailboxes
@@ -973,14 +977,6 @@ RFC Wishlist
 :rfc:`8508`
 
     IMAP REPLACE Extension
-
-:rfc:`8514`
-
-    Internet Message Access Protocol (IMAP) - SAVEDATE Extension
-
-    .. NOTE::
-
-       This is implemented as draft-ietf-extra-imap-savedate.
 
 :rfc:`8621`
 
