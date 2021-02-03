@@ -645,6 +645,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Extension for Converting Messages before Delivery
 
+:rfc:`6455`
+
+    The WebSocket Protocol
+
 :rfc:`6578`
 
     Collection Synchronization for Web Distributed Authoring and
@@ -676,6 +680,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     Internet Message Access Protocol (IMAP) - MOVE Extension
 
     .. versionadded:: 2.5.0
+
+:rfc:`6901`
+
+    JavaScript Object Notation (JSON) Pointer
 
 :rfc:`7230`
 
@@ -751,6 +759,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Hypertext Transfer Protocol (HTTP) Client-Initiated Content-Encoding
 
+:rfc:`7725`
+
+    An HTTP Status Code to Report Legal Obstacles
+
 :rfc:`7804`
 
     Salted Challenge Response HTTP Authentication Mechanism
@@ -798,6 +810,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     HTTP Immutable Responses
 
+:rfc:`8288`
+
+    Web Linking
+
 :rfc:`8297`
 
     An HTTP Status Code for Indicating Hints
@@ -813,6 +829,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`8440`
 
     IMAP4 Extension for Returning MYRIGHTS Information in Extended LIST
+
+:rfc:`8441`
+
+    Bootstrapping WebSockets with HTTP/2
 
 :rfc:`8478`
 
@@ -834,8 +854,28 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Calendaring Extensions to WebDAV (CalDAV): Managed Attachments
 
+:rfc:`8620`
+
+    The JSON Meta Application Protocol (JMAP)
+
+:rfc:`8621`
+
+    The JSON Meta Application Protocol (JMAP) for Mail
+
+:rfc:`8887`
+
+    A JSON Meta Application Protocol (JMAP) Subprotocol for WebSocket
+
 IETF RFC Drafts
 ===============
+
+draft-ietf-jmap-calendars
+
+    JMAP for Calendars
+
+draft-ietf-jmap-sieve
+
+    JMAP for Sieve Scripts
 
 draft-murchison-lmtp-ignorequota
 
@@ -937,10 +977,6 @@ RFC Wishlist
 
     IMAP Support for UTF-8
 
-:rfc:`6901`
-
-    JavaScript Object Notation (JSON) Pointer
-
 :rfc:`7162`
 
     IMAP Extensions: Quick Flag Changes Resynchronization (CONDSTORE)
@@ -950,17 +986,9 @@ RFC Wishlist
 
     IMAP4 Multimailbox SEARCH Extension
 
-:rfc:`7725`
-
-    An HTTP Status Code to Report Legal Obstacles
-
 :rfc:`7888`
 
     IMAP4 Non-synchronizing Literals
-
-:rfc:`8288`
-
-    Web Linking
 
 :rfc:`8470`
 
@@ -977,7 +1005,3 @@ RFC Wishlist
 :rfc:`8508`
 
     IMAP REPLACE Extension
-
-:rfc:`8621`
-
-    The JSON Meta Application Protocol (JMAP) for Mail
