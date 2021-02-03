@@ -2171,24 +2171,16 @@ static void convert_folderclause(search_expr_t *clause,
     }
 }
 
-static int _email_buildsearch(search_expr_t **rootp,
-                              jmap_req_t *req, json_t *filter,
-                              hash_table *contactgroups,
-                              strarray_t *perf_filters,
-                              int *is_imapfolderptr)
+static int _emailsearch_normalise(search_expr_t **rootp, int *is_imapfolderptr)
 {
     if (is_imapfolderptr) *is_imapfolderptr = 0;
-    *rootp = NULL;
-
-    search_expr_t *root = _email_buildsearchexpr(req, filter, NULL,
-                                        contactgroups, perf_filters);
-    if (!root) return 0;
 
     /* Convert tree to DNF, it will converted in search_query anyway */
-    if (search_expr_normalise(&root) < 0) {
-        search_expr_free(root);
+    if (search_expr_normalise(rootp) < 0) {
         return IMAP_SEARCH_SLOW;
     }
+
+    search_expr_t *root = *rootp;
 
     /* Is there any JMAP folder expression we could optimize? */
     int has_jmapfolder_expr = 0;
@@ -2223,7 +2215,6 @@ static int _email_buildsearch(search_expr_t **rootp,
         strarray_fini(&preferred_folders);
     }
 
-    *rootp = root;
     return 0;
 }
 
@@ -2401,7 +2392,8 @@ struct emailsearch {
     int want_partids;
     int ignore_timer;
     int is_mutable;
-    search_expr_t *expr;
+    search_expr_t *expr_dnf;
+    search_expr_t *expr_orig;
     struct sortcrit *sort;
     char *hash;
     strarray_t perf_filters;
@@ -2418,7 +2410,8 @@ static void _emailsearch_fini(struct emailsearch *search)
 {
     if (!search) return;
 
-    search_expr_free(search->expr);
+    search_expr_free(search->expr_dnf);
+    search_expr_free(search->expr_orig);
     freesortcrit(search->sort);
     strarray_fini(&search->perf_filters);
     free(search->hash);
@@ -2434,12 +2427,9 @@ static char *_emailsearch_hash(search_expr_t *expr, struct sortcrit *sort)
 {
     struct buf buf = BUF_INITIALIZER;
     if (expr) {
-        search_expr_t *mysearch = search_expr_duplicate(expr);
-        search_expr_normalise(&mysearch);
-        char *tmp = search_expr_serialise(mysearch);
+        char *tmp = search_expr_serialise(expr);
         buf_appendcstr(&buf, tmp);
         free(tmp);
-        search_expr_free(mysearch);
     }
     else {
         buf_appendcstr(&buf, "noquery");
@@ -2492,8 +2482,13 @@ static int _emailsearch_init(struct emailsearch *search,
 {
     memset(search, 0, sizeof(struct emailsearch));
 
-    int r = _email_buildsearch(&search->expr, req, filter, contactgroups,
-                               &search->perf_filters, &search->is_imapfolder);
+    search->expr_orig = _email_buildsearchexpr(req, filter, NULL,
+                                    contactgroups, &search->perf_filters);
+    if (!search->expr_orig) return 0;
+
+    search->expr_dnf = search_expr_duplicate(search->expr_orig);
+
+    int r = _emailsearch_normalise(&search->expr_dnf, &search->is_imapfolder);
     if (r) return r;
 
     if (json_array_size(jsort)) {
@@ -2511,8 +2506,8 @@ static int _emailsearch_init(struct emailsearch *search,
         search->sort = sort;
     }
 
-    search->hash = _emailsearch_hash(search->expr, search->sort);
-    search->is_mutable = search_is_mutable(search->sort, search->expr);
+    search->hash = _emailsearch_hash(search->expr_dnf, search->sort);
+    search->is_mutable = search_is_mutable(search->sort, search->expr_dnf);
     search->want_expunged = want_expunged;
     search->want_partids = want_partids;
     search->ignore_timer = ignore_timer;
@@ -2528,7 +2523,7 @@ static int _emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *searc
     /* Build search args */
     search->args = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
             &jmap_namespace, req->accountid, req->authstate, 0);
-    search->args->root = search_expr_duplicate(search->expr);
+    search->args->root = search_expr_duplicate(search->expr_dnf);
 
     /* Build index state */
     search->init.userid = req->accountid;
@@ -3328,9 +3323,9 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
 }
 
 static int guidsearch_rank_expr(struct conversations_state *cstate,
-                                const search_expr_t *_e)
+                                const search_expr_t *e)
 {
-    if (!_e) return 0;
+    if (!e) return 0;
 
     /*
      * Returns -1 for unsupported expressions or a bitmask of:
@@ -3338,28 +3333,19 @@ static int guidsearch_rank_expr(struct conversations_state *cstate,
      *  0x1  supported but does not require Xapian
      *  0x2  requires Xapian
      */
-
-    search_expr_t *e = search_expr_duplicate(_e);
-    if (search_expr_normalise(&e) == -1) {
-        return -1;
-    }
-    int rank = 0;
     if (e->op == SEOP_OR) {
+        int rank = 0;
         search_expr_t *child;
         for (child = e->children ; child ; child = child->next) {
             int childrank = guidsearch_rank_clause(cstate, child);
             if (childrank == 1 || childrank == -1) {
-                rank = -1;
-                goto done;
+                return -1;
             }
             rank |= childrank;
         }
+        return rank;
     }
-    else rank = guidsearch_rank_clause(cstate, e);
-
-done:
-    search_expr_free(e);
-    return rank;
+    return guidsearch_rank_clause(cstate, e);
 }
 
 static int is_guidsearch_sort(struct sortcrit *sort)
@@ -3441,7 +3427,7 @@ static int guidsearch_run_cb(const conv_guidrec_t *rec,
 static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
                           struct guidsearch_query *gsq)
 {
-    int exprrank = guidsearch_rank_expr(req->cstate, search->expr);
+    int exprrank = guidsearch_rank_expr(req->cstate, search->expr_dnf);
     if (exprrank < 2 || !is_guidsearch_sort(search->sort)) {
         return IMAP_SEARCH_NOT_SUPPORTED;
     }
@@ -3492,7 +3478,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         }
 
         int need_folders = 0;
-        gsq->matchexpr = guidsearch_expr_build(req->cstate, NULL, search->expr,
+        gsq->matchexpr = guidsearch_expr_build(req->cstate, NULL, search->expr_orig,
                                                &foldernum_by_mboxname,
                                                &need_folders);
         gsq->numfolders = need_folders ? numfolders : 0;
@@ -3522,7 +3508,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         goto done;
     }
 
-    search_build_query(bx, search->expr);
+    search_build_query(bx, search->expr_orig);
     r = bx->run_guidsearch(bx, guidsearch_run_cb, gsq);
     bv_fini(&gsq->readable_folders);
     if (r && r != IMAP_OK_COMPLETED) goto done;
