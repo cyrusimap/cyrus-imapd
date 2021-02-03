@@ -4231,7 +4231,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_PREVIEW) {
-        prot_printf(state->out, "%cPREVIEW (FUZZY ", sepchar);
+        prot_printf(state->out, "%cPREVIEW ", sepchar);
         const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
         if (annot && !strncmp(annot, "/shared/", 8)) {
             struct buf previewbuf = BUF_INITIALIZER;
@@ -4243,11 +4243,9 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
             buf_free(&previewbuf);
         }
         else {
-            prot_printf(state->out, "NIL");
+            prot_puts(state->out, "NIL");
         }
 
-
-        prot_printf(state->out, ")");
         sepchar = ' ';
     }
     if (fetchitems & FETCH_FILESIZE) {

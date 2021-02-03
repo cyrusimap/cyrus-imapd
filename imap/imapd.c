@@ -340,7 +340,7 @@ static struct capa_struct base_capabilities[] = {
     { "NAMESPACE",             2 }, /* RFC 2342 */
     /* NOTIFY           RFC 5465 is not implemented */
     { "OBJECTID",              2 }, /* RFC 8474 */
-    /* PREVIEW          RFC 8970 is not implemented */
+    { "PREVIEW",               2 }, /* RFC 8970 */
     { "QRESYNC",               2 }, /* RFC 7162, but the implementation is likely from RFC 4551 and RFC 5162 */
     { "QUOTA",                 2 }, /* RFC 2087 */
     /* REPLACE          RFC 8508 is not implemented */
@@ -372,7 +372,6 @@ static struct capa_struct base_capabilities[] = {
     { "DIGEST=SHA1",           2 }, /* Cyrus custom */
     { "LIST-METADATA",         2 }, /* not standard */
     { "NO_ATOMIC_RENAME",      2 },
-    { "PREVIEW=FUZZY",         2 }, /* draft-ietf-extra-imap-fetch-preview */
     { "SCAN",                  2 },
     { "SORT=MODSEQ",           2 },
     { "SORT=UID",              2 }, /* not standard */
@@ -4927,8 +4926,8 @@ badannotation:
                         c = ' ';
                         while (c == ' ') {
                             c = getword(imapd_in, &fieldname);
-                            if (strcasecmp(fieldname.s, "") && strcasecmp(fieldname.s, "FUZZY") && strcasecmp(fieldname.s, "LAZY=FUZZY")) {
-                                prot_printf(imapd_out, "%s BAD FETCH contains invalid preview algorithm name (%s)\r\n", tag, fieldname.s);
+                            if (strcasecmp(fieldname.s, "LAZY")) {
+                                prot_printf(imapd_out, "%s BAD FETCH contains invalid preview modifier (%s)\r\n", tag, fieldname.s);
                                 eatline(imapd_in, c);
                                 goto freeargs;
                             }
