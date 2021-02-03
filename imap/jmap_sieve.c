@@ -1646,7 +1646,7 @@ static int jmapquery(void *sc, void *mc, const char *json)
     return matches;
 }
 
-static void _strlist(json_t *args, const char *name, strarray_t *sl)
+static json_t *_strlist(json_t *args, const char *name, strarray_t *sl)
 {
     if (strarray_size(sl)) {
         int i, n = strarray_size(sl);
@@ -1657,6 +1657,8 @@ static void _strlist(json_t *args, const char *name, strarray_t *sl)
         }
         json_object_set_new(args, name, ja);
     }
+
+    return args;
 }
 
 static int keep(void *ac,
@@ -1674,26 +1676,23 @@ static int keep(void *ac,
         return SIEVE_OK;
     }
 
-    const char *action = "keep";
-    json_t *args = json_object();
+    json_t *args = _strlist(json_object(), "flags", kc->imapflags);
 
-    _strlist(args, "flags", kc->imapflags);
-
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    json_array_append_new(m->actions, json_pack("[s o []]", "keep", args));
 
     return SIEVE_OK;
 }
 
-static void _fileinto(json_t *args, sieve_fileinto_context_t *fc)
+static json_t *_fileinto(json_t *args, sieve_fileinto_context_t *fc)
 {
-    _strlist(args, "flags", fc->imapflags);
-
     if (fc->specialuse)
         json_object_set_new(args, "specialuse", json_string(fc->specialuse));
     if (fc->mailboxid)
         json_object_set_new(args, "mailboxid", json_string(fc->mailboxid));
     if (fc->do_create)
         json_object_set_new(args, "create", json_true());
+
+    return _strlist(args, "flags", fc->imapflags);
 }
 
 static int fileinto(void *ac,
@@ -1711,14 +1710,10 @@ static int fileinto(void *ac,
         return SIEVE_OK;
     }
 
-    const char *action = "fileinto";
-    json_t *args = json_object();
+    json_t *args = _fileinto(json_object(), fc);
 
-    _fileinto(args, fc);
-
-    json_object_set_new(args, "mailbox", json_string(fc->mailbox));
-
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    json_array_append_new(m->actions,
+                          json_pack("[s o [s]]", "fileinto", args, fc->mailbox));
 
     return SIEVE_OK;
 }
@@ -1731,10 +1726,7 @@ static int discard(void *ac __attribute__((unused)),
 {
     message_data_t *m = (message_data_t *) mc;
 
-    const char *action = "discard";
-    json_t *args = json_object();
-
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    json_array_append_new(m->actions, json_pack("[s {} []]", "discard"));
 
     return SIEVE_OK;
 }
@@ -1748,7 +1740,6 @@ static int redirect(void *ac,
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
 
-    const char *action = "redirect";
     json_t *args = json_object();
 
     if (rc->dsn_notify)
@@ -1756,9 +1747,8 @@ static int redirect(void *ac,
     if (rc->dsn_ret)
         json_object_set_new(args, "ret", json_string(rc->dsn_ret));
 
-    json_object_set_new(args, "address", json_string(rc->addr));
-
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    json_array_append_new(m->actions,
+                          json_pack("[s o [s]]", "redirect", args, rc->addr));
 
     return SIEVE_OK;
 }
@@ -1772,10 +1762,10 @@ static int reject(void *ac,
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
 
-    const char *action = rc->is_extended ? "ereject" : "reject";
-    json_t *args = json_pack("{s:s}", "reason", rc->msg);
-
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    json_array_append_new(m->actions,
+                          json_pack("[s {} [s]]",
+                                    rc->is_extended ? "ereject" : "reject",
+                                    rc->msg));
 
     return SIEVE_OK;
 }
@@ -1805,7 +1795,6 @@ static int send_response(void *ac,
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
 
-    const char *action = "vacation";
     json_t *args = json_object();
 
     if (src->fcc.mailbox) {
@@ -1820,9 +1809,8 @@ static int send_response(void *ac,
     if (src->mime)
         json_object_set_new(args, "mime", json_true());
 
-    json_object_set_new(args, "reason", json_string(src->msg));
-
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    json_array_append_new(m->actions,
+                          json_pack("[s o [s]]", "vacation", args, src->msg));
 
     return SIEVE_OK;
 }
@@ -1842,7 +1830,6 @@ static int addheader(void *mc, const char *head, const char *body, int index)
 
     if (!m->cache_full) fill_cache(m);
 
-    const char *action = "addheader";
     json_t *args = json_object();
 
     if (index < 0) {
@@ -1854,10 +1841,8 @@ static int addheader(void *mc, const char *head, const char *body, int index)
         spool_prepend_header(xstrdup(head), xstrdup(body), m->cache);
     }
 
-    json_object_set_new(args, "field-name", json_string(head));
-    json_object_set_new(args, "value", json_string(body));
-
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    json_array_append_new(m->actions,
+                          json_pack("[s o [s s]]", "addheader", args, head, body));
 
     return SIEVE_OK;
 }
@@ -1870,7 +1855,6 @@ static int deleteheader(void *mc, const char *head, int index)
 
     if (!m->cache_full) fill_cache(m);
 
-    const char *action = "deleteheader";
     json_t *args = json_object();
 
     if (index) {
@@ -1884,9 +1868,8 @@ static int deleteheader(void *mc, const char *head, int index)
         spool_remove_header(xstrdup(head), m->cache);
     }
 
-    json_object_set_new(args, "field-name", json_string(head));
-
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    json_array_append_new(m->actions,
+                          json_pack("[s o]", "deleteheader", args, head));
 
     return SIEVE_OK;
 }
@@ -1900,8 +1883,7 @@ static int notify(void *ac,
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
 
-    const char *action = "notify";
-    json_t *args = json_object();
+    json_t *args = _strlist(json_object(), "options", nc->options);
 
     if (nc->from)
         json_object_set_new(args, "from", json_string(nc->from));
@@ -1909,15 +1891,16 @@ static int notify(void *ac,
     if (nc->priority)
         json_object_set_new(args, "importance", json_string(nc->priority));
 
-    _strlist(args, "options", nc->options);
-
     if (nc->message)
         json_object_set_new(args, "message", json_string(nc->message));
 
-    if (nc->method)
-        json_object_set_new(args, "method", json_string(nc->method));
+    json_t *method = json_array();
 
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    if (nc->method)
+      json_array_append_new(method, json_string(nc->method));
+
+    json_array_append_new(m->actions,
+                          json_pack("[s o o]", "notify", args, method));
 
     return SIEVE_OK;
 }
@@ -1932,7 +1915,6 @@ static int snooze(void *ac,
     message_data_t *m = (message_data_t *) mc;
     int i;
 
-    const char *action = "snooze";
     json_t *args = json_object();
 
     if (sn->awaken_spluse)
@@ -1974,9 +1956,9 @@ static int snooze(void *ac,
                    t / 3600, (t % 3600) / 60, t % 60);
         json_array_append_new(jtimes, json_string(buf_cstring(sd->buf)));
     }
-    json_object_set_new(args, "times", jtimes);
 
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    json_array_append_new(m->actions,
+                          json_pack("[s o [o]]", "snooze", args, jtimes));
 
     return SIEVE_OK;
 }
@@ -1986,10 +1968,7 @@ static void sieve_log(void *sc __attribute__((unused)),
 {
     message_data_t *m = (message_data_t *) mc;
 
-    const char *action = "log";
-    json_t *args = json_pack("{s:s}", "text", text);
-
-    json_array_append_new(m->actions, json_pack("[s o]", action, args));
+    json_array_append_new(m->actions, json_pack("[s {} [s]]", "log", text));
 }
 
 static int getinclude(void *sc __attribute__((unused)),
