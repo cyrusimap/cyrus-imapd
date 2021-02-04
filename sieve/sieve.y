@@ -332,20 +332,20 @@ extern void sieverestart(FILE *f);
 /* fcc - RFC 8580 */
 %token FCC
 
-/* draft-gondwana-sieve-mailboxid */
+/* mailboxid - draft-ietf-extra-sieve-mailboxid */
 %token MAILBOXID MAILBOXIDEXISTS
+
+/* snooze - draft-ietf-extra-sieve-snooze */
+%token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS WEEKDAYS TZID
+%type <nval> weekdaylist weekdays weekday time
+%type <nl> timelist times time1
+%type <cl> sntags
 
 /* vnd.cyrus.log */
 %token LOG
 
 /* vnd.cyrus.jmapquery */
 %token JMAPQUERY
-
-/* vnd.cyrus.snooze */
-%token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS WEEKDAYS TZID
-%type <nval> weekdaylist weekdays weekday time
-%type <nl> timelist times time1
-%type <cl> sntags
 
 
 %%
@@ -626,13 +626,21 @@ specialuse: SPECIALUSE string    {
                                                       SIEVE_MISSING_REQUIRE,
                                                       "special-use");
                                      }
+                                     else if (*mailboxid != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":specialuse",
+                                                      ":mailboxid");
+                                         free(*mailboxid);
+                                     }
 
                                      *specialuse = $2;
                                  }
         ;
 
+/* :mailboxid */
 mailboxid: MAILBOXID string      {
-                                     /* **mailboxid assigned by the calling rule */
+                                     /* **mailboxid assigned by calling rule */
                                      if (*mailboxid != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -643,6 +651,13 @@ mailboxid: MAILBOXID string      {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "mailboxid");
+                                     }
+                                     else if (*specialuse != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":mailboxid",
+                                                      ":specialuse");
+                                         free(*mailboxid);
                                      }
 
                                      *mailboxid = $2;
