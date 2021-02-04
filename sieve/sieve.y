@@ -458,8 +458,8 @@ itags: /* empty */               { $$ = new_command(B_INCLUDE, sscript); }
         | itags location         {
                                      if ($$->u.inc.location != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      "location");
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":personal", ":location");
                                      }
 
                                      $$->u.inc.location = $2;
@@ -705,9 +705,17 @@ delbytags: BYTIMEREL NUMBER      {
                                      commandlist_t *c = $<cl>0;
 
                                      if (c->u.r.bytime != NULL) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":bytime*");
+                                         if (isdigit(c->u.r.bytime[0])) {
+                                             sieveerror_c(sscript,
+                                                          SIEVE_CONFLICTING_TAGS,
+                                                          ":bytimerelative",
+                                                          ":bytimeabsolute");
+                                         }
+                                         else {
+                                             sieveerror_c(sscript,
+                                                          SIEVE_DUPLICATE_TAG,
+                                                          ":bytimerelative");
+                                         }
                                      }                                         
 
                                      struct buf buf = BUF_INITIALIZER;
@@ -719,10 +727,17 @@ delbytags: BYTIMEREL NUMBER      {
                                      commandlist_t *c = $<cl>0;
 
                                      if (c->u.r.bytime != NULL) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":bytimerelative"
-                                                      " OR :bytimeabsolute");
+                                         if (isdigit(c->u.r.bytime[0])) {
+                                             sieveerror_c(sscript,
+                                                          SIEVE_DUPLICATE_TAG,
+                                                          ":bytimeabsolute");
+                                         }
+                                         else {
+                                             sieveerror_c(sscript,
+                                                          SIEVE_CONFLICTING_TAGS,
+                                                          ":bytimeabsolute",
+                                                          ":bytimerelative");
+                                         }
                                      }
 
                                      c->u.r.bytime = $2;
@@ -787,7 +802,7 @@ stags: /* empty */               { $$ = new_command(B_SET, sscript); }
         | stags mod40            {
                                      if ($$->u.s.modifiers & BFV_MOD40_MASK) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "precedence 40 modifier");
                                      }
 
@@ -796,7 +811,7 @@ stags: /* empty */               { $$ = new_command(B_SET, sscript); }
         | stags mod30            {
                                      if ($$->u.s.modifiers & BFV_MOD30_MASK) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "precedence 30 modifier");
                                      }
 
@@ -805,7 +820,7 @@ stags: /* empty */               { $$ = new_command(B_SET, sscript); }
         | stags mod20            {
                                      if ($$->u.s.modifiers & BFV_MOD20_MASK) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "precedence 20 modifier");
                                      }
 
@@ -814,7 +829,7 @@ stags: /* empty */               { $$ = new_command(B_SET, sscript); }
         | stags mod15            {
                                      if ($$->u.s.modifiers & BFV_MOD15_MASK) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "precedence 15 modifier");
                                      }
 
@@ -823,7 +838,7 @@ stags: /* empty */               { $$ = new_command(B_SET, sscript); }
         | stags mod10            {
                                      if ($$->u.s.modifiers & BFV_MOD10_MASK) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "precedence 10 modifier");
                                      }
 
@@ -1108,7 +1123,7 @@ ntags: /* empty */               {
         | ntags priority         {
                                      if ($$->u.n.priority != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "priority");
                                      }
 
@@ -1156,7 +1171,7 @@ dtags: /* empty */               {
         | dtags priority         {
                                      if ($$->u.d.priority != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "priority");
                                      }
 
@@ -1451,7 +1466,7 @@ matchtype: matchtag              {
                                      /* *ctags assigned by the calling rule */
                                      if (ctags->match != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "match-type");
                                      }
 
@@ -1468,7 +1483,7 @@ matchtype: matchtag              {
                                      }
                                      if (ctags->match != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "match-type");
                                      }
 
@@ -1521,7 +1536,7 @@ listmatch: LIST                  {
                                      }
                                      if (ctags->match != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "match-type");
                                      }
 
@@ -1626,7 +1641,7 @@ addrpart: addrparttag           {
 
                                      if (test->u.ae.addrpart != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "address-part");
                                      }
 
@@ -1684,7 +1699,7 @@ btags: /* empty */               {
         | btags transform        {
                                      if ($$->u.b.transform != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "transform");
                                      }
 
@@ -1695,7 +1710,7 @@ btags: /* empty */               {
                                  {
                                      if ($$->u.b.transform != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "transform");
                                          strarray_free($$->u.b.content_types);
                                      }
@@ -1812,9 +1827,8 @@ duptags: /* empty */             { $$ = new_test(BC_DUPLICATE, sscript); }
         | duptags idtype string  {
                                      if ($$->u.dup.idtype != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      $2 == HEADER ?
-                                                      ":header" : ":uniqueid");
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":header", ":uniqueid");
                                          free($$->u.dup.idval);
                                      }
 
