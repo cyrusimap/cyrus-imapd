@@ -870,6 +870,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     A JSON Meta Application Protocol (JMAP) Subprotocol for WebSocket
 
+:rfc:`8970`
+
+    IMAP4 Extension: Message Preview Generation
+
 IETF RFC Drafts
 ===============
 
