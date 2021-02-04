@@ -78,7 +78,13 @@ ec SIEVE_UNEXPECTED_TAG,
    "unexpected %s tag"
 
 ec SIEVE_DUPLICATE_TAG,
-   "duplicate/conflicting %s tag"
+   "duplicate %s tag"
+
+ec SIEVE_MULTIPLE_TAGS,
+   "multiple %s tags"
+
+ec SIEVE_CONFLICTING_TAGS,
+   "tag %s MUST NOT be used with tag %s"
 
 ec SIEVE_DUPLICATE_ARG,
    "duplicate %s argument"
