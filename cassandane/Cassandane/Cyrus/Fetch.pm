@@ -925,7 +925,7 @@ sub test_mailboxids_noconversations
 }
 
 sub test_preview_args
-    :min_version_3_1 :Conversations
+    :min_version_3_4 :Conversations
 {
     my ($self) = @_;
 
@@ -937,25 +937,25 @@ sub test_preview_args
 
     my $res;
 
-    # expect no name to be accepted
+    # expect no modifier to be accepted
     $res = $imaptalk->fetch('1', '(PREVIEW)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    # expect no name to be accepted
+    # expect empty modifier list to be rejected
     $res = $imaptalk->fetch('1', '(PREVIEW ())');
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-
-    # expect bad name to be rejected
-    $res = $imaptalk->fetch('1', '(PREVIEW (FUZZY=BUZZY))');
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
 
-    # expect fuzzy name to be accepted
-    $res = $imaptalk->fetch('1', '(PREVIEW (FUZZY))');
+    # expect bad modifier name to be rejected
+    $res = $imaptalk->fetch('1', '(PREVIEW (FOO))');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    # expect lazy modifier to be accepted
+    $res = $imaptalk->fetch('1', '(PREVIEW (LAZY))');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    # expect lazy fuzzy name to be accepted
-    $res = $imaptalk->fetch('1', '(PREVIEW (LAZY=FUZZY))');
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    # expect lazy + bad modifier to be rejected
+    $res = $imaptalk->fetch('1', '(PREVIEW (LAZY FOO))');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
 }
 
 1;
