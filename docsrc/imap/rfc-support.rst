@@ -877,6 +877,14 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 IETF RFC Drafts
 ===============
 
+draft-ietf-extra-sieve-mailboxid
+
+    Sieve Email Filtering: delivery by mailboxid
+
+draft-ietf-extra-sieve-snooze
+
+    Sieve Email Filtering: Snooze Extension
+
 draft-ietf-jmap-calendars
 
     JMAP for Calendars
@@ -906,10 +914,6 @@ draft-york-vpoll
 draft-desruisseaux-ischedule
 
     Internet Calendar Scheduling Protocol (iSchedule)
-
-draft-gondwana-sieve-mailboxid
-
-    Sieve Email Filtering: delivery by mailboxid
 
 draft-thomson-hybi-http-timeout
 
