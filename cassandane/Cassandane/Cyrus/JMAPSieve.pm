@@ -780,7 +780,7 @@ sub test_sieve_test
     my $script = <<EOF;
 require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use"];
 if header "subject" "Memo" {
-  fileinto :copy :flags ["\\flagged", "\\answered"] :specialuse "\\flagged" :mailboxid "123" :create "INBOX.foo";
+  fileinto :copy :flags ["\\flagged", "\\answered"] :specialuse "\\flagged" :create "INBOX.foo";
   setflag "\\seen\";
 }
 EOF
@@ -881,7 +881,7 @@ EOF
 require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vacation"];
 if header :contains "subject" "test" {
   setflag "\\Seen\";
-  fileinto :copy :flags ["\\Flagged", "\\Answered"] :specialuse "\\Flagged" :mailboxid "M123" :create "INBOX.foo";
+  fileinto :copy :flags ["\\Flagged", "\\Answered"] :specialuse "\\Flagged" :create "INBOX.foo";
 }
 else {
   vacation "Gone fishin'";
@@ -970,7 +970,7 @@ EOF
 require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vacation"];
 if header :contains "subject" "test" {
   setflag "\\Seen\";
-  fileinto :copy :flags ["\\Flagged", "\\Answered"] :specialuse "\\Flagged" :mailboxid "M123" :create "INBOX.foo";
+  fileinto :copy :flags ["\\Flagged", "\\Answered"] :specialuse "\\Flagged" :create "INBOX.foo";
 }
 else {
   vacation "Gone fishin'";
