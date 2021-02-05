@@ -631,7 +631,6 @@ specialuse: SPECIALUSE string    {
                                                       SIEVE_CONFLICTING_TAGS,
                                                       ":specialuse",
                                                       ":mailboxid");
-                                         free(*mailboxid);
                                      }
 
                                      *specialuse = $2;
@@ -657,7 +656,6 @@ mailboxid: MAILBOXID string      {
                                                       SIEVE_CONFLICTING_TAGS,
                                                       ":mailboxid",
                                                       ":specialuse");
-                                         free(*mailboxid);
                                      }
 
                                      *mailboxid = $2;
