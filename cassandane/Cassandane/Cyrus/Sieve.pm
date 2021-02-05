@@ -2937,7 +2937,7 @@ sub test_snooze_specialuse_create
     xlog $self, "Install script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["snooze", "imap4flags", "special-use", "mailbox", "mailboxid"];
-snooze :mailboxid "foobar" :specialuse "\\\\Important" :mailbox "$awakened" :create :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr";
+snooze:specialuse "\\\\Important" :mailbox "$awakened" :create :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr";
 EOF
     );
 
