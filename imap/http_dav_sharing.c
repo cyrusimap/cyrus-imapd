@@ -910,8 +910,8 @@ HIDDEN int notify_post(struct transaction_t *txn)
     /* Set invite status */
     r = mailbox_open_iwl(mboxname, &shared);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for share reply",
-               mboxname);
+        xsyslog(LOG_ERR, "IOERROR: failed to open mailbox for share reply",
+                         "mailbox=<%s>", mboxname);
     }
     else {
         annotate_state_t *astate = NULL;
