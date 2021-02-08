@@ -62,6 +62,7 @@
 #include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
+#include <getopt.h>
 
 #include "annotate.h"
 #include "assert.h"
@@ -120,43 +121,45 @@ __attribute__((noreturn)) static int usage(const char *name)
             "usage: %s [mode] [options] [source]\n"
             "\n"
             "Mode flags: \n"
-            "  none        index [source] (default)\n"
-            "  -a          index [source] using /squat annotations\n"
-            "  -r          index [source] recursively\n"
-            "  -f file     index from synclog file\n"
-            "  -R          start rolling indexer\n"
-            "  -z tier     compact to tier\n"
-            "  -l          list paths\n"
+            "  none                         index [source] (default)\n"
+            "  -a, --squat-annot            index [source] using /squat annotations\n"
+            "  -r, --recursive              index [source] recursively\n"
+            "  -f, --synclog=FILE           index from synclog file\n"
+            "  -R, --rolling                start rolling indexer\n"
+            "  -z, --compact=TIER           compact to TIER\n"
+            "  -l, --list                   list paths\n"
+            "  -A, --audit                  report unindexed messages\n"
             "\n"
             "Index mode options:\n"
-            "  -i          index incrementally\n"
-            "  -p          allow partially indexed messages\n"
-            "  -P          reindex partially indexed messages (implies -Z)\n"
-            "  -L level    reindex messages where indexlevel < level (implies -Z)\n"
-            "  -N name     index mailbox names starting with name\n"
-            "  -S seconds  sleep seconds between indexing mailboxes\n"
-            "  -Z          Xapian: use internal index rather than cyrus.indexed.db\n"
+            "  -i, --incremental            index incrementally\n"
+            "  -p, --allow-partials         allow partially indexed messages\n"
+            "  -P, --reindex-partials       reindex partially indexed messages (implies -Z)\n"
+            "  -L, --reindex-minlevel=LEVEL reindex messages where indexlevel < LEVEL (implies -Z)\n"
+            "  -N, --name=NAME              index mailbox names starting with NAME\n"
+            "  -S, --sleep=SECONDS          sleep SECONDS between indexing mailboxes\n"
+            "  -Z, --internalindex          Xapian: use internal index rather than cyrus.indexed.db\n"
             "\n"
             "Index sources:\n"
-            "  none        all mailboxes (default)\n"
-            "  mailbox...  index mailboxes\n"
-            "  -u user...  index mailboxes of users\n"
+            "  none                         all mailboxes (default)\n"
+            "  mailbox...                   index mailboxes\n"
+            "  -u, --user=USER...           index mailboxes of USER\n"
             "\n"
             "Rolling indexer options:\n"
-            "  -n channel  listen to channel\n"
-            "  -d          don't background process\n"
+            "  -n, --channel=CHANNEL        listen to CHANNEL\n"
+            "  -d, --nodaemon               don't background process\n"
             "\n"
             "Compact mode options:\n"
-            "  -t tier...  compact from tiers\n"
-            "  -F          filter during compaction\n"
-            "  -T dir      use temporary directory dir during compaction\n"
-            "  -X          reindex during compaction\n"
-            "  -o          copy db rather compacting\n"
-            "  -U          only compact if re-indexing\n"
+            "  -t, --srctier=TIER,...       compact from TIER\n"
+            "  -F, --filter                 filter during compaction\n"
+            "  -T, --reindex-tier=TIER,...  reindex TIER\n"
+            "  -X, --reindex                reindex during compaction\n"
+            "  -o, --copydb                 copy db rather compacting\n"
+            "  -U, --only-upgrade           only compact if re-indexing\n"
+            " --B, --skip-locked            skip users that are locked by another process\n"
             "\n"
             "General options:\n"
-            "  -v          be verbose\n"
-            "  -h          show usage\n",
+            "  -v, --verbose                be verbose\n"
+            "  -h, --help                   show usage\n",
         name);
 
     exit(EX_USAGE);
@@ -905,7 +908,64 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:N:RUBXZDT:S:Fde:f:mn:riavpPL:Az:t:ouhl")) != EOF) {
+    /* Keep these in alphabetic order */
+    static const char *short_options = "ABC:DFL:N:PRS:T:UXZade:f:hilmn:oprt:uvz:";
+
+    /* Keep these ordered by mode */
+    static struct option long_options[] = {
+        /* audit-mode flags */
+        {"audit",  no_argument, 0, 'A' },
+
+        /* compact-mode flags */
+        {"copydb", no_argument, 0, 'o' },
+        {"filter", no_argument, 0, 'F' },
+        {"skip-locked", no_argument, 0, 'B' },
+        {"only-upgrade", no_argument, 0, 'U' },
+        {"reindex-tier", required_argument, 0, 'T' },
+        {"srctier", required_argument, 0, 't' },
+        {"compact", required_argument, 0, 'z' },
+
+        /* index-mode flags */
+        {"index-duplicates", no_argument, 0, 'D' },
+        {"incremental", no_argument, 0, 'i' },
+        {"allow-partials", no_argument, 0, 'p' },
+        {"name", required_argument, 0, 'N' },
+        {"internalindex", no_argument, 0, 'Z' },
+        {"user", no_argument, 0, 'u' },
+        {"reindex", no_argument, 0, 'X' },
+        {"reindex-minlevel", required_argument, 0, 'L' },
+        {"reindex-partials", no_argument, 0, 'P' },
+
+        /* list-mode flags */
+        {"list", no_argument, 0, 'l' },
+
+        /* rolling mode */
+        {"rolling", no_argument, 0, 'R' },
+        {"channel", required_argument, 0, 'n' },
+        {"nodaemon", no_argument, 0, 'd' },
+
+        /* search-mode flags */
+        {"search-multifolder", no_argument, 0, 'm' },
+        {"search-term", required_argument, 0, 'e' },
+
+        /* squat flags */
+        {"squat-annot", no_argument, 0, 'a' },
+
+        /* synclog-mode flags */
+        {"synclog", required_argument, 0, 'f' },
+
+        {"recursive", no_argument, 0, 'r' },
+        {"sleep", required_argument, 0, 'S' },
+
+        /* misc */
+        {"help", no_argument, 0, 'h' },
+        {"verbose", no_argument, 0, 'v' },
+        // no long form for 'C' option
+
+        {0, 0, 0, 0 }
+    };
+
+    while ((opt = getopt_long(argc, argv, short_options, long_options, NULL)) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
