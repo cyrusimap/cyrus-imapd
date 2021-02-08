@@ -502,6 +502,38 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
     return res;
 }
 
+HIDDEN int jmap_getblob(jmap_req_t *req, const char *from_accountid,
+                        const char *blobid, const char *accept_mime,
+                        struct buf *blob, const char **content_type,
+                        const char **errstr)
+{
+    int res = 0;
+
+    /* Call getblob handlers */
+    int i;
+    for (i = 0; i < ptrarray_size(&my_jmap_settings.getblob_handlers); i++) {
+        jmap_getblob_handler *h =
+            ptrarray_nth(&my_jmap_settings.getblob_handlers, i);
+
+        buf_reset(blob);
+        res = h(req, from_accountid,
+                blobid, accept_mime, blob, content_type, errstr);
+        if (res) break;
+    }
+
+    if (!res) {
+        /* Try default getblob handler */
+        buf_reset(blob);
+        res = jmap_getblob_default_handler(req, from_accountid,
+                                           blobid, accept_mime,
+                                           blob, content_type, errstr);
+    }
+
+    if (res == HTTP_OK) return 0;
+
+    return res;
+}
+
 /* Handle a GET on the download endpoint */
 static int jmap_download(struct transaction_t *txn)
 {
@@ -570,23 +602,8 @@ static int jmap_download(struct transaction_t *txn)
     /* Call blob download handlers */
     const char *content_type = "application/octet-stream";
     const char *errstr = NULL;
-    int i;
-    for (i = 0; i < ptrarray_size(&my_jmap_settings.getblob_handlers); i++) {
-        jmap_getblob_handler *h = ptrarray_nth(&my_jmap_settings.getblob_handlers, i);
-
-        buf_reset(&blob);
-        res = h(&req, accountid, blobid, accept_mime, &blob, &content_type, &errstr);
-        if (res) break;
-    }
-    if (!res) {
-        /* Try default getblob handler */
-        buf_reset(&blob);
-        res = jmap_getblob_default_handler(&req, accountid,
-                                           blobid, accept_mime,
-                                           &blob, &content_type, &errstr);
-    }
-    if (res == HTTP_OK) res = 0;
-
+    res = jmap_getblob(&req, accountid,
+                       blobid, accept_mime, &blob, &content_type, &errstr);
     if (res) {
         txn->error.desc = errstr ? errstr : error_message(res);
     }
