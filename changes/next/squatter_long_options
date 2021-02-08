@@ -1,0 +1,13 @@
+Description:
+
+Adds support to long-style command-line arguments to squatter.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Installations may want to update their external scripts to call squatter with long options. This is not required, as all existing short options are still supported. Any future squatter features may be only be enabled by use of long options.

@@ -551,7 +551,6 @@ AM_CONDITIONAL([WITH_CARINGO], [test "x$with_caringo" != xno])
 AM_CONDITIONAL([WITH_OPENIO], [test "x$use_openio" != xno])
 AM_CONDITIONAL([WITH_OBJSTR_DUMMY], [test "x$with_objectstore_dummy" != xno])
 
-
 dnl
 dnl Search engines - SQUAT
 dnl
@@ -655,7 +654,12 @@ fi
 AM_CONDITIONAL([USE_XAPIAN], [test "${enable_xapian}" != "no"])
 AC_DEFINE_UNQUOTED([XAPIAN_CJK_TOKENS], ["$xapian_cjk_tokens"], [Which Xapian CJK tokenzation are we using?])
 
-
+dnl
+dnl Search - Squatter
+dnl
+if test "${enable_squat}" != "no" -o "${enable_xapian}" != "no"; then
+    AC_CHECK_FUNC(getopt_long, [], [AC_MSG_ERROR([squatter executable requires getopt_long])])
+fi
 AM_CONDITIONAL([SQUATTER],
     [test "${enable_squat}" != "no" -o "${enable_xapian}" != "no" ])
 
