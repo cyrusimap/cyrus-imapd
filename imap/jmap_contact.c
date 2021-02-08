@@ -3491,10 +3491,6 @@ static int _blob_to_card(struct jmap_req *req,
                          struct vparse_card *card, const char *key, json_t *file)
 {
     struct buf blob_buf = BUF_INITIALIZER;
-    msgrecord_t *mr = NULL;
-    struct mailbox *mbox = NULL;
-    struct body *body = NULL;
-    const struct body *part = NULL;
     const char *blobid = NULL;
     const char *accountid = NULL;
     char *encbuf = NULL;
@@ -3511,25 +3507,16 @@ static int _blob_to_card(struct jmap_req *req,
     if (val) blobid = jmap_id_string_value(req, val);
     if (!blobid) goto done;
 
-    /* Find body part containing blob */
     accountid = json_string_value(json_object_get(file, "accountId"));
-    r = jmap_findblob(req, accountid, blobid,
-                      &mbox, &mr, &body, &part, &blob_buf);
+
+    /* Find blob */
+    const char *content_type = NULL, *errstr = NULL;
+    r = jmap_getblob(req, accountid, blobid, NULL/*accept_mime*/,
+                     &blob_buf, &content_type, &errstr);
     if (r) goto done;
 
-    /* Fetch blob contents and decode */
     base = buf_base(&blob_buf);
     len = buf_len(&blob_buf);
-
-    if (part) {
-        /* Map into body part */
-        base += part->content_offset;
-        len = part->content_size;
-
-        /* Determine encoding */
-        int encoding = part->charset_enc & 0xff;
-        base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
-    }
 
     /* Pre-flight base64 encoder to determine length */
     size_t len64 = 0;
@@ -3565,12 +3552,6 @@ static int _blob_to_card(struct jmap_req *req,
   done:
     free(decbuf);
     free(encbuf);
-    if (body) {
-        message_free_body(body);
-        free(body);
-    }
-    msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
     buf_free(&blob_buf);
 
     return r;
