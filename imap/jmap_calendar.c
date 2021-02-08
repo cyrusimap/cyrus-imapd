@@ -86,8 +86,13 @@ static int jmap_calendarevent_query(struct jmap_req *req);
 static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 
-static int jmap_calendarevent_getblob(jmap_req_t *req, const char *blobid,
-                                      const char *accept);
+static int jmap_calendarevent_getblob(jmap_req_t *req,
+                                      const char *from_accountid,
+                                      const char *blobid,
+                                      const char *accept_mime,
+                                      struct buf *blob,
+                                      const char **content_type,
+                                      const char **errstr);
 
 #define JMAPCACHE_CALVERSION 19
 
@@ -1552,7 +1557,7 @@ done:
 
 
 struct calendarevent_getblob_rock {
-    jmap_req_t *req;
+    const char *boundary;
     struct buf *buf;
 };
 
@@ -1567,7 +1572,6 @@ static int _calendarevent_getblob_cb(const char *mailbox __attribute__((unused))
     if (!buf_len(value)) return 0;
 
     struct calendarevent_getblob_rock *rock = vrock;
-    jmap_req_t *req = rock->req;
     struct buf *buf = rock->buf;
 
     /* Parse the value and fetch the patch */
@@ -1575,34 +1579,37 @@ static int _calendarevent_getblob_cb(const char *mailbox __attribute__((unused))
     const char *vpatchstr = NULL;
     dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
     dlist_getatom(dl, "VPATCH", &vpatchstr);
-    if (vpatchstr) buf_setcstr(buf, vpatchstr);
+    if (vpatchstr) {
+        /* Write VPATCH blob */
+        buf_printf(buf, "\r\n--%s\r\n", rock->boundary);
+        buf_appendcstr(buf, "Content-Type: text/calendar; component=VPATCH\r\n");
+        buf_printf(buf, "Content-Length: %zu\r\n", strlen(vpatchstr));
+        if (userid) buf_printf(buf, "X-UserId: %s\r\n", userid);
+        buf_appendcstr(buf, "\r\n");
+        buf_appendcstr(buf, vpatchstr);
+    }
+
     dlist_free(&dl);
-    if (!buf_len(buf)) return 0;
-
-    /* Write VPATCH blob */
-    char *part_headers = NULL;
-    if (userid) part_headers = strconcat("X-UserId: ", userid, "\r\n", NULL);
-    req->txn->resp_body.type = "text/calendar; component=VPATCH";
-    req->txn->resp_body.len = buf_len(buf);
-    write_multipart_body(0, req->txn, buf_base(buf), buf_len(buf), part_headers);
-    free(part_headers);
-
     return 0;
 }
 
 static int jmap_calendarevent_getblob(jmap_req_t *req,
+                                      const char *from_accountid,
                                       const char *blobid,
-                                      const char *accept_mime)
+                                      const char *accept_mime,
+                                      struct buf *blob,
+                                      const char **content_type,
+                                      const char **errstr)
 {
     struct caldav_db *db = NULL;
     struct caldav_data *cdata = NULL;
     struct mailbox *mailbox = NULL;
     icalcomponent *ical = NULL;
+    static struct buf cbuf = BUF_INITIALIZER;
     char *uid = NULL;
     char *userid = NULL;
     modseq_t modseq;
-    struct buf buf = BUF_INITIALIZER;
-    int res = 0;
+    int res = HTTP_OK;
     int r;
 
     if (*blobid != 'I') return 0;
@@ -1619,9 +1626,9 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
     }
 
     /* Lookup uid in CaldavDB */
-    db = caldav_open_userid(req->accountid);
+    db = caldav_open_userid(from_accountid ? from_accountid : req->accountid);
     if (!db) {
-        req->txn->error.desc = "no calendar db";
+        *errstr = "no calendar db";
         res = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -1642,7 +1649,7 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
 
     /* Open mailbox, we need it now */
     if ((r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 0))) {
-        req->txn->error.desc = error_message(r);
+        *errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -1675,77 +1682,66 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
         }
     }
     if (!ical) {
-        req->txn->error.desc = "failed to load record";
+        *errstr = "failed to load record";
         res = HTTP_SERVER_ERROR;
         goto done;
     }
 
-    /* Write blob to socket */
     if (userid) {
         /* Set Content headers */
-        if (accept_mime) {
-            if (strcmp(accept_mime, "application/octet-stream") &&
-                strcmp(accept_mime, "text/calendar")) {
-                res = HTTP_NOT_ACCEPTABLE;
-                goto done;
-            }
-        }
-        char *content_type = NULL;
-        if (!accept_mime || !strcmp(accept_mime, "text/calendar")) {
+        if (!accept_mime) {
             const char *comp_type = caldav_comp_type_as_string(cdata->comp_type);
-            if (comp_type) {
-                content_type = strconcat("text/calendar; component=", comp_type, NULL);
-                req->txn->resp_body.type = content_type;
-            }
-        }
-        if (!req->txn->resp_body.type) {
-            req->txn->resp_body.type = accept_mime;
+
+            buf_setcstr(&cbuf, "text/calendar");
+            if (comp_type) buf_printf(&cbuf, "; component=%s", comp_type);
+            *content_type = buf_cstring(&cbuf);
         }
 
         /* Write body */
-        buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
-        req->txn->resp_body.len = buf_len(&buf);
-        write_body(HTTP_OK, req->txn, buf_base(&buf), buf_len(&buf));
-        free(content_type);
-        res = HTTP_OK;
+        buf_setcstr(blob, icalcomponent_as_ical_string(ical));
     }
     else {
-        /* Iniitialize multipart body */
-        if (accept_mime && strcmp(accept_mime, "multipart/mixed")) {
-            res = HTTP_NOT_ACCEPTABLE;
-            goto done;
-        }
-        req->txn->resp_body.type = "multipart/mixed";
-        write_multipart_body(HTTP_OK, req->txn, NULL, 0, NULL);
+        /* Create multipart body */
+        const char *preamble =
+            "This is a message with multiple parts in MIME format.\r\n";
+        const char *epilogue = "\r\nEnd of MIME multipart body.\r\n";
+        char boundary[100];
 
-        /* Set main component Content headers */
-        char *content_type = NULL;
-        const char *comp_type = caldav_comp_type_as_string(cdata->comp_type);
-        if (comp_type) {
-            content_type = strconcat("text/calendar; component=", comp_type, NULL);
-            req->txn->resp_body.type = content_type;
-        }
-        else req->txn->resp_body.type = "text/calendar";
+        snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
+                 *spool_getheader(req->txn->req_hdrs, ":authority"),
+                 (long) getpid(), (long) time(0), (long) rand());
+
+        buf_reset(&cbuf);
+        buf_printf(&cbuf, "multipart/mixed; boundary=\"%s\"", boundary);
+        *content_type = buf_cstring(&cbuf);
+
+        buf_setcstr(blob, preamble);
 
         /* Write main component body */
-        buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
-        req->txn->resp_body.len = buf_len(&buf);
-        write_multipart_body(0, req->txn, buf_base(&buf), buf_len(&buf), NULL);
+        buf_printf(blob, "\r\n--%s\r\n", boundary);
+        buf_appendcstr(blob, "Content-Type: text/calendar");
+        
+        const char *comp_type = caldav_comp_type_as_string(cdata->comp_type);
+        if (comp_type) buf_printf(blob, "; component=%s", comp_type);
+        buf_appendcstr(blob, "\r\n");
+
+        const char *icalstr = icalcomponent_as_ical_string(ical);
+        buf_printf(blob, "Content-Length: %zu\r\n", strlen(icalstr));
+        buf_appendcstr(blob, "\r\n");
+        buf_appendcstr(blob, icalstr);
 
         /* Write userdata parts */
-        struct calendarevent_getblob_rock rock = { req, &buf };
+        struct calendarevent_getblob_rock rock = { boundary, blob };
         annotatemore_findall(cdata->dav.mailbox, cdata->dav.imap_uid,
                              PER_USER_CAL_DATA, 0, _calendarevent_getblob_cb,
                              &rock, 0);
 
-        write_multipart_body(0, req->txn, NULL, 0, NULL);
-
-        free(content_type);
-        res = HTTP_OK;
+        /* Write close-delimiter and epilogue */
+        buf_printf(blob, "\r\n--%s--\r\n%s", boundary, epilogue);
     }
 
 done:
-    if (res != HTTP_OK && !req->txn->error.desc) {
+    if (res != HTTP_OK && !*errstr) {
         const char *desc = NULL;
         switch (res) {
             case HTTP_BAD_REQUEST:
@@ -1757,12 +1753,11 @@ done:
             default:
                 desc = error_message(res);
         }
-        req->txn->error.desc = desc;
+        *errstr = desc;
     }
     if (ical) icalcomponent_free(ical);
     if (mailbox) jmap_closembox(req, &mailbox);
     if (db) caldav_close(db);
-    buf_free(&buf);
     free(userid);
     free(uid);
     return res;

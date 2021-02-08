@@ -111,8 +111,10 @@ static int jmap_searchsnippet_get(jmap_req_t *req);
 static int jmap_thread_get(jmap_req_t *req);
 static int jmap_thread_changes(jmap_req_t *req);
 
-static int jmap_emailheader_getblob(jmap_req_t *req, const char *blobid,
-                                    const char *accept);
+static int jmap_emailheader_getblob(jmap_req_t *req, const char *from_accountid,
+                                    const char *blobid, const char *accept_mime,
+                                    struct buf *blob, const char **content_type,
+                                    const char **errstr);
 
 /*
  * Possibly to be implemented:
@@ -13415,9 +13417,10 @@ done:
     return is_valid;
 }
 
-static int jmap_emailheader_getblob(jmap_req_t *req,
-                                    const char *blobid,
-                                    const char *accept_mime)
+static int jmap_emailheader_getblob(jmap_req_t *req, const char *from_accountid,
+                                    const char *blobid, const char *accept_mime,
+                                    struct buf *blob, const char **content_type,
+                                    const char **errstr)
 {
     struct mailbox *mailbox = NULL;
     char *emailid = NULL;
@@ -13425,8 +13428,7 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
     const char *mimetype = NULL;
     char *mboxname = NULL;
     uid_t uid = 0;
-    struct buf buf = BUF_INITIALIZER;
-    int res = 0;
+    int res = HTTP_OK;
     int r;
 
     if (*blobid != 'H') return 0;
@@ -13437,11 +13439,11 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
     }
 
     /* Lookup emailid */
-    r = jmap_email_find(req, NULL, emailid, &mboxname, &uid);
+    r = jmap_email_find(req, from_accountid, emailid, &mboxname, &uid);
     if (r) {
         if (r == IMAP_NOTFOUND) res = HTTP_NOT_FOUND;
         else {
-            req->txn->error.desc = error_message(r);
+            *errstr = error_message(r);
             res = HTTP_SERVER_ERROR;
         }
         goto done;
@@ -13459,14 +13461,13 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
             goto done;
         }
 
-        req->txn->resp_body.type = accept_mime;
+        *content_type = accept_mime;
     }
-    else if (mimetype) req->txn->resp_body.type = mimetype;
-    else req->txn->resp_body.type = "application/octet-stream";
+    else if (mimetype) *content_type = mimetype;
 
     /* Open mailbox, we need it now */
     if ((r = jmap_openmbox(req, mboxname, &mailbox, 0))) {
-        req->txn->error.desc = error_message(r);
+        *errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -13474,15 +13475,15 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
     /* Load the message */
     msgrecord_t *mr = msgrecord_from_uid(mailbox, uid);
     if (!mr) {
-        req->txn->error.desc = "failed to load message";
+        *errstr = "failed to load message";
         res = HTTP_SERVER_ERROR;
         goto done;
     }
 
     message_t *msg;
     r = msgrecord_get_message(mr, &msg);
-    if (!r) r = message_get_field(msg, hdrname, MESSAGE_RAW, &buf);
-    if (!r && buf_len(&buf)) {
+    if (!r) r = message_get_field(msg, hdrname, MESSAGE_RAW, blob);
+    if (!r && buf_len(blob)) {
         static int initialized_re = 0;
         static regex_t whitespace_re;
         unsigned outlen;
@@ -13494,16 +13495,16 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
         }
 
         /* eliminate whitespace */
-        buf_replace_all_re(&buf, &whitespace_re, "");
+        buf_replace_all_re(blob, &whitespace_re, "");
 
         /* base64-decode the data */
-        r = sasl_decode64(buf_base(&buf), buf_len(&buf),
-                          (char *) buf_base(&buf), buf_len(&buf), &outlen);
+        r = sasl_decode64(buf_base(blob), buf_len(blob),
+                          (char *) buf_base(blob), buf_len(blob), &outlen);
         if (r == SASL_OK) {
-            buf_truncate(&buf, outlen);
+            buf_truncate(blob, outlen);
         }
         else {
-            req->txn->error.desc = "failed to decode blob";
+            *errstr = "failed to decode blob";
             res = HTTP_SERVER_ERROR;
         }
     }
@@ -13512,15 +13513,8 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
     }
     msgrecord_unref(&mr);
 
-    if (res) goto done;
-
-    /* Write body */
-    req->txn->resp_body.len = buf_len(&buf);
-    write_body(HTTP_OK, req->txn, buf_base(&buf), buf_len(&buf));
-    res = HTTP_OK;
-
 done:
-    if (res != HTTP_OK && !req->txn->error.desc) {
+    if (res != HTTP_OK && !*errstr) {
         const char *desc = NULL;
         switch (res) {
             case HTTP_BAD_REQUEST:
@@ -13532,10 +13526,9 @@ done:
             default:
                 desc = error_message(res);
         }
-        req->txn->error.desc = desc;
+        *errstr = desc;
     }
     if (mailbox) jmap_closembox(req, &mailbox);
-    buf_free(&buf);
     free(emailid);
     free(mboxname);
     return res;

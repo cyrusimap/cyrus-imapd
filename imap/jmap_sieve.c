@@ -85,8 +85,10 @@ static int jmap_sieve_query(jmap_req_t *req);
 static int jmap_sieve_validate(jmap_req_t *req);
 static int jmap_sieve_test(jmap_req_t *req);
 
-static int jmap_sieve_getblob(jmap_req_t *req,
-                              const char *blobid, const char *accept);
+static int jmap_sieve_getblob(jmap_req_t *req, const char *from_accountid,
+                              const char *blobid, const char *accept_mime,
+                              struct buf *blob, const char **content_type,
+                              const char **errstr);
 
 static int maxscripts = 0;
 static json_int_t maxscriptsize = 0;
@@ -2290,10 +2292,14 @@ done:
     return 0;
 }
 
-static int jmap_sieve_getblob(jmap_req_t *req,
-                              const char *blobid, const char *accept_mime)
+static int jmap_sieve_getblob(jmap_req_t *req, const char *from_accountid,
+                              const char *blobid, const char *accept_mime,
+                              struct buf *blob, const char **content_type,
+                              const char **errstr)
 {
     if (*blobid != 'S') return 0;
+
+    *errstr = NULL;
 
     /* Make sure client can handle blob type. */
     if (accept_mime) {
@@ -2302,12 +2308,13 @@ static int jmap_sieve_getblob(jmap_req_t *req,
             return HTTP_NOT_ACCEPTABLE;
         }
 
-        req->txn->resp_body.type = accept_mime;
+        *content_type = accept_mime;
     }
-    else req->txn->resp_body.type = "application/sieve; charset=utf-8";
+    else *content_type = "application/sieve; charset=utf-8";
 
     /* Lookup scriptid */
-    const char *sievedir = user_sieve_path(req->accountid);
+    const char *sievedir =
+        user_sieve_path(from_accountid ? from_accountid : req->accountid);
     const char *script = script_from_id(sievedir, blobid+1, 0);
     struct buf *content = NULL;
 
@@ -2317,10 +2324,7 @@ static int jmap_sieve_getblob(jmap_req_t *req,
     }
     if (!content) return HTTP_NOT_FOUND;
 
-    /* Write body */
-    req->txn->resp_body.len = buf_len(content);
-    write_body(HTTP_OK, req->txn, buf_base(content), buf_len(content));
-
+    buf_move(blob, content);
     buf_destroy(content);
 
     return HTTP_OK;

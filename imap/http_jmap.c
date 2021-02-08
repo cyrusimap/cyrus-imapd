@@ -437,59 +437,60 @@ static char *parse_accept_header(const char **hdr)
 }
 
 static int jmap_getblob_default_handler(jmap_req_t *req,
+                                        const char *from_accountid,
                                         const char *blobid,
-                                        const char *accept_mime)
+                                        const char *accept_mime,
+                                        struct buf *blob,
+                                        const char **content_type,
+                                        const char **errstr)
 {
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
     struct body *body = NULL;
     const struct body *part = NULL;
-    struct buf msg_buf = BUF_INITIALIZER;
-    char *decbuf = NULL;
-    int res = 0;
-
-    if (*blobid != 'G') {
-        req->txn->error.desc = "invalid blobid (doesn't start with G)";
-        return HTTP_BAD_REQUEST;
-    }
-
-    if (strlen(blobid) != 41) {
-        /* incomplete or incorrect blobid */
-        req->txn->error.desc = "invalid blobid (not 41 chars)";
-        return HTTP_BAD_REQUEST;
-    }
+    int res = HTTP_OK;
 
     /* Find part containing blob */
-    int r = jmap_findblob(req, NULL/*accountid*/, blobid,
-                          &mbox, &mr, &body, &part, &msg_buf);
+    int r = jmap_findblob(req, from_accountid, blobid,
+                          &mbox, &mr, &body, &part, blob);
     if (r) {
         res = HTTP_NOT_FOUND; // XXX errors?
-        req->txn->error.desc = "failed to find blob by id";
+        *errstr = "failed to find blob by id";
         goto done;
     }
 
     // default with no part is the whole message
-    const char *base = msg_buf.s;
-    size_t len = msg_buf.len;
+
+    if (accept_mime) {
+        /* XXX  Can we be smarter here and test against part->[sub]type ? */
+        *content_type = accept_mime;
+    }
 
     if (part) {
         // map into just this part
-        base += part->content_offset;
-        len = part->content_size;
+        const char *base = buf_base(blob) + part->content_offset;
+        size_t len = part->content_size;
+        char *decbuf = NULL;
 
         // binary decode if needed
         int encoding = part->charset_enc & 0xff;
         base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
+
+        if (!base) {
+            res = HTTP_NOT_FOUND; // XXX errors?
+            *errstr = "failed to decode blob";
+            goto done;
+        }
+        else if (decbuf) {
+            buf_initm(blob, decbuf, len);
+        }
+        else {
+            buf_remove(blob, 0, part->content_offset);
+            buf_truncate(blob, part->content_size);
+        }
     }
 
-    // success
-    req->txn->resp_body.type = accept_mime ? accept_mime : "application/octet-stream";
-    req->txn->resp_body.len = len;
-    write_body(HTTP_OK, req->txn, base, len);
-    res = HTTP_OK;
-
  done:
-    free(decbuf);
     if (mbox) jmap_closembox(req, &mbox);
     if (body) {
         message_free_body(body);
@@ -498,7 +499,6 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
     if (mr) {
         msgrecord_unref(&mr);
     }
-    buf_free(&msg_buf);
     return res;
 }
 
@@ -567,35 +567,43 @@ static int jmap_download(struct transaction_t *txn)
         accept_mime = parse_accept_header(hdr);
     }
 
-    /* Set Content-Disposition header */
-    txn->resp_body.dispo.attach = fname != NULL;
-    txn->resp_body.dispo.fname = fname;
-
-    /* Set Cache-Control directives */
-    txn->resp_body.maxage = 604800;  /* 7 days */
-    txn->flags.cc |= CC_MAXAGE | CC_PRIVATE | CC_IMMUTABLE;
-
     /* Call blob download handlers */
+    const char *content_type = "application/octet-stream";
+    const char *errstr = NULL;
     int i;
     for (i = 0; i < ptrarray_size(&my_jmap_settings.getblob_handlers); i++) {
         jmap_getblob_handler *h = ptrarray_nth(&my_jmap_settings.getblob_handlers, i);
-        res = h(&req, blobid, accept_mime);
+
+        buf_reset(&blob);
+        res = h(&req, accountid, blobid, accept_mime, &blob, &content_type, &errstr);
         if (res) break;
     }
     if (!res) {
-        /* Try default blob download handler */
-        res = jmap_getblob_default_handler(&req, blobid, accept_mime);
-        if (!res) res = HTTP_NOT_FOUND;
+        /* Try default getblob handler */
+        buf_reset(&blob);
+        res = jmap_getblob_default_handler(&req, accountid,
+                                           blobid, accept_mime,
+                                           &blob, &content_type, &errstr);
     }
+    if (res == HTTP_OK) res = 0;
 
-    if (res != HTTP_OK) {
-        if (!txn->error.desc) txn->error.desc = error_message(res);
-        txn->resp_body.dispo.attach = 0;
-        txn->resp_body.dispo.fname = NULL;
-        txn->resp_body.maxage = 0;
-        txn->flags.cc = 0;
+    if (res) {
+        txn->error.desc = errstr ? errstr : error_message(res);
     }
-    else if (res == HTTP_OK) res = 0;
+    else {
+        /* Set Content-Disposition header */
+        txn->resp_body.dispo.attach = fname != NULL;
+        txn->resp_body.dispo.fname = fname;
+
+        /* Set Cache-Control directives */
+        txn->resp_body.maxage = 604800;  /* 7 days */
+        txn->flags.cc |= CC_MAXAGE | CC_PRIVATE | CC_IMMUTABLE;
+
+        /* Write body */
+        txn->resp_body.type = content_type;
+        txn->resp_body.len = buf_len(&blob);
+        write_body(HTTP_OK, txn, buf_base(&blob), buf_len(&blob));
+    }
 
     buf_free(&blob);
     free_hash_table(&mbstates, free);

@@ -156,18 +156,21 @@ typedef struct jmap_req {
     const strarray_t *using_capabilities;
 } jmap_req_t;
 
-/* Write the contents of the blob identified by blobid on the
- * HTTP transaction embedded in JMAP request req.
+/* Fetch the contents of the blob identified by blobid,
+ * optionally returning a content type and an error string.
+ *
  * If not NULL, accept_mime defines the requested MIME type,
  * either defined in the Accept header or {type} URI template
  * parameter.
  *
- * Return HTTP_OK if the blob has been written or any other
+ * Return HTTP_OK if the blob has been found or any other
  * HTTP status on error.
- * Return zero if the next blob handler should be called. */
-typedef int jmap_getblob_handler(jmap_req_t *req,
-                                 const char *blobid,
-                                 const char *accept_mime);
+ * Return zero if the next blob handler should be called.
+ */
+typedef int jmap_getblob_handler(jmap_req_t *req, const char *from_accountid,
+                                 const char *blobid, const char *accept_mime,
+                                 struct buf *blob, const char **content_type,
+                                 const char **errstr);
 
 typedef struct {
     hash_table methods;

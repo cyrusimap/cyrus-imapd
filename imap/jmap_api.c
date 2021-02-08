@@ -1291,8 +1291,10 @@ static int _jmap_findblob(jmap_req_t *req, const char *from_accountid,
         }
     }
 
-    if (blobid[0] != 'G')
+    if (blobid[0] != 'G' || strlen(blobid) != 41) {
+        /* incomplete or incorrect blobid */
         return IMAP_NOTFOUND;
+    }
 
     if (strcmp(req->accountid, accountid)) {
         cstate = conversations_get_user(accountid);

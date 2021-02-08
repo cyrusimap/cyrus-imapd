@@ -100,8 +100,10 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
                                        struct mailbox *mailbox,
                                        struct index_record *record);
 
-static int jmap_contact_getblob(jmap_req_t *req, const char *blobid,
-                                const char *accept);
+static int jmap_contact_getblob(jmap_req_t *req, const char *from_accountid,
+                                const char *blobid, const char *accept_mime,
+                                struct buf *blob, const char **content_type,
+                                const char **errstr);
 
 #define JMAPCACHE_CONTACTVERSION 1
 
@@ -1775,18 +1777,19 @@ done:
     return is_valid;
 }
 
-static int jmap_contact_getblob(jmap_req_t *req,
-                                const char *blobid,
-                                const char *accept_mime)
+static int jmap_contact_getblob(jmap_req_t *req, const char *from_accountid,
+                                const char *blobid, const char *accept_mime,
+                                struct buf *blob, const char **content_type,
+                                const char **errstr)
 {
     struct carddav_db *db = NULL;
     struct carddav_data *cdata = NULL;
     struct mailbox *mailbox = NULL;
     struct vparse_card *vcard = NULL;
+    static struct buf cbuf = BUF_INITIALIZER;
     char *uid = NULL;
     modseq_t modseq;
-    struct buf buf = BUF_INITIALIZER;
-    int res = 0;
+    int res = HTTP_OK;
     int r;
 
     if (*blobid != 'V') return 0;
@@ -1797,9 +1800,9 @@ static int jmap_contact_getblob(jmap_req_t *req,
     }
 
     /* Lookup uid in CarddavDB */
-    db = carddav_open_userid(req->accountid);
+    db = carddav_open_userid(from_accountid ? from_accountid : req->accountid);
     if (!db) {
-        req->txn->error.desc = "no addressbook db";
+        *errstr = "no addressbook db";
         res = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -1820,7 +1823,7 @@ static int jmap_contact_getblob(jmap_req_t *req,
 
     /* Open mailbox, we need it now */
     if ((r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 0))) {
-        req->txn->error.desc = error_message(r);
+        *errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -1840,35 +1843,24 @@ static int jmap_contact_getblob(jmap_req_t *req,
         vcard = record_to_vcard(mailbox, &record);
     }
     if (!vcard) {
-        req->txn->error.desc = "failed to load record";
+        *errstr = "failed to load record";
         res = HTTP_SERVER_ERROR;
         goto done;
     }
 
-    /* Write blob to socket */
-    char *content_type = NULL;
-    if (!accept_mime || !strcmp(accept_mime, "text/vcard")) {
+    if (!accept_mime) {
         struct vparse_entry *entry =
             vparse_get_entry(vcard->objects, NULL, "VERSION");
-        if (entry) {
-            content_type =
-                strconcat("text/vcard; version=", entry->v.value, NULL);
-            req->txn->resp_body.type = content_type;
-        }
-    }
-    if (!req->txn->resp_body.type) {
-        req->txn->resp_body.type = accept_mime;
+
+        buf_setcstr(&cbuf, "text/vcard");
+        if (entry) buf_printf(&cbuf, "; version=%s", entry->v.value);
+        *content_type = buf_cstring(&cbuf);
     }
 
-    /* Write body */
-    vparse_tobuf(vcard, &buf);
-    req->txn->resp_body.len = buf_len(&buf);
-    write_body(HTTP_OK, req->txn, buf_base(&buf), buf_len(&buf));
-    free(content_type);
-    res = HTTP_OK;
+    vparse_tobuf(vcard, blob);
 
 done:
-    if (res != HTTP_OK && !req->txn->error.desc) {
+    if (res != HTTP_OK && !*errstr) {
         const char *desc = NULL;
         switch (res) {
             case HTTP_BAD_REQUEST:
@@ -1880,12 +1872,11 @@ done:
             default:
                 desc = error_message(res);
         }
-        req->txn->error.desc = desc;
+        *errstr = desc;
     }
     if (vcard) vparse_free_card(vcard);
     if (mailbox) jmap_closembox(req, &mailbox);
     if (db) carddav_close(db);
-    buf_free(&buf);
     free(uid);
     return res;
 }
