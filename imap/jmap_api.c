@@ -1329,11 +1329,6 @@ static int _jmap_findblob(jmap_req_t *req, const char *from_accountid,
                 break;
             }
             if (!mypart->subpart) {
-                if (data.mbox->mbtype == MBTYPE_ADDRESSBOOK &&
-                    (mypart = jmap_contact_findblob(&content_guid, data.part_id,
-                                                    data.mbox, data.mr, blob))) {
-                    break;
-                }
                 continue;
             }
             ptrarray_push(&parts, mypart->subpart);

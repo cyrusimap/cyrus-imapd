@@ -4050,50 +4050,6 @@ static int jmap_contact_set(struct jmap_req *req)
     return 0;
 }
 
-const struct body *jmap_contact_findblob(struct message_guid *content_guid,
-                                         const char *part_id,
-                                         struct mailbox *mbox,
-                                         msgrecord_t *mr,
-                                         struct buf *blob)
-{
-    const struct body *ret = NULL;
-    struct index_record record;
-    struct vparse_card *vcard;
-    const char *proppath = strstr(part_id, "/VCARD#");
-
-    if (!proppath) return NULL;
-
-    msgrecord_get_index_record(mr, &record);
-    vcard = record_to_vcard(mbox, &record);
-
-    if (vcard) {
-        static struct body subpart;
-        char *type = NULL;
-        struct vparse_entry *entry =
-            vparse_get_entry(vcard->objects, NULL, proppath+7);
-
-        memset(&subpart, 0, sizeof(struct body));
-
-        if (entry &&
-            vcard_prop_decode_value(entry, blob, &type, &subpart.content_guid) &&
-            !message_guid_cmp(content_guid, &subpart.content_guid)) {
-            /* Build a body part for the property */
-            subpart.charset_enc = ENCODING_NONE;
-            subpart.encoding = "BINARY";
-            subpart.header_offset = 0;
-            subpart.header_size = 0;
-            subpart.content_offset = 0;
-            subpart.content_size = buf_len(blob);
-            ret = &subpart;
-        }
-
-        free(type);
-        vparse_free_card(vcard);
-    }
-
-    return ret;
-}
-
 static void _contact_copy(jmap_req_t *req,
                           json_t *jcard,
                           struct carddav_db *src_db,
