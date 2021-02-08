@@ -2727,9 +2727,8 @@ product version in the capabilities
    \fIfileinto\fR action in scripts to use UTF8 encoding.  Otherwise,
    modified UTF7 encoding should be used. */
 
-{ "sieve_sasl_send_unsolicited_capability", 0, SWITCH, "2.3.17" }
-/* If enabled, timsieved will emit a capability response after a successful
-   SASL authentication, per draft-martin-managesieve-12.txt . */
+{ "sieve_sasl_send_unsolicited_capability", 1, SWITCH, "UNRELEASED", "UNRELEASED" }
+/* Deprecated: this option does nothing. */
 
 { "sieve_use_lmtp_reject", 1, SWITCH, "3.1.1" }
 /* Enabled by default.  If reject can be done via LMTP, then return a 550
