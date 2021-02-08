@@ -1984,6 +1984,8 @@ xapian_query_t *xapian_query_new_compound(const xapian_db_t *db __attribute__((u
 xapian_query_t *xapian_query_new_not(const xapian_db_t *db __attribute__((unused)),
                                      xapian_query_t *child)
 {
+    if (!child) return (xapian_query_t*) new Xapian::Query(Xapian::Query::MatchAll);
+
     try {
         Xapian::Query *qq = new Xapian::Query(
                                         Xapian::Query::OP_AND_NOT,
