@@ -1446,11 +1446,14 @@ static int _email_find_in_account(jmap_req_t *req,
 }
 
 HIDDEN int jmap_email_find(jmap_req_t *req,
+                           const char *from_accountid,
                            const char *email_id,
                            char **mboxnameptr,
                            uint32_t *uidptr)
 {
-    return _email_find_in_account(req, req->accountid, email_id, mboxnameptr, uidptr);
+    const char *accountid = from_accountid ?  from_accountid : req->accountid;
+
+    return _email_find_in_account(req, accountid, email_id, mboxnameptr, uidptr);
 }
 
 struct email_getcid_rock {
@@ -5291,7 +5294,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
 
         const char *msgid = json_string_value(val);
 
-        r = jmap_email_find(req, msgid, &mboxname, &uid);
+        r = jmap_email_find(req, NULL, msgid, &mboxname, &uid);
         if (r) {
             if (r == IMAP_NOTFOUND) {
                 json_array_append_new(*notfound, json_string(msgid));
@@ -7497,7 +7500,7 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
         struct mailbox *mbox = NULL;
 
         uint32_t uid;
-        int r = jmap_email_find(req, id, &mboxname, &uid);
+        int r = jmap_email_find(req, NULL, id, &mboxname, &uid);
         if (!r) {
             r = jmap_openmbox(req, mboxname, &mbox, 0);
             if (!r) {
@@ -8309,7 +8312,7 @@ static void _email_append(jmap_req_t *req,
      *  visible for the authenticated user. */
     char *exist_mboxname = NULL;
     uint32_t exist_uid;
-    r = jmap_email_find(req, detail->email_id, &exist_mboxname, &exist_uid);
+    r = jmap_email_find(req, NULL, detail->email_id, &exist_mboxname, &exist_uid);
     free(exist_mboxname);
     if (r != IMAP_NOTFOUND) {
         if (!r) r = IMAP_MAILBOX_EXISTS;
@@ -13434,7 +13437,7 @@ static int jmap_emailheader_getblob(jmap_req_t *req,
     }
 
     /* Lookup emailid */
-    r = jmap_email_find(req, emailid, &mboxname, &uid);
+    r = jmap_email_find(req, NULL, emailid, &mboxname, &uid);
     if (r) {
         if (r == IMAP_NOTFOUND) res = HTTP_NOT_FOUND;
         else {
