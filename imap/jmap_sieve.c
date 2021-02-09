@@ -85,10 +85,7 @@ static int jmap_sieve_query(jmap_req_t *req);
 static int jmap_sieve_validate(jmap_req_t *req);
 static int jmap_sieve_test(jmap_req_t *req);
 
-static int jmap_sieve_getblob(jmap_req_t *req, const char *from_accountid,
-                              const char *blobid, const char *accept_mime,
-                              struct buf *blob, const char **content_type,
-                              const char **errstr);
+static int jmap_sieve_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
 static int maxscripts = 0;
 static json_int_t maxscriptsize = 0;
@@ -2292,30 +2289,25 @@ done:
     return 0;
 }
 
-static int jmap_sieve_getblob(jmap_req_t *req, const char *from_accountid,
-                              const char *blobid, const char *accept_mime,
-                              struct buf *blob, const char **content_type,
-                              const char **errstr)
+static int jmap_sieve_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 {
-    if (*blobid != 'S') return 0;
-
-    *errstr = NULL;
+    if (ctx->blobid[0] != 'S') return 0;
 
     /* Make sure client can handle blob type. */
-    if (accept_mime) {
-        if (strcmp(accept_mime, "application/octet-stream") &&
-            strcmp(accept_mime, "application/sieve")) {
+    if (ctx->accept_mime) {
+        if (strcmp(ctx->accept_mime, "application/octet-stream") &&
+            strcmp(ctx->accept_mime, "application/sieve")) {
             return HTTP_NOT_ACCEPTABLE;
         }
 
-        *content_type = accept_mime;
+        ctx->content_type = ctx->accept_mime;
     }
-    else *content_type = "application/sieve; charset=utf-8";
+    else ctx->content_type = "application/sieve; charset=utf-8";
 
     /* Lookup scriptid */
     const char *sievedir =
-        user_sieve_path(from_accountid ? from_accountid : req->accountid);
-    const char *script = script_from_id(sievedir, blobid+1, 0);
+        user_sieve_path(ctx->from_accountid ? ctx->from_accountid : req->accountid);
+    const char *script = script_from_id(sievedir, ctx->blobid+1, 0);
     struct buf *content = NULL;
 
     if (script) {
@@ -2324,7 +2316,7 @@ static int jmap_sieve_getblob(jmap_req_t *req, const char *from_accountid,
     }
     if (!content) return HTTP_NOT_FOUND;
 
-    buf_move(blob, content);
+    buf_move(&ctx->blob, content);
     buf_destroy(content);
 
     return HTTP_OK;

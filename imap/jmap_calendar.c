@@ -86,13 +86,7 @@ static int jmap_calendarevent_query(struct jmap_req *req);
 static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 
-static int jmap_calendarevent_getblob(jmap_req_t *req,
-                                      const char *from_accountid,
-                                      const char *blobid,
-                                      const char *accept_mime,
-                                      struct buf *blob,
-                                      const char **content_type,
-                                      const char **errstr);
+static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
 #define JMAPCACHE_CALVERSION 19
 
@@ -1593,13 +1587,7 @@ static int _calendarevent_getblob_cb(const char *mailbox __attribute__((unused))
     return 0;
 }
 
-static int jmap_calendarevent_getblob(jmap_req_t *req,
-                                      const char *from_accountid,
-                                      const char *blobid,
-                                      const char *accept_mime,
-                                      struct buf *blob,
-                                      const char **content_type,
-                                      const char **errstr)
+static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 {
     struct caldav_db *db = NULL;
     struct caldav_data *cdata = NULL;
@@ -1612,9 +1600,9 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
     int res = HTTP_OK;
     int r;
 
-    if (*blobid != 'I') return 0;
+    if (ctx->blobid[0] != 'I') return 0;
 
-    if (!_decode_calendarevent_blobid(blobid, &uid, &modseq, &userid)) {
+    if (!_decode_calendarevent_blobid(ctx->blobid, &uid, &modseq, &userid)) {
         res = HTTP_BAD_REQUEST;
         goto done;
     }
@@ -1626,9 +1614,10 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
     }
 
     /* Lookup uid in CaldavDB */
-    db = caldav_open_userid(from_accountid ? from_accountid : req->accountid);
+    db = caldav_open_userid(ctx->from_accountid ?
+                            ctx->from_accountid : req->accountid);
     if (!db) {
-        *errstr = "no calendar db";
+        ctx->errstr = "no calendar db";
         res = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -1649,21 +1638,21 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
 
     /* Open mailbox, we need it now */
     if ((r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 0))) {
-        *errstr = error_message(r);
+        ctx->errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
         goto done;
     }
 
     /* Make sure client can handle blob type. */
-    if (accept_mime) {
+    if (ctx->accept_mime) {
         if (userid) {
-            if (strcmp(accept_mime, "application/octet-stream") &&
-                strcmp(accept_mime, "text/calendar")) {
+            if (strcmp(ctx->accept_mime, "application/octet-stream") &&
+                strcmp(ctx->accept_mime, "text/calendar")) {
                 res = HTTP_NOT_ACCEPTABLE;
                 goto done;
             }
         }
-        else if (strcmp(accept_mime, "multipart/mixed")) {
+        else if (strcmp(ctx->accept_mime, "multipart/mixed")) {
             res = HTTP_NOT_ACCEPTABLE;
             goto done;
         }
@@ -1682,23 +1671,23 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
         }
     }
     if (!ical) {
-        *errstr = "failed to load record";
+        ctx->errstr = "failed to load record";
         res = HTTP_SERVER_ERROR;
         goto done;
     }
 
     if (userid) {
         /* Set Content headers */
-        if (!accept_mime) {
+        if (!ctx->accept_mime || !strcmp(ctx->accept_mime, "text/calendar")) {
             const char *comp_type = caldav_comp_type_as_string(cdata->comp_type);
 
             buf_setcstr(&cbuf, "text/calendar");
             if (comp_type) buf_printf(&cbuf, "; component=%s", comp_type);
-            *content_type = buf_cstring(&cbuf);
+            ctx->content_type = buf_cstring(&cbuf);
         }
 
         /* Write body */
-        buf_setcstr(blob, icalcomponent_as_ical_string(ical));
+        buf_setcstr(&ctx->blob, icalcomponent_as_ical_string(ical));
     }
     else {
         /* Create multipart body */
@@ -1706,6 +1695,7 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
             "This is a message with multiple parts in MIME format.\r\n";
         const char *epilogue = "\r\nEnd of MIME multipart body.\r\n";
         char boundary[100];
+        struct buf *blob = &ctx->blob;
 
         snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
                  *spool_getheader(req->txn->req_hdrs, ":authority"),
@@ -1713,7 +1703,7 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
 
         buf_reset(&cbuf);
         buf_printf(&cbuf, "multipart/mixed; boundary=\"%s\"", boundary);
-        *content_type = buf_cstring(&cbuf);
+        ctx->content_type = buf_cstring(&cbuf);
 
         buf_setcstr(blob, preamble);
 
@@ -1741,7 +1731,7 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
     }
 
 done:
-    if (res != HTTP_OK && !*errstr) {
+    if (res != HTTP_OK && !ctx->errstr) {
         const char *desc = NULL;
         switch (res) {
             case HTTP_BAD_REQUEST:
@@ -1753,7 +1743,7 @@ done:
             default:
                 desc = error_message(res);
         }
-        *errstr = desc;
+        ctx->errstr = desc;
     }
     if (ical) icalcomponent_free(ical);
     if (mailbox) jmap_closembox(req, &mailbox);

@@ -167,10 +167,16 @@ typedef struct jmap_req {
  * HTTP status on error.
  * Return zero if the next blob handler should be called.
  */
-typedef int jmap_getblob_handler(jmap_req_t *req, const char *from_accountid,
-                                 const char *blobid, const char *accept_mime,
-                                 struct buf *blob, const char **content_type,
-                                 const char **errstr);
+typedef struct {
+    const char *from_accountid;
+    const char *blobid;
+    const char *accept_mime;
+    struct buf blob;
+    const char *content_type;
+    const char *errstr;
+} jmap_getblob_context_t;
+
+typedef int jmap_getblob_handler(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
 typedef struct {
     hash_table methods;
