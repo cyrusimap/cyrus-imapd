@@ -168,12 +168,12 @@ typedef struct jmap_req {
  * Return zero if the next blob handler should be called.
  */
 typedef struct {
-    const char *from_accountid;
-    const char *blobid;
-    const char *accept_mime;
-    struct buf blob;
-    const char *content_type;
-    const char *errstr;
+    const char *from_accountid;  // input to the handler
+    const char *blobid;          // input to the handler
+    const char *accept_mime;     // input to the handler
+    struct buf blob;             // output from the handler
+    const char *content_type;    // output from the handler
+    const char *errstr;          // output from the handler
 } jmap_getblob_context_t;
 
 typedef int jmap_getblob_handler(jmap_req_t *req, jmap_getblob_context_t *ctx);
