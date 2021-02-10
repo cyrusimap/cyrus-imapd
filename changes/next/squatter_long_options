@@ -1,6 +1,6 @@
 Description:
 
-Adds support to long-style command-line arguments to squatter.
+Adds support to long-style command-line arguments to squatter. Reintroduces the squat backend option to skip unmodified mailboxes.
 
 
 Config changes:
@@ -11,3 +11,5 @@ None.
 Upgrade instructions:
 
 Installations may want to update their external scripts to call squatter with long options. This is not required, as all existing short options are still supported. Any future squatter features may be only be enabled by use of long options.
+
+Users of the squat backend may want to update their scripts to use the -s option again. In contrast to the previous implementation, the -s option now takes an optional argument to define the time delta in seconds (the documentation has been updated accordingly).
