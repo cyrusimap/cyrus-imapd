@@ -380,7 +380,7 @@ EXPORTED int message_parse_file(FILE *infile,
 
     if (fstat(fd, &sbuf) == -1) {
         if (efname)
-            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool"
+            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool",
                              "filename=<%s>",
                              efname);
         else
