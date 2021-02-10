@@ -94,9 +94,8 @@ extern int optind;
 /* current namespace */
 static struct namespace squat_namespace;
 
-const int SKIP_FUZZ = 60;
-
 static int verbose = 0;
+static int skip_unmodified = -1;
 static int incremental_mode = 0;
 static int xapindexed_mode = 0;
 static int recursive_flag = 0;
@@ -138,6 +137,7 @@ __attribute__((noreturn)) static int usage(const char *name)
             "  -N, --name=NAME              index mailbox names starting with NAME\n"
             "  -S, --sleep=SECONDS          sleep SECONDS between indexing mailboxes\n"
             "  -Z, --internalindex          Xapian: use internal index rather than cyrus.indexed.db\n"
+            "  -s, --squat-skip[=DELTA]     skip unmodified mailboxes (requires squat backend)\n"
             "\n"
             "Index sources:\n"
             "  none                         all mailboxes (default)\n"
@@ -354,6 +354,21 @@ again:
     syslog(LOG_INFO, "indexing mailbox %s... ", extname);
     if (verbose > 0) {
         printf("Indexing mailbox %s... ", extname);
+    }
+
+    if (skip_unmodified >= 0) {
+        const char *fname = mailbox_meta_fname(mailbox, META_SQUAT);
+        struct stat sbuf;
+        if (!stat(fname, &sbuf) &&
+                skip_unmodified + mailbox->index_mtime < sbuf.st_mtime) {
+            syslog(LOG_DEBUG, "Squat skipping mailbox %s", extname);
+            if (verbose > 0) {
+                printf("Skipping mailbox %s\n", extname);
+            }
+            mailbox_close(&mailbox);
+            free(extname);
+            return 0;
+        }
     }
 
     r = search_update_mailbox(rx, mailbox, reindex_minlevel, flags);
@@ -909,7 +924,7 @@ int main(int argc, char **argv)
     setbuf(stdout, NULL);
 
     /* Keep these in alphabetic order */
-    static const char *short_options = "ABC:DFL:N:PRS:T:UXZade:f:hilmn:oprt:uvz:";
+    static const char *short_options = "ABC:DFL:N:PRS:T:UXZade:f:hilmn:oprs:t:uvz:";
 
     /* Keep these ordered by mode */
     static struct option long_options[] = {
@@ -950,6 +965,7 @@ int main(int argc, char **argv)
 
         /* squat flags */
         {"squat-annot", no_argument, 0, 'a' },
+        {"squat-skip", optional_argument, 0, 's' },
 
         /* synclog-mode flags */
         {"synclog", required_argument, 0, 'f' },
@@ -1085,6 +1101,22 @@ int main(int argc, char **argv)
         case 'a':               /* use /squat annotation */
             if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
             annotation_flag = 1;
+            mode = INDEXER;
+            break;
+
+        case 's':
+            if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
+            if (optarg) {
+                char *end;
+                long val = strtol(optarg, &end, 10);
+                if (val < 0 || val > INT_MAX || *end) {
+                    usage(argv[0]);
+                }
+                skip_unmodified = (int) val;
+            }
+            else {
+                skip_unmodified = 60;
+            }
             mode = INDEXER;
             break;
 

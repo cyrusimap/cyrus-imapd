@@ -237,6 +237,18 @@ Options
     Recursively create indexes for all sub-mailboxes of the user,
     mailboxes or mailbox prefixes given as arguments.
 
+.. option:: -s, --squat-skip[=delta]
+
+    Skip mailboxes that have not been modified since last index. This is
+    achieved by comparing the last modification time of a mailbox to
+    the last time the squat index of this mailbox got updated. If the
+    mailbox modification time (plus delta) is less than the squat
+    index modification time, then the mailbox is skipped. The optional
+    argument value delta is defined in seconds and must be equal to or
+    higher than zero, the default value is 60.
+    Squat only.
+    |master-new-feature|
+
 .. option:: -S seconds, --sleep=seconds
 
     After processing each mailbox, sleep for "seconds" before
