@@ -3654,9 +3654,13 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
             return HTTP_FORBIDDEN;
         }
         if (icaltime_compare(dtend, dtstart) < 1) {
-            error->desc = "DTEND must occur after DTSTART";
-            error->precond = CALDAV_VALID_DATA;
-            return HTTP_FORBIDDEN;
+            if (icaltime_compare(dtend, dtstart) < 0) {
+                error->desc = "DTEND must occur after DTSTART";
+                error->precond = CALDAV_VALID_DATA;
+                return HTTP_FORBIDDEN;
+            }
+            syslog(LOG_ERR, "IOERROR: saw DTSTART == DTEND in component %s %s",
+                   httpd_userid, icalcomponent_get_uid(comp));
         }
     }
     else {
