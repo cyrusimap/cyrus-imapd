@@ -3570,25 +3570,27 @@ static int _blob_to_card(struct jmap_req *req, json_t *file,
 {
     const char *blobid = NULL;
     const char *accountid = NULL;
+    const char *accept_mime = NULL;
     char *encbuf = NULL;
     char *decbuf = NULL;
     json_t *val;
-    int r = -1;
+    int r = 0;
     const char *base = NULL;
     size_t len = 0;
 
-    if (!file) goto done;
+    if (!file) return HTTP_BAD_REQUEST;
 
     /* Extract blobId */
     val = json_object_get(file, "blobId");
     if (val) blobid = jmap_id_string_value(req, val);
-    if (!blobid) goto done;
+    if (!blobid) return HTTP_NOT_FOUND;
 
     accountid = json_string_value(json_object_get(file, "accountId"));
+    accept_mime = json_string_value(json_object_get(file, "type"));
 
     /* Find blob */
     jmap_getblob_context_t ctx =
-        { accountid, blobid, NULL/*accept_mime*/, BUF_INITIALIZER, NULL, NULL } ;
+        { accountid, blobid, accept_mime, BUF_INITIALIZER, NULL, NULL };
     r = jmap_getblob(req, &ctx);
     if (r) goto done;
 
@@ -3612,13 +3614,8 @@ static int _blob_to_card(struct jmap_req *req, json_t *file,
 
     vparse_add_param(entry, "ENCODING", "b");
 
-    val = json_object_get(file, "type");
-    if (JNOTNULL(val)) {
-        r = -1;
-        const char *type = json_string_value(val);
-        if (!type) goto done;
-        char *subtype = xstrdupnull(strchr(type, '/'));
-        if (!subtype) goto done;
+    if (ctx.content_type) {
+        char *subtype = xstrdupnull(strchr(ctx.content_type, '/'));
 
         vparse_add_param(entry, "TYPE", ucase(subtype+1));
         free(subtype);
@@ -3629,8 +3626,6 @@ static int _blob_to_card(struct jmap_req *req, json_t *file,
     message_guid_generate(&guid, buf_base(&ctx.blob), buf_len(&ctx.blob));
     _encode_contact_blobid(vparse_stringval(card, "uid"), 0,
                            prop, &guid, new_blobid);
-
-    r = 0;
 
   done:
     free(decbuf);
@@ -3771,7 +3766,12 @@ static int _json_to_card(struct jmap_req *req,
                 struct buf new_blobid = BUF_INITIALIZER;
                 int r = _blob_to_card(req, jval, card, "PHOTO", &new_blobid);
                 if (r) {
-                    json_array_append_new(invalid, json_string("avatar"));
+                    if (r == HTTP_BAD_REQUEST)
+                        json_array_append_new(invalid, json_string("avatar"));
+                    else if (r == HTTP_NOT_ACCEPTABLE)
+                        json_array_append_new(invalid, json_string("avatar/type"));
+                    else
+                        json_array_append_new(invalid, json_string("avatar/blobId"));
                     continue;
                 }
                 if (!*item) *item = json_object();
