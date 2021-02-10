@@ -417,7 +417,7 @@ enum {
     CE_DEFLATE  =       (1<<0), /* ZLIB      - RFC 1950 */
     CE_GZIP     =       (1<<1), /* GZIP      - RFC 1952 */
     CE_BR       =       (1<<2), /* Brotli    - RFC 7932 */
-    CE_ZSTD     =       (1<<3)  /* Zstandard - RFC 8478 */
+    CE_ZSTD     =       (1<<3)  /* Zstandard - RFC 8878 */
 };
 
 /* Cache-Control directive flags */

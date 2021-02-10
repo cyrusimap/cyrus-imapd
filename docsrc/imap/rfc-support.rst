@@ -838,10 +838,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP Extension for Object Identifiers
 
-:rfc:`8478`
-
-    Zstandard Compression and the application/zstd Media Type
-
 :rfc:`8514`
 
     Internet Message Access Protocol (IMAP) - SAVEDATE Extension
@@ -865,6 +861,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`8621`
 
     The JSON Meta Application Protocol (JMAP) for Mail
+
+:rfc:`8878`
+
+    Zstandard Compression and the application/zstd Media Type
 
 :rfc:`8887`
 
