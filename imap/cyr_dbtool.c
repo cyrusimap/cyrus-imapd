@@ -197,9 +197,17 @@ static void batch_commands(struct db *db)
                 const char *res;
                 size_t reslen;
                 r = cyrusdb_fetch(db, key.s, key.len, &res, &reslen, tidp);
-                if (r) goto done;
-                aprinter_cb(out, key.s, key.len, res, reslen);
-                prot_flush(out);
+                switch (r) {
+                case 0:
+                    aprinter_cb(out, key.s, key.len, res, reslen);
+                    prot_flush(out);
+                    break;
+                case CYRUSDB_NOTFOUND:
+                    r = 0;
+                    break;
+                default:
+                    goto done;
+                }
             }
             else if (!strcmp(cmd.s, "DELETE")) {
                 r = cyrusdb_delete(db, key.s, key.len, tidp, 1);
