@@ -502,6 +502,8 @@ HIDDEN int jmap_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 {
     int res = 0;
 
+    if (!ctx->blobid) return HTTP_NOT_FOUND;
+
     /* Call getblob handlers */
     int i;
     for (i = 0; i < ptrarray_size(&my_jmap_settings.getblob_handlers); i++) {
