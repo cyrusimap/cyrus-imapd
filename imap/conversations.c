@@ -2211,32 +2211,6 @@ static int conversations_set_guid(struct conversations_state *state,
                               record->system_flags, record->internal_flags,
                               record->internaldate, body, base, add);
 
-#ifdef WITH_DAV
-    if (!r && (mailbox->mbtype == MBTYPE_ADDRESSBOOK) &&
-        !strcmp(body->type, "TEXT") && !strcmp(body->subtype, "VCARD")) {
-
-        struct vparse_card *vcard = record_to_vcard(mailbox, record);
-
-        if (vcard) {
-            struct message_guid guid;
-            struct vparse_entry *photo =
-                vparse_get_entry(vcard->objects, NULL, "photo");
-
-            if (photo && vcard_prop_decode_value(photo, NULL, NULL, &guid)) {
-                buf_printf(&item, "[%s/VCARD#PHOTO]", body->part_id);
-                r = conversations_guid_setitem(state, message_guid_encode(&guid),
-                                               buf_cstring(&item), 0 /*cid*/,
-                                               record->system_flags,
-                                               record->internal_flags,
-                                               record->internaldate,
-                                               add);
-            }
-
-            vparse_free_card(vcard);
-        }
-    }
-#endif /* WITH_DAV */
-
     message_free_body(body);
     free(body);
     buf_free(&item);

@@ -1291,8 +1291,10 @@ static int _jmap_findblob(jmap_req_t *req, const char *from_accountid,
         }
     }
 
-    if (blobid[0] != 'G')
+    if (blobid[0] != 'G' || strlen(blobid) != 41) {
+        /* incomplete or incorrect blobid */
         return IMAP_NOTFOUND;
+    }
 
     if (strcmp(req->accountid, accountid)) {
         cstate = conversations_get_user(accountid);
@@ -1329,11 +1331,6 @@ static int _jmap_findblob(jmap_req_t *req, const char *from_accountid,
                 break;
             }
             if (!mypart->subpart) {
-                if (data.mbox->mbtype == MBTYPE_ADDRESSBOOK &&
-                    (mypart = jmap_contact_findblob(&content_guid, data.part_id,
-                                                    data.mbox, data.mr, blob))) {
-                    break;
-                }
                 continue;
             }
             ptrarray_push(&parts, mypart->subpart);

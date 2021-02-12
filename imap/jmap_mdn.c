@@ -255,7 +255,7 @@ static json_t *generate_mdn(struct jmap_req *req,
     buf_reset(msgbuf);
 
     /* Lookup the message */
-    r = jmap_email_find(req, mdn->emailid, &mboxname, &uid);
+    r = jmap_email_find(req, NULL, mdn->emailid, &mboxname, &uid);
     if (r) {
         if (r == IMAP_NOTFOUND) {
             err = json_pack("{s:s}", "type", "emailNotFound");

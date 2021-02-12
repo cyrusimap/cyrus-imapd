@@ -156,18 +156,27 @@ typedef struct jmap_req {
     const strarray_t *using_capabilities;
 } jmap_req_t;
 
-/* Write the contents of the blob identified by blobid on the
- * HTTP transaction embedded in JMAP request req.
+/* Fetch the contents of the blob identified by blobid,
+ * optionally returning a content type and an error string.
+ *
  * If not NULL, accept_mime defines the requested MIME type,
  * either defined in the Accept header or {type} URI template
  * parameter.
  *
- * Return HTTP_OK if the blob has been written or any other
+ * Return HTTP_OK if the blob has been found or any other
  * HTTP status on error.
- * Return zero if the next blob handler should be called. */
-typedef int jmap_getblob_handler(jmap_req_t *req,
-                                 const char *blobid,
-                                 const char *accept_mime);
+ * Return zero if the next blob handler should be called.
+ */
+typedef struct {
+    const char *from_accountid;  // input to the handler
+    const char *blobid;          // input to the handler
+    const char *accept_mime;     // input to the handler
+    struct buf blob;             // output from the handler
+    const char *content_type;    // output from the handler
+    const char *errstr;          // output from the handler
+} jmap_getblob_context_t;
+
+typedef int jmap_getblob_handler(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
 typedef struct {
     hash_table methods;
@@ -268,12 +277,6 @@ extern int jmap_findblob_exact(jmap_req_t *req, const char *accountid,
                                const char *blobid,
                                struct mailbox **mbox, msgrecord_t **mr,
                                struct buf *blob);
-
-extern const struct body *jmap_contact_findblob(struct message_guid *content_guid,
-                                                const char *part_id,
-                                                struct mailbox *mbox,
-                                                msgrecord_t *mr,
-                                                struct buf *blob);
 
 #define JMAP_BLOBID_SIZE 42
 extern void jmap_set_blobid(const struct message_guid *guid, char *buf);

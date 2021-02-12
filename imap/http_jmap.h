@@ -52,4 +52,6 @@ extern struct namespace jmap_namespace;
 extern int jmap_open_upload_collection(const char *accountid,
                                        struct mailbox **mailbox);
 
+extern int jmap_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
+
 #endif /* HTTP_JMAP_H */
