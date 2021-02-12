@@ -2125,7 +2125,10 @@ sub test_contact_set
                              }
                      } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
-    $contact->{avatar}{blobId} = $res->[0][1]{updated}{$id}{avatar}{blobId};
+
+    if ($res->[0][1]{updated}{$id}{avatar}{blobId}) {
+        $contact->{avatar}{blobId} = $res->[0][1]{updated}{$id}{avatar}{blobId};
+    }
 
     xlog $self, "get avatar $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
@@ -2167,11 +2170,15 @@ sub test_contact_set_avatar_singlecommand
     $self->assert_str_equals('Blob/set', $res->[0][0]);
     $self->assert_str_equals('R0', $res->[0][2]);
 
+    $contact->{avatar}{blobId} = $res->[0][1]{created}{"img"}{blobId};
+
     $self->assert_str_equals('Contact/set', $res->[1][0]);
     $self->assert_str_equals('R1', $res->[1][2]);
     my $id = $res->[1][1]{created}{"1"}{id};
 
-    $contact->{avatar}{blobId} = $res->[1][1]{created}{"1"}{avatar}{blobId};
+    if ($res->[1][1]{created}{"1"}{avatar}{blobId}) {
+        $contact->{avatar}{blobId} = $res->[1][1]{created}{"1"}{avatar}{blobId};
+    }
 
     $self->assert_str_equals('Contact/get', $res->[2][0]);
     $self->assert_str_equals('R2', $res->[2][2]);
