@@ -2126,6 +2126,10 @@ sub test_contact_set
                      } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
+    if ($res->[0][1]{updated}{$id}{avatar}{blobId}) {
+        $contact->{avatar}{blobId} = $res->[0][1]{updated}{$id}{avatar}{blobId};
+    }
+
     xlog $self, "get avatar $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
@@ -2171,6 +2175,10 @@ sub test_contact_set_avatar_singlecommand
     $self->assert_str_equals('Contact/set', $res->[1][0]);
     $self->assert_str_equals('R1', $res->[1][2]);
     my $id = $res->[1][1]{created}{"1"}{id};
+
+    if ($res->[1][1]{created}{"1"}{avatar}{blobId}) {
+        $contact->{avatar}{blobId} = $res->[1][1]{created}{"1"}{avatar}{blobId};
+    }
 
     $self->assert_str_equals('Contact/get', $res->[2][0]);
     $self->assert_str_equals('R2', $res->[2][2]);
@@ -2879,7 +2887,8 @@ sub test_contact_copy
 
     # avatar
     xlog $self, "upload avatar";
-    my $res = $jmap->Upload("some photo", "image/jpeg");
+    my $data = "some photo";
+    my $res = $jmap->Upload($data, "image/jpeg");
     my $blobid = $res->{blobId};
 
     my $card =  {
@@ -2927,9 +2936,20 @@ sub test_contact_copy
         }, 'R2'],
     ]);
     $self->assert_str_equals('foo', $res->[0][1]{list}[0]{firstName});
-    $self->assert_str_equals($blobid, $res->[0][1]{list}[0]{avatar}{blobId});
+    my $blob = $jmap->Download({ accept => 'image/jpeg' },
+                               'other', $res->[0][1]{list}[0]{avatar}{blobId});
+    $self->assert_str_equals('image/jpeg',
+                             $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+    $self->assert_equals($data, $blob->{content});
+
     $self->assert_str_equals('foo', $res->[1][1]{list}[0]{firstName});
-    $self->assert_str_equals($blobid, $res->[1][1]{list}[0]{avatar}{blobId});
+    $blob = $jmap->Download({ accept => 'image/jpeg' },
+                            'cassandane', $res->[1][1]{list}[0]{avatar}{blobId});
+    $self->assert_str_equals('image/jpeg',
+                             $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+    $self->assert_equals($data, $blob->{content});
 
     xlog $self, "move card $cardId with changes";
     $res = $jmap->CallMethods([['Contact/copy', {
@@ -2978,7 +2998,8 @@ sub test_contact_copy
 
     # avatar
     xlog $self, "upload avatar for other3";
-    $res = $other3Jmap->Upload("some other photo", "image/jpeg");
+    $data = "some other photo";
+    $res = $other3Jmap->Upload($data, "image/jpeg");
     $blobid = $res->{blobId};
 
     $admintalk->setacl("user.other3.#jmap",
@@ -3017,7 +3038,13 @@ sub test_contact_copy
         }, 'R2'],
     ]);
     $self->assert_str_equals('foo', $res->[0][1]{list}[0]{firstName});
-    $self->assert_str_equals($blobid, $res->[0][1]{list}[0]{avatar}{blobId});
+    $blob = $jmap->Download({ accept => 'image/jpeg' },
+                               'other3', $res->[0][1]{list}[0]{avatar}{blobId});
+    $self->assert_str_equals('image/jpeg',
+                             $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+    $self->assert_equals($data, $blob->{content});
+
     $self->assert_str_equals($cardId, $res->[1][1]{notFound}[0]);
 }
 
