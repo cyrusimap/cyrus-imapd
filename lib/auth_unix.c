@@ -114,7 +114,7 @@ static int mymemberof(const struct auth_state *auth_state, const char *identifie
  * Identifiers don't require a digit, really, so that should probably be
  * relaxed, too.
  */
-static char allowedchars[256] = {
+static const char allowedchars[256] = {
  /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00-0F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10-1F */

@@ -3213,7 +3213,7 @@ EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, i
  * May be called with 'msg_base' as NULL to get the number of encoded
  * bytes for allocating 'retval' of the proper size.
  */
-static char base_64[] =
+static const char base_64[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
