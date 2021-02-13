@@ -249,7 +249,7 @@ out:
 /*
  * Remove a deny DB record; this has the effect of allowing the given
  * user access to all services.  Returns an IMAP error code or 0 on
- * success.  It is not an error to remove an non-existant record.
+ * success.  It is not an error to remove a non-existant record.
  */
 EXPORTED int denydb_delete(const char *user)
 {
