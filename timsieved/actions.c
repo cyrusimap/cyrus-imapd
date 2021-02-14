@@ -104,7 +104,7 @@ int actions_setuser(const char *userid)
 {
   char *domain = NULL;
   struct buf buf = BUF_INITIALIZER;
-  int result, ret = TIMSIEVE_OK;
+  int result;
 
   free(sieved_userid);
   sieved_userid = xstrdup(userid);
@@ -143,10 +143,8 @@ int actions_setuser(const char *userid)
           if (!result) result = stat(sieve_dir, &sbuf);
       }
   }
-  ret = result ? TIMSIEVE_FAIL : TIMSIEVE_OK;
 
-  buf_free(&buf);
-  return ret;
+  return result ? TIMSIEVE_FAIL : TIMSIEVE_OK;
 }
 
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
