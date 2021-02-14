@@ -353,7 +353,7 @@ static void zfree(voidpf opaque __attribute__((unused)),
 
 /*
  * Turn on (de)compression for this connection
- * If its an output stream, initialize a compressor,
+ * If it is an output stream, initialize a compressor,
  * otherwise initialize a decompressor.
  */
 
