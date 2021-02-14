@@ -4340,9 +4340,13 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     if (!icaltime_is_null_time(dtend)) {
         dtstart = icalcomponent_get_dtstart(comp);
 
-        if (icaltime_is_date(dtend) != icaltime_is_date(dtstart) ||
-//            !icaltime_get_timezone(dtend) != !icaltime_get_timezone(dtstart) ||
-            icaltime_compare(dtend, dtstart) < 1) {
+        if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
+            txn->error.desc = "DTSTART and DTEND must have same value type";
+            txn->error.precond = CALDAV_VALID_DATA;
+            ret = HTTP_FORBIDDEN;
+            goto done;
+        }
+        if (icaltime_compare(dtend, dtstart) < 1) {
             txn->error.desc = "DTEND must occur after DTSTART";
             txn->error.precond = CALDAV_VALID_DATA;
             ret = HTTP_FORBIDDEN;
