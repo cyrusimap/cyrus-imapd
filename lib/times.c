@@ -706,7 +706,7 @@ EXPORTED int time_to_rfc3501(time_t date, char *buf, size_t len)
  *                      (Obsolete, now SST = Samoa S.T.)
  *          BDT -1000   Nonsensical, standard time is used
  *                      all year around in the SST territories.
- * zzzzz is an numeric time zone offset in the form +HHMM
+ * zzzzz is a numeric time zone offset in the form +HHMM
  *      or -HMMM.
  *
  * Returns: Number of characters consumed from @s on success,

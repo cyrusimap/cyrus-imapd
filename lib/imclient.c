@@ -408,7 +408,7 @@ EXPORTED void imclient_addcallback(struct imclient *imclient, ...)
  *   %s -- astring (will be quoted or literalized as needed)
  *   %d -- decimal
  *   %u -- unsigned decimal
- *   %v -- #astring (arg is an null-terminated array of (char *)
+ *   %v -- #astring (arg is a null-terminated array of (char *)
  *         which are written as space separated astrings)
  *   %B -- (internal use only) base64-encoded data at end of command line
  */

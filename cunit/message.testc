@@ -929,7 +929,7 @@ static void test_parameter_recovery(void)
 "Subject: MIME testing email\r\n"
 "X-Mailer: Norman\r\n"
 "MIME-Version: 1.0\r\n"
-/* The value of the "type" parameter contains an / but is
+/* The value of the "type" parameter contains a / but is
  * not quoted, which is illegal under RFC2045 rules.  We should
  * be either accepting it, or ignoring it, but in either case
  * the "boundary" that follows it should be accepted and used

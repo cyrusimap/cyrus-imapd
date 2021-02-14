@@ -55,7 +55,7 @@ The client connection is therefore to be proxied to the appropriate
 It is not at all uncommon to (reverse) proxy client connections like
 this (a task that ``imap.example.org`` takes on in this example).
 
-In the case of webservers for example, reverse proxying is an very
+In the case of webservers for example, reverse proxying is a very
 common practice:
 
 .. graphviz::
