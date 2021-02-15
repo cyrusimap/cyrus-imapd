@@ -495,7 +495,7 @@ static const jmap_property_t contact_props[] = {
     {
         "blobId",
         JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
+        JMAP_PROP_SERVER_SET
     },
 
     { NULL, NULL, 0 }
