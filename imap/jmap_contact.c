@@ -959,6 +959,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
     }
 
     /* update */
+    struct buf buf = BUF_INITIALIZER;
     const char *uid;
     json_object_foreach(set.update, uid, arg) {
         struct carddav_data *cdata = NULL;
@@ -1031,9 +1032,9 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         struct entryattlist *annots = NULL;
         strarray_t *flags = NULL;
 
+        json_t *item = json_object();
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
-        json_t *item = NULL;
 
         /* Load message containing the resource and parse vcard data */
         struct vparse_card *vcard = record_to_vcard(mailbox, &record);
@@ -1136,22 +1137,36 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                                             req->accountid, req->authstate);
                     if (!r) r = annotate_state_store(state, annots);
                     if (!r) r = mailbox_rewrite_index_record(mailbox, &record);
-                    if (!r) json_object_set_new(set.updated, uid, json_null());
+                    if (!r) {
+                        _encode_contact_blobid(uid, mailbox->i.highestmodseq,
+                                       NULL, NULL, &buf);
+                        json_object_set_new(set.updated, uid,
+                                            json_pack("{s:s}", "blobId",
+                                                      buf_cstring(&buf)));
+                    }
                     goto finish;
                 }
             }
         }
 
         if (!r && !json_array_size(invalid) && !errors.blobNotFound) {
+            struct mailbox *this_mailbox = newmailbox ? newmailbox : mailbox;
+
             syslog(LOG_NOTICE, "jmap: update %s %s/%s",
                    kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                    req->accountid, resource);
-            r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource,
+            r = carddav_store(this_mailbox, card, resource,
                               record.createdmodseq, flags, &annots, req->accountid,
                               req->authstate, ignorequota);
-            if (!r)
+            if (!r) {
+                _encode_contact_blobid(uid, this_mailbox->i.highestmodseq,
+                                       NULL, NULL, &buf);
+                json_object_set_new(item, "blobId",
+                                    json_string(buf_cstring(&buf)));
+
                 r = carddav_remove(mailbox, olduid,
                                    /*isreplace*/!newmailbox, req->accountid);
+            }
         }
 
         if (json_array_size(invalid)) {
@@ -1182,10 +1197,9 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                     err = jmap_server_error(r);
             }
             json_object_set_new(set.not_updated, uid, err);
-            if (item) json_decref(item);
             goto finish;
         }
-        else json_object_set_new(set.updated, uid, item ? item : json_null());
+        else json_object_set(set.updated, uid, item);
 
       finish:
         strarray_free(flags);
@@ -1196,8 +1210,10 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         json_decref(jupdated);
         json_decref(invalid);
         json_decref(errors.blobNotFound);
+        json_decref(item);
         r = 0;
     }
+    buf_free(&buf);
 
 
     /* destroy */
@@ -1756,6 +1772,8 @@ static const char *_encode_contact_blobid(const char *uid,
                                           struct message_guid *guid,
                                           struct buf *dst)
 {
+    buf_reset(dst);
+
     /* Set vCard smart blob prefix */
     buf_putc(dst, 'V');
 
@@ -4025,6 +4043,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     char *uid = NULL;
     int r = 0;
     char *resourcename = NULL;
+    struct buf buf = BUF_INITIALIZER;
 
     if ((uid = (char *) json_string_value(json_object_get(jcard, "uid")))) {
         /* Use custom vCard UID from request object */
@@ -4038,7 +4057,6 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     /* Determine mailbox and resource name of card.
      * We attempt to reuse the UID as DAV resource name; but
      * only if it looks like a reasonable URL path segment. */
-    struct buf buf = BUF_INITIALIZER;
     const char *p;
     for (p = uid; *p; p++) {
         if ((*p >= '0' && *p <= '9') ||
@@ -4058,7 +4076,6 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     }
     buf_appendcstr(&buf, ".vcf");
     resourcename = buf_newcstring(&buf);
-    buf_free(&buf);
 
     const char *addressbookId = "Default";
     json_t *abookid = json_object_get(jcard, "addressbookId");
@@ -4146,6 +4163,9 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
 
     json_object_set_new(item, "id", json_string(uid));
 
+    _encode_contact_blobid(uid, (*mailbox)->i.highestmodseq, NULL, NULL, &buf);
+    json_object_set_new(item, "blobId", json_string(buf_cstring(&buf)));
+
 done:
     vparse_free_card(card);
     free(mboxname);
@@ -4153,6 +4173,7 @@ done:
     strarray_free(flags);
     freeentryatts(annots);
     free(uid);
+    buf_free(&buf);
 
     return r;
 }

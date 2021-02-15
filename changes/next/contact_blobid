@@ -1,0 +1,13 @@
+Description:
+
+Always return 'blobId' in /set{create.update} and  /get responses.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
