@@ -2471,25 +2471,30 @@ static int _jmap_checkfolder(const char *mboxname, void *rock)
     return 0;
 }
 
-static int _emailsearch_init(struct emailsearch *search,
-                             jmap_req_t *req,
-                             json_t *filter,
-                             json_t *jsort,
-                             hash_table *contactgroups,
-                             int want_expunged,
-                             int want_partids,
-                             int ignore_timer)
+static void _emailsearch_init(struct emailsearch *search,
+                              jmap_req_t *req,
+                              json_t *filter,
+                              json_t *jsort,
+                              hash_table *contactgroups,
+                              int want_expunged,
+                              int want_partids,
+                              int ignore_timer,
+                              json_t **err)
 {
     memset(search, 0, sizeof(struct emailsearch));
 
     search->expr_orig = _email_buildsearchexpr(req, filter, NULL,
                                     contactgroups, &search->perf_filters);
-    if (!search->expr_orig) return 0;
+    if (!search->expr_orig) return;
 
     search->expr_dnf = search_expr_duplicate(search->expr_orig);
 
     int r = _emailsearch_normalise(&search->expr_dnf, &search->is_imapfolder);
-    if (r) return r;
+    if (r == IMAP_SEARCH_SLOW) {
+        *err = json_pack("{s:s s:s}", "type", "unsupportedFilter",
+                "description", "search too complex");
+        return;
+    }
 
     if (json_array_size(jsort)) {
         search->sort = _email_buildsort(jsort, &search->sort_savedate);
@@ -2511,8 +2516,6 @@ static int _emailsearch_init(struct emailsearch *search,
     search->want_expunged = want_expunged;
     search->want_partids = want_partids;
     search->ignore_timer = ignore_timer;
-
-    return 0;
 }
 
 static int _emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *search,
@@ -4043,10 +4046,12 @@ static void _email_query(jmap_req_t *req, struct jmap_emailquery *q,
                          hash_table *contactgroups,
                          json_t **err)
 {
+    int r = 0;
+
     struct emailsearch search;
-    int r = _emailsearch_init(&search, req, q->super.filter, q->super.sort,
-                              contactgroups, 0, q->want_partids, 0);
-    if (r) goto done;
+    _emailsearch_init(&search, req, q->super.filter, q->super.sort,
+                      contactgroups, 0, q->want_partids, 0, err);
+    if (*err) goto done;
 
     /* make query state */
     modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
@@ -4226,6 +4231,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
     modseq_t addrbook_modseq = 0;
+    int r = 0;
 
     if (!_email_read_querystate(query->since_querystate,
                                 &since_modseq, &since_uid,
@@ -4242,12 +4248,12 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     }
 
     struct emailsearch search;
-    int r = _emailsearch_init(&search, req, query->filter, query->sort,
-                              &contactfilter->contactgroups,
-                              /*want_expunged*/1,
-                              /*want_partids*/0,
-                              /*ignore_timer*/0);
-    if (r) goto done;
+    _emailsearch_init(&search, req, query->filter, query->sort,
+                      &contactfilter->contactgroups,
+                      /*want_expunged*/1,
+                      /*want_partids*/0,
+                      /*ignore_timer*/0, err);
+    if (*err) goto done;
 
     if (!_email_query_is_mutable_search(&search)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
@@ -4441,6 +4447,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
     modseq_t addrbook_modseq = 0;
+    int r = 0;
 
     if (!_email_read_querystate(query->since_querystate,
                                 &since_modseq, &since_uid,
@@ -4456,12 +4463,12 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     }
 
     struct emailsearch search;
-    int r = _emailsearch_init(&search, req, query->filter, query->sort,
-                              &contactfilter->contactgroups,
-                              /*want_expunged*/1,
-                              /*want_partids*/0,
-                              /*ignore_timer*/0);
-    if (r) goto done;
+    _emailsearch_init(&search, req, query->filter, query->sort,
+                      &contactfilter->contactgroups,
+                      /*want_expunged*/1,
+                      /*want_partids*/0,
+                      /*ignore_timer*/0, err);
+    if (*err) goto done;
 
     if (!_email_query_is_mutable_search(&search)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
@@ -4649,18 +4656,20 @@ done:
 
 static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t **err)
 {
+    int r = 0;
+
     /* Run search */
     json_t *filter = json_pack("{s:o}", "sinceEmailState",
                                jmap_fmtstate(changes->since_modseq));
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
 
     struct emailsearch search;
-    int r = _emailsearch_init(&search, req, filter, sort,
-                              /*contactgroups*/NULL,
-                              /*want_expunged*/1,
-                              /*want_partids*/0,
-                              /*ignore_timer*/1);
-    if (r) goto done;
+    _emailsearch_init(&search, req, filter, sort,
+                      /*contactgroups*/NULL,
+                      /*want_expunged*/1,
+                      /*want_partids*/0,
+                      /*ignore_timer*/1, err);
+    if (*err) goto done;
 
     const ptrarray_t *msgdata = NULL;
     r = _emailsearch_run_uidsearch(req, &search, &msgdata);
@@ -4778,6 +4787,7 @@ done:
 static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_t **err)
 {
     conversation_t conv = CONVERSATION_INIT;
+    int r = 0;
 
     /* Run search */
     json_t *filter = json_pack("{s:o}", "sinceEmailState",
@@ -4785,12 +4795,12 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
 
     struct emailsearch search;
-    int r = _emailsearch_init(&search, req, filter, sort,
-                              /*contactgroups*/NULL,
-                              /*want_expunged*/1,
-                              /*want_partids*/0,
-                              /*ignore_timer*/1);
-    if (r) goto done;
+    _emailsearch_init(&search, req, filter, sort,
+                      /*contactgroups*/NULL,
+                      /*want_expunged*/1,
+                      /*want_partids*/0,
+                      /*ignore_timer*/1, err);
+    if (*err) goto done;
 
     const ptrarray_t *msgdata = NULL;
     r = _emailsearch_run_uidsearch(req, &search, &msgdata);
