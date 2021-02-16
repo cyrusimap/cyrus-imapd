@@ -78,7 +78,7 @@ static json_t *extract_array_value(json_t *val, const char *idx,
 {
     if (!strcmp(idx, "*")) {
         /* Build value from array traversal */
-        json_t *newval = json_pack("[]");
+        json_t *newval = json_array();
         size_t i;
         json_t *v;
         json_array_foreach(val, i, v) {
@@ -1621,7 +1621,7 @@ HIDDEN void jmap_ok(jmap_req_t *req, json_t *res)
 {
     json_object_set_new(res, "accountId", json_string(req->accountid));
 
-    json_t *item = json_pack("[]");
+    json_t *item = json_array();
     json_array_append_new(item, json_string(req->method));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
@@ -2834,9 +2834,9 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
 
         // we've got one! Create the object if this is the first
         if (!JNOTNULL(sharewith))
-            sharewith = json_pack("{}");
+            sharewith = json_object();
 
-        json_t *obj = json_pack("{}");
+        json_t *obj = json_object();
         json_object_set_new(sharewith, userid, obj);
 
         if (iscalendar)

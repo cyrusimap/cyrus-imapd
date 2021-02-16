@@ -4220,9 +4220,9 @@ static int _mbox_changes(jmap_req_t *req,
 
     ptrarray_t updates = PTRARRAY_INITIALIZER;
     struct _mbox_changes_data data = {
-        json_pack("{}"),
-        json_pack("{}"),
-        json_pack("{}"),
+        json_object(),
+        json_object(),
+        json_object(),
         changes->since_modseq,
         only_counts_changed,
         req

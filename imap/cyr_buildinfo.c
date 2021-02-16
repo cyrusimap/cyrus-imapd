@@ -77,12 +77,12 @@ static void usage(void)
 /* Gather the build configuration parameters as JSON object */
 static json_t *buildinfo()
 {
-    json_t *component = json_pack("{}");
-    json_t *dependency = json_pack("{}");
-    json_t *database = json_pack("{}");
-    json_t *search = json_pack("{}");
-    json_t *hardware = json_pack("{}");
-    json_t *buildconf = json_pack("{}");
+    json_t *component = json_object();
+    json_t *dependency = json_object();
+    json_t *database = json_object();
+    json_t *search = json_object();
+    json_t *hardware = json_object();
+    json_t *buildconf = json_object();
 
     json_object_set_new(buildconf, "component", component);
     json_object_set_new(buildconf, "dependency", dependency);

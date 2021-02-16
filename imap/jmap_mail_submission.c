@@ -660,7 +660,7 @@ static void _emailsubmission_create(jmap_req_t *req,
                             json_pack("{s:s}", "email", from));
 
         /* Determine RCPT TO */
-        json_t *rcpts = json_pack("{}"); /* deduplicated set of recipients */
+        json_t *rcpts = json_object(); /* deduplicated set of recipients */
         json_t *rcptTo = json_array();   /* envelope rcptTo value */
         size_t i;
         const char *s;

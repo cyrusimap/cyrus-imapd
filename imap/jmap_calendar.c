@@ -285,7 +285,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         goto done;
     }
 
-    json_t *obj = json_pack("{}");
+    json_t *obj = json_object();
 
     const strarray_t *boxes = mbname_boxes(mbname);
     const char *id = strarray_nth(boxes, boxes->count-1);
@@ -1054,7 +1054,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         }
 
         /* Parse and validate properties. */
-        json_t *invalid = json_pack("[]"), *shareWith = NULL;
+        json_t *invalid = json_array(), *shareWith = NULL;
         const char *name = NULL;
         const char *color = NULL;
         int32_t sortOrder = 0;
@@ -1257,7 +1257,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         }
 
         /* Parse and validate properties. */
-        json_t *invalid = json_pack("[]"), *shareWith = NULL;
+        json_t *invalid = json_array(), *shareWith = NULL;
 
         char *mboxname = caldav_mboxname(req->accountid, uid);
         const char *name = NULL;
@@ -3476,8 +3476,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         }
 
         /* Create the calendar event. */
-        json_t *invalid = json_pack("[]");
-        json_t *create = json_pack("{}");
+        json_t *invalid = json_array();
+        json_t *create = json_object();
         r = setcalendarevents_create(req, req->accountid, arg, db, invalid, create);
         if (r) {
             json_t *err;
@@ -3540,8 +3540,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         }
 
         /* Update the calendar event. */
-        json_t *invalid = json_pack("[]");
-        json_t *update = json_pack("{}");
+        json_t *invalid = json_array();
+        json_t *update = json_object();
         json_t *err = NULL;
         r = setcalendarevents_update(req, arg, eid, db, invalid, update, &err);
         if (r || err) {
@@ -4694,7 +4694,7 @@ static void _calendarevent_copy(jmap_req_t *req,
 
     /* Create event */
     json_t *invalid = json_array();
-    *new_event = json_pack("{}");
+    *new_event = json_object();
     r = setcalendarevents_create(req, req->accountid, dst_event,
                                  dst_db, invalid, *new_event);
     if (r || json_array_size(invalid)) {

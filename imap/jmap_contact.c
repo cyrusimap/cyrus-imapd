@@ -273,10 +273,10 @@ struct cards_rock {
 static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
 {
     struct vparse_entry *ventry = NULL;
-    json_t *obj = json_pack("{}");
+    json_t *obj = json_object();
 
-    json_t *contactids = json_pack("[]");
-    json_t *otherids = json_pack("{}");
+    json_t *contactids = json_array();
+    json_t *otherids = json_object();
 
     for (ventry = vcard->properties; ventry; ventry = ventry->next) {
         const char *name = ventry->name;
@@ -907,9 +907,9 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
     const char *key;
     json_t *arg;
     json_object_foreach(set.create, key, arg) {
-        json_t *invalid = json_pack("[]");
+        json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
-        json_t *item = json_pack("{}");
+        json_t *item = json_object();
         r = _contact_set_create(req, kind, arg,
                                 NULL, &mailbox, item, &errors);
         if (r) {
@@ -1031,7 +1031,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         struct entryattlist *annots = NULL;
         strarray_t *flags = NULL;
 
-        json_t *invalid = json_pack("[]");
+        json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = NULL;
 
@@ -1412,7 +1412,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
                                        struct index_record *record)
 {
     strarray_t *empty = NULL;
-    json_t *obj = json_pack("{}");
+    json_t *obj = json_object();
     struct buf buf = BUF_INITIALIZER;
     struct vparse_entry *entry;
 
@@ -1463,7 +1463,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
     for (entry = card->properties; entry; entry = entry->next) {
         if (strcasecmp(entry->name, "adr")) continue;
-        json_t *item = json_pack("{}");
+        json_t *item = json_object();
 
         /* XXX - type and label */
         const strarray_t *a = entry->v.values;
@@ -1532,7 +1532,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     int i = 0;
     for (entry = card->properties; entry; entry = entry->next) {
         if (strcasecmp(entry->name, "email")) continue;
-        json_t *item = json_pack("{}");
+        json_t *item = json_object();
         const struct vparse_param *param;
         const char *type = "other";
         const char *label = NULL;
@@ -1578,7 +1578,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
     for (entry = card->properties; entry; entry = entry->next) {
         if (strcasecmp(entry->name, "tel")) continue;
-        json_t *item = json_pack("{}");
+        json_t *item = json_object();
         const struct vparse_param *param;
         const char *type = "other";
         const char *label = NULL;
@@ -1622,7 +1622,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
     for (entry = card->properties; entry; entry = entry->next) {
         if (!strcasecmp(entry->name, "url")) {
-            json_t *item = json_pack("{}");
+            json_t *item = json_object();
             const struct vparse_param *param;
             const char *label = NULL;
             for (param = entry->params; param; param = param->next) {
@@ -1636,7 +1636,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
             json_array_append_new(online, item);
         }
         if (!strcasecmp(entry->name, "impp")) {
-            json_t *item = json_pack("{}");
+            json_t *item = json_object();
             const struct vparse_param *param;
             const char *label = NULL;
             for (param = entry->params; param; param = param->next) {
@@ -1650,7 +1650,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
             json_array_append_new(online, item);
         }
         if (!strcasecmp(entry->name, "x-social-profile")) {
-            json_t *item = json_pack("{}");
+            json_t *item = json_object();
             const struct vparse_param *param;
             const char *label = NULL;
             const char *value = NULL;
@@ -1669,7 +1669,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
             json_array_append_new(online, item);
         }
         if (!strcasecmp(entry->name, "x-fm-online-other")) {
-            json_t *item = json_pack("{}");
+            json_t *item = json_object();
             const struct vparse_param *param;
             const char *label = NULL;
             for (param = entry->params; param; param = param->next) {

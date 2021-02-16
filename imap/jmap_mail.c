@@ -653,7 +653,7 @@ static json_t *_emailaddresses_from_addr(struct address *addr, enum header_form 
         }
         else {
             /* Regular address */
-            json_t *jemailaddr = json_pack("{}");
+            json_t *jemailaddr = json_object();
             if (addr->name) {
                 char *tmp = _decode_mimeheader(addr->name);
                 if (tmp) json_object_set_new(jemailaddr, "name", json_string(tmp));
@@ -1298,7 +1298,7 @@ static conversation_id_t _cid_from_id(const char *thrid)
  */
 static json_t *_email_mailboxes(jmap_req_t *req, const char *msgid)
 {
-    struct _email_mailboxes_rock data = { req, json_pack("{}") };
+    struct _email_mailboxes_rock data = { req, json_object() };
     conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_mailboxes_cb, &data);
     return data.mboxs;
 }
@@ -5210,8 +5210,8 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     static search_snippet_markup_t markup = { "<mark>", "</mark>", "..." };
     strarray_t partids = STRARRAY_INITIALIZER;
 
-    *snippets = json_pack("[]");
-    *notfound = json_pack("[]");
+    *snippets = json_array();
+    *notfound = json_array();
 
     /* Set up custom search text receiver */
     struct snippet_receiver sr = {
@@ -5273,7 +5273,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     }
 
     /* Initialize snippet callback context */
-    snippet = json_pack("{}");
+    snippet = json_object();
     struct search_text_receiver *srx = (struct search_text_receiver*) &sr;
     rx = search_begin_snippets(intquery, 0, &markup, _snippet_get_cb, &sr);
     if (!rx) {
@@ -5442,7 +5442,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     _email_contactfilter_initreq(req, &contactfilter);
 
     /* Parse and validate arguments. */
-    json_t *unsupported_filter = json_pack("[]");
+    json_t *unsupported_filter = json_array();
 
     json_object_foreach(req->args, key, arg) {
         if (!strcmp(key, "accountId")) {
@@ -5537,7 +5537,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
         size_t i;
         json_t *val;
 
-        snippets = json_pack("[]");
+        snippets = json_array();
         notfound = json_null();
 
         json_array_foreach(jmessageids, i, val) {
@@ -5607,7 +5607,7 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
         }
 
         int is_own_account = !strcmp(req->userid, req->accountid);
-        json_t *ids = json_pack("[]");
+        json_t *ids = json_array();
         for (thread = conv.thread; thread; thread = thread->next) {
             struct thread_get_rock rock = { req, is_own_account, 0 };
             const char *guidrep = message_guid_encode(&thread->guid);
@@ -8201,7 +8201,7 @@ static void _email_append(jmap_req_t *req,
     if (!internaldate) internaldate = time(NULL);
 
     /* Pick the mailbox to create the message in, prefer \Snoozed then \Drafts */
-    mailboxes = json_pack("{}"); /* maps mailbox ids to mboxnames */
+    mailboxes = json_object(); /* maps mailbox ids to mboxnames */
     json_object_foreach(mailboxids, id, val) {
         const char *mboxid = id;
         /* Lookup mailbox */
@@ -12627,8 +12627,8 @@ done:
 
 static int jmap_email_import(jmap_req_t *req)
 {
-    json_t *created = json_pack("{}");
-    json_t *not_created = json_pack("{}");
+    json_t *created = json_object();
+    json_t *not_created = json_object();
 
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     const char *key;

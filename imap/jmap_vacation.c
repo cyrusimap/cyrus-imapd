@@ -370,7 +370,7 @@ static void vacation_update(const char *userid, const char *id,
     /* Parse and validate properties. */
     unsigned status = 0;
     json_t *vacation = vacation_read(userid, &status);
-    json_t *prop, *jerr, *invalid = json_pack("[]");
+    json_t *prop, *jerr, *invalid = json_array();
     int r;
 
     prop = json_object_get(patch, "isEnabled");
