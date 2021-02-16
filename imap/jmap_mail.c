@@ -9873,11 +9873,8 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
                                     struct emailpart *emailpart,
                                     json_t *missing_blobs)
 {
-    struct buf blob_buf = BUF_INITIALIZER;
-    msgrecord_t *mr = NULL;
-    struct mailbox *mbox = NULL;
-    struct body *body = NULL;
-    const struct body *part = NULL;
+    jmap_getblob_context_t ctx =
+        GETBLOB_CTX_INITIALIZER(NULL, emailpart->blob_id, NULL, 0);
     const char *content = NULL;
     size_t content_size = 0;
     const char *src_encoding = NULL;
@@ -9886,21 +9883,15 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     int r = 0;
 
     /* Find body part containing blob */
-    r = jmap_findblob(req, NULL/*accountid*/, emailpart->blob_id,
-                      &mbox, &mr, &body, &part, &blob_buf);
+    r = jmap_getblob(req, &ctx);
     if (r) goto done;
 
     /* Fetch blob contents and headers */
-    content = blob_buf.s;
-    content_size = blob_buf.len;
-    if (part) {
-        content += part->content_offset;
-        content_size = part->content_size;
-        src_encoding = part->encoding;
-    }
+    content = buf_base(&ctx.blob);
+    content_size = buf_len(&ctx.blob);
 
     /* Determine target encoding */
-    encoding = src_encoding;
+    encoding = src_encoding = ctx.encoding;
 
     if (!strcasecmpsafe(emailpart->type, "MESSAGE")) {
         if (!strcasecmpsafe(src_encoding, "BASE64")) {
@@ -9966,13 +9957,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
 
 done:
     if (r) json_array_append_new(missing_blobs, json_string(emailpart->blob_id));
-    if (body) {
-        message_free_body(body);
-        free(body);
-    }
-    msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
-    buf_free(&blob_buf);
+    jmap_getblob_ctx_free(&ctx);
 }
 
 static void _emailpart_text_to_mime(FILE *fp, struct emailpart *part)
