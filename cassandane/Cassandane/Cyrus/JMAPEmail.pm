@@ -20541,6 +20541,7 @@ EOF
     ], $using);
 
     $self->assert_str_equals('unsupportedFilter', $res->[0][1]{type});
+    $self->assert_str_equals('search too complex', $res->[0][1]{description});
 }
 
 1;
