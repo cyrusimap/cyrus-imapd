@@ -1878,6 +1878,7 @@ sub test_contact_set
 
     if ($res->[0][1]{created}{"1"}{blobId}) {
         $contact->{blobId} = $res->[0][1]{created}{"1"}{blobId};
+        $contact->{size} = $res->[0][1]{created}{"1"}{size};
     }
 
     xlog $self, "get contact $id";
@@ -1909,6 +1910,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -1922,6 +1924,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -1935,6 +1938,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -1953,6 +1957,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -1971,6 +1976,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -1984,6 +1990,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -1997,6 +2004,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -2010,6 +2018,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -2040,6 +2049,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -2070,6 +2080,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -2100,6 +2111,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -2132,6 +2144,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -2145,6 +2158,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     xlog $self, "get contact $id";
@@ -2188,6 +2202,7 @@ sub test_contact_set
 
     if ($res->[0][1]{updated}{$id}{blobId}) {
         $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
     }
 
     if ($res->[0][1]{updated}{$id}{avatar}{blobId}) {
