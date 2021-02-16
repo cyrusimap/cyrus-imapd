@@ -1,6 +1,6 @@
 Description:
 
-Always return 'blobId' in Contact/set{create.update} and Contact/get responses.
+Always return 'blobId' and 'size' in Contact/set{create,update} and Contact/get responses.
 
 
 Config changes:

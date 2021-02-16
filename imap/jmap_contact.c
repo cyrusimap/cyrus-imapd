@@ -497,6 +497,11 @@ static const jmap_property_t contact_props[] = {
         JMAP_CONTACTS_EXTENSION,
         JMAP_PROP_SERVER_SET
     },
+    {
+        "size",
+        JMAP_CONTACTS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    },
 
     { NULL, NULL, 0 }
 };
@@ -1159,10 +1164,17 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                               record.createdmodseq, flags, &annots, req->accountid,
                               req->authstate, ignorequota);
             if (!r) {
-                _encode_contact_blobid(uid, this_mailbox->i.highestmodseq,
-                                       NULL, NULL, &buf);
+                struct index_record record;
+
+                mailbox_find_index_record(this_mailbox,
+                                          this_mailbox->i.last_uid, &record);
+
+                _encode_contact_blobid(uid, record.modseq, NULL, NULL, &buf);
                 json_object_set_new(item, "blobId",
                                     json_string(buf_cstring(&buf)));
+
+                json_object_set_new(item, "size",
+                                    json_integer(record.size - record.header_size));
 
                 r = carddav_remove(mailbox, olduid,
                                    /*isreplace*/!newmailbox, req->accountid);
@@ -2055,6 +2067,10 @@ gotvalue:
         }
         buf_free(&blobid);
         json_object_set_new(obj, "blobId", jblobid);
+    }
+    if (jmap_wantprop(crock->get->props, "size")) {
+        json_object_set_new(obj, "size",
+                            json_integer(record.size - record.header_size));
     }
 
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
@@ -4163,8 +4179,14 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
 
     json_object_set_new(item, "id", json_string(uid));
 
-    _encode_contact_blobid(uid, (*mailbox)->i.highestmodseq, NULL, NULL, &buf);
+    struct index_record record;
+    mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
+
+    _encode_contact_blobid(uid, record.modseq, NULL, NULL, &buf);
     json_object_set_new(item, "blobId", json_string(buf_cstring(&buf)));
+
+    json_object_set_new(item, "size",
+                        json_integer(record.size - record.header_size));
 
 done:
     vparse_free_card(card);
