@@ -3265,3 +3265,10 @@ EXPORTED void jmap_mbentry_cache_free(jmap_req_t *req)
         req->mbentry_byid = NULL;
     }
 }
+
+HIDDEN void jmap_getblob_ctx_free(jmap_getblob_context_t *ctx)
+{
+    buf_free(&ctx->blob);
+    free(ctx->content_type);
+    free(ctx->encoding);
+}

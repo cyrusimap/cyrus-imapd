@@ -1882,7 +1882,6 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     struct carddav_data *cdata = NULL;
     struct mailbox *mailbox = NULL;
     struct vparse_card *vcard = NULL;
-    static struct buf cbuf = BUF_INITIALIZER;
     char *uid = NULL, *prop = NULL, *mediatype = NULL;
     modseq_t modseq;
     struct message_guid guid = MESSAGE_GUID_INITIALIZER;
@@ -1928,7 +1927,7 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
                 goto done;
             }
 
-            ctx->content_type = ctx->accept_mime;
+            ctx->content_type = xstrdup(ctx->accept_mime);
         }
     }
 
@@ -1968,23 +1967,26 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
                 goto done;
             }
 
-            ctx->content_type = ctx->accept_mime;
+            ctx->content_type = xstrdup(ctx->accept_mime);
         }
         else {
-            buf_setcstr(&cbuf, mediatype);
-            ctx->content_type = buf_cstring(&cbuf);
+            ctx->content_type = xstrdupnull(mediatype);
         }
+
+        ctx->encoding = xstrdup("BINARY");
     }
     else {
         if (!ctx->accept_mime || !strcmp(ctx->accept_mime, "text/vcard")) {
             struct vparse_entry *entry =
                 vparse_get_entry(vcard->objects, NULL, "VERSION");
+            struct buf buf = BUF_INITIALIZER;
 
-            buf_setcstr(&cbuf, "text/vcard");
-            if (entry) buf_printf(&cbuf, "; version=%s", entry->v.value);
-            ctx->content_type = buf_cstring(&cbuf);
+            buf_setcstr(&buf, "text/vcard");
+            if (entry) buf_printf(&buf, "; version=%s", entry->v.value);
+            ctx->content_type = buf_release(&buf);
         }
 
+        ctx->encoding = xstrdup("8BIT");
         vparse_tobuf(vcard, &ctx->blob);
     }
 
@@ -3660,11 +3662,11 @@ static int _blob_to_card(struct jmap_req *req,
 
     /* Find blob */
     jmap_getblob_context_t ctx =
-        { accountid, blobid, accept_mime, BUF_INITIALIZER, NULL, NULL };
+        GETBLOB_CTX_INITIALIZER(accountid, blobid, accept_mime, 1);
     r = jmap_getblob(req, &ctx);
 
     switch (r) {
-    case 0: 
+    case 0:
         if (!ctx.content_type || strchr(ctx.content_type, '/')) break;
 
         /* Fall through */
@@ -3725,7 +3727,7 @@ static int _blob_to_card(struct jmap_req *req,
     free(decbuf);
     free(encbuf);
     buf_free(&buf);
-    buf_free(&ctx.blob);
+    jmap_getblob_ctx_free(&ctx);
 
     return r;
 }

@@ -1593,7 +1593,6 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
     struct caldav_data *cdata = NULL;
     struct mailbox *mailbox = NULL;
     icalcomponent *ical = NULL;
-    static struct buf cbuf = BUF_INITIALIZER;
     char *uid = NULL;
     char *userid = NULL;
     modseq_t modseq;
@@ -1680,10 +1679,11 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
         /* Set Content headers */
         if (!ctx->accept_mime || !strcmp(ctx->accept_mime, "text/calendar")) {
             const char *comp_type = caldav_comp_type_as_string(cdata->comp_type);
+            struct buf buf = BUF_INITIALIZER;
 
-            buf_setcstr(&cbuf, "text/calendar");
-            if (comp_type) buf_printf(&cbuf, "; component=%s", comp_type);
-            ctx->content_type = buf_cstring(&cbuf);
+            buf_setcstr(&buf, "text/calendar");
+            if (comp_type) buf_printf(&buf, "; component=%s", comp_type);
+            ctx->content_type = buf_release(&buf);
         }
 
         /* Write body */
@@ -1696,14 +1696,14 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
         const char *epilogue = "\r\nEnd of MIME multipart body.\r\n";
         char boundary[100];
         struct buf *blob = &ctx->blob;
+        struct buf buf = BUF_INITIALIZER;
 
         snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
                  *spool_getheader(req->txn->req_hdrs, ":authority"),
                  (long) getpid(), (long) time(0), (long) rand());
 
-        buf_reset(&cbuf);
-        buf_printf(&cbuf, "multipart/mixed; boundary=\"%s\"", boundary);
-        ctx->content_type = buf_cstring(&cbuf);
+        buf_printf(&buf, "multipart/mixed; boundary=\"%s\"", boundary);
+        ctx->content_type = buf_release(&buf);
 
         buf_setcstr(blob, preamble);
 
@@ -1729,6 +1729,8 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
         /* Write close-delimiter and epilogue */
         buf_printf(blob, "\r\n--%s--\r\n%s", boundary, epilogue);
     }
+
+    ctx->encoding = xstrdup("8BIT");
 
 done:
     if (res != HTTP_OK && !ctx->errstr) {

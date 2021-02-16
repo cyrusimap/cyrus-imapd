@@ -13455,9 +13455,9 @@ static int jmap_emailheader_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx
             goto done;
         }
 
-        ctx->content_type = ctx->accept_mime;
+        ctx->content_type = xstrdup(ctx->accept_mime);
     }
-    else if (mimetype) ctx->content_type = mimetype;
+    else if (mimetype) ctx->content_type = xstrdup(mimetype);
 
     /* Open mailbox, we need it now */
     if ((r = jmap_openmbox(req, mboxname, &mailbox, 0))) {
@@ -13492,16 +13492,20 @@ static int jmap_emailheader_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx
         /* eliminate whitespace */
         buf_replace_all_re(blob, &whitespace_re, "");
 
-        /* base64-decode the data */
-        r = sasl_decode64(buf_base(blob), buf_len(blob),
-                          (char *) buf_base(blob), buf_len(blob), &outlen);
-        if (r == SASL_OK) {
-            buf_truncate(blob, outlen);
+        if (ctx->decode) {
+            /* base64-decode the data */
+            r = sasl_decode64(buf_base(blob), buf_len(blob),
+                              (char *) buf_base(blob), buf_len(blob), &outlen);
+            if (r == SASL_OK) {
+                buf_truncate(blob, outlen);
+                ctx->encoding = xstrdup("BINARY");
+            }
+            else {
+                ctx->errstr = "failed to decode blob";
+                res = HTTP_SERVER_ERROR;
+            }
         }
-        else {
-            ctx->errstr = "failed to decode blob";
-            res = HTTP_SERVER_ERROR;
-        }
+        else ctx->encoding = xstrdup("BASE64");
     }
     else {
         res = HTTP_NOT_FOUND;
