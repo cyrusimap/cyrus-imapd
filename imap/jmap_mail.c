@@ -9873,8 +9873,6 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
                                     struct emailpart *emailpart,
                                     json_t *missing_blobs)
 {
-    jmap_getblob_context_t ctx =
-        GETBLOB_CTX_INITIALIZER(NULL, emailpart->blob_id, NULL, 0);
     const char *content = NULL;
     size_t content_size = 0;
     const char *src_encoding = NULL;
@@ -9883,6 +9881,8 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     int r = 0;
 
     /* Find body part containing blob */
+    jmap_getblob_context_t ctx;
+    jmap_getblob_ctx_init(&ctx, NULL, emailpart->blob_id, NULL, 0);
     r = jmap_getblob(req, &ctx);
     if (r) goto done;
 
@@ -9957,7 +9957,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
 
 done:
     if (r) json_array_append_new(missing_blobs, json_string(emailpart->blob_id));
-    jmap_getblob_ctx_free(&ctx);
+    jmap_getblob_ctx_fini(&ctx);
 }
 
 static void _emailpart_text_to_mime(FILE *fp, struct emailpart *part)

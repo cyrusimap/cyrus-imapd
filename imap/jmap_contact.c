@@ -3661,8 +3661,8 @@ static int _blob_to_card(struct jmap_req *req,
     accept_mime = json_string_value(json_object_get(file, "type"));
 
     /* Find blob */
-    jmap_getblob_context_t ctx =
-        GETBLOB_CTX_INITIALIZER(accountid, blobid, accept_mime, 1);
+    jmap_getblob_context_t ctx;
+    jmap_getblob_ctx_init(&ctx, accountid, blobid, accept_mime, 1);
     r = jmap_getblob(req, &ctx);
 
     switch (r) {
@@ -3727,7 +3727,7 @@ static int _blob_to_card(struct jmap_req *req,
     free(decbuf);
     free(encbuf);
     buf_free(&buf);
-    jmap_getblob_ctx_free(&ctx);
+    jmap_getblob_ctx_fini(&ctx);
 
     return r;
 }

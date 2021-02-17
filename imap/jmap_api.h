@@ -178,11 +178,10 @@ typedef struct {
     const char *errstr;          // output from the handler
 } jmap_getblob_context_t;
 
-#define GETBLOB_CTX_INITIALIZER(from_accountid, blobid, accept_mime, decode) \
-    { from_accountid, blobid, accept_mime, decode,                           \
-            BUF_INITIALIZER, NULL, NULL, NULL };
-
-void jmap_getblob_ctx_free(jmap_getblob_context_t *ctx);
+void jmap_getblob_ctx_init(jmap_getblob_context_t *ctx,
+                           const char *from_accountid, const char *blobid,
+                           const char *accept_mime, unsigned decode);
+void jmap_getblob_ctx_fini(jmap_getblob_context_t *ctx);
 
 typedef int jmap_getblob_handler(jmap_req_t *req, jmap_getblob_context_t *ctx);
 

@@ -593,9 +593,8 @@ static int jmap_download(struct transaction_t *txn)
     }
 
     /* Call blob download handlers */
-    jmap_getblob_context_t ctx =
-        GETBLOB_CTX_INITIALIZER(accountid, blobid, accept_mime, 1);
-
+    jmap_getblob_context_t ctx;
+    jmap_getblob_ctx_init(&ctx, accountid, blobid, accept_mime, 1);
     res = jmap_getblob(&req, &ctx);
     if (res) {
         txn->error.desc = ctx.errstr ? ctx.errstr : error_message(res);
@@ -616,7 +615,7 @@ static int jmap_download(struct transaction_t *txn)
         write_body(HTTP_OK, txn, buf_base(&ctx.blob), buf_len(&ctx.blob));
     }
 
-    jmap_getblob_ctx_free(&ctx);
+    jmap_getblob_ctx_fini(&ctx);
     free_hash_table(&mbstates, free);
     conversations_commit(&cstate);
     free(accept_mime);
