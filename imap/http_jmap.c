@@ -458,7 +458,7 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
 
     if (ctx->accept_mime) {
         /* XXX  Can we be smarter here and test against part->[sub]type ? */
-        ctx->content_type = ctx->accept_mime;
+        ctx->content_type = xstrdup(ctx->accept_mime);
     }
 
     if (part) {
@@ -478,11 +478,13 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
         }
         else if (decbuf) {
             buf_initm(&ctx->blob, decbuf, len);
+            ctx->encoding = xstrdup("BINARY");
         }
         else {
             /* Skip headers */
             buf_remove(&ctx->blob, 0, part->content_offset);
             buf_truncate(&ctx->blob, part->content_size);
+            ctx->encoding = xstrdup(part->encoding);
         }
     }
 
@@ -591,10 +593,8 @@ static int jmap_download(struct transaction_t *txn)
     }
 
     /* Call blob download handlers */
-    jmap_getblob_context_t ctx =
-        { accountid, blobid, accept_mime,
-          BUF_INITIALIZER, "application/octet-stream", NULL };
-        
+    jmap_getblob_context_t ctx;
+    jmap_getblob_ctx_init(&ctx, accountid, blobid, accept_mime, 1);
     res = jmap_getblob(&req, &ctx);
     if (res) {
         txn->error.desc = ctx.errstr ? ctx.errstr : error_message(res);
@@ -609,12 +609,13 @@ static int jmap_download(struct transaction_t *txn)
         txn->flags.cc |= CC_MAXAGE | CC_PRIVATE | CC_IMMUTABLE;
 
         /* Write body */
-        txn->resp_body.type = ctx.content_type;
+        txn->resp_body.type =
+            ctx.content_type ? ctx.content_type : "application/octet-stream";
         txn->resp_body.len = buf_len(&ctx.blob);
         write_body(HTTP_OK, txn, buf_base(&ctx.blob), buf_len(&ctx.blob));
     }
 
-    buf_free(&ctx.blob);
+    jmap_getblob_ctx_fini(&ctx);
     free_hash_table(&mbstates, free);
     conversations_commit(&cstate);
     free(accept_mime);

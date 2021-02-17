@@ -2300,9 +2300,11 @@ static int jmap_sieve_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
             return HTTP_NOT_ACCEPTABLE;
         }
 
-        ctx->content_type = ctx->accept_mime;
+        ctx->content_type = xstrdup(ctx->accept_mime);
     }
-    else ctx->content_type = "application/sieve; charset=utf-8";
+    else ctx->content_type = xstrdup("application/sieve; charset=utf-8");
+
+    ctx->encoding = xstrdup("8BIT");
 
     /* Lookup scriptid */
     const char *sievedir =

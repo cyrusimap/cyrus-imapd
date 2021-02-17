@@ -3265,3 +3265,22 @@ EXPORTED void jmap_mbentry_cache_free(jmap_req_t *req)
         req->mbentry_byid = NULL;
     }
 }
+
+HIDDEN void jmap_getblob_ctx_init(jmap_getblob_context_t *ctx,
+                                  const char *from_accountid, const char *blobid,
+                                  const char *accept_mime, unsigned decode)
+{
+    memset(ctx, 0, sizeof(jmap_getblob_context_t));
+
+    ctx->from_accountid = from_accountid;
+    ctx->blobid = blobid;
+    ctx->accept_mime = accept_mime;
+    ctx->decode = decode;
+}
+
+HIDDEN void jmap_getblob_ctx_fini(jmap_getblob_context_t *ctx)
+{
+    buf_free(&ctx->blob);
+    free(ctx->content_type);
+    free(ctx->encoding);
+}

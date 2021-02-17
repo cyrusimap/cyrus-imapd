@@ -9883,11 +9883,6 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
                                     struct emailpart *emailpart,
                                     json_t *missing_blobs)
 {
-    struct buf blob_buf = BUF_INITIALIZER;
-    msgrecord_t *mr = NULL;
-    struct mailbox *mbox = NULL;
-    struct body *body = NULL;
-    const struct body *part = NULL;
     const char *content = NULL;
     size_t content_size = 0;
     const char *src_encoding = NULL;
@@ -9896,21 +9891,17 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     int r = 0;
 
     /* Find body part containing blob */
-    r = jmap_findblob(req, NULL/*accountid*/, emailpart->blob_id,
-                      &mbox, &mr, &body, &part, &blob_buf);
+    jmap_getblob_context_t ctx;
+    jmap_getblob_ctx_init(&ctx, NULL, emailpart->blob_id, NULL, 0);
+    r = jmap_getblob(req, &ctx);
     if (r) goto done;
 
     /* Fetch blob contents and headers */
-    content = blob_buf.s;
-    content_size = blob_buf.len;
-    if (part) {
-        content += part->content_offset;
-        content_size = part->content_size;
-        src_encoding = part->encoding;
-    }
+    content = buf_base(&ctx.blob);
+    content_size = buf_len(&ctx.blob);
 
     /* Determine target encoding */
-    encoding = src_encoding;
+    encoding = src_encoding = ctx.encoding;
 
     if (!strcasecmpsafe(emailpart->type, "MESSAGE")) {
         if (!strcasecmpsafe(src_encoding, "BASE64")) {
@@ -9976,13 +9967,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
 
 done:
     if (r) json_array_append_new(missing_blobs, json_string(emailpart->blob_id));
-    if (body) {
-        message_free_body(body);
-        free(body);
-    }
-    msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
-    buf_free(&blob_buf);
+    jmap_getblob_ctx_fini(&ctx);
 }
 
 static void _emailpart_text_to_mime(FILE *fp, struct emailpart *part)
@@ -13465,9 +13450,9 @@ static int jmap_emailheader_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx
             goto done;
         }
 
-        ctx->content_type = ctx->accept_mime;
+        ctx->content_type = xstrdup(ctx->accept_mime);
     }
-    else if (mimetype) ctx->content_type = mimetype;
+    else if (mimetype) ctx->content_type = xstrdup(mimetype);
 
     /* Open mailbox, we need it now */
     if ((r = jmap_openmbox(req, mboxname, &mailbox, 0))) {
@@ -13502,16 +13487,20 @@ static int jmap_emailheader_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx
         /* eliminate whitespace */
         buf_replace_all_re(blob, &whitespace_re, "");
 
-        /* base64-decode the data */
-        r = sasl_decode64(buf_base(blob), buf_len(blob),
-                          (char *) buf_base(blob), buf_len(blob), &outlen);
-        if (r == SASL_OK) {
-            buf_truncate(blob, outlen);
+        if (ctx->decode) {
+            /* base64-decode the data */
+            r = sasl_decode64(buf_base(blob), buf_len(blob),
+                              (char *) buf_base(blob), buf_len(blob), &outlen);
+            if (r == SASL_OK) {
+                buf_truncate(blob, outlen);
+                ctx->encoding = xstrdup("BINARY");
+            }
+            else {
+                ctx->errstr = "failed to decode blob";
+                res = HTTP_SERVER_ERROR;
+            }
         }
-        else {
-            ctx->errstr = "failed to decode blob";
-            res = HTTP_SERVER_ERROR;
-        }
+        else ctx->encoding = xstrdup("BASE64");
     }
     else {
         res = HTTP_NOT_FOUND;
