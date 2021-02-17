@@ -1876,6 +1876,11 @@ sub test_contact_set
     $contact->{"x-hasPhoto"} = JSON::false;
     $contact->{"addressbookId"} = 'Default';
 
+    if ($res->[0][1]{created}{"1"}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{created}{"1"}{blobId};
+        $contact->{size} = $res->[0][1]{created}{"1"}{size};
+    }
+
     xlog $self, "get contact $id";
     my $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
 
@@ -1890,6 +1895,10 @@ sub test_contact_set
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {isFlagged => JSON::true} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+    }
+
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
@@ -1898,6 +1907,11 @@ sub test_contact_set
     $contact->{prefix} = 'foo';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {prefix => 'foo'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
+
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
 
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
@@ -1908,6 +1922,11 @@ sub test_contact_set
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {suffix => 'bar'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
+
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
@@ -1916,6 +1935,11 @@ sub test_contact_set
     $contact->{nickname} = 'nick';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {nickname => 'nick'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
+
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
 
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
@@ -1931,6 +1955,11 @@ sub test_contact_set
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {birthday => '1979-04-01'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
+
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
@@ -1945,6 +1974,11 @@ sub test_contact_set
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {anniversary => '1989-12-17'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
+
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
@@ -1953,6 +1987,11 @@ sub test_contact_set
     $contact->{company} = 'acme';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {company => 'acme'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
+
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
 
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
@@ -1963,6 +2002,11 @@ sub test_contact_set
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {department => 'looney tunes'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
+
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
@@ -1971,6 +2015,11 @@ sub test_contact_set
     $contact->{jobTitle} = 'director of everything';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {jobTitle => 'director of everything'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
+
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
 
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
@@ -1998,6 +2047,11 @@ sub test_contact_set
                         } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
+
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
@@ -2024,6 +2078,11 @@ sub test_contact_set
                         } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
+
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
@@ -2049,6 +2108,11 @@ sub test_contact_set
                             online => [{ type => "uri", value => "http://example.com/me" }]
                         } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
+
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
 
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
@@ -2078,6 +2142,11 @@ sub test_contact_set
                         } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
+
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
@@ -2086,6 +2155,11 @@ sub test_contact_set
     $contact->{notes} = 'baz';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {notes => 'baz'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
+
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
 
     xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
@@ -2125,6 +2199,11 @@ sub test_contact_set
                              }
                      } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
+
+    if ($res->[0][1]{updated}{$id}{blobId}) {
+        $contact->{blobId} = $res->[0][1]{updated}{$id}{blobId};
+        $contact->{size} = $res->[0][1]{updated}{$id}{size};
+    }
 
     if ($res->[0][1]{updated}{$id}{avatar}{blobId}) {
         $contact->{avatar}{blobId} = $res->[0][1]{updated}{$id}{avatar}{blobId};
