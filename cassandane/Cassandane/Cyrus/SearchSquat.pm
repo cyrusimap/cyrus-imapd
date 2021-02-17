@@ -114,4 +114,27 @@ sub test_simple
     }
 }
 
+# XXX version gated to 3.4+ for now to keep travis happy, but if we
+# XXX backport the fix we should change or remove the gate...
+sub test_skip_unmodified_slow
+    :SearchEngineSquat :min_version_3_4
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message() || die;
+
+    sleep(1);
+
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert(not grep /Squat skipping mailbox/, @lines);
+
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-s', '0');
+    @lines = $self->{instance}->getsyslog();
+    $self->assert(grep /Squat skipping mailbox/, @lines);
+}
+
 1;
