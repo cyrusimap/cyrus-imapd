@@ -33,6 +33,7 @@ Major changes since the 3.0.x series
   createdmodseq to index header, savedate and createdmodseq to index records
 * Support for WebSockets
 * Support for HTTP/2.0
+* Support for SCRAM authentication for httpd
 * Experimental support for Zeroskip database format
 * Intermediate mailboxes are now recorded in mailboxes database
 * Conversations database format update - adds flags and internaldate fields,

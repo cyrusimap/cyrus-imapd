@@ -728,7 +728,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`7540`
 
-      Hypertext Transfer Protocol Version 2 (HTTP/2)
+    Hypertext Transfer Protocol Version 2 (HTTP/2)
 
 :rfc:`7615`
 
