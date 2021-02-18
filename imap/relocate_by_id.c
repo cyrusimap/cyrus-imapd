@@ -373,6 +373,11 @@ static int find_p(const mbentry_t *mbentry, void *rock)
 {
     ptrarray_t *mboxlist = (ptrarray_t *) rock;
 
+    if (mbentry->mbtype & MBTYPE_DELETED) {
+        /* skip tombstones */
+        return 0;
+    }
+
     if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
         mbentry_t *mbentry_copy = NULL;
 
