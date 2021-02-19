@@ -8175,7 +8175,6 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
             mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
                                                 buf_len(&txn->buf), 0);
             spool_replace_header(xstrdup("From"), mimehdr, txn->req_hdrs);
-            buf_reset(&txn->buf);
         }
     }
 
