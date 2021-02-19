@@ -274,17 +274,18 @@ static const Xapian::Stopper* get_stopper(const std::string& iso)
     } catch (const std::out_of_range&) {};
 
     // Lookup language name by ISO code.
-    std::string lang_name;
     icu::Locale loc(iso.c_str());
     if (loc.isBogus()) return NULL;
-    icu::UnicodeString ulang_name;
-    loc.getDisplayLanguage(icu::Locale("en"), ulang_name);
-    ulang_name.toLower();
-    ulang_name.toUTF8String(lang_name);
 
     // Read stopper file and add to cache.
     const char *swpath = config_getstring(IMAPOPT_SEARCH_STOPWORD_PATH);
     if (!swpath) return NULL;
+
+    std::string lang_name;
+    icu::UnicodeString ulang_name;
+    loc.getDisplayLanguage(icu::Locale("en"), ulang_name);
+    ulang_name.toLower();
+    ulang_name.toUTF8String(lang_name);
 
     // Open stopword file
     // XXX doesn't play nice with WIN32 paths
