@@ -236,7 +236,6 @@ static struct txn *new_txn(void)
 
 static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 {
-    int r = 0;
     struct stat sbuf;
 
     assert(db);
@@ -246,8 +245,7 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 
         /* start txn; grab lock */
 
-        r = lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction);
-        if (r < 0) {
+        if (lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction) < 0) {
             syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, db->fname);
             return CYRUSDB_IOERROR;
         }
@@ -422,22 +420,6 @@ static int myfetch(struct dbengine *db,
 
     buf_free(&keybuf);
     return r;
-}
-
-static int fetch(struct dbengine *mydb,
-                 const char *key, size_t keylen,
-                 const char **data, size_t *datalen,
-                 struct txn **mytid)
-{
-    return myfetch(mydb, key, keylen, data, datalen, mytid);
-}
-
-static int fetchlock(struct dbengine *db,
-                     const char *key, size_t keylen,
-                     const char **data, size_t *datalen,
-                     struct txn **mytid)
-{
-    return myfetch(db, key, keylen, data, datalen, mytid);
 }
 
 static int getentry(struct dbengine *db, const char *p,
@@ -844,8 +826,8 @@ EXPORTED struct cyrusdb_backend cyrusdb_flat =
     &myopen,
     &myclose,
 
-    &fetch,
-    &fetchlock,
+    &myfetch,
+    &myfetch,
     NULL,
 
     &foreach,
