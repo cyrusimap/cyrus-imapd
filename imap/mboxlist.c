@@ -3461,9 +3461,9 @@ static int alluser_cb(const mbentry_t *mbentry, void *rock)
         if (strcmpsafe(urock->prev, userid)) {
             r = urock->proc(userid, urock->rock);
             free(urock->prev);
-            urock->prev = xstrdup(userid);
-        }
-        free(userid);
+            urock->prev = userid;
+        } else
+            free(userid);
     }
 
     return r;
