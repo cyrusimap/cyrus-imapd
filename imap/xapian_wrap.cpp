@@ -694,11 +694,9 @@ void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *torein
 
 /* ====================================================================== */
 
-static inline void add_boolean_nterm(Xapian::Document& doc,
-                                     const std::string& term,
-                                     size_t n = XAPIAN_MAX_TERM_LENGTH)
+static inline void add_boolean_nterm(Xapian::Document& doc, const std::string& term)
 {
-    if (term.size() && term.size() < n) {
+    if (term.size() && term.size() < XAPIAN_MAX_TERM_LENGTH) {
         doc.add_boolean_term(term);
     }
 }
