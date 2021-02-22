@@ -52,12 +52,14 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/param.h>
+#include <jansson.h>
 
 #include "util.h"
 #include "global.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "strarray.h"
 #include "user.h"
 
 /* generated headers are not necessarily in current directory */
@@ -73,6 +75,7 @@ static int usage(const char *error)
 {
     fprintf(stderr,"usage: mbpath [-C <alt_config>] [-l] [-m] [-q] [-s] [-u] [-a|A|D|M|S|U] <mailbox name>...\n");
     fprintf(stderr, "\n");
+    fprintf(stderr,"\t-j\tprint all values as a JSON object\n");
     fprintf(stderr,"\t-a\tprint all values with prefixes\n");
     fprintf(stderr,"\t-l\tlocal only (exit with error for remote/nonexistent)\n");
     fprintf(stderr,"\t-m\toutput the path to the metadata files (if different from the message files)\n");
@@ -89,6 +92,84 @@ static int usage(const char *error)
         fprintf(stderr,"ERROR: %s", error);
     }
     exit(-1);
+}
+
+static void find_tier(const char *key, const char *val __attribute__((unused)), void *rock)
+{
+    strarray_t *tiers = (strarray_t *)rock;
+    const char *partition = strstr(key, "searchpartition-");
+    if (!partition) return;
+    strarray_appendm(tiers, xstrndup(key, partition - key));
+}
+
+static void print_json(const mbname_t *mbname, const mbentry_t *mbentry)
+{
+    // we always print everything in JSON format
+    int i;
+
+    json_t *jres = json_object();
+
+    const char *userid = mbname_userid(mbname);
+
+    // mbname
+    json_t *jmbname = json_object();
+    if (mbname_userid(mbname))
+        json_object_set_new(jmbname, "userid", json_string(userid));
+    if (mbname_domain(mbname))
+        json_object_set_new(jmbname, "domain", json_string(mbname_domain(mbname)));
+    if (mbname_localpart(mbname))
+        json_object_set_new(jmbname, "localpart", json_string(mbname_localpart(mbname)));
+    if (mbname_isdeleted(mbname))
+        json_object_set_new(jmbname, "isdeleted", json_integer(mbname_isdeleted(mbname)));
+    json_t *jboxes = json_array();
+    const strarray_t *boxes = mbname_boxes(mbname);
+    for (i = 0; i < strarray_size(boxes); i++)
+        json_array_append_new(jboxes, json_string(strarray_nth(boxes, i)));
+    json_object_set_new(jmbname, "boxes", jboxes);
+    json_object_set_new(jmbname, "intname", json_string(mbname_intname(mbname)));
+    json_object_set_new(jres, "mbname", jmbname);
+
+    // we don't do quota paths because that's hard to extract from the quota db interface right now
+
+    if (userid) {
+        // user paths
+        json_t *juser = json_object();
+        json_object_set_new(juser, "conversations", json_string(user_hash_meta(userid, "conversations")));
+        json_object_set_new(juser, "counters", json_string(user_hash_meta(userid, "counters")));
+        json_object_set_new(juser, "dav", json_string(user_hash_meta(userid, "dav")));
+        json_object_set_new(juser, "sieve", json_string(user_sieve_path(userid)));
+        json_object_set_new(juser, "sub", json_string(user_hash_meta(userid, "sub")));
+        json_object_set_new(juser, "xapianactive", json_string(user_hash_meta(userid, "xapianactive")));
+
+        json_object_set_new(jres, "user", juser);
+
+        // xapian tiers
+        json_t *jxapian = json_object();
+        strarray_t tiers = STRARRAY_INITIALIZER;
+        config_foreachoverflowstring(find_tier, &tiers);
+        for (i = 0; i < strarray_size(&tiers); i++) {
+            const char *tier = strarray_nth(&tiers, i);
+            char *basedir = NULL;
+            xapian_basedir(tier, mbentry->name, mbentry->partition, NULL, &basedir);
+            if (basedir) {
+                json_object_set_new(jxapian, tier, json_string(basedir));
+                free(basedir);
+            }
+        }
+        strarray_fini(&tiers);
+
+        json_object_set_new(jres, "xapian", jxapian);
+    }
+
+    // mailbox paths
+    json_object_set_new(jres, "archive", json_string(mboxname_archivepath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0)));
+    json_object_set_new(jres, "data", json_string(mboxname_datapath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0)));
+    json_object_set_new(jres, "meta", json_string(mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0, 0)));
+
+    char *out = json_dumps(jres, JSON_INDENT(2)|JSON_SORT_KEYS);
+    printf("%s\n", out);
+    free(out);
+    json_decref(jres);
 }
 
 int main(int argc, char **argv)
@@ -110,8 +191,9 @@ int main(int argc, char **argv)
     int doS = 0;
     int doU = 0;
     int sel = 0;
+    int do_json = 0;
 
-    while ((opt = getopt(argc, argv, "C:almqsuADMSU")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:ajlmqsudADMSU")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -127,6 +209,10 @@ int main(int argc, char **argv)
 
         case 'l':
             localonly = 1;
+            break;
+
+        case 'j':
+            do_json = 1;
             break;
 
         case 'm':
@@ -226,6 +312,9 @@ int main(int argc, char **argv)
                     // ignore all selectors and just print this
                     printf("%s!%s\n", mbentry->server, mbentry->partition);
                 }
+            }
+            else if (do_json) {
+                print_json(mbname, mbentry);
             }
             else {
                 if (doall || doA) {
