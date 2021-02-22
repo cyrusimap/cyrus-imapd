@@ -777,7 +777,8 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "debug_writefail_guid", NULL, STRING, "UNRELEASED" }
 /* If set, any arriving message with this guid will fail as if the underlying
    disk write had failed, pretending to be a disk full condition.  This is
-   mainly useful for regression testing certain edge case handling. */
+   mainly useful for regression testing certain edge case handling.
+   Currently only implemented for replication uploads. */
 
 { "defaultacl", "anyone lrs", STRING, "2.3.17" }
 /* The Access Control List (ACL) placed on a newly-created (non-user)

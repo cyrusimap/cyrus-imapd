@@ -172,9 +172,24 @@ static int reservefile(struct protstream *in, const char *part,
                        struct message_guid *guid, unsigned long size,
                        int isbackup, const char **fname)
 {
+    static struct message_guid debug_writefail_guid = MESSAGE_GUID_INITIALIZER;
     FILE *file;
     char buf[8192+1];
     int r = 0;
+
+    if (debug_writefail_guid.status == GUID_UNKNOWN) {
+        const char *guidstr = config_getstring(IMAPOPT_DEBUG_WRITEFAIL_GUID);
+        if (guidstr) {
+            if (!message_guid_decode(&debug_writefail_guid, guidstr)) {
+                xsyslog(LOG_DEBUG, "debug_writefail_guid: ignoring invalid guid",
+                                   "guid=<%s>", guidstr);
+                message_guid_set_null(&debug_writefail_guid);
+            }
+        }
+        else {
+            message_guid_set_null(&debug_writefail_guid);
+        }
+    }
 
     /* XXX - write to a temporary file then move in to place! */
     *fname = dlist_reserve_path(part, /*isarchive*/0, isbackup, guid);
@@ -187,9 +202,19 @@ static int reservefile(struct protstream *in, const char *part,
         syslog(LOG_ERR,
                "IOERROR: failed to upload file %s", message_guid_encode(guid));
         r = IMAP_IOERROR;
-        /* Note: we still read the file's data from the wire,
-         * to avoid losing protocol sync */
     }
+    else if (debug_writefail_guid.status == GUID_NONNULL
+             && message_guid_equal(&debug_writefail_guid, guid)) {
+        /* no error, but pretend the disk is full */
+        fclose(file);
+        file = NULL;
+        errno = ENOSPC;
+        syslog(LOG_ERR, "IOERROR: failed to upload file %s (simulated)",
+                        message_guid_encode(guid));
+        r = IMAP_IOERROR;
+    }
+    /* Note: in the case of error we still read the file's data from the wire,
+     * to avoid losing protocol sync */
 
     /* XXX - calculate sha1 on the fly? */
     while (size) {
