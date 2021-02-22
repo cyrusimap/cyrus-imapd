@@ -91,11 +91,11 @@
  * mboxlist_mbtype_to_string()
  */
 
-#define mbtype_isa(mbtype)          (mbtype & 0xf)
-#define mbtypes_dav(mbtype)         (mbtype & 0x8)
+#define mbtype_isa(mbtype)          ((mbtype) & 0xf)
+#define mbtypes_dav(mbtype)         ((mbtype) & 0x8)
 #define mbtypes_unavailable(mbtype) \
-  (mbtype & (MBTYPE_REMOTE | MBTYPE_RESERVE | MBTYPE_MOVING | MBTYPE_DELETED))
-#define mbtypes_sync(mbtype)        (mbtype & ~MBTYPE_LEGACY_DIRS)
+  ((mbtype) & (MBTYPE_REMOTE | MBTYPE_RESERVE | MBTYPE_MOVING | MBTYPE_DELETED))
+#define mbtypes_sync(mbtype)        ((mbtype) & ~MBTYPE_LEGACY_DIRS)
 
 /* master name of the mailboxes file */
 #define FNAME_MBOXLIST "/mailboxes.db"
