@@ -3249,9 +3249,6 @@ static int validate_type(struct jmap_parser *parser, json_t *jobj, const char *w
 
 static void relatedto_to_ical(icalcomponent *, struct jmap_parser *, json_t *);
 
-/* defined in http_tzdist */
-extern void icalcomponent_add_required_timezones(icalcomponent *ical);
-
 /* Remove and deallocate any properties of kind in comp. */
 static void remove_icalprop(icalcomponent *comp, icalproperty_kind kind)
 {
