@@ -253,6 +253,10 @@ int search_can_match(enum search_op matchop, int partnum);
 /* for debugging */
 extern const char *search_op_as_string(int op);
 
+/* for mbpath */
+extern int xapian_basedir(const char *tier, const char *mboxname, const char *part,
+                          const char *root, char **basedir);
+
 
 
 #endif

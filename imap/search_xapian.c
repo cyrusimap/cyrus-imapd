@@ -101,8 +101,6 @@ struct segment
 };
 
 static const char *xapian_rootdir(const char *tier, const char *partition);
-static int xapian_basedir(const char *tier, const char *mboxname, const char *part,
-                          const char *root, char **basedir);
 
 /* ====================================================================== */
 static int check_config(char **errstr)
@@ -1941,7 +1939,7 @@ static const char *xapian_rootdir(const char *tier, const char *partition)
 }
 
 /* Returns in *basedirp a new string which must be free()d */
-static int xapian_basedir(const char *tier,
+EXPORTED int xapian_basedir(const char *tier,
                           const char *mboxname, const char *partition,
                           const char *root, char **basedirp)
 {
