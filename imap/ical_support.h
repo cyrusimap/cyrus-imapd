@@ -147,6 +147,25 @@ extern int icalcomponent_apply_vpatch(icalcomponent *ical,
 
 extern icaltimezone *icaltimezone_lookup_tzid(const char *tzid);
 
+struct observance {
+    const char *name;
+    icaltimetype onset;
+    int offset_from;
+    int offset_to;
+    int is_daylight;
+    int is_std;
+    int is_gmt;
+};
+
+extern void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
+                                                     icaltimetype *startp, icaltimetype *endp,
+                                                     icalarray *obsarray,
+                                                     struct observance **proleptic,
+                                                     icalcomponent **eternal_std,
+                                                     icalcomponent **eternal_dst,
+                                                     icaltimetype *last_dtstart,
+                                                     int ms_compatible);
+
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory
 
