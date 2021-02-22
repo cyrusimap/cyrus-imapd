@@ -73,7 +73,7 @@ static struct namespace mbpath_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: mbpath [-C <alt_config>] [-l] [-m] [-q] [-s] [-u] [-a|A|D|M|S|U] <mailbox name>...\n");
+    fprintf(stderr,"usage: mbpath [-C <alt_config>] [-l] [-m] [-q] [-s] [-u|d] [-a|A|D|M|S|U] <mailbox name>...\n");
     fprintf(stderr, "\n");
     fprintf(stderr,"\t-j\tprint all values as a JSON object\n");
     fprintf(stderr,"\t-a\tprint all values with prefixes\n");
@@ -82,6 +82,7 @@ static int usage(const char *error)
     fprintf(stderr,"\t-q\tquietly drop any error messages\n");
     fprintf(stderr,"\t-s\tstop on error\n");
     fprintf(stderr,"\t-u\targuments are user, not mailbox\n");
+    fprintf(stderr,"\t-d\targuments are domain, not mailbox\n");
     fprintf(stderr,"\t-A\tpartition archive directory\n");
     fprintf(stderr,"\t-D\tpartition data directory (*default*)\n");
     fprintf(stderr,"\t-M\tpartition metadata file directory (duplicate of -m)\n");
@@ -93,6 +94,26 @@ static int usage(const char *error)
     }
     exit(-1);
 }
+
+struct options_t {
+    unsigned quiet         : 1;
+    unsigned stop_on_error : 1;
+    unsigned localonly     : 1;
+    unsigned foundone      : 1;
+    unsigned mode          : 2;
+    unsigned paths         : 5;
+    unsigned do_json       : 1;
+};
+
+#define DO_ARCHIVE  (1<<0)
+#define DO_DATA     (1<<1)
+#define DO_META     (1<<2)
+#define DO_SIEVE    (1<<3)
+#define DO_USER     (1<<4)
+#define DO_ALL      (DO_ARCHIVE | DO_DATA | DO_META | DO_SIEVE | DO_USER)
+
+#define MODE_USER   1
+#define MODE_DOMAIN 2
 
 static void find_tier(const char *key, const char *val __attribute__((unused)), void *rock)
 {
@@ -163,9 +184,9 @@ static void print_json(const mbname_t *mbname, const mbentry_t *mbentry)
     }
 
     // mailbox paths
-    json_object_set_new(jres, "archive", json_string(mboxname_archivepath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0)));
-    json_object_set_new(jres, "data", json_string(mboxname_datapath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0)));
-    json_object_set_new(jres, "meta", json_string(mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0, 0)));
+    json_object_set_new(jres, "archive", json_string(mbentry_archivepath(mbentry, 0)));
+    json_object_set_new(jres, "data", json_string(mbentry_datapath(mbentry, 0)));
+    json_object_set_new(jres, "meta", json_string(mbentry_metapath(mbentry, 0, 0)));
 
     char *out = json_dumps(jres, JSON_INDENT(2)|JSON_SORT_KEYS);
     printf("%s\n", out);
@@ -173,111 +194,170 @@ static void print_json(const mbname_t *mbname, const mbentry_t *mbentry)
     json_decref(jres);
 }
 
+static int do_paths(struct findall_data *data, void *rock)
+{
+    struct options_t *opts = (struct options_t *) rock;
+
+    /* don't want partial matches */
+    if (!data || !data->is_exactmatch) return 0;
+
+    /* Ignore "reserved" entries, like they aren't there */
+    if (data->mbentry->mbtype & MBTYPE_RESERVE) {
+        return IMAP_MAILBOX_RESERVED;
+    }
+    /* Ignore "deleted" entries, like they aren't there */
+    else if (data->mbentry->mbtype & MBTYPE_DELETED) {
+        return IMAP_MAILBOX_NONEXISTENT;
+    }
+    else if (data->mbentry->mbtype & MBTYPE_REMOTE) {
+        if (opts->localonly) {
+            if (opts->stop_on_error) {
+                if (opts->quiet) {
+                    fatal("", -1);
+                }
+                else {
+                    fatal("Non-local mailbox. Stopping\n", -1);
+                }
+            }
+        }
+        else {
+            // ignore all paths and just print this
+            if (!opts->do_json)
+                printf("%s!%s\n", data->mbentry->server, data->mbentry->partition);
+        }
+    }
+    else if (opts->do_json) {
+        print_json(data->mbname, data->mbentry);
+    }
+    else {
+        if (opts->mode == MODE_DOMAIN) {
+            printf("\nUserid: %s\n", mbname_userid(data->mbname));
+        }
+        if (opts->paths & DO_ARCHIVE) {
+            const char *path = mbentry_archivepath(data->mbentry, 0);
+            if (opts->paths == DO_ALL) printf("Archive: ");
+            printf("%s\n", path);
+        }
+        if (opts->paths & DO_DATA) {
+            const char *path = mbentry_datapath(data->mbentry, 0);
+            if (opts->paths == DO_ALL) printf("Data: ");
+            printf("%s\n", path);
+        }
+        if (opts->paths & DO_META) {
+            const char *path = mbentry_metapath(data->mbentry, 0, 0);
+            if (opts->paths == DO_ALL) printf("Meta: ");
+            printf("%s\n", path);
+        }
+        if (opts->paths & DO_SIEVE) {
+            const char *path = user_sieve_path(mbname_userid(data->mbname));
+            if (opts->paths == DO_ALL) printf("Sieve: ");
+            printf("%s\n", path);
+        }
+        if (opts->paths & DO_USER) {
+            // different interface - caller must free
+            char *path = mboxname_conf_getpath(data->mbname, NULL);
+            if (opts->paths == DO_ALL) printf("User: ");
+            printf("%s\n", path);
+            free(path);
+        }
+    }
+
+    opts->foundone = 1;
+
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
-    mbentry_t *mbentry = NULL;
     int r, i;
     int opt;              /* getopt() returns an int */
     char *alt_config = NULL;
 
     // capture options
-    int quiet = 0;
-    int stop_on_error = 0;
-    int localonly = 0;
-    int usermode = 0;
-    int doall = 0;
-    int doA = 0;
-    int doD = 1; // default
-    int doM = 0;
-    int doS = 0;
-    int doU = 0;
-    int sel = 0;
-    int do_json = 0;
+    struct options_t opts = { 0, 0, 0, 0, 0, 0, 0 };
 
-    while ((opt = getopt(argc, argv, "C:ajlmqsuADMSU")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:ajlmqsudADMSU")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
 
         case 'a':
-            if (sel)
+            if (opts.paths)
                 usage("Duplicate selectors given");
-            doall = 1;
-            doD = 0;
-            sel = 1;
-            break;
-
-        case 'l':
-            localonly = 1;
+            opts.paths = DO_ALL;
             break;
 
         case 'j':
-            do_json = 1;
+            opts.do_json = 1;
+            break;
+
+        case 'l':
+            opts.localonly = 1;
             break;
 
         case 'm':
-            if (sel)
+            if (opts.paths)
                 usage("Duplicate selectors given");
-            doM = 1;
-            doD = 0;
-            sel = 1;
+            opts.paths = DO_META;
             break;
 
         case 'q':
-            quiet = 1;
+            opts.quiet = 1;
             break;
 
         case 's':
-            stop_on_error = 1;
+            opts.stop_on_error = 1;
             break;
 
         case 'u':
-            usermode = 1;
+            if (opts.mode)
+                usage("Multiple modes given");
+            opts.mode = MODE_USER;
+            break;
+
+        case 'd':
+            if (opts.mode)
+                usage("Multiple modes given");
+            opts.mode = MODE_DOMAIN;
             break;
 
         case 'A':
-            if (sel)
+            if (opts.paths)
                 usage("Duplicate selectors given");
-            doA = 1;
-            doD = 0;
-            sel = 1;
+            opts.paths = DO_ARCHIVE;
             break;
 
         case 'D':
-            if (sel)
+            if (opts.paths)
                 usage("Duplicate selectors given");
-            sel = 1;
+            opts.paths = DO_DATA;
             break;
 
         case 'M':
-            if (sel)
+            if (opts.paths)
                 usage("Duplicate selectors given");
-            doM = 1;
-            doD = 0;
-            sel = 1;
+            opts.paths = DO_META;
             break;
 
         case 'S':
-            if (sel)
+            if (opts.paths)
                 usage("Duplicate selectors given");
-            doS = 1;
-            doD = 0;
-            sel = 1;
+            opts.paths = DO_SIEVE;
             break;
 
         case 'U':
-            if (sel)
+            if (opts.paths)
                 usage("Duplicate selectors given");
-            doU = 1;
-            doD = 0;
-            sel = 1;
+            opts.paths = DO_USER;
             break;
 
         default:
             usage(NULL);
         }
     }
+
+    if (!opts.paths) opts.paths = DO_DATA; // default
 
     cyrus_init(alt_config, "mbpath", 0, 0);
 
@@ -290,81 +370,38 @@ int main(int argc, char **argv)
     for (i = optind; i < argc; i++) {
         /* Translate mailboxname */
         mbname_t *mbname = NULL;
-        if (usermode) {
+        const char *extname;
+
+        if (opts.mode == MODE_DOMAIN) {
+            char *userid = strconcat("%@", argv[i], NULL); // all inboxen
+            mbname = mbname_from_userid(userid);
+            free(userid);
+        }
+        else if (opts.mode == MODE_USER) {
             mbname = mbname_from_userid(argv[i]);
         }
         else {
             mbname = mbname_from_path(argv[i], &mbpath_namespace);
         }
-        r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
-        if (!r) {
-            /* Ignore "reserved" entries, like they aren't there */
-            if (mbentry->mbtype & MBTYPE_RESERVE) {
-                r = IMAP_MAILBOX_RESERVED;
-            }
-            /* Ignore "deleted" entries, like they aren't there */
-            else if (mbentry->mbtype & MBTYPE_DELETED) {
+
+        extname = mbname_extname(mbname, &mbpath_namespace, "cyrus");
+        if (extname) {
+            r = mboxlist_findall(&mbpath_namespace, extname,
+                                 /*isadmin*/1, NULL, NULL, &do_paths, &opts);
+            if (!r && !opts.foundone) {
                 r = IMAP_MAILBOX_NONEXISTENT;
-            }
-        }    
-        if (!r) {
-            if (mbentry->mbtype & MBTYPE_REMOTE) {
-                if (localonly) {
-                    if (stop_on_error) {
-                        if (quiet) {
-                            fatal("", -1);
-                        }
-                        else {
-                            fatal("Non-local mailbox. Stopping\n", -1);
-                        }
-                    }
-                }
-                else {
-                    // ignore all selectors and just print this
-                    printf("%s!%s\n", mbentry->server, mbentry->partition);
-                }
-            }
-            else if (do_json) {
-                print_json(mbname, mbentry);
-            }
-            else {
-                if (doall || doA) {
-                    const char *path = mbentry_archivepath(mbentry, 0);
-                    if (doall) printf("Archive: ");
-                    printf("%s\n", path);
-                }
-                if (doall || doD) {
-                    const char *path = mbentry_datapath(mbentry, 0);
-                    if (doall) printf("Data: ");
-                    printf("%s\n", path);
-                }
-                if (doall || doM) {
-                    const char *path = mbentry_metapath(mbentry, 0, 0);
-                    if (doall) printf("Meta: ");
-                    printf("%s\n", path);
-                }
-                if (doall || doS) {
-                    const char *path = user_sieve_path(mbname_userid(mbname));
-                    if (doall) printf("Sieve: ");
-                    printf("%s\n", path);
-                }
-                if (doall || doU) {
-                    // different interface - caller must free
-                    char *path = mboxname_conf_getpath(mbname, NULL);
-                    if (doall) printf("User: ");
-                    printf("%s\n", path);
-                    free(path);
-                }
             }
         }
         else {
-            if (!quiet && (r == IMAP_MAILBOX_NONEXISTENT)) {
+            r = IMAP_MAILBOX_NONEXISTENT;
+        }
+        if (r) {
+            if (!opts.quiet && (r == IMAP_MAILBOX_NONEXISTENT)) {
                 fprintf(stderr, "Invalid mailbox name: %s\n", argv[i]);
-                fprintf(stderr, "Invalid mailbox name: %s\n",
-                        mbname_extname(mbname, &mbpath_namespace, "cyrus"));
+                if (extname) fprintf(stderr, "Invalid mailbox name: %s\n", extname);
             }
-            if (stop_on_error) {
-                if (quiet) {
+            if (opts.stop_on_error) {
+                if (opts.quiet) {
                     fatal("", -1);
                 }
                 else {
@@ -373,7 +410,6 @@ int main(int argc, char **argv)
             }
         }
         mbname_free(&mbname);
-        mboxlist_entry_free(&mbentry);
     }
 
     cyrus_done();
