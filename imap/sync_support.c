@@ -1979,7 +1979,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_setatom(kl, "MBOXNAME", mailbox->name);
-    if (mailbox->mbtype)
+    if (mbtypes_sync(mailbox->mbtype))
         dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mbtypes_sync(mailbox->mbtype)));
     if (ispartial) {
         /* send a zero to make older Cyrus happy */
@@ -3997,7 +3997,7 @@ int sync_restore_mailbox(struct dlist *kin,
     /* XXX verify mailbox is suitable? */
 
     /* make sure mailbox types match */
-    if (mailbox->mbtype != mbtype) {
+    if (mbtypes_sync(mailbox->mbtype) != mbtype) {
         syslog(LOG_ERR, "restore mailbox %s: mbtype mismatch (%d, %d)",
                mailbox->name, mailbox->mbtype, mbtype);
         r = IMAP_MAILBOX_BADTYPE;
@@ -5722,7 +5722,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     modseq_t xconvmodseq = 0;
 
     if (!remote) return 0;
-    if (remote->mbtype != mailbox->mbtype) return 0;
+    if (remote->mbtype != mbtypes_sync(mailbox->mbtype)) return 0;
     if (remote->last_uid != mailbox->i.last_uid) return 0;
     if (remote->highestmodseq != mailbox->i.highestmodseq) return 0;
     if (remote->uidvalidity != mailbox->i.uidvalidity) return 0;
