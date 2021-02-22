@@ -764,6 +764,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
+{ "debug", 0, SWITCH, "2.5.0" }
+/* If enabled, allow syslog() to pass LOG_DEBUG messages. */
+
 { "debug_command", NULL, STRING, "2.3.17" }
 /* Debug command to be used by processes started with -D option.  The string
    is a C format string that gets 3 options: the first is the name of the
@@ -956,9 +959,6 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, the partitions will also be hashed, in addition to the
    hashing done on configuration directories.  This is recommended if
    one partition has a very bushy mailbox tree. */
-
-{ "debug", 0, SWITCH, "2.5.0" }
-/* If enabled, allow syslog() to pass LOG_DEBUG messages. */
 
 # Commented out - there's no such thing as "hostname_mechs", but we need
 # this for the man page
