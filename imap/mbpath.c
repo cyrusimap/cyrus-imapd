@@ -138,6 +138,7 @@ static void print_json(const mbname_t *mbname, const mbentry_t *mbentry)
         json_object_set_new(juser, "counters", json_string(user_hash_meta(userid, "counters")));
         json_object_set_new(juser, "dav", json_string(user_hash_meta(userid, "dav")));
         json_object_set_new(juser, "sieve", json_string(user_sieve_path(userid)));
+        json_object_set_new(juser, "seen", json_string(user_hash_meta(userid, "seen")));
         json_object_set_new(juser, "sub", json_string(user_hash_meta(userid, "sub")));
         json_object_set_new(juser, "xapianactive", json_string(user_hash_meta(userid, "xapianactive")));
 
