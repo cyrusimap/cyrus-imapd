@@ -194,7 +194,7 @@ int main(int argc, char **argv)
     int sel = 0;
     int do_json = 0;
 
-    while ((opt = getopt(argc, argv, "C:ajlmqsudADMSU")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:ajlmqsuADMSU")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
