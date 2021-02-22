@@ -99,6 +99,76 @@ sub test_append
 }
 
 #
+# Test handling of replication when append fails due to disk error
+#
+sub test_appendone_diskfull
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $canary = << 'EOF';
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+To: Sarah Jane Smith <sjsmith@tard.is>
+Subject: this is just to say
+X-Cassandane-Unique: canary
+
+I have eaten
+the canary
+that was in
+the coal mine
+
+and which
+you were probably
+saving
+for emergencies
+
+Forgive me
+it was delicious
+so tweet
+and so coaled
+EOF
+    $canary =~ s/\n/\r\n/g;
+    my $canaryguid = "f2eaa91974c50ec3cfb530014362e92efb06a9ba";
+
+    $self->{replica}->{config}->set('debug_writefail_guid' => $canaryguid);
+    $self->_start_instances();
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my %exp;
+    $exp{1} = Cassandane::Message->new(raw => $canary,
+                                       attrs => { UID => 1 }),
+    $self->_save_message($exp{1}, $master_store);
+
+    xlog $self, "message should be on master only";
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
+    $self->check_messages({}, keyed_on => 'uid', store => $replica_store);
+
+    xlog $self, "running replication...";
+    eval {
+        $self->run_replication();
+    };
+    my $e = $@;
+
+    # sync_client should have exited with an error
+    $self->assert($e);
+    $self->assert_matches(qr/child\sprocess\s
+                            \(binary\ssync_client\spid\s\d+\)\s
+                            exited\swith\scode/x,
+                          $e->to_string());
+
+    # sync_client should have logged the BAD response
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/IOERROR: received bad response/, "@lines");
+
+    # sync server should have logged the write error
+    @lines = $self->{replica}->getsyslog();
+    $self->assert_matches(qr/IOERROR: failed to upload file $canaryguid/,
+                          "@lines");
+}
+
+#
 # Test replication of messages APPENDed to the master
 #
 sub test_splitbrain
