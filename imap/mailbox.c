@@ -6974,6 +6974,8 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     struct index_record record;
     struct stat sbuf;
     int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
+    const char *uniqueid =
+        !(mailbox->mbtype & MBTYPE_LEGACY_DIRS) ? mailbox->uniqueid : NULL;
 
     memset(&record, 0, sizeof(struct index_record));
 
@@ -6984,9 +6986,9 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
 #endif
 
     if (isarchive && !object_storage_enabled)
-        fname = mboxname_archivepath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
+        fname = mboxname_archivepath(mailbox->part, mailbox->name, uniqueid, uid);
     else
-        fname = mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
+        fname = mboxname_datapath(mailbox->part, mailbox->name, uniqueid, uid);
 
 #if defined ENABLE_OBJECTSTORE
     if (object_storage_enabled)
@@ -7011,7 +7013,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     if (!uid) {
         /* filthy hack - copy the path to '1.' and replace 1 with 0 */
         char *hack;
-        fname = mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, 1);
+        fname = mboxname_datapath(mailbox->part, mailbox->name, uniqueid, 1);
         hack = (char *)fname;
         hack[strlen(fname)-2] = '0';
     }
