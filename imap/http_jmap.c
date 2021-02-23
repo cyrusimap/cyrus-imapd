@@ -512,14 +512,14 @@ HIDDEN int jmap_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
         jmap_getblob_handler *handler =
             ptrarray_nth(&my_jmap_settings.getblob_handlers, i);
 
-        buf_reset(&ctx->blob);
+        jmap_getblob_ctx_reset(ctx);
         res = handler(req, ctx);
         if (res) break;
     }
 
     if (!res) {
         /* Try default getblob handler */
-        buf_reset(&ctx->blob);
+        jmap_getblob_ctx_reset(ctx);
         res = jmap_getblob_default_handler(req, ctx);
     }
 
