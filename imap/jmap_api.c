@@ -3278,6 +3278,15 @@ HIDDEN void jmap_getblob_ctx_init(jmap_getblob_context_t *ctx,
     ctx->decode = decode;
 }
 
+HIDDEN void jmap_getblob_ctx_reset(jmap_getblob_context_t *ctx)
+{
+    buf_reset(&ctx->blob);
+    free(ctx->content_type);
+    free(ctx->encoding);
+
+    ctx->errstr = ctx->content_type = ctx->encoding = NULL;
+}
+
 HIDDEN void jmap_getblob_ctx_fini(jmap_getblob_context_t *ctx)
 {
     buf_free(&ctx->blob);
