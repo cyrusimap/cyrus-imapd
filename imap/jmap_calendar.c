@@ -85,6 +85,7 @@ static int jmap_calendarevent_changes(struct jmap_req *req);
 static int jmap_calendarevent_query(struct jmap_req *req);
 static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
+static int jmap_calendarevent_parse(jmap_req_t *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
@@ -143,6 +144,12 @@ jmap_method_t jmap_calendar_methods_nonstandard[] = {
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendarevent_copy,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "CalendarEvent/parse",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendarevent_parse,
+        JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
 };
@@ -4791,5 +4798,114 @@ done:
     if (dst_db) caldav_close(dst_db);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
+    return 0;
+}
+
+static int _calendarevent_parseargs_parse(jmap_req_t *req __attribute__((unused)),
+                                          struct jmap_parser *parser,
+                                          const char *key,
+                                          json_t *arg,
+                                          void *rock)
+{
+    hash_table **props = (hash_table **) rock;
+
+    if (!strcmp(key, "properties")) {
+        if (json_is_array(arg)) {
+            size_t i;
+            json_t *val;
+
+            *props = xzmalloc(sizeof(hash_table));
+            construct_hash_table(*props, json_array_size(arg) + 1, 0);
+            json_array_foreach(arg, i, val) {
+                const char *s = json_string_value(val);
+                if (!s) {
+                    jmap_parser_push_index(parser, "properties", i, s);
+                    jmap_parser_invalid(parser, NULL);
+                    jmap_parser_pop(parser);
+                    continue;
+                }
+                hash_insert(s, (void*)1, *props);
+            }
+        }
+        else if (JNOTNULL(arg)) {
+            return 0;
+        }
+
+        return 1;
+    }
+
+    return 0;
+}
+
+static int jmap_calendarevent_parse(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_parse parse;
+    hash_table *props = NULL;
+    json_t *err = NULL;
+
+    /* Parse request */
+    jmap_parse_parse(req, &parser,
+                     &_calendarevent_parseargs_parse, &props, &parse, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Process request */
+    jmap_getblob_context_t ctx;
+    jmap_getblob_ctx_init(&ctx, NULL, NULL, "text/calendar", 1);
+
+    json_t *jval;
+    size_t i;
+    json_array_foreach(parse.blob_ids, i, jval) {
+        const char *blobid = json_string_value(jval);
+        icalcomponent *ical = NULL;
+        json_t *event = NULL;
+        int r = 0;
+
+        if (!blobid) continue;
+
+        /* Find blob */
+        ctx.blobid = blobid;
+        if (blobid[0] == '#') {
+            ctx.blobid = jmap_lookup_id(req, blobid + 1);
+            if (!ctx.blobid) {
+                json_array_append_new(parse.not_found, json_string(blobid));
+                continue;
+            }
+        }
+
+        buf_reset(&ctx.blob);
+        r = jmap_getblob(req, &ctx);
+        if (r) {
+            json_array_append_new(parse.not_found, json_string(blobid));
+            continue;
+        }
+
+        ical = icalparser_parse_string(buf_cstring(&ctx.blob));
+        if (ical) {
+            event = jmapical_tojmap(ical, props);
+            icalcomponent_free(ical);
+        }
+
+        if (event) {
+            json_object_set_new(parse.parsed, blobid, event);
+        }
+        else {
+            json_array_append_new(parse.not_parsable, json_string(blobid));
+        }
+    }
+
+    jmap_getblob_ctx_fini(&ctx);
+
+    /* Build response */
+    jmap_ok(req, jmap_parse_reply(&parse));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_parse_fini(&parse);
+    free_hash_table(props, NULL);
+    free(props);
     return 0;
 }
