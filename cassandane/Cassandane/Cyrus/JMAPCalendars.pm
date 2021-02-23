@@ -7055,4 +7055,58 @@ sub test_calendarevent_get_location_newline
     $self->assert_str_equals("xyz\nxyz", $locations[1]{name});
 }
 
+sub test_calendarevent_parse_singlecommand
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $id = '97c46ea4-4182-493c-87ef-aee4edc2d38b';
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:$id
+SUMMARY:bar
+DESCRIPTION:
+TRANSP:OPAQUE
+DTSTART;VALUE=DATE:20151008
+DTEND;VALUE=DATE:20151009
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/blob',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Blob/set',
+           { create => {
+               "ical" => { content => $ical, type => 'text/calendar' },
+               "junk" => { content => 'foo bar', type => 'text/calendar' }
+             } }, 'R0'],
+        ['CalendarEvent/parse', {
+            blobIds => [ "#ical", "foo", "#junk" ],
+            properties => [ "uid", "title", "start" ]
+         }, "R1"]],
+        $using);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('R0', $res->[0][2]);
+
+    $self->assert_str_equals('CalendarEvent/parse', $res->[1][0]);
+    $self->assert_str_equals('R1', $res->[1][2]);
+    $self->assert_str_equals($id, $res->[1][1]{parsed}{"#ical"}{uid});
+    $self->assert_str_equals("bar", $res->[1][1]{parsed}{"#ical"}{title});
+    $self->assert_str_equals("2015-10-08T00:00:00", $res->[1][1]{parsed}{"#ical"}{start});
+
+    $self->assert_str_equals("#junk", $res->[1][1]{notParsable}[0]);
+    $self->assert_str_equals("foo", $res->[1][1]{notFound}[0]);
+}
+
 1;
