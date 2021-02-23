@@ -217,38 +217,24 @@ static json_t *get_schedule_address_set(const char *userid,
 {
     struct buf attrib = BUF_INITIALIZER;
     json_t *val = json_array();
-    static const char *annot =
-        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-    int r = annotatemore_lookupmask(mboxname, annot, httpd_userid, &attrib);
-    if (r || !attrib.len) {
-        // fetch from my own principal
-        char *prinmbox = mboxname_user_mbox(httpd_userid, "#calendars");
-        r = annotatemore_lookupmask(prinmbox, annot, httpd_userid, &attrib);
-        free(prinmbox);
-    }
-    if (!r && attrib.len) {
-        strarray_t *values = strarray_split(buf_cstring(&attrib), ",", STRARRAY_TRIM);
-        int i;
-        for (i = 0; i < strarray_size(values); i++) {
-            const char *item = strarray_nth(values, i);
-            if (!strncasecmp(item, "mailto:", 7)) item += 7;
+    strarray_t *values;
+    if (annotatemore_lookupmask(mboxname,
+                                DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set",
+                                userid, &attrib) || !attrib.len)
+        values = get_calendar_user_address_set_for_principal(userid);
+    else
+        values = strarray_split(buf_cstring(&attrib), ",", STRARRAY_TRIM);
+    for (int i = 0; i < strarray_size(values); i++) {
+        const char *item = strarray_nth(values, i);
+        if (strncasecmp("mailto:", item, 7)) {
             char *value = strconcat("mailto:", item, NULL);
             json_array_append_new(val, json_string(value));
             free(value);
         }
-        strarray_free(values);
+        else
+            json_array_append_new(val, json_string(item));
     }
-    else if (strchr(userid, '@')) {
-        char *value = strconcat("mailto:", userid, NULL);
-        json_array_append_new(val, json_string(value));
-        free(value);
-    }
-    else {
-        const char *domain = httpd_extradomain ? httpd_extradomain : config_defdomain;
-        char *value = strconcat("mailto:", userid, "@", domain, NULL);
-        json_array_append_new(val, json_string(value));
-        free(value);
-    }
+    strarray_free(values);
     buf_free(&attrib);
     return val;
 }

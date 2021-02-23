@@ -1,0 +1,11 @@
+Description:
+
+Honour the real CalDAV:calendar-user-address-set WebDAV property for matches in the DAV:principal-property-search report.
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+None

@@ -6237,86 +6237,48 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
     const char *annotname =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
     xmlNodePtr node;
-    int r, ret = HTTP_NOT_FOUND;
 
     if (!(namespace_calendar.enabled && fctx->req_tgt->userid))
         return HTTP_NOT_FOUND;
 
     if (fctx->req_tgt->namespace->id == URL_NS_PRINCIPAL) {
-        char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
-
         node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                             name, ns, NULL, 0);
-
-        buf_reset(&fctx->buf);
-        r = annotatemore_lookupmask(mailboxname, annotname,
-                                    fctx->req_tgt->userid, &fctx->buf);
-        free(mailboxname);
-        if (!r && fctx->buf.len) {
-            strarray_t *items = strarray_split(buf_cstring(&fctx->buf), ",", STRARRAY_TRIM);
-            if (isemail) {
-                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, 0));
-            }
-            else {
-                int i;
-                for (i = strarray_size(items); i; i--) {
-                    xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i-1));
-                    /* apple will use the alphabetically first href, and Thunderbird will use the
-                     * last one in order, so we set preferred for Apple, and put the preferred one
-                     * last for Thunderbird (and maybe others) */
-                    if (i == 1) xmlNewProp(href, BAD_CAST "preferred", BAD_CAST "1");
-                }
-                strarray_free(items);
-            }
+        strarray_t *items = get_calendar_user_address_set_for_principal(fctx->req_tgt->userid);
+        if (isemail) {
+            xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, 0));
         }
-
-        /* XXX  This needs to be done via an LDAP/DB lookup */
-        else if (strchr(fctx->req_tgt->userid, '@')) {
-            buf_reset(&fctx->buf);
-            buf_printf(&fctx->buf, "mailto:%s", fctx->req_tgt->userid);
-            xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
-        }
-
-        else if (httpd_extradomain) {
-            buf_reset(&fctx->buf);
-            buf_printf(&fctx->buf, "mailto:%s@%s",
-                       fctx->req_tgt->userid, httpd_extradomain);
-            xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
-        }
-
         else {
-            struct strlist *domains;
-            for (domains = cua_domains; domains; domains = domains->next) {
-                buf_reset(&fctx->buf);
-                buf_printf(&fctx->buf, "mailto:%s@%s",
-                           fctx->req_tgt->userid, domains->s);
-
-                xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+            for (int i = strarray_size(items); i; i--) {
+                xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i-1));
+                /* apple will use the alphabetically first href, and Thunderbird will use the
+                 * last one in order, so we set preferred for Apple, and put the preferred one
+                 * last for Thunderbird (and maybe others) */
+                if (i == 1) xmlNewProp(href, BAD_CAST "preferred", BAD_CAST "1");
             }
         }
+        strarray_free(items);
 
-        ret = 0;
+        return 0;
     }
-    else {
-        buf_reset(&fctx->buf);
-        r = annotatemore_lookupmask(fctx->mbentry->name, annotname,
-                                    fctx->req_tgt->userid, &fctx->buf);
-        if (!r && fctx->buf.len) {
-            strarray_t *addr =
-                strarray_split(buf_cstring(&fctx->buf), ",", STRARRAY_TRIM);
 
-            node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
-                                &propstat[PROPSTAT_OK], name, ns, NULL, 0);
-            int i;
-            for (i = strarray_size(addr); i; i--) {
-                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(addr, i-1));
-            }
-            strarray_free(addr);
-            ret = 0;
+    buf_reset(&fctx->buf);
+    if (!annotatemore_lookupmask(fctx->mbentry->name, annotname,
+                                 fctx->req_tgt->userid, &fctx->buf) && fctx->buf.len) {
+        strarray_t *addr =
+            strarray_split(buf_cstring(&fctx->buf), ",", STRARRAY_TRIM);
+
+        node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                            &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+        int i;
+        for (i = strarray_size(addr); i; i--) {
+            xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(addr, i-1));
         }
+        strarray_free(addr);
+        return 0;
     }
 
-    return ret;
+    return HTTP_NOT_FOUND;
 }
 
 /* Callback to fetch CALDAV:calendar-user-address-set */

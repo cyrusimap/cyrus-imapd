@@ -3801,32 +3801,9 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
 
         if (action == ICAL_ACTION_EMAIL) {
             /* ATTENDEE */
-            const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-            char *mailboxname = caldav_mboxname(httpd_userid, NULL);
-            struct buf buf = BUF_INITIALIZER;
-            int r = annotatemore_lookupmask(mailboxname, annotname, httpd_userid, &buf);
-
-            char *recipient = NULL;
-
-            if (!r && buf_len(&buf)) {
-                strarray_t *values = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
-                const char *item = strarray_nth(values, 0);
-                if (!strncasecmp(item, "mailto:", 7)) item += 7;
-                recipient = strconcat("mailto:", item, NULL);
-                strarray_free(values);
-            }
-            else if (strchr(httpd_userid, '@')) {
-                recipient = strconcat("mailto:", httpd_userid, NULL);
-            }
-            else {
-                recipient = strconcat("mailto:", httpd_userid, "@", config_defdomain, NULL);
-            }
-
-            icalcomponent_add_property(alarm, icalproperty_new_attendee(recipient));
-            free(recipient);
-
-            buf_free(&buf);
-            free(mailboxname);
+            strarray_t *values = get_calendar_user_address_set_for_principal(httpd_userid);
+            icalcomponent_add_property(alarm, icalproperty_new_attendee(strarray_nth(values, 0)));
+            strarray_free(values);
 
             /* SUMMARY */
             const char *summary = icalcomponent_get_summary(comp);

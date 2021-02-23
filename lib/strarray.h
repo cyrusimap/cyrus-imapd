@@ -108,6 +108,8 @@ void strarray_uniq(strarray_t *);
 char **strarray_safetakevf(strarray_t *sa);
 char **strarray_takevf(strarray_t *sa);
 
+int strarray_findg(const strarray_t *sa, const char *match, int starting,
+                   int (*compare)(const char *, const char *));
 int strarray_find(const strarray_t *sa, const char *match,
                   int starting);
 int strarray_find_case(const strarray_t *sa, const char *match,

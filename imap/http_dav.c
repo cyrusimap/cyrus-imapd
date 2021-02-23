@@ -70,6 +70,7 @@
 #include "caldav_db.h"
 #include "dlist.h"
 #include "global.h"
+#include "imap/http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "http_proxy.h"
@@ -7856,6 +7857,10 @@ struct search_crit {
     struct search_crit *next;
 };
 
+static int find_cut_mailto(const char *haystack, const char* needle) {
+    // the mailto: prefix is skipped
+    return xmlStrcasestr(BAD_CAST haystack + 7, BAD_CAST needle) == NULL;
+}
 
 /* mboxlist_alluser() callback to find user principals (has Inbox) */
 static int principal_search(const char *userid, void *rock)
@@ -7881,12 +7886,10 @@ static int principal_search(const char *userid, void *rock)
                                    search_crit->match)) return 0;
             }
             else if (!strcmp(prop->s, "calendar-user-address-set")) {
-                char email[MAX_MAILBOX_NAME+1];
-
-                snprintf(email, MAX_MAILBOX_NAME, "%s@%s",
-                         userid, config_servername);
-                if (!xmlStrcasestr(BAD_CAST email,
-                                   search_crit->match)) return 0;
+                strarray_t *items = get_calendar_user_address_set_for_principal(userid);
+                int pos = strarray_findg(items, (char *)search_crit->match, 0, find_cut_mailto);
+                strarray_free(items);
+                if (pos == -1) return 0;
             }
             else if (!strcmp(prop->s, "calendar-user-type")) {
                 if (!xmlStrcasestr(BAD_CAST "INDIVIDUAL",

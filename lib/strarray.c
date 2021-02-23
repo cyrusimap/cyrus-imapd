@@ -423,13 +423,13 @@ EXPORTED void strarray_uniq(strarray_t *sa)
 }
 
 /* common generic routine for the _find family */
-static int strarray_findg(const strarray_t *sa, const char *match, int starting,
-                          int (*compare)(const char *, const char *))
+EXPORTED int strarray_findg(const strarray_t *sa, const char *match, int starting,
+                            int (*compare)(const char *, const char *))
 {
     int i;
 
     for (i = starting ; i < sa->count ; i++)
-        if (!compare(match, sa->data[i]))
+        if (!compare(/* haystack */ sa->data[i], /* needle */ match))
             return i;
     return -1;
 }

@@ -178,6 +178,7 @@ extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
                                         xmlChar *recipient, xmlChar *status);
 extern int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
                              const strarray_t *schedule_addresses);
+extern strarray_t* get_calendar_user_address_set_for_principal(const char *);
 extern void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
                                    const char *userid, strarray_t *addresses);
 
