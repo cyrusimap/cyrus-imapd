@@ -136,6 +136,42 @@ static struct sqldb_upgrade upgrade[] = {
     { 0, NULL, NULL }
 };
 
+#define CMD_REPLACE                              \
+    "REPLACE INTO events"                        \
+    " ( mboxname, imap_uid, nextcheck )"         \
+    " VALUES"                                    \
+    " ( :mboxname, :imap_uid, :nextcheck )"      \
+    ";"
+
+#define CMD_DELETE                               \
+    "DELETE FROM events"                         \
+    " WHERE mboxname = :mboxname"                \
+    "   AND imap_uid = :imap_uid"                \
+    ";"
+
+#define CMD_DELETEMAILBOX       \
+    "DELETE FROM events WHERE"  \
+    " mboxname = :mboxname"     \
+    ";"
+
+#define CMD_DELETEUSER          \
+    "DELETE FROM events WHERE"  \
+    " mboxname LIKE :prefix"     \
+    ";"
+
+#define CMD_SELECTUSER           \
+    "SELECT mboxname, imap_uid, nextcheck" \
+    " FROM events WHERE"                   \
+    " mboxname LIKE :prefix"               \
+    ";"
+
+#define CMD_SELECT_ALARMS                                                \
+    "SELECT mboxname, imap_uid, nextcheck"                               \
+    " FROM events WHERE"                                                 \
+    " nextcheck < :before"                                               \
+    " ORDER BY mboxname, imap_uid, nextcheck"                            \
+    ";"
+
 static sqldb_t *my_alarmdb;
 int refcount;
 static struct mboxlock *my_alarmdb_lock;
@@ -182,6 +218,77 @@ static int caldav_alarm_close(sqldb_t *alarmdb)
     mboxname_release(&my_alarmdb_lock);
 
     return 0;
+}
+
+/* set up a reconstruct database to override regular open/close */
+EXPORTED int caldav_alarm_set_reconstruct(sqldb_t *db)
+{
+    // make sure we're not already open
+    assert(!my_alarmdb);
+    assert(!refcount);
+
+    // create the events table
+    int rc = sqldb_exec(db, CMD_CREATE, NULL, NULL, NULL);
+    if (rc != SQLITE_OK) return IMAP_IOERROR;
+
+    // preload the DB into our refcounter
+    my_alarmdb = db;
+    refcount = 1;
+
+    return 0;
+}
+
+static int copydb(sqlite3_stmt *stmt, void *rock)
+{
+    sqldb_t *destdb = (sqldb_t *)rock;
+    struct sqldb_bindval bval[] = {
+        { ":mboxname",  SQLITE_TEXT,    { .s = (const char *)sqlite3_column_text(stmt, 0) } },
+        { ":imap_uid",  SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 1)  } },
+        { ":nextcheck", SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 2)  } },
+        { NULL,         SQLITE_NULL,    { .s = NULL      } }
+    };
+    return sqldb_exec(destdb, CMD_REPLACE, bval, NULL, NULL);
+}
+
+/* remove all existing alarms for this user and copy all alarms from the
+   reconstructed database into place instead */
+EXPORTED int caldav_alarm_commit_reconstruct(const char *userid)
+{
+    sqldb_t *db = my_alarmdb;
+
+    // zero out the override so we can open the correct database
+    assert(refcount == 1);
+    refcount = 0;
+    my_alarmdb = NULL;
+
+    mbname_t *mbname = mbname_from_userid(userid);
+    const char *mboxname = mbname_intname(mbname);
+    char *prefix = strconcat(mboxname, ".%", (char *)NULL);
+    mbname_free(&mbname);
+
+    struct sqldb_bindval bval[] = {
+        { ":prefix",    SQLITE_TEXT, { .s = prefix  } },
+        { NULL,         SQLITE_NULL, { .s = NULL    } }
+    };
+
+    sqldb_t *alarmdb = caldav_alarm_open();
+    int r = sqldb_begin(alarmdb, "replace_alarms");
+    if (!r) r = sqldb_exec(alarmdb, CMD_DELETEUSER, bval, NULL, NULL);
+    if (!r) r = sqldb_exec(db, CMD_SELECTUSER, bval, &copydb, alarmdb);
+    if (!r) r = sqldb_commit(alarmdb, "replace_alarms");
+    else sqldb_rollback(alarmdb, "replace_alarms");
+    caldav_alarm_close(alarmdb);
+
+    return r;
+}
+
+/* release the reconstruction database without copying or removing any
+ * existing alarms */
+EXPORTED void caldav_alarm_rollback_reconstruct()
+{
+    assert(refcount == 1);
+    refcount = 0;
+    my_alarmdb = NULL;
 }
 
 /*
@@ -423,19 +530,6 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
 
     return 1; /* keep going */
 }
-
-#define CMD_REPLACE                              \
-    "REPLACE INTO events"                        \
-    " ( mboxname, imap_uid, nextcheck )"         \
-    " VALUES"                                    \
-    " ( :mboxname, :imap_uid, :nextcheck )"      \
-    ";"
-
-#define CMD_DELETE                               \
-    "DELETE FROM events"                         \
-    " WHERE mboxname = :mboxname"                \
-    "   AND imap_uid = :imap_uid"                \
-    ";"
 
 static int update_alarmdb(const char *mboxname,
                           uint32_t imap_uid, time_t nextcheck)
@@ -682,11 +776,6 @@ HIDDEN int caldav_alarm_delete_record(const char *mboxname, uint32_t imap_uid)
     return update_alarmdb(mboxname, imap_uid, 0);
 }
 
-#define CMD_DELETEMAILBOX       \
-    "DELETE FROM events WHERE"  \
-    " mboxname = :mboxname"     \
-    ";"
-
 /* delete all alarms matching the event */
 HIDDEN int caldav_alarm_delete_mailbox(const char *mboxname)
 {
@@ -701,11 +790,6 @@ HIDDEN int caldav_alarm_delete_mailbox(const char *mboxname)
 
     return rc;
 }
-
-#define CMD_DELETEUSER          \
-    "DELETE FROM events WHERE"  \
-    " mboxname LIKE :prefix"     \
-    ";"
 
 /* delete all alarms matching the event */
 HIDDEN int caldav_alarm_delete_user(const char *userid)
@@ -734,13 +818,6 @@ struct alarm_read_rock {
     time_t runtime;
     time_t next;
 };
-
-#define CMD_SELECT_ALARMS                                                \
-    "SELECT mboxname, imap_uid, nextcheck"                               \
-    " FROM events WHERE"                                                 \
-    " nextcheck < :before"                                               \
-    " ORDER BY mboxname, imap_uid"                                       \
-    ";"
 
 static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 {
