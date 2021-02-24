@@ -377,12 +377,6 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     dav_getpath_byuserid(&newfname, userid);
     buf_printf(&newfname, ".NEW");
 
-    /* XXX - this still means that alarms can go missing if this
-     * task is interrupted, but we can't afford to keep the
-     * alarm database locked for the entire time, it's a single
-     * blocking database over the entire server */
-    caldav_alarm_delete_user(userid);
-
     int r = IMAP_IOERROR;
     reconstruct_db = sqldb_open(buf_cstring(&newfname), CMD_CREATE, DB_VERSION, davdb_upgrade,
                                 config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
