@@ -387,13 +387,18 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     reconstruct_db = sqldb_open(buf_cstring(&newfname), CMD_CREATE, DB_VERSION, davdb_upgrade,
                                 config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
     if (reconstruct_db) {
-        sqldb_begin(reconstruct_db, "reconstruct");
-        r = mboxlist_usermboxtree(userid, NULL,
-                                  _dav_reconstruct_mb, (void *) userid, 0);
-        if (r)
-            sqldb_rollback(reconstruct_db, "reconstruct");
-        else
-            sqldb_commit(reconstruct_db, "reconstruct");
+        r = sqldb_begin(reconstruct_db, "reconstruct");
+        // make all the alarm updates to go this database too
+        if (!r) r = caldav_alarm_set_reconstruct(reconstruct_db);
+        // reconstruct everything
+        if (!r) r = mboxlist_usermboxtree(userid, NULL,
+                                          _dav_reconstruct_mb, (void *) userid, 0);
+        // commit events over to ther alarm database if we're keeping them
+        if (!r && !audit_tool) r = caldav_alarm_commit_reconstruct(userid);
+        else caldav_alarm_rollback_reconstruct();
+        // and commit to this DB
+        if (r) sqldb_rollback(reconstruct_db, "reconstruct");
+        else sqldb_commit(reconstruct_db, "reconstruct");
         sqldb_close(&reconstruct_db);
     }
 
