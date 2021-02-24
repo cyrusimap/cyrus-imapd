@@ -90,6 +90,7 @@ struct get_alarm_rock {
     time_t last;
     time_t now;
     time_t nextcheck;
+    int dryrun;
 };
 
 static struct namespace caldav_alarm_namespace;
@@ -494,7 +495,7 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
             continue;
         }
 
-        if (check <= data->now) {
+        if (check <= data->now && !data->dryrun) {
             prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
             const char *summary =
                 prop ? icalproperty_get_value_as_string(prop) : "[no summary]";
@@ -678,10 +679,11 @@ static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid
 
 static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
                              const char *userid, icaltimezone *floatingtz,
-                             icalcomponent *ical, time_t lastrun, time_t runtime)
+                             icalcomponent *ical, time_t lastrun,
+                             time_t runtime, int dryrun)
 {
     struct get_alarm_rock rock =
-        { userid, mboxname, imap_uid, floatingtz, lastrun, runtime, 0 };
+        { userid, mboxname, imap_uid, floatingtz, lastrun, runtime, 0, dryrun };
     struct icalperiodtype range = icalperiodtype_null_period();
     icalcomponent_myforeach(ical, range, floatingtz, process_alarm_cb, &rock);
     return rock.nextcheck;
@@ -849,6 +851,7 @@ struct process_alarms_rock {
     icalcomponent *ical;
     struct lastalarm_data *alarm;
     time_t runtime;
+    int dryrun;
 };
 
 static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
@@ -882,7 +885,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
 
     /* Process any VALARMs in the patched iCalendar resource */
     check = process_alarms(mailbox, uid, userid, floatingtz, myical,
-                           prock->alarm->lastrun, prock->runtime);
+                           prock->alarm->lastrun, prock->runtime, prock->dryrun);
     if (!prock->alarm->nextcheck || check < prock->alarm->nextcheck) {
         prock->alarm->nextcheck = check;
     }
@@ -895,7 +898,8 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
 
 static int process_valarms(struct mailbox *mailbox,
                             struct index_record *record,
-                            icaltimezone *floatingtz, time_t runtime)
+                            icaltimezone *floatingtz, time_t runtime,
+                            int dryrun)
 {
     icalcomponent *ical = ical = record_to_ical(mailbox, record, NULL);
 
@@ -926,12 +930,12 @@ static int process_valarms(struct mailbox *mailbox,
     syslog(LOG_DEBUG, "processing alarms in resource");
 
     data.nextcheck = process_alarms(mailbox->name, record->uid, userid,
-                                    floatingtz, ical, data.lastrun, runtime);
+                                    floatingtz, ical, data.lastrun, runtime, dryrun);
     free(userid);
 
     /* Process VALARMs in per-user-cal-data */
     struct process_alarms_rock prock =
-        { mailbox->i.options, ical, &data, runtime };
+        { mailbox->i.options, ical, &data, runtime, dryrun };
 
     syslog(LOG_DEBUG, "processing per-user alarms");
 
@@ -1048,7 +1052,9 @@ static int process_futurerelease(struct mailbox *mailbox,
 }
 
 static int process_snoozed(struct mailbox *mailbox,
-                            struct index_record *record, time_t runtime)
+                           struct index_record *record,
+                           time_t runtime,
+                           int dryrun)
 {
     struct buf buf = BUF_INITIALIZER;
     msgrecord_t *mr = NULL;
@@ -1072,13 +1078,17 @@ static int process_snoozed(struct mailbox *mailbox,
 
     /* Get the snoozed annotation */
     snoozed = jmap_fetch_snoozed(mailbox->name, record->uid);
-    if (!snoozed) goto done;
+    if (!snoozed) {
+        // no worries, let's not try again
+        update_alarmdb(mailbox->name, record->uid, 0);
+        goto done;
+    }
 
     time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
                       &wakeup);
 
-    /* Check runtime against wakup and adjust as necessary */
-    if (wakeup > runtime) {
+    /* Check runtime against wakeup and adjust as necessary */
+    if (dryrun || wakeup > runtime) {
         update_alarmdb(mailbox->name, record->uid, wakeup);
         goto done;
     }
@@ -1208,7 +1218,7 @@ static int process_snoozed(struct mailbox *mailbox,
 }
 #endif /* WITH_JMAP */
 
-static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
+static void process_one_record(struct caldav_alarm_data *data, time_t runtime, int dryrun)
 {
     int r;
     struct mailbox *mailbox = NULL;
@@ -1259,12 +1269,12 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
 
     if (mailbox->mbtype == MBTYPE_CALENDAR) {
         icaltimezone *floatingtz = get_floatingtz(mailbox->name, "");
-        r = process_valarms(mailbox, &record, floatingtz, runtime);
+        r = process_valarms(mailbox, &record, floatingtz, runtime, dryrun);
         if (floatingtz) icaltimezone_free(floatingtz, 1);
     }
 #ifdef WITH_JMAP
     else if (mailbox->mbtype == MBTYPE_SUBMISSION) {
-        if (record.internaldate > runtime) {
+        if (record.internaldate > runtime || dryrun) {
             update_alarmdb(data->mboxname, data->imap_uid, record.internaldate);
             goto done;
         }
@@ -1272,7 +1282,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
     }
     else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
         /* XXX  Check special-use flag on mailbox */
-        r = process_snoozed(mailbox, &record, runtime);
+        r = process_snoozed(mailbox, &record, runtime, dryrun);
     }
 #endif
     else {
@@ -1290,7 +1300,7 @@ done:
 }
 
 /* process alarms with triggers before a given time */
-EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp)
+EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 {
     syslog(LOG_DEBUG, "processing alarms");
 
@@ -1318,7 +1328,7 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp)
     int i;
     for (i = 0; i < rock.list.count; i++) {
         struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
-        process_one_record(data, runtime);
+        process_one_record(data, runtime, dryrun);
         caldav_alarm_fini(data);
         free(data);
     }
@@ -1390,7 +1400,7 @@ EXPORTED int caldav_alarm_upgrade()
                     char *userid = mboxname_to_userid(mailbox->name);
                     time_t nextcheck = process_alarms(mailbox->name, record->uid,
                                                       userid, floatingtz, ical,
-                                                      runtime, runtime);
+                                                      runtime, runtime, /*dryrun*/1);
                     free(userid);
 
                     struct lastalarm_data data = { runtime, nextcheck };
