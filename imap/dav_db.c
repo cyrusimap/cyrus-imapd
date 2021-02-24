@@ -387,6 +387,8 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
         // reconstruct everything
         if (!r) r = mboxlist_usermboxtree(userid, NULL,
                                           _dav_reconstruct_mb, (void *) userid, 0);
+        // make sure all the alarms are resolved
+        if (!r) r = caldav_alarm_process(0, NULL, /*dryrun*/1);
         // commit events over to ther alarm database if we're keeping them
         if (!r && !audit_tool) r = caldav_alarm_commit_reconstruct(userid);
         else caldav_alarm_rollback_reconstruct();
