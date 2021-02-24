@@ -151,7 +151,7 @@ EXPORTED int carddav_close(struct carddav_db *carddavdb)
         buf_free(&carddavdb->bufs[i]);
     }
 
-    r = sqldb_close(&carddavdb->db);
+    r = dav_close(&carddavdb->db);
 
     free(carddavdb->userid);
     free(carddavdb);

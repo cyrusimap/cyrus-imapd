@@ -67,6 +67,7 @@ struct dav_data {
 /* get a database handle corresponding to mailbox */
 sqldb_t *dav_open_userid(const char *userid);
 sqldb_t *dav_open_mailbox(struct mailbox *mailbox);
+int dav_close(sqldb_t **dbp);
 
 /* delete database corresponding to mailbox */
 int dav_delete(struct mailbox *mailbox);

@@ -275,6 +275,11 @@ EXPORTED int dav_attach_mailbox(sqldb_t *db, struct mailbox *mailbox)
     return r;
 }
 
+EXPORTED int dav_close(sqldb_t **dbp)
+{
+    return sqldb_close(dbp);
+}
+
 
 /*
  * mboxlist_usermboxtree() callback function to create DAV DB entries for a mailbox
