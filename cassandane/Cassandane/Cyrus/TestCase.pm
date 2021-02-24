@@ -193,6 +193,7 @@ magic(RightNow => sub {
     shift->config_set(sync_rightnow_channel => '""');
 });
 magic(Replication => sub { shift->want('replica'); });
+magic(CSyncReplication => sub { shift->want('csyncreplica'); });
 magic(Murder => sub { shift->want('murder'); });
 magic(Backups => sub { shift->want('backups'); });
 magic(AnnotationAllowUndefined => sub {
@@ -403,7 +404,7 @@ sub _create_instances
     {
         my $conf = $self->{_config}->clone();
 
-        if ($want->{replica})
+        if ($want->{replica} || $want->{csyncreplica})
         {
             $sync_port = Cassandane::PortManager::alloc();
             $conf->set(
@@ -466,7 +467,7 @@ sub _create_instances
         $self->{instance}->_setup_for_deliver()
             if ($want->{deliver});
 
-        if ($want->{replica})
+        if ($want->{replica} || $want->{csyncreplica})
         {
             my %replica_params = %instance_params;
             $replica_params{config} = $conf->clone();
@@ -481,7 +482,7 @@ sub _create_instances
             $self->{replica} = Cassandane::Instance->new(%replica_params,
                                                          setup_mailbox => 0);
             my ($v) = Cassandane::Instance->get_version($replica_params{installation});
-            if ($v < 3) {
+            if ($v < 3 || $want->{csyncreplica}) {
                 $self->{replica}->add_service(name => 'sync',
                                               port => $sync_port,
                                               argv => ['sync_server']);
