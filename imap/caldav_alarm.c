@@ -279,6 +279,9 @@ EXPORTED int caldav_alarm_commit_reconstruct(const char *userid)
     else sqldb_rollback(alarmdb, "replace_alarms");
     caldav_alarm_close(alarmdb);
 
+    // if we succeeded, drop the copy of events in this DB
+    if (!r) r = sqldb_exec(db, "DROP TABLE events;", NULL, NULL, NULL);
+
     return r;
 }
 
@@ -289,6 +292,8 @@ EXPORTED void caldav_alarm_rollback_reconstruct()
     assert(refcount == 1);
     refcount = 0;
     my_alarmdb = NULL;
+
+    // we keep the events database in this copy for later examination
 }
 
 /*
