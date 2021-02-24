@@ -350,7 +350,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     return r;
 }
 
-static void run_audit_tool(const char *tool, const char *srcdb, const char *dstdb)
+static void run_audit_tool(const char *tool, const char *userid, const char *srcdb, const char *dstdb)
 {
     pid_t pid = fork();
     if (pid < 0)
@@ -358,7 +358,7 @@ static void run_audit_tool(const char *tool, const char *srcdb, const char *dstd
 
     if (pid == 0) {
         /* child */
-        execl(tool, tool, srcdb, dstdb, (void *)NULL);
+        execl(tool, tool, "-C", config_filename, "-u", userid, srcdb, dstdb, (void *)NULL);
         exit(-1);
     }
 
@@ -413,7 +413,7 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     else {
         syslog(LOG_NOTICE, "dav_reconstruct_user: %s SUCCEEDED", userid);
         if (audit_tool) {
-            run_audit_tool(audit_tool, buf_cstring(&fname), buf_cstring(&newfname));
+            run_audit_tool(audit_tool, userid, buf_cstring(&fname), buf_cstring(&newfname));
             unlink(buf_cstring(&newfname));
         }
         else {
