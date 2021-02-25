@@ -62,6 +62,7 @@
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "times.h"
+#include "user.h"
 #include "util.h"
 #include "xstrlcat.h"
 #include "xmalloc.h"
@@ -1299,9 +1300,13 @@ done:
     mailbox_close(&mailbox);
 }
 
+#define MAX_CONSECUTIVE_ALARMS_PER_USER 50
+
 /* process alarms with triggers before a given time */
 EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 {
+    int i;
+
     syslog(LOG_DEBUG, "processing alarms");
 
     if (!runtime) {
@@ -1325,13 +1330,66 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 
     caldav_alarm_close(alarmdb);
 
-    int i;
-    for (i = 0; i < rock.list.count; i++) {
-        struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
-        process_one_record(data, runtime, dryrun);
-        caldav_alarm_fini(data);
-        free(data);
+    if (intervalp) {
+        // we want to restrict the number of records processed per user per run,
+        // and also take a non-blocking lock so we're never waiting while other
+        // things process
+        int skipped_some = 0;
+        int did_some = 0;
+        int num_user_records = 0;
+        char *userid = NULL;
+        struct mboxlock *nslock = NULL;
+        for (i = 0; i < rock.list.count; i++) {
+            struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
+
+            // only alarms for mailboxes with userids
+            mbname_t *mbname = mbname_from_intname(data->mboxname);
+            if (!mbname_userid(mbname)) {
+                mbname_free(&mbname);
+                continue;
+            }
+
+            // we are sorted by mboxname, so all the mailboxes for the same
+            // userid will be next to each other
+            if (strcmpsafe(userid, mbname_userid(mbname))) {
+                num_user_records = 0;
+                free(userid);
+                mboxname_release(&nslock);
+                userid = xstrdup(mbname_userid(mbname));
+                nslock = user_namespacelock_full(userid, LOCK_NONBLOCKING);
+            }
+            mbname_free(&mbname);
+
+            // if we failed to lock the user, or have done too many for this user, skip
+            if (!nslock || ++num_user_records > MAX_CONSECUTIVE_ALARMS_PER_USER) {
+                skipped_some++;
+                caldav_alarm_fini(data);
+                free(data);
+                continue;
+            }
+
+            did_some++;
+            process_one_record(data, runtime, dryrun);
+            caldav_alarm_fini(data);
+            free(data);
+        }
+
+        free(userid);
+        mboxname_release(&nslock);
+
+        // if we both made some progress AND skipped some, then retry again immediately
+        if (did_some && skipped_some) rock.next = runtime;
     }
+    else {
+        // we're testing or reconstructing, run everything!
+        for (i = 0; i < rock.list.count; i++) {
+            struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
+            process_one_record(data, runtime, dryrun);
+            caldav_alarm_fini(data);
+            free(data);
+        }
+    }
+
     ptrarray_fini(&rock.list);
 
     syslog(LOG_DEBUG, "done");
