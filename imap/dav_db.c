@@ -60,6 +60,7 @@
 #include "dav_db.h"
 #include "imap_err.h"
 #include "global.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -377,6 +378,8 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     dav_getpath_byuserid(&newfname, userid);
     buf_printf(&newfname, ".NEW");
 
+    struct mboxlock *namespacelock = user_namespacelock(userid);
+
     int r = IMAP_IOERROR;
     reconstruct_db = sqldb_open(buf_cstring(&newfname), CMD_CREATE, DB_VERSION, davdb_upgrade,
                                 config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
@@ -416,6 +419,8 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
             rename(buf_cstring(&newfname), buf_cstring(&fname));
         }
     }
+
+    mboxname_release(&namespacelock);
 
     buf_free(&newfname);
     buf_free(&fname);
