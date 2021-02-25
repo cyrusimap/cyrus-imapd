@@ -1790,7 +1790,7 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
-/* Callback to write CALDAV:displayname for the principal */
+/* Callback to write DAV:displayname for the principal */
 int proppatch_principalname(xmlNodePtr prop, unsigned set,
                           struct proppatch_ctx *pctx,
                           struct propstat propstat[],
