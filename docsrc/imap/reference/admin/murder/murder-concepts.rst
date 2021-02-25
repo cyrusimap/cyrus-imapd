@@ -58,7 +58,7 @@ The Cyrus IMAP Aggregator has three classes of servers:
     3. MUPDATE. 
     
 The frontend servers act as the primary communication point between the 
-end user clients and the backendservers. The frontends use the MUPDATE 
+end user clients and the backend servers. The frontends use the MUPDATE
 server as an authoritative source for mailbox names, locations, and 
 permissions. The backend servers store the actual IMAP data (and keep 
 the MUPDATE server appraised as to changes in the Mailbox list). 

@@ -177,7 +177,7 @@ Changes to the Cyrus IMAP Server Since Version 1.5
 *   Bug fix: auth_newstate now initializes its structures.
 *   Bug fix: pop3d.c, a printf was changed to prot_printf.
 *   Cyrus now sends X-NON-HIERARCHICAL-RENAME to alert clients that it is not handling RENAME in an IMAP4rev1 compliant manner. This will be fixed in a subsequent release.
-*   Bug fix: imclient_autenticate now does resolution on the hostname before authenticating to it. This caused problems when authenticating to an address that was a CNAME.
+*   Bug fix: imclient_authenticate now does resolution on the hostname before authenticating to it. This caused problems when authenticating to an address that was a CNAME.
 *   Bug fix: LIST %.% (and other multiple hierarchy delimiter matches) works properly. Several other glob.c fixes are included as well.
 *   Bug fix: a fetch of exclusively BODY[HEADER.FIELDS...] should now work properly.
 *   Bug fix: reconstruct now considers a nonexistant INN news directory to be empty; this makes reconstruct fix the cyrus.* files in the imap news partition.

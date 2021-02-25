@@ -40,7 +40,7 @@ Options
 .. option:: -l
 
     List all of the scripts currently on the server. If one of the
-    scripts is active a arrow is printed indicating that it is the
+    scripts is active an arrow is printed indicating that it is the
     active script.
 
 .. option:: -p  port
