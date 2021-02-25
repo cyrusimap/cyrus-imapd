@@ -946,7 +946,7 @@ static int process_valarms(struct mailbox *mailbox,
                          &prock, /* flags */ 0);
 
     data.lastrun = runtime;
-    write_lastalarm(mailbox, record, &data);
+    if (!dryrun) write_lastalarm(mailbox, record, &data);
 
     update_alarmdb(mailbox->name, record->uid, data.nextcheck);
 
@@ -1227,7 +1227,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
     syslog(LOG_DEBUG, "processing alarms for mailbox %s uid %u",
            data->mboxname, data->imap_uid);
 
-    r = mailbox_open_iwl(data->mboxname, &mailbox);
+    r = dryrun ? mailbox_open_irl(data->mboxname, &mailbox) : mailbox_open_iwl(data->mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         syslog(LOG_ERR, "not found mailbox %s", data->mboxname);
         /* no record, no worries */
@@ -1461,9 +1461,7 @@ EXPORTED int caldav_alarm_upgrade()
                                                       runtime, runtime, /*dryrun*/1);
                     free(userid);
 
-                    struct lastalarm_data data = { runtime, nextcheck };
-                    write_lastalarm(mailbox, record, &data);
-                    update_alarmdb(mailbox->name, record->uid, data.nextcheck);
+                    update_alarmdb(mailbox->name, record->uid, nextcheck);
                 }
                 icalcomponent_free(ical);
             }
