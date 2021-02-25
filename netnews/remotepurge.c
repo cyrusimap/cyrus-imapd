@@ -473,7 +473,6 @@ static int purge_me(char *name, time_t when)
         }
     }
 
- after_search:
     /* close mailbox */
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
                   "CLOSE");
