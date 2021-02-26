@@ -181,7 +181,11 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
         if (!d->partition || !strcmpsafe(d->partition, mbentry->partition)) {
             printf("%s\t%d ", mbentry->name, mbentry->mbtype);
             if (mbentry->server) printf("%s!", mbentry->server);
-            printf("%s %s\n", mbentry->partition, mbentry->acl);
+            printf("%s %s>%s " TIME_T_FMT " %" PRIu32 " %llu %llu %s\n",
+                mbentry->partition, mbentry->acl,
+                mbentry->uniqueid, mbentry->mtime, mbentry->uidvalidity,
+                mbentry->foldermodseq, mbentry->createdmodseq,
+                mbentry->legacy_specialuse);
             if (d->purge) {
                 mboxlist_delete(mbentry->name);
             }
@@ -529,13 +533,10 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
 
             struct mboxlock *namespacelock = mboxname_usernamespacelock(me->mailbox);
 
-            if (!mboxlist_delayed_delete_isenabled()) {
+            if (!mboxlist_delayed_delete_isenabled() ||
+                mboxname_isdeletedmailbox(me->mailbox, NULL)) {
                 ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL,
                         MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
-            } else if (mboxname_isdeletedmailbox(me->mailbox, NULL)) {
-                ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL,
-                        MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
-
             } else {
                 ret = mboxlist_delayed_deletemailbox(me->mailbox, 1, "", NULL, NULL,
                         MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
@@ -562,71 +563,63 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
 
 static void do_undump(void)
 {
-    int r = 0;
     char buf[16384];
     int line = 0;
-    const char *name, *partition, *acl;
-    int mbtype;
-    char *p;
 
     while (fgets(buf, sizeof(buf), stdin)) {
-        mbentry_t *newmbentry = NULL;
-        const char *server = NULL;
-
+        mbentry_t *newmbentry = mboxlist_entry_create();
         line++;
 
-        name = buf;
-        for (p = buf; *p && *p != '\t'; p++) ;
-        if (!*p) {
+        sscanf(buf, "%m[^\t]\t%d %ms %m[^>]>%ms " TIME_T_FMT " %" SCNu32
+               " %llu %llu %m[^\n]\n", &newmbentry->name, &newmbentry->mbtype,
+               &newmbentry->partition, &newmbentry->acl, &newmbentry->uniqueid,
+               &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
+               &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
+
+        if (!newmbentry->acl) {
+           /*
+            * This can be valid, e.g. for folders created by
+            *  0000 CREATE #calendars (TYPE CALENDAR)
+            *  0001 CREATE #addressbooks (TYPE ADDRESSBOOK)
+            *  0002 CREATE #calendars/Shared (TYPE CALENDAR)
+            *  0003 CREATE #addressbooks/Shared (TYPE ADDRESSBOOK)
+            * For these read the uniqueid, mtime, etc.
+            */
+            mboxlist_entry_free(&newmbentry);
+            newmbentry = mboxlist_entry_create();
+            sscanf(buf, "%m[^\t]\t%d %ms >%ms " TIME_T_FMT " %" SCNu32
+                   " %llu %llu %m[^\n]\n", &newmbentry->name, &newmbentry->mbtype,
+                   &newmbentry->partition, &newmbentry->uniqueid,
+                   &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
+                   &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
+        }
+
+        if (!newmbentry->partition) {
             fprintf(stderr, "line %d: no partition found\n", line);
+            mboxlist_entry_free(&newmbentry);
             continue;
         }
-        *p++ = '\0';
-        if (Uisdigit(*p)) {
-            /* new style dump */
-            mbtype = strtol(p, &p, 10);
-            /* skip trailing space */
-            if (*p == ' ') p++;
-        }
-        else mbtype = 0;
 
-        partition = p;
-        for (; *p && (*p != ' ') && (*p != '\t'); p++) {
-            if (*p == '!') {
-                *p++ = '\0';
-                server = partition;
-                partition = p;
-            }
+        char *partition = strchr(newmbentry->partition, '!');
+        if (partition) {
+            newmbentry->server = newmbentry->partition;
+            newmbentry->partition = strdup(partition + 1);
+            *partition = '\0';
         }
-        if (!*p) {
-            fprintf(stderr, "line %d: no acl found\n", line);
-            continue;
-        }
-        *p++ = '\0';
-        acl = p;
-        /* chop off the newline */
-        for (; *p && *p != '\r' && *p != '\n'; p++) ;
-        *p++ = '\0';
 
-        if (strlen(name) >= MAX_MAILBOX_BUFFER) {
+        if (strlen(newmbentry->name) >= MAX_MAILBOX_BUFFER) {
             fprintf(stderr, "line %d: mailbox name too long\n", line);
+            mboxlist_entry_free(&newmbentry);
             continue;
         }
-        if (strlen(partition) >= MAX_PARTITION_LEN) {
+        if (strlen(newmbentry->partition) >= MAX_PARTITION_LEN) {
             fprintf(stderr, "line %d: partition name too long\n", line);
+            mboxlist_entry_free(&newmbentry);
             continue;
         }
 
         /* generate a new entry */
-        newmbentry = mboxlist_entry_create();
-        newmbentry->name = xstrdup(name);
-        newmbentry->mbtype = mbtype;
-        newmbentry->server = xstrdupnull(server);
-        newmbentry->partition = xstrdupnull(partition);
-        newmbentry->acl = xstrdupnull(acl);
-        /* XXX - still missing all the new fields */
-
-        r = mboxlist_update(newmbentry, /*localonly*/1);
+        int r = mboxlist_update(newmbentry, /*localonly*/1);
         mboxlist_entry_free(&newmbentry);
 
         if (r) break;
