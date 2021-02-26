@@ -105,6 +105,7 @@
 
 /* each mailbox has the following data */
 struct mboxlist_entry {
+    /* keep in sync with ctl_mboxlist -d/-u */
     char *name;
     char *ext_name;
     time_t mtime;
