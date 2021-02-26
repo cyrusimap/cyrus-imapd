@@ -3258,7 +3258,7 @@ out:
 #ifdef WITH_DAV
 static int mailbox_update_carddav(struct mailbox *mailbox,
                                   const struct index_record *old,
-                                  struct index_record *new)
+                                  const struct index_record *new)
 {
     struct carddav_db *carddavdb = NULL;
     struct param *param;
@@ -3358,7 +3358,7 @@ done:
 
 static int mailbox_update_caldav(struct mailbox *mailbox,
                                  const struct index_record *old,
-                                 struct index_record *new)
+                                 const struct index_record *new)
 {
     struct caldav_db *caldavdb = NULL;
     struct param *param;
@@ -3483,7 +3483,7 @@ done:
 
 static int mailbox_update_webdav(struct mailbox *mailbox,
                                  const struct index_record *old,
-                                 struct index_record *new)
+                                 const struct index_record *new)
 {
     struct webdav_db *webdavdb = NULL;
     struct param *param;
@@ -3572,7 +3572,7 @@ done:
 
 static int mailbox_update_dav(struct mailbox *mailbox,
                               const struct index_record *old,
-                              struct index_record *new)
+                              const struct index_record *new)
 {
     /* never have DAV on deleted mailboxes */
     if (mboxname_isdeletedmailbox(mailbox->name, NULL))
@@ -3649,7 +3649,7 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 #ifdef WITH_JMAP
 static int mailbox_update_email_alarms(struct mailbox *mailbox,
                                        const struct index_record *old,
-                                       struct index_record *new)
+                                       const struct index_record *new)
 {
     int r = 0;
 
@@ -3696,10 +3696,8 @@ EXPORTED int mailbox_add_email_alarms(struct mailbox *mailbox)
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        struct index_record copyrecord = *record;
-        r = mailbox_update_email_alarms(mailbox, NULL, &copyrecord);
+        r = mailbox_update_email_alarms(mailbox, NULL, record);
         if (r) break;
-        /* in THEORY there maybe changes here that we should be saving... */
     }
     mailbox_iter_done(&iter);
 
@@ -3801,6 +3799,11 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
                                   struct index_record *new)
 {
     int r = 0;
+
+    // 'new' is not static because conversations might change the CID
+    r = mailbox_update_conversations(mailbox, old, new);
+    if (r) return r;
+
 #ifdef WITH_DAV
     r = mailbox_update_dav(mailbox, old, new);
     if (r) return r;
@@ -3810,9 +3813,6 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
     r = mailbox_update_email_alarms(mailbox, old, new);
     if (r) return r;
 #endif
-
-    r = mailbox_update_conversations(mailbox, old, new);
-    if (r) return r;
 
     /* NOTE - we do these last, once the counts are updated */
 
@@ -5435,10 +5435,8 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        struct index_record copyrecord = *record;
-        r = mailbox_update_dav(mailbox, NULL, &copyrecord);
+        r = mailbox_update_dav(mailbox, NULL, record);
         if (r) break;
-        /* in THEORY there maybe changes here that we should be saving... */
     }
     mailbox_iter_done(&iter);
 
