@@ -342,8 +342,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     if (addproc) {
         struct mailbox *mailbox = NULL;
         /* Open/lock header */
-        r = mailbox_open_iwl(mbentry->name, &mailbox);
-        // needs to be writable to remove bogus lastalarm data
+        r = mailbox_open_irl(mbentry->name, &mailbox);
         if (!r) r = addproc(mailbox);
         mailbox_close(&mailbox);
     }
