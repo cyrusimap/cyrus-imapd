@@ -20516,7 +20516,7 @@ sub test_email_querychanges_mailbox_or
 }
 
 sub test_email_query_dnfcomplexity
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_4 :needs_component_jmap :JMAPExtensions
     :SearchNormalizationMax20000 :SearchMaxTime1Sec
 {
     my ($self) = @_;
