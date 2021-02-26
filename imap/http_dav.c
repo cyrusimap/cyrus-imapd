@@ -1852,6 +1852,18 @@ int proppatch_principalname(xmlNodePtr prop, unsigned set,
     return 0;
 }
 
+/* used by propfind_principalname and principal_search */
+static void extract_principal_displayname(const char *userid, struct buf *output) {
+    static const char annotname[] = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+    char *mailboxname = caldav_mboxname(userid, NULL);
+    buf_reset(output);
+    int r = annotatemore_lookupmask(mailboxname, annotname, userid, output);
+    free(mailboxname);
+    if (r || !buf_len(output)) {
+        buf_printf(output, "%s", userid);
+    }
+}
+
 /* Callback to fetch DAV:displayname for principals */
 static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
                                   struct propfind_ctx *fctx,
@@ -1861,19 +1873,11 @@ static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
                                   void *rock __attribute__((unused)))
 {
     /* XXX  Do LDAP/SQL lookup here */
-    buf_reset(&fctx->buf);
-
     if (fctx->req_tgt->userid) {
-        const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-        char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
-        int r = annotatemore_lookupmask(mailboxname, annotname,
-                                        fctx->req_tgt->userid, &fctx->buf);
-        free(mailboxname);
-        if (r || !buf_len(&fctx->buf)) {
-            buf_printf(&fctx->buf, "%s", fctx->req_tgt->userid);
-        }
+        extract_principal_displayname(fctx->req_tgt->userid, &fctx->buf);
     }
     else {
+        buf_reset(&fctx->buf);
         buf_printf(&fctx->buf, "no userid");
     }
 
@@ -7877,7 +7881,8 @@ static int principal_search(const char *userid, void *rock)
 
         for (prop = search_crit->props; prop; prop = prop->next) {
             if (!strcmp(prop->s, "displayname")) {
-                if (!xmlStrcasestr(BAD_CAST userid,
+                extract_principal_displayname(userid, &fctx->buf);
+                if (!xmlStrcasestr(BAD_CAST buf_cstring(&fctx->buf),
                                    search_crit->match)) return 0;
             }
             else if (!strcmp(prop->s, "calendar-user-address-set")) {
