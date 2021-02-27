@@ -4412,7 +4412,8 @@ static void parse_timerange(xmlNodePtr node,
 static void cal_parse_propfilter(xmlNodePtr node, struct prop_filter *prop,
                                  struct error_t *error)
 {
-    if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+    if (!xmlStrcmp(node->name, BAD_CAST "time-range") &&
+        !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
         if (prop->other) {
             error->precond = CALDAV_SUPP_FILTER;
             error->desc = "Multiple time-range";
@@ -4565,7 +4566,8 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
             error->desc = DAV_FILTER_ISNOTDEF_ERR;
             error->node = xmlCopyNode(root, 1);
         }
-        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined")) {
+        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined") &&
+                 !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
             if ((*comp)->range || (*comp)->prop || (*comp)->comp) {
                 error->precond = CALDAV_SUPP_FILTER;
                 error->desc = DAV_FILTER_ISNOTDEF_ERR;
@@ -4580,7 +4582,8 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
                 }
             }
         }
-        else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+        else if (!xmlStrcmp(node->name, BAD_CAST "time-range") &&
+                 !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
             if ((*comp)->range) {
                 error->precond = CALDAV_SUPP_FILTER;
                 error->desc = "Multiple time-range";
@@ -4609,7 +4612,8 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
 
             if (depth != 1) *flags |= PARSE_ICAL;
         }
-        else if (!xmlStrcmp(node->name, BAD_CAST "prop-filter")) {
+        else if (!xmlStrcmp(node->name, BAD_CAST "prop-filter") &&
+                 !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
             struct prop_filter *prop = NULL;
 
             *flags |= PARSE_ICAL;
@@ -4632,7 +4636,8 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
                 }
             }
         }
-        else if (!xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
+        else if (!xmlStrcmp(node->name, BAD_CAST "comp-filter") &&
+                 !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
             struct comp_filter *subcomp = NULL;
 
             parse_compfilter(node, depth + 1, &subcomp,
@@ -4657,7 +4662,8 @@ static int parse_calfilter(xmlNodePtr root, struct calquery_filter *filter,
 
     /* Parse elements of filter */
     node = xmlFirstElementChild(root);
-    if (node && !xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
+    if (node && !xmlStrcmp(node->name, BAD_CAST "comp-filter") &&
+        !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
         parse_compfilter(node, 0, &filter->comp,
                          &filter->flags, &filter->comp_types, error);
     }
@@ -5602,7 +5608,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                     return (*fctx->ret = HTTP_BAD_REQUEST);
                 }
             }
-            else if (!xmlStrcmp(node->name, BAD_CAST "limit-freebusy-set")) {
+            else if (!xmlStrcmp(node->name, BAD_CAST "limit-freebusy-set") &&
+                     !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
                 syslog(LOG_NOTICE,
                        "Client attempted to use CALDAV:limit-freebusy-set");
                 return (*fctx->ret = HTTP_NOT_IMPLEMENTED);
@@ -7936,7 +7943,8 @@ static int report_fb_query(struct transaction_t *txn,
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
-            if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+            if (!xmlStrcmp(node->name, BAD_CAST "time-range") &&
+                !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
                 xmlChar *start, *end;
 
                 start = xmlGetProp(node, BAD_CAST "start");

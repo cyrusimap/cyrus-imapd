@@ -8058,7 +8058,8 @@ static int report_prin_prop_search(struct transaction_t *txn,
     fctx->filter_crit = NULL;
     for (node = inroot->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
-            if (!xmlStrcmp(node->name, BAD_CAST "property-search")) {
+            if (!xmlStrcmp(node->name, BAD_CAST "property-search") &&
+                !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_DAV)) {
                 xmlNodePtr search;
 
                 search_crit = xzmalloc(sizeof(struct search_crit));
@@ -8067,7 +8068,8 @@ static int report_prin_prop_search(struct transaction_t *txn,
 
                 for (search = node->children; search; search = search->next) {
                     if (search->type == XML_ELEMENT_NODE) {
-                        if (!xmlStrcmp(search->name, BAD_CAST "prop")) {
+                        if (!xmlStrcmp(search->name, BAD_CAST "prop") &&
+                            !xmlStrcmp(search->ns->href, BAD_CAST XML_NS_DAV)) {
                             xmlNodePtr prop;
 
                             for (prop = search->children;
@@ -8096,7 +8098,8 @@ static int report_prin_prop_search(struct transaction_t *txn,
                                 }
                             }
                         }
-                        else if (!xmlStrcmp(search->name, BAD_CAST "match")) {
+                        else if (!xmlStrcmp(search->name, BAD_CAST "match") &&
+                                 !xmlStrcmp(search->ns->href, BAD_CAST XML_NS_DAV)) {
                             if (search_crit->match) {
                                 txn->error.desc =
                                     "Too many DAV:match XML elements";
