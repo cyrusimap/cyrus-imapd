@@ -2355,7 +2355,8 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
         for (node = xmlFirstElementChild(prop); node;
              node = xmlNextElementSibling(node)) {
 
-            if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
+            if (!xmlStrcmp(node->name, BAD_CAST "prop") &&
+                !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV)) {
                 xmlChar *name = xmlGetProp(node, BAD_CAST "name");
                 if (name) {
                     strarray_add_case(partial, (const char *) name);
@@ -2895,7 +2896,8 @@ static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
     for (node = xmlFirstElementChild(root); node && !error->precond;
          node = xmlNextElementSibling(node)) {
 
-        if (!xmlStrcmp(node->name, BAD_CAST "prop-filter")) {
+        if (!xmlStrcmp(node->name, BAD_CAST "prop-filter") &&
+            !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV)) {
             struct prop_filter *prop = NULL;
 
             dav_parse_propfilter(node, &prop, &profile, error);
@@ -2968,7 +2970,8 @@ static int report_card_query(struct transaction_t *txn,
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
-            if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
+            if (!xmlStrcmp(node->name, BAD_CAST "filter") &&
+                !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV)) {
                 ret = parse_cardfilter(node, &cardfilter, &txn->error);
                 if (ret) goto done;
                 else fctx->filter = apply_cardfilter;
