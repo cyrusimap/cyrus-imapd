@@ -864,31 +864,36 @@ static int _add_othergroup_entries(struct jmap_req *req,
 }
 
 typedef struct {
-    const char *key;
-    const char *prop;
+    char *key;
+    char *prop;
     char *type;
     size_t size;
     struct message_guid guid;
 } property_blob_t;
 
 static property_blob_t *property_blob_new(const char *key, const char *prop,
-                                          char *type, struct buf *data)
+                                          const char *type, struct buf *data)
 {
     property_blob_t *blob = xzmalloc(sizeof(property_blob_t));
 
-    blob->key = key;
-    blob->prop = prop;
-    blob->type = type;
+    blob->key = xstrdup(key);
+    blob->prop = xstrdup(prop);
+    blob->type = xstrdupnull(type);
     blob->size = buf_len(data);
     message_guid_generate(&blob->guid, buf_base(data), buf_len(data));
 
     return blob;
 }
 
-static void property_blob_free(property_blob_t *blob)
+static void property_blob_free(property_blob_t **blob)
 {
-    free(blob->type);
-    free(blob);
+    property_blob_t *freeme = *blob;
+
+    free(freeme->key);
+    free(freeme->prop);
+    free(freeme->type);
+    free(freeme);
+    *blob = NULL;
 }
 
 static void _contacts_set(struct jmap_req *req, unsigned kind)
@@ -1209,7 +1214,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                                                   "blobId", buf_cstring(&buf),
                                                   "size", blob->size,
                                                   "type", blob->type, "name"));
-                    property_blob_free(blob);
+                    property_blob_free(&blob);
                 }
 
                 r = carddav_remove(mailbox, olduid,
@@ -1260,7 +1265,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         json_decref(errors.blobNotFound);
         json_decref(item);
         while ((blob = ptrarray_pop(&blobs))) {
-            property_blob_free(blob);
+            property_blob_free(&blob);
         }
         ptrarray_fini(&blobs);
         r = 0;
@@ -3742,8 +3747,7 @@ static int _blob_to_card(struct jmap_req *req,
 
     /* Add this blob to our list */
     property_blob_t *blob = property_blob_new(key, prop,
-                                              xstrdupnull(ctx.content_type),
-                                              &ctx.blob);
+                                              ctx.content_type, &ctx.blob);
     ptrarray_append(blobs, blob);
 
   done:
@@ -4223,7 +4227,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
                                       "blobId", buf_cstring(&buf),
                                       "size", blob->size,
                                       "type", blob->type, "name"));
-        property_blob_free(blob);
+        property_blob_free(&blob);
     }
 
 done:
@@ -4235,7 +4239,7 @@ done:
     free(uid);
     buf_free(&buf);
     while ((blob = ptrarray_pop(&blobs))) {
-        property_blob_free(blob);
+        property_blob_free(&blob);
     }
     ptrarray_fini(&blobs);
 

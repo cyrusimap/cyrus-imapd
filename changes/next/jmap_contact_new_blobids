@@ -1,6 +1,6 @@
 Description:
 
-Use mailbox id + message UID as blob id
+Use mailbox id + message UID [ + property name + GUID ] as blobId for vCard data and avatar download
 
 
 Config changes:
