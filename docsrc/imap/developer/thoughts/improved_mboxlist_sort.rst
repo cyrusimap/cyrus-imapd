@@ -9,13 +9,16 @@ Enabling improved_mboxlist_sort
 
 You can't enable and disable ``improved_mboxlist_sort`` on a live
 system. You need to dump and load the necessary database after stopping
-and before starting the master process.
+and before starting the master process.  Note that you should move or
+rename the original mailboxes.db out of the way between dumping the old
+and loading the new.
 
 Dumping the mailboxes.db file
 
 ::
 
     ctl_mboxlist -d > /var/tmp/mailboxes.txt
+    mv mailboxes.db mailboxes.db.orig
     ctl_mboxlist -u < /var/tmp/mailboxes.txt
 
 If your subscription databases are not in flat files you need to do
