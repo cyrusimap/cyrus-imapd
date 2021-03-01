@@ -133,4 +133,18 @@ extern const char *jmap_decode_to_utf8(const char *charset, int encoding,
                                        char **val,
                                        int *is_encoding_problem);
 
+extern const char *jmap_encode_rawdata_blobid(const char prefix,
+                                              const char *mboxid,
+                                              uint32_t uid,
+                                              const char *userid,
+                                              const char *subpart,
+                                              struct message_guid *guid,
+                                              struct buf *dst);
+extern int jmap_decode_rawdata_blobid(const char *blobid,
+                                      char **mboxidptr,
+                                      uint32_t *uidptr,
+                                      char **useridptr,
+                                      char **subpartptr,
+                                      struct message_guid *guid);
+
 #endif /* JMAP_UTIL_H */

@@ -46,6 +46,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
+#include <errno.h>
 
 #include <sasl/saslutil.h>
 
@@ -695,4 +696,129 @@ done:
     charset_free(&cs);
     *val = text;
     return text;
+}
+
+EXPORTED const char *jmap_encode_rawdata_blobid(const char prefix,
+                                                const char *mboxid,
+                                                uint32_t uid,
+                                                const char *userid,
+                                                const char *subpart,
+                                                struct message_guid *guid,
+                                                struct buf *dst)
+{
+    buf_reset(dst);
+
+    /* Set smart blob prefix */
+    buf_putc(dst, prefix);
+
+    /* Encode mailbox id */
+    buf_appendcstr(dst, mboxid);
+    
+    /* Encode message UID */
+    buf_printf(dst, "_%u", uid);
+
+    /* Encode user id */
+    if (userid) {
+        buf_putc(dst, '_');
+        char *b64userid = jmap_encode_base64_nopad(userid, strlen(userid));
+        if (!b64userid) {
+            buf_reset(dst);
+            return NULL;
+        }
+        buf_appendcstr(dst, b64userid);
+        free(b64userid);
+    }
+
+    /* Encode subpart */
+    if (subpart) {
+        buf_putc(dst, '_');
+        char *b64part = jmap_encode_base64_nopad(subpart, strlen(subpart));
+        if (!b64part) {
+            buf_reset(dst);
+            return NULL;
+        }
+        buf_appendcstr(dst, b64part);
+        free(b64part);
+
+        if (guid) {
+            /* Encode subpart data GUID */
+            buf_printf(dst, "_%s", message_guid_encode(guid));
+        }
+    }
+
+    return buf_cstring(dst);
+}
+
+EXPORTED int jmap_decode_rawdata_blobid(const char *blobid,
+                                        char **mboxidptr,
+                                        uint32_t *uidptr,
+                                        char **useridptr,
+                                        char **subpartptr,
+                                        struct message_guid *guid)
+{
+    char *mboxid = NULL;
+    uint32_t uid = 0;
+    char *userid = NULL;
+    char *subpart = NULL;
+    int is_valid = 0;
+
+    /* Decode mailbox id */
+    const char *base = blobid+1;
+    const char *p = strchr(base, '_');
+    if (!p) goto done;
+    mboxid = xstrndup(base, p-base);
+    if (!*mboxid) goto done;
+    base = p + 1;
+
+    /* Decode message UID */
+    if (*base == '\0') goto done;
+    char *endptr = NULL;
+    errno = 0;
+    uid = strtoul(base, &endptr, 10);
+    if (errno == ERANGE || (*endptr && *endptr != '_')) {
+        goto done;
+    }
+    base = endptr;
+
+    /* Decode userid */
+    if (useridptr && *base == '_') {
+        base += 1;
+        size_t len = strlen(base);
+        if (len) {
+            userid = jmap_decode_base64_nopad(base, len);
+            if (!userid) goto done;
+        }
+        base += len;
+    }
+
+    /* Decode subpart */
+    if (subpartptr && *base == '_') {
+        base += 1;
+        p = strchr(base, '_');
+        if (!p) goto done;
+        subpart = jmap_decode_base64_nopad(base, p-base);
+        if (!subpart) goto done;
+        base = p + 1;
+
+        if (guid) {
+            /* Decode subpart data GUID */
+            if (*base == '\0') goto done;
+            if (!message_guid_decode(guid, base)) message_guid_set_null(guid);
+        }
+    }
+
+    /* All done */
+    *mboxidptr = mboxid;
+    *uidptr = uid;
+    if (useridptr) *useridptr = userid;
+    if (subpartptr) *subpartptr = subpart;
+    is_valid = 1;
+
+done:
+    if (!is_valid) {
+        free(mboxid);
+        free(userid);
+        free(subpart);
+    }
+    return is_valid;
 }
