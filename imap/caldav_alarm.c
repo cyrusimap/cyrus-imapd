@@ -1207,6 +1207,8 @@ done:
     mailbox_close(&mailbox);
 }
 
+#define MAX_CONSECUTIVE_ALARMS_PER_USER 50
+
 /* process alarms with triggers before a given time */
 EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp)
 {
@@ -1233,14 +1235,54 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp)
 
     caldav_alarm_close(alarmdb);
 
-    int i;
-    for (i = 0; i < rock.list.count; i++) {
-        struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
-        process_one_record(data, runtime);
-        caldav_alarm_fini(data);
-        free(data);
-    }
+    int next = 0;
+    char *prev_mboxname = NULL;
+    do {
+        int i = next, cnt = 0;
+
+        next = 0;  /* reset next pass start point */
+
+        for (; i < rock.list.count; i++) {
+            struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
+
+            if (!data) continue;
+
+            /* XXX  we can do this comparison because the list is sorted */
+            if (!prev_mboxname ||
+                strncmp(data->mboxname, prev_mboxname, strlen(prev_mboxname))) {
+                /* different user/tree - reset counter */
+                cnt = 0;
+            }
+            else if (cnt >= MAX_CONSECUTIVE_ALARMS_PER_USER) {
+                /* exceeded per-user limit - skip this alarm until next pass */
+
+                if (!next) {
+                    /* set next pass start point */
+                    next = i;
+                }
+
+                continue;
+            }
+
+            process_one_record(data, runtime);
+
+            ptrarray_set(&rock.list, i, NULL);  /* mark alarm as processed */
+
+            if (!cnt++) {
+                /* steal allocated mboxname from caldav_alarm_data */
+                free(prev_mboxname);
+                prev_mboxname = data->mboxname;
+                data->mboxname = NULL;
+            }
+
+            caldav_alarm_fini(data);
+            free(data);
+        }
+
+    } while (next);
+
     ptrarray_fini(&rock.list);
+    free(prev_mboxname);
 
     syslog(LOG_DEBUG, "done");
 
