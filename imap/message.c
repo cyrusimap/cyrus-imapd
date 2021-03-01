@@ -2665,7 +2665,34 @@ static void message_write_searchaddr(struct buf *buf,
 
             if (addrlist->name) {
                 tmp = charset_parse_mimeheader(addrlist->name, charset_flags);
-                buf_appendcstr(buf, tmp);
+                /* Determine if name is an atext or quoted-string */
+                static const char *atext_specials = "!#$%&'*+-/=?^_`{|}~";
+                const char *c;
+                for (c = tmp; *c; c++) {
+                    // see RFC 5322, section 3.2.3
+                    if (!isalpha(*c) && !isdigit(*c) && !isspace(*c) &&
+                            !strchr(atext_specials, *c)) {
+                        break;
+                    }
+                }
+                int need_quote = *c;
+                /* Write name */
+                if (need_quote) {
+                    struct buf qtext = BUF_INITIALIZER;
+                    buf_ensure(&qtext, strlen(tmp) + 2);
+                    buf_putc(&qtext, '"');
+                    for (c = tmp; *c; c++) {
+                        if (*c == '\\' || *c == '"')
+                            buf_putc(&qtext, '\\');
+                        buf_putc(&qtext, *c);
+                    }
+                    buf_putc(&qtext, '"');
+                    buf_copy(buf, &qtext);
+                    buf_free(&qtext);
+                }
+                else {
+                    buf_appendcstr(buf, tmp);
+                }
                 free(tmp); tmp = NULL;
                 buf_putc(buf, ' ');
             }
