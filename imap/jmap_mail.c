@@ -3368,10 +3368,24 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
     }
 }
 
+static inline void guidsearch_hash_expr(const search_expr_t *e, struct buf *buf)
+{
+    buf_putc(buf, '(');
+    char *tmp = search_expr_serialise(e);
+    buf_appendcstr(buf, tmp);
+    free(tmp);
+    buf_putc(buf, ')');
+}
+
 static int guidsearch_rank_clause(struct conversations_state *cstate,
-                                  const search_expr_t *e)
+                                  const search_expr_t *e,
+                                  struct buf *nonxapian_hash)
 {
     assert(e->op != SEOP_OR);
+
+    if (nonxapian_hash) {
+        buf_reset(nonxapian_hash);
+    }
 
     switch (e->op) {
         case SEOP_AND:
@@ -3379,15 +3393,33 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
             {
                 int rank = 0;
                 search_expr_t *child;
+                strarray_t child_hashes = STRARRAY_INITIALIZER;
                 for (child = e->children ; child ; child = child->next) {
-                    int childrank = guidsearch_rank_clause(cstate, child);
+                    int childrank = guidsearch_rank_clause(cstate, child,
+                            nonxapian_hash);
                     if (childrank == -1) {
                         return -1;
                     }
                     else {
                         rank |= childrank;
                     }
+                    if (nonxapian_hash && buf_len(nonxapian_hash)) {
+                        strarray_append(&child_hashes, buf_cstring(nonxapian_hash));
+                        buf_reset(nonxapian_hash);
+                    }
                 }
+                /* Create hash as list sorted list of children hashes */
+                if (strarray_size(&child_hashes)) {
+                    strarray_sort(&child_hashes, cmpstringp_raw);
+                    buf_setcstr(nonxapian_hash, e->op == SEOP_AND ? "AND" : "NOT");
+                    buf_putc(nonxapian_hash, '(');
+                    int i;
+                    for (i = 0; i < strarray_size(&child_hashes); i++) {
+                        buf_appendcstr(nonxapian_hash, strarray_nth(&child_hashes, i));
+                    }
+                    buf_putc(nonxapian_hash, ')');
+                }
+                strarray_fini(&child_hashes);
                 return rank;
             }
         case SEOP_LT:
@@ -3403,12 +3435,18 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                 e->attr == &_emailsearch_folders_otherthan_attr) {
                 /* inMailbox
                  * inMailboxOtherThan */
+                if (nonxapian_hash) {
+                    guidsearch_hash_expr(e, nonxapian_hash);
+                }
                 return 1;
             }
             else if (e->attr == search_attr_find("systemflags") &&
                     (e->value.u & (FLAG_DRAFT|FLAG_FLAGGED|FLAG_ANSWERED))) {
                 /* hasKeyword
                  * notKeyword */
+                if (nonxapian_hash) {
+                    guidsearch_hash_expr(e, nonxapian_hash);
+                }
                 return 1;
             }
             else if (e->attr == search_attr_find("convflags") ||
@@ -3418,12 +3456,18 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                  * noneInThreadHaveKeyword */
                 if (!strcasecmp(e->value.s, "\\Seen")) {
                     // always supported
+                    if (nonxapian_hash) {
+                        guidsearch_hash_expr(e, nonxapian_hash);
+                    }
                     return 1;
                 }
                 else  {
                     // check if conversation flag is counted
                     if (cstate->counted_flags &&
                         strarray_find_case(cstate->counted_flags, e->value.s, 0) >= 0) {
+                        if (nonxapian_hash) {
+                            guidsearch_hash_expr(e, nonxapian_hash);
+                        }
                         return 1;
                     }
                     else {
@@ -3457,18 +3501,29 @@ static int guidsearch_rank_expr(struct conversations_state *cstate,
      *  0x2  requires Xapian
      */
     if (e->op == SEOP_OR) {
-        int rank = 0;
-        search_expr_t *child;
-        for (child = e->children ; child ; child = child->next) {
-            int childrank = guidsearch_rank_clause(cstate, child);
-            if (childrank == 1 || childrank == -1) {
-                return -1;
+        if (!e->children) return 0;
+        /* A DNF clause of a guidsearch expression must contain at least one
+         * Xapian criteria. It may contain non-Xapian criteria, but these
+         * must be the same for all DNF clauses due to the way we post-process
+         * Xapian results. We assert this by comparing the hash of non-Xapian
+         * criteria across the DNF clauses. */
+        struct buf hash0 = BUF_INITIALIZER, hash = BUF_INITIALIZER;
+        search_expr_t *child = e->children;
+        int rank = guidsearch_rank_clause(cstate, child, &hash0);
+        if (rank == 1 || rank == -1) return -1;
+        for (child = child->next ; child; child = child->next) {
+            int childrank = guidsearch_rank_clause(cstate, child, &hash);
+            if (childrank == 1 || childrank == -1 || buf_cmp(&hash0, &hash)) {
+                rank = -1;
+                break;
             }
             rank |= childrank;
         }
+        buf_free(&hash0);
+        buf_free(&hash);
         return rank;
     }
-    return guidsearch_rank_clause(cstate, e);
+    return guidsearch_rank_clause(cstate, e, NULL);
 }
 
 static int is_guidsearch_sort(struct sortcrit *sort)
