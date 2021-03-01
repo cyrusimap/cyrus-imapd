@@ -99,7 +99,7 @@ static int _json_to_card(struct jmap_req *req,
                          struct vparse_card *card,
                          json_t *arg, strarray_t *flags,
                          struct entryattlist **annotsp,
-                         json_t **item,
+                         ptrarray_t *blobs,
                          jmap_contact_errors_t *errors);
 
 static json_t *jmap_contact_from_vcard(struct vparse_card *card,
@@ -108,8 +108,8 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
 static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-static const char *_encode_contact_blobid(const char *uid,
-                                          modseq_t modseq,
+static const char *_encode_contact_blobid(const char *mboxid,
+                                          uint32_t uid,
                                           const char *prop,
                                           struct message_guid *guid,
                                           struct buf *dst);
@@ -863,6 +863,34 @@ static int _add_othergroup_entries(struct jmap_req *req,
     return r;
 }
 
+typedef struct {
+    const char *key;
+    const char *prop;
+    char *type;
+    size_t size;
+    struct message_guid guid;
+} property_blob_t;
+
+static property_blob_t *property_blob_new(const char *key, const char *prop,
+                                          char *type, struct buf *data)
+{
+    property_blob_t *blob = xzmalloc(sizeof(property_blob_t));
+
+    blob->key = key;
+    blob->prop = prop;
+    blob->type = type;
+    blob->size = buf_len(data);
+    message_guid_generate(&blob->guid, buf_base(data), buf_len(data));
+
+    return blob;
+}
+
+static void property_blob_free(property_blob_t *blob)
+{
+    free(blob->type);
+    free(blob);
+}
+
 static void _contacts_set(struct jmap_req *req, unsigned kind)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -1040,6 +1068,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         json_t *item = json_object();
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
+        ptrarray_t blobs = PTRARRAY_INITIALIZER;
+        property_blob_t *blob;
 
         /* Load message containing the resource and parse vcard data */
         struct vparse_card *vcard = record_to_vcard(mailbox, &record);
@@ -1124,7 +1154,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
             flags = mailbox_extract_flags(mailbox, &record, req->accountid);
             annots = mailbox_extract_annots(mailbox, &record);
 
-            r = _json_to_card(req, cdata, card, arg, flags, &annots, &item, &errors);
+            r = _json_to_card(req, cdata, card, arg, flags, &annots, &blobs, &errors);
             if (r == HTTP_NO_CONTENT) {
                 r = 0;
                 if (!newmailbox) {
@@ -1142,13 +1172,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                                             req->accountid, req->authstate);
                     if (!r) r = annotate_state_store(state, annots);
                     if (!r) r = mailbox_rewrite_index_record(mailbox, &record);
-                    if (!r) {
-                        _encode_contact_blobid(uid, mailbox->i.highestmodseq,
-                                       NULL, NULL, &buf);
-                        json_object_set_new(set.updated, uid,
-                                            json_pack("{s:s}", "blobId",
-                                                      buf_cstring(&buf)));
-                    }
+                    if (!r) json_object_set_new(set.updated, uid, json_null());
                     goto finish;
                 }
             }
@@ -1169,12 +1193,24 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                 mailbox_find_index_record(this_mailbox,
                                           this_mailbox->i.last_uid, &record);
 
-                _encode_contact_blobid(uid, record.modseq, NULL, NULL, &buf);
+                _encode_contact_blobid(this_mailbox->uniqueid, record.uid,
+                                       NULL, NULL, &buf);
                 json_object_set_new(item, "blobId",
                                     json_string(buf_cstring(&buf)));
 
                 json_object_set_new(item, "size",
                                     json_integer(record.size - record.header_size));
+
+                while ((blob = ptrarray_pop(&blobs))) {
+                    _encode_contact_blobid(this_mailbox->uniqueid, record.uid,
+                                           blob->prop, &blob->guid, &buf);
+                    json_object_set_new(item, blob->key,
+                                        json_pack("{s:s s:i s:s? s:n}",
+                                                  "blobId", buf_cstring(&buf),
+                                                  "size", blob->size,
+                                                  "type", blob->type, "name"));
+                    property_blob_free(blob);
+                }
 
                 r = carddav_remove(mailbox, olduid,
                                    /*isreplace*/!newmailbox, req->accountid);
@@ -1223,6 +1259,10 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         json_decref(invalid);
         json_decref(errors.blobNotFound);
         json_decref(item);
+        while ((blob = ptrarray_pop(&blobs))) {
+            property_blob_free(blob);
+        }
+        ptrarray_fini(&blobs);
         r = 0;
     }
     buf_free(&buf);
@@ -1740,7 +1780,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     if (photo &&
         (size = vcard_prop_decode_value(photo, NULL, &type, &guid))) {
         struct buf blobid = BUF_INITIALIZER;
-        if (_encode_contact_blobid(vparse_stringval(card, "uid"), 0,
+        if (_encode_contact_blobid(mailbox->uniqueid, record->uid,
                                    "PHOTO", &guid, &blobid)) {
             file = json_pack("{s:s s:i s:s? s:n}",
                              "blobId", buf_cstring(&blobid), "size", size,
@@ -1778,8 +1818,8 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     return obj;
 }
 
-static const char *_encode_contact_blobid(const char *uid,
-                                          modseq_t modseq,
+static const char *_encode_contact_blobid(const char *mboxid,
+                                          uint32_t uid,
                                           const char *prop,
                                           struct message_guid *guid,
                                           struct buf *dst)
@@ -1789,22 +1829,15 @@ static const char *_encode_contact_blobid(const char *uid,
     /* Set vCard smart blob prefix */
     buf_putc(dst, 'V');
 
-    /* Encode vCard UID */
-    char *b64uid =
-        jmap_encode_base64_nopad(uid, strlen(uid));
-    if (!b64uid) {
-        buf_reset(dst);
-        return NULL;
-    }
-    buf_appendcstr(dst, b64uid);
-    free(b64uid);
+    /* Encode mailbox id */
+    buf_appendcstr(dst, mboxid);
     
-    /* Encode modseq */
-    buf_printf(dst, "-" MODSEQ_FMT, modseq);
+    /* Encode message UID */
+    buf_printf(dst, "_%u", uid);
 
     /* Encode property */
     if (prop) {
-        buf_putc(dst, '-');
+        buf_putc(dst, '_');
         char *b64prop = jmap_encode_base64_nopad(prop, strlen(prop));
         if (!b64prop) {
             buf_reset(dst);
@@ -1814,45 +1847,45 @@ static const char *_encode_contact_blobid(const char *uid,
         free(b64prop);
 
         /* Encode property value GUID */
-        buf_printf(dst, "-%s", message_guid_encode(guid));
+        buf_printf(dst, "_%s", message_guid_encode(guid));
     }
 
     return buf_cstring(dst);
 }
 
 static int _decode_contact_blobid(const char *blobid,
-                                  char **uidptr,
-                                  modseq_t *modseqptr,
+                                  char **mboxidptr,
+                                  uint32_t *uidptr,
                                   char **propptr,
                                   struct message_guid *guid)
 {
-    char *uid = NULL;
-    modseq_t modseq = 0;
+    char *mboxid = NULL;
+    uint32_t uid = 0;
     char *prop = NULL;
     int is_valid = 0;
 
-    /* Decode vCard UID */
+    /* Decode mailbox id */
     const char *base = blobid+1;
-    const char *p = strchr(base, '-');
+    const char *p = strchr(base, '_');
     if (!p) goto done;
-    uid = jmap_decode_base64_nopad(base, p-base);
-    if (!uid) goto done;
+    mboxid = xstrndup(base, p-base);
+    if (!*mboxid) goto done;
     base = p + 1;
 
-    /* Decode modseq */
+    /* Decode message UID */
     if (*base == '\0') goto done;
     char *endptr = NULL;
     errno = 0;
-    modseq = strtoull(base, &endptr, 10);
-    if (errno == ERANGE || (*endptr && *endptr != '-')) {
+    uid = strtoul(base, &endptr, 10);
+    if (errno == ERANGE || (*endptr && *endptr != '_')) {
         goto done;
     }
     base = endptr;
 
     /* Decode property */
-    if (*base == '-') {
+    if (*base == '_') {
         base += 1;
-        p = strchr(base, '-');
+        p = strchr(base, '_');
         if (!p) goto done;
         prop = jmap_decode_base64_nopad(base, p-base);
         if (!prop) goto done;
@@ -1864,75 +1897,63 @@ static int _decode_contact_blobid(const char *blobid,
     }
 
     /* All done */
+    *mboxidptr = mboxid;
     *uidptr = uid;
-    *modseqptr = modseq;
     *propptr = prop;
     is_valid = 1;
 
 done:
     if (!is_valid) {
-        free(uid);
+        free(mboxid);
+        free(prop);
     }
     return is_valid;
 }
 
 static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 {
-    struct carddav_db *db = NULL;
-    struct carddav_data *cdata = NULL;
     struct mailbox *mailbox = NULL;
     struct vparse_card *vcard = NULL;
-    char *uid = NULL, *prop = NULL, *mediatype = NULL;
-    modseq_t modseq;
+    char *mboxid = NULL, *prop = NULL, *mediatype = NULL;
+    uint32_t uid;
     struct message_guid guid = MESSAGE_GUID_INITIALIZER;
     int res = HTTP_OK;
+    mbentry_t *freeme = NULL;
     int r;
 
     if (ctx->blobid[0] != 'V') return 0;
 
-    if (!_decode_contact_blobid(ctx->blobid, &uid, &modseq, &prop, &guid)) {
+    if (!_decode_contact_blobid(ctx->blobid, &mboxid, &uid, &prop, &guid)) {
         res = HTTP_BAD_REQUEST;
         goto done;
     }
 
-    /* Lookup uid in CarddavDB */
-    db = carddav_open_userid(ctx->from_accountid ?
-                             ctx->from_accountid : req->accountid);
-    if (!db) {
-        ctx->errstr = "no addressbook db";
-        res = HTTP_SERVER_ERROR;
-        goto done;
-    }
-    if (carddav_lookup_uid(db, uid, &cdata)) {
-        res = HTTP_NOT_FOUND;
-        goto done;
-    }
-    if (!jmap_hasrights(req, cdata->dav.mailbox, JACL_READITEMS)) {
-        res = HTTP_NOT_FOUND;
-        goto done;
-    }
-
-    if (!prop) {
-        /* Validate modseq */
-        if (modseq != cdata->dav.modseq) {
-            res = HTTP_NOT_FOUND;
+    if (!prop && ctx->accept_mime) {
+        /* Make sure client can handle blob type. */
+        if (strcmp(ctx->accept_mime, "application/octet-stream") &&
+            strcmp(ctx->accept_mime, "text/vcard")) {
+            res = HTTP_NOT_ACCEPTABLE;
             goto done;
         }
 
-        /* Make sure client can handle blob type. */
-        if (ctx->accept_mime) {
-            if (strcmp(ctx->accept_mime, "application/octet-stream") &&
-                strcmp(ctx->accept_mime, "text/vcard")) {
-                res = HTTP_NOT_ACCEPTABLE;
-                goto done;
-            }
+        ctx->content_type = xstrdup(ctx->accept_mime);
+    }
 
-            ctx->content_type = xstrdup(ctx->accept_mime);
-        }
+    const mbentry_t *mbentry;
+    if (ctx->from_accountid) {
+        mboxlist_lookup_by_uniqueid(mboxid, &freeme);
+        mbentry = freeme;
+    }
+    else {
+        mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+    }
+    if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+        res = HTTP_NOT_FOUND;
+        goto done;
     }
 
     /* Open mailbox, we need it now */
-    if ((r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 0))) {
+    if ((r = jmap_openmbox(req, mbentry->name, &mailbox, 0))) {
         ctx->errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
         goto done;
@@ -1940,7 +1961,13 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 
     /* Load vCard data */
     struct index_record record;
-    if (!mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record)) {
+    r = mailbox_find_index_record(mailbox, uid, &record);
+    if (r == IMAP_NOTFOUND) {
+        res = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    if (!r) {
         vcard = record_to_vcard(mailbox, &record);
     }
     if (!vcard) {
@@ -2007,8 +2034,8 @@ done:
     }
     if (vcard) vparse_free_card(vcard);
     if (mailbox) jmap_closembox(req, &mailbox);
-    if (db) carddav_close(db);
-    free(uid);
+    mboxlist_entry_free(&freeme);
+    free(mboxid);
     free(prop);
     free(mediatype);
     return res;
@@ -2063,7 +2090,7 @@ gotvalue:
     if (jmap_wantprop(crock->get->props, "blobId")) {
         json_t *jblobid = json_null();
         struct buf blobid = BUF_INITIALIZER;
-        if (_encode_contact_blobid(cdata->vcard_uid, cdata->dav.modseq,
+        if (_encode_contact_blobid(crock->mailbox->uniqueid, record.uid,
                                    NULL, NULL, &blobid)) {
             jblobid = json_string(buf_cstring(&blobid));
         }
@@ -3628,7 +3655,7 @@ static int _kv_to_card(struct vparse_card *card, const char *key, json_t *jval)
 static int _blob_to_card(struct jmap_req *req,
                          const char *key, json_t *file,
                          struct vparse_card *card, const char *prop,
-                         json_t **item, jmap_contact_errors_t *errors)
+                         ptrarray_t *blobs, jmap_contact_errors_t *errors)
 {
     const char *blobid = NULL;
     const char *accountid = NULL;
@@ -3713,15 +3740,11 @@ static int _blob_to_card(struct jmap_req *req,
         free(subtype);
     }
 
-    /* Generate our new blobId */
-    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
-    message_guid_generate(&guid, buf_base(&ctx.blob), buf_len(&ctx.blob));
-    _encode_contact_blobid(vparse_stringval(card, "uid"), 0, prop, &guid, &buf);
-
-    /* Report new blobId in created/updated object */
-    if (!*item) *item = json_object();
-    json_object_set_new(*item, "avatar",
-                        json_pack("{s:s}", "blobId", buf_cstring(&buf)));
+    /* Add this blob to our list */
+    property_blob_t *blob = property_blob_new(key, prop,
+                                              xstrdupnull(ctx.content_type),
+                                              &ctx.blob);
+    ptrarray_append(blobs, blob);
 
   done:
     free(decbuf);
@@ -3776,7 +3799,7 @@ static int _json_to_card(struct jmap_req *req,
                          struct vparse_card *card,
                          json_t *arg, strarray_t *flags,
                          struct entryattlist **annotsp,
-                         json_t **item,
+                         ptrarray_t *blobs,
                          jmap_contact_errors_t *errors)
 {
     json_t *invalid = errors->invalid;
@@ -3861,7 +3884,7 @@ static int _json_to_card(struct jmap_req *req,
         }
         else if (!strcmp(key, "avatar")) {
             if (!json_is_null(jval)) {
-                int r = _blob_to_card(req, key, jval, card, "PHOTO", item, errors);
+                int r = _blob_to_card(req, key, jval, card, "PHOTO", blobs, errors);
                 if (r) {
                     continue;
                 }
@@ -4062,6 +4085,8 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     int r = 0;
     char *resourcename = NULL;
     struct buf buf = BUF_INITIALIZER;
+    ptrarray_t blobs = PTRARRAY_INITIALIZER;
+    property_blob_t *blob;
 
     if ((uid = (char *) json_string_value(json_object_get(jcard, "uid")))) {
         /* Use custom vCard UID from request object */
@@ -4159,7 +4184,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     }
     else {
         flags = strarray_new();
-        r = _json_to_card(req, cdata, card, jcard, flags, &annots, &item, errors);
+        r = _json_to_card(req, cdata, card, jcard, flags, &annots, &blobs, errors);
 
         logfmt = "jmap: create contact %s/%s (%s)";
     }
@@ -4184,11 +4209,22 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     struct index_record record;
     mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
 
-    _encode_contact_blobid(uid, record.modseq, NULL, NULL, &buf);
+    _encode_contact_blobid((*mailbox)->uniqueid, record.uid, NULL, NULL, &buf);
     json_object_set_new(item, "blobId", json_string(buf_cstring(&buf)));
 
     json_object_set_new(item, "size",
                         json_integer(record.size - record.header_size));
+
+    while ((blob = ptrarray_pop(&blobs))) {
+        _encode_contact_blobid((*mailbox)->uniqueid, record.uid,
+                               blob->prop, &blob->guid, &buf);
+        json_object_set_new(item, blob->key,
+                            json_pack("{s:s s:i s:s? s:n}",
+                                      "blobId", buf_cstring(&buf),
+                                      "size", blob->size,
+                                      "type", blob->type, "name"));
+        property_blob_free(blob);
+    }
 
 done:
     vparse_free_card(card);
@@ -4198,6 +4234,10 @@ done:
     freeentryatts(annots);
     free(uid);
     buf_free(&buf);
+    while ((blob = ptrarray_pop(&blobs))) {
+        property_blob_free(blob);
+    }
+    ptrarray_fini(&blobs);
 
     return r;
 }

@@ -1,0 +1,13 @@
+Description:
+
+Use mailbox id + message UID as blob id
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
