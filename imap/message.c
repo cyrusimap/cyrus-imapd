@@ -2666,7 +2666,7 @@ static void message_write_searchaddr(struct buf *buf,
             if (addrlist->name) {
                 tmp = charset_parse_mimeheader(addrlist->name, charset_flags);
                 /* Determine if name is an atext or quoted-string */
-                static const char *atext_specials = "!#$%&'*+-/=?^_`{|}~";
+                static const char atext_specials[] = "!#$%&'*+-/=?^_`{|}~";
                 const char *c;
                 for (c = tmp; *c; c++) {
                     // see RFC 5322, section 3.2.3
