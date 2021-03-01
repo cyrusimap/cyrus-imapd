@@ -1,6 +1,6 @@
 Description:
 
-Fix a bug in cached email address fields, where names where stored without quotes.
+Fix a bug in cached email address fields, where names were stored without quotes.
 
 Config changes:
 
