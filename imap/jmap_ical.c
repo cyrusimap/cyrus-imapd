@@ -1909,7 +1909,11 @@ static json_t *participant_from_ical(icalproperty *prop,
             }
         }
         strarray_free(vals);
-        if (jschedstat) json_object_set_new(p, "scheduleStatus", jschedstat);
+        if (!json_array_size(jschedstat)) {
+            json_decref(jschedstat);
+            jschedstat = json_null();
+        }
+        json_object_set_new(p, "scheduleStatus", jschedstat);
     }
 
     /* participationComment */
