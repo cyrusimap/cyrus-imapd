@@ -639,35 +639,55 @@ EXPORTED char *mboxlist_find_specialuse(const char *use, const char *userid)
 
 struct _find_uniqueid_data {
     const char *uniqueid;
-    char *mboxname;
+    mbentry_t **entryptr;
 };
 
 static int _find_uniqueid(const mbentry_t *mbentry, void *rock) {
     struct _find_uniqueid_data *d = (struct _find_uniqueid_data *) rock;
     int r = 0;
     if (!strcmpsafe(d->uniqueid, mbentry->uniqueid)) {
-        d->mboxname = xstrdup(mbentry->name);
+        *(d->entryptr) = mboxlist_entry_copy(mbentry);
         r = CYRUSDB_DONE;
     }
     return r;
 }
 
 // calling this function without a userid is fine, it will scan the entire server!
-EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
-                                      const struct auth_state *auth_state)
+static int _mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
+                                    const struct auth_state *auth_state,
+                                    mbentry_t **entryptr)
 {
-    struct _find_uniqueid_data rock = { uniqueid, NULL };
+    struct _find_uniqueid_data rock = { uniqueid, entryptr };
 
     int flags = MBOXTREE_INTERMEDIATES|MBOXTREE_PLUS_RACL;
 
     init_internal();
 
     if (userid && !have_runq)
-        mboxlist_usermboxtree(userid, auth_state, _find_uniqueid, &rock, flags);
+        return mboxlist_usermboxtree(userid, auth_state, _find_uniqueid, &rock, flags);
     else
-        mboxlist_foreach_uniqueid(uniqueid, _find_uniqueid, &rock, flags);
+        return mboxlist_foreach_uniqueid(uniqueid, _find_uniqueid, &rock, flags);
+}
 
-    return rock.mboxname;
+EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
+                                      const struct auth_state *auth_state)
+{
+    mbentry_t *mbentry = NULL;
+    char *mboxname = NULL;
+
+    _mboxlist_find_uniqueid(uniqueid, userid, auth_state, &mbentry);
+
+    if (mbentry) {
+        mboxname = xstrdup(mbentry->name);
+        mboxlist_entry_free(&mbentry);
+    }
+
+    return mboxname;
+}
+
+EXPORTED int mboxlist_lookup_by_uniqueid(const char *uniqueid, mbentry_t **entryptr)
+{
+    return _mboxlist_find_uniqueid(uniqueid, NULL, NULL, entryptr);
 }
 
 /* given a mailbox name, find the staging directory.  XXX - this should
