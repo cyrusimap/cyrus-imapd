@@ -16661,32 +16661,6 @@ sub test_email_query_guidsearch_inmailbox
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
     @wantIds = sort ($emailIdC, $emailIdD, $emailIdCD, $emailIdABCD);
     $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
-
-    xlog $self, "query emails in mailboxes other than A,B and not in D";
-    $res = $jmap->CallMethods([
-        ['Email/query', {
-            filter => {
-                operator => 'AND',
-                conditions => [{
-                    from => 'foo@local',
-                }, {
-                    inMailboxOtherThan => [$mboxIdA, $mboxIdB],
-                }, {
-                    operator => 'NOT',
-                    conditions => [{
-                        inMailbox => $mboxIdD,
-                    }],
-                }],
-            },
-            sort => [{
-                property => 'id',
-                isAscending => JSON::true,
-            }],
-        }, 'R1'],
-    ], $using);
-    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
-    @wantIds = sort ($emailIdC);
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
 }
 
 sub test_email_query_guidsearch_keywords
@@ -20839,6 +20813,181 @@ sub test_email_set_update_no_id
     ]);
     $self->assert_equals(undef, $res->[0][1]{updated}{$emailId});
 
+}
+
+sub test_email_query_guidsearch_mixedfilter2
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['id'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+            }
+        }, 'R2'],
+    ], $using);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    my $mboxA = $res->[1][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[1][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                emailA => {
+                    mailboxIds => {
+                        $mboxA => JSON::true,
+                    },
+                    subject => 'emailA',
+                    from => [{
+                        email => 'fromA@local'
+                    }] ,
+                    to => [{
+                        email => 'toA@local'
+                    }] ,
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'emailA',
+                        }
+                    },
+                },
+                emailB => {
+                    mailboxIds => {
+                        $mboxB => JSON::true,
+                    },
+                    subject => 'emailB',
+                    from => [{
+                        email => 'fromB@local'
+                    }] ,
+                    to => [{
+                        email => 'toB@local'
+                    }] ,
+                    cc => [{
+                        email => 'ccB@local'
+                    }] ,
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'emailB',
+                        }
+                    },
+                },
+                emailX => {
+                    mailboxIds => {
+                        $inbox => JSON::true,
+                    },
+                    subject => 'emailX',
+                    from => [{
+                        email => 'fromA@local'
+                    }] ,
+                    to => [{
+                        email => 'toB@local'
+                    }] ,
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'emailX',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $emailA = $res->[0][1]{created}{emailA}{id};
+    $self->assert_not_null($emailA);
+    my $emailB = $res->[0][1]{created}{emailB}{id};
+    $self->assert_not_null($emailB);
+    my $emailX = $res->[0][1]{created}{emailX}{id};
+    $self->assert_not_null($emailX);
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                'operator' => 'AND',
+                'conditions' => [
+                    {
+                        'operator' => 'OR',
+                        'conditions' => [
+                            {
+                                'from' => 'fromA@local',
+                            },
+                            {
+                                'operator' => 'AND',
+                                'conditions' => [
+                                    {
+                                        'inMailbox' => $mboxB,
+                                    },
+                                    {
+                                        'operator' => 'OR',
+                                        'conditions' => [
+                                            {
+                                                'to' => 'toB@local'
+                                            },
+                                            {
+                                                'cc' => 'ccB@local'
+                                            },
+                                            {
+                                                'bcc' => 'bccB@local'
+                                            },
+                                            {
+                                                'deliveredTo' => 'deliveredToB@local'
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'inMailboxOtherThan' => [
+                            $inbox
+                        ]
+                    }
+                ]
+            },
+            sort => [{ property => 'id' }],
+        }, 'R1'],
+    ], $using);
+
+    # All DNF-clauses of a guidsearch query with Xapian and non-Xapian criteria
+    # must contain the same non-Xapian criteria.
+    # This might change in the future.
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    my @wantIds = sort ( $emailA, $emailB );
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
 }
 
 1;
