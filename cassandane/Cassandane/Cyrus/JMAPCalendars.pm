@@ -7056,7 +7056,7 @@ sub test_calendarevent_get_location_newline
 }
 
 sub test_calendarevent_parse_singlecommand
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
