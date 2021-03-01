@@ -106,7 +106,7 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
                         continue;
                     }
                     if ((flags & SIEVEDIR_IGNORE_JUNK) &&
-                        strcmp(ext, BYTECODE_SUFFIX)) {
+                        strcmpnull(ext, BYTECODE_SUFFIX)) {
                         /* ignore non-bytecode */
                         continue;
                     }
