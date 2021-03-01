@@ -26,7 +26,7 @@ if docutils_version_info < (0, 11):
 
 from sphinx import addnodes
 from sphinx.locale import admonitionlabels, _
-from sphinx.util.osutil import ustrftime
+from time import strftime
 
 class CyrusManualPageWriter(ManualPageWriter):
 
@@ -68,11 +68,7 @@ class CyrusManualPageTranslator(BaseTranslator):
 
         # docinfo set by other config values
         self._docinfo['title_upper'] = self._docinfo['title'].upper()
-        if builder.config.today:
-            self._docinfo['date'] = builder.config.today
-        else:
-            self._docinfo['date'] = ustrftime(builder.config.today_fmt
-                                              or _('%B %d, %Y'))
+        self._docinfo['date'] = builder.config.today or strftime(builder.config.today_fmt or _('%B %d, %Y'))
         self._docinfo['copyright'] = builder.config.copyright
         self._docinfo['version'] = builder.config.version
         self._docinfo['manual_group'] = builder.config.project
