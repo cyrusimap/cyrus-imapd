@@ -865,6 +865,37 @@ out:
     return r;
 }
 
+struct findstage_cb_rock {
+    const char *partition;
+    const char *stagefile;
+};
+
+static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct findstage_cb_rock *rock = vrock;
+    mbentry_t *mbentry = NULL;
+
+    if (rec->part) return 0;
+
+    int r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
+    if (r) return 0;
+
+    if (!strcmp(rock->partition, mbentry->partition)) {
+        const char *msgpath = mboxname_datapath(mbentry->partition,
+                                                mbentry->name,
+                                                mbentry->uniqueid, rec->uid);
+        if (msgpath) {
+            /* link the first stage part to the existing message file */
+            r = cyrus_copyfile(msgpath, rock->stagefile, 0/*flags*/);
+        }
+        r = r ? r : CYRUSDB_DONE;
+    }
+
+    mboxlist_entry_free(&mbentry);
+
+    return r;
+}
+
 /*
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
@@ -892,7 +923,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 #endif
 
     /* for staging */
-    char stagefile[MAX_MAILBOX_PATH+1];
+    char stagefile[MAX_MAILBOX_PATH+1] = "";
 
     assert(stage != NULL && stage->parts.count);
 
@@ -911,6 +942,24 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     /* xxx check errors */
     mboxlist_findstage(mailbox->name, stagefile, sizeof(stagefile));
     strlcat(stagefile, stage->fname, sizeof(stagefile));
+
+    if (!nolink) {
+        /* attempt to find an existing message with the same guid
+           and use it as the stagefile */
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+
+        if (cstate) {
+            struct findstage_cb_rock rock = { mailbox->part, stagefile };
+
+            r = conversations_guid_foreach(cstate,
+                                           message_guid_encode(&(*body)->guid),
+                                           findstage_cb, &rock);
+            if (r && r != CYRUSDB_DONE) {
+                r = IMAP_IOERROR;
+                goto out;
+            }
+        }
+    }
 
     for (i = 0 ; i < stage->parts.count ; i++) {
         /* ok, we've successfully created the file */
