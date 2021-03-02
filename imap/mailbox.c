@@ -3768,7 +3768,7 @@ static struct sieve_db *mailbox_open_sieve(struct mailbox *mailbox)
 
 static int mailbox_update_sieve(struct mailbox *mailbox,
                               const struct index_record *old,
-                              struct index_record *new)
+                              const struct index_record *new)
 {
     struct sieve_db *sievedb = NULL;
     struct param *param;
@@ -3957,8 +3957,7 @@ EXPORTED int mailbox_add_sieve(struct mailbox *mailbox)
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        struct index_record copyrecord = *record;
-        r = mailbox_update_sieve(mailbox, NULL, &copyrecord);
+        r = mailbox_update_sieve(mailbox, NULL, record);
         if (r) break;
         /* in THEORY there maybe changes here that we should be saving... */
     }
