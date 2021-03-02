@@ -3975,7 +3975,8 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
     struct param *param;
     struct body *body = NULL;
     struct sieve_data *sdata = NULL;
-    const char *id = NULL, *name = NULL;
+    char *id = NULL;
+    const char *name = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
     int isexpunged = (new->internal_flags & FLAG_INTERNAL_EXPUNGED ? 1 : 0);
     int isactive = (new->system_flags & FLAG_FLAGGED ? 1 : 0);
@@ -3999,7 +4000,11 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
     message_read_bodystructure(new, &body);
     for (param = body->disposition_params; param; param = param->next) {
         if (!strcmp(param->attribute, "FILENAME")) {
-            id = param->value;
+            ssize_t idlen = strlen(param->value) - strlen(SIEVE_EXTENSION);
+
+            if (idlen > 0 && !strcmp(param->value + idlen, SIEVE_EXTENSION)) {
+                id = xstrndup(param->value, idlen);
+            }
         }
     }
 
@@ -4089,6 +4094,7 @@ done:
         free(body);
     }
     buf_free(&msg_buf);
+    free(id);
 
     return r;
 }

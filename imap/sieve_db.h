@@ -53,6 +53,8 @@ struct sieve_db;
 #define SIEVE_CREATE 0x01
 #define SIEVE_TRUNC  0x02
 
+#define SIEVE_EXTENSION ".sieve"
+
 struct sieve_data {
     unsigned rowid;
     time_t creationdate;
