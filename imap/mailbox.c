@@ -1432,6 +1432,25 @@ EXPORTED int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroo
     return 0;
 }
 
+static int _too_many_flags(const char *flag, int num)
+{
+    if (num < 100) return 0;
+    if (num >= MAX_USER_FLAGS) return 1;
+    int too_many = 1;
+
+    /* check if this is a required user flag */
+    const char *val = config_getstring(IMAPOPT_MAILBOX_INITIAL_FLAGS);
+    if (val) {
+        strarray_t *flags = strarray_split(val, NULL, 0);
+        // it's not too many if there's still space and it's an initial flag
+        if (strarray_find_case(flags, flag, 0) >= 0)
+            too_many = 0;
+        strarray_free(flags);
+    }
+
+    return too_many;
+}
+
 /* find or create a user flag - dirty header if change needed.  If 'create'
  * is 1, then only 100 flags may be created.  If >1, then you can use all 128 */
 EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
@@ -1458,7 +1477,7 @@ EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
             return IMAP_USERFLAG_EXHAUSTED;
 
         /* stop imapd exhausting flags */
-        if (emptyflag >= 100 && create == 1) {
+        if (create == 1 && _too_many_flags(flag, emptyflag)) {
             xsyslog(LOG_ERR, "IOERROR: out of flags",
                              "mailbox=<%s> flag=<%s>",
                              mailbox->name, flag);
@@ -5181,7 +5200,6 @@ EXPORTED int mailbox_create(const char *name,
     int n;
     int createfnames[] = { META_INDEX, META_HEADER, 0 };
     struct mailboxlist *listitem;
-    strarray_t *initial_flags = NULL;
 
     if (!uniqueid) uniqueid = makeuuid();
 
@@ -5323,20 +5341,6 @@ EXPORTED int mailbox_create(const char *name,
 
     mailbox->header_dirty = 1;
 
-    /* pre-set any required permanent flags */
-    if (config_getstring(IMAPOPT_MAILBOX_INITIAL_FLAGS)) {
-        const char *val = config_getstring(IMAPOPT_MAILBOX_INITIAL_FLAGS);
-        int i;
-
-        initial_flags = strarray_split(val, NULL, 0);
-
-        for (i = 0; i < initial_flags->count; i++) {
-            const char *flag = strarray_nth(initial_flags, i);
-            r = mailbox_user_flag(mailbox, flag, NULL, /*create*/1);
-            if (r) goto done;
-        }
-    }
-
     r = seen_create_mailbox(NULL, mailbox);
     if (r) goto done;
     r = mailbox_commit(mailbox);
@@ -5353,8 +5357,6 @@ done:
         *mailboxptr = mailbox;
     else
         mailbox_close(&mailbox);
-
-    strarray_free(initial_flags);
 
     return r;
 }
