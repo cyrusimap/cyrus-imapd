@@ -173,7 +173,7 @@ EXPORTED int webdav_close(struct webdav_db *webdavdb)
     buf_free(&webdavdb->subtype);
     buf_free(&webdavdb->res_uid);
 
-    r = sqldb_close(&webdavdb->db);
+    r = dav_close(&webdavdb->db);
 
     free(webdavdb->userid);
     free(webdavdb);

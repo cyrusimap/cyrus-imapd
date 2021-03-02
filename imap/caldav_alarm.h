@@ -56,6 +56,11 @@ int caldav_alarm_init(void);
 /* done with all caldav operations for this process */
 int caldav_alarm_done(void);
 
+/* reconstruct support */
+int caldav_alarm_set_reconstruct(sqldb_t *db);
+int caldav_alarm_commit_reconstruct(const char *userid);
+void caldav_alarm_rollback_reconstruct();
+
 /* add a calendar alarm */
 int caldav_alarm_add_record(struct mailbox *mailbox,
                             const struct index_record *record,
@@ -79,7 +84,7 @@ int caldav_alarm_delete_mailbox(const char *mboxname);
 int caldav_alarm_delete_user(const char *userid);
 
 /* distribute alarms with triggers in the next minute */
-int caldav_alarm_process(time_t runtime, time_t *next);
+int caldav_alarm_process(time_t runtime, time_t *next, int dryrun);
 
 /* upgrade old databases */
 int caldav_alarm_upgrade();

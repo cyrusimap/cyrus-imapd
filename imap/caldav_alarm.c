@@ -62,6 +62,7 @@
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "times.h"
+#include "user.h"
 #include "util.h"
 #include "xstrlcat.h"
 #include "xmalloc.h"
@@ -90,6 +91,7 @@ struct get_alarm_rock {
     time_t last;
     time_t now;
     time_t nextcheck;
+    int dryrun;
 };
 
 static struct namespace caldav_alarm_namespace;
@@ -135,6 +137,42 @@ static struct sqldb_upgrade upgrade[] = {
     /* always finish with an empty row */
     { 0, NULL, NULL }
 };
+
+#define CMD_REPLACE                              \
+    "REPLACE INTO events"                        \
+    " ( mboxname, imap_uid, nextcheck )"         \
+    " VALUES"                                    \
+    " ( :mboxname, :imap_uid, :nextcheck )"      \
+    ";"
+
+#define CMD_DELETE                               \
+    "DELETE FROM events"                         \
+    " WHERE mboxname = :mboxname"                \
+    "   AND imap_uid = :imap_uid"                \
+    ";"
+
+#define CMD_DELETEMAILBOX       \
+    "DELETE FROM events WHERE"  \
+    " mboxname = :mboxname"     \
+    ";"
+
+#define CMD_DELETEUSER          \
+    "DELETE FROM events WHERE"  \
+    " mboxname LIKE :prefix"     \
+    ";"
+
+#define CMD_SELECTUSER           \
+    "SELECT mboxname, imap_uid, nextcheck" \
+    " FROM events WHERE"                   \
+    " mboxname LIKE :prefix"               \
+    ";"
+
+#define CMD_SELECT_ALARMS                                                \
+    "SELECT mboxname, imap_uid, nextcheck"                               \
+    " FROM events WHERE"                                                 \
+    " nextcheck < :before"                                               \
+    " ORDER BY mboxname, imap_uid, nextcheck"                            \
+    ";"
 
 static sqldb_t *my_alarmdb;
 int refcount;
@@ -182,6 +220,82 @@ static int caldav_alarm_close(sqldb_t *alarmdb)
     mboxname_release(&my_alarmdb_lock);
 
     return 0;
+}
+
+/* set up a reconstruct database to override regular open/close */
+EXPORTED int caldav_alarm_set_reconstruct(sqldb_t *db)
+{
+    // make sure we're not already open
+    assert(!my_alarmdb);
+    assert(!refcount);
+
+    // create the events table
+    int rc = sqldb_exec(db, CMD_CREATE, NULL, NULL, NULL);
+    if (rc != SQLITE_OK) return IMAP_IOERROR;
+
+    // preload the DB into our refcounter
+    my_alarmdb = db;
+    refcount = 1;
+
+    return 0;
+}
+
+static int copydb(sqlite3_stmt *stmt, void *rock)
+{
+    sqldb_t *destdb = (sqldb_t *)rock;
+    struct sqldb_bindval bval[] = {
+        { ":mboxname",  SQLITE_TEXT,    { .s = (const char *)sqlite3_column_text(stmt, 0) } },
+        { ":imap_uid",  SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 1)  } },
+        { ":nextcheck", SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 2)  } },
+        { NULL,         SQLITE_NULL,    { .s = NULL      } }
+    };
+    return sqldb_exec(destdb, CMD_REPLACE, bval, NULL, NULL);
+}
+
+/* remove all existing alarms for this user and copy all alarms from the
+   reconstructed database into place instead */
+EXPORTED int caldav_alarm_commit_reconstruct(const char *userid)
+{
+    sqldb_t *db = my_alarmdb;
+
+    // zero out the override so we can open the correct database
+    assert(refcount == 1);
+    refcount = 0;
+    my_alarmdb = NULL;
+
+    mbname_t *mbname = mbname_from_userid(userid);
+    const char *mboxname = mbname_intname(mbname);
+    char *prefix = strconcat(mboxname, ".%", (char *)NULL);
+    mbname_free(&mbname);
+
+    struct sqldb_bindval bval[] = {
+        { ":prefix",    SQLITE_TEXT, { .s = prefix  } },
+        { NULL,         SQLITE_NULL, { .s = NULL    } }
+    };
+
+    sqldb_t *alarmdb = caldav_alarm_open();
+    int r = sqldb_begin(alarmdb, "replace_alarms");
+    if (!r) r = sqldb_exec(alarmdb, CMD_DELETEUSER, bval, NULL, NULL);
+    if (!r) r = sqldb_exec(db, CMD_SELECTUSER, bval, &copydb, alarmdb);
+    if (!r) r = sqldb_commit(alarmdb, "replace_alarms");
+    else sqldb_rollback(alarmdb, "replace_alarms");
+    caldav_alarm_close(alarmdb);
+
+    // if we succeeded, drop the copy of events in this DB
+    if (!r) r = sqldb_exec(db, "DROP TABLE events;", NULL, NULL, NULL);
+
+    return r;
+}
+
+/* release the reconstruction database without copying or removing any
+ * existing alarms */
+EXPORTED void caldav_alarm_rollback_reconstruct()
+{
+    assert(refcount == 1);
+    refcount = 0;
+    my_alarmdb = NULL;
+
+    // we keep the events database in this copy for later examination
 }
 
 /*
@@ -382,7 +496,7 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
             continue;
         }
 
-        if (check <= data->now) {
+        if (check <= data->now && !data->dryrun) {
             prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
             const char *summary =
                 prop ? icalproperty_get_value_as_string(prop) : "[no summary]";
@@ -423,19 +537,6 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
 
     return 1; /* keep going */
 }
-
-#define CMD_REPLACE                              \
-    "REPLACE INTO events"                        \
-    " ( mboxname, imap_uid, nextcheck )"         \
-    " VALUES"                                    \
-    " ( :mboxname, :imap_uid, :nextcheck )"      \
-    ";"
-
-#define CMD_DELETE                               \
-    "DELETE FROM events"                         \
-    " WHERE mboxname = :mboxname"                \
-    "   AND imap_uid = :imap_uid"                \
-    ";"
 
 static int update_alarmdb(const char *mboxname,
                           uint32_t imap_uid, time_t nextcheck)
@@ -579,10 +680,11 @@ static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid
 
 static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
                              const char *userid, icaltimezone *floatingtz,
-                             icalcomponent *ical, time_t lastrun, time_t runtime)
+                             icalcomponent *ical, time_t lastrun,
+                             time_t runtime, int dryrun)
 {
     struct get_alarm_rock rock =
-        { userid, mboxname, imap_uid, floatingtz, lastrun, runtime, 0 };
+        { userid, mboxname, imap_uid, floatingtz, lastrun, runtime, 0, dryrun };
     struct icalperiodtype range = icalperiodtype_null_period();
     icalcomponent_myforeach(ical, range, floatingtz, process_alarm_cb, &rock);
     return rock.nextcheck;
@@ -682,11 +784,6 @@ HIDDEN int caldav_alarm_delete_record(const char *mboxname, uint32_t imap_uid)
     return update_alarmdb(mboxname, imap_uid, 0);
 }
 
-#define CMD_DELETEMAILBOX       \
-    "DELETE FROM events WHERE"  \
-    " mboxname = :mboxname"     \
-    ";"
-
 /* delete all alarms matching the event */
 HIDDEN int caldav_alarm_delete_mailbox(const char *mboxname)
 {
@@ -701,11 +798,6 @@ HIDDEN int caldav_alarm_delete_mailbox(const char *mboxname)
 
     return rc;
 }
-
-#define CMD_DELETEUSER          \
-    "DELETE FROM events WHERE"  \
-    " mboxname LIKE :prefix"     \
-    ";"
 
 /* delete all alarms matching the event */
 HIDDEN int caldav_alarm_delete_user(const char *userid)
@@ -735,13 +827,6 @@ struct alarm_read_rock {
     time_t next;
 };
 
-#define CMD_SELECT_ALARMS                                                \
-    "SELECT mboxname, imap_uid, nextcheck"                               \
-    " FROM events WHERE"                                                 \
-    " nextcheck < :before"                                               \
-    " ORDER BY mboxname, imap_uid"                                       \
-    ";"
-
 static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct alarm_read_rock *alarm = rock;
@@ -767,6 +852,7 @@ struct process_alarms_rock {
     icalcomponent *ical;
     struct lastalarm_data *alarm;
     time_t runtime;
+    int dryrun;
 };
 
 static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
@@ -800,7 +886,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
 
     /* Process any VALARMs in the patched iCalendar resource */
     check = process_alarms(mailbox, uid, userid, floatingtz, myical,
-                           prock->alarm->lastrun, prock->runtime);
+                           prock->alarm->lastrun, prock->runtime, prock->dryrun);
     if (!prock->alarm->nextcheck || check < prock->alarm->nextcheck) {
         prock->alarm->nextcheck = check;
     }
@@ -813,7 +899,8 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
 
 static int process_valarms(struct mailbox *mailbox,
                             struct index_record *record,
-                            icaltimezone *floatingtz, time_t runtime)
+                            icaltimezone *floatingtz, time_t runtime,
+                            int dryrun)
 {
     icalcomponent *ical = ical = record_to_ical(mailbox, record, NULL);
 
@@ -844,12 +931,12 @@ static int process_valarms(struct mailbox *mailbox,
     syslog(LOG_DEBUG, "processing alarms in resource");
 
     data.nextcheck = process_alarms(mailbox->name, record->uid, userid,
-                                    floatingtz, ical, data.lastrun, runtime);
+                                    floatingtz, ical, data.lastrun, runtime, dryrun);
     free(userid);
 
     /* Process VALARMs in per-user-cal-data */
     struct process_alarms_rock prock =
-        { mailbox->i.options, ical, &data, runtime };
+        { mailbox->i.options, ical, &data, runtime, dryrun };
 
     syslog(LOG_DEBUG, "processing per-user alarms");
 
@@ -859,7 +946,7 @@ static int process_valarms(struct mailbox *mailbox,
                          &prock, /* flags */ 0);
 
     data.lastrun = runtime;
-    write_lastalarm(mailbox, record, &data);
+    if (!dryrun) write_lastalarm(mailbox, record, &data);
 
     update_alarmdb(mailbox->name, record->uid, data.nextcheck);
 
@@ -966,7 +1053,9 @@ static int process_futurerelease(struct mailbox *mailbox,
 }
 
 static int process_snoozed(struct mailbox *mailbox,
-                            struct index_record *record, time_t runtime)
+                           struct index_record *record,
+                           time_t runtime,
+                           int dryrun)
 {
     struct buf buf = BUF_INITIALIZER;
     msgrecord_t *mr = NULL;
@@ -990,13 +1079,17 @@ static int process_snoozed(struct mailbox *mailbox,
 
     /* Get the snoozed annotation */
     snoozed = jmap_fetch_snoozed(mailbox->name, record->uid);
-    if (!snoozed) goto done;
+    if (!snoozed) {
+        // no worries, let's not try again
+        update_alarmdb(mailbox->name, record->uid, 0);
+        goto done;
+    }
 
     time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
                       &wakeup);
 
-    /* Check runtime against wakup and adjust as necessary */
-    if (wakeup > runtime) {
+    /* Check runtime against wakeup and adjust as necessary */
+    if (dryrun || wakeup > runtime) {
         update_alarmdb(mailbox->name, record->uid, wakeup);
         goto done;
     }
@@ -1126,7 +1219,7 @@ static int process_snoozed(struct mailbox *mailbox,
 }
 #endif /* WITH_JMAP */
 
-static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
+static void process_one_record(struct caldav_alarm_data *data, time_t runtime, int dryrun)
 {
     int r;
     struct mailbox *mailbox = NULL;
@@ -1134,7 +1227,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
     syslog(LOG_DEBUG, "processing alarms for mailbox %s uid %u",
            data->mboxname, data->imap_uid);
 
-    r = mailbox_open_iwl(data->mboxname, &mailbox);
+    r = dryrun ? mailbox_open_irl(data->mboxname, &mailbox) : mailbox_open_iwl(data->mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         syslog(LOG_ERR, "not found mailbox %s", data->mboxname);
         /* no record, no worries */
@@ -1177,12 +1270,12 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
 
     if (mailbox->mbtype == MBTYPE_CALENDAR) {
         icaltimezone *floatingtz = get_floatingtz(mailbox->name, "");
-        r = process_valarms(mailbox, &record, floatingtz, runtime);
+        r = process_valarms(mailbox, &record, floatingtz, runtime, dryrun);
         if (floatingtz) icaltimezone_free(floatingtz, 1);
     }
 #ifdef WITH_JMAP
     else if (mailbox->mbtype == MBTYPE_SUBMISSION) {
-        if (record.internaldate > runtime) {
+        if (record.internaldate > runtime || dryrun) {
             update_alarmdb(data->mboxname, data->imap_uid, record.internaldate);
             goto done;
         }
@@ -1190,7 +1283,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime)
     }
     else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
         /* XXX  Check special-use flag on mailbox */
-        r = process_snoozed(mailbox, &record, runtime);
+        r = process_snoozed(mailbox, &record, runtime, dryrun);
     }
 #endif
     else {
@@ -1207,9 +1300,13 @@ done:
     mailbox_close(&mailbox);
 }
 
+#define MAX_CONSECUTIVE_ALARMS_PER_USER 50
+
 /* process alarms with triggers before a given time */
-EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp)
+EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 {
+    int i;
+
     syslog(LOG_DEBUG, "processing alarms");
 
     if (!runtime) {
@@ -1233,13 +1330,66 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp)
 
     caldav_alarm_close(alarmdb);
 
-    int i;
-    for (i = 0; i < rock.list.count; i++) {
-        struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
-        process_one_record(data, runtime);
-        caldav_alarm_fini(data);
-        free(data);
+    if (intervalp) {
+        // we want to restrict the number of records processed per user per run,
+        // and also take a non-blocking lock so we're never waiting while other
+        // things process
+        int skipped_some = 0;
+        int did_some = 0;
+        int num_user_records = 0;
+        char *userid = NULL;
+        struct mboxlock *nslock = NULL;
+        for (i = 0; i < rock.list.count; i++) {
+            struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
+
+            // only alarms for mailboxes with userids
+            mbname_t *mbname = mbname_from_intname(data->mboxname);
+            if (!mbname_userid(mbname)) {
+                mbname_free(&mbname);
+                continue;
+            }
+
+            // we are sorted by mboxname, so all the mailboxes for the same
+            // userid will be next to each other
+            if (strcmpsafe(userid, mbname_userid(mbname))) {
+                num_user_records = 0;
+                free(userid);
+                mboxname_release(&nslock);
+                userid = xstrdup(mbname_userid(mbname));
+                nslock = user_namespacelock_full(userid, LOCK_NONBLOCKING);
+            }
+            mbname_free(&mbname);
+
+            // if we failed to lock the user, or have done too many for this user, skip
+            if (!nslock || ++num_user_records > MAX_CONSECUTIVE_ALARMS_PER_USER) {
+                skipped_some++;
+                caldav_alarm_fini(data);
+                free(data);
+                continue;
+            }
+
+            did_some++;
+            process_one_record(data, runtime, dryrun);
+            caldav_alarm_fini(data);
+            free(data);
+        }
+
+        free(userid);
+        mboxname_release(&nslock);
+
+        // if we both made some progress AND skipped some, then retry again immediately
+        if (did_some && skipped_some) rock.next = runtime;
     }
+    else {
+        // we're testing or reconstructing, run everything!
+        for (i = 0; i < rock.list.count; i++) {
+            struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
+            process_one_record(data, runtime, dryrun);
+            caldav_alarm_fini(data);
+            free(data);
+        }
+    }
+
     ptrarray_fini(&rock.list);
 
     syslog(LOG_DEBUG, "done");
@@ -1308,12 +1458,10 @@ EXPORTED int caldav_alarm_upgrade()
                     char *userid = mboxname_to_userid(mailbox->name);
                     time_t nextcheck = process_alarms(mailbox->name, record->uid,
                                                       userid, floatingtz, ical,
-                                                      runtime, runtime);
+                                                      runtime, runtime, /*dryrun*/1);
                     free(userid);
 
-                    struct lastalarm_data data = { runtime, nextcheck };
-                    write_lastalarm(mailbox, record, &data);
-                    update_alarmdb(mailbox->name, record->uid, data.nextcheck);
+                    update_alarmdb(mailbox->name, record->uid, nextcheck);
                 }
                 icalcomponent_free(ical);
             }

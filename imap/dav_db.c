@@ -58,7 +58,9 @@
 #include "caldav_alarm.h"
 #include "cyrusdb.h"
 #include "dav_db.h"
+#include "imap_err.h"
 #include "global.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -231,14 +233,15 @@ struct sqldb_upgrade davdb_upgrade[] = {
 
 #define DB_VERSION 10
 
-static int in_reconstruct = 0;
+static sqldb_t *reconstruct_db;
 
 EXPORTED sqldb_t *dav_open_userid(const char *userid)
 {
+    if (reconstruct_db) return reconstruct_db;
+
     sqldb_t *db = NULL;
     struct buf fname = BUF_INITIALIZER;
     dav_getpath_byuserid(&fname, userid);
-    if (in_reconstruct) buf_printf(&fname, ".NEW");
     db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
                     config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
     buf_free(&fname);
@@ -247,10 +250,11 @@ EXPORTED sqldb_t *dav_open_userid(const char *userid)
 
 EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
 {
+    if (reconstruct_db) return reconstruct_db;
+
     sqldb_t *db = NULL;
     struct buf fname = BUF_INITIALIZER;
     dav_getpath(&fname, mailbox);
-    if (in_reconstruct) buf_printf(&fname, ".NEW");
     db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
                     config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
     buf_free(&fname);
@@ -259,6 +263,8 @@ EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
 
 EXPORTED int dav_attach_userid(sqldb_t *db, const char *userid)
 {
+    assert (!reconstruct_db);
+
     struct buf fname = BUF_INITIALIZER;
     dav_getpath_byuserid(&fname, userid);
     int r = sqldb_attach(db, buf_cstring(&fname));
@@ -268,11 +274,20 @@ EXPORTED int dav_attach_userid(sqldb_t *db, const char *userid)
 
 EXPORTED int dav_attach_mailbox(sqldb_t *db, struct mailbox *mailbox)
 {
+    assert (!reconstruct_db);
+
     struct buf fname = BUF_INITIALIZER;
     dav_getpath(&fname, mailbox);
     int r = sqldb_attach(db, buf_cstring(&fname));
     buf_free(&fname);
     return r;
+}
+
+EXPORTED int dav_close(sqldb_t **dbp)
+{
+    if (reconstruct_db) return 0;
+
+    return sqldb_close(dbp);
 }
 
 
@@ -327,8 +342,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     if (addproc) {
         struct mailbox *mailbox = NULL;
         /* Open/lock header */
-        r = mailbox_open_iwl(mbentry->name, &mailbox);
-        // needs to be writable to remove bogus lastalarm data
+        r = mailbox_open_irl(mbentry->name, &mailbox);
         if (!r) r = addproc(mailbox);
         mailbox_close(&mailbox);
     }
@@ -336,7 +350,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     return r;
 }
 
-static void run_audit_tool(const char *tool, const char *srcdb, const char *dstdb)
+static void run_audit_tool(const char *tool, const char *userid, const char *srcdb, const char *dstdb)
 {
     pid_t pid = fork();
     if (pid < 0)
@@ -344,7 +358,7 @@ static void run_audit_tool(const char *tool, const char *srcdb, const char *dstd
 
     if (pid == 0) {
         /* child */
-        execl(tool, tool, srcdb, dstdb, (void *)NULL);
+        execl(tool, tool, "-C", config_filename, "-u", userid, srcdb, dstdb, (void *)NULL);
         exit(-1);
     }
 
@@ -363,25 +377,28 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     dav_getpath_byuserid(&newfname, userid);
     buf_printf(&newfname, ".NEW");
 
-    /* XXX - this still means that alarms can go missing if this
-     * task is interrupted, but we can't afford to keep the
-     * alarm database locked for the entire time, it's a single
-     * blocking database over the entire server */
-    caldav_alarm_delete_user(userid);
+    struct mboxlock *namespacelock = user_namespacelock(userid);
 
-    in_reconstruct = 1;
-
-    sqldb_t *userdb = dav_open_userid(userid);
-    sqldb_begin(userdb, "reconstruct");
-    int r = mboxlist_usermboxtree(userid, NULL,
-                                  _dav_reconstruct_mb, (void *) userid, 0);
-    if (r)
-        sqldb_rollback(userdb, "reconstruct");
-    else
-        sqldb_commit(userdb, "reconstruct");
-    sqldb_close(&userdb);
-
-    in_reconstruct = 0;
+    int r = IMAP_IOERROR;
+    reconstruct_db = sqldb_open(buf_cstring(&newfname), CMD_CREATE, DB_VERSION, davdb_upgrade,
+                                config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
+    if (reconstruct_db) {
+        r = sqldb_begin(reconstruct_db, "reconstruct");
+        // make all the alarm updates to go this database too
+        if (!r) r = caldav_alarm_set_reconstruct(reconstruct_db);
+        // reconstruct everything
+        if (!r) r = mboxlist_usermboxtree(userid, NULL,
+                                          _dav_reconstruct_mb, (void *) userid, 0);
+        // make sure all the alarms are resolved
+        if (!r) r = caldav_alarm_process(0, NULL, /*dryrun*/1);
+        // commit events over to ther alarm database if we're keeping them
+        if (!r && !audit_tool) r = caldav_alarm_commit_reconstruct(userid);
+        else caldav_alarm_rollback_reconstruct();
+        // and commit to this DB
+        if (r) sqldb_rollback(reconstruct_db, "reconstruct");
+        else sqldb_commit(reconstruct_db, "reconstruct");
+        sqldb_close(&reconstruct_db);
+    }
 
     /* this actually works before close according to the internets */
     if (r) {
@@ -394,13 +411,15 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     else {
         syslog(LOG_NOTICE, "dav_reconstruct_user: %s SUCCEEDED", userid);
         if (audit_tool) {
-            run_audit_tool(audit_tool, buf_cstring(&fname), buf_cstring(&newfname));
+            run_audit_tool(audit_tool, userid, buf_cstring(&fname), buf_cstring(&newfname));
             unlink(buf_cstring(&newfname));
         }
         else {
             rename(buf_cstring(&newfname), buf_cstring(&fname));
         }
     }
+
+    mboxname_release(&namespacelock);
 
     buf_free(&newfname);
     buf_free(&fname);

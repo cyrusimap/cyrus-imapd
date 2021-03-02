@@ -201,7 +201,7 @@ EXPORTED int caldav_close(struct caldav_db *caldavdb)
     buf_free(&caldavdb->sched_tag);
     buf_free(&caldavdb->jmapdata);
 
-    r = sqldb_close(&caldavdb->db);
+    r = dav_close(&caldavdb->db);
 
     free(caldavdb);
 
