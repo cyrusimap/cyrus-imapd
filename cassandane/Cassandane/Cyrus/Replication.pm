@@ -169,6 +169,87 @@ EOF
 }
 
 #
+# Test handling of replication when append fails due to disk error
+#
+sub test_appendmulti_diskfull
+    :CSyncReplication :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $canary = << 'EOF';
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+To: Sarah Jane Smith <sjsmith@tard.is>
+Subject: this is just to say
+X-Cassandane-Unique: canary
+
+I have eaten
+the canary
+that was in
+the coal mine
+
+and which
+you were probably
+saving
+for emergencies
+
+Forgive me
+it was delicious
+so tweet
+and so coaled
+EOF
+    $canary =~ s/\n/\r\n/g;
+    my $canaryguid = "f2eaa91974c50ec3cfb530014362e92efb06a9ba";
+
+    $self->{replica}->{config}->set('debug_writefail_guid' => $canaryguid);
+    $self->_start_instances();
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my %exp;
+    $exp{1} = $self->make_message("msg 1", uid => 1, store => $master_store);
+    $exp{2} = $self->make_message("msg 2", uid => 2, store => $master_store);
+    $exp{3} = Cassandane::Message->new(raw => $canary,
+                                       attrs => { UID => 3 }),
+    $self->_save_message($exp{3}, $master_store);
+    $exp{4} = $self->make_message("msg 4", uid => 4, store => $master_store);
+
+    xlog $self, "messages should be on master only";
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
+    $self->check_messages({}, keyed_on => 'uid', store => $replica_store);
+
+    xlog $self, "running replication...";
+    eval {
+        $self->run_replication();
+    };
+    my $e = $@;
+
+    # sync_client should have exited with an error
+    $self->assert($e);
+    $self->assert_matches(qr/child\sprocess\s
+                            \(binary\ssync_client\spid\s\d+\)\s
+                            exited\swith\scode/x,
+                          $e->to_string());
+
+    # sync_client should have logged the BAD response
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/IOERROR: received bad response/, "@lines");
+
+    # sync server should have logged the write error
+    @lines = $self->{replica}->getsyslog();
+    $self->assert_matches(qr/IOERROR: failed to upload file $canaryguid/,
+                          "@lines");
+
+    # contents of message 4 should not appear on the wire (or logs) as
+    # junk commands!  we need sync_server specifically for this (and not
+    # a replication-aware imapd), because only sync_server logs bad
+    # commands.
+    $self->assert_does_not_match(qr/IOERROR:\sreceived\sbad\scommand:\s
+                                    command=<Return-path:>/x,
+                                 "@lines");
+}
+
+#
 # Test replication of messages APPENDed to the master
 #
 sub test_splitbrain
