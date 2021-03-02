@@ -1855,6 +1855,72 @@ void sync_send_restore(struct dlist *kl, struct protstream *out)
     prot_flush(out);
 }
 
+/*
+ * Copied from imapparse.c:eatline(), and extended to also eat
+ * dlist file literals
+ * XXX potentially dedup back into original eatline
+ */
+void sync_eatline(struct protstream *pin, int c)
+{
+    for (;;) {
+        if (c == '\n') return;
+
+        /* Several of the parser helper functions return EOF
+           even if an unexpected character (other than EOF) is received.
+           We need to confirm that the stream is actually at EOF. */
+        if (c == EOF && (prot_IS_EOF(pin) || prot_IS_ERROR(pin))) return;
+
+        /* see if it's a literal */
+        if (c == '{') {
+            c = prot_getc(pin);
+            uint64_t size = 0;
+            while (cyrus_isdigit(c)) {
+                if (size > 429496729 || (size == 429496729 && (c > '5')))
+                    break; /* don't fatal, just drop out of literal parsing */
+                size = size * 10 + c - '0';
+                c = prot_getc(pin);
+            }
+            if (c != '+') continue;
+            c = prot_getc(pin);
+            if (c != '}') continue;
+            c = prot_getc(pin);
+            /* optional \r */
+            if (c == '\r') c = prot_getc(pin);
+            if (c != '\n') continue;
+            /* successful literal, consume it */
+            while (size--) {
+                c = prot_getc(pin);
+                if (c == EOF) return;
+            }
+        }
+        else if (c == '%') {
+            /* replication file literal */
+            static struct buf discard = BUF_INITIALIZER;
+            uint32_t size = 0;
+
+            c = prot_getc(pin);
+            if (c != '{') continue;
+            c = getastring(pin, NULL, &discard); /* partition */
+            if (c != ' ') continue;
+            c = getastring(pin, NULL, &discard); /* guid */
+            if (c != ' ') continue;
+            c = getuint32(pin, &size);
+            if (c != '}') continue;
+            c = prot_getc(pin);
+            /* optional \r */
+            if (c == '\r') c = prot_getc(pin);
+            if (c != '\n') continue;
+            /* successful file literal, consume it */
+            while (size--) {
+                c = prot_getc(pin);
+                if (c == EOF) return;
+            }
+        }
+
+        c = prot_getc(pin);
+    }
+}
+
 struct dlist *sync_parseline(struct protstream *in)
 {
     struct dlist *dl = NULL;
@@ -1867,7 +1933,7 @@ struct dlist *sync_parseline(struct protstream *in)
     if (c == '\n') return dl;
 
     dlist_free(&dl);
-    eatline(in, c);
+    sync_eatline(in, c);
     return NULL;
 }
 
