@@ -2266,6 +2266,104 @@ sub test_contact_set_avatar_singlecommand
     $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{"x-hasPhoto"});
 }
 
+sub test_contact_set_avatar_from_deleted_contact
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $contact = {
+        firstName => "first",
+        lastName => "last",
+        avatar => {
+            blobId => "#img",
+            size => 10,
+            type => "image/jpeg",
+            name => JSON::null
+        }
+    };
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/contacts',
+        'https://cyrusimap.org/ns/jmap/blob',
+    ];
+
+    xlog $self, "create initial card";
+    my $res = $jmap->CallMethods([
+        ['Blob/set', { create => {
+            "img" => { content => 'some photo',
+                       type => 'image/jpeg' } } }, 'R0'],
+        ['Contact/set', {create => {"1" => $contact }}, "R1"],
+        ['Contact/get', {}, "R2"]],
+        $using);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('R0', $res->[0][2]);
+
+    $contact->{avatar}{blobId} = $res->[0][1]{created}{"img"}{blobId};
+
+    $self->assert_str_equals('Contact/set', $res->[1][0]);
+    $self->assert_str_equals('R1', $res->[1][2]);
+    my $id = $res->[1][1]{created}{"1"}{id};
+
+    $contact->{avatar}{blobId} = $res->[1][1]{created}{"1"}{avatar}{blobId};
+
+    $self->assert_str_equals('Contact/get', $res->[2][0]);
+    $self->assert_str_equals('R2', $res->[2][2]);
+    $self->assert_str_equals($id, $res->[2][1]{list}[0]{id});
+    $self->assert_str_equals('first', $res->[2][1]{list}[0]{firstName});
+    $self->assert_deep_equals($contact->{avatar}, $res->[2][1]{list}[0]{avatar});
+    $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{"x-hasPhoto"});
+
+    my $newcontact = {
+        firstName => "first2",
+        lastName => "last2",
+        avatar => {
+            blobId => "$contact->{avatar}{blobId}",
+            size => 10,
+            type => "image/jpeg",
+            name => JSON::null
+        }
+    };
+
+    xlog $self, "delete initial card";
+    $res = $jmap->CallMethods([
+        ['Contact/set', { destroy => [ "$id"] }, 'R0']],
+        $using);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R0', $res->[0][2]);
+
+    xlog $self, "create new card using avatar from deleted card";
+    $res = $jmap->CallMethods([
+        ['Contact/set', {create => {"1" => $newcontact }}, "R1"],
+        ['Contact/get', {}, "R2"]],
+        $using);
+
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $id = $res->[0][1]{created}{"1"}{id};
+
+    $contact->{avatar}{blobId} = $res->[0][1]{created}{"1"}{avatar}{blobId};
+
+    $self->assert_str_equals('Contact/get', $res->[1][0]);
+    $self->assert_str_equals('R2', $res->[1][2]);
+    $self->assert_str_equals($id, $res->[1][1]{list}[0]{id});
+    $self->assert_str_equals('first2', $res->[1][1]{list}[0]{firstName});
+    $self->assert_deep_equals($contact->{avatar}, $res->[1][1]{list}[0]{avatar});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{"x-hasPhoto"});
+
+    xlog $self, "download and check avatar content";
+    my $blob = $jmap->Download({ accept => 'image/jpeg' },
+                               'cassandane', $res->[1][1]{list}[0]{avatar}{blobId});
+    $self->assert_str_equals('image/jpeg',
+                             $blob->{headers}->{'content-type'});
+    $self->assert_num_equals(10, $blob->{headers}->{'content-length'});
+    $self->assert_equals('some photo', $blob->{content});
+}
+
 sub test_contact_set_uid
     :min_version_3_1 :needs_component_jmap
 {
