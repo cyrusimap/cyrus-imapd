@@ -48,11 +48,23 @@
 #include "util.h"
 #include "xmalloc.h"
 
-EXPORTED struct dynarray *dynarray_new(size_t membsize)
+EXPORTED void dynarray_init(struct dynarray *da, size_t membsize)
 {
     assert(membsize);
-    struct dynarray *da = xzmalloc(sizeof(struct dynarray));
+    memset(da, 0, sizeof(struct dynarray));
     da->membsize = membsize;
+}
+
+EXPORTED void dynarray_fini(struct dynarray *da)
+{
+    free(da->data);
+    memset(da, 0, sizeof(struct dynarray));
+}
+
+EXPORTED struct dynarray *dynarray_new(size_t membsize)
+{
+    struct dynarray *da = xmalloc(sizeof(struct dynarray));
+    dynarray_init(da, membsize);
     return da;
 }
 

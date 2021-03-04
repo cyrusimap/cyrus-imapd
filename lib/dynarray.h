@@ -44,12 +44,15 @@
 #ifndef __CYRUS_DYNARRAY_H__
 #define __CYRUS_DYNARRAY_H__
 
-struct dynarray {
+typedef struct dynarray {
     size_t membsize;
     int count;
     int alloc;
     void *data;
-};
+} dynarray_t;
+
+extern void dynarray_init(struct dynarray *da, size_t membsize);
+extern void dynarray_fini(struct dynarray *da);
 
 extern struct dynarray *dynarray_new(size_t membsize);
 extern void dynarray_free(struct dynarray **dap);
