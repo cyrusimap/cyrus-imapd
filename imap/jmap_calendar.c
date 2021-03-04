@@ -1505,6 +1505,16 @@ static int _calendarevent_getblob_cb(const char *mailbox __attribute__((unused))
     return 0;
 }
 
+/* Fetch a specific MIME parameter from a list */
+static const char *get_param(struct param *params, const char *attrib)
+{
+    struct param *p;
+
+    for (p = params; p && strcasecmp(p->attribute, attrib); p = p->next);
+
+    return (p ? p->value : NULL);
+}
+
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 {
     struct mailbox *mailbox = NULL;
@@ -1571,31 +1581,19 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
     struct index_record record;
     if (!mailbox_find_index_record(mailbox, uid, &record) &&
         !mailbox_cacherecord(mailbox, &record)) {
-        struct param *param;
 
         message_read_bodystructure(&record, &body);
 
-        /* get component param in Content-Type header */
-        for (param = body->params; param; param = param->next) {
-            if (!strcasecmp(param->attribute, "COMPONENT")) {
-                comp_type = param->value;
-                break;
-            }
-        }
+        comp_type = get_param(body->params, "COMPONENT");
 
         if (userid) {
             /* Fetch ical resource with personalized data */
-            struct caldav_data cdata;
-
-            cdata.dav.imap_uid = record.uid;
-
-            /* get per-user-data param in Content-Disposition header */
-            for (param = body->disposition_params; param; param = param->next) {
-                if (!strcmp(param->attribute, "PER-USER-DATA")) {
-                    cdata.comp_flags.shared = !strcasecmp(param->value, "TRUE");
-                    break;
-                }
-            }
+            struct caldav_data cdata = {
+                .dav.imap_uid = record.uid,
+                .comp_flags.shared =
+                    !strcasecmpsafe(get_param(body->disposition_params,
+                                              "PER-USER-DATA"), "TRUE")
+            };
 
             ical = caldav_record_to_ical(mailbox, &cdata, req->userid, NULL);
         }
