@@ -698,6 +698,16 @@ done:
     return text;
 }
 
+/*
+ * The blobId syntax for raw message data is:
+ *
+ * <mailbox id> "_" <message UID> [ "_" <userid> [ "_" <subpart> [ "_" <SHA1> ]]]
+ *
+ * <userid> is currently used to personalize iCalendar data and may be empty
+ * <subpart> is currently used to target vCard/iCalendar properties
+ *   with data: URI values (e.g. vCard PHOTO/LOGO/SOUND or iCalendar IMAGE)
+ * <SHA1> is used to target a <subpart> having a specific value
+ */
 EXPORTED const char *jmap_encode_rawdata_blobid(const char prefix,
                                                 const char *mboxid,
                                                 uint32_t uid,
