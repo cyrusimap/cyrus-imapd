@@ -108,12 +108,6 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
 static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-static const char *_encode_contact_blobid(const char *mboxid,
-                                          uint32_t uid,
-                                          const char *prop,
-                                          struct message_guid *guid,
-                                          struct buf *dst);
-
 #define JMAPCACHE_CONTACTVERSION 1
 
 jmap_method_t jmap_contact_methods_standard[] = {
@@ -1198,8 +1192,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                 mailbox_find_index_record(this_mailbox,
                                           this_mailbox->i.last_uid, &record);
 
-                _encode_contact_blobid(this_mailbox->uniqueid, record.uid,
-                                       NULL, NULL, &buf);
+                jmap_encode_rawdata_blobid('V', this_mailbox->uniqueid, record.uid,
+                                           NULL, NULL, NULL, &buf);
                 json_object_set_new(item, "blobId",
                                     json_string(buf_cstring(&buf)));
 
@@ -1207,8 +1201,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                                     json_integer(record.size - record.header_size));
 
                 while ((blob = ptrarray_pop(&blobs))) {
-                    _encode_contact_blobid(this_mailbox->uniqueid, record.uid,
-                                           blob->prop, &blob->guid, &buf);
+                    jmap_encode_rawdata_blobid('V', this_mailbox->uniqueid, record.uid,
+                                               NULL, blob->prop, &blob->guid, &buf);
                     json_object_set_new(item, blob->key,
                                         json_pack("{s:s s:i s:s? s:n}",
                                                   "blobId", buf_cstring(&buf),
@@ -1785,8 +1779,8 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     if (photo &&
         (size = vcard_prop_decode_value(photo, NULL, &type, &guid))) {
         struct buf blobid = BUF_INITIALIZER;
-        if (_encode_contact_blobid(mailbox->uniqueid, record->uid,
-                                   "PHOTO", &guid, &blobid)) {
+        if (jmap_encode_rawdata_blobid('V', mailbox->uniqueid, record->uid,
+                                       NULL, "PHOTO", &guid, &blobid)) {
             file = json_pack("{s:s s:i s:s? s:n}",
                              "blobId", buf_cstring(&blobid), "size", size,
                              "type", type, "name");
@@ -1823,98 +1817,6 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     return obj;
 }
 
-static const char *_encode_contact_blobid(const char *mboxid,
-                                          uint32_t uid,
-                                          const char *prop,
-                                          struct message_guid *guid,
-                                          struct buf *dst)
-{
-    buf_reset(dst);
-
-    /* Set vCard smart blob prefix */
-    buf_putc(dst, 'V');
-
-    /* Encode mailbox id */
-    buf_appendcstr(dst, mboxid);
-    
-    /* Encode message UID */
-    buf_printf(dst, "_%u", uid);
-
-    /* Encode property */
-    if (prop) {
-        buf_putc(dst, '_');
-        char *b64prop = jmap_encode_base64_nopad(prop, strlen(prop));
-        if (!b64prop) {
-            buf_reset(dst);
-            return NULL;
-        }
-        buf_appendcstr(dst, b64prop);
-        free(b64prop);
-
-        /* Encode property value GUID */
-        buf_printf(dst, "_%s", message_guid_encode(guid));
-    }
-
-    return buf_cstring(dst);
-}
-
-static int _decode_contact_blobid(const char *blobid,
-                                  char **mboxidptr,
-                                  uint32_t *uidptr,
-                                  char **propptr,
-                                  struct message_guid *guid)
-{
-    char *mboxid = NULL;
-    uint32_t uid = 0;
-    char *prop = NULL;
-    int is_valid = 0;
-
-    /* Decode mailbox id */
-    const char *base = blobid+1;
-    const char *p = strchr(base, '_');
-    if (!p) goto done;
-    mboxid = xstrndup(base, p-base);
-    if (!*mboxid) goto done;
-    base = p + 1;
-
-    /* Decode message UID */
-    if (*base == '\0') goto done;
-    char *endptr = NULL;
-    errno = 0;
-    uid = strtoul(base, &endptr, 10);
-    if (errno == ERANGE || (*endptr && *endptr != '_')) {
-        goto done;
-    }
-    base = endptr;
-
-    /* Decode property */
-    if (*base == '_') {
-        base += 1;
-        p = strchr(base, '_');
-        if (!p) goto done;
-        prop = jmap_decode_base64_nopad(base, p-base);
-        if (!prop) goto done;
-        base = p + 1;
-
-        /* Decode GUID */
-        if (*base == '\0') goto done;
-        if (!message_guid_decode(guid, base)) message_guid_set_null(guid);
-    }
-
-    /* All done */
-    *mboxidptr = mboxid;
-    *uidptr = uid;
-    *propptr = prop;
-    is_valid = 1;
-
-done:
-    if (!is_valid) {
-        free(mboxid);
-        free(prop);
-    }
-    return is_valid;
-}
-
 static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 {
     struct mailbox *mailbox = NULL;
@@ -1928,7 +1830,8 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 
     if (ctx->blobid[0] != 'V') return 0;
 
-    if (!_decode_contact_blobid(ctx->blobid, &mboxid, &uid, &prop, &guid)) {
+    if (!jmap_decode_rawdata_blobid(ctx->blobid, &mboxid, &uid,
+                                    NULL, &prop, &guid)) {
         res = HTTP_BAD_REQUEST;
         goto done;
     }
@@ -2095,8 +1998,8 @@ gotvalue:
     if (jmap_wantprop(crock->get->props, "blobId")) {
         json_t *jblobid = json_null();
         struct buf blobid = BUF_INITIALIZER;
-        if (_encode_contact_blobid(crock->mailbox->uniqueid, record.uid,
-                                   NULL, NULL, &blobid)) {
+        if (jmap_encode_rawdata_blobid('V', crock->mailbox->uniqueid, record.uid,
+                                       NULL, NULL, NULL, &blobid)) {
             jblobid = json_string(buf_cstring(&blobid));
         }
         buf_free(&blobid);
@@ -4213,15 +4116,16 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     struct index_record record;
     mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
 
-    _encode_contact_blobid((*mailbox)->uniqueid, record.uid, NULL, NULL, &buf);
+    jmap_encode_rawdata_blobid('V', (*mailbox)->uniqueid, record.uid,
+                               NULL, NULL, NULL, &buf);
     json_object_set_new(item, "blobId", json_string(buf_cstring(&buf)));
 
     json_object_set_new(item, "size",
                         json_integer(record.size - record.header_size));
 
     while ((blob = ptrarray_pop(&blobs))) {
-        _encode_contact_blobid((*mailbox)->uniqueid, record.uid,
-                               blob->prop, &blob->guid, &buf);
+        jmap_encode_rawdata_blobid('V', (*mailbox)->uniqueid, record.uid,
+                                   NULL, blob->prop, &blob->guid, &buf);
         json_object_set_new(item, blob->key,
                             json_pack("{s:s s:i s:s? s:n}",
                                       "blobId", buf_cstring(&buf),

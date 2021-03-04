@@ -46,6 +46,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
+#include <errno.h>
 
 #include <sasl/saslutil.h>
 
@@ -695,4 +696,156 @@ done:
     charset_free(&cs);
     *val = text;
     return text;
+}
+
+/*
+ * The blobId syntax for raw message data is:
+ *
+ * <mailbox id> "_" <message UID> [ "_" <userid> [ "_" <subpart> [ "_" <SHA1> ]]]
+ *
+ * <userid> is currently used to personalize iCalendar data and may be empty
+ * <subpart> is currently used to target vCard/iCalendar properties
+ *   with data: URI values (e.g. vCard PHOTO/LOGO/SOUND or iCalendar IMAGE)
+ * <SHA1> is used to target a <subpart> having a specific value
+ */
+EXPORTED const char *jmap_encode_rawdata_blobid(const char prefix,
+                                                const char *mboxid,
+                                                uint32_t uid,
+                                                const char *userid,
+                                                const char *subpart,
+                                                struct message_guid *guid,
+                                                struct buf *dst)
+{
+    buf_reset(dst);
+
+    /* Set smart blob prefix */
+    buf_putc(dst, prefix);
+
+    /* Encode mailbox id */
+    buf_appendcstr(dst, mboxid);
+    
+    /* Encode message UID */
+    buf_printf(dst, "_%u", uid);
+
+    /* Encode user id */
+    if (userid || subpart) {
+        char *b64 = NULL;
+
+        buf_putc(dst, '_');
+        if (userid) {
+            b64 = jmap_encode_base64_nopad(userid, strlen(userid));
+            if (!b64) {
+                buf_reset(dst);
+                return NULL;
+            }
+            buf_appendcstr(dst, b64);
+            free(b64);
+        }
+
+        /* Encode subpart */
+        if (subpart) {
+            buf_putc(dst, '_');
+            b64 = jmap_encode_base64_nopad(subpart, strlen(subpart));
+            if (!b64) {
+                buf_reset(dst);
+                return NULL;
+            }
+            buf_appendcstr(dst, b64);
+            free(b64);
+
+            if (guid) {
+                /* Encode subpart data GUID */
+                buf_printf(dst, "_%s", message_guid_encode(guid));
+            }
+        }
+    }
+
+    return buf_cstring(dst);
+}
+
+EXPORTED int jmap_decode_rawdata_blobid(const char *blobid,
+                                        char **mboxidptr,
+                                        uint32_t *uidptr,
+                                        char **useridptr,
+                                        char **subpartptr,
+                                        struct message_guid *guidptr)
+{
+    char *mboxid = NULL;
+    uint32_t uid = 0;
+    char *userid = NULL;
+    char *subpart = NULL;
+    struct message_guid guid;
+    int is_valid = 0;
+
+    /* Decode mailbox id */
+    const char *base = blobid+1;
+    const char *p = strchr(base, '_');
+    if (!p) goto done;
+    mboxid = xstrndup(base, p-base);
+    if (!*mboxid) goto done;
+    base = p + 1;
+
+    /* Decode message UID */
+    if (*base == '\0') goto done;
+    char *endptr = NULL;
+    errno = 0;
+    uid = strtoul(base, &endptr, 10);
+    if (errno == ERANGE || (*endptr && *endptr != '_')) {
+        goto done;
+    }
+    base = endptr;
+
+    /* Decode userid */
+    if (*base == '_') {
+        base += 1;
+        p = strchr(base, '_');
+        size_t len = p ? (size_t) (p - base) : strlen(base);
+        if (len) {
+            userid = jmap_decode_base64_nopad(base, len);
+            if (!userid) goto done;
+        }
+        base += len;
+
+        /* Decode subpart */
+        if (*base == '_') {
+            base += 1;
+            p = strchr(base, '_');
+            len = p ? (size_t) (p - base) : strlen(base);
+            if (len) {
+                subpart = jmap_decode_base64_nopad(base, p-base);
+                if (!subpart) goto done;
+            }
+            base += len;
+
+            /* Decode subpart data GUID */
+            if (*base == '_') {
+                base += 1;
+                if (!message_guid_decode(&guid, base)) goto done;
+            }
+        }
+    }
+
+    /* All done */
+    *uidptr = uid;
+    *mboxidptr = mboxid;
+    mboxid = NULL;
+    if (useridptr) {
+        *useridptr = userid;
+        userid = NULL;
+    }
+    if (subpartptr) {
+        *subpartptr = subpart;
+        subpart = NULL;
+    }
+    if (guidptr) message_guid_copy(guidptr, &guid);
+    is_valid = 1;
+
+done:
+    free(mboxid);
+    free(userid);
+    free(subpart);
+    if (!is_valid) {
+        if (guidptr) message_guid_set_null(guidptr);
+    }
+    return is_valid;
 }
