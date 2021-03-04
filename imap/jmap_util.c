@@ -718,31 +718,35 @@ EXPORTED const char *jmap_encode_rawdata_blobid(const char prefix,
     buf_printf(dst, "_%u", uid);
 
     /* Encode user id */
-    if (userid) {
-        buf_putc(dst, '_');
-        char *b64userid = jmap_encode_base64_nopad(userid, strlen(userid));
-        if (!b64userid) {
-            buf_reset(dst);
-            return NULL;
-        }
-        buf_appendcstr(dst, b64userid);
-        free(b64userid);
-    }
+    if (userid || subpart) {
+        char *b64 = NULL;
 
-    /* Encode subpart */
-    if (subpart) {
         buf_putc(dst, '_');
-        char *b64part = jmap_encode_base64_nopad(subpart, strlen(subpart));
-        if (!b64part) {
-            buf_reset(dst);
-            return NULL;
+        if (userid) {
+            b64 = jmap_encode_base64_nopad(userid, strlen(userid));
+            if (!b64) {
+                buf_reset(dst);
+                return NULL;
+            }
+            buf_appendcstr(dst, b64);
+            free(b64);
         }
-        buf_appendcstr(dst, b64part);
-        free(b64part);
 
-        if (guid) {
-            /* Encode subpart data GUID */
-            buf_printf(dst, "_%s", message_guid_encode(guid));
+        /* Encode subpart */
+        if (subpart) {
+            buf_putc(dst, '_');
+            b64 = jmap_encode_base64_nopad(subpart, strlen(subpart));
+            if (!b64) {
+                buf_reset(dst);
+                return NULL;
+            }
+            buf_appendcstr(dst, b64);
+            free(b64);
+
+            if (guid) {
+                /* Encode subpart data GUID */
+                buf_printf(dst, "_%s", message_guid_encode(guid));
+            }
         }
     }
 
@@ -754,12 +758,13 @@ EXPORTED int jmap_decode_rawdata_blobid(const char *blobid,
                                         uint32_t *uidptr,
                                         char **useridptr,
                                         char **subpartptr,
-                                        struct message_guid *guid)
+                                        struct message_guid *guidptr)
 {
     char *mboxid = NULL;
     uint32_t uid = 0;
     char *userid = NULL;
     char *subpart = NULL;
+    struct message_guid guid;
     int is_valid = 0;
 
     /* Decode mailbox id */
@@ -781,44 +786,56 @@ EXPORTED int jmap_decode_rawdata_blobid(const char *blobid,
     base = endptr;
 
     /* Decode userid */
-    if (useridptr && *base == '_') {
+    if (*base == '_') {
         base += 1;
-        size_t len = strlen(base);
+        p = strchr(base, '_');
+        size_t len = p ? (size_t) (p - base) : strlen(base);
         if (len) {
             userid = jmap_decode_base64_nopad(base, len);
             if (!userid) goto done;
         }
         base += len;
-    }
 
-    /* Decode subpart */
-    if (subpartptr && *base == '_') {
-        base += 1;
-        p = strchr(base, '_');
-        if (!p) goto done;
-        subpart = jmap_decode_base64_nopad(base, p-base);
-        if (!subpart) goto done;
-        base = p + 1;
+        /* Decode subpart */
+        if (*base == '_') {
+            base += 1;
+            p = strchr(base, '_');
+            len = p ? (size_t) (p - base) : strlen(base);
+            if (len) {
+                subpart = jmap_decode_base64_nopad(base, p-base);
+                if (!subpart) goto done;
+            }
+            base += len;
 
-        if (guid) {
             /* Decode subpart data GUID */
-            if (*base == '\0') goto done;
-            if (!message_guid_decode(guid, base)) message_guid_set_null(guid);
+            if (*base == '_') {
+                base += 1;
+                if (!message_guid_decode(&guid, base)) goto done;
+            }
         }
     }
 
     /* All done */
-    *mboxidptr = mboxid;
     *uidptr = uid;
-    if (useridptr) *useridptr = userid;
-    if (subpartptr) *subpartptr = subpart;
+    *mboxidptr = mboxid;
+    mboxid = NULL;
+    if (useridptr) {
+        *useridptr = userid;
+        userid = NULL;
+    }
+    if (subpartptr) {
+        *subpartptr = subpart;
+        subpart = NULL;
+    }
+    if (guidptr) message_guid_copy(guidptr, &guid);
     is_valid = 1;
 
 done:
+    free(mboxid);
+    free(userid);
+    free(subpart);
     if (!is_valid) {
-        free(mboxid);
-        free(userid);
-        free(subpart);
+        if (guidptr) message_guid_set_null(guidptr);
     }
     return is_valid;
 }
