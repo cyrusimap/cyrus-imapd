@@ -119,6 +119,8 @@ static void calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
 
 static const char *sha1key(const char *val, char *keybuf)
 {
+    if (!val) return NULL;
+
     unsigned char dest[SHA1_DIGEST_LENGTH];
 
     xsha1((const unsigned char *) val, strlen(val), dest);
@@ -1212,6 +1214,7 @@ rsvpto_from_ical(icalproperty *prop)
      * If it isn't, this could be because an iCalendar client updated the
      * property value, but kept the RSVP x-params. */
     const char *caladdress = icalproperty_get_value_as_string(prop);
+    if (!caladdress) goto done;
     int caladdress_is_defined = 0;
     json_t *jval;
     const char *key;
@@ -1228,6 +1231,7 @@ rsvpto_from_ical(icalproperty *prop)
             json_object_set_new(rsvpTo, "other", json_string(caladdress));
     }
 
+done:
     if (!json_object_size(rsvpTo)) {
         json_decref(rsvpTo);
         rsvpTo = json_null();
@@ -1520,6 +1524,7 @@ participant_from_icalorganizer(icalproperty *orga)
     /* sendTo */
     /* email */
     const char *caladdress = icalproperty_get_value_as_string(orga);
+    if (!caladdress) goto done;
     if (!strncasecmp(caladdress, "mailto:", 7)) {
         json_object_set_new(jorga, "sendTo", json_pack("{s:s}", "imip", caladdress));
         char *email = mailaddr_from_uri(caladdress);
@@ -1536,6 +1541,11 @@ participant_from_icalorganizer(icalproperty *orga)
     json_object_set_new(jorga, "scheduleSequence", json_integer(0));
     json_object_set_new(jorga, "expectReply", json_false());
 
+done:
+    if (json_object_size(jorga) == 1) {
+        json_decref(jorga);
+        jorga = json_null();
+    }
     return jorga;
 }
 
@@ -1557,6 +1567,7 @@ participants_from_ical(icalcomponent *comp)
 
         /* Map normalized URI to ATTENDEE */
         char *uri = normalized_uri(icalproperty_get_value_as_string(prop));
+        if (!uri) continue;
         hash_insert(uri, prop, &attendee_by_uri);
 
         /* Map mailto:URI to ID */
@@ -1575,6 +1586,7 @@ participants_from_ical(icalcomponent *comp)
          prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 
         char *uri = normalized_uri(icalproperty_get_value_as_string(prop));
+        if (!uri) continue;
         const char *id = hash_lookup(uri, &id_by_uri);
         json_t *p = participant_from_ical(prop, &id_by_uri, orga);
         json_object_set_new(participants, id, p);
@@ -1583,16 +1595,18 @@ participants_from_ical(icalcomponent *comp)
 
     if (orga) {
         const char *caladdress = icalproperty_get_value_as_string(orga);
-        char *uri = normalized_uri(caladdress);
-        if (!hash_lookup(uri, &attendee_by_uri)) {
-            /* Add a default participant for the organizer. */
-            const char *id = get_icalxparam_value(orga, JMAPICAL_XPARAM_ID);
-            char keybuf[JMAPICAL_SHA1KEY_LEN];
-            if (!id) id = sha1key(uri, keybuf);
-            json_t *jorga = participant_from_icalorganizer(orga);
-            json_object_set_new(participants, id, jorga);
+        if (caladdress) {
+            char *uri = normalized_uri(caladdress);
+            if (!hash_lookup(uri, &attendee_by_uri)) {
+                /* Add a default participant for the organizer. */
+                const char *id = get_icalxparam_value(orga, JMAPICAL_XPARAM_ID);
+                char keybuf[JMAPICAL_SHA1KEY_LEN];
+                if (!id) id = sha1key(uri, keybuf);
+                json_t *jorga = participant_from_icalorganizer(orga);
+                json_object_set_new(participants, id, jorga);
+            }
+            free(uri);
         }
-        free(uri);
     }
 
     if (!json_object_size(participants)) {
@@ -1687,6 +1701,7 @@ links_from_ical(icalcomponent *comp)
         const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
         char keybuf[JMAPICAL_SHA1KEY_LEN];
         if (!id) id = sha1key(icalproperty_get_value_as_string(prop), keybuf);
+        if (!id) continue;
         json_t *link = link_from_ical(prop);
         if (link) json_object_set_new(ret, id, link);
     }
@@ -1699,6 +1714,7 @@ links_from_ical(icalcomponent *comp)
         const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
         char keybuf[JMAPICAL_SHA1KEY_LEN];
         if (!id) id = sha1key(icalproperty_get_value_as_string(prop), keybuf);
+        if (!id) continue;
         json_t *link = link_from_ical(prop);
         if (link) json_object_set_new(ret, id, link);
     }
@@ -1949,6 +1965,8 @@ static json_t *coordinates_from_ical(icalproperty *prop)
     const char *p, *val = icalproperty_get_value_as_string(prop);
     struct buf buf = BUF_INITIALIZER;
     json_t *c;
+
+    if (!val) return NULL;
 
     p = strchr(val, ';');
     if (!p) return NULL;
@@ -3013,11 +3031,13 @@ participant_to_ical(icalcomponent *comp,
     json_t *jemail = json_object_get(jpart, "email");
     if (json_is_string(jemail)) {
         const char *uri = icalproperty_get_value_as_string(prop);
-        const char *email = json_string_value(jemail);
-        if (!match_uri(uri, email)) {
-            icalproperty_add_parameter(prop, icalparameter_new_email(email));
-            if (is_orga) {
-                icalproperty_add_parameter(orga, icalparameter_new_email(email));
+        if (uri) {
+            const char *email = json_string_value(jemail);
+            if (!match_uri(uri, email)) {
+                icalproperty_add_parameter(prop, icalparameter_new_email(email));
+                if (is_orga) {
+                    icalproperty_add_parameter(orga, icalparameter_new_email(email));
+                }
             }
         }
     }
@@ -3415,7 +3435,7 @@ static icalproperty* findprop_byid(icalcomponent *comp, const char *id,
         char keybuf[JMAPICAL_SHA1KEY_LEN];
         if (!oldid)
             oldid = sha1key(icalproperty_get_value_as_string(prop), keybuf);
-        if (!strcmp(id, oldid)) break;
+        if (!strcmpsafe(id, oldid)) break;
     }
 
     return prop;
