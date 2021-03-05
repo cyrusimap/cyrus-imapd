@@ -16,7 +16,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **unexpunge** [ **-C** *config-file* ] **-l** *mailbox*
+    **unexpunge** [ **-C** *config-file* ] **-l** *mailbox* [ *uid*... ]
     **unexpunge** [ **-C** *config-file* ] **-t** *time-interval* [ **-d** ] [ **-v** ] [ **-f** *flagname* ] **mailbox**
     **unexpunge** [ **-C** *config-file* ] **-a** [ **-d** ] [ **-v** ] [ **-f** *flagname* ] *mailbox*
     **unexpunge** [ **-C** *config-file* ] **-u** [ **-d** ] [ **-v** ] [ **-f** *flagname* ] *mailbox* *uid*...
@@ -46,6 +46,8 @@ Options
 
     List the expunged messages in the specified mailbox which are
     available for restoration.
+    Optionally, only list the messages in the mailbox matching the
+    UIDs in the space\-separated list at the end of the command invocation.
 
 .. option:: -t time-interval
 
