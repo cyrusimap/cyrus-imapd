@@ -3237,6 +3237,37 @@ void sched_param_fini(struct caldav_sched_param *sparam)
     memset(sparam, 0, sizeof(struct caldav_sched_param));
 }
 
+// all returned items are prefixed with mailto:
+HIDDEN strarray_t* get_calendar_user_address_set_for_principal(const char *principal) {
+    char *mailboxname = caldav_mboxname(principal, NULL);
+    struct buf attrib = BUF_INITIALIZER;
+    int r = annotatemore_lookupmask(mailboxname, DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set",
+                                    principal, &attrib);
+    free(mailboxname);
+    strarray_t *items;
+    if (!r && attrib.len) {
+        items = strarray_split(buf_cstring(&attrib), ",", STRARRAY_TRIM);
+        for (int i = 0; i < strarray_size(items); i++) {
+            const char *item = strarray_nth(items, i);
+            if (strncasecmp(item, "mailto:", 7))
+                strarray_setm(items, i, strconcat("mailto:", item, NULL));
+        }
+        buf_free(&attrib);
+        return items;
+    }
+    buf_free(&attrib);
+    items = strarray_new();
+    /* XXX  This needs to be done via an LDAP/DB lookup */
+    if (strchr(principal, '@'))
+        strarray_appendm(items, strconcat("mailto:", principal, NULL));
+    else if (httpd_extradomain)
+        strarray_appendm(items, strconcat("mailto:", principal, "@", httpd_extradomain, NULL));
+    else {
+        for (struct strlist *domains = cua_domains; domains; domains = domains->next)
+            strarray_appendm(items, strconcat("mailto:", principal, "@", domains->s, NULL));
+    }
+    return items;
+}
 
 void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
                             const char *userid, strarray_t *addresses)
@@ -3256,45 +3287,21 @@ void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
         /* find schedule address based on the destination calendar's user */
 
         /* check calendar-user-address-set for target user's mailbox */
+        strarray_t *values;
         const char *annotname =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-        int r = annotatemore_lookupmask(mboxname, annotname,
-                                        userid, &buf);
-        if (r || !buf.len) {
-            /* check calendar-user-address-set for target user's principal */
-            char *calhomeset = caldav_mboxname(userid, NULL);
-            buf_reset(&buf);
-            r = annotatemore_lookupmask(calhomeset, annotname,
-                                        userid, &buf);
-            free(calhomeset);
-        }
+        if (annotatemore_lookupmask(mboxname, annotname, userid, &buf) || !buf.len)
+            values = get_calendar_user_address_set_for_principal(userid);
+        else
+            values = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
 
-        if (!r && buf.len) {
-            strarray_t *values =
-                strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
-            int i;
-            for (i = 0; i < strarray_size(values); i++) {
-                const char *item = strarray_nth(values, i);
-                if (!strncasecmp(item, "mailto:", 7)) item += 7;
-                strarray_add(addresses, item);
-            }
-            strarray_free(values);
+        int i;
+        for (i = 0; i < strarray_size(values); i++) {
+            const char *item = strarray_nth(values, i);
+            if (!strncasecmp(item, "mailto:", 7)) item += 7;
+            strarray_add(addresses, item);
         }
-        else if (strchr(userid, '@')) {
-            /* userid corresponding to target */
-            strarray_add(addresses, userid);
-        }
-        else {
-            /* append fully qualified userids */
-            struct strlist *domains;
-
-            for (domains = cua_domains; domains; domains = domains->next) {
-                buf_reset(&buf);
-                buf_printf(&buf, "%s@%s", userid, domains->s);
-
-                strarray_add(addresses, buf_cstring(&buf));
-            }
-        }
+        strarray_free(values);
     }
 
     buf_free(&buf);
