@@ -367,7 +367,7 @@ int main(int argc, char **argv)
     const char *path = (optind == argc) ? "." : argv[optind];
     mbname_t *mbname = NULL;
 
-    mbname = mbname_from_path(path, &cyr_ls_namespace);
+    mbname = mbname_from_path(path);
 
     do_list(mbname, &opts);
 

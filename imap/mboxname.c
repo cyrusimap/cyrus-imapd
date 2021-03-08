@@ -766,30 +766,29 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     return mbname;
 }
 
-EXPORTED mbname_t *mbname_from_path(const char *path, const struct namespace *ns)
+EXPORTED mbname_t *mbname_from_path(const char *path)
 {
     int absolute = 0, relative = 0, r;
     mbname_t *mbname = NULL;
     mbentry_t *mbentry = NULL;
+    const char *uid;
 
     /* Is the mailbox argument absolute or relative to cwd? */
     if (path[0] == '/') {
         absolute = 1;
-        path++;
     }
     else if (path[0] == '.') {
         relative = 1;
     }
 
     if (!relative) {
-        mbname = mbname_from_extname(path, ns, NULL);
-        r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
+        uid = strrchr(path, '/');
+        r = mboxlist_lookup_by_uniqueid(uid+1, &mbentry, NULL);
+        if (!r) mbname = mbname_from_intname(mbentry->name);
     }
     if (relative || (!absolute && (r == IMAP_MAILBOX_NONEXISTENT))) {
         char cwd[MAX_MAILBOX_PATH+1];
-        const char *uid;
 
-        mbname_free(&mbname);
         mboxlist_entry_free(&mbentry);
 
         /* Construct a mailbox relative to cwd */
