@@ -101,7 +101,7 @@ int main(int argc, char **argv)
     mbname_t *mbname = NULL;
     const char *extname = NULL;
 
-    mbname = mbname_from_path(".", &cyr_pwd_namespace);
+    mbname = mbname_from_path(".");
 
     if (mbname) 
         extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
