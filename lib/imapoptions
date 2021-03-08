@@ -764,12 +764,21 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
+{ "debug", 0, SWITCH, "2.5.0" }
+/* If enabled, allow syslog() to pass LOG_DEBUG messages. */
+
 { "debug_command", NULL, STRING, "2.3.17" }
 /* Debug command to be used by processes started with -D option.  The string
    is a C format string that gets 3 options: the first is the name of the
    executable (as specified in the cmd parameter in cyrus.conf). The second
    is the pid (integer) and the third is the service ID.
    Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d */
+
+{ "debug_writefail_guid", NULL, STRING, "UNRELEASED" }
+/* If set, any arriving message with this guid will fail as if the underlying
+   disk write had failed, pretending to be a disk full condition.  This is
+   mainly useful for regression testing certain edge case handling.
+   Currently only implemented for replication uploads. */
 
 { "defaultacl", "anyone lrs", STRING, "2.3.17" }
 /* The Access Control List (ACL) placed on a newly-created (non-user)
@@ -956,9 +965,6 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, the partitions will also be hashed, in addition to the
    hashing done on configuration directories.  This is recommended if
    one partition has a very bushy mailbox tree. */
-
-{ "debug", 0, SWITCH, "2.5.0" }
-/* If enabled, allow syslog() to pass LOG_DEBUG messages. */
 
 # Commented out - there's no such thing as "hostname_mechs", but we need
 # this for the man page

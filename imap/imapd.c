@@ -2081,7 +2081,7 @@ static void cmdloop(void)
                     cmd_syncapply(tag.s, kl, reserve_list);
                     dlist_free(&kl);
                 }
-                else goto extraargs;
+                else goto badrepl;
             }
             else if (!strcmp(cmd.s, "Syncget")) {
                 if (!imapd_userisadmin) goto badcmd;
@@ -2092,7 +2092,7 @@ static void cmdloop(void)
                     cmd_syncget(tag.s, kl);
                     dlist_free(&kl);
                 }
-                else goto extraargs;
+                else goto badrepl;
             }
             else if (!strcmp(cmd.s, "Syncrestart")) {
                 if (!imapd_userisadmin) goto badcmd;
@@ -2111,7 +2111,7 @@ static void cmdloop(void)
                     cmd_syncrestore(tag.s, kl, reserve_list);
                     dlist_free(&kl);
                 }
-                else goto extraargs;
+                else goto badrepl;
             }
             else goto badcmd;
             break;
@@ -2517,6 +2517,12 @@ static void cmdloop(void)
         prot_printf(imapd_out,
                     "%s BAD Invalid partition name in %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
+        continue;
+
+    badrepl:
+        prot_printf(imapd_out,
+                    "%s BAD Replication parse failure in %s\r\n", tag.s, cmd.s);
+        /* n.b. sync_parseline already ate the bad line */
         continue;
     }
 
