@@ -92,7 +92,7 @@ static int usage(const char *error)
         fprintf(stderr,"\n");
         fprintf(stderr,"ERROR: %s", error);
     }
-    exit(-1);
+    exit(EX_USAGE);
 }
 
 struct options_t {
@@ -267,6 +267,20 @@ static int do_paths(struct findall_data *data, void *rock)
     return 0;
 }
 
+static int imap_err_to_exit_code(int r)
+{
+    switch (r) {
+    case 0: return 0;
+
+    case IMAP_MAILBOX_NONEXISTENT:
+    case IMAP_MAILBOX_RESERVED:
+        return EX_DATAERR;
+
+    default:
+        return EX_SOFTWARE;
+    }
+}
+
 int main(int argc, char **argv)
 {
     int r, i;
@@ -367,7 +381,7 @@ int main(int argc, char **argv)
 
     r = mboxname_init_namespace(&mbpath_namespace, 1);
     if (r) {
-        fatal(error_message(r), -1);
+        fatal(error_message(r), EX_SOFTWARE);
     }
 
     for (i = optind; i < argc; i++) {
@@ -404,11 +418,13 @@ int main(int argc, char **argv)
                 if (extname) fprintf(stderr, "Invalid mailbox name: %s\n", extname);
             }
             if (opts.stop_on_error) {
+                int ec = imap_err_to_exit_code(r);
+
                 if (opts.quiet) {
-                    fatal("", -1);
+                    fatal("", ec);
                 }
                 else {
-                    fatal("Error in processing mailbox. Stopping\n", -1);
+                    fatal("Error in processing mailbox. Stopping\n", ec);
                 }
             }
         }
@@ -417,5 +433,5 @@ int main(int argc, char **argv)
 
     cyrus_done();
 
-    return 0;
+    return imap_err_to_exit_code(r);
 }
