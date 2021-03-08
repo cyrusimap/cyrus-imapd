@@ -55,6 +55,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <dirent.h>
+#include <errno.h>
 
 #include "global.h"
 #include "assert.h"
