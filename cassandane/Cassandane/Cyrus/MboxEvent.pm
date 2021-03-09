@@ -87,7 +87,7 @@ sub tear_down
 }
 
 sub test_tls_login_event
-    :TLS
+    :TLS :min_version_3_0
 {
     my ($self) = @_;
 
