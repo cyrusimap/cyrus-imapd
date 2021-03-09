@@ -20623,4 +20623,136 @@ EOF
     $self->assert_str_equals('search too complex', $res->[0][1]{description});
 }
 
+sub test_email_query_toplevel_calendar
+    :min_version_3_4 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $rawMessage = <<'EOF';
+From: from@local
+To: to@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/calendar; charset="UTF-8"
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DTEND:20160928T170000Z
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:event
+ORGANIZER:mailto:organizer@local
+ATTENDEE:mailto:attendee@local
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                from => 'organizer@local',
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                to => 'attendee@local',
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                from => 'from@local',
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                to => 'to@local',
+            },
+        }, 'R4'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[3][1]{ids}});
+}
+
+sub test_email_query_toplevel_calendar_sieve
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions :needs_component_sieve
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    $imap->create("matches") or die;
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+      "from" : "from@local"
+  }
+.
+  )
+{
+  fileinto "matches";
+}
+EOF
+    );
+
+    my $rawMessage = <<'EOF';
+From: from@local
+To: to@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/calendar; charset="UTF-8"
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DTEND:20160928T170000Z
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:event
+ORGANIZER:mailto:organizer@local
+ATTENDEE:mailto:attendee@local
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $rawMessage);
+    $self->{instance}->deliver($msg);
+    $self->assert_num_equals(1, $imap->message_count('matches'));
+}
+
 1;
