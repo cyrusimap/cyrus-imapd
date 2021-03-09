@@ -64,7 +64,7 @@ LEX = @LEX@
 COMPILE_ET = @COMPILE_ET@
 
 PACKAGE = cyrus-imapd
-VERSION = 2.4.21
+VERSION = 2.4.22
 GIT_VERSION = $(VERSION).git$(shell date +'%Y%m%d%H%M')
 
 all:: xversion
