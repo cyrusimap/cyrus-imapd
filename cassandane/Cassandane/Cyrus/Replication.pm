@@ -102,7 +102,7 @@ sub test_append
 # Test handling of replication when append fails due to disk error
 #
 sub test_appendone_diskfull
-    :NoStartInstances
+    :NoStartInstances :min_version_3_5
 {
     my ($self) = @_;
 
@@ -172,7 +172,7 @@ EOF
 # Test handling of replication when append fails due to disk error
 #
 sub test_appendmulti_diskfull
-    :CSyncReplication :NoStartInstances
+    :CSyncReplication :NoStartInstances :min_version_3_5
 {
     my ($self) = @_;
 
