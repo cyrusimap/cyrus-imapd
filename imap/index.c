@@ -5918,93 +5918,69 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
                 flags & INDEX_GETSEARCHTEXT_SNIPPET);
     }
 
-    /* Choose index scheme for Content=Type */
-    if (!strcasecmp(type, "TEXT") && !strcasecmp(subtype, "CALENDAR")) {
-#ifdef USE_HTTPD
-        /* An iCalendar entry. */
-        struct buf buf = BUF_INITIALIZER;
-        int encoding = 0;
-        const char *charset_id = NULL;
-        charset_t charset = CHARSET_UNKNOWN_CHARSET;
-        const struct body *body = NULL;
+    /* Extract headers */
+    if (!message_get_field(msg, "From", format, &buf))
+        stuff_part(receiver, SEARCH_PART_FROM, &buf);
 
-        r = message_get_field(msg, "rawbody", MESSAGE_RAW, &buf);
-        if (!r) r = message_get_cachebody(msg, &body);
-        if (!r) r = message_get_encoding(msg, &encoding);
-        if (!r) r = message_get_charset_id(msg, &charset_id);
-        if (!r) charset = charset_lookupname(charset_id);
-        if (charset != CHARSET_UNKNOWN_CHARSET)
-            r = extract_icalbuf(&buf, charset, encoding, &str);
-        charset_free(&charset);
-        buf_free(&buf);
-#endif
+    if (!message_get_field(msg, "To", format, &buf))
+        stuff_part(receiver, SEARCH_PART_TO, &buf);
+
+    if (!message_get_field(msg, "Cc", format, &buf))
+        stuff_part(receiver, SEARCH_PART_CC, &buf);
+
+    if (!message_get_field(msg, "Bcc", format, &buf))
+        stuff_part(receiver, SEARCH_PART_BCC, &buf);
+
+    if (!message_get_field(msg, "Subject", format, &buf))
+        stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
+
+    if (!message_get_field(msg, "List-Id", format, &buf))
+        stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+
+    if (!message_get_field(msg, "Mailing-List", format, &buf))
+        stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+
+    if (!message_get_field(msg, "Mailing-List", format, &buf))
+        stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+
+    if (!message_get_deliveredto(msg, &buf))
+        stuff_part(receiver, SEARCH_PART_DELIVEREDTO, &buf);
+
+    if (!message_get_priority(msg, &buf))
+        stuff_part(receiver, SEARCH_PART_PRIORITY, &buf);
+
+    if (!message_get_leaf_types(msg, &types) && types.count) {
+        for (i = 0 ; i < types.count ; i+= 2) {
+            receiver->begin_part(receiver, SEARCH_PART_TYPE);
+            buf_setcstr(&buf, types.data[i]);
+            buf_putc(&buf, '/');
+            buf_appendcstr(&buf, types.data[i+1]);
+            receiver->append_text(receiver, &buf);
+            receiver->end_part(receiver, SEARCH_PART_TYPE);
+        }
     }
-    else {
 
-        if (!message_get_field(msg, "From", format, &buf))
-            stuff_part(receiver, SEARCH_PART_FROM, &buf);
+    /* Determine when to strip HTML from plain text */
+    find_striphtml_parts(msg, &str.striphtml);
 
-        if (!message_get_field(msg, "To", format, &buf))
-            stuff_part(receiver, SEARCH_PART_TO, &buf);
-
-        if (!message_get_field(msg, "Cc", format, &buf))
-            stuff_part(receiver, SEARCH_PART_CC, &buf);
-
-        if (!message_get_field(msg, "Bcc", format, &buf))
-            stuff_part(receiver, SEARCH_PART_BCC, &buf);
-
-        if (!message_get_field(msg, "Subject", format, &buf))
-            stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
-
-        if (!message_get_field(msg, "List-Id", format, &buf))
-            stuff_part(receiver, SEARCH_PART_LISTID, &buf);
-
-        if (!message_get_field(msg, "Mailing-List", format, &buf))
-            stuff_part(receiver, SEARCH_PART_LISTID, &buf);
-
-        if (!message_get_field(msg, "Mailing-List", format, &buf))
-            stuff_part(receiver, SEARCH_PART_LISTID, &buf);
-
-        if (!message_get_deliveredto(msg, &buf))
-            stuff_part(receiver, SEARCH_PART_DELIVEREDTO, &buf);
-
-        if (!message_get_priority(msg, &buf))
-            stuff_part(receiver, SEARCH_PART_PRIORITY, &buf);
-
-        if (!message_get_leaf_types(msg, &types) && types.count) {
-            for (i = 0 ; i < types.count ; i+= 2) {
-                receiver->begin_part(receiver, SEARCH_PART_TYPE);
-                buf_setcstr(&buf, types.data[i]);
-                buf_putc(&buf, '/');
-                buf_appendcstr(&buf, types.data[i+1]);
-                receiver->append_text(receiver, &buf);
-                receiver->end_part(receiver, SEARCH_PART_TYPE);
-            }
-        }
-
-        /* A regular message. */
-
-        /* Determine when to strip HTML from plain text */
-        find_striphtml_parts(msg, &str.striphtml);
-
-        /* Generate snippets in two passes. */
-        if (flags & INDEX_GETSEARCHTEXT_SNIPPET) {
-            str.snippet_iteration = 1; /* first pass */
-        }
-
-        r = message_foreach_section(msg, getsearchtext_cb, &str);
-        if (!r && str.snippet_iteration) {
-            if (receiver->flush) {
-                r = receiver->flush(receiver);
-            }
-            if (!r) {
-                str.snippet_iteration = 2;
-                r = message_foreach_section(msg, getsearchtext_cb, &str);
-            }
-            if (r == IMAP_OK_COMPLETED) r = 0;
-        }
-        if (r) goto done;
+    /* Generate snippets in two passes. */
+    if (flags & INDEX_GETSEARCHTEXT_SNIPPET) {
+        str.snippet_iteration = 1; /* first pass */
     }
+
+    /* Traverse bodies */
+    r = message_foreach_section(msg, getsearchtext_cb, &str);
+    if (!r && str.snippet_iteration) {
+        if (receiver->flush) {
+            r = receiver->flush(receiver);
+        }
+        if (!r) {
+            str.snippet_iteration = 2;
+            r = message_foreach_section(msg, getsearchtext_cb, &str);
+        }
+        if (r == IMAP_OK_COMPLETED) r = 0;
+    }
+    if (r) goto done;
 
     /* Finalize message. */
     r = receiver->end_message(receiver, str.indexlevel);
