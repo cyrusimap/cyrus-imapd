@@ -1063,11 +1063,11 @@ epub_exclude_files = ['search.html']
 #epub_use_index = True
 
 rst_prolog = """
-.. |imap_last_stable_version| replace:: 3.0.13
+.. |imap_last_stable_version| replace:: 3.0.15
 .. |imap_last_stable_branch| replace:: `cyrus-imapd-3.0`
-.. |imap_last_stable_next_version| replace:: 3.0.13 + patches
-.. |imap_current_stable_version| replace:: 3.2.5
-.. |imap_current_stable_next_version| replace:: 3.2.5 + patches
+.. |imap_last_stable_next_version| replace:: 3.0.15 + patches
+.. |imap_current_stable_version| replace:: 3.2.6
+.. |imap_current_stable_next_version| replace:: 3.2.6 + patches
 .. |imap_current_stable_branch| replace:: `cyrus-imapd-3.2`
 .. |imap_latest_development_version| replace:: 3.3.1
 .. |imap_latest_development_branch| replace:: master
@@ -1082,7 +1082,7 @@ rst_prolog = """
 .. |sasl_current_stable_version| replace:: 2.1.27
 .. |imap_stable_release_notes| raw:: html
 
-    <a href="3.2/x/3.2.5.html">3.2.5</a>
+    <a href="3.2/x/3.2.6.html">3.2.6</a>
 
 .. |imap_development_release_notes| raw:: html
 
