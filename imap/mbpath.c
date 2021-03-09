@@ -398,7 +398,22 @@ int main(int argc, char **argv)
             mbname = mbname_from_userid(argv[i]);
         }
         else {
-            mbname = mbname_from_extname(argv[i], &mbpath_namespace, NULL);
+            mbname = mbname_from_extname(argv[i], &mbpath_namespace, "cyrus");
+
+            r = mboxlist_lookup_allow_all(mbname_intname(mbname), NULL, NULL);
+            if (r == IMAP_MAILBOX_NONEXISTENT) {
+                /* Are we in an existing mailbox path? */
+                mbname_t *child = mbname;
+                const strarray_t *subs = mbname_boxes(child);
+                int i;
+
+                mbname = mbname_from_path(".");
+                for (i = 0; i < strarray_size(subs); i++) {
+                    mbname_push_boxes(mbname, strarray_nth(subs, i));
+                }
+
+                mbname_free(&child);
+            }
         }
 
         extname = mbname_extname(mbname, &mbpath_namespace, "cyrus");
@@ -414,8 +429,10 @@ int main(int argc, char **argv)
         }
         if (r) {
             if (!opts.quiet && (r == IMAP_MAILBOX_NONEXISTENT)) {
-                fprintf(stderr, "Invalid mailbox name: %s\n", argv[i]);
-                if (extname) fprintf(stderr, "Invalid mailbox name: %s\n", extname);
+                fprintf(stderr, "Invalid mailbox name: '%s'", argv[i]);
+                if (extname && strcmp(extname, argv[i]))
+                    fprintf(stderr, " ('%s')\n", extname);
+                fprintf(stderr, "\n");
             }
             if (opts.stop_on_error) {
                 int ec = imap_err_to_exit_code(r);
