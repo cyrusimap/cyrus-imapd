@@ -55,7 +55,7 @@ static const Xapian::Stopper* get_stopper(const std::string& iso)
 {
     // Lookup cached entry.
     try {
-        stoppers.at(iso).get();
+        return stoppers.at(iso).get();
     } catch (const std::out_of_range&) {};
 
     // Lookup language name by ISO code.
