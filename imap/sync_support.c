@@ -6678,6 +6678,11 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
 
         r = sieve_upload(sync_cs, userid, mitem->name, mitem->last_update);
         if (r) goto bail;
+
+        if (!ritem) {
+            sync_sieve_list_add(replica_sieve, mitem->name,
+                                mitem->last_update, &mitem->guid, 0);
+        }
     }
 
     /* Delete scripts which no longer exist on the master */
@@ -6689,6 +6694,8 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
         } else {
             r = sieve_delete(sync_cs, userid, ritem->name);
             if (r) goto bail;
+
+            ritem->mark = -1;
         }
     }
 
@@ -6700,13 +6707,16 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
 
         master_active = 1;
         ritem = sync_sieve_lookup(replica_sieve, mitem->name);
-        if (ritem && ritem->active)
-            break;
+        if (ritem) {
+            if (ritem->active) break;
 
-        r = sieve_activate(sync_cs, userid, mitem->name);
-        if (r) goto bail;
+            if (ritem->mark != -1) {
+                r = sieve_activate(sync_cs, userid, mitem->name);
+                if (r) goto bail;
 
-        replica_active = 1;
+                replica_active = 1;
+            }
+        }
         break;
     }
 
