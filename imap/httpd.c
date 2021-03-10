@@ -3658,8 +3658,9 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
 
             /* 5xx codes */
         case HTTP_SERVER_ERROR:
-            txn->error.desc =
-                "The server encountered an internal error.";
+            if (!txn->error.desc)
+                txn->error.desc =
+                    "The server encountered an internal error.";
             break;
 
         case HTTP_NOT_IMPLEMENTED:
@@ -4052,6 +4053,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         memset(pass, 0, strlen(pass));          /* erase plaintext password */
 
         if (status) {
+            if (*user == '\0')  // TB can send "Authorization: Basic Og=="
+                txn->error.desc = "All-whitespace username.";
             syslog(LOG_NOTICE, "badlogin: %s Basic %s %s",
                    txn->conn->clienthost, realuser,
                    sasl_errdetail(httpd_saslconn));
