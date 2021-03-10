@@ -725,8 +725,8 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
         case B_INCLUDE:
             printf("INCLUDE LOCATION(%s) ONCE(%d) OPTIONAL(%d)",
-                   (cmd.u.inc.location = B_PERSONAL) ? "Personal" : "Global",
-                   cmd.u.inc.once, cmd.u.inc.optional);
+                   (cmd.u.inc.location == B_PERSONAL) ? "Personal" : "Global",
+                   !!cmd.u.inc.once, !!cmd.u.inc.optional);
             print_string("\n\tSCRIPT", cmd.u.inc.script);
             break;
 
