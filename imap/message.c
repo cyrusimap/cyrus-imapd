@@ -2687,7 +2687,7 @@ static void message_write_searchaddr(struct buf *buf,
                         buf_putc(&qtext, *c);
                     }
                     buf_putc(&qtext, '"');
-                    buf_copy(buf, &qtext);
+                    buf_append(buf, &qtext);
                     buf_free(&qtext);
                 }
                 else {

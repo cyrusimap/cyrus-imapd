@@ -1,0 +1,19 @@
+Description:
+
+Fixes a bug where multiple recipients in a To: header might not have
+been indexed properly in the mailbox cache and search indexes.
+
+This bug only occurred since January 21, 2021 and got fixed on March 11, 2021.
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Actions are only required if installations were running Cyrus development
+versions between the time range mentioned in the Description section.
+
+If so, rewrite the mailbox cache using `reconstruct` and rewrite the search
+indexes using `squatter`.
