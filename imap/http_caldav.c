@@ -752,19 +752,16 @@ static int _create_mailbox(const char *userid, const char *mailboxname,
                            int useracl, int anyoneacl, const char *displayname,
                            struct mboxlock **namespacelockp)
 {
-    int r = 0;
     char rights[100];
     struct mailbox *mailbox = NULL;
 
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (!r) return 0;
+    int r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r != IMAP_MAILBOX_NONEXISTENT) return r;
 
     if (!*namespacelockp) {
         *namespacelockp = mboxname_usernamespacelock(mailboxname);
         // maybe we lost the race on this one
         r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (!r) return 0;
         if (r != IMAP_MAILBOX_NONEXISTENT) return r;
     }
 
