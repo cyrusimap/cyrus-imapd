@@ -78,6 +78,7 @@ imap/cyr_dbtool
 imap/cyr_deny
 imap/cyr_df
 imap/cyr_expire
+imap/cyr_guesstzdb
 imap/cyr_info
 imap/cyr_sequence
 imap/cyr_sphinxmgr

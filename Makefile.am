@@ -248,7 +248,8 @@ libexec_PROGRAMS += imap/httpd
 check_PROGRAMS += imap/ical_apply_patch
 sbin_PROGRAMS += \
 	imap/ctl_zoneinfo \
-	imap/dav_reconstruct
+	imap/dav_reconstruct \
+	imap/cyr_guesstzdb
 
 endif # HTTPD
 
@@ -1330,6 +1331,8 @@ nodist_imap_httpd_SOURCES += \
 	imap/jmap_err.h
 
 imap_libcyrus_imap_la_SOURCES += \
+	imap/guesstz.c \
+	imap/guesstz.h \
 	imap/jmap_util.c \
 	imap/jmap_util.h \
 	imap/json_support.c \
@@ -1410,6 +1413,9 @@ imap_tls_prune_LDADD = $(LD_UTILITY_ADD)
 
 imap_unexpunge_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/unexpunge.c
 imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
+
+imap_cyr_guesstzdb_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/cyr_guesstzdb.c
+imap_cyr_guesstzdb_LDADD = $(LD_UTILITY_ADD)
 
 # $(COMPILE_ET) creates its output files in the directory it's run from,
 # so do a tricky directory change
@@ -1621,6 +1627,7 @@ dist_man8_MANS = \
 	man/cyr_deny.8 \
 	man/cyr_df.8 \
 	man/cyr_expire.8 \
+	man/cyr_guesstzdb.8 \
 	man/cyr_info.8 \
 	man/cyr_synclog.8 \
 	man/cyr_virusscan.8 \

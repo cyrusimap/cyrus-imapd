@@ -1223,6 +1223,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "jmap_vacation", 1, SWITCH, "3.1.8" }
 /* If enabled, support the JMAP vacation extension */
 
+{ "jmap_guesstz_fname", NULL, STRING, "3.5.0" }
+/* the file path of the database to guess timezone identifier for JMAP
+   calendar events. The default is \"<zoneinfo_dir>/guesstz.db\". */
+
 { "jmapuploadfolder", "#jmap", STRING, "3.1.1" }
 /* the name of the folder for JMAP uploads (#jmap) */
 
