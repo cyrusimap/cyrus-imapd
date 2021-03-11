@@ -78,7 +78,7 @@ extern sieve_interp_t *interp;
 
 static char *sieve_dir_config = NULL;
 
-static const char *sieved_userid = NULL;
+static char *sieved_userid = NULL;
 
 int actions_init(void)
 {
@@ -106,6 +106,7 @@ int actions_setuser(const char *userid)
 
   char *sieve_dir = (char *) xzmalloc(size+1);
 
+  free(sieved_userid);
   sieved_userid = xstrdup(userid);
   user = (char *) userid;
   if (config_virtdomains && strchr(user, '@')) {
