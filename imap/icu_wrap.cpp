@@ -51,7 +51,7 @@ extern "C" {
 #include <unicode/unistr.h>
 #include <unicode/timezone.h>
 
-extern "C" char *icu_getIDForWindowsID(const char *id)
+extern "C" EXPORTED char *icu_getIDForWindowsID(const char *id)
 {
     UErrorCode status = U_ZERO_ERROR;
 
