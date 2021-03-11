@@ -21981,4 +21981,142 @@ sub test_email_query_seen_shared
     $self->assert_deep_equals([$email2], $res->[3][1]{ids});
 }
 
+sub test_searchsnippet_get_text_rtf
+    :min_version_3_4 :needs_component_jmap :JMAPExtensions
+    :SearchAttachmentExtractor
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    my $instance = $self->{instance};
+
+    my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
+
+    # Start a dummy extractor server.
+    my $handler = sub {
+        my ($conn, $req) = @_;
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } else {
+            my $res = HTTP::Response->new(200);
+            $res->header("Keep-Alive" => "timeout=1");  # Force client timeout
+            $res->content("This is an RTF attachment with formatting.");
+            $conn->send_response($res);
+        }
+    };
+    $instance->start_httpd($handler, $uri->port());
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $rawMessage = <<'EOF';
+From: from@local
+To: to@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary=c4683f7a320d4d20902b000486fbdf9b
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/plain
+
+test
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Disposition: attachment;filename="test.rtf"
+Content-Type: text/rtf; name="test.rtf"
+Content-Transfer-Encoding: BASE64
+
+e1xydGYxXGFuc2lcZGVmZjNcYWRlZmxhbmcxMDI1CntcZm9udHRibHtcZjBcZnJvbWFuXGZw
+cnEyXGZjaGFyc2V0MCBUaW1lcyBOZXcgUm9tYW47fXtcZjFcZnJvbWFuXGZwcnEyXGZjaGFy
+c2V0MiBTeW1ib2w7fXtcZjJcZnN3aXNzXGZwcnEyXGZjaGFyc2V0MCBBcmlhbDt9e1xmM1xm
+cm9tYW5cZnBycTJcZmNoYXJzZXQwIExpYmVyYXRpb24gU2VyaWZ7XCpcZmFsdCBUaW1lcyBO
+ZXcgUm9tYW59O317XGY0XGZzd2lzc1xmcHJxMlxmY2hhcnNldDAgTGliZXJhdGlvbiBTYW5z
+e1wqXGZhbHQgQXJpYWx9O317XGY1XGZuaWxcZnBycTJcZmNoYXJzZXQwIE5vdG8gU2FucyBD
+SksgU0MgUmVndWxhcjt9e1xmNlxmbmlsXGZwcnEyXGZjaGFyc2V0MCBOb3RvIFNhbnMgRGV2
+YW5hZ2FyaTt9e1xmN1xmc3dpc3NcZnBycTBcZmNoYXJzZXQxMjggTm90byBTYW5zIERldmFu
+YWdhcmk7fX0Ke1xjb2xvcnRibDtccmVkMFxncmVlbjBcYmx1ZTA7XHJlZDBcZ3JlZW4wXGJs
+dWUyNTU7XHJlZDBcZ3JlZW4yNTVcYmx1ZTI1NTtccmVkMFxncmVlbjI1NVxibHVlMDtccmVk
+MjU1XGdyZWVuMFxibHVlMjU1O1xyZWQyNTVcZ3JlZW4wXGJsdWUwO1xyZWQyNTVcZ3JlZW4y
+NTVcYmx1ZTA7XHJlZDI1NVxncmVlbjI1NVxibHVlMjU1O1xyZWQwXGdyZWVuMFxibHVlMTI4
+O1xyZWQwXGdyZWVuMTI4XGJsdWUxMjg7XHJlZDBcZ3JlZW4xMjhcYmx1ZTA7XHJlZDEyOFxn
+cmVlbjBcYmx1ZTEyODtccmVkMTI4XGdyZWVuMFxibHVlMDtccmVkMTI4XGdyZWVuMTI4XGJs
+dWUwO1xyZWQxMjhcZ3JlZW4xMjhcYmx1ZTEyODtccmVkMTkyXGdyZWVuMTkyXGJsdWUxOTI7
+fQp7XHN0eWxlc2hlZXR7XHMwXHNuZXh0MFx3aWRjdGxwYXJcaHlwaHBhcjBcY2YwXGtlcm5p
+bmcxXGRiY2hcYWY4XGxhbmdmZTIwNTJcZGJjaFxhZjZcYWZzMjRcYWxhbmcxMDgxXGxvY2hc
+ZjNcaGljaFxhZjNcZnMyNFxsYW5nMTAzMyBOb3JtYWw7fQp7XHMxNVxzYmFzZWRvbjBcc25l
+eHQxNlxzYjI0MFxzYTEyMFxrZWVwblxkYmNoXGFmNVxkYmNoXGFmNlxhZnMyOFxsb2NoXGY0
+XGZzMjggSGVhZGluZzt9CntcczE2XHNiYXNlZG9uMFxzbmV4dDE2XHNsMjc2XHNsbXVsdDFc
+c2IwXHNhMTQwIFRleHQgQm9keTt9CntcczE3XHNiYXNlZG9uMTZcc25leHQxN1xzbDI3Nlxz
+bG11bHQxXHNiMFxzYTE0MFxkYmNoXGFmNyBMaXN0O30Ke1xzMThcc2Jhc2Vkb24wXHNuZXh0
+MThcc2IxMjBcc2ExMjBcbm9saW5lXGlcZGJjaFxhZjdcYWZzMjRcYWlcZnMyNCBDYXB0aW9u
+O30Ke1xzMTlcc2Jhc2Vkb24wXHNuZXh0MTlcbm9saW5lXGRiY2hcYWY3IEluZGV4O30KfXtc
+KlxnZW5lcmF0b3IgTGlicmVPZmZpY2UvNi4xLjUuMiRMaW51eF9YODZfNjQgTGlicmVPZmZp
+Y2VfcHJvamVjdC8xMCRCdWlsZC0yfXtcaW5mb3tcY3JlYXRpbVx5cjIwMjFcbW8zXGR5MTFc
+aHIxMVxtaW4zOX17XHJldnRpbVx5cjIwMjFcbW8zXGR5MTFcaHIxMVxtaW40MX17XHByaW50
+aW1ceXIwXG1vMFxkeTBcaHIwXG1pbjB9fXtcKlx1c2VycHJvcHN9XGRlZnRhYjcwOQpcdmll
+d3NjYWxlMTUwCntcKlxwZ2RzY3RibAp7XHBnZHNjMFxwZ2RzY3VzZTQ1MVxwZ3dzeG4xMjI0
+MFxwZ2hzeG4xNTg0MFxtYXJnbHN4bjExMzRcbWFyZ3JzeG4xMTM0XG1hcmd0c3huMTEzNFxt
+YXJnYnN4bjExMzRccGdkc2NueHQwIERlZmF1bHQgU3R5bGU7fX0KXGZvcm1zaGFkZVxwYXBl
+cmgxNTg0MFxwYXBlcncxMjI0MFxtYXJnbDExMzRcbWFyZ3IxMTM0XG1hcmd0MTEzNFxtYXJn
+YjExMzRcc2VjdGRcc2Jrbm9uZVxzZWN0dW5sb2NrZWQxXHBnbmRlY1xwZ3dzeG4xMjI0MFxw
+Z2hzeG4xNTg0MFxtYXJnbHN4bjExMzRcbWFyZ3JzeG4xMTM0XG1hcmd0c3huMTEzNFxtYXJn
+YnN4bjExMzRcZnRuYmpcZnRuc3RhcnQxXGZ0bnJzdGNvbnRcZnRubmFyXGFlbmRkb2NcYWZ0
+bnJzdGNvbnRcYWZ0bnN0YXJ0MVxhZnRubnJsYwp7XCpcZnRuc2VwXGNoZnRuc2VwfVxwZ25k
+ZWNccGFyZFxwbGFpbiBcczBcd2lkY3RscGFyXGh5cGhwYXIwXGNmMFxrZXJuaW5nMVxkYmNo
+XGFmOFxsYW5nZmUyMDUyXGRiY2hcYWY2XGFmczI0XGFsYW5nMTA4MVxsb2NoXGYzXGhpY2hc
+YWYzXGZzMjRcbGFuZzEwMzN7XHJ0bGNoIFxsdHJjaFxsb2NoClRoaXMgaXMgYW4gfXtcaVxh
+aVxydGxjaCBcbHRyY2hcbG9jaApSVEZ9e1xydGxjaCBcbHRyY2hcbG9jaAogfXtcYlxhYlxy
+dGxjaCBcbHRyY2hcbG9jaAphdHRhY2htZW50fXtccnRsY2ggXGx0cmNoXGxvY2gKIHdpdGgg
+fXtcdWxcdWxjMFxydGxjaCBcbHRyY2hcbG9jaApmb3JtYXR0aW5nfXtccnRsY2ggXGx0cmNo
+XGxvY2gKLn0KXHBhciB9
+
+--c4683f7a320d4d20902b000486fbdf9b--
+
+test
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                text => 'formatting',
+            },
+            findMatchingParts => JSON::true,
+        }, 'R1'],
+        ['SearchSnippet/get', {
+            '#emailIds' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+            '#filter' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/filter',
+            },
+            '#partIds' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/partIds',
+            },
+        }, 'R2'],
+    ], $using);
+
+    $self->assert_str_equals('This is an RTF attachment with <mark>formatting</mark>.',
+        $res->[1][1]{list}[0]{preview});
+}
+
 1;
