@@ -13047,14 +13047,8 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
                                                           &imapd_namespace,
                                                           imapd_userid);
             }
-            if (mboxname_iscalendarmailbox(intname, mbtype)    ||
-                mboxname_isaddressbookmailbox(intname, mbtype) ||
-                mboxname_isdavdrivemailbox(intname, mbtype)    ||
-                mboxname_issubmissionmailbox(intname, mbtype)    ||
-                mboxname_ispushsubscriptionmailbox(intname, mbtype)    ||
-                mboxname_isdavnotificationsmailbox(intname, mbtype)) {
+            if (mboxname_isnonimapmailbox(intname, mbtype))
                 skip = 1;
-            }
             free(freeme);
 
             if (skip) return 0;
