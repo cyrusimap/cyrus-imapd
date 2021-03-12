@@ -146,7 +146,7 @@ vlog(int prio, const char *fmt, va_list args)
 #if defined(__GLIBC__)
 /* Under some but not all combinations of options, glibc
  * defines syslog() as an inline that calls this function */
-void
+EXPORTED void
 __attribute__((format(printf, 3, 4)))
 __syslog_chk(int prio, int whatever __attribute__((unused)),
              const char *fmt, ...)
@@ -159,7 +159,7 @@ __syslog_chk(int prio, int whatever __attribute__((unused)),
 }
 #endif
 
-void syslog(int prio, const char *fmt, ...)
+EXPORTED void syslog(int prio, const char *fmt, ...)
 {
     va_list args;
 

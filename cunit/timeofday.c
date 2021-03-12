@@ -188,6 +188,13 @@ void time_restore(void)
 
 #if defined(__GLIBC__)
 
+/* XXX Annoyingly, we can't just include <config.h> in this file,
+ * XXX because for whatever reason it breaks the gettimeofday
+ * XXX replacement.  Assume we just have this flag for now, and
+ * XXX define EXPORTED ourselves
+ */
+#define EXPORTED __attribute__((__visibility__("default")))
+
 /* call the real libc function */
 static int real_gettimeofday(struct timeval *tv, ...)
 {
@@ -196,13 +203,13 @@ static int real_gettimeofday(struct timeval *tv, ...)
 }
 
 /* provide a function to hide the libc weak alias */
-int gettimeofday(struct timeval *tv, ...)
+EXPORTED int gettimeofday(struct timeval *tv, ...)
 {
     to_timeval(transform(now()), tv);
     return 0;
 }
 
-time_t time(time_t *tp)
+EXPORTED time_t time(time_t *tp)
 {
     time_t tt = to_time_t(transform(now()));
     if (tp) *tp = tt;
