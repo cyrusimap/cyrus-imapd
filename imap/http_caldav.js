@@ -78,20 +78,20 @@ function createCalendar(baseurl) {
 
     // Build Extended MKCOL document
     var doc = document.implementation.createDocument(XML_DAV_NS,
-                                                     "D:mkcol", null);
+                                                     "mkcol", null);
     var mkcol = doc.documentElement;
-    var set = doc.createElementNS(XML_DAV_NS, "D:set");
+    var set = doc.createElementNS(XML_DAV_NS, "set");
     mkcol.appendChild(set);
 
-    var props = doc.createElementNS(XML_DAV_NS, "D:prop");
+    var props = doc.createElementNS(XML_DAV_NS, "prop");
     set.appendChild(props);
 
-    var prop = doc.createElementNS(XML_DAV_NS, "D:resourcetype");
-    prop.appendChild(doc.createElementNS(XML_DAV_NS, "D:collection"));
+    var prop = doc.createElementNS(XML_DAV_NS, "resourcetype");
+    prop.appendChild(doc.createElementNS(XML_DAV_NS, "collection"));
     prop.appendChild(doc.createElementNS(XML_CALDAV_NS, "C:calendar"));
     props.appendChild(prop);
 
-    prop = doc.createElementNS(XML_DAV_NS, "D:displayname");
+    prop = doc.createElementNS(XML_DAV_NS, "displayname");
     prop.appendChild(doc.createTextNode(create.name.value));
     props.appendChild(prop);
 
@@ -139,19 +139,19 @@ function createCalendar(baseurl) {
 function shareCalendar(url, share) {
     // Build DAV sharing document
     var doc = document.implementation.createDocument(XML_DAV_NS,
-                                                     "D:share-resource", null);
+                                                     "share-resource", null);
     var root = doc.documentElement;
 
-    var sharee = doc.createElementNS(XML_DAV_NS, "D:sharee");
+    var sharee = doc.createElementNS(XML_DAV_NS, "sharee");
     root.appendChild(sharee);
 
-    var href = doc.createElementNS(XML_DAV_NS, "D:href");
+    var href = doc.createElementNS(XML_DAV_NS, "href");
     href.appendChild(doc.createTextNode("DAV:all"));
     sharee.appendChild(href);
 
-    var access = doc.createElementNS(XML_DAV_NS, "D:share-access");
+    var access = doc.createElementNS(XML_DAV_NS, "share-access");
     access.appendChild(doc.createElementNS(XML_DAV_NS,
-                                           share ? "D:read" : "D:no-access"));
+                                           share ? "read" : "no-access"));
     sharee.appendChild(access);
 
     // Send POST request
@@ -167,21 +167,21 @@ function shareCalendar(url, share) {
 function transpCalendar(url, transp) {
     // Build PROPPATCH document
     var doc = document.implementation.createDocument(XML_DAV_NS,
-                                                     "D:propertyupdate", null);
+                                                     "propertyupdate", null);
     var propupdate = doc.documentElement;
-    var props = doc.createElementNS(XML_DAV_NS, "D:prop");
+    var props = doc.createElementNS(XML_DAV_NS, "prop");
     var caltransp = doc.createElementNS(XML_CALDAV_NS,
                                         "C:schedule-calendar-transp");
     props.appendChild(caltransp);
 
     var op;
     if (transp) {
-        op = doc.createElementNS(XML_DAV_NS, "D:set");
+        op = doc.createElementNS(XML_DAV_NS, "set");
         caltransp.appendChild(doc.createElementNS(XML_CALDAV_NS,
                                                   "C:transparent"));
     }
     else {
-        op = doc.createElementNS(XML_DAV_NS, "D:remove");
+        op = doc.createElementNS(XML_DAV_NS, "remove");
     }
 
     op.appendChild(props);
@@ -211,15 +211,15 @@ function compsetCalendar(url, name, comps) {
 
     // Build PROPPATCH document
     var doc = document.implementation.createDocument(XML_DAV_NS,
-                                                     "D:propertyupdate", null);
+                                                     "propertyupdate", null);
     var propupdate = doc.documentElement;
-    var props = doc.createElementNS(XML_DAV_NS, "D:prop");
+    var props = doc.createElementNS(XML_DAV_NS, "prop");
     var compset = doc.createElementNS(XML_CALDAV_NS,
                                       "C:supported-calendar-component-set");
     compset.setAttribute("force", "yes");
     props.appendChild(compset);
 
-    var op = doc.createElementNS(XML_DAV_NS, "D:set");
+    var op = doc.createElementNS(XML_DAV_NS, "set");
     for (var i = 0; i < comps.length; i++) {
         if (comps[i].selected) {
             var comp = doc.createElementNS(XML_CALDAV_NS, "C:comp");
