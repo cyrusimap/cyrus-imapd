@@ -158,14 +158,16 @@ EOF
                             exited\swith\scode/x,
                           $e->to_string());
 
-    # sync_client should have logged the BAD response
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/IOERROR: received bad response/, "@lines");
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # sync_client should have logged the BAD response
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/IOERROR: received bad response/, "@lines");
 
-    # sync server should have logged the write error
-    @lines = $self->{replica}->getsyslog();
-    $self->assert_matches(qr/IOERROR: failed to upload file $canaryguid/,
-                          "@lines");
+        # sync server should have logged the write error
+        @lines = $self->{replica}->getsyslog();
+        $self->assert_matches(qr/IOERROR: failed to upload file $canaryguid/,
+                              "@lines");
+    }
 }
 
 #
@@ -231,22 +233,24 @@ EOF
                             exited\swith\scode/x,
                           $e->to_string());
 
-    # sync_client should have logged the BAD response
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/IOERROR: received bad response/, "@lines");
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # sync_client should have logged the BAD response
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/IOERROR: received bad response/, "@lines");
 
-    # sync server should have logged the write error
-    @lines = $self->{replica}->getsyslog();
-    $self->assert_matches(qr/IOERROR: failed to upload file $canaryguid/,
-                          "@lines");
+        # sync server should have logged the write error
+        @lines = $self->{replica}->getsyslog();
+        $self->assert_matches(qr/IOERROR: failed to upload file $canaryguid/,
+                              "@lines");
 
-    # contents of message 4 should not appear on the wire (or logs) as
-    # junk commands!  we need sync_server specifically for this (and not
-    # a replication-aware imapd), because only sync_server logs bad
-    # commands.
-    $self->assert_does_not_match(qr/IOERROR:\sreceived\sbad\scommand:\s
-                                    command=<Return-path:>/x,
-                                 "@lines");
+        # contents of message 4 should not appear on the wire (or logs) as
+        # junk commands!  we need sync_server specifically for this (and not
+        # a replication-aware imapd), because only sync_server logs bad
+        # commands.
+        $self->assert_does_not_match(qr/IOERROR:\sreceived\sbad\scommand:\s
+                                        command=<Return-path:>/x,
+                                     "@lines");
+    }
 }
 
 #
