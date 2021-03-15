@@ -1585,8 +1585,15 @@ sub reap_command
 sub stop_command
 {
     my ($self, $pid) = @_;
-    _stop_pid($pid, sub { $self->reap_command($pid); } );
-    $self->reap_command($pid);
+    my $child;
+
+    # it's our child, so we must reap it, otherwise it'll never
+    # completely exit.  but if it ignores the first sigterm, a normal
+    # waitpid will block forever, so we need to be WNOHANG here
+    _stop_pid($pid, sub { $child = waitpid($pid, WNOHANG); });
+
+    $self->_handle_wait_status($pid)
+        if $child == $pid;
 }
 
 my %default_command_handlers = (
