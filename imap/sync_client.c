@@ -268,6 +268,8 @@ static void replica_connect()
         int r = sync_connect(&sync_cs);
         if (r != IMAP_AGAIN) break;
 
+        signals_poll();
+
         fprintf(stderr,
                 "Can not connect to server '%s', retrying in %d seconds\n",
                 servername, wait);
