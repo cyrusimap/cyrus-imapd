@@ -260,7 +260,7 @@ static int do_daemon_work(const char *sync_shutdown_file,
     return(r);
 }
 
-static void replica_connect()
+static void replica_connect(void)
 {
     int wait;
 
@@ -629,7 +629,7 @@ int main(int argc, char **argv)
 
     case MODE_ALLUSER:
         /* Open up connection to server */
-        replica_connect(channel);
+        replica_connect();
 
         if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &channel, 0))
             exit_rc = 1;
@@ -639,7 +639,7 @@ int main(int argc, char **argv)
 
     case MODE_MAILBOX:
         /* Open up connection to server */
-        replica_connect(channel);
+        replica_connect();
 
         mboxname_list = sync_name_list_create();
         if (input_filename) {
@@ -681,7 +681,7 @@ int main(int argc, char **argv)
 
     case MODE_META:
         /* Open up connection to server */
-        replica_connect(channel);
+        replica_connect();
 
         for (i = optind; i < argc; i++) {
             if (sync_do_meta(&sync_cs, argv[i])) {
@@ -703,7 +703,7 @@ int main(int argc, char **argv)
     case MODE_REPEAT:
         if (input_filename) {
             /* Open up connection to server */
-            replica_connect(channel);
+            replica_connect();
 
             exit_rc = do_sync_filename(input_filename);
 
