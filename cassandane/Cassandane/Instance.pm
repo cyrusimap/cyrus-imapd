@@ -949,6 +949,7 @@ sub _start_notifyd
 
     xlog "started notifyd for $basedir as $notifypid";
     push @{$self->{_shutdowncallbacks}}, sub {
+        local *__ANON__ = "kill_notifyd";
         my $self = shift;
         xlog "killing notifyd $notifypid";
         kill(15, $notifypid);
@@ -1052,6 +1053,7 @@ sub _start_smtpd {
 
     xlog "started smtpd as $smtppid";
     push @{$self->{_shutdowncallbacks}}, sub {
+        local *__ANON__ = "kill_smtpd";
         my $self = shift;
         xlog "killing smtpd $smtppid";
         kill(15, $smtppid);
@@ -1097,6 +1099,7 @@ sub start_httpd {
 
     xlog "started httpd as $httpdpid";
     push @{$self->{_shutdowncallbacks}}, sub {
+        local *__ANON__ = "kill_httpd";
         my $self = shift;
         xlog "killing httpd $httpdpid";
         kill(15, $httpdpid);
