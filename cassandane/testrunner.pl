@@ -118,6 +118,7 @@ my %runners =
     tap => sub
     {
         my ($plan, $fh) = @_;
+        local *__ANON__ = "runner_tap";
         my $runner = Cassandane::Unit::Runner->new($fh);
         my @filters = qw(x skip_version skip_missing_features);
         push @filters, 'skip_slow' if $plan->{skip_slow};
@@ -127,6 +128,7 @@ my %runners =
     pretty => sub
     {
         my ($plan, $fh) = @_;
+        local *__ANON__ = "runner_pretty";
         my $runner = Cassandane::Unit::RunnerPretty->new({}, $fh);
         my @filters = qw(x skip_version skip_missing_features);
         push @filters, 'skip_slow' if $plan->{skip_slow};
@@ -136,6 +138,7 @@ my %runners =
     prettier => sub
     {
         my ($plan, $fh) = @_;
+        local *__ANON__ = "runner_prettier";
         my $runner = Cassandane::Unit::RunnerPretty->new({quiet=>1}, $fh);
         my @filters = qw(x skip_version skip_missing_features);
         push @filters, 'skip_slow' if $plan->{skip_slow};
@@ -164,6 +167,7 @@ eval
     $runners{xml} = sub
     {
         my ($plan, $fh) = @_;
+        local *__ANON__ = "runner_xml";
 
         my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
         my @filters = qw(x skip_version skip_missing_features);
