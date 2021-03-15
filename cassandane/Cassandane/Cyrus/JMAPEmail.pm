@@ -21110,4 +21110,82 @@ sub test_email_set_update_mailboxids_nonempty
     $self->assert_str_equals($emailId, $res->[4][1]{list}[0]{id});
 }
 
+sub test_searchsnippet_search_maxsize
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :SearchMaxSize4k
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $rawMessage = <<'EOF';
+From: from@local
+To: to@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+EOF
+
+    xlog "Index overlong text";
+    my $kbody = "xxx\n" x 1023;
+    $kbody .=   "foo\n"; # last line of included text
+    $kbody .=   "bar\n"; # first line of excluded text
+    $rawMessage .= $kbody;
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    xlog "Assert indexer only processes maxsize bytes of text";
+    $self->{instance}->getsyslog(); # clear syslog
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert_num_equals(1, scalar grep { m/Xapian: truncating/ } @lines);
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                body => 'foo',
+            },
+        }, "R1"],
+        ['Email/query', {
+            filter => {
+                body => 'bar',
+            },
+        }, "R2"],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{ids}});
+    my $emailId = $res->[0][1]{ids}[0];
+
+    # Note: test assumes Cyrus charset buffer to flush every 4096 bytes
+
+    xlog "Assert snippet generator only processes maxsize bytes of text";
+    $self->{instance}->getsyslog(); # clear syslog
+    $res = $jmap->CallMethods([
+        ['SearchSnippet/get', {
+            emailIds => [ $emailId ],
+            filter => {
+                body => 'foo',
+            },
+        }, 'R3'],
+    ]);
+    $self->assert_not_null($res->[0][1]{list}[0]{preview});
+    @lines = $self->{instance}->getsyslog();
+    $self->assert_num_equals(1, scalar grep { m/Xapian: truncating/ } @lines);
+
+    xlog "Assert snippet generator only processes maxsize bytes of text";
+    $self->{instance}->getsyslog(); # clear syslog
+    $res = $jmap->CallMethods([
+        ['SearchSnippet/get', {
+            emailIds => [ $emailId ],
+            filter => {
+                body => 'bar',
+            },
+        }, 'R3'],
+    ]);
+    $self->assert_null($res->[0][1]{list}[0]{preview});
+    @lines = $self->{instance}->getsyslog();
+    $self->assert_num_equals(1, scalar grep { m/Xapian: truncating/ } @lines);
+}
+
 1;
