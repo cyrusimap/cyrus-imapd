@@ -1868,4 +1868,61 @@ sub test_intermediate_rename
     $self->check_replication('cassandane');
 }
 
+sub test_clean_remote_shutdown_while_rolling
+    :CSyncReplication :NoStartInstances :min_version_3_5
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('sync_log' => 1);
+    $self->_start_instances();
+
+    my $mtalk = $self->{master_store}->get_client();
+
+    $mtalk->create('INBOX.a.b');
+
+    # get a rolling sync_client started
+    # XXX can't just run_replication bc it expects sync_client to finish
+    my @cmd = qw( sync_client -v -v -o -R );
+    my $sync_client_pid = $self->{instance}->run_command(
+        {
+            cyrus => 1,
+            background => 1,
+            handlers => {
+                exited_abnormally => sub {
+                    my ($child, $code) = @_;
+                    xlog "child process $child->{binary}\[$child->{pid}\]"
+                        . " exited with code $code";
+                    return $code;
+                },
+            },
+        },
+        @cmd);
+
+    # make sure sync_client has time to connect in the first place
+    sleep 3;
+
+    # stop the replica
+    $self->{replica}->stop();
+
+    # make more changes on master
+    $mtalk = $self->{master_store}->get_client();
+    $mtalk->create('INBOX.a.b.c');
+
+    # give sync_client another moment to wake up and see the new log entry
+    sleep 3;
+
+    # by now it should have noticed the disconnected replica, and either
+    # shut itself down cleanly, or IOERRORed
+
+    # it should have exited already, but signal it if it hasn't, and
+    # do the cleanup
+    my $ec = $self->{instance}->stop_command($sync_client_pid);
+
+    # if it exited itself, this will be zero.  if it hung around until
+    # signalled, 75.
+    $self->assert_equals(0, $ec);
+
+    # should not be errors in syslog!
+}
+
 1;
