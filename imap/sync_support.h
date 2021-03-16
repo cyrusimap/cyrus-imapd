@@ -328,8 +328,6 @@ void sync_sieve_list_add(struct sync_sieve_list *l,
 struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l,
                                      const char *name);
 
-void sync_sieve_list_set_active(struct sync_sieve_list *l, const char *name);
-
 void sync_sieve_list_free(struct sync_sieve_list **lp);
 
 struct sync_sieve_list *sync_sieve_list_generate(const char *userid);

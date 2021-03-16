@@ -904,18 +904,6 @@ struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, const char *name
     return NULL;
 }
 
-void sync_sieve_list_set_active(struct sync_sieve_list *l, const char *name)
-{
-    struct sync_sieve *item;
-
-    for (item = l->head; item; item = item->next) {
-        if (!strcmp(item->name, name)) {
-            item->active = 1;
-            break;
-        }
-    }
-}
-
 void sync_sieve_list_free(struct sync_sieve_list **lp)
 {
     struct sync_sieve_list *l = *lp;
