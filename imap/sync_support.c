@@ -6664,12 +6664,12 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
 
         /* Don't upload compiled bytecode */
         ext = strrchr(mitem->name, '.');
-        if (ext && !strcmp(ext, ".bc"))
-            continue;
+        if (!ext || strcmp(ext, ".bc")) {
+             r = sieve_upload(sync_cs, userid, mitem->name, mitem->last_update);
+             if (r) goto bail;
+        }
 
-        r = sieve_upload(sync_cs, userid, mitem->name, mitem->last_update);
-        if (r) goto bail;
-
+        /* but still log it as having been created, since it will be automatically */
         if (!ritem) {
             ritem = sync_sieve_list_add(replica_sieve, mitem->name,
                                         mitem->last_update, &mitem->guid, 0);
