@@ -872,7 +872,8 @@ struct sync_sieve_list *sync_sieve_list_create(void)
     return l;
 }
 
-void sync_sieve_list_add(struct sync_sieve_list *l, const char *name,
+static struct sync_sieve *sync_sieve_list_add(
+                         struct sync_sieve_list *l, const char *name,
                          time_t last_update, struct message_guid *guidp,
                          int active)
 {
@@ -890,6 +891,8 @@ void sync_sieve_list_add(struct sync_sieve_list *l, const char *name,
         l->head = l->tail = item;
 
     l->count++;
+
+    return item;
 }
 
 struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, const char *name)
@@ -6668,8 +6671,9 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
         if (r) goto bail;
 
         if (!ritem) {
-            sync_sieve_list_add(replica_sieve, mitem->name,
-                                mitem->last_update, &mitem->guid, 0);
+            ritem = sync_sieve_list_add(replica_sieve, mitem->name,
+                                        mitem->last_update, &mitem->guid, 0);
+            ritem->mark = 1;
         }
     }
 
