@@ -3483,7 +3483,7 @@ sub test_email_seen_shared
             },
         }, 'R1']
     ]);
-    $self->assert_not_null($res->[0][1]{updated}{$emailId});
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
 
     # Assert $seen got updated
     $res = $jmap->CallMethods([
@@ -3558,7 +3558,7 @@ sub test_email_seen_shared_twofolder
             },
         }, 'R1']
     ]);
-    $self->assert_not_null($res->[0][1]{updated}{$emailId});
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
 
     # Assert $seen got updated
     $res = $jmap->CallMethods([
@@ -3632,7 +3632,7 @@ sub test_email_seen_shared_twofolder_hidden
             },
         }, 'R1']
     ]);
-    $self->assert_not_null($res->[0][1]{updated}{$emailId});
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
 
     # Assert $seen got updated
     $res = $jmap->CallMethods([
@@ -3704,7 +3704,7 @@ sub test_email_flagged_shared_twofolder_hidden
             },
         }, 'R1']
     ]);
-    $self->assert_not_null($res->[0][1]{updated}{$emailId});
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
 
     # Assert $seen got updated
     $res = $jmap->CallMethods([
@@ -12935,9 +12935,9 @@ sub test_email_set_update_bulk
     }, 'R1']], $using);
 
     $self->assert_not_null($res);
-    $self->assert_not_null($res->[0][1]{updated}{$emailId1});
-    $self->assert_not_null($res->[0][1]{updated}{$emailId2});
-    $self->assert_not_null($res->[0][1]{updated}{$emailId3});
+    $self->assert(exists $res->[0][1]{updated}{$emailId1});
+    $self->assert(exists $res->[0][1]{updated}{$emailId2});
+    $self->assert(exists $res->[0][1]{updated}{$emailId3});
     $self->assert_null($res->[0][1]{notUpdated});
 
     $res = $jmap->CallMethods([['Email/get', {
@@ -13041,7 +13041,7 @@ sub test_email_set_update_after_attach
         },
     }, 'R1']], $using);
     $self->assert_not_null($res);
-    $self->assert_not_null($res->[0][1]{updated}{$emailId});
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
     $self->assert_null($res->[0][1]{notUpdated});
 
     $res = $jmap->CallMethods([['Email/get', {
@@ -20794,6 +20794,51 @@ EOF
         }, 'R1'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+}
+
+sub test_email_set_update_no_id
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    subject => 'email',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'email',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $emailId = $res->[0][1]{created}{email}{id};
+    $self->assert_not_null($emailId);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId => {
+                    keywords => {
+                        'foo' => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_equals(undef, $res->[0][1]{updated}{$emailId});
+
 }
 
 1;
