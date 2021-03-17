@@ -11887,7 +11887,7 @@ static void _email_bulkupdate_exec(struct email_bulkupdate *bulk,
             json_object_set(not_updated, email_id, err);
         }
         else {
-            json_object_set_new(updated, email_id, json_pack("{s:s}", "id", email_id));
+            json_object_set_new(updated, email_id, json_null());
         }
     }
     hash_iter_free(&iter);
