@@ -20705,7 +20705,7 @@ sub test_email_query_toplevel_calendar_sieve
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    $imap->create("matches") or die;
+    $imap->create("INBOX.matches") or die;
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
 if
@@ -20717,7 +20717,7 @@ if
 .
   )
 {
-  fileinto "matches";
+  fileinto "INBOX.matches";
 }
 EOF
     );
@@ -20752,7 +20752,7 @@ EOF
     my $msg = Cassandane::Message->new();
     $msg->set_lines(split /\n/, $rawMessage);
     $self->{instance}->deliver($msg);
-    $self->assert_num_equals(1, $imap->message_count('matches'));
+    $self->assert_num_equals(1, $imap->message_count('INBOX.matches'));
 }
 
 sub test_email_query_fix_multiple_recipients
