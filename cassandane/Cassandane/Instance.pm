@@ -1127,9 +1127,11 @@ sub start
     $self->_init_basedir_and_name();
     xlog "start $self->{description}: basedir $self->{basedir}";
 
-    # Start SMTP server before generating imapd config, we need to
-    # to set smtp_host to the auto-assigned TCP port it listens on.
-    $self->_start_smtpd();
+    if ($self->{description} =~ m/^main instance for test /) {
+        # Start SMTP server before generating imapd config, we need to
+        # to set smtp_host to the auto-assigned TCP port it listens on.
+        $self->_start_smtpd();
+    }
 
     # arrange for fakesaslauthd to be started by master
     # XXX make this run as a DAEMON rather than a START
