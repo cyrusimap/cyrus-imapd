@@ -364,10 +364,20 @@ int main(int argc, char **argv)
     }
 
     /* Translate mailboxname */
-    const char *path = (optind == argc) ? "." : argv[optind];
     mbname_t *mbname = NULL;
+    r = IMAP_MAILBOX_NONEXISTENT;
+    if (optind != argc) {
+        /* Is this an actual mailbox name */
+        mbname = mbname_from_extname(argv[optind], &cyr_ls_namespace, "cyrus");
 
-    mbname = mbname_from_path(path);
+        r = mboxlist_lookup_allow_all(mbname_intname(mbname), NULL, NULL);
+    }
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* Are we in a mailbox directory? */
+        const char *path = (optind == argc) ? "." : argv[optind];
+
+        mbname = mbname_from_path(path);
+    }
 
     do_list(mbname, &opts);
 
