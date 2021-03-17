@@ -285,8 +285,8 @@ sub test_move_200
     ]);
 
     $self->assert_str_equals('Email/set', $res->[0][0]);
-    $self->assert_not_null($res->[0][1]{updated}{$emailid1});
-    $self->assert_not_null($res->[0][1]{updated}{$emailid2});
+    $self->assert(exists $res->[0][1]{updated}{$emailid1});
+    $self->assert(exists $res->[0][1]{updated}{$emailid2});
     $self->assert_str_equals('R1', $res->[0][2]);
 
     $res = $jmap->CallMethods([
