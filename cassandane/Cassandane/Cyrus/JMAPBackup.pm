@@ -1491,7 +1491,7 @@ sub test_restore_mail_full
             update => { $emailId2 => { "mailboxIds/$inboxId" => undef }}
          }, "R4.5"]
     ]);
-    $self->assert_not_null($res->[0][1]{updated}{$emailId2});
+    $self->assert(exists $res->[0][1]{updated}{$emailId2});
 
     sleep 2;
     xlog "destroy email2, all drafts, 'foo' and 'bar' mailboxes";
