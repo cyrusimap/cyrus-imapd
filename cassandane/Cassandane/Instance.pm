@@ -938,14 +938,14 @@ sub _start_notifyd
 
     my $notifypid = fork();
     unless ($notifypid) {
-        $SIG{TERM} = sub { die "killed" };
+        $SIG{TERM} = sub { POSIX::_exit(0) };
 
         POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
 
         # child;
         $0 = "cassandane notifyd: $basedir";
         notifyd("$basedir/run");
-        exit 0;
+        POSIX::_exit(0);
     }
 
     xlog "started notifyd for $basedir as $notifypid";
@@ -1027,6 +1027,10 @@ sub _start_smtpd {
     my $smtppid = fork();
     unless ($smtppid) {
         # Child process.
+        # XXX This child still has the whole test's process space
+        # XXX still mapped, and when it exits, all our destructors
+        # XXX will be called, leaving the test in who knows what
+        # XXX state...
         $SIG{TERM} = sub { die "killed" };
 
         POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
@@ -1073,6 +1077,10 @@ sub start_httpd {
     my $httpdpid = fork();
     unless ($httpdpid) {
         # Child process.
+        # XXX This child still has the whole test's process space
+        # XXX still mapped, and when it exits, all our destructors
+        # XXX will be called, leaving the test in who knows what
+        # XXX state...
         $SIG{TERM} = sub { exit 0; };
 
         POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
