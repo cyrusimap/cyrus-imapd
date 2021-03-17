@@ -66,7 +66,7 @@ sub xlog
 
     my (undef, undef, $line, $sub) = caller(1);
     $sub =~ s/^Cassandane:://;
-    my $msg = "=====> $sub\[$line] ";
+    my $msg = "[$$] =====> $sub\[$line] ";
     $msg .= "($id) " if $id;
     $msg .= join(' ', @_);
     print STDERR "$msg\n";
