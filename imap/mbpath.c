@@ -397,6 +397,11 @@ int main(int argc, char **argv)
         else if (opts.mode == MODE_USER) {
             mbname = mbname_from_userid(argv[i]);
         }
+        else if (!strcmp(argv[i], "..")) {
+            /* Backup one mailbox from existing path */
+            mbname = mbname_from_path(".");
+            free(mbname_pop_boxes(mbname));
+        }
         else {
             mbname = mbname_from_extname(argv[i], &mbpath_namespace, "cyrus");
 
