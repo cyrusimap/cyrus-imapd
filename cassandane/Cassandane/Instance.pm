@@ -112,6 +112,7 @@ sub new
         _started => 0,
         _pwcheck => $cassini->val('cassandane', 'pwcheck', 'alwaystrue'),
         install_certificates => 0,
+        _pid => $$,
     };
 
     $self->{name} = $params{name}
@@ -1441,6 +1442,11 @@ sub cleanup
 sub DESTROY
 {
     my ($self) = @_;
+
+    if ($$ != $self->{_pid}) {
+        xlog "ignoring DESTROY from bad caller: $$";
+        return;
+    }
 
     if (defined $self->{basedir} &&
         !$self->{persistent} &&
