@@ -152,6 +152,7 @@ static void cmd_restore(struct dlist *kin,
 
 static void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
+void shut_down_via_signal(int code) __attribute__ ((noreturn));
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
                       const char *init_resp, const char *resp_prefix,
@@ -237,7 +238,7 @@ int service_init(int argc __attribute__((unused)),
     setproctitle_init(argc, argv, envp);
 
     /* set signal handlers */
-    signals_set_shutdown(&shut_down);
+    signals_set_shutdown(&shut_down_via_signal);
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
@@ -422,6 +423,15 @@ void shut_down(int code)
     cyrus_done();
 
     exit(code);
+}
+
+void shut_down_via_signal(int code __attribute__((unused)))
+{
+    if (sync_out) {
+        prot_puts(sync_out, "BYE shutting down\r\n");
+    }
+
+    shut_down(0);
 }
 
 EXPORTED void fatal(const char* s, int code)
