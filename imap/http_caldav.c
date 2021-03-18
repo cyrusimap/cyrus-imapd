@@ -6266,8 +6266,8 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
                      * last for Thunderbird (and maybe others) */
                     if (i == 1) xmlNewProp(href, BAD_CAST "preferred", BAD_CAST "1");
                 }
-                strarray_free(items);
             }
+            strarray_free(items);
         }
 
         /* XXX  This needs to be done via an LDAP/DB lookup */
