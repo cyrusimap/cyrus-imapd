@@ -193,9 +193,7 @@ static int getmailboxidexists(void *sc, const char *extname)
     char *intname = mboxlist_find_uniqueid(extname, userid, sd->authstate);
     int exists = 0;
 
-    if (intname &&
-        !mboxname_isdeletedmailbox(intname, NULL) &&
-        !mboxname_isnonimapmailbox(intname, 0)) {
+    if (intname && !mboxname_isnondeliverymailbox(intname, 0)) {
         exists = 1;
     }
 
@@ -1089,9 +1087,7 @@ static int sieve_fileinto(void *ac,
     else {
         if (fc->mailboxid) {
             intname = mboxlist_find_uniqueid(fc->mailboxid, userid, sd->authstate);
-            if (intname &&
-                (mboxname_isdeletedmailbox(intname, NULL) ||
-                 mboxname_isnonimapmailbox(intname, 0))) {
+            if (intname && mboxname_isnondeliverymailbox(intname, 0)) {
                 free(intname);
                 intname = NULL;
             }
@@ -1584,9 +1580,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
     if (fcc->mailboxid) {
         intname = mboxlist_find_uniqueid(fcc->mailboxid, userid,
                                          sdata->authstate);
-        if (intname &&
-            (mboxname_isdeletedmailbox(intname, NULL) ||
-             mboxname_isnonimapmailbox(intname, 0))) {
+        if (intname && mboxname_isnondeliverymailbox(intname, 0)) {
             free(intname);
             intname = NULL;
         }

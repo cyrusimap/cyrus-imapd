@@ -502,8 +502,7 @@ int deliver_mailbox(FILE *f,
     time_t internaldate = 0;
 
     /* make sure we have an IMAP mailbox */
-    if (mboxname_isdeletedmailbox(mailboxname, NULL) ||
-        mboxname_isnonimapmailbox(mailboxname, 0/*mbtype*/)) {
+    if (mboxname_isnondeliverymailbox(mailboxname, 0/*mbtype*/)) {
         return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
