@@ -1312,4 +1312,78 @@ sub test_rename_deepfolder_intermediates_rightnow
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
 }
 
+sub test_imap_list_notes
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.Foo.Hi") || die;
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.Junk", "(USE (\\Junk))");
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))");
+    $imaptalk->create("INBOX.Important", "(USE (\\Important))");
+    $imaptalk->create("INBOX.Notes", "(USE (\\XNotes))");
+
+    my $data = $imaptalk->list('', '*');
+    $self->assert_deep_equals([
+  [
+    [
+      '\\HasChildren',
+    ],
+    '.',
+    'INBOX',
+  ],
+  [
+    [
+      '\\HasNoChildren',
+    ],
+    '.',
+    'INBOX.A',
+  ],
+  [
+    [
+      '\\HasNoChildren',
+    ],
+    '.',
+    'INBOX.Foo.Hi',
+  ],
+  [
+    [
+      '\\HasNoChildren',
+      '\\Important',
+    ],
+    '.',
+    'INBOX.Important',
+  ],
+  [
+    [
+      '\\HasNoChildren',
+      '\\Junk',
+    ],
+    '.',
+    'INBOX.Junk',
+  ],
+  [
+    [
+      '\\HasNoChildren',
+      '\\XNotes',
+    ],
+    '.',
+    'INBOX.Notes',
+  ],
+  [
+    [
+      '\\HasNoChildren',
+      '\\Trash',
+    ],
+    '.',
+    'INBOX.Trash',
+  ],
+], $data);
+
+}
+
 1;
