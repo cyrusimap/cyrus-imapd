@@ -1517,9 +1517,7 @@ static int getmailboxidexists(void *sc, const char *extname)
     char *intname = mboxlist_find_uniqueid(extname, sd->userid, sd->authstate);
     int exists = 0;
 
-    if (intname &&
-        !mboxname_isdeletedmailbox(intname, NULL) &&
-        !mboxname_isnonimapmailbox(intname, 0)) {
+    if (intname && !mboxname_isnondeliverymailbox(intname, 0)) {
         exists = 1;
     }
 
