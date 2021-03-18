@@ -56,7 +56,7 @@
 /* check a string, with meaningful description of error */
 EXPORTED int cyrus_acl_checkstr(const char *str, char **errstr)
 {
-    const char *rights = "lrswipckxtedan0123456789";
+    static const char rights[] = "lrswipckxtedan0123456789";
     const char *p;
 
     /* ignore leading plus/minus */
