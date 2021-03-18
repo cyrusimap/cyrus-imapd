@@ -3451,6 +3451,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
     if (!sparam.isyou) {
         sched_param_fini(&sparam);
         txn->error.precond = CALDAV_VALID_ORGANIZER;
+        txn->error.desc = "ORGANIZER is not you";
         ret = HTTP_FORBIDDEN;
         goto done;
     }
