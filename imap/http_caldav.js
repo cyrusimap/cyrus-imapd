@@ -197,10 +197,10 @@ function transpCalendar(url, transp) {
 
 
 // Adjust supported components on a calendar collection
-function compsetCalendar(url, name, comps) {
+function compsetCalendar(url, id, comps) {
     if (!window.confirm('Are you sure you want to change' +
                         ' component types on calendar \"' +
-                        name + '\"?')) {
+                        document.getElementById(id).innerText + '\"?')) {
 
         // Reset selected options
         for (var i = 0; i < comps.length; i++) {
@@ -242,9 +242,9 @@ function compsetCalendar(url, name, comps) {
 
 
 // Delete a calendar collection
-function deleteCalendar(url, name) {
+function deleteCalendar(url, id) {
     if (window.confirm('Are you sure you want to delete calendar \"' +
-                       name + '\"?')) {
+                       document.getElementById(id).innerText + '\"?')) {
         // Send DELETE request
         var req = new XMLHttpRequest();
         req.open('DELETE', url, false);
