@@ -215,7 +215,6 @@ int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype);
      || mboxname_isaddressbookmailbox(name, mbtype)        \
      || mboxname_isdavdrivemailbox(name, mbtype)           \
      || mboxname_isdavnotificationsmailbox(name, mbtype)   \
-     || mboxname_isnotesmailbox(name, mbtype)              \
      || mboxname_issubmissionmailbox(name, mbtype)         \
      || mboxname_ispushsubscriptionmailbox(name, mbtype)   \
      || mboxname_isjmapuploadmailbox(name, mbtype)         \
