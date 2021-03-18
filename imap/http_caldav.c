@@ -8202,8 +8202,6 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                    datestr, sizeof(datestr));
     spool_replace_header(xstrdup("Date"), xstrdup(datestr), txn->req_hdrs);
 
-    buf_reset(&txn->buf);
-
     /* Use SHA1(uid)@servername as Message-ID */
     struct message_guid uuid;
     message_guid_generate(&uuid, uid, strlen(uid));
