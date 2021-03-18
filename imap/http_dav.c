@@ -783,7 +783,10 @@ HIDDEN int calcarddav_parse_path(const char *path,
         ret = mboxlist_createmailboxcheck(mboxname, 0, NULL, httpd_userisadmin,
                                           httpd_userid, httpd_authstate,
                                           NULL, NULL, 0 /* force */);
-        if (ret) goto done;
+        if (ret) {
+            *resultstr = "Invalid name.  Percent encodeded URLs are in theory valid, but in practice not supported.";
+            goto done;
+	}
 
         tgt->allow |= ALLOW_MKCOL;
     }
