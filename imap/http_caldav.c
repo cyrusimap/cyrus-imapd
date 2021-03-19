@@ -2705,7 +2705,6 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         unsigned need_tz = 0;
         const char **hdr;
         icalcomponent *ical = NULL;
-        int ret = HTTP_CONTINUE;
 
         /* Check for optional CalDAV-Timezones header */
         hdr = spool_getheader(txn->req_hdrs, "CalDAV-Timezones");
@@ -2721,7 +2720,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                     /* Fill in previous ETag and don't return Last-Modified */
                     txn->resp_body.etag = cdata->sched_tag;
                     txn->resp_body.lastmod = 0;
-                    ret = HTTP_NOT_MODIFIED;
+                    return HTTP_NOT_MODIFIED;
                 }
             }
             if (need_tz) {
@@ -2740,7 +2739,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             if (r) {
                 syslog(LOG_ERR, "relock index(%s) failed: %s",
                        mailbox->name, error_message(r));
-                goto done;
+                return HTTP_SERVER_ERROR;
             }
 
             strarray_t schedule_addresses = STRARRAY_INITIALIZER;
@@ -2768,13 +2767,13 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             caldav_close(caldavdb);
         }
 
+        if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
+
         /* Personalize resource, if necessary */
         if (namespace_calendar.allow & ALLOW_USERDATA) {
             struct buf userdata = BUF_INITIALIZER;
 
             if (caldav_is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
-                if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
-
                 add_personal_data(ical, &userdata);
                 buf_free(&userdata);
             }
@@ -2784,8 +2783,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         txn->flags.cc |= CC_NOTRANSFORM;
         txn->flags.vary |= VARY_CALTZ;
 
-      done:
-        return ret;
+        return HTTP_CONTINUE;
     }
 
     if (txn->req_tgt.mbentry->server) {
