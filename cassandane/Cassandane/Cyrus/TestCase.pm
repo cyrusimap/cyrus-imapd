@@ -193,7 +193,11 @@ magic(RightNow => sub {
     shift->config_set(sync_rightnow_channel => '""');
 });
 magic(Replication => sub { shift->want('replica'); });
-magic(CSyncReplication => sub { shift->want('csyncreplica'); });
+magic(CSyncReplication => sub {
+    my ($self) = @_;
+    $self->want('csyncreplica');
+    $self->config_set('sync_try_imap' => 0);
+});
 magic(Murder => sub { shift->want('murder'); });
 magic(Backups => sub { shift->want('backups'); });
 magic(AnnotationAllowUndefined => sub {
