@@ -1601,6 +1601,7 @@ sub reap_command
     return undef;
 }
 
+# returns the command's exit status, or -1 if something went wrong
 sub stop_command
 {
     my ($self, $pid) = @_;
@@ -1609,10 +1610,15 @@ sub stop_command
     # it's our child, so we must reap it, otherwise it'll never
     # completely exit.  but if it ignores the first sigterm, a normal
     # waitpid will block forever, so we need to be WNOHANG here
-    _stop_pid($pid, sub { $child = waitpid($pid, WNOHANG); });
+    my $r = _stop_pid($pid, sub { $child = waitpid($pid, WNOHANG); });
+    return -1 if $r != 1;
 
-    $self->_handle_wait_status($pid)
-        if $child == $pid;
+    if ($child == $pid) {
+        return $self->_handle_wait_status($pid)
+    }
+    else {
+        return -1;
+    }
 }
 
 my %default_command_handlers = (
