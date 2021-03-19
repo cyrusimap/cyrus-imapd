@@ -1,0 +1,12 @@
+Description:
+
+sync_client can now recognise when the sync_server has been shut down cleanly
+instead of logging a bunch of errors
+
+Config changes:
+
+(none)
+
+Upgrade instructions:
+
+(none)
