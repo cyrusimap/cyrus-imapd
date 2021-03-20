@@ -236,6 +236,10 @@ static int propfind_schedtag(const xmlChar *name, xmlNsPtr ns,
                              struct propfind_ctx *fctx,
                              xmlNodePtr prop, xmlNodePtr resp,
                              struct propstat propstat[], void *rock);
+static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
+                              struct propfind_ctx *fctx,
+                              xmlNodePtr prop, xmlNodePtr resp,
+                              struct propstat propstat[], void *rock);
 static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
                                struct proppatch_ctx *pctx,
                                struct propstat propstat[], void *rock);
@@ -505,7 +509,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_scheddefault, proppatch_scheddefault, NULL },
     { "schedule-calendar-transp", NS_CALDAV,
       PROP_COLLECTION | PROP_PERUSER,
-      propfind_fromdb, proppatch_caltransp, NULL },
+      propfind_caltransp, proppatch_caltransp, NULL },
 
     /* CalDAV Sharing (draft-pot-caldav-sharing) properties */
     { "calendar-user-address-set", NS_CALDAV,
@@ -6451,6 +6455,26 @@ int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
+static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
+                         struct propfind_ctx *fctx,
+                         xmlNodePtr prop __attribute__((unused)),
+                         xmlNodePtr resp __attribute__((unused)),
+                         struct propstat propstat[],
+                         void *rock __attribute__((unused)))
+{
+    buf_reset(&fctx->buf);
+    if (!annotatemore_lookupmask(fctx->mbentry->name,
+                                 DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp",
+                                 httpd_userid, &fctx->buf) && fctx->buf.len) {
+        xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                                       name, ns, BAD_CAST NULL, 0);
+        xmlNewChild(node, fctx->ns[NS_CALDAV], BAD_CAST buf_cstring(&fctx->buf), 0);
+
+        return 0;
+    }
+
+    return HTTP_NOT_FOUND;
+}
 
 /* Callback to write schedule-calendar-transp property */
 static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
@@ -6469,8 +6493,9 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 
                 /* Make sure its a value we understand */
                 if (cur->type != XML_ELEMENT_NODE) continue;
-                if (!xmlStrcmp(cur->name, BAD_CAST "opaque") ||
-                    !xmlStrcmp(cur->name, BAD_CAST "transparent")) {
+                if ((!xmlStrcmp(cur->name, BAD_CAST "opaque") ||
+                     !xmlStrcmp(cur->name, BAD_CAST "transparent")) &&
+                     !xmlStrcmp(cur->ns->href, BAD_CAST XML_NS_CALDAV)) {
                     value = cur->name;
                     break;
                 }
