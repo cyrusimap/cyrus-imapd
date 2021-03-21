@@ -2167,6 +2167,13 @@ int sync_parse_response(const char *cmd, struct protstream *in,
         eatline(in, c);
         return 0;
     }
+    if (!strcmp(response.s, "BYE")) {
+        /* server is shutting down, don't be surprised by it */
+        syslog(LOG_DEBUG, "received BYE: replica was shut down");
+        dlist_free(&kl);
+        eatline(in, c);
+        return IMAP_BYE_LOGOUT;
+    }
     if (!strcmp(response.s, "NO")) {
         dlist_free(&kl);
         sync_getline(in, &errmsg);
@@ -7106,7 +7113,7 @@ static int do_mailboxes(struct sync_client_state *sync_cs,
             }
             r = 0;
         }
-        else if (r) {
+        else if (r && r != IMAP_BYE_LOGOUT) {
             /* promote failed personal mailboxes to USER */
             int nonuser = 0;
 
@@ -7335,6 +7342,9 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             sync_log_channel_quota(sync_cs->channel, action->name);
             report_verbose("  Deferred: QUOTA %s\n", action->name);
         }
+        else if (r == IMAP_BYE_LOGOUT) {
+            goto cleanup;
+        }
         else if (r) {
             sync_action_list_add(user_list, action->name, NULL);
             report_verbose("  Promoting: QUOTA %s -> USER %s\n",
@@ -7356,6 +7366,9 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             sync_log_channel_annotation(sync_cs->channel, action->name);
             report_verbose("  Deferred: ANNOTATION %s\n", action->name);
         }
+        else if (r == IMAP_BYE_LOGOUT) {
+            goto cleanup;
+        }
         else if (r) {
             sync_action_list_add(user_list, action->name, NULL);
             report_verbose("  Promoting: ANNOTATION %s -> USER %s\n",
@@ -7372,6 +7385,9 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             sync_log_channel_seen(sync_cs->channel, action->user, action->name);
             report_verbose("  Deferred: SEEN %s %s\n",
                            action->user, action->name);
+        }
+        else if (r == IMAP_BYE_LOGOUT) {
+            goto cleanup;
         }
         else if (r) {
             char *userid = mboxname_to_userid(action->name);
@@ -7397,6 +7413,9 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             sync_log_channel_subscribe(sync_cs->channel, action->user, action->name);
             report_verbose("  Deferred: SUB %s %s\n",
                            action->user, action->name);
+        }
+        else if (r == IMAP_BYE_LOGOUT) {
+            goto cleanup;
         }
         else if (r) {
             sync_action_list_add(meta_list, NULL, action->user);
@@ -7434,7 +7453,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             sync_log_channel_sieve(sync_cs->channel, action->user);
             report_verbose("  Deferred: META %s\n", action->user);
         }
-        else if (r == IMAP_INVALID_USER) {
+        else if (r == IMAP_INVALID_USER || r == IMAP_BYE_LOGOUT) {
             goto cleanup;
         }
         else if (r) {
@@ -7469,7 +7488,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
     }
 
   cleanup:
-    if (r) {
+    if (r && r != IMAP_BYE_LOGOUT) {
         report_verbose_error("Error in do_sync(): bailing out! %s", error_message(r));
     }
 
