@@ -1925,4 +1925,59 @@ sub test_clean_remote_shutdown_while_rolling
     # should not be errors in syslog!
 }
 
+sub test_rolling_retry_wait_limit
+    :CSyncReplication :NoStartInstances :min_version_3_5
+{
+    my ($self) = @_;
+    my $maxwait = 20;
+
+    $self->{instance}->{config}->set(
+        'sync_log' => 1,
+        'sync_reconnect_maxwait' => "${maxwait}s",
+    );
+    $self->_start_instances();
+
+    # stop the replica
+    $self->{replica}->stop();
+
+    # get a rolling sync_client started, which won't be able to connect
+    # XXX can't just run_replication bc it expects sync_client to finish
+    my $errfile = "$self->{instance}->{basedir}/stderr.out";
+    my @cmd = qw( sync_client -v -v -o -R );
+    my $sync_client_pid = $self->{instance}->run_command(
+        {
+            cyrus => 1,
+            background => 1,
+            handlers => {
+                exited_abnormally => sub {
+                    my ($child, $code) = @_;
+                    xlog "child process $child->{binary}\[$child->{pid}\]"
+                        . " exited with code $code";
+                    return $code;
+                },
+            },
+            redirects => { stderr => $errfile },
+        },
+        @cmd);
+
+    # wait around for a while to give sync_client time to go through its
+    # reconnect loop a few times.  first will be 15, then 20, then 20,
+    # then 20 (but we'll kill it 5s in)
+    sleep 60;
+
+    # grant mercy
+    my $ec = $self->{instance}->stop_command($sync_client_pid);
+
+    # if it exited itself, this will be zero.  if it hung around until
+    # signalled, 75.
+    $self->assert_equals(75, $ec);
+
+    # check stderr for "retrying in ... seconds" lines, making sure none
+    # exceed our limit
+    my $output = slurp_file($errfile);
+    my @waits = $output =~ m/retrying in (\d+) seconds/g;
+    $self->assert_num_lte($maxwait, $_) for @waits;
+    $self->assert_deep_equals([ 15, 20, 20, 20 ], \@waits);
+}
+
 1;
