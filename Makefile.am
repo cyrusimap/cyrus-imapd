@@ -118,7 +118,6 @@ MAINTAINERCLEANFILES = \
     doc/legacy/murder.png \
     doc/legacy/netnews.png \
     imap/http_caldav_js.h \
-    imap/http_carddav_js.h \
     man/imapd.conf.5 \
     man/sieveshell.1 \
     sieve/addr.h \
@@ -249,7 +248,6 @@ AM_LDFLAGS += $(HTTP_LIBS)
 
 BUILT_SOURCES += \
     imap/http_caldav_js.h \
-    imap/http_carddav_js.h \
     imap/tz_err.c \
     imap/tz_err.h
 
@@ -343,7 +341,6 @@ EXTRA_DIST = \
     doc \
     docsrc \
     imap/http_caldav.js \
-    imap/http_carddav.js \
     imap/http_err.et \
     imap/imap_err.et \
     imap/jmap_err.et \
@@ -1279,7 +1276,7 @@ imap_httpd_SOURCES = \
     imap/smtpclient.c \
     imap/spool.c \
     imap/sync_support.c \
-        imap/sync_support.h \
+    imap/sync_support.h \
     imap/xcal.c \
     imap/xcal.h \
     imap/xml_support.c \

@@ -2247,9 +2247,8 @@ static int list_calendars(struct transaction_t *txn)
         buf_printf_markup(body, level, "<td></td>");
         buf_printf_markup(body, level,
                           "<td><br><input type=button value='Create'"
-                          " onclick=\"createCalendar('%s')\">"
-                          " <input type=reset></td>",
-                          base_path);
+                          " onclick='createCollection()'>"
+                          " <input type=reset></td>");
         buf_printf_markup(body, --level, "</tr>");
 
         buf_printf_markup(body, --level, "</table>");
@@ -2293,8 +2292,8 @@ static int list_calendars(struct transaction_t *txn)
         }
 
         /* Calendar name */
-        buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td id='%i'>%s%s%s", i,
+        buf_printf_markup(body, level++, "<tr id='%i' data-url='%s'>", i, cal->shortname);
+        buf_printf_markup(body, level, "<td>%s%s%s",
                           (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
                           displayname,
                           (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
@@ -2303,9 +2302,8 @@ static int list_calendars(struct transaction_t *txn)
         /* Supported components list */
         buf_printf_markup(body, level++, "<td>");
         buf_printf_markup(body, level++,
-                          "<select multiple name=comp size=3"
-                          " onChange=\"compsetCalendar('%s%s', '%i', this.options)\">",
-                          base_path, cal->shortname, i);
+                          "<select multiple size=3"
+                          " onChange='compsetCalendar(%i, this.options)'>", i);
         for (comp = cal_comps; comp->name; comp++) {
             buf_printf_markup(body, level, "<option%s>%s</option>",
                               (cal->types & comp->type) ? " selected" : "",
@@ -2324,29 +2322,31 @@ static int list_calendars(struct transaction_t *txn)
                           base_path, cal->shortname);
 
         /* Delete button */
-        buf_printf_markup(body, level,
-                          "<td><input type=button%s value='Delete'"
-                          " onclick=\"deleteCalendar('%s%s', '%i')\"></td>",
-                          !(cal->flags & CAL_CAN_DELETE) ? " disabled" : "",
-                          base_path, cal->shortname, i);
+        if (cal->flags & CAL_IS_DEFAULT)
+            buf_printf_markup(body, level,
+                              "<td>Default Calendar</td>");
+        else if (cal->flags & CAL_CAN_DELETE)
+            buf_printf_markup(body, level,
+                              "<td><input type=button value='Delete'"
+                              " onclick='deleteCollection(%i)'></td>", i);
+        else
+            buf_printf_markup(body, level, "<td></td>");
 
         /* Public (shared) checkbox */
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=share"
-                          " onclick=\"shareCalendar('%s%s', this.checked)\">"
+                          "<td><input type=checkbox%s%s"
+                          " onclick='share(%i, this.checked)'>"
                           "Public</td>",
-                          !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
-                          (cal->flags & CAL_IS_PUBLIC) ? " checked" : "",
-                          base_path, cal->shortname);
+                          (cal->flags & CAL_CAN_ADMIN) ? "" : " disabled",
+                          (cal->flags & CAL_IS_PUBLIC) ? " checked" : "", i);
 
         /* Transparent checkbox */
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=transp"
-                          " onclick=\"transpCalendar('%s%s', this.checked)\">"
+                          "<td><input type=checkbox%s%s"
+                          " onclick='transpCalendar(%i, this.checked)'>"
                           "Transparent</td>",
-                          !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
-                          (cal->flags & CAL_IS_TRANSP) ? " checked" : "",
-                          base_path, cal->shortname);
+                          (cal->flags & CAL_CAN_ADMIN) ? "" : " disabled",
+                          (cal->flags & CAL_IS_TRANSP) ? " checked" : "", i);
 
         buf_printf_markup(body, --level, "</tr>");
     }
