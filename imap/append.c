@@ -887,8 +887,12 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
         if (msgpath) {
             /* link the first stage part to the existing message file */
             r = cyrus_copyfile(msgpath, rock->stagefile, 0/*flags*/);
+            if (r) {
+                /* don't fail - worst case, we will use existing stage */
+                r = 0;
+            }
+            else r = CYRUSDB_DONE;
         }
-        r = r ? r : CYRUSDB_DONE;
     }
 
     mboxlist_entry_free(&mbentry);
