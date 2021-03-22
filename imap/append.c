@@ -876,6 +876,8 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
     mbentry_t *mbentry = NULL;
 
     if (rec->part) return 0;
+    // no point copying from archive, spool is on data
+    if (rec->internal_flags & FLAG_INTERNAL_ARCHIVED) return 0;
 
     int r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
     if (r) return 0;
