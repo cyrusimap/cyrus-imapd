@@ -20624,7 +20624,7 @@ EOF
 }
 
 sub test_email_query_toplevel_calendar
-    :min_version_3_4 :needs_component_jmap :JMAPExtensions
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20699,7 +20699,7 @@ EOF
 }
 
 sub test_email_query_toplevel_calendar_sieve
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions :needs_component_sieve
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :needs_component_sieve
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
