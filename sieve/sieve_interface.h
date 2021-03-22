@@ -141,7 +141,7 @@ typedef struct sieve_cal_context {
 typedef struct sieve_redirect_context {
     const char *addr;
     int is_ext_list :1;
-    const char *deliverby;
+    char *deliverby;
     const char *dsn_notify;
     const char *dsn_ret;
     struct buf *headers;
