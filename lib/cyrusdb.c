@@ -127,8 +127,11 @@ static int _myopen(const char *backend, const char *fname,
     if (flags & CYRUSDB_SHARED) {
         assert(tid && *tid == NULL);
         if (flags & CYRUSDB_CONVERT) {
-            syslog(LOG_ERR, "DBERROR: CONVERT and SHARED are mutually exclusive, "
-                    "won't open db %s (backend %s)", fname, backend);
+            xsyslog(LOG_ERR,
+                    "DBERROR: CONVERT and SHARED are mutually exclusive,"
+                        " won't open db",
+                    "fname=<%s> backend=<%s>",
+                    fname, backend);
             r = CYRUSDB_INTERNAL;
             goto done;
         }
@@ -153,8 +156,9 @@ static int _myopen(const char *backend, const char *fname,
 
     realname = cyrusdb_detect(fname);
     if (!realname) {
-        syslog(LOG_ERR, "DBERROR: failed to detect DB type for %s (backend %s) (r was %d)",
-               fname, backend, r);
+        xsyslog(LOG_ERR, "DBERROR: failed to detect DB type",
+                         "fname=<%s> backend=<%s> r=<%d>",
+                         fname, backend, r);
         /* r is still set */
         goto done;
     }
@@ -164,8 +168,9 @@ static int _myopen(const char *backend, const char *fname,
         if (flags & CYRUSDB_CONVERT) {
             r = cyrusdb_convert(fname, fname, realname, backend);
             if (r) {
-                syslog(LOG_ERR, "DBERROR: failed to convert %s from %s to %s, maybe someone beat us",
-                       fname, realname, backend);
+                xsyslog(LOG_ERR, "DBERROR: failed to convert, maybe someone beat us",
+                                 "fname=<%s> from=<%s> to=<%s>",
+                                 fname, realname, backend);
             }
             else {
                 syslog(LOG_NOTICE, "cyrusdb: converted %s from %s to %s",
@@ -394,11 +399,12 @@ EXPORTED void cyrusdb_init(void)
     strcpy(dbdir, confdir);
     strcat(dbdir, FNAME_DBDIR);
 
-    for(i=0; _backends[i]; i++) {
+    for (i=0; _backends[i]; i++) {
         r = (_backends[i])->init(dbdir, initflags);
-        if(r) {
-            syslog(LOG_ERR, "DBERROR: init() on %s",
-                   _backends[i]->name);
+        if (r) {
+            xsyslog(LOG_ERR, "DBERROR: backend init failed",
+                             "backend=<%s>",
+                             _backends[i]->name);
         }
     }
 }
