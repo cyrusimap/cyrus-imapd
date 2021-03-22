@@ -106,6 +106,8 @@ static void idle_notify(const char *mboxname)
                         "NOTIFY to idled for mailbox %s: %s.",
                         mboxname, error_message(r));
     }
+    if (errno == ENOENT)
+        errno = 0;
 }
 
 /*

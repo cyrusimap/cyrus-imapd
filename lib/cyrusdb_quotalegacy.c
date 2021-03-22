@@ -387,8 +387,11 @@ static int myfetch(struct dbengine *db, char *quota_path,
         /* just check if the key exists */
         struct stat sbuf;
 
-        if (stat(quota_path, &sbuf) == -1)
+        if (stat(quota_path, &sbuf) == -1) {
+            if (errno == ENOENT)
+                errno = 0;
             return CYRUSDB_NOTFOUND;
+        }
 
         return 0;
     }
@@ -406,6 +409,7 @@ static int myfetch(struct dbengine *db, char *quota_path,
         if (quota_fd == -1) {
             if (errno == ENOENT) {
                 /* key doesn't exist */
+                errno = 0;
                 return CYRUSDB_NOTFOUND;
             }
 
