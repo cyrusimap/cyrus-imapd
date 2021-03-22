@@ -262,13 +262,20 @@ static int do_daemon_work(const char *sync_shutdown_file,
 
 static void replica_connect(void)
 {
+    static int maxwait = 0;
     int wait;
+
+    if (!maxwait)
+        maxwait = config_getduration(IMAPOPT_SYNC_RECONNECT_MAXWAIT, 's');
 
     for (wait = 15;; wait *= 2) {
         int r = sync_connect(&sync_cs);
         if (r != IMAP_AGAIN) break;
 
         signals_poll();
+
+        if (maxwait > 0 && wait > maxwait)
+            wait = maxwait;
 
         fprintf(stderr,
                 "Can not connect to server '%s', retrying in %d seconds\n",

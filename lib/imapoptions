@@ -2692,6 +2692,18 @@ product version in the capabilities
 /* The authentication realm to use when authenticating to a sync server.
    Prefix with a channel name to only apply for that channel */
 
+{ "sync_reconnect_maxwait", "20m", DURATION, "UNRELEASED" }
+/* When a rolling sync_client cannot connect to the replica, it enters
+   a retry loop with an exponential backoff between attempts.  This
+   option sets the upper limit on that exponential backoff: no matter
+   how long the replica has been down so far, sync_client will never
+   wait longer than sync_reconnect_maxwait between retries.
+.PP
+   If this is zero or negative, the backoff duration will be allowed
+   to increase indefinitely (not recommended).
+.PP
+   If no unit is specified, seconds is assumed. */
+
 { "sync_repeat_interval", "1s", DURATION, "3.1.8" }
 /* Minimum interval between replication runs in rolling replication
    mode. If a replication run takes longer than this time, we repeat
