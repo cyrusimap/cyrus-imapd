@@ -982,7 +982,7 @@ imap_libcyrus_imap_la_LIBADD = \
     lib/libcyrus.la
 
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
-imap_libcyrus_imap_la_CXXFLAGS = $(AM_CXXFLAGS)
+imap_libcyrus_imap_la_CXXFLAGS = $(AM_CXXFLAGS) $(CFLAG_VISIBILITY)
 
 imap_libcyrus_imap_la_SOURCES = \
 	imap/annotate.c \

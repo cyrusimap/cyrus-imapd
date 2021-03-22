@@ -1075,7 +1075,7 @@ void shut_down(int code)
 }
 
 
-void fatal(const char* s, int code)
+EXPORTED void fatal(const char* s, int code)
 {
     static int recurse_code = 0;
     const char *fatal = "Fatal error: ";
