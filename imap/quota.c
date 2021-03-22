@@ -227,7 +227,7 @@ int main(int argc,char **argv)
 static void usage(void)
 {
     fprintf(stderr,
-            "usage: quota [-C <alt_config>] [-d <domain>] [-f] [-q] [-u] [mailbox-spec]...\n");
+            "usage: quota [-C <alt_config>] [-d <domain>] [-f] [-q] [-J] [-n] [-u] [mailbox-spec]...\n");
     exit(EX_USAGE);
 }
 
