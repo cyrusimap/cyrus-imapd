@@ -67,11 +67,7 @@ Authentication
 --------------
 
 As with other Cyrus services, the Cyrus httpd service uses
-:ref:`Cyrus SASL <cyrussasl:sasl-index>` to perform
-its authentication. Cyrus supports the following HTTP authentication schemes:
-Basic, Digest, Negotiate (Kerberos only), NTLM, SCRAM-SHA-1, and SCRAM-SHA-256.
-While Basic and NTLM are available in all versions of SASL, the remaining schemes
-are only available in Cyrus SASL 2.1.16 (and higher).
+:ref:`Cyrus SASL <cyrussasl:sasl-index>` to perform its authentication.
 
 .. sidebar:: allowplaintext
 
@@ -84,13 +80,15 @@ are only available in Cyrus SASL 2.1.16 (and higher).
 Similar to plaintext login commands supported by the other Cyrus services (IMAP
 LOGIN, POP3 USER/PASS), the Cyrus httpd service determines whether to advertise
 the HTTP Basic authentication scheme based on the ``allowplaintext`` option and
-whether the client has connected over a TLS protected connection (HTTPS).
+whether the client has connected over a TLS protected connection (HTTPS). BASIC
+authentication does not depend on a Cyrus SASL plugin.
 
-The availability of the other HTTP authentication schemes is controlled by the
+The advertisement of the other HTTP authentication schemes is controlled by the
 :ref:`SASL mech_list option <cyrussasl:options>` option. For Cyrus httpd
 the DIGEST-MD5, GSS-SPNEGO, NTLM, SCRAM-SHA-1, and SCRAM-SHA-256 values enable
-support for the Digest, Negotiate, NTLM, SCRAM-SHA-1, and SCRAM-SHA-256 authentication
-schemes respectively, provided that the plugins are installed on the server.
+support for the Digest, Negotiate (Kerberos only), NTLM, SCRAM-SHA-1, and
+SCRAM-SHA-256 authentication schemes respectively, provided that the plugins
+are installed on the server.
 
 Module-specific information
 ===========================
