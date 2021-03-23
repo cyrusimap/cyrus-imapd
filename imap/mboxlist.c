@@ -394,36 +394,42 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
 
     if (!string) return 0; /* null just means default */
 
-    for (; *string; string++) {
-        /* mailbox types */
-        switch (*string) {
-        case 'a':
-            mbtype = MBTYPE_ADDRESSBOOK;
-            break;
-        case 'b':
-            mbtype = MBTYPE_COLLECTION;
-            break;
-        case 'c':
-            mbtype = MBTYPE_CALENDAR;
-            break;
-        case 'e':
-            mbtype = MBTYPE_EMAIL;
-            break;
-        case 'j':
-            mbtype = MBTYPE_JMAPNOTIFY;
-            break;
-        case 'n':
-            mbtype = MBTYPE_NETNEWS;
-            break;
-        case 'p':
-            mbtype = MBTYPE_JMAPPUSHSUB;
-            break;
-        case 's':
-            mbtype = MBTYPE_JMAPSUBMIT;
-            break;
+    /* mailbox type - ALWAYS first character */
+    switch (*string) {
+    case 'a':
+        mbtype = MBTYPE_ADDRESSBOOK;
+        break;
+    case 'b':
+        mbtype = MBTYPE_COLLECTION;
+        break;
+    case 'c':
+        mbtype = MBTYPE_CALENDAR;
+        break;
+    case 'e':
+        mbtype = MBTYPE_EMAIL;
+        break;
+    case 'j':
+        mbtype = MBTYPE_JMAPNOTIFY;
+        break;
+    case 'n':
+        mbtype = MBTYPE_NETNEWS;
+        break;
+    case 'p':
+        mbtype = MBTYPE_JMAPPUSHSUB;
+        break;
+    case 's':
+        mbtype = MBTYPE_JMAPSUBMIT;
+        break;
 
+    default:
+        /* make sure we didn't forget to handle every expected character */
+        assert(0);
+        break;
+    }
             
+    for (++string; *string; string++) {
         /* mailbox flags */
+        switch (*string) {
         case 'd':
             mbtype |= MBTYPE_DELETED;
             break;
