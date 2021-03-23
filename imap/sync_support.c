@@ -872,7 +872,8 @@ struct sync_sieve_list *sync_sieve_list_create(void)
     return l;
 }
 
-void sync_sieve_list_add(struct sync_sieve_list *l, const char *name,
+static struct sync_sieve *sync_sieve_list_add(
+                         struct sync_sieve_list *l, const char *name,
                          time_t last_update, struct message_guid *guidp,
                          int active)
 {
@@ -890,6 +891,8 @@ void sync_sieve_list_add(struct sync_sieve_list *l, const char *name,
         l->head = l->tail = item;
 
     l->count++;
+
+    return item;
 }
 
 struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, const char *name)
@@ -902,18 +905,6 @@ struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, const char *name
     }
 
     return NULL;
-}
-
-void sync_sieve_list_set_active(struct sync_sieve_list *l, const char *name)
-{
-    struct sync_sieve *item;
-
-    for (item = l->head; item; item = item->next) {
-        if (!strcmp(item->name, name)) {
-            item->active = 1;
-            break;
-        }
-    }
 }
 
 void sync_sieve_list_free(struct sync_sieve_list **lp)
@@ -6680,11 +6671,17 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
 
         /* Don't upload compiled bytecode */
         ext = strrchr(mitem->name, '.');
-        if (ext && !strcmp(ext, ".bc"))
-            continue;
+        if (!ext || strcmp(ext, ".bc")) {
+             r = sieve_upload(sync_cs, userid, mitem->name, mitem->last_update);
+             if (r) goto bail;
+        }
 
-        r = sieve_upload(sync_cs, userid, mitem->name, mitem->last_update);
-        if (r) goto bail;
+        /* but still log it as having been created, since it will be automatically */
+        if (!ritem) {
+            ritem = sync_sieve_list_add(replica_sieve, mitem->name,
+                                        mitem->last_update, &mitem->guid, 0);
+            ritem->mark = 1;
+        }
     }
 
     /* Delete scripts which no longer exist on the master */
@@ -6696,6 +6693,8 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
         } else {
             r = sieve_delete(sync_cs, userid, ritem->name);
             if (r) goto bail;
+
+            ritem->mark = -1;
         }
     }
 
@@ -6707,13 +6706,16 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
 
         master_active = 1;
         ritem = sync_sieve_lookup(replica_sieve, mitem->name);
-        if (ritem && ritem->active)
-            break;
+        if (ritem) {
+            if (ritem->active) break;
 
-        r = sieve_activate(sync_cs, userid, mitem->name);
-        if (r) goto bail;
+            if (ritem->mark != -1) {
+                r = sieve_activate(sync_cs, userid, mitem->name);
+                if (r) goto bail;
 
-        replica_active = 1;
+                replica_active = 1;
+            }
+        }
         break;
     }
 

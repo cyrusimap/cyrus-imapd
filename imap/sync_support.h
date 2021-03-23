@@ -321,14 +321,8 @@ struct sync_sieve_list {
 
 struct sync_sieve_list *sync_sieve_list_create(void);
 
-void sync_sieve_list_add(struct sync_sieve_list *l,
-                         const char *name, time_t last_update,
-                         struct message_guid *guidp, int active);
-
 struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l,
                                      const char *name);
-
-void sync_sieve_list_set_active(struct sync_sieve_list *l, const char *name);
 
 void sync_sieve_list_free(struct sync_sieve_list **lp);
 
