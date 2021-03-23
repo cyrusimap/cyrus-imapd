@@ -1,0 +1,109 @@
+:tocdepth: 3
+
+====================================
+Cyrus IMAP 3.4.0-rc1 Release Notes
+====================================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.0-rc1/cyrus-imapd-3.4.0-rc1.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.0-rc1/cyrus-imapd-3.4.0-rc1.tar.gz.sig
+
+.. _relnotes-3.4.0-rc1-changes:
+
+Major changes since the 3.2 series
+==================================
+
+* DAV improvements
+* Improved performance for users with large folders
+* LITERAL- maximum size is now honoured (:rfc:`7888`)
+* Support for the ESORT (but not CONTEXT) extension from :rfc:`5267`
+* Experimental :draft:`JMAP for Sieve Scripts <draft-murchison-jmap-sieve>`
+  support
+  (requires `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental :draft:`Handling Message Disposition Notification with JMAP
+  <draft-ietf-jmap-mdn>` support
+  (requires `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental JMAP Backup extension (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental JMAP Notes extension (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental JMAP Blob extension (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental JMAP Mail extension (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* New cyrus.index format v17 adds changes_epoch field, needed by JMAP Backups
+  extension
+* New `reverseuniqueids` :cyrusman:`imapd.conf(5)` option (default on), which
+  improves performance for users with large mailboxes
+* Further improvements to the `reverseacls` :cyrusman:`imapd.conf(5)`
+  performance option
+* Improvements to replication reliability and performance
+* Experimental vnd.cyrus.log and vnd.cyrus.jmapquery Sieve extensions
+* Experimental Sieve Snooze extension based on
+  :draft:`draft-ietf-extra-sieve-snooze`
+* Experimental Sieve mailboxid extension based on
+  :draft:`draft-ietf-extra-sieve-mailboxid`
+* Improvements to conversations
+* New `mailbox_maxmessages_addressbook`, `mailbox_maxmessages_calendar`, and
+  `mailbox_maxmessages_email` :cyrusman:`imapd.conf(5)` options for providing
+  server-wide limits on the amount of objects in any one mailbox, independently
+  of quotas.  These default to `0` (unlimited) for backward compatibility, but
+  are highly recommended for protecting your server from misbehaving clients.
+* New IMAP create/delete behaviour based on
+  :draft:`draft-ietf-extra-imap4rev2`: mailboxes containing child mailboxes
+  can no longer be deleted; and when creating mailboxes, ancestors will be
+  created as needed.
+* CRC32 optimisations
+* :cyrusman:`quota(8)` and :cyrusman:`cyr_expire(8)` arguments are now in
+  the admin namespace like other tools
+* Support for per-language indexing and searching
+* SNMP support has been removed, as it was broken and unmaintained
+* New `sync_rightnow_channel` :cyrusman:`imapd.conf(5)` option to enable
+  real-time replication to the specified channel as writes occur.
+* Caching of mailbox state for quicker replication turnaround.  Configure
+  `sync_cache_db` and `sync_cache_db_path` in :cyrusman:`imapd.conf(5)` to
+  enable.
+* New `search-fuzzy-always` annotation allows per-user override of the
+  `search_fuzzy_always` :cyrusman:`imapd.conf(5)` option
+* New `lmtp_preparse` :cyrusman:`imapd.conf(5)` option for parsing incoming
+  messages before locking the mailbox.
+* New `search_index_skip_users` and `search_index_skip_domains`
+  :cyrusman:`imapd.conf(5)` options for skipping indexing of particular
+  users/domains.
+* The HTTP Admin module's Currently Running Services feature now works
+  on the major BSDs (thanks Felix J. Ogris)
+* :cyrusman:`squatter(8)` once again supports the ``-s`` option to skip
+  reindexing mailboxes which were not modified since the last index
+  (Squat backend only)
+* :cyrusman:`squatter(8)` now supports long options
+* Improvements to search query normalisation performance
+
+
+Updates to default configuration
+================================
+
+The :cyrusman:`cyr_info(8)` `conf`, `conf-all` and `conf-default` subcommands
+accept an `-s <version>` argument to highlight :cyrusman:`imapd.conf(5)`
+options that are new or whose behaviour has changed since the specified
+version.  We recommend using this when evaluating a new Cyrus version to
+check which configuration options you will need to examine and maybe set or
+change during the process.
+
+* The `annotation_definitions` file is now loaded case-insensitively
+* Implementations may want to revisit their `search_normalisation_max`
+  settings, but its default value 1000 is a good conservative choice. Current
+  server-grade hardware may use 20000 or more.
+
+Security fixes
+==============
+
+* None so far
+
+Significant bugfixes
+====================
+
+* Fixed: Sieve Editheader Extension (:rfc:`5293`) now works correctly with
+  respect to section 7, Interaction with Other Sieve Extensions.
+* Fixed :issue:`2598`: indexed search now works correctly with Squat engine
+  again
