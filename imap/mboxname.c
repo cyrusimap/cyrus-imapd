@@ -768,7 +768,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
 EXPORTED mbname_t *mbname_from_path(const char *path)
 {
-    int absolute = 0, relative = 0, r;
+    int absolute = 0, relative = 0, r = IMAP_MAILBOX_NONEXISTENT;
     mbname_t *mbname = NULL;
     mbentry_t *mbentry = NULL;
     const char *uid;
@@ -781,8 +781,7 @@ EXPORTED mbname_t *mbname_from_path(const char *path)
         relative = 1;
     }
 
-    if (!relative) {
-        uid = strrchr(path, '/');
+    if (!relative && (uid = strrchr(path, '/'))) {
         r = mboxlist_lookup_by_uniqueid(uid+1, &mbentry, NULL);
         if (!r) mbname = mbname_from_intname(mbentry->name);
     }
