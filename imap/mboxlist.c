@@ -395,7 +395,7 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
     if (!string) return 0; /* null just means default */
 
     /* mailbox type - ALWAYS first character */
-    switch (*string) {
+    switch (*string++) {
     case 'a':
         mbtype = MBTYPE_ADDRESSBOOK;
         break;
@@ -422,12 +422,13 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
         break;
 
     default:
-        /* make sure we didn't forget to handle every expected character */
-        assert(0);
+        /* Assume this is a mailbox flag .
+           This should only happen for a legacy email entry with no 'e' */
+        string--;
         break;
     }
             
-    for (++string; *string; string++) {
+    for (; *string; string++) {
         /* mailbox flags */
         switch (*string) {
         case 'd':
