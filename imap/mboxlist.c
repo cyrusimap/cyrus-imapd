@@ -2138,7 +2138,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         // make it deleted and mark it done!
         if (!mboxname_isdeletedmailbox(name, NULL)) {
             mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
-            newmbentry->mbtype = MBTYPE_DELETED;
+            newmbentry->mbtype |= MBTYPE_DELETED;
             if (!silent) {
                 newmbentry->foldermodseq = mboxname_nextmodseq(newmbentry->name, newmbentry->foldermodseq,
                                                                newmbentry->mbtype,
@@ -2644,7 +2644,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             /* store a DELETED marker */
             mbentry_t *oldmbentry = mboxlist_entry_create();
             oldmbentry->name = xstrdupnull(mbentry->name);
-            oldmbentry->mbtype |= MBTYPE_DELETED;
+            oldmbentry->mbtype = mbentry->mbtype | MBTYPE_DELETED;
             oldmbentry->uidvalidity = mbentry->uidvalidity;
             oldmbentry->uniqueid = xstrdupnull(mbentry->uniqueid);
             oldmbentry->createdmodseq = mbentry->createdmodseq;
