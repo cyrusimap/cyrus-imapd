@@ -141,8 +141,10 @@ static void notify_dlist(const char *sockpath, const char *method,
     if (c == '\r') c = prot_getc(in);
     /* XXX - do something with the response?  Like have NOTIFY answer */
     if (c == '\n' && res && res->name) {
-        syslog(LOG_NOTICE, "NOTIFY(%s): response %s to method %s",
-               loginfo, res->name, method);
+        if (strcmp(res->name, "OK")) {
+            syslog(LOG_NOTICE, "NOTIFY(%s): response %s to method %s",
+                  loginfo, res->name, method);
+        }
     }
     else {
         syslog(LOG_ERR, "NOTIFY(%s): error sending %s to %s",
