@@ -127,52 +127,19 @@ structure: use :cyrusman:`mkimap(8)`.
 
     sudo -u cyrus ./tools/mkimap
 
-Optional: Setting up SSL certificates
+Optional: Setting up TLS certificates
 -------------------------------------
 
-Create a TLS certificate using OpenSSL. Generate the certificate and
-store it in the /var/lib/cyrus/server.pem file:
+Obtain a certificate, e.g. from
+`Let’s Encrypt <https://letsencrypt.org/>`_.  You need a file with
+the full chain and a private key in
+`X.509 <https://en.wikipedia.org/wiki/X.509>`_ format.  Adjust the file
+owner on these files with ``sudo chown cyrus:mail``.  Set the options
+``tls_server_cert`` and ``tls_server_key`` in :cyrusman:`imapd.conf(5)`
+to point to these files.
 
-::
-
-    sudo openssl req -new -x509 -nodes -out /var/lib/cyrus/server.pem \
-    -keyout /var/lib/cyrus/server.pem -days 365 \
-    -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost"
-
-This creates a TLS certificate (`-out`) and private key (`-keyout`) in
-the `X.509 <https://en.wikipedia.org/wiki/X.509>`_ format (`-x509`).
-The certificate is set to expire in 365 days (`-days`) and has default
-information set up (`-subj ...`). The contents of the -subj is
-non-trivial and defined in `RFC 5280
-<http://www.ietf.org/rfc/rfc5280.txt>`_, a brief summary is available
-on `stackoverflow
-<http://stackoverflow.com/questions/6464129/certificate-subject-x-509>`_
-which is enough to decode our sample above.
-
-Great! You should now have a file at /var/lib/cyrus/server.pem. Give
-Cyrus access to this file:
-
-::
-
-    sudo chown cyrus:mail /var/lib/cyrus/server.pem
-
-Awesome! Almost done. We will now configure the Cyrus IMAP server to
-actually use this TLS certificate. Open your Cyrus configuration file
-``/etc/imapd.conf`` and add the following two lines at the end of it:
-
-::
-
-    tls_server_cert: /var/lib/cyrus/server.pem
-    tls_server_key: /var/lib/cyrus/server.pem
-
-This tells the server where to find the TLS certificate and the key. It
-may seem weird to specify the same file twice, but since the file has
-the x509 format, the server will know what to do. Cyrus is there for
-you, always (unless your hard drive burns down) ! :-)
-
-The other configuration file we have to edit is ``/etc/cyrus.conf``.
-Open it up with your favorite text editor and in the **SERVICES**
-section, add (or uncomment) this line:
+Open ``/etc/cyrus.conf`` and in the **SERVICES** section, add (or
+uncomment) this line:
 
 ::
 
