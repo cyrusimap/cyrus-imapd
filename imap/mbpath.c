@@ -73,7 +73,7 @@ static struct namespace mbpath_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: mbpath [-C <alt_config>] [-l] [-m] [-q] [-s] [-u|d] [-a|A|D|M|S|U] <mailbox name>...\n");
+    fprintf(stderr,"usage: mbpath [-C <alt_config>] [-l] [-m] [-q] [-s] [-u|d|p] [-a|A|D|M|S|U] <mailbox name>...\n");
     fprintf(stderr, "\n");
     fprintf(stderr,"\t-j\tprint all values as a JSON object\n");
     fprintf(stderr,"\t-a\tprint all values with prefixes\n");
@@ -83,6 +83,7 @@ static int usage(const char *error)
     fprintf(stderr,"\t-s\tstop on error\n");
     fprintf(stderr,"\t-u\targuments are user, not mailbox\n");
     fprintf(stderr,"\t-d\targuments are domain, not mailbox\n");
+    fprintf(stderr,"\t-p\targuments are UNIX path, not mailbox\n");
     fprintf(stderr,"\t-A\tpartition archive directory\n");
     fprintf(stderr,"\t-D\tpartition data directory (*default*)\n");
     fprintf(stderr,"\t-M\tpartition metadata file directory (duplicate of -m)\n");
@@ -114,6 +115,7 @@ struct options_t {
 
 #define MODE_USER   1
 #define MODE_DOMAIN 2
+#define MODE_PATH   3
 
 static void find_tier(const char *key, const char *val __attribute__((unused)), void *rock)
 {
@@ -290,7 +292,7 @@ int main(int argc, char **argv)
     // capture options
     struct options_t opts = { 0, 0, 0, 0, 0, 0, 0 };
 
-    while ((opt = getopt(argc, argv, "C:7ajlmqsudADMSU")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:7ajlmqsudpADMSU")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -337,6 +339,12 @@ int main(int argc, char **argv)
             if (opts.mode)
                 usage("Multiple modes given");
             opts.mode = MODE_DOMAIN;
+            break;
+
+        case 'p':
+            if (opts.mode)
+                usage("Multiple modes given");
+            opts.mode = MODE_PATH;
             break;
 
         case 'A':
@@ -397,28 +405,11 @@ int main(int argc, char **argv)
         else if (opts.mode == MODE_USER) {
             mbname = mbname_from_userid(argv[i]);
         }
-        else if (!strcmp(argv[i], "..")) {
-            /* Backup one mailbox from existing path */
-            mbname = mbname_from_path(".");
-            free(mbname_pop_boxes(mbname));
+        else if (opts.mode == MODE_PATH) {
+            mbname = mbname_from_path(argv[i]);
         }
         else {
             mbname = mbname_from_extname(argv[i], &mbpath_namespace, "cyrus");
-
-            r = mboxlist_lookup_allow_all(mbname_intname(mbname), NULL, NULL);
-            if (r == IMAP_MAILBOX_NONEXISTENT) {
-                /* Are we in an existing mailbox path? */
-                mbname_t *child = mbname;
-                const strarray_t *subs = mbname_boxes(child);
-                int i;
-
-                mbname = mbname_from_path(".");
-                for (i = 0; i < strarray_size(subs); i++) {
-                    mbname_push_boxes(mbname, strarray_nth(subs, i));
-                }
-
-                mbname_free(&child);
-            }
         }
 
         extname = mbname_extname(mbname, &mbpath_namespace, "cyrus");
