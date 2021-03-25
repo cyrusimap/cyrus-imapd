@@ -67,6 +67,7 @@ function createCalendar(baseurl) {
 
     if (create.name.value.length === 0) {
         window.alert('New calendar MUST have a name');
+        return;
     }
 
     // Generate calendar collection name
