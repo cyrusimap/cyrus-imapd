@@ -103,9 +103,10 @@ typedef enum {
 /* we don't have to worry about dotstuffing here, since it's illegal
    for a header to begin with a dot!
 
-   returns 0 on success, filling in 'headname' and 'contents' with a static
-   pointer (blech).
-   on end of headers, returns 0 with NULL 'headname' and NULL 'contents'
+   returns 0 on success, filling in 'headname', 'contents', and 'rawvalue'
+   with malloced pointers (caller must free!).
+   on end of headers, returns 0 with NULL 'headname', NULL 'contents', and
+   NULL 'rawvalue'
 
    on error, returns < 0
 */
@@ -207,6 +208,31 @@ static int parseheader(struct protstream *fin, FILE *fout,
             break;
 
         case BODY_START:
+            /* leading whitespace might be folded too */
+            /* XXX mostly copied from BODY, below. could be deduped */
+            if (c == '\r' || c == '\n') {
+                int peek;
+
+                peek = prot_getc(fin);
+
+                if (!skip) buf_appendcstr(&raw, "\r\n");
+                /* we should peek ahead to see if it's folded whitespace */
+                if (c == '\r' && peek == '\n') {
+                    c = prot_getc(fin);
+                }
+                else {
+                    c = peek;
+                }
+
+                if (c != ' ' && c != '\t') {
+                    /* not folded leading ws, actually end of header! */
+                    buf_cstring(&body);
+                    buf_cstring(&raw);
+                    prot_ungetc(c, fin);
+                    goto got_header;
+                }
+            }
+
             if (c == ' ' || c == '\t') /* eat the whitespace */
                 break;
             buf_reset(&body);
