@@ -254,8 +254,6 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
     /* and we didn't get a header */
     *headname = NULL;
-    *contents = NULL;
-    *rawvalue = NULL;
 
     return r;
 
@@ -386,27 +384,23 @@ EXPORTED void spool_remove_header_instance(const char *name, int n,
 EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout,
                                  hdrcache_t cache, const char **skipheaders)
 {
-    int r = 0;
-
     /* let's fill that header cache */
     for (;;) {
-        char *name = NULL, *body = NULL, *raw = NULL;
+        char *name, *body, *raw;
+        int r = parseheader(fin, fout, &name, &body, &raw, skipheaders);
 
-        if ((r = parseheader(fin, fout, &name, &body, &raw, skipheaders)) < 0) {
-            break;
-        }
+        if (r < 0)
+            return r;
         if (!name) {
             /* reached the end of headers */
-            free(body);
-            free(raw);
-            break;
+            return 0;
         }
 
         /* put it in the hash table */
         spool_append_header_raw(name, body, raw, cache);
     }
 
-    return r;
+    return 0;
 }
 
 EXPORTED const char **spool_getheader(hdrcache_t cache, const char *phead)
