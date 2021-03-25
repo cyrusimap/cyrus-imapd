@@ -768,7 +768,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
 EXPORTED mbname_t *mbname_from_path(const char *path)
 {
-    int absolute = 0, relative = 0, r = IMAP_MAILBOX_NONEXISTENT;
+    int absolute = 0;
     mbname_t *mbname = NULL;
     mbentry_t *mbentry = NULL;
     const char *uid;
@@ -776,61 +776,49 @@ EXPORTED mbname_t *mbname_from_path(const char *path)
     /* Is the mailbox argument absolute or relative to cwd? */
     if (path[0] == '/') {
         absolute = 1;
+        uid = strrchr(path, '/');
     }
-    else if (path[0] == '.') {
-        relative = 1;
-    }
-
-    if (!relative && (uid = strrchr(path, '/'))) {
-        r = mboxlist_lookup_by_uniqueid(uid+1, &mbentry, NULL);
-        if (!r) mbname = mbname_from_intname(mbentry->name);
-    }
-    if (relative || (!absolute && (r == IMAP_MAILBOX_NONEXISTENT))) {
+    else {
+        /* Construct a mailbox relative to cwd */
         char cwd[MAX_MAILBOX_PATH+1];
 
-        mboxlist_entry_free(&mbentry);
-
-        /* Construct a mailbox relative to cwd */
         getcwd(cwd, MAX_MAILBOX_PATH);
         uid = strrchr(cwd, '/');
-        if (uid) {
-            /* Lookup current mailbox by uniqueid */
-            r = mboxlist_lookup_by_uniqueid(uid+1, &mbentry, NULL);
+    }
 
-            if (!r) {
-                strarray_t *subs = NULL;
+    if (uid) {
+        /* Lookup current mailbox by uniqueid */
+        int r = mboxlist_lookup_by_uniqueid(uid+1, &mbentry, NULL);
+
+        if (!r) {
+            /* Build current mailbox name */
+            mbname = mbname_from_intname(mbentry->name);
+
+            if (!absolute) {
+                /* Add submailbox(es) */
+                strarray_t *subs = subs = strarray_split(path, "/", 0);
                 int i;
 
-                /* Build current mailbox name */
-                mbname = mbname_from_intname(mbentry->name);
+                for (i = 0; i < strarray_size(subs); i++) {
+                    const char *sub = strarray_nth(subs, i);
 
-                if (relative) {
-                    if (path[1] == '\0') {
-                        /* Explicit . */
-                        path += 1;
-                    }
-                    if (path[1] == '/') {
-                        /* Explicit ./foo */
-                        path += 2;
-                    }
-                    else {
-                        while (path[0] == '.' && path[1] == '.' &&
-                               (path[2] == '\0' || path[2] == '/')) {
-                            /* Up to parent */
-                            free(mbname_pop_boxes(mbname));
-                            path += (path[2] == '/') ? 3 : 2;
+                    if (!strcmp(sub, ".")) continue;
+                    else if (!strcmp(sub, "..")) {
+                        char *s = mbname_pop_boxes(mbname);
+
+                        if (s) free(s);
+                        else {
+                            /* At top of hierarchy */
+                            mbname_free(&mbname);
+                            break;
                         }
                     }
-                }
-
-                /* Add submailbox(es) */
-                subs = strarray_split(path, "/", 0);
-                for (i = 0; i < strarray_size(subs); i++) {
-                    mbname_push_boxes(mbname, strarray_nth(subs, i));
+                    else {
+                        mbname_push_boxes(mbname, strarray_nth(subs, i));
+                    }
                 }
                 strarray_free(subs);
             }
-
         }
     }
     mboxlist_entry_free(&mbentry);
