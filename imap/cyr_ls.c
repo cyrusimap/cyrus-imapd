@@ -91,8 +91,9 @@ static struct namespace cyr_ls_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-m] [-i] [-l] [-R] [-1] [mailbox name]\n");
+    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-p] [-m] [-i] [-l] [-R] [-1] [mailbox name]\n");
     fprintf(stderr, "\n");
+    fprintf(stderr,"\t-p\targument is a UNIX path, not mailbox\n");
     fprintf(stderr,"\t-m\tlist the contents of the metadata directory (if different from the data directory)\n");
     fprintf(stderr,"\t-i\tprint ID of each mailbox\n");
     fprintf(stderr,"\t-l\tlong listing format\n");
@@ -315,12 +316,13 @@ int main(int argc, char **argv)
     int r;
     int opt;              /* getopt() returns an int */
     char *alt_config = NULL;
+    int is_path = 0;
 
     // capture options
     struct list_opts opts =
         { 0, 0, 0, 0, isatty(STDOUT_FILENO), 4 /* default to 4 columns */, 0 };
 
-    while ((opt = getopt(argc, argv, "C:milR1")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:milR1p")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -348,6 +350,10 @@ int main(int argc, char **argv)
             opts.columns = 1;
             break;
 
+        case 'p':
+            is_path = 1;
+            break;
+
         default:
             usage(NULL);
         }
@@ -366,7 +372,7 @@ int main(int argc, char **argv)
     /* Translate mailboxname */
     mbname_t *mbname = NULL;
     r = IMAP_MAILBOX_NONEXISTENT;
-    if (optind != argc) {
+    if (!is_path && (optind != argc)) {
         /* Is this an actual mailbox name */
         mbname = mbname_from_extname(argv[optind], &cyr_ls_namespace, "cyrus");
 
