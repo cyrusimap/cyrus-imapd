@@ -610,6 +610,113 @@ sub test_multi_flags
     $self->check_messages(\%msg);
 }
 
+# Quoth RFC 4314:
+#  STORE operation SHOULD NOT fail if the user has rights to modify
+#  at least one flag specified in the STORE, as the tagged NO
+#  response to a STORE command is not handled very well by deployed
+#  clients
+sub test_multi_flags_acl
+    :min_version_3_5 :NoAltNamespace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    my %acls = (
+        '\\Seen' => 's',
+        '\\Deleted' => 't',
+        '\\Flagged' => 'w',
+    );
+    my @flags = sort keys %acls;
+
+    while (my ($flag, $acl_bit) = each %acls) {
+        xlog $self, "testing flag $flag";
+        # reset to no flags set
+        $admintalk->setacl("user.cassandane", "cassandane", "lrstw") or die;
+        $talk->unselect();
+        $talk->select('INBOX');
+        $talk->store('1', 'flags', '()');
+        $msg{A}->set_attribute(flags => []);
+        $self->check_messages(\%msg);
+
+        # limit user access
+        $admintalk->setacl("user.cassandane", "cassandane", "lr$acl_bit")
+            or die;
+        $talk->unselect();
+        $talk->select('INBOX');
+
+        # set a bunch of flags
+        $talk->store('1', '+flags', "(@flags)");
+
+        # it should work, but only the allowed flag should have been set
+        $self->assert_equals('ok', $talk->get_last_completion_response());
+        $msg{A}->set_attribute(flags => [$flag]);
+        $self->check_messages(\%msg);
+
+        # reset to all flags set
+        $admintalk->setacl("user.cassandane", "cassandane", "lrstw") or die;
+        $talk->unselect();
+        $talk->select('INBOX');
+        $talk->store('1', 'flags', "(@flags)");
+        $msg{A}->set_attribute(flags => [@flags]);
+        $self->check_messages(\%msg);
+
+        # limit user access
+        $admintalk->setacl("user.cassandane", "cassandane", "lr$acl_bit")
+            or die;
+        $talk->unselect();
+        $talk->select('INBOX');
+
+        # remove a bunch of flags
+        $talk->store('1', '-flags', "(@flags)");
+
+        # it should work, but only the allowed flag should have been changed
+        $self->assert_equals('ok', $talk->get_last_completion_response());
+        $msg{A}->set_attribute(flags => [ grep { $_ ne $flag } @flags ]);
+        $self->check_messages(\%msg);
+
+        # explicit set with any of them missing permission should fail
+        $talk->store('1', 'flags', "(@flags)");
+
+        # nothing should have changed
+        $self->assert_equals('no', $talk->get_last_completion_response());
+        $self->check_messages(\%msg);
+
+        # no flags we're allowed to change
+        $talk->store('1', '+flags',
+                     '(' . join(' ', grep { $_ ne $flag } @flags) . ')');
+
+        # nothing should have changed
+        $self->assert_equals('no', $talk->get_last_completion_response());
+        $self->check_messages(\%msg);
+
+        # no flags we're allowed to change
+        $talk->store('1', '-flags',
+                     '(' . join(' ', grep { $_ ne $flag } @flags) . ')');
+
+        # nothing should have changed
+        $self->assert_equals('no', $talk->get_last_completion_response());
+        $self->check_messages(\%msg);
+    }
+}
+
 # Get the modseq of a given returned message
 sub get_modseq
 {
