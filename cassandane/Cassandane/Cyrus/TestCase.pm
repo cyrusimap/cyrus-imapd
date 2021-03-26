@@ -971,12 +971,31 @@ sub check_messages
         }
 
         # check optional structured attributes
-        foreach my $a (qw(flags modseq))
+        foreach my $a (qw(modseq))
         {
             next unless defined $expmsg->get_attribute($a);
             xlog $self, "checking attribute $a";
             $self->assert_deep_equals($expmsg->get_attribute($a),
                                       $actmsg->get_attribute($a));
+        }
+
+        # check optional order-agnostic attributes
+        foreach my $a (qw(flags))
+        {
+            next unless defined $expmsg->get_attribute($a);
+            xlog $self, "checking attribute $a";
+
+            my $exp = $expmsg->get_attribute($a);
+            my $act = $actmsg->get_attribute($a);
+
+            if (ref $exp eq 'ARRAY') {
+                $exp = [ sort @{$exp} ];
+            }
+            if (ref $act eq 'ARRAY') {
+                $act = [ sort @{$act} ];
+            }
+
+            $self->assert_deep_equals($exp, $act);
         }
 
         # check annotations
