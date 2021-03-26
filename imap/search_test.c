@@ -328,7 +328,7 @@ static int usage(const char *name)
     exit(EX_USAGE);
 }
 
-void fatal(const char* s, int code)
+EXPORTED void fatal(const char* s, int code)
 {
     fprintf(stderr, "search_test: %s\n", s);
     cyrus_done();
