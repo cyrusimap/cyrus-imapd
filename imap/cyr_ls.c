@@ -199,6 +199,8 @@ struct list_opts {
 struct list_rock {
     struct list_opts *opts;
     int count;
+    int magic_inbox;
+    struct buf buf;
     strarray_t *children;
 };
 
@@ -248,6 +250,11 @@ static int list_cb(struct findall_data *data, void *rock)
     }
 
     printf("%s", color);
+    if (lrock->magic_inbox) {
+        buf_setcstr(&lrock->buf, "INBOX/");
+        buf_appendcstr(&lrock->buf, child_name);
+        child_name = buf_cstring(&lrock->buf);
+    }
     r = print_name(child_name);
     if (*color) printf("%s", ANSI_COLOR_RESET);
 
@@ -266,7 +273,7 @@ static int list_cb(struct findall_data *data, void *rock)
 static void do_list(mbname_t *mbname, struct list_opts *opts)
 {
     mbentry_t *mbentry = NULL;
-    struct list_rock lrock = { opts, 0, NULL };
+    struct list_rock lrock = { opts, 0, 0, BUF_INITIALIZER, NULL };
     strarray_t names = STRARRAY_INITIALIZER;
     int r, i;
 
@@ -290,12 +297,24 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
 
     if (!r) {
         /* List children */
+        int isinbox = mboxname_isusermailbox(mbname_intname(mbname), 1);
+
         if (opts->recurse) lrock.children = &names;
 
         mbname_push_boxes(mbname, "%");
         mboxlist_findall(&cyr_ls_namespace,
                          mbname_extname(mbname, &cyr_ls_namespace, "cyrus"),
                          1, 0, 0, &list_cb, &lrock);
+
+        if (isinbox) {
+            free(mbname_pop_boxes(mbname));
+            mbname_push_boxes(mbname, "INBOX");
+            mbname_push_boxes(mbname, "%");
+            lrock.magic_inbox = 1;
+            mboxlist_findall(&cyr_ls_namespace,
+                             mbname_extname(mbname, &cyr_ls_namespace, "cyrus"),
+                             1, 0, 0, &list_cb, &lrock);
+        }
         printf("\n");
 
         if (opts->recurse) {
@@ -309,6 +328,8 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
             strarray_fini(&names);
         }
     }
+
+    buf_free(&lrock.buf);
 }
 
 int main(int argc, char **argv)
