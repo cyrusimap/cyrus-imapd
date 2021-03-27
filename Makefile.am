@@ -69,19 +69,19 @@ AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 # have distcheck try to build with all optional components enabled, to aid
 # detection of missing files for these components
 AM_DISTCHECK_CONFIGURE_FLAGS = \
-    --enable-http \
-    --enable-calalarmd \
-    --enable-replication \
-    --with-openssl=yes \
-    --enable-nntp \
-    --enable-murder \
-    --enable-idled \
-    --enable-sieve \
-    --enable-autocreate \
-    --enable-backup \
-    --enable-xapian \
-    --enable-jmap \
-    --with-ldap
+	--enable-http \
+	--enable-calalarmd \
+	--enable-replication \
+	--with-openssl=yes \
+	--enable-nntp \
+	--enable-murder \
+	--enable-idled \
+	--enable-sieve \
+	--enable-autocreate \
+	--enable-backup \
+	--enable-xapian \
+	--enable-jmap \
+	--with-ldap
 
 BUILT_SOURCES = \
 	lib/imapopts.c \
@@ -815,49 +815,49 @@ noinst_HEADERS += \
 	lib/xstrnchr.h
 
 backup_libcyrus_backup_la_SOURCES = \
-    lib/gzuncat.c \
-    lib/gzuncat.h \
-    backup/lcb.c \
-    backup/lcb_append.c \
-    backup/lcb_backupdb.c \
-    backup/lcb_compact.c \
-    backup/lcb_indexr.c \
-    backup/lcb_indexw.c \
-    backup/lcb_internal.c \
-    backup/lcb_internal.h \
-    backup/lcb_partlist.c \
-    backup/lcb_read.c \
-    backup/lcb_sqlconsts.c \
-    backup/lcb_sqlconsts.h \
-    backup/lcb_verify.c
+	lib/gzuncat.c \
+	lib/gzuncat.h \
+	backup/lcb.c \
+	backup/lcb_append.c \
+	backup/lcb_backupdb.c \
+	backup/lcb_compact.c \
+	backup/lcb_indexr.c \
+	backup/lcb_indexw.c \
+	backup/lcb_internal.c \
+	backup/lcb_internal.h \
+	backup/lcb_partlist.c \
+	backup/lcb_read.c \
+	backup/lcb_sqlconsts.c \
+	backup/lcb_sqlconsts.h \
+	backup/lcb_verify.c
 backup_libcyrus_backup_la_LIBADD = $(LD_BASIC_ADD)
 
 backup_backupd_SOURCES = \
-    imap/mutex_fake.c \
-    imap/sync_support.c \
-    imap/sync_support.h \
-    master/service.c \
-    backup/backupd.c
+	imap/mutex_fake.c \
+	imap/sync_support.c \
+	imap/sync_support.h \
+	master/service.c \
+	backup/backupd.c
 backup_backupd_LDADD = backup/libcyrus_backup.la $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 backup_ctl_backups_SOURCES = \
-    imap/mutex_fake.c \
-    imap/sync_support.c \
-    imap/sync_support.h \
-    backup/ctl_backups.c
+	imap/mutex_fake.c \
+	imap/sync_support.c \
+	imap/sync_support.h \
+	backup/ctl_backups.c
 backup_ctl_backups_LDADD = backup/libcyrus_backup.la $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 backup_cyr_backup_SOURCES = \
-    imap/json_support.h \
-    imap/mutex_fake.c \
-    backup/cyr_backup.c
+	imap/json_support.h \
+	imap/mutex_fake.c \
+	backup/cyr_backup.c
 backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
 
 backup_restore_SOURCES = \
-    imap/mutex_fake.c \
-    imap/sync_support.c \
-    imap/sync_support.h \
-    backup/restore.c
+	imap/mutex_fake.c \
+	imap/sync_support.c \
+	imap/sync_support.h \
+	backup/restore.c
 backup_restore_LDADD = backup/libcyrus_backup.la $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
@@ -975,11 +975,11 @@ nodist_imap_libcyrus_imap_la_SOURCES = \
 	imap/promdata.h
 
 imap_libcyrus_imap_la_LIBADD = \
-    $(COM_ERR_LIBS) \
-    $(LIB_UUID) \
-    $(GCOV_LIBS) \
-    lib/libcyrus_min.la \
-    lib/libcyrus.la
+	$(COM_ERR_LIBS) \
+	$(LIB_UUID) \
+	$(GCOV_LIBS) \
+	lib/libcyrus_min.la \
+	lib/libcyrus.la
 
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 imap_libcyrus_imap_la_CXXFLAGS = $(AM_CXXFLAGS) $(CFLAG_VISIBILITY)
@@ -1063,7 +1063,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/sequence.c \
 	imap/sequence.h \
 	imap/setproctitle.c \
-        imap/sievedir.c \
+	imap/sievedir.c \
 	imap/sievedir.h \
 	imap/spool.c \
 	imap/spool.h \
@@ -1089,9 +1089,9 @@ imap_libcyrus_imap_la_SOURCES = \
 
 if OBJECTSTORE
 imap_libcyrus_imap_la_SOURCES += \
-    imap/objectstore_db.c \
-    imap/objectstore_db.h \
-    imap/objectstore.h
+	imap/objectstore_db.c \
+	imap/objectstore_db.h \
+	imap/objectstore.h
 if WITH_OPENIO
 imap_libcyrus_imap_la_SOURCES += imap/objectstore_openio.c
 else
@@ -1211,7 +1211,7 @@ imap_mupdate_SOURCES = \
 	imap/tls_th-lock.c \
 	master/service-thread.c
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
-imap_mupdate_CFLAGS =  $(AM_CFLAGS) -pthread
+imap_mupdate_CFLAGS = $(AM_CFLAGS) -pthread
 
 nodist_imap_nntpd_SOURCES = imap/nntp_err.c
 
@@ -1274,7 +1274,7 @@ imap_httpd_SOURCES = \
 	imap/smtpclient.c \
 	imap/spool.c \
 	imap/sync_support.c \
-        imap/sync_support.h \
+	imap/sync_support.h \
 	imap/xcal.c \
 	imap/xcal.h \
 	imap/xml_support.c \
@@ -1804,19 +1804,19 @@ sieve_libcyrus_sieve_la_SOURCES += \
 endif
 
 sieve_libcyrus_sieve_la_LIBADD = \
-    sieve/libcyrus_sieve_lex.la \
-    $(COM_ERR_LIBS) \
-    lib/libcyrus_min.la \
-    lib/libcyrus.la
+	sieve/libcyrus_sieve_lex.la \
+	$(COM_ERR_LIBS) \
+	lib/libcyrus_min.la \
+	lib/libcyrus.la
 sieve_libcyrus_sieve_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
 sieve_test_SOURCES = \
-    sieve/test.c \
-    imap/mutex_fake.c \
-    sieve/sieve_interface.h
+	sieve/test.c \
+	imap/mutex_fake.c \
+	sieve/sieve_interface.h
 if JMAP
 sieve_test_SOURCES += \
 	imap/jmap_util.c imap/jmap_mail_query.c imap/jmap_mail_query_parse.c
@@ -1824,9 +1824,9 @@ endif
 sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 sieve_test_mailbox_SOURCES = \
-    sieve/test_mailbox.c \
-    imap/mutex_fake.c \
-    sieve/sieve_interface.h
+	sieve/test_mailbox.c \
+	imap/mutex_fake.c \
+	sieve/sieve_interface.h
 sieve_test_mailbox_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 timsieved_timsieved_SOURCES = \
