@@ -51,7 +51,7 @@
 #include <libical/ical.h>
 #undef icalerror_warn
 #define icalerror_warn(message) \
-{syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s\n", __FUNCTION__, __FILE__, __LINE__, message);}
+{syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s", __FUNCTION__, __FILE__, __LINE__, message);}
 
 #include "mailbox.h"
 

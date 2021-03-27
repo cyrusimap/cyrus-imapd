@@ -208,7 +208,7 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
                                 &version, NULL);
                 if (version == BYTECODE_VERSION) {
                     syslog(LOG_DEBUG,
-                           "%s: %s is up to date\n", __func__, bc_fname);
+                           "%s: %s is up to date", __func__, bc_fname);
                     r = SIEVE_OK;
                     sieve_script_unload(&exe);
                     goto done;

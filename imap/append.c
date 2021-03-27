@@ -1082,7 +1082,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             newflags = strarray_new();
         r = callout_run(fname, *body, &user_annots, &system_annots, newflags);
         if (r) {
-            syslog(LOG_ERR, "Annotation callout failed, ignoring\n");
+            syslog(LOG_ERR, "Annotation callout failed, ignoring");
             r = 0;
         }
         flags = newflags;
@@ -1135,7 +1135,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     if (in_object_storage) {  // must delete local file
         if (unlink(fname) != 0) // unlink should do it.
             if (!remove (fname))  // we must insist
-                syslog(LOG_ERR, "Removing local file <%s> error \n", fname);
+                syslog(LOG_ERR, "Removing local file <%s> error", fname);
     }
 
     /* Apply the annotations */

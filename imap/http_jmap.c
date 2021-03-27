@@ -394,7 +394,7 @@ static int meth_post(struct transaction_t *txn,
         ret = json_response(ret ? ret : HTTP_OK, txn, res);
     }
 
-    syslog(LOG_DEBUG, ">>>> jmap_post: Exit\n");
+    syslog(LOG_DEBUG, ">>>> jmap_post: Exit");
     return ret;
 }
 

@@ -1041,7 +1041,7 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
     /* Get a shared lock */
     r = mboxname_lock(namelock_fname, &lock->namelock, LOCK_SHARED);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
                 namelock_fname);
         goto out;
     }
@@ -2398,7 +2398,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
     r = mboxname_lock(namelock_fname, &tr->xapiandb_namelock, LOCK_SHARED);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
                namelock_fname);
         goto out;
     }
@@ -2949,7 +2949,7 @@ static int list_files(const char *userid, strarray_t *files)
 
     r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_SHARED);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
                namelock_fname);
         goto out;
     }
@@ -3530,7 +3530,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
         goto out;
     }
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
                namelock_fname);
         goto out;
     }
@@ -3619,7 +3619,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     /* Get a shared name lock */
     r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_SHARED);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
                namelock_fname);
         goto out;
     }
@@ -3761,7 +3761,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     /* Get an exclusive namelock */
     r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
                namelock_fname);
         goto out;
     }
@@ -3893,7 +3893,7 @@ static int delete_user(const char *userid)
     namelock_fname = xapiandb_namelock_fname_from_userid(userid);
     r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
                namelock_fname);
         goto out;
     }

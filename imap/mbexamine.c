@@ -389,7 +389,7 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
 
         if (stat(fname, &sbuf) != 0) {
             syslog(LOG_WARNING,
-                   "Can not open message file %s -- skipping\n", fname);
+                   "Can not open message file %s -- skipping", fname);
             continue;
         }
 
