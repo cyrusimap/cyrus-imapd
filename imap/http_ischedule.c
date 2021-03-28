@@ -457,7 +457,7 @@ static int meth_post_isched(struct transaction_t *txn,
 
     /* Make sure we have a body */
     if (!buf_len(&txn->req_body.payload)) {
-        txn->error.desc = "Missing request body\r\n";
+        txn->error.desc = "Missing request body";
         return HTTP_BAD_REQUEST;
     }
 
@@ -543,7 +543,7 @@ static int meth_post_isched(struct transaction_t *txn,
             if (!(root = init_xml_response("schedule-response",
                                            NS_ISCHED, NULL, ns))) {
                 ret = HTTP_SERVER_ERROR;
-                txn->error.desc = "Unable to create XML response\r\n";
+                txn->error.desc = "Unable to create XML response";
                 goto done;
             }
 

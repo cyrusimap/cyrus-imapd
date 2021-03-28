@@ -827,7 +827,7 @@ int sched_busytime_query(struct transaction_t *txn,
                             (txn->req_tgt.allow & ALLOW_ISCHEDULE) ? NS_ISCHED :
                             NS_CALDAV, NULL, ns))) {
         ret = HTTP_SERVER_ERROR;
-        txn->error.desc = "Unable to create XML response\r\n";
+        txn->error.desc = "Unable to create XML response";
         goto done;
     }
 

@@ -218,7 +218,7 @@ static int meth_get(struct transaction_t *txn,
     /* If no UID specified, list messages as an RSS feed */
     if (!uid) ret = list_messages(txn, mailbox);
     else if (uid > mailbox->i.last_uid) {
-        txn->error.desc = "Message does not exist\r\n";
+        txn->error.desc = "Message does not exist";
         ret = HTTP_NOT_FOUND;
     }
     else {
@@ -700,7 +700,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     if ((r == CYRUSDB_NOTFOUND) ||
         ((record->system_flags & FLAG_DELETED) ||
          record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-        txn->error.desc = "Message has been removed\r\n";
+        txn->error.desc = "Message has been removed";
 
         /* Fill in Expires */
         txn->resp_body.maxage = 31536000;  /* 1 year */
