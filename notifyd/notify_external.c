@@ -88,7 +88,7 @@ char* notify_external(const char *class, const char *priority,
 
     if (pipe(fds) < 0) {
        syslog(LOG_ERR,
-              "notify_external: pipe() returned %s\n", strerror(errno));
+              "notify_external: pipe() returned %s", strerror(errno));
        return strdup("NO notify_external pipe failed");
     }
 

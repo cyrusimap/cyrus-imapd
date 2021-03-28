@@ -273,7 +273,7 @@ static char *pack_other_message (char *sql_cmd, const char *msg_guid){   // used
 void sql_error (int rc, char *zErrMsg)
 {
     if( rc != SQLITE_OK ){
-        syslog(LOG_ERR, "SQL error: %s\n", zErrMsg);
+        syslog(LOG_ERR, "SQL error: %s", zErrMsg);
         sqlite3_free(zErrMsg);
     }
 }

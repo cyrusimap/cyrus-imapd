@@ -610,7 +610,7 @@ EXPORTED int backup_reindex(const char *name,
                 const char *error = prot_error(member);
                 if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                     syslog(LOG_ERR,
-                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
+                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %i: %s",
                            name, member_offset, prot_bytes_in(member), error);
 
                     if (out)
@@ -647,7 +647,7 @@ EXPORTED int backup_reindex(const char *name,
             r = backup_append(backup, dl, &ts, BACKUP_APPEND_NOFLUSH);
             if (r) {
                 // FIXME do something
-                syslog(LOG_ERR, "backup_append returned %d\n", r);
+                syslog(LOG_ERR, "backup_append returned %d", r);
                 fprintf(out, "backup_append returned %d\n", r);
             }
 

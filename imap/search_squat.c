@@ -195,7 +195,7 @@ static struct opstack *opstack_push(SquatBuilderData *bb, int op)
 
 #if DEBUG
     if (bb->verbose > 1)
-        syslog(LOG_NOTICE, "Squat opstack_push(op=%s)\n", search_op_as_string(op));
+        syslog(LOG_NOTICE, "Squat opstack_push(op=%s)", search_op_as_string(op));
 #endif
 
     /* push a new op on the stack */
@@ -545,7 +545,7 @@ static void stop_stats(SquatStats *stats)
 static void print_stats(const char *which, const SquatStats *stats)
 {
     syslog(LOG_NOTICE, "squat: %s indexed %lu messages (%lu bytes) "
-            "into %lu index bytes in %d seconds\n",
+            "into %lu index bytes in %d seconds",
             which,
             stats->indexed_messages,
             stats->indexed_bytes,
@@ -628,7 +628,7 @@ static int do_append(SquatReceiverData *d, const struct buf *text)
     int s;          /* SQUAT error */
 
     if (d->verbose > 3)
-        syslog(LOG_ERR, "squat: writing %llu bytes into message %u\n",
+        syslog(LOG_ERR, "squat: writing %llu bytes into message %u",
                (unsigned long long)text->len, d->uid);
 
     s = squat_index_append_document(d->index, text->s, text->len);
@@ -660,7 +660,7 @@ static void append_text(search_text_receiver_t *rx,
 
         /* just went over the threshold */
         if (d->verbose > 2)
-            syslog(LOG_NOTICE, "squat: opening document part '%s'\n",
+            syslog(LOG_NOTICE, "squat: opening document part '%s'",
                     d->doc_name);
 
         s = squat_index_open_document(d->index, d->doc_name);

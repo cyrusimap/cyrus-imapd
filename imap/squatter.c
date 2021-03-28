@@ -213,7 +213,7 @@ static int should_index(const char *name)
             printf("error looking up %s: %s\n",
                    extname, error_message(r));
         }
-        syslog(LOG_INFO, "error looking up %s: %s\n",
+        syslog(LOG_INFO, "error looking up %s: %s",
                extname, error_message(r));
 
         free(extname);
@@ -345,7 +345,7 @@ again:
         if (verbose) {
             printf("error opening %s: %s\n", extname, error_message(r));
         }
-        syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
+        syslog(LOG_INFO, "error opening %s: %s", extname, error_message(r));
         free(extname);
 
         return r;
@@ -756,7 +756,7 @@ static void do_rolling(const char *channel)
         int sig = signals_poll();
 
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
-            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully\n");
+            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully");
             sync_log_reader_end(slr);
             shut_down(0);
         }

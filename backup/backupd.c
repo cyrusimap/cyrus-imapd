@@ -913,7 +913,7 @@ static int cmd_apply_message(struct dlist *dl)
 
             message_guid_generate(&computed_guid, msg_base, msg_len);
             if (!message_guid_equal(guid, &computed_guid)) {
-                syslog(LOG_ERR, "%s: guid mismatch: header %s, derived %s\n",
+                syslog(LOG_ERR, "%s: guid mismatch: header %s, derived %s",
                     __func__, message_guid_encode(guid),
                     message_guid_encode(&computed_guid));
                 r = IMAP_PROTOCOL_ERROR;

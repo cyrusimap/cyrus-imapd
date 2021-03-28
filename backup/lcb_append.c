@@ -147,7 +147,7 @@ HIDDEN int backup_real_append_start(struct backup *backup,
 
     r = sqldb_exec(backup->db, backup_index_start_sql, bval, NULL, NULL);
     if (r) {
-        syslog(LOG_ERR, "%s: something went wrong: %i\n", __func__, r);
+        syslog(LOG_ERR, "%s: something went wrong: %i", __func__, r);
         sqldb_rollback(backup->db, "backup_append");
         goto error;
     }
@@ -257,7 +257,7 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
     if (!(backup->append_state->mode & BACKUP_APPEND_INDEXONLY)) {
         r = gzflush(backup->append_state->gzfile, Z_FINISH);
         if (r != Z_OK) {
-            syslog(LOG_ERR, "IOERROR: gzflush %s failed: %i\n",
+            syslog(LOG_ERR, "IOERROR: gzflush %s failed: %i",
                             backup->data_fname, r);
             sqldb_rollback(backup->db, "backup_append");
             goto done;
@@ -280,7 +280,7 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
 
     r = sqldb_exec(backup->db, backup_index_end_sql, bval, NULL, NULL);
     if (r) {
-        syslog(LOG_ERR, "%s: something went wrong: %i\n", __func__, r);
+        syslog(LOG_ERR, "%s: something went wrong: %i", __func__, r);
         sqldb_rollback(backup->db, "backup_append");
     }
     else {

@@ -221,7 +221,7 @@ int clamav_scanfile(void *state, const char *fname,
 
     default:
         printf("cl_scanfile error: %s\n", cl_strerror(r));
-        syslog(LOG_ERR, "cl_scanfile error: %s\n", cl_strerror(r));
+        syslog(LOG_ERR, "cl_scanfile error: %s", cl_strerror(r));
         break;
     }
 

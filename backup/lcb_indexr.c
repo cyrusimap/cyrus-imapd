@@ -94,7 +94,7 @@ EXPORTED int backup_get_mailbox_id(struct backup *backup, const char *uniqueid)
     int r = sqldb_exec(backup->db, backup_index_mailbox_select_uniqueid_sql,
                        bval, _get_mailbox_id_cb, &id);
     if (r) {
-        syslog(LOG_ERR, "%s: something went wrong: %i %s\n",
+        syslog(LOG_ERR, "%s: something went wrong: %i %s",
                         __func__, r, uniqueid);
     }
 
@@ -784,7 +784,7 @@ EXPORTED int backup_get_message_id(struct backup *backup, const char *guid)
     int r = sqldb_exec(backup->db, backup_index_message_select_guid_sql, bval,
                        _get_message_id_cb, &id);
     if (r) {
-        syslog(LOG_ERR, "%s: something went wrong: %i %s\n",
+        syslog(LOG_ERR, "%s: something went wrong: %i %s",
                         __func__, r, guid);
         return -1;
     }
@@ -857,7 +857,7 @@ EXPORTED struct backup_message *backup_get_message(struct backup *backup,
     int r = sqldb_exec(backup->db, backup_index_message_select_guid_sql, bval,
                        _message_row_cb, &mrock);
     if (r) {
-        syslog(LOG_ERR, "%s: something went wrong: %i %s\n",
+        syslog(LOG_ERR, "%s: something went wrong: %i %s",
                         __func__, r, message_guid_encode(guid));
         if (bm) backup_message_free(&bm);
         return NULL;

@@ -521,7 +521,7 @@ EXPORTED int backup_compact(const char *name,
                 const char *error = prot_error(in);
                 if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                     syslog(LOG_ERR,
-                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
+                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %i: %s",
                            name, chunk->offset, prot_bytes_in(in), error);
 
                     if (out)

@@ -737,14 +737,14 @@ int main(int argc, char **argv)
 
         sig = signals_poll();
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
-            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully\n");
+            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully");
             shut_down(0);
         }
 
         /* check for shutdown file */
         if (shutdown_file(NULL, 0)) {
             if (verbose || debugmode)
-                syslog(LOG_DEBUG, "Detected shutdown file\n");
+                syslog(LOG_DEBUG, "Detected shutdown file");
             shut_down(0);
         }
 

@@ -11958,7 +11958,7 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     r = getresult(xfer->sync_cs.backend->in, "Q01");
     if (r) syslog(LOG_ERR,
                   "Could not move mailbox: %s, " \
-                  "failed setting initial quota root\r\n",
+                  "failed setting initial quota root",
                   mboxname);
     return r;
 }

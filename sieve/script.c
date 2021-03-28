@@ -200,13 +200,13 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
 
     res = sieve_register_vacation(interpreter, &stub_vacation);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_vacation() returns %d", res);
         goto done;
     }
 
     res = sieve_register_duplicate(interpreter, &stub_duplicate);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_duplicate() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_duplicate() returns %d", res);
         goto done;
     }
 

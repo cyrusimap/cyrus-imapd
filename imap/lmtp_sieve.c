@@ -1958,7 +1958,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 
     res = sieve_register_vacation(interp, &vacation);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_vacation() returns %d", res);
         fatal("sieve_register_vacation()", EX_SOFTWARE);
     }
 
@@ -1966,7 +1966,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
         config_getduration(IMAPOPT_SIEVE_DUPLICATE_MAX_EXPIRATION, 's');
     res = sieve_register_duplicate(interp, &duplicate);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_duplicate() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_duplicate() returns %d", res);
         fatal("sieve_register_duplicate()", EX_SOFTWARE);
     }
 

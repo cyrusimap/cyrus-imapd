@@ -419,7 +419,7 @@ int service_init(int argc __attribute__((unused)),
     /* initialize duplicate delivery database */
     if (duplicate_init(NULL) != 0) {
         syslog(LOG_ERR,
-               "unable to init duplicate delivery database\n");
+               "unable to init duplicate delivery database");
         fatal("unable to init duplicate delivery database", EX_SOFTWARE);
     }
 

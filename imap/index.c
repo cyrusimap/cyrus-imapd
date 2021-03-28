@@ -1418,7 +1418,7 @@ static void prefetch_messages(struct index_state *state,
     const char *fname;
     struct index_record record;
 
-    syslog(LOG_ERR, "Prefetching initial parts of messages\n");
+    syslog(LOG_ERR, "Prefetching initial parts of messages");
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
         im = &state->map[msgno-1];

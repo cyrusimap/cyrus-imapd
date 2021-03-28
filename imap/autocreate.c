@@ -276,7 +276,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
                   O_CREAT|O_TRUNC|O_WRONLY,
                   S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (out_fd < 0 && errno != EEXIST) {
-        syslog(LOG_ERR, "autocreate_sieve: Error opening file %s :%m\n",
+        syslog(LOG_ERR, "autocreate_sieve: Error opening file %s :%m",
                script_names.bctmpname);
         goto failed_start;
     }
@@ -298,8 +298,8 @@ static int autocreate_sieve(const char *userid, const char *source_script)
                 xclose(out_fd);
                 xclose(in_fd);
             } else if (r < 0) {
-                syslog(LOG_ERR, "autocreate_sieve: Error reading"
-                       "compiled script %s: %m\n", compiled_source_script);
+                syslog(LOG_ERR, "autocreate_sieve: Error reading "
+                       "compiled script %s: %m", compiled_source_script);
                 xclose(in_fd);
                 do_compile = 1;
                 if (lseek(out_fd, 0, SEEK_SET)) {
@@ -442,7 +442,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
                       O_CREAT|O_EXCL|O_WRONLY,
                       S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
         if (out_fd < 0 && errno != EEXIST) {
-            syslog(LOG_ERR, "autocreate_sieve: Error opening file %s :%m\n",
+            syslog(LOG_ERR, "autocreate_sieve: Error opening file %s :%m",
                    script_names.tmpname2);
             xclose(in_fd);
             goto success;

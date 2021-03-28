@@ -685,7 +685,7 @@ static int _annotate_getdb(const char *mboxname,
     if (r)
         goto error;
 #if DEBUG
-    syslog(LOG_ERR, "Opening annotations db %s\n", fname);
+    syslog(LOG_ERR, "Opening annotations db %s", fname);
 #endif
 
     r = cyrusdb_open(DB, fname, dbflags | CYRUSDB_CONVERT, &db);
@@ -738,7 +738,7 @@ static void annotate_closedb(annotate_db_t *d)
     detach_db(prev, d);
 
 #if DEBUG
-    syslog(LOG_ERR, "Closing annotations db %s\n", d->filename);
+    syslog(LOG_ERR, "Closing annotations db %s", d->filename);
 #endif
 
     r = cyrusdb_close(d->db);
@@ -810,7 +810,7 @@ static void annotate_abort(annotate_db_t *d)
 
     if (d->txn) {
 #if DEBUG
-        syslog(LOG_ERR, "Aborting annotations db %s\n", d->filename);
+        syslog(LOG_ERR, "Aborting annotations db %s", d->filename);
 #endif
         cyrusdb_abort(d->db, d->txn);
     }
@@ -827,7 +827,7 @@ static int annotate_commit(annotate_db_t *d)
 
     if (d->txn) {
 #if DEBUG
-        syslog(LOG_ERR, "Committing annotations db %s\n", d->filename);
+        syslog(LOG_ERR, "Committing annotations db %s", d->filename);
 #endif
         r = cyrusdb_commit(d->db, d->txn);
         if (r)
