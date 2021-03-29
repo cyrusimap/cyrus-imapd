@@ -114,7 +114,7 @@ Security fixes
 Significant bugfixes
 ====================
 
-* Contains fix for :issue:`2839`
+* Contains fix for :issue:`2839` and :issue:`2854`.
 
 
 .. _Xapian: https://xapian.org
