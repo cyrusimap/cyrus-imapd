@@ -612,6 +612,7 @@ cunit_FRAMEWORK = \
 cunit_TESTS = \
 	cunit/aaa-db.testc \
 	cunit/annotate.testc \
+	cunit/arrayu64.testc \
 	cunit/backend.testc \
 	cunit/binhex.testc \
 	cunit/bitvector.testc \
