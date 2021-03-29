@@ -3250,18 +3250,17 @@ static int _emails_to_card(struct vparse_card *card,
         }
 
         /* Update card. */
-        buf_reset(&buf);
+        const char *group = NULL;
         if (label) {
             /* Add Apple-style label using property grouping */
-            buf_printf(&buf, "email%d.X-ABLabel", i);
-            vparse_add_entry(card, NULL, buf_cstring(&buf), label);
+            buf_reset(&buf);
+            buf_printf(&buf, "email%d", i);
+            group = buf_cstring(&buf);
 
-            buf_truncate(&buf, buf_len(&buf) - 9);
+            vparse_add_entry(card, group, "X-ABLabel", label);
         }
-        buf_appendcstr(&buf, "EMAIL");
 
-        struct vparse_entry *entry =
-            vparse_add_entry(card, NULL, buf_cstring(&buf), value);
+        struct vparse_entry *entry = vparse_add_entry(card, group, "EMAIL", value);
 
         if (!strcmpsafe(type, "personal"))
             type = "home";
@@ -3317,18 +3316,17 @@ static int _phones_to_card(struct vparse_card *card,
         }
 
         /* Update card. */
-        buf_reset(&buf);
+        const char *group = NULL;
         if (label) {
             /* Add Apple-style label using property grouping */
-            buf_printf(&buf, "tel%d.X-ABLabel", i);
-            vparse_add_entry(card, NULL, buf_cstring(&buf), label);
+            buf_reset(&buf);
+            buf_printf(&buf, "tel%d", i);
+            group = buf_cstring(&buf);
 
-            buf_truncate(&buf, buf_len(&buf) - 9);
+            vparse_add_entry(card, group, "X-ABLabel", label);
         }
-        buf_appendcstr(&buf, "TEL");
 
-        struct vparse_entry *entry =
-            vparse_add_entry(card, NULL, buf_cstring(&buf), value);
+        struct vparse_entry *entry = vparse_add_entry(card, group, "TEL", value);
 
         if (!strcmp(type, "mobile"))
             vparse_add_param(entry, "TYPE", "CELL");
@@ -3485,18 +3483,17 @@ static int _addresses_to_card(struct vparse_card *card,
         }
 
         /* Update card. */
-        buf_reset(&buf);
+        const char *group = NULL;
         if (label) {
             /* Add Apple-style label using property grouping */
-            buf_printf(&buf, "adr%d.X-ABLabel", i);
-            vparse_add_entry(card, NULL, buf_cstring(&buf), label);
+            buf_reset(&buf);
+            buf_printf(&buf, "adr%d", i);
+            group = buf_cstring(&buf);
 
-            buf_truncate(&buf, buf_len(&buf) - 9);
+            vparse_add_entry(card, group, "X-ABLabel", label);
         }
-        buf_appendcstr(&buf, "ADR");
 
-        struct vparse_entry *entry =
-            vparse_add_entry(card, NULL, buf_cstring(&buf), NULL);
+        struct vparse_entry *entry = vparse_add_entry(card, group, "ADR", NULL);
 
         if (strcmpsafe(type, "other"))
             vparse_add_param(entry, "TYPE", type);
