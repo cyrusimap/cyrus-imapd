@@ -172,7 +172,7 @@ static int calculate_language_counts(const Xapian::Database& db,
     return 0;
 }
 
-static void remove_legacy_metadata(Xapian::WritableDatabase& db)
+static void remove_legacy_metadata(Xapian::WritableDatabase& metadb, Xapian::Database& db)
 {
     const std::string prefix{XAPIAN_LANG_DOC_KEYPREFIX "."};
     for (Xapian::TermIterator key = db.metadata_keys_begin(prefix);
@@ -182,22 +182,10 @@ static void remove_legacy_metadata(Xapian::WritableDatabase& db)
         // Remove legacy keys and values.
         if ((*key).find('.') != std::string::npos ||
             (!val.empty() && !isalpha(val[0]))) {
-            db.set_metadata(*key, "");
+            metadb.set_metadata(*key, "OVERWRITE:");
         }
     }
-    for (Xapian::docid docid = 1; docid <= db.get_lastdocid(); ++docid) {
-        try {
-            Xapian::Document doc = db.get_document(docid);
-            const std::string& val = doc.get_value(SLOT_DOCLANGS);
-            // Remove legacy doclang slot values.
-            if (!val.empty() && !isalpha(val[0])) {
-                doc.remove_value(SLOT_DOCLANGS);
-            }
-        }
-        catch (Xapian::DocNotFoundError e) {
-            // ignore
-        }
-    }
+    // NOTE: we're not removing DOCLANG slot because we can't tell the compactor to remove it
 }
 
 static void write_language_counts(Xapian::WritableDatabase& db,
@@ -454,10 +442,17 @@ class CyrusMetadataCompactor : public Xapian::Compactor
                                                size_t num_tags,
                                                const std::string tags[])
         {
+            size_t i;
+            // allow overwriting of values!
+            for (i = 0; i < num_tags; i++) {
+                if (tags[i].rfind("OVERWRITE:", 0) == 0) {
+                    return tags[i].substr(10);
+                }
+            }
             if (key.rfind("cyrusid.", 0) == 0) {
                 uint8_t indexlevel = parse_indexlevel(tags[0]);
                 size_t bestpos = 0;
-                for (size_t i = 1; i < num_tags; i++) {
+                for (i = 1; i < num_tags; i++) {
                     uint8_t level = parse_indexlevel(tags[i]);
                     if (better_indexlevel(indexlevel, level) == level) {
                         indexlevel = level;
@@ -521,20 +516,68 @@ EXPORTED int xapian_compact_dbs(const char *dest, const char **sources)
             }
         }
         thispath = "(unknown path)";
+        int flags = Xapian::DB_DANGEROUS|Xapian::DB_NO_SYNC|Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS;
+        std::string metadir = std::string(dest) + ".META";
+        Xapian::WritableDatabase metadb {metadir, flags};
+
+        // set version metadata
+        std::ostringstream val;
+        for (std::set<int>::iterator it = db_versions.begin(); it != db_versions.end(); ++it) {
+            if (it != db_versions.begin()) val << ",";
+            val << *it;
+        }
+        if (db.get_metadata("cyrus.db_version").empty()) {
+            metadb.set_metadata("cyrus.db_version", val.str());
+        }
+        else {
+            metadb.set_metadata("cyrus.db_version", std::string("OVERWRITE:") + val.str());
+        }
+        if (db.get_metadata("cyrus.stem-version").empty()) {
+            metadb.set_metadata("cyrus.stem-version", "");
+        }
+        else {
+            metadb.set_metadata("cyrus.stem-version", "OVERWRITE:");
+        }
+
+        // Clean metadata
+        remove_legacy_metadata(metadb, db);
+
+        for (Xapian::TermIterator it = db.metadata_keys_begin(XAPIAN_LANG_COUNT_KEYPREFIX);
+                it != db.metadata_keys_end(XAPIAN_LANG_COUNT_KEYPREFIX); ++it) {
+            metadb.set_metadata(*it, "OVERWRITE:");
+        }
+        for (const std::pair<std::string, unsigned>& it : lang_counts) {
+            std::string key = lang_count_key(it.first);
+            if (db.get_metadata(key).empty()) {
+                metadb.set_metadata(key, std::to_string(it.second));
+            }
+            else {
+                metadb.set_metadata(key, std::string("OVERWRITE:") + std::to_string(it.second));
+            }
+        }
+
+        // add a single document with a single term so compact works.
+        // XXX - can remove when HONEY backend is safe without this
+        Xapian::Document metadoc;
+        metadoc.add_posting(std::string("XC"), 1, 1);
+        metadb.add_document(metadoc);
+
+        // commit changes
+        metadb.commit();
+
+        // and add it to the list
+        db.add_database(metadb);
 
         // Compact database.
         static CyrusMetadataCompactor comp;
         // FULLER because we never write to compression targets again.
-        db.compact(dest, Xapian::Compactor::FULLER | Xapian::DBCOMPACT_MULTIPASS, 0, comp);
-
-        Xapian::WritableDatabase newdb(dest);
-        write_db_versions(newdb, db_versions);
-
-        // Clean metadata.
-        remove_legacy_metadata(newdb);
-
-        // Reset language counts.
-        write_language_counts(newdb, lang_counts);
+        int cflags = Xapian::Compactor::FULLER | Xapian::DBCOMPACT_MULTIPASS;
+        if (config_getswitch(IMAPOPT_XAPIAN_USEHONEY))
+            cflags |= Xapian::DB_BACKEND_HONEY;
+        else
+            cflags |= Xapian::DB_BACKEND_GLASS;
+        db.compact(dest, cflags, 0, comp);
+        removedir(metadir.c_str());
     }
     catch (const Xapian::Error &err) {
         xsyslog(LOG_ERR, "IOERROR: caught exception",
@@ -2347,7 +2390,8 @@ EXPORTED int xapian_filter(const char *dest, const char **sources,
 
     try {
         /* create a destination database */
-        Xapian::WritableDatabase destdb {dest, Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS};
+        int flags = Xapian::DB_DANGEROUS|Xapian::DB_NO_SYNC|Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS;
+        Xapian::WritableDatabase destdb {dest, flags};
 
         /* With multiple databases as above, the docids are interleaved, so it
          * might be worth trying to open each source and copy its documents to
