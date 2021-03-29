@@ -1,0 +1,13 @@
+Description:
+
+Switch to using Apple-style labels on vCard ADR/TEL/EMAIL properties (via property grouping)
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
