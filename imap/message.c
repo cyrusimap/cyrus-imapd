@@ -3645,7 +3645,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     char *msubj = NULL;
     char *msubj_oldstyle = NULL;
     int i;
-    int j;
+    size_t j;
     int r = 0;
     struct mailbox *local_mailbox = NULL;
 

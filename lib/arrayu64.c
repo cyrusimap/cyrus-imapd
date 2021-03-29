@@ -74,7 +74,7 @@ EXPORTED void arrayu64_free(arrayu64_t *au)
 }
 
 #define QUANTUM     16
-static void ensure_alloc(arrayu64_t *au, int newalloc)
+static void ensure_alloc(arrayu64_t *au, size_t newalloc)
 {
     if (newalloc <= au->alloc)
         return;
@@ -97,7 +97,7 @@ static void ensure_alloc(arrayu64_t *au, int newalloc)
  */
 static inline int adjust_index_ro(const arrayu64_t *au, int idx)
 {
-    if (idx >= au->count)
+    if (idx >= 0 && (unsigned) idx >= au->count)
         return -1;
     else if (idx < 0)
         idx += au->count;
@@ -112,7 +112,7 @@ static inline int adjust_index_ro(const arrayu64_t *au, int idx)
  */
 static inline int adjust_index_rw(arrayu64_t *au, int idx, int grow)
 {
-    if (idx >= au->count) {
+    if (idx >= 0 && (unsigned) idx >= au->count) {
         /* expanding the array as a side effect @idx pointing
          * outside the current bounds, plus perhaps @grow */
         ensure_alloc(au, idx+grow);
@@ -131,7 +131,7 @@ static inline int adjust_index_rw(arrayu64_t *au, int idx, int grow)
 EXPORTED arrayu64_t *arrayu64_dup(const arrayu64_t *au)
 {
     arrayu64_t *new = arrayu64_new();
-    int i;
+    size_t i;
 
     arrayu64_truncate(new, au->count);
 
@@ -162,7 +162,7 @@ EXPORTED void arrayu64_set(arrayu64_t *au, int idx, uint64_t val)
         return;
     au->data[idx] = val;
     /* adjust the count if we just sparsely expanded the array */
-    if (idx >= au->count)
+    if ((unsigned) idx >= au->count)
         au->count = idx+1;
 }
 
@@ -171,7 +171,7 @@ EXPORTED void arrayu64_insert(arrayu64_t *au, int idx, uint64_t val)
 {
     if ((idx = adjust_index_rw(au, idx, 1)) < 0)
         return;
-    if (idx < au->count)
+    if ((unsigned) idx < au->count)
         memmove(au->data+idx+1, au->data+idx,
                 sizeof(uint64_t) * (au->count-idx));
     au->data[idx] = val;
@@ -185,7 +185,7 @@ EXPORTED uint64_t arrayu64_remove(arrayu64_t *au, int idx)
         return 0;
     val = au->data[idx];
     au->count--;
-    if (idx < au->count)
+    if ((unsigned) idx < au->count)
         memmove(au->data+idx, au->data+idx+1,
                 sizeof(uint64_t) * (au->count-idx));
     au->data[au->count] = 0;
@@ -208,7 +208,7 @@ EXPORTED int arrayu64_remove_all(arrayu64_t *au, uint64_t val)
     return count;
 }
 
-EXPORTED void arrayu64_truncate(arrayu64_t *au, int newlen)
+EXPORTED void arrayu64_truncate(arrayu64_t *au, size_t newlen)
 {
     if (newlen == au->count)
         return;
@@ -234,7 +234,7 @@ EXPORTED uint64_t arrayu64_nth(const arrayu64_t *au, int idx)
 EXPORTED uint64_t arrayu64_max(const arrayu64_t *au)
 {
     uint64_t max = 0;
-    int i;
+    size_t i;
 
     for (i = 0; i < au->count; i++) {
         if (au->data[i] > max)
@@ -264,7 +264,7 @@ EXPORTED void arrayu64_sort(arrayu64_t *au, arrayu64_cmp_fn_t *cmp)
 
 EXPORTED void arrayu64_uniq(arrayu64_t *au)
 {
-    int i;
+    size_t i;
 
     for (i = 1; i < au->count; i++) {
         if (au->data[i-1] == au->data[i])
@@ -274,7 +274,7 @@ EXPORTED void arrayu64_uniq(arrayu64_t *au)
 
 EXPORTED off_t arrayu64_find(const arrayu64_t *au, uint64_t val, off_t idx)
 {
-    int i;
+    size_t i;
 
     if ((idx = adjust_index_ro(au, idx)) < 0)
         return -1;
