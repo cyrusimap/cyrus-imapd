@@ -1,0 +1,13 @@
+Description:
+
+Extend ctl_mboxlist -d/-u to deal with all fields in mboxlist
+
+(N.B. This means uidvalidity, createdmodseq, foldermodseq, legacy_specialuse, mtime from struct mailbox_entry)
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+This change makes possible to follow the procedure for switching improved_mboxlist_sort described in docsrc/imap/developer/thoughts/improved_mboxlist_sort.rst
