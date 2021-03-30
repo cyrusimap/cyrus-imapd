@@ -94,8 +94,6 @@ CLEANFILES = \
 
 DISTCLEANFILES = \
 	com_err/et/compile_et \
-	imap/http_caldav_js.h \
-	imap/http_carddav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
 	imap/imap_err.c \
@@ -120,6 +118,8 @@ DISTCLEANFILES = \
 MAINTAINERCLEANFILES = \
 	doc/legacy/murder.png \
 	doc/legacy/netnews.png \
+	imap/http_caldav_js.h \
+	imap/http_carddav_js.h \
 	man/imapd.conf.5 \
 	man/sieveshell.1 \
 	sieve/addr.h \
@@ -1229,8 +1229,6 @@ imap_nntpd_SOURCES = \
 imap_nntpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 nodist_imap_httpd_SOURCES = \
-	imap/http_caldav_js.h \
-	imap/http_carddav_js.h \
 	imap/tz_err.c \
 	imap/tz_err.h
 
