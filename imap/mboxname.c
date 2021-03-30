@@ -818,6 +818,13 @@ EXPORTED mbname_t *mbname_from_path(const char *path)
                     }
                 }
                 strarray_free(subs);
+
+                /* If we end up at a magic user.foo.INBOX, revert to user.foo */
+                if (mbname_userid(mbname) != NULL &&
+                    strarray_size(mbname_boxes(mbname)) == 1 &&
+                    !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
+                    free(mbname_pop_boxes(mbname));
+                }
             }
         }
     }
