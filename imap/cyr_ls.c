@@ -290,7 +290,8 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
         }
     }
     else {
-        fprintf(stderr, "Invalid mailbox name\n");
+        fprintf(stderr, "Invalid mailbox name: '%s'\n",
+                mbname_extname(mbname, &cyr_ls_namespace, "cyrus"));
     }
 
     mboxlist_entry_free(&mbentry);
