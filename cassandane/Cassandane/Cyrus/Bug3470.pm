@@ -90,9 +90,14 @@ sub test_list_percent
     my $imaptalk = $self->{store}->get_client();
 
     my @inbox_flags = qw( \\HasNoChildren );
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v < 3) {
+    my @inter_flags = qw( \\HasChildren );
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3) {
         unshift @inbox_flags, qw( \\Noinferiors );
+        unshift @inter_flags, qw( \\Noselect );
+    }
+    elsif ($maj == 3 && $min < 5) {
+        unshift @inter_flags, qw( \\Noselect );
     }
 
     my $alldata = $imaptalk->list("", "%");
@@ -103,10 +108,7 @@ sub test_list_percent
             'INBOX'
           ],
           [
-            [
-              '\\Noselect',
-              '\\HasChildren'
-            ],
+            \@inter_flags,
             '/',
             '2001'
           ],
@@ -129,13 +131,16 @@ sub test_list_2011
 
     my $imaptalk = $self->{store}->get_client();
 
+    my @inter_flags = qw( \\HasChildren );
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj == 3 && $min < 5)) {
+        unshift @inter_flags, qw( \\Noselect );
+    }
+
     my $alldata = $imaptalk->list("", "2001");
     $self->assert_deep_equals($alldata, [
           [
-            [
-              '\\Noselect',
-              '\\HasChildren'
-            ],
+            \@inter_flags,
             '/',
             '2001'
           ]
