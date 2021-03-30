@@ -3827,7 +3827,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     /* Make sure method is allowed (only allowed on collections) */
     if (!(txn->req_tgt.allow & ALLOW_ACL)) {
-        txn->error.desc = "ACLs can only be set on collections\r\n";
+        txn->error.desc = "ACLs can only be set on collections";
         syslog(LOG_DEBUG, "Tried to set ACL on non-collection");
         return HTTP_NOT_ALLOWED;
     }
@@ -3861,7 +3861,7 @@ int meth_acl(struct transaction_t *txn, void *params)
     /* Parse the ACL body */
     ret = parse_xml_body(txn, &root, NULL);
     if (!ret && !root) {
-        txn->error.desc = "Missing request body\r\n";
+        txn->error.desc = "Missing request body";
         ret = HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -3900,7 +3900,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                 if (child->type == XML_ELEMENT_NODE) {
                     if (!xmlStrcmp(child->name, BAD_CAST "principal")) {
                         if (prin) {
-                            txn->error.desc = "Multiple principals in ACE\r\n";
+                            txn->error.desc = "Multiple principals in ACE";
                             ret = HTTP_BAD_REQUEST;
                             goto done;
                         }
@@ -3908,14 +3908,14 @@ int meth_acl(struct transaction_t *txn, void *params)
                         for (prin = child->children; prin &&
                              prin->type != XML_ELEMENT_NODE; prin = prin->next);
                         if (!prin) {
-                            txn->error.desc = "Empty principal in ACE\r\n";
+                            txn->error.desc = "Empty principal in ACE";
                             ret = HTTP_BAD_REQUEST;
                             goto done;
                         }
                     }
                     else if (!xmlStrcmp(child->name, BAD_CAST "grant")) {
                         if (privs) {
-                            txn->error.desc = "Multiple grant|deny in ACE\r\n";
+                            txn->error.desc = "Multiple grant|deny in ACE";
                             ret = HTTP_BAD_REQUEST;
                             goto done;
                         }
@@ -3925,7 +3925,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                     }
                     else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
                         if (privs) {
-                            txn->error.desc = "Multiple grant|deny in ACE\r\n";
+                            txn->error.desc = "Multiple grant|deny in ACE";
                             ret = HTTP_BAD_REQUEST;
                             goto done;
                         }
@@ -3941,7 +3941,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                         goto done;
                     }
                     else {
-                        txn->error.desc = "Unknown element in ACE\r\n";
+                        txn->error.desc = "Unknown element in ACE";
                         ret = HTTP_BAD_REQUEST;
                         goto done;
                     }
@@ -5583,7 +5583,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     /* Start construction of our prop response */
     if (!(root = init_xml_response("prop", NS_DAV, root, ns))) {
         ret = HTTP_SERVER_ERROR;
-        txn->error.desc = "Unable to create XML response\r\n";
+        txn->error.desc = "Unable to create XML response";
         goto done;
     }
 
@@ -5750,7 +5750,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         buf_reset(&txn->buf);
         if (!root) {
             ret = HTTP_SERVER_ERROR;
-            txn->error.desc = "Unable to create XML response\r\n";
+            txn->error.desc = "Unable to create XML response";
             mboxname_release(&namespacelock);
             goto done;
         }
@@ -6145,7 +6145,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
         depth = 0;
     }
     else {
-        txn->error.desc = "Illegal Depth value\r\n";
+        txn->error.desc = "Illegal Depth value";
         return HTTP_BAD_REQUEST;
     }
 
@@ -6502,7 +6502,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     /* Parse the PROPPATCH body */
     ret = parse_xml_body(txn, &root, NULL);
     if (!ret && !root) {
-        txn->error.desc = "Missing request body\r\n";
+        txn->error.desc = "Missing request body";
         ret = HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -6521,7 +6521,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
     /* Start construction of our multistatus response */
     if (!(root = init_xml_response("multistatus", NS_DAV, root, ns))) {
-        txn->error.desc = "Unable to create XML response\r\n";
+        txn->error.desc = "Unable to create XML response";
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -8107,7 +8107,7 @@ int meth_report(struct transaction_t *txn, void *params)
             depth = 2;
         }
         else if ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1)) {
-            txn->error.desc = "Illegal Depth value\r\n";
+            txn->error.desc = "Illegal Depth value";
             return HTTP_BAD_REQUEST;
         }
     }
@@ -8115,7 +8115,7 @@ int meth_report(struct transaction_t *txn, void *params)
     /* Parse the REPORT body */
     ret = parse_xml_body(txn, &inroot, NULL);
     if (!ret && !inroot) {
-        txn->error.desc = "Missing request body\r\n";
+        txn->error.desc = "Missing request body";
         return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -8230,7 +8230,7 @@ int meth_report(struct transaction_t *txn, void *params)
     /* Start construction of our multistatus response */
     if (report->resp_root &&
         !(outroot = init_xml_response(report->resp_root, NS_DAV, inroot, ns))) {
-        txn->error.desc = "Unable to create XML response\r\n";
+        txn->error.desc = "Unable to create XML response";
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -8471,7 +8471,7 @@ int dav_store_resource(struct transaction_t *txn,
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
         syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
-        txn->error.desc = "append_newstage() failed\r\n";
+        txn->error.desc = "append_newstage() failed";
         return HTTP_SERVER_ERROR;
     }
 
@@ -8569,7 +8569,7 @@ int dav_store_resource(struct transaction_t *txn,
         } else {
             ret = HTTP_SERVER_ERROR;
         }
-        txn->error.desc = "append_setup() failed\r\n";
+        txn->error.desc = "append_setup() failed";
     }
     else {
         struct body *body = NULL;
@@ -8596,7 +8596,7 @@ int dav_store_resource(struct transaction_t *txn,
             syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
                    mailbox->name, error_message(r));
             ret = HTTP_SERVER_ERROR;
-            txn->error.desc = "append_fromstage() failed\r\n";
+            txn->error.desc = "append_fromstage() failed";
         }
         if (body) {
             message_free_body(body);
@@ -8612,7 +8612,7 @@ int dav_store_resource(struct transaction_t *txn,
                 syslog(LOG_ERR, "append_commit(%s) failed: %s",
                        mailbox->name, error_message(r));
                 ret = HTTP_SERVER_ERROR;
-                txn->error.desc = "append_commit() failed\r\n";
+                txn->error.desc = "append_commit() failed";
             }
             else {
                 if (oldrecord) {

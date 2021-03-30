@@ -3406,7 +3406,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
 
     /* Make sure we have a body */
     if (!buf_len(&txn->req_body.payload)) {
-        txn->error.desc = "Missing request body\r\n";
+        txn->error.desc = "Missing request body";
         return HTTP_BAD_REQUEST;
     }
 

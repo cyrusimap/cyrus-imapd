@@ -3533,7 +3533,7 @@ EXPORTED void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     }
     else {
         txn->error.precond = 0;
-        txn->error.desc = "Error dumping XML tree\r\n";
+        txn->error.desc = "Error dumping XML tree";
         error_response(HTTP_SERVER_ERROR, txn);
     }
 }
