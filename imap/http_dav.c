@@ -784,7 +784,8 @@ HIDDEN int calcarddav_parse_path(const char *path,
                                           httpd_userid, httpd_authstate,
                                           NULL, NULL, 0 /* force */);
         if (ret) {
-            *resultstr = "Invalid name.  Percent encoded HTTP URLs are in theory valid, but in practice not supported.";
+            if (ret == IMAP_MAILBOX_BADNAME)
+                *resultstr = "Invalid name.  Percent encoded HTTP URLs are in theory valid, but in practice not supported.";
             goto done;
 	}
 
