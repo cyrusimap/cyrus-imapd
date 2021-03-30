@@ -196,7 +196,7 @@ sub test_good_mailboxes_virtdomains
 
     my @good_mailboxes = (
         'user.cassandane.$RACL',
-        'domain.com!user.foo',
+        'user.foo@domain.com',
     );
 
     foreach my $m (@good_mailboxes) {
