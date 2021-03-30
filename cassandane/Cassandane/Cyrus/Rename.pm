@@ -714,7 +714,7 @@ sub _dbset
 }
 
 sub test_intermediate_cleanup
-    :min_version_3_1 :NoAltNameSpace :NoAltNameSpace
+    :min_version_3_1 :max_version_3_4 :NoAltNameSpace :NoAltNameSpace
 {
     my ($self) = @_;
 
