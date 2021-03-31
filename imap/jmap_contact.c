@@ -260,6 +260,7 @@ struct cards_rock {
     struct jmap_req *req;
     struct jmap_get *get;
     struct mailbox *mailbox;
+    mbentry_t *mbentry;
     hashu64_table jmapcache;
     int rows;
 };
@@ -607,7 +608,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     int r = 0;
 
     /* Build callback data */
-    struct cards_rock rock = { NULL, req, &get, NULL /*mailbox*/,
+    struct cards_rock rock = { NULL, req, &get, NULL /*mailbox*/, NULL /*mbentry*/,
                                HASHU64_TABLE_INITIALIZER, 0 /*rows */ };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
@@ -672,6 +673,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     jmap_get_fini(&get);
     free(mboxname);
     mailbox_close(&rock.mailbox);
+    mboxlist_entry_free(&rock.mbentry);
     free_hashu64_table(&rock.jmapcache, free);
     if (db) carddav_close(db);
     return r;
@@ -2018,7 +2020,24 @@ gotvalue:
     if (jmap_wantprop(crock->get->props, "blobId")) {
         json_t *jblobid = json_null();
         struct buf blobid = BUF_INITIALIZER;
-        if (jmap_encode_rawdata_blobid('V', crock->mailbox->uniqueid, record.uid,
+        const char *uniqueid = NULL;
+
+        /* Get uniqueid of calendar mailbox */
+        if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
+            if (!crock->mbentry || strcmp(crock->mbentry->name, cdata->dav.mailbox)) {
+                mboxlist_entry_free(&crock->mbentry);
+                r = jmap_mboxlist_lookup(cdata->dav.mailbox, &crock->mbentry, NULL);
+            }
+            if (crock->mbentry) {
+                uniqueid = crock->mbentry->uniqueid;
+            }
+        }
+        else {
+            uniqueid = crock->mailbox->uniqueid;
+        }
+
+        if (uniqueid &&
+            jmap_encode_rawdata_blobid('V', uniqueid, record.uid,
                                        NULL, NULL, NULL, &blobid)) {
             jblobid = json_string(buf_cstring(&blobid));
         }
