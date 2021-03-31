@@ -1320,6 +1320,7 @@ sub test_imap_list_notes
     my $imaptalk = $self->{store}->get_client();
 
     xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.Foo") || die;
     $imaptalk->create("INBOX.Foo.Hi") || die;
     $imaptalk->create("INBOX.A") || die;
     $imaptalk->create("INBOX.Junk", "(USE (\\Junk))");
@@ -1342,6 +1343,13 @@ sub test_imap_list_notes
     ],
     '.',
     'INBOX.A',
+  ],
+  [
+    [
+      '\\HasChildren',
+    ],
+    '.',
+    'INBOX.Foo',
   ],
   [
     [
