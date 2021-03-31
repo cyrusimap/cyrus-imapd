@@ -472,7 +472,7 @@ class CyrusMetadataCompactor : public Xapian::Compactor
 };
 
 
-EXPORTED int xapian_compact_dbs(const char *dest, const char **sources)
+HIDDEN int xapian_compact_dbs(const char *dest, const char **sources)
 {
     int r = 0;
     Xapian::Database db;
@@ -673,7 +673,7 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
 
 /* For all db paths in sources that are not using the latest database
  * version or not readable, report their paths in toreindex */
-EXPORTED void xapian_check_if_needs_reindex(const strarray_t *sources,
+HIDDEN void xapian_check_if_needs_reindex(const strarray_t *sources,
                                             strarray_t *toreindex,
                                             int always_upgrade)
 {
@@ -828,7 +828,7 @@ EXPORTED void xapian_dbw_close(xapian_dbw_t *dbw)
     }
 }
 
-EXPORTED int xapian_dbw_begin_txn(xapian_dbw_t *dbw)
+HIDDEN int xapian_dbw_begin_txn(xapian_dbw_t *dbw)
 {
     int r = 0;
     try {
@@ -843,26 +843,11 @@ EXPORTED int xapian_dbw_begin_txn(xapian_dbw_t *dbw)
     return r;
 }
 
-EXPORTED int xapian_dbw_commit_txn(xapian_dbw_t *dbw)
+HIDDEN int xapian_dbw_commit_txn(xapian_dbw_t *dbw)
 {
     int r = 0;
     try {
         dbw->database->commit_transaction();
-    }
-    catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
-        r = IMAP_IOERROR;
-    }
-    return r;
-}
-
-EXPORTED int xapian_dbw_cancel_txn(xapian_dbw_t *dbw)
-{
-    int r = 0;
-    try {
-        dbw->database->cancel_transaction();
     }
     catch (const Xapian::Error &err) {
         xsyslog(LOG_ERR, "IOERROR: caught exception",
@@ -1282,7 +1267,7 @@ EXPORTED int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
     return r;
 }
 
-EXPORTED unsigned long xapian_dbw_total_length(xapian_dbw_t *dbw)
+HIDDEN unsigned long xapian_dbw_total_length(xapian_dbw_t *dbw)
 {
     unsigned long res = 0;
     try {
@@ -1296,7 +1281,7 @@ EXPORTED unsigned long xapian_dbw_total_length(xapian_dbw_t *dbw)
     return res;
 }
 
-EXPORTED uint8_t xapian_dbw_is_indexed(xapian_dbw_t *dbw,
+HIDDEN uint8_t xapian_dbw_is_indexed(xapian_dbw_t *dbw,
                                        const struct message_guid *guid,
                                        char doctype)
 {
@@ -1376,7 +1361,7 @@ static int xapian_db_init(xapian_db_t *db)
     return r;
 }
 
-EXPORTED int xapian_db_open(const char **paths, xapian_db_t **dbp)
+HIDDEN int xapian_db_open(const char **paths, xapian_db_t **dbp)
 {
     xapian_db_t *db = (xapian_db_t *)xzmalloc(sizeof(xapian_db_t));
     const char *thispath = "(unknown)";
@@ -1481,7 +1466,7 @@ EXPORTED void xapian_db_close(xapian_db_t *db)
     }
 }
 
-EXPORTED int xapian_db_langstats(xapian_db_t *db, ptrarray_t* lstats,
+HIDDEN int xapian_db_langstats(xapian_db_t *db, ptrarray_t* lstats,
                                  size_t *nolang)
 {
     std::map<const std::string, unsigned> lang_counts;
@@ -1510,7 +1495,7 @@ EXPORTED int xapian_db_langstats(xapian_db_t *db, ptrarray_t* lstats,
     return 0;
 }
 
-EXPORTED void xapian_query_add_stemmer(xapian_db_t *db, const char *iso_lang)
+HIDDEN void xapian_query_add_stemmer(xapian_db_t *db, const char *iso_lang)
 {
     if (strcmp(iso_lang, "en")) db->stem_languages->insert(iso_lang);
 }
@@ -1843,7 +1828,7 @@ static Xapian::Query *query_new_type(const xapian_db_t *db __attribute__((unused
     return new Xapian::Query(q);
 }
 
-EXPORTED Xapian::Query *
+static Xapian::Query *
 xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *str)
 {
     const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
@@ -2007,7 +1992,7 @@ xapian_query_new_matchall(const xapian_db_t *db __attribute__((unused)))
     return (xapian_query_t *) new Xapian::Query(Xapian::Query::MatchAll);
 }
 
-EXPORTED xapian_query_t *
+HIDDEN xapian_query_t *
 xapian_query_new_has_doctype(const xapian_db_t *db __attribute__((unused)),
                              char doctype, xapian_query_t *child)
 {
@@ -2120,7 +2105,7 @@ struct xapian_snipgen
     size_t max_len;
 };
 
-EXPORTED xapian_snipgen_t *
+HIDDEN xapian_snipgen_t *
 xapian_snipgen_new(xapian_db_t *db,
                    const char *hi_start,
                    const char *hi_end,
@@ -2139,7 +2124,7 @@ xapian_snipgen_new(xapian_db_t *db,
     return snipgen;
 }
 
-EXPORTED void xapian_snipgen_free(xapian_snipgen_t *snipgen)
+HIDDEN void xapian_snipgen_free(xapian_snipgen_t *snipgen)
 {
     if (!snipgen) return;
     delete snipgen->default_stemmer;
@@ -2195,7 +2180,7 @@ static Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, Xapia
     return q;
 }
 
-EXPORTED int xapian_snipgen_add_match(xapian_snipgen_t *snipgen,
+HIDDEN int xapian_snipgen_add_match(xapian_snipgen_t *snipgen,
                                       const char *match)
 {
     size_t len = strlen(match);
@@ -2217,7 +2202,7 @@ EXPORTED int xapian_snipgen_add_match(xapian_snipgen_t *snipgen,
     return 0;
 }
 
-EXPORTED int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen,
+HIDDEN int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen,
                                       const struct message_guid *guid,
                                       char doctype)
 {
@@ -2230,7 +2215,7 @@ EXPORTED int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen,
     return 0;
 }
 
-EXPORTED int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
+static int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
                                          const struct buf *part,
                                          Xapian::Stem* stemmer)
 {
@@ -2269,7 +2254,7 @@ EXPORTED int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
     return r;
 }
 
-EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
+HIDDEN int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
                                      const struct buf *part,
                                      int partnum __attribute__((unused)))
 {
@@ -2317,7 +2302,7 @@ EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
     return xapian_snipgen_make_snippet(snipgen, part, snipgen->default_stemmer);
 }
 
-EXPORTED int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
+HIDDEN int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 {
     buf_reset(buf);
     buf_copy(buf, snipgen->buf);
@@ -2338,7 +2323,7 @@ EXPORTED int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 }
 
 /* cb returns true if document should be copied, false if not */
-EXPORTED int xapian_filter(const char *dest, const char **sources,
+HIDDEN int xapian_filter(const char *dest, const char **sources,
                            int (*cb)(const char *cyrusid, void *rock),
                            void *rock)
 {
@@ -2503,11 +2488,6 @@ EXPORTED int xapian_doc_foreach_term(xapian_doc_t *doc,
         if (r) return r;
     }
     return 0;
-}
-
-EXPORTED void xapian_doc_reset(xapian_doc_t *doc)
-{
-    doc->doc->clear_values();
 }
 
 EXPORTED void xapian_doc_close(xapian_doc_t *doc)

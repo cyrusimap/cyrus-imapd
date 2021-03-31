@@ -69,7 +69,6 @@ extern int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode, in
 extern void xapian_dbw_close(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_commit_txn(xapian_dbw_t *dbw);
-extern int xapian_dbw_cancel_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
 extern int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part);
 extern int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel);
@@ -110,7 +109,6 @@ extern xapian_doc_t *xapian_doc_new(void);
 extern void xapian_doc_index_text(xapian_doc_t *doc, const char *text, size_t len);
 extern size_t xapian_doc_termcount(xapian_doc_t *doc);
 extern int xapian_doc_foreach_term(xapian_doc_t *doc, int(*cb)(const char*, void*), void *rock);
-extern void xapian_doc_reset(xapian_doc_t *doc);
 extern void xapian_doc_close(xapian_doc_t *doc);
 
 extern const char *xapian_version_string();
