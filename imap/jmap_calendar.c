@@ -1733,6 +1733,7 @@ struct getcalendarevents_rock {
     struct jmap_req *req;
     struct jmap_get *get;
     struct mailbox *mailbox;
+    mbentry_t *mbentry;
     hashu64_table jmapcache;
     ptrarray_t *want_eventids;
     int check_acl;
@@ -2013,29 +2014,46 @@ gotevent:
         json_object_set_new(jsevent, "calendarId",
                             json_string(strrchr(cdata->dav.mailbox, '.')+1));
     }
-    if (jmap_wantprop(rock->get->props, "blobId")) {
-        json_t *jblobid = json_null();
+
+    unsigned want_blobId = jmap_wantprop(rock->get->props, "blobId");
+    unsigned want_debugBlobId = jmap_wantprop(rock->get->props, "debugBlobId");
+    if (want_blobId || want_debugBlobId) {
         struct buf blobid = BUF_INITIALIZER;
-        if (jmap_encode_rawdata_blobid('I', rock->mailbox->uniqueid,
-                                       cdata->dav.imap_uid, req->userid,
-                                       NULL, NULL, &blobid)) {
-            jblobid = json_string(buf_cstring(&blobid));
+        const char *uniqueid;
+
+        /* Get uniqueid of calendar mailbox */
+        if (!rock->mailbox || strcmp(rock->mailbox->name, cdata->dav.mailbox)) {
+            if (!rock->mbentry || strcmp(rock->mbentry->name, cdata->dav.mailbox)) {
+                mboxlist_entry_free(&rock->mbentry);
+                r = jmap_mboxlist_lookup(cdata->dav.mailbox, &rock->mbentry, NULL);
+                if (r) goto done;
+            }
+            uniqueid = rock->mbentry->uniqueid;
         }
-        buf_free(&blobid);
-        json_object_set_new(jsevent, "blobId", jblobid);
-    }
-    if (jmap_wantprop(rock->get->props, "debugBlobId")) {
-        json_t *jblobid = json_null();
-        if (httpd_userisadmin) {
-            struct buf blobid = BUF_INITIALIZER;
-            if (jmap_encode_rawdata_blobid('I', rock->mailbox->uniqueid,
-                                           cdata->dav.imap_uid, NULL,
-                                           NULL, NULL, &blobid)) {
+        else {
+            uniqueid = rock->mailbox->uniqueid;
+        }
+
+        if (want_blobId) {
+            json_t *jblobid = json_null();
+            if (jmap_encode_rawdata_blobid('I', uniqueid, cdata->dav.imap_uid,
+                                           req->userid, NULL, NULL, &blobid)) {
                 jblobid = json_string(buf_cstring(&blobid));
             }
-            buf_free(&blobid);
+            json_object_set_new(jsevent, "blobId", jblobid);
         }
-        json_object_set_new(jsevent, "debugBlobId", jblobid);
+        if (want_debugBlobId) {
+            json_t *jblobid = json_null();
+            if (httpd_userisadmin) {
+                if (jmap_encode_rawdata_blobid('I', uniqueid, cdata->dav.imap_uid,
+                                               NULL, NULL, NULL, &blobid)) {
+                    jblobid = json_string(buf_cstring(&blobid));
+                }
+            }
+            json_object_set_new(jsevent, "debugBlobId", jblobid);
+        }
+
+        buf_free(&blobid);
     }
 
     if (rock->want_eventids == NULL) {
@@ -2303,6 +2321,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     struct getcalendarevents_rock rock = { NULL /* db */,
                                            req, &get,
                                            NULL /* mbox */,
+                                           NULL /* mbentry */,
                                            HASHU64_TABLE_INITIALIZER, /* cache */
                                            NULL, /* want_eventids */
                                            checkacl };
@@ -2403,6 +2422,7 @@ done:
     jmap_get_fini(&get);
     if (db) caldav_close(db);
     if (rock.mailbox) jmap_closembox(req, &rock.mailbox);
+    if (rock.mbentry) mboxlist_entry_free(&rock.mbentry);
     free_hashu64_table(&rock.jmapcache, free);
     return r;
 }
