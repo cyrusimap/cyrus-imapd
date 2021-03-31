@@ -6648,6 +6648,15 @@ sub test_calendarevent_blobid
             properties => ['blobId'],
         }, 'R1']
     ]);
+
+    # fetch a second time to make sure this works with a cached response
+    $res = $otherJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'other',
+            ids => [$eventId],
+            properties => ['blobId'],
+        }, 'R1']
+    ]);
     my $otherBlobId = $res->[0][1]{list}[0]{blobId};
     $self->assert_not_null($otherBlobId);
 
