@@ -2019,16 +2019,17 @@ gotevent:
     unsigned want_debugBlobId = jmap_wantprop(rock->get->props, "debugBlobId");
     if (want_blobId || want_debugBlobId) {
         struct buf blobid = BUF_INITIALIZER;
-        const char *uniqueid;
+        const char *uniqueid = NULL;
 
         /* Get uniqueid of calendar mailbox */
         if (!rock->mailbox || strcmp(rock->mailbox->name, cdata->dav.mailbox)) {
             if (!rock->mbentry || strcmp(rock->mbentry->name, cdata->dav.mailbox)) {
                 mboxlist_entry_free(&rock->mbentry);
                 r = jmap_mboxlist_lookup(cdata->dav.mailbox, &rock->mbentry, NULL);
-                if (r) goto done;
             }
-            uniqueid = rock->mbentry->uniqueid;
+            if (rock->mbentry) {
+                uniqueid = rock->mbentry->uniqueid;
+            }
         }
         else {
             uniqueid = rock->mailbox->uniqueid;
@@ -2036,7 +2037,8 @@ gotevent:
 
         if (want_blobId) {
             json_t *jblobid = json_null();
-            if (jmap_encode_rawdata_blobid('I', uniqueid, cdata->dav.imap_uid,
+            if (uniqueid &&
+                jmap_encode_rawdata_blobid('I', uniqueid, cdata->dav.imap_uid,
                                            req->userid, NULL, NULL, &blobid)) {
                 jblobid = json_string(buf_cstring(&blobid));
             }
@@ -2045,7 +2047,8 @@ gotevent:
         if (want_debugBlobId) {
             json_t *jblobid = json_null();
             if (httpd_userisadmin) {
-                if (jmap_encode_rawdata_blobid('I', uniqueid, cdata->dav.imap_uid,
+                if (uniqueid &&
+                    jmap_encode_rawdata_blobid('I', uniqueid, cdata->dav.imap_uid,
                                                NULL, NULL, NULL, &blobid)) {
                     jblobid = json_string(buf_cstring(&blobid));
                 }
