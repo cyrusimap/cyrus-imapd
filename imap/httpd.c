@@ -3658,9 +3658,8 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
 
             /* 5xx codes */
         case HTTP_SERVER_ERROR:
-            if (!txn->error.desc)
-                txn->error.desc =
-                    "The server encountered an internal error.";
+            txn->error.desc =
+                "The server encountered an internal error.";
             break;
 
         case HTTP_NOT_IMPLEMENTED:
