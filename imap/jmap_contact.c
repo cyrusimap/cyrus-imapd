@@ -1483,6 +1483,15 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     struct buf buf = BUF_INITIALIZER;
     struct vparse_entry *entry;
 
+    /* Fetch any Apple-style labels */
+    hash_table labels = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&labels, 10, 0);
+    for (entry = card->properties; entry; entry = entry->next) {
+        if (!strcasecmp(entry->name, "X-ABLabel")) {
+            hash_insert(entry->group, entry->v.value, &labels);
+        }
+    }
+
     const strarray_t *n = vparse_multival(card, "n");
     const strarray_t *org = vparse_multival(card, "org");
     if (!n) n = empty ? empty : (empty = strarray_new());
@@ -1538,6 +1547,9 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         const struct vparse_param *param;
         const char *type = "other";
         const char *label = NULL;
+        if (entry->group) {
+            label = hash_lookup(entry->group, &labels);
+        }
         for (param = entry->params; param; param = param->next) {
             if (!strcasecmp(param->name, "type")) {
                 if (!strcasecmp(param->value, "home")) {
@@ -1603,6 +1615,9 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         const struct vparse_param *param;
         const char *type = "other";
         const char *label = NULL;
+        if (entry->group) {
+            label = hash_lookup(entry->group, &labels);
+        }
         for (param = entry->params; param; param = param->next) {
             if (!strcasecmp(param->name, "type")) {
                 if (!strcasecmp(param->value, "home")) {
@@ -1649,6 +1664,9 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         const struct vparse_param *param;
         const char *type = "other";
         const char *label = NULL;
+        if (entry->group) {
+            label = hash_lookup(entry->group, &labels);
+        }
         for (param = entry->params; param; param = param->next) {
             if (!strcasecmp(param->name, "type")) {
                 if (!strcasecmp(param->value, "home")) {
@@ -1813,6 +1831,8 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
     buf_free(&buf);
     if (empty) strarray_free(empty);
+
+    free_hash_table(&labels, NULL);
 
     return obj;
 }
@@ -3230,16 +3250,22 @@ static int _emails_to_card(struct vparse_card *card,
         }
 
         /* Update card. */
-        struct vparse_entry *entry =
-            vparse_add_entry(card, NULL, "EMAIL", value);
+        const char *group = NULL;
+        if (label) {
+            /* Add Apple-style label using property grouping */
+            buf_reset(&buf);
+            buf_printf(&buf, "email%d", i);
+            group = buf_cstring(&buf);
+
+            vparse_add_entry(card, group, "X-ABLabel", label);
+        }
+
+        struct vparse_entry *entry = vparse_add_entry(card, group, "EMAIL", value);
 
         if (!strcmpsafe(type, "personal"))
             type = "home";
         if (strcmpsafe(type, "other"))
             vparse_add_param(entry, "TYPE", type);
-
-        if (label)
-            vparse_add_param(entry, "LABEL", label);
 
         if (jisDefault && json_is_true(jisDefault))
             vparse_add_param(entry, "TYPE", "pref");
@@ -3290,15 +3316,22 @@ static int _phones_to_card(struct vparse_card *card,
         }
 
         /* Update card. */
-        struct vparse_entry *entry = vparse_add_entry(card, NULL, "TEL", value);
+        const char *group = NULL;
+        if (label) {
+            /* Add Apple-style label using property grouping */
+            buf_reset(&buf);
+            buf_printf(&buf, "tel%d", i);
+            group = buf_cstring(&buf);
+
+            vparse_add_entry(card, group, "X-ABLabel", label);
+        }
+
+        struct vparse_entry *entry = vparse_add_entry(card, group, "TEL", value);
 
         if (!strcmp(type, "mobile"))
             vparse_add_param(entry, "TYPE", "CELL");
         else if (strcmp(type, "other"))
             vparse_add_param(entry, "TYPE", type);
-
-        if (label)
-            vparse_add_param(entry, "LABEL", label);
 
         buf_reset(&buf);
     }
@@ -3450,13 +3483,20 @@ static int _addresses_to_card(struct vparse_card *card,
         }
 
         /* Update card. */
-        struct vparse_entry *entry = vparse_add_entry(card, NULL, "ADR", NULL);
+        const char *group = NULL;
+        if (label) {
+            /* Add Apple-style label using property grouping */
+            buf_reset(&buf);
+            buf_printf(&buf, "adr%d", i);
+            group = buf_cstring(&buf);
+
+            vparse_add_entry(card, group, "X-ABLabel", label);
+        }
+
+        struct vparse_entry *entry = vparse_add_entry(card, group, "ADR", NULL);
 
         if (strcmpsafe(type, "other"))
             vparse_add_param(entry, "TYPE", type);
-
-        if (label)
-            vparse_add_param(entry, "LABEL", label);
 
         entry->multivaluesep = ';';
         entry->v.values = strarray_new();
