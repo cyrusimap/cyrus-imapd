@@ -58,11 +58,13 @@
 #include "caldav_alarm.h"
 #include "cyrusdb.h"
 #include "dav_db.h"
-#include "imap_err.h"
 #include "global.h"
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define CMD_CREATE_CAL                                                  \
     "CREATE TABLE IF NOT EXISTS ical_objs ("                            \
