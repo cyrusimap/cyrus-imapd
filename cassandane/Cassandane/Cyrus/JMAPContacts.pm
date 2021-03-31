@@ -3291,6 +3291,14 @@ sub test_contact_blobid
             properties => ['blobId'],
         }, 'R2']
     ]);
+
+    # fetch a second time to make sure this works with a cached response
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            ids => [$contactId],
+            properties => ['blobId'],
+        }, 'R2']
+    ]);
     my $blobId = $res->[0][1]{list}[0]{blobId};
     $self->assert_not_null($blobId);
 
