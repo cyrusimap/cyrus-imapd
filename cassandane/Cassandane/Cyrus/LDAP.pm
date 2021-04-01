@@ -308,16 +308,20 @@ sub do_test_list_order
     # ... which is not the order we created them ;)
     # Also, the "order-o" folders are not returned, because cassandane
     # is not a member of that group
-    $self->assert_deep_equals(\@boxes, [qw(
+    my @expect = qw(
         INBOX
         INBOX.aaa
         INBOX.zzz
         user.otheruser.order-c
         user.otheruser.order-co
         user.otheruser.order-user
-        shared.order-c
-        shared.order-co
-    )]);
+    );
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min > 4)) {
+        push @expect, qw(shared);
+    }
+    push @expect, qw( shared.order-c shared.order-co );
+    $self->assert_deep_equals(\@boxes, \@expect);
 }
 
 sub test_list_order_noracl
