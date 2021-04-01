@@ -2264,6 +2264,21 @@ sub test_contact_set_avatar_singlecommand
     $self->assert_str_equals($id, $res->[2][1]{list}[0]{id});
     $self->assert_deep_equals($contact->{avatar}, $res->[2][1]{list}[0]{avatar});
     $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{"x-hasPhoto"});
+
+    xlog $self, "remove avatar";
+    $res = $jmap->CallMethods([
+        ['Contact/set', {update => {$id => {avatar => JSON::null} }}, "R1"],
+        ['Contact/get', {}, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    $self->assert_str_equals('Contact/get', $res->[1][0]);
+    $self->assert_str_equals('R2', $res->[1][2]);
+    $self->assert_str_equals($id, $res->[1][1]{list}[0]{id});
+    $self->assert_null($res->[1][1]{list}[0]{avatar});
+    $self->assert_equals(JSON::false, $res->[1][1]{list}[0]{"x-hasPhoto"});
 }
 
 sub test_contact_set_avatar_from_deleted_contact
