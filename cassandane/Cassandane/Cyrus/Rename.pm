@@ -635,8 +635,8 @@ sub test_rename_paths
     -f "$basedir/data/user/cassandane/rename-dst/sub/1." || die;
 
     # and src don't
-    -d "$basedir/data/user/cassandane/rename-src" && die;
-    -d "$basedir/meta/user/cassandane/rename-src" && die;
+    -d "$basedir/data/user/cassandane/rename-src/sub" && die;
+    -d "$basedir/meta/user/cassandane/rename-src/sub" && die;
 }
 
 sub test_rename_deepuser_unixhs
@@ -714,7 +714,7 @@ sub _dbset
 }
 
 sub test_intermediate_cleanup
-    :min_version_3_1 :NoAltNameSpace :NoAltNameSpace
+    :min_version_3_1 :max_version_3_4 :NoAltNameSpace :NoAltNameSpace
 {
     my ($self) = @_;
 

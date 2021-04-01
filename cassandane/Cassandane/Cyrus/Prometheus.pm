@@ -346,10 +346,16 @@ sub test_shared_mailbox_namespaces
     my $report = parse_report($response->{content});
     $self->assert(scalar keys %{$report});
 
-    # expect to find 4 folders on each of 'foo' and 'bar' namespaces
-    $self->assert_equals(4, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="bar"'}->{value});
+    my $num_folders = 4;
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min > 4)) {
+        $num_folders = 7;
+    }
 
-    $self->assert_equals(4, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="foo"'}->{value});
+    # expect to find $num_folders folders on each of 'foo' and 'bar' namespaces
+    $self->assert_equals($num_folders, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="bar"'}->{value});
+
+    $self->assert_equals($num_folders, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="foo"'}->{value});
 }
 
 sub slowtest_50000_users
