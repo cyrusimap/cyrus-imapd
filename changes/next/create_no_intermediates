@@ -1,0 +1,16 @@
+
+Description:
+
+All members of a newly created mailbox hierarchy will now be selectable mailboxes.
+In other words, when creating mailbox user.foo.A.B.C, both user.foo.A and
+user.foo.A.B will also be created as real mailboxes.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
