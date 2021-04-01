@@ -3856,6 +3856,10 @@ static int _json_to_card(struct jmap_req *req,
                 }
                 record_is_dirty = 1;
             }
+            else if (vparse_get_entry(card, NULL, "PHOTO")) {
+                vparse_delete_entries(card, NULL, "PHOTO");
+                record_is_dirty = 1;
+            }
         }
         else if (!strcmp(key, "prefix")) {
             const char *val = json_string_value(jval);
