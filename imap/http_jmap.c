@@ -607,6 +607,38 @@ static int jmap_download(struct transaction_t *txn)
     return res;
 }
 
+static int sharedrights_cb(struct findall_data *data, void *vrock)
+{
+    if (!data || !data->mbentry) {
+        return 0;
+    }
+
+    int *rights = (int *) vrock;
+
+    *rights |= httpd_myrights(httpd_authstate, data->mbentry);
+
+    if (*rights & JACL_ADDITEMS) {
+        /* one writable mailbox is enough to short-circuit the search */
+        return CYRUSDB_DONE;
+    }
+    
+    return 0;
+}
+
+/* See if this account has shared any mailbox with the authenticated user */
+HIDDEN int jmap_has_shared_rights(const char *accountid)
+{
+    mbname_t *mbname = mbname_from_userid(accountid);
+    int rights = 0;
+
+    mbname_push_boxes(mbname, "*");
+    mboxlist_findall(&jmap_namespace, mbname_intname(mbname), 0,
+                     httpd_userid, httpd_authstate, sharedrights_cb, &rights);
+    mbname_free(&mbname);
+
+    return rights;
+}
+
 static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
 {
     mbname_t *mbname;
@@ -642,10 +674,12 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
             goto done;
         }
 
-        int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_CREATE)) {
-            r = IMAP_PERMISSION_DENIED;
-            goto done;
+        if (!strcmp(accountid, httpd_userid)) {
+            int rights = httpd_myrights(httpd_authstate, *mbentry);
+            if (!(rights & ACL_CREATE)) {
+                r = IMAP_PERMISSION_DENIED;
+                goto done;
+            }
         }
 
         if (*mbentry) free((*mbentry)->name);
@@ -677,7 +711,14 @@ static int _create_upload_collection(const char *accountid,
         goto done;
     }
     else if (r == IMAP_PERMISSION_DENIED) {
-        goto done;
+        if (jmap_has_shared_rights(accountid) & JACL_ADDITEMS) {
+            /* add rights for the sharee */
+            char rightstr[100];
+            cyrus_acl_masktostr(JACL_READITEMS | JACL_WRITE, rightstr);
+            r = mboxlist_setacl(&jmap_namespace, mbentry->name, httpd_userid,
+                                rightstr, 1, httpd_userid, httpd_authstate);
+        }
+        if (r) goto done;
     }
     else if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (!mbentry) goto done;
@@ -685,6 +726,16 @@ static int _create_upload_collection(const char *accountid,
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
                              &backend_cached, NULL, NULL, httpd_in);
             goto done;
+        }
+
+        int is_shared = 0;
+        if (strcmp(accountid, httpd_userid)) {
+            if (!(jmap_has_shared_rights(accountid) & JACL_ADDITEMS)) {
+                r = IMAP_PERMISSION_DENIED;
+                goto done;
+            }
+
+            is_shared = 1;
         }
 
         r = mboxlist_createmailbox(mbentry->name, MBTYPE_COLLECTION,
@@ -696,6 +747,30 @@ static int _create_upload_collection(const char *accountid,
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                         mbentry->name, error_message(r));
+            }
+            else if (is_shared) {
+                /* add rights for the sharee */
+                char *newacl = xstrdup((*mailbox)->acl);
+
+                cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
+                              JACL_READITEMS | JACL_WRITE, NULL, NULL);
+
+                /* ok, change the mailboxes database */
+                r = mboxlist_sync_setacls(mbentry->name, newacl,
+                                          mailbox_modseq_dirty(*mailbox));
+                if (r) {
+                    syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+                           mbentry->name, error_message(r));
+                }
+                else {
+                    /* ok, change the backup in cyrus.header */
+                    r = mailbox_set_acl(*mailbox, newacl);
+                    if (r) {
+                        syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
+                               mbentry->name, error_message(r));
+                    }
+                }
+                free(newacl);
             }
             goto done;
         }
