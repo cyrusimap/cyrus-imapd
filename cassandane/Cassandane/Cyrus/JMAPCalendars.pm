@@ -470,6 +470,9 @@ sub test_calendar_set_sharewith
 {
     my ($self) = @_;
 
+    # need to version-gate jmap features that aren't in 3.5...
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
     my $jmap = $self->{jmap};
     my $admintalk = $self->{adminstore}->get_client();
 
@@ -489,7 +492,7 @@ sub test_calendar_set_sharewith
     );
 
     $admintalk->setacl("user.master", admin => 'lrswipkxtecdan');
-    $admintalk->setacl("user.master", manifold => 'lrswipkxtecdn');
+    $admintalk->setacl("user.master", master => 'lrswipkxtecdn');
 
     xlog $self, "create calendar";
     my $CalendarId = $mastalk->NewCalendar({name => 'Shared Calendar'});
@@ -588,6 +591,15 @@ sub test_calendar_set_sharewith
     $Name = $partalk->GetProps('/dav/principals/user/master', 'D:displayname');
     $self->assert_str_equals('master', $Name);
 
+    if ($maj > 3 || ($maj == 3 && $min >= 4)) {
+        xlog $self, "check ACL on JMAP upload folder";
+        $acl = $admintalk->getacl("user.master.#jmap");
+        %map = @$acl;
+        $self->assert_str_equals('lrswitedn', $map{cassandane});
+        $self->assert_str_equals('lrs', $map{manifold});
+        $self->assert_str_equals('lrswitedn', $map{paraphrase});
+    }
+
     xlog $self, "Clear initial syslog";
     $self->{instance}->getsyslog();
 
@@ -604,6 +616,15 @@ sub test_calendar_set_sharewith
         my @lines = $self->{instance}->getsyslog();
         $self->assert_matches(qr/manifold\.\#notifications/, "@lines");
         $self->assert((not grep { /paraphrase\.\#notifications/ } @lines), Data::Dumper::Dumper(\@lines));
+    }
+
+    if ($maj > 3 || ($maj == 3 && $min >= 4)) {
+        xlog $self, "check ACL on JMAP upload folder";
+        $acl = $admintalk->getacl("user.master.#jmap");
+        %map = @$acl;
+        $self->assert_str_equals('lrswitedn', $map{cassandane});
+        $self->assert_str_equals('lrswitedn', $map{manifold});
+        $self->assert_str_equals('lrswitedn', $map{paraphrase});
     }
 
     xlog $self, "Remove the access for manifold";
@@ -646,6 +667,15 @@ sub test_calendar_set_sharewith
     my $error = $@;
     $self->assert_null($Name);
     $self->assert_matches(qr/403 Forbidden/, $error);
+
+    if ($maj > 3 || ($maj == 3 && $min >= 4)) {
+        xlog $self, "check ACL on JMAP upload folder";
+        $acl = $admintalk->getacl("user.master.#jmap");
+        %map = @$acl;
+        $self->assert_str_equals('lrswitedn', $map{cassandane});
+        $self->assert_str_equals('lrswitedn', $map{manifold});
+        $self->assert_str_equals('lr', $map{paraphrase});
+    }
 }
 
 sub test_calendar_set_issubscribed
