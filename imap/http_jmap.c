@@ -611,9 +611,15 @@ static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
 {
     int *rights = (int *) vrock;
 
-    *rights |= httpd_myrights(httpd_authstate, mbentry);
+    /* skip any special use folders */
+    if (mbentry->mbtype &&
+        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+        return 0;
+    }
 
-    if (*rights & JACL_ADDITEMS) {
+    *rights |= (httpd_myrights(httpd_authstate, mbentry) & JACL_ADDITEMS);
+
+    if (*rights) {
         /* one writable mailbox is enough to short-circuit the search */
         return CYRUSDB_DONE;
     }
@@ -622,7 +628,7 @@ static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
 }
 
 /* See if this account has shared any mailbox with the authenticated user */
-static int has_shared_rights(const char *accountid)
+static int has_shared_rw_rights(const char *accountid)
 {
     int rights = 0;
 
@@ -703,7 +709,7 @@ static int _create_upload_collection(const char *accountid,
         goto done;
     }
     else if (r == IMAP_PERMISSION_DENIED) {
-        if (has_shared_rights(accountid) & JACL_ADDITEMS) {
+        if (has_shared_rw_rights(accountid)) {
             /* add rights for the sharee */
             char rightstr[100];
             cyrus_acl_masktostr(JACL_READITEMS | JACL_WRITE, rightstr);
@@ -722,7 +728,7 @@ static int _create_upload_collection(const char *accountid,
 
         int is_shared = 0;
         if (strcmp(accountid, httpd_userid)) {
-            if (!(has_shared_rights(accountid) & JACL_ADDITEMS)) {
+            if (!(has_shared_rw_rights(accountid))) {
                 r = IMAP_PERMISSION_DENIED;
                 goto done;
             }
