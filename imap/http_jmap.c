@@ -625,15 +625,11 @@ static int jmap_download(struct transaction_t *txn)
     return res;
 }
 
-static int sharedrights_cb(struct findall_data *data, void *vrock)
+static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
 {
-    if (!data || !data->mbentry) {
-        return 0;
-    }
-
     int *rights = (int *) vrock;
 
-    *rights |= httpd_myrights(httpd_authstate, data->mbentry);
+    *rights |= httpd_myrights(httpd_authstate, mbentry);
 
     if (*rights & JACL_ADDITEMS) {
         /* one writable mailbox is enough to short-circuit the search */
@@ -644,15 +640,11 @@ static int sharedrights_cb(struct findall_data *data, void *vrock)
 }
 
 /* See if this account has shared any mailbox with the authenticated user */
-HIDDEN int jmap_has_shared_rights(const char *accountid)
+static int has_shared_rights(const char *accountid)
 {
-    mbname_t *mbname = mbname_from_userid(accountid);
     int rights = 0;
 
-    mbname_push_boxes(mbname, "*");
-    mboxlist_findall(&jmap_namespace, mbname_intname(mbname), 0,
-                     httpd_userid, httpd_authstate, sharedrights_cb, &rights);
-    mbname_free(&mbname);
+    mboxlist_usermboxtree(accountid, NULL, &sharedrights_cb, &rights, 0);
 
     return rights;
 }
@@ -729,7 +721,7 @@ static int _create_upload_collection(const char *accountid,
         goto done;
     }
     else if (r == IMAP_PERMISSION_DENIED) {
-        if (jmap_has_shared_rights(accountid) & JACL_ADDITEMS) {
+        if (has_shared_rights(accountid) & JACL_ADDITEMS) {
             /* add rights for the sharee */
             char rightstr[100];
             cyrus_acl_masktostr(JACL_READITEMS | JACL_WRITE, rightstr);
@@ -748,7 +740,7 @@ static int _create_upload_collection(const char *accountid,
 
         int is_shared = 0;
         if (strcmp(accountid, httpd_userid)) {
-            if (!(jmap_has_shared_rights(accountid) & JACL_ADDITEMS)) {
+            if (!(has_shared_rights(accountid) & JACL_ADDITEMS)) {
                 r = IMAP_PERMISSION_DENIED;
                 goto done;
             }
