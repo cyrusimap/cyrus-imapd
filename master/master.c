@@ -1067,7 +1067,14 @@ static void reap_child(void)
     struct service *s;
     int failed;
 
-    while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > 0) {
+    while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > -1) {
+        if (pid == 0) {
+            if (errno == EINTR) {
+                errno = 0;
+                continue;
+            }
+            break;
+        }
 
         /* account for the child */
         c = centry_find(pid);
