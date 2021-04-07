@@ -717,6 +717,49 @@ sub test_multi_flags_acl
     }
 }
 
+sub test_explicit_store_acl
+    :NoAltNamespace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    # add a message
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    # set some flags on it
+    $talk->store('1', '+flags', '(\\Deleted \\Seen)');
+    $msg{A}->set_attribute(flags => [ '\\Deleted', '\\Seen' ]);
+    $self->check_messages(\%msg);
+
+    # remove 't' right from user
+    my %acl = @{ $admintalk->getacl('user.cassandane') };
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+    xlog "acl: " . Dumper \%acl;
+    $self->assert_not_null($acl{'cassandane'});
+    $acl{'cassandane'} =~ s/t//g;
+    $admintalk->setacl("user.cassandane", "cassandane", $acl{'cassandane'});
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+
+    # try to set flags to a new set not containing \Deleted or \Seen.
+    # \Seen should be removed, but \Deleted must not be
+    $talk->unselect();
+    $talk->select('INBOX');
+    $talk->store('1', 'flags', '(\\Flagged)');
+    $msg{A}->set_attribute(flags => [ '\\Flagged', '\\Deleted' ]);
+    $self->check_messages(\%msg);
+}
+
 # Get the modseq of a given returned message
 sub get_modseq
 {
