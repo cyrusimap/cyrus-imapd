@@ -7749,15 +7749,13 @@ static void _mime_write_xparam(struct buf *buf, const char *name, const char *va
 
     /* Break value into continuations */
     int section = 0;
-    p = xvalue;
     struct buf line = BUF_INITIALIZER;
-    buf_appendcstr(&line, ";\r\n ");
-    while (*p) {
+    for (p = xvalue; *p; section++) {
         /* Build parameter continuation line. */
-        buf_printf(&line, "%s*%d*=", name, section);
+        buf_setcstr(&line, ";\r\n ");
+        buf_printf(&line, "%s*%d", name, section);
+        buf_appendcstr(&line, is_qstring ? "=\"" : "*=");
         /* Write at least one character of the value */
-        if (is_qstring)
-            buf_putc(&line, '"');
         int n = buf_len(&line) + 1;
         do {
             buf_putc(&line, *p);
@@ -7770,10 +7768,6 @@ static void _mime_write_xparam(struct buf *buf, const char *name, const char *va
             buf_putc(&line, '"');
         /* Write line */
         buf_append(buf, &line);
-        /* Prepare next iteration */
-        if (*p) buf_appendcstr(buf, ";\r\n ");
-        buf_reset(&line);
-        section++;
     }
     buf_free(&line);
 
