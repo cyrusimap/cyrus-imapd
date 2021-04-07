@@ -72,7 +72,7 @@ EXPORTED void bufarray_fini(bufarray_t *ba)
 
 EXPORTED void bufarray_free(bufarray_t **ba)
 {
-    if (!*ba)
+    if (!ba || !*ba)
         return;
     bufarray_fini(*ba);
     free(*ba);
@@ -101,6 +101,7 @@ EXPORTED bufarray_t *bufarray_dup(const bufarray_t *ba)
 
     bufarray_truncate(new, ba->count);
     for (i = 0 ; i < ba->count ; i++) {
+        new->items[i] = buf_new();
         buf_setmap(new->items[i], ba->items[i]->s, ba->items[i]->len);
     }
 
