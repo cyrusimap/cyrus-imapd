@@ -617,6 +617,7 @@ cunit_TESTS = \
 	cunit/binhex.testc \
 	cunit/bitvector.testc \
 	cunit/buf.testc \
+	cunit/bufarray.testc \
 	cunit/byteorder.testc \
 	cunit/charset.testc \
 	cunit/command.testc \
