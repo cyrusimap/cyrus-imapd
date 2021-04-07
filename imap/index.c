@@ -1261,13 +1261,60 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     struct index_modified_flags modified_flags;
     struct index_record record;
 
-    /* First pass at checking permission */
-    if ((storeargs->seen && !(state->myrights & ACL_SETSEEN)) ||
-        ((storeargs->system_flags & FLAG_DELETED) &&
-         !(state->myrights & ACL_DELETEMSG)) ||
-        (((storeargs->system_flags & ~FLAG_DELETED) || flags->count) &&
-         !(state->myrights & ACL_WRITE))) {
-        return IMAP_PERMISSION_DENIED;
+    if (storeargs->operation == STORE_ADD_FLAGS
+        || storeargs->operation == STORE_REMOVE_FLAGS)
+    {
+        int did_limit_flags = 0;
+
+        /* Quoth RFC 4314:
+        *  STORE operation SHOULD NOT fail if the user has rights to modify
+        *  at least one flag specified in the STORE, as the tagged NO
+        *  response to a STORE command is not handled very well by deployed
+        *  clients.
+        */
+        if (storeargs->seen && !(state->myrights & ACL_SETSEEN)) {
+            syslog(LOG_DEBUG, "%s: no permission to alter \\Seen, removing from set",
+                            __func__);
+            storeargs->seen = 0;
+            did_limit_flags = 1;
+        }
+
+        if ((storeargs->system_flags & FLAG_DELETED)
+            && !(state->myrights & ACL_DELETEMSG))
+        {
+            syslog(LOG_DEBUG, "%s: no permission to alter \\Deleted, removing from set",
+                            __func__);
+            storeargs->system_flags &= ~FLAG_DELETED;
+            did_limit_flags = 1;
+        }
+
+        if (((storeargs->system_flags & ~FLAG_DELETED) || flags->count)
+            && !(state->myrights & ACL_WRITE))
+        {
+            syslog(LOG_DEBUG, "%s: no permission to alter other flags, removing from set",
+                            __func__);
+            storeargs->system_flags &= FLAG_DELETED; /* turn off everything BUT deleted */
+            strarray_truncate(&storeargs->flags, 0);
+            did_limit_flags = 1;
+        }
+
+        if (did_limit_flags
+            && !storeargs->seen
+            && !storeargs->system_flags
+            && !flags->count)
+        {
+            syslog(LOG_DEBUG, "%s: no permitted flags left, rejecting", __func__);
+            return IMAP_PERMISSION_DENIED;
+        }
+    }
+    else {
+        if ((storeargs->seen && !(state->myrights & ACL_SETSEEN)) ||
+            ((storeargs->system_flags & FLAG_DELETED) &&
+            !(state->myrights & ACL_DELETEMSG)) ||
+            (((storeargs->system_flags & ~FLAG_DELETED) || flags->count) &&
+            !(state->myrights & ACL_WRITE))) {
+            return IMAP_PERMISSION_DENIED;
+        }
     }
 
     r = index_lock(state, /*readonly*/0);
