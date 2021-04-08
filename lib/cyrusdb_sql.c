@@ -875,7 +875,7 @@ static int finish_txn(struct dbengine *db, struct txn *tid, int commit)
 
         if (rc) {
             if (commit) {
-                xsyslog(LOG_ERR, "DBERROR: failed to commit transaction"
+                xsyslog(LOG_ERR, "DBERROR: failed to commit transaction",
                                  "table=<%s>",
                                  db->table);
             }
