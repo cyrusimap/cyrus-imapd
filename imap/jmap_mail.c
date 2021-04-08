@@ -902,8 +902,8 @@ static struct header_prop *_header_parseprop(const char *s)
 
     /* Validate requested header form */
     if (is_valid && form != HEADER_FORM_RAW) {
-        enum header_form allowed_form = (enum header_form) \
-                                         hash_lookup(lcasename, &allowed_header_forms);
+        enum header_form allowed_form =
+            (enum header_form) ((uintptr_t) hash_lookup(lcasename, &allowed_header_forms));
         if (allowed_form != HEADER_FORM_UNKNOWN && !(form & allowed_form)) {
             is_valid = 0;
         }
