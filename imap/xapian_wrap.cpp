@@ -207,7 +207,7 @@ static void write_language_counts(Xapian::WritableDatabase& db,
             it != db.metadata_keys_end(XAPIAN_LANG_COUNT_KEYPREFIX); ++it) {
         db.set_metadata(*it, "");
     }
-    for (const std::pair<std::string, unsigned>& it : lang_counts) {
+    for (const std::pair<const std::string, unsigned>& it : lang_counts) {
         db.set_metadata(lang_count_key(it.first), std::to_string(it.second));
     }
 }
