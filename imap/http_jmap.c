@@ -1128,6 +1128,10 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
         size_t flags = JSON_PRESERVE_ORDER;
         char *buf;
 
+        /* Add @type */
+        json_object_set_new(res, "@type",
+                            json_string(ret ? "RequestError" : "Response"));
+
         /* Dump JSON object into a text buffer */
         flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
         buf = json_dumps(res, flags);

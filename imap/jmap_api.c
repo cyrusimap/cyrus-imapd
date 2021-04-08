@@ -416,16 +416,8 @@ static int jmap_error_response(struct transaction_t *txn,
         return code;
     }
 
-    if (txn->meth == METH_UNKNOWN) {
-        /* API request over WebSocket */
-        *res = json_pack("{s:s s:s s:s s:i}",
-                         "@type", "RequestError", "type", type, "title", title,
-                         "status", atoi(error_message(http_code)));
-    }
-    else {
-        *res = json_pack("{s:s s:s s:i}", "type", type, "title", title,
-                         "status", atoi(error_message(http_code)));
-    }
+    *res = json_pack("{s:s s:s s:i}", "type", type, "title", title,
+                     "status", atoi(error_message(http_code)));
     if (!*res) {
         txn->error.desc = "Unable to create JSON response";
         return HTTP_SERVER_ERROR;
@@ -894,14 +886,8 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     }
 
     /* Build response */
-    if (txn->meth == METH_UNKNOWN) {
-        /* API request over WebSocket */
-        *res = json_pack("{s:s s:O}",
-                         "@type", "Response", "methodResponses", resp);
-    }
-    else {
-        *res = json_pack("{s:O}", "methodResponses", resp);
-    }
+    *res = json_pack("{s:O}", "methodResponses", resp);
+
     if (return_created_ids) {
         json_t *jcreatedIds = json_object();
         hash_enumerate(&created_ids, _make_created_ids, jcreatedIds);
