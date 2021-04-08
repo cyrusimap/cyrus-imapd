@@ -345,6 +345,11 @@ static int json_response(int code, struct transaction_t *txn, json_t *root)
 
     /* Output the JSON object */
     switch (code) {
+    case 0:
+        /* API request over WebSocket */
+        buf_initm(&txn->resp_body.payload, buf, strlen(buf));
+        return 0;
+
     case HTTP_OK:
     case HTTP_CREATED:
         txn->resp_body.type = "application/json; charset=utf-8";
@@ -1124,21 +1129,13 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
     }
 
     if (res) {
-        /* Return the JSON object */
-        size_t flags = JSON_PRESERVE_ORDER;
-        char *buf;
-
         /* Add @type */
         json_object_set_new(res, "@type",
                             json_string(ret ? "RequestError" : "Response"));
 
-        /* Dump JSON object into a text buffer */
-        flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
-        buf = json_dumps(res, flags);
-        json_decref(res);
-
-        buf_initm(outbuf, buf, strlen(buf));
-        ret = 0;
+        /* Return the JSON object */
+        ret = json_response(0, txn, res);
+        buf_move(outbuf, &txn->resp_body.payload);
     }
 
     return ret;
