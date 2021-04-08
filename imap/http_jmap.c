@@ -328,6 +328,25 @@ static int meth_get(struct transaction_t *txn,
     return HTTP_NO_CONTENT;
 }
 
+static int parse_json_body(struct transaction_t *txn, json_t **req)
+{
+    json_error_t jerr;
+
+    /* Parse the JSON request */
+    *req = json_loadb(buf_base(&txn->req_body.payload),
+                      buf_len(&txn->req_body.payload),
+                      0, &jerr);
+    if (!*req) {
+        buf_reset(&txn->buf);
+        buf_printf(&txn->buf,
+                   "Unable to parse JSON request body: %s", jerr.text);
+        txn->error.desc = buf_cstring(&txn->buf);
+        return JMAP_NOT_JSON;
+    }
+
+    return 0;
+}
+
 static int json_response(int code, struct transaction_t *txn, json_t *root)
 {
     size_t flags = JSON_PRESERVE_ORDER;
@@ -370,7 +389,7 @@ static int meth_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
 {
     int ret;
-    json_t *res = NULL;
+    json_t *req = NULL, *res = NULL;
 
     ret = jmap_parse_path(txn);
 
@@ -385,8 +404,29 @@ static int meth_post(struct transaction_t *txn,
     }
 
     /* Regular JMAP API request */
-    ret = jmap_api(txn, &res, &my_jmap_settings);
+    txn->req_body.flags |= BODY_DECODE;
 
+    /* Check Content-Type */
+    const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+    if (!hdr ||
+        !is_mediatype("application/json", hdr[0])) {
+        txn->error.desc = "This method requires a JSON request body";
+        ret = HTTP_BAD_MEDIATYPE;
+    }
+
+    /* Read body */
+    else if ((ret = http_read_req_body(txn))) {
+        txn->flags.conn = CONN_CLOSE;
+    }
+
+    /* Parse the JSON request */
+    else if (!(ret = parse_json_body(txn, &req))) {
+        ret = jmap_api(txn, req, &res, &my_jmap_settings);
+        json_decref(req);
+    }
+
+    if (ret) ret = jmap_error_response(txn, ret, &res);
+        
     /* ensure we didn't leak anything! */
     assert(!open_mailboxes_exist());
     assert(!open_mboxlocks_exist());
@@ -1073,14 +1113,12 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
 {
     struct transaction_t **txnp = (struct transaction_t **) rock;
     struct transaction_t *txn = *txnp;
-    json_t *res = NULL;
+    json_t *req = NULL, *res = NULL;
     int ret;
 
     if (!txn) {
         /* Create a transaction rock to use for API requests */
         txn = *txnp = xzmalloc(sizeof(struct transaction_t));
-        txn->meth = METH_UNKNOWN;
-        txn->req_body.flags = BODY_DONE;
 
         /* Create header cache */
         txn->req_hdrs = spool_new_hdrcache();
@@ -1088,10 +1126,6 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
             free(txn);
             return HTTP_SERVER_ERROR;
         }
-
-        /* Set Content-Type of request payload */
-        spool_cache_header(xstrdup("Content-Type"),
-                           xstrdup("application/json"), txn->req_hdrs);
     }
     else if (!inbuf) {
         /* Free transaction rock */
@@ -1103,8 +1137,35 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
     /* Set request payload */
     buf_init_ro(&txn->req_body.payload, buf_base(inbuf), buf_len(inbuf));
 
-    /* Process the API request */
-    ret = jmap_api(txn, &res, &my_jmap_settings);
+    /* Parse the JSON request */
+    ret = parse_json_body(txn, &req);
+    if (ret) {
+        ret = jmap_error_response(txn, ret, &res);
+    }
+    else {
+        const char *type = json_string_value(json_object_get(req, "@type"));
+
+        if (!strcmpsafe(type, "Request")) {
+            /* Process the API request */
+            ret = jmap_api(txn, req, &res, &my_jmap_settings);
+        }
+        else if (!strcmpsafe(type, "WebSocketPushEnable")) {
+            /* XXX  Ignore until supported */
+            ret = 0;
+        }
+        else if (!strcmpsafe(type, "WebSocketPushDisable")) {
+            /* XXX  Ignore until supported */
+            ret = 0;
+        }
+        else {
+            buf_reset(&txn->buf);
+            buf_printf(&txn->buf,
+                       "Unknown request @type: %s", type ? type : "null");
+            txn->error.desc = buf_cstring(&txn->buf);
+
+            ret = jmap_error_response(txn, JMAP_NOT_REQUEST, &res);
+        }
+    }
 
     /* ensure we didn't leak anything! */
     assert(!open_mailboxes_exist());
@@ -1123,9 +1184,20 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
         if (hdr) buf_printf(logbuf, "; jmap=%s", hdr[0]);
 
         /* Add logheaders */
-        hdr = spool_getheader(txn->req_hdrs, ":logheaders");
+        if (strarray_size(httpd_log_headers)) {
+            json_t *jlogHeaders = json_object_get(req, "logHeaders");
+            const char *hdrname;
+            json_t *jval;
 
-        if (hdr) buf_appendcstr(logbuf, hdr[0]);
+            json_object_foreach(jlogHeaders, hdrname, jval) {
+                const char *val = json_string_value(jval);
+
+                if (val &&
+                    strarray_find_case(httpd_log_headers, hdrname, 0) >= 0) {
+                    buf_printf(logbuf, "; %s=\"%s\"", hdrname, val);
+                }
+            }
+        }
     }
 
     if (res) {
@@ -1133,10 +1205,18 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
         json_object_set_new(res, "@type",
                             json_string(ret ? "RequestError" : "Response"));
 
+        /* Add requestId */
+        json_t *id = json_object_get(req, "id");
+        if (id) {
+            json_object_set(res, "requestId", id);
+        }
+
         /* Return the JSON object */
         ret = json_response(0, txn, res);
         buf_move(outbuf, &txn->resp_body.payload);
     }
+
+    json_decref(req);
 
     return ret;
 }

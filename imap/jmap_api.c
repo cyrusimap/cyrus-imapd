@@ -247,43 +247,7 @@ static int process_resultrefs(json_t *args, json_t *resp, json_t **err)
     return ret;
 }
 
-static int parse_json_body(struct transaction_t *txn, json_t **req)
-{
-    const char **hdr;
-    json_error_t jerr;
-    int ret;
-
-    /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-        !is_mediatype("application/json", hdr[0])) {
-        txn->error.desc = "This method requires a JSON request body";
-        return HTTP_BAD_MEDIATYPE;
-    }
-
-    /* Read body */
-    txn->req_body.flags |= BODY_DECODE;
-    ret = http_read_req_body(txn);
-    if (ret) {
-        txn->flags.conn = CONN_CLOSE;
-        return ret;
-    }
-
-    /* Parse the JSON request */
-    *req = json_loadb(buf_base(&txn->req_body.payload),
-                      buf_len(&txn->req_body.payload),
-                      0, &jerr);
-    if (!*req) {
-        buf_reset(&txn->buf);
-        buf_printf(&txn->buf,
-                   "Unable to parse JSON request body: %s", jerr.text);
-        txn->error.desc = buf_cstring(&txn->buf);
-        return JMAP_NOT_JSON;
-    }
-
-    return 0;
-}
-
-static int validate_request(struct transaction_t *txn, json_t *req,
+static int validate_request(struct transaction_t *txn, const json_t *req,
                             jmap_settings_t *settings)
 {
     json_t *using = json_object_get(req, "using");
@@ -384,7 +348,7 @@ static void _make_created_ids(const char *creation_id, void *val, void *rock)
     json_object_set_new(jcreatedIds, creation_id, json_string(id));
 }
 
-static int jmap_error_response(struct transaction_t *txn,
+HIDDEN int jmap_error_response(struct transaction_t *txn,
                                long code, json_t **res)
 {
     long http_code = HTTP_BAD_REQUEST;
@@ -652,10 +616,11 @@ static void _free_buf(void *val)
 }
 
 /* Perform an API request */
-HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
+HIDDEN int jmap_api(struct transaction_t *txn,
+                    const json_t *jreq, json_t **res,
                     jmap_settings_t *settings)
 {
-    json_t *jreq = NULL, *resp = NULL;
+    json_t *resp = NULL;
     size_t i;
     int ret, do_perf = 0;
     char *account_inboxname = NULL;
@@ -669,12 +634,8 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     ptrarray_t processed_methods = PTRARRAY_INITIALIZER;
     strarray_t using_capabilities = STRARRAY_INITIALIZER;
 
-    ret = parse_json_body(txn, &jreq);
-    if (ret) return jmap_error_response(txn, ret, res);
-
     /* Validate Request object */
     if ((ret = validate_request(txn, jreq, settings))) {
-        json_decref(jreq);
         return jmap_error_response(txn, ret, res);
     }
 
@@ -905,26 +866,6 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     spool_replace_header(xstrdup(":jmap"),
                          strarray_join(&methods, ","), txn->req_hdrs);
 
-    if ((txn->meth == METH_UNKNOWN) && strarray_size(httpd_log_headers)) {
-        /* API request over WebSocket - add logheaders */
-        json_t *jlogHeaders = json_object_get(jreq, "logHeaders");
-        struct buf logbuf = BUF_INITIALIZER;
-        const char *hdrname;
-        json_t *jval;
-
-        json_object_foreach(jlogHeaders, hdrname, jval) {
-            const char *val = json_string_value(jval);
-
-            if (val &&
-                strarray_find_case(httpd_log_headers, hdrname, 0) >= 0) {
-                buf_printf(&logbuf, "; %s=\"%s\"", hdrname, val);
-            }
-        }
-
-        spool_replace_header(xstrdup(":logheaders"),
-                             buf_release(&logbuf), txn->req_hdrs);
-    }
-
     {
         /* Clean up call stack */
         json_t *jval;
@@ -942,7 +883,6 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     free_hash_table(&capabilities_by_accountid, _free_json);
     free_hash_table(&mbstates, free);
     free(account_inboxname);
-    json_decref(jreq);
     json_decref(resp);
     strarray_fini(&methods);
     strarray_fini(&using_capabilities);

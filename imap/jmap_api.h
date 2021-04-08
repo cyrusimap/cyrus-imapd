@@ -206,7 +206,10 @@ typedef struct {
     enum jmap_method_flags flags;
 } jmap_method_t;
 
-extern int jmap_api(struct transaction_t *txn, json_t **res,
+extern int jmap_error_response(struct transaction_t *txn,
+                               long code, json_t **res);
+extern int jmap_api(struct transaction_t *txn,
+                    const json_t *jreq, json_t **res,
                     jmap_settings_t *settings);
 
 extern int jmap_initreq(jmap_req_t *req);
