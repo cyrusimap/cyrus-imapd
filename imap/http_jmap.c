@@ -1123,7 +1123,7 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
         if (hdr) buf_appendcstr(logbuf, hdr[0]);
     }
 
-    if (!ret) {
+    if (res) {
         /* Return the JSON object */
         size_t flags = JSON_PRESERVE_ORDER;
         char *buf;
@@ -1134,6 +1134,7 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
         json_decref(res);
 
         buf_initm(outbuf, buf, strlen(buf));
+        ret = 0;
     }
 
     return ret;
