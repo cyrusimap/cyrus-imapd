@@ -155,7 +155,7 @@ struct centry {
     int si;                     /* Services[] index */
     char *desc;                 /* human readable description for logging */
     struct timeval spawntime;   /* when the centry was allocated */
-    time_t sighuptime;          /* when did we send a SIGHUP */;
+    time_t sighuptime;          /* when did we send a SIGHUP */
     struct centry *next;
 };
 static struct centry *ctable[child_table_size];

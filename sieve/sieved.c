@@ -937,7 +937,8 @@ static void generate_stringlist(const char *tag, const strarray_t *sl,
 
 static void generate_time(uint64_t t, struct buf *buf)
 {
-    buf_printf(buf, "\"%02lu:%02lu:%02lu\"", t / 3600, (t % 3600) / 60, t % 60);
+    buf_printf(buf, "\"%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 "\"",
+                    t / 3600, (t % 3600) / 60, t % 60);
 }
 
 static void generate_valuelist(const char *name, const arrayu64_t *vl,
@@ -959,7 +960,7 @@ static void generate_valuelist(const char *name, const arrayu64_t *vl,
             buf_appendcstr(buf, sep);
             gen_cb(u, buf);
         }
-        else buf_printf(buf, "%s%lu", sep, u);
+        else buf_printf(buf, "%s%" PRIu64, sep, u);
         sep = ", ";
     }
     if (len > 1) buf_putc(buf, ']');
