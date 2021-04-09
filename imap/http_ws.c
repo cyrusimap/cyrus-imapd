@@ -90,7 +90,7 @@ static struct ws_extension {
 /* WebSocket channel context */
 struct ws_context {
     wslay_event_context_ptr event;
-    const char *accept;
+    const char *accept_key;
     const char *protocol;
     int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
                    struct buf *logbuf, void **rock);
@@ -604,7 +604,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
                                            struct buf *logbuf, void **rock))
 {
     int r;
-    const char **hdr, *accept = NULL;
+    const char **hdr, *accept_key = NULL;
     wslay_event_context_ptr ev;
     struct ws_context *ctx;
     struct wslay_event_callbacks callbacks = {
@@ -684,10 +684,10 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
         xsha1((u_char *) buf_base(&txn->buf), buf_len(&txn->buf), sha1buf);
 
         buf_ensure(&txn->buf, WS_AKEY_LEN+1);
-        accept = buf_base(&txn->buf);
+        accept_key = buf_base(&txn->buf);
 
         r = sasl_encode64((char *) sha1buf, SHA1_DIGEST_LENGTH,
-                          (char *) accept, WS_AKEY_LEN+1, NULL);
+                          (char *) accept_key, WS_AKEY_LEN+1, NULL);
         if (r != SASL_OK) syslog(LOG_WARNING, "sasl_encode64: %d", r);
     }
 
@@ -706,7 +706,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
     /* Create channel context */
     ctx = xzmalloc(sizeof(struct ws_context));
     ctx->event = ev;
-    ctx->accept = accept;
+    ctx->accept_key = accept_key;
     ctx->protocol = protocol;
     ctx->data_cb = data_cb;
     txn->ws_ctx = ctx;
@@ -764,8 +764,8 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
         return;
     }
 
-    if (ctx->accept) {
-        simple_hdr(txn, "Sec-WebSocket-Accept", "%s", ctx->accept);
+    if (ctx->accept_key) {
+        simple_hdr(txn, "Sec-WebSocket-Accept", "%s", ctx->accept_key);
     }
 
     if (ctx->protocol) {
