@@ -111,31 +111,29 @@ struct ws_context {
 };
 
 
-static const char *wslay_str_opcode(uint8_t opcode)
+static const char *wslay_opcode_as_str(enum wslay_opcode opcode)
 {
     switch (opcode) {
-    case 0x0u:
+    case WSLAY_CONTINUATION_FRAME:
         return "Continuation";
-    case 0x1u:
+    case WSLAY_TEXT_FRAME:
         return "Text";
-    case 0x2u:
+    case WSLAY_BINARY_FRAME:
         return "Binary";
-    case 0x8u:
+    case WSLAY_CONNECTION_CLOSE:
         return "Close";
-    case 0x9u:
+    case WSLAY_PING:
         return "Ping";
-    case 0xau:
+    case WSLAY_PONG:
         return "Pong";
     default:
         return "Unknown opcode";
     }
 }
 
-static const char *wslay_strerror(int err_code)
+static const char *wslay_error_as_str(enum wslay_error err_code)
 {
     switch (err_code) {
-    case 0:
-        return "Success";
     case WSLAY_ERR_WANT_READ:
         return "Want to read more data from peer";
     case WSLAY_ERR_WANT_WRITE:
@@ -155,7 +153,7 @@ static const char *wslay_strerror(int err_code)
     case WSLAY_ERR_NOMEM:
         return "Out of memory";
     default:
-        return "Unknown error code";
+        return (err_code ? "Unknown error code" : "Success");
     }
 }
 
@@ -354,7 +352,7 @@ static void on_frame_recv_start_cb(wslay_event_context_ptr ev __attribute__((unu
 {
     syslog(LOG_DEBUG,
            "on_frame_recv_start_cb: opcode=%s; rsv=0x%x; fin=0x%x; length=%ld",
-           wslay_str_opcode(arg->opcode), arg->rsv, arg->fin, arg->payload_length);
+           wslay_opcode_as_str(arg->opcode), arg->rsv, arg->fin, arg->payload_length);
 }
 
 #define COMP_FAILED_ERR    "Compressing message failed"
@@ -413,7 +411,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                    http2_get_streamid(txn->strm_ctx));
     }
     buf_printf(&ctx->log, "opcode=%s; rsv=0x%x; length=%ld",
-               wslay_str_opcode(arg->opcode), arg->rsv, arg->msg_length);
+               wslay_opcode_as_str(arg->opcode), arg->rsv, arg->msg_length);
     if (pmce_str) {
         buf_printf(&ctx->log, " [%ld]; pmce=%s", buf_len(&inbuf), pmce_str);
         pmce_str = NULL;
@@ -498,7 +496,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         /* Log the server response */
         buf_printf(&ctx->log,
                    ") => \"Success\" (opcode=%s; rsv=0x%x; length=%ld",
-                   wslay_str_opcode(msgarg.opcode), rsv, msgarg.msg_length);
+                   wslay_opcode_as_str(msgarg.opcode), rsv, msgarg.msg_length);
         if (pmce_str) {
             buf_printf(&ctx->log, " [%ld]; pmce=%s", orig_len, pmce_str);
         }
@@ -523,7 +521,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         buf_printf(&ctx->log,
                    ") => \"Fail\" (opcode=%s; rsv=0x%x; length=%ld"
                    "; status=%d; msg='%s'",
-                   wslay_str_opcode(WSLAY_CONNECTION_CLOSE), rsv, err_msg_len,
+                   wslay_opcode_as_str(WSLAY_CONNECTION_CLOSE), rsv, err_msg_len,
                    err_code, err_msg);
     }
 
@@ -699,7 +697,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
     r = wslay_event_context_server_init(&ev, &callbacks, txn);
     if (r) {
         syslog(LOG_WARNING,
-               "wslay_event_context_init: %s", wslay_strerror(r));
+               "wslay_event_context_init: %s", wslay_error_as_str(r));
         return HTTP_SERVER_ERROR;
     }
 
@@ -791,7 +789,10 @@ HIDDEN void ws_end_channel(void *ws_ctx)
     wslay_event_context_free(ctx->event);
     buf_free(&ctx->log);
 
-    if (ctx->cb_rock) ctx->data_cb(NULL, NULL, NULL, &ctx->cb_rock);
+    if (ctx->cb_rock) {
+        /* Cleanup cb_rock */
+        ctx->data_cb(NULL, NULL, NULL, &ctx->cb_rock);
+    }
 
     ws_zlib_done(ctx);
 
@@ -813,7 +814,7 @@ HIDDEN void ws_output(struct transaction_t *txn)
         /* Send queued frame(s) */
         int r = wslay_event_send(ev);
         if (r) {
-            syslog(LOG_ERR, "wslay_event_send: %s", wslay_strerror(r));
+            syslog(LOG_ERR, "wslay_event_send: %s", wslay_error_as_str(r));
             txn->flags.conn = CONN_CLOSE;
         }
     }
@@ -863,7 +864,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
         else {
             /* Failure */
             syslog(LOG_DEBUG, "ws_event_recv: %s (%s)",
-                   wslay_strerror(r), prot_error(txn->conn->pin));
+                   wslay_error_as_str(r), prot_error(txn->conn->pin));
             goaway = 1;
 
             if (r == WSLAY_ERR_CALLBACK_FAILURE) {
@@ -871,7 +872,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
                 txn->error.desc = prot_error(txn->conn->pin);
             }
             else {
-                txn->error.desc = wslay_strerror(r);
+                txn->error.desc = wslay_error_as_str(r);
             }
         }
     }
@@ -886,7 +887,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
                                         strlen(txn->error.desc));
         if (r) {
             syslog(LOG_ERR,
-                   "wslay_event_queue_close: %s", wslay_strerror(r));
+                   "wslay_event_queue_close: %s", wslay_error_as_str(r));
         }
 
         txn->flags.conn = CONN_CLOSE;

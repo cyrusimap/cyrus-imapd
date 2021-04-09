@@ -41,8 +41,8 @@
  *
  */
 
-#ifndef HTTPD_WS_H
-#define HTTPD_WS_H
+#ifndef HTTP_WS_H
+#define HTTP_WS_H
 
 #include <config.h>
 
@@ -79,4 +79,4 @@ extern void ws_output(struct transaction_t *txn);
 
 extern void ws_input(struct transaction_t *txn);
 
-#endif /* HTTPD_WS_H */
+#endif /* HTTP_WS_H */
