@@ -45,13 +45,7 @@
 #include <sysexits.h>
 
 #include "httpd.h"
-#include "md5.h"
-#include "util.h"
-
-int (*alpn_select_cb)(SSL *ssl,
-                      const unsigned char **out, unsigned char *outlen,
-                      const unsigned char *in, unsigned int inlen,
-                      void *arg) = NULL;
+#include "http_h2.h"
 
 #ifdef HAVE_NGHTTP2
 
@@ -60,7 +54,6 @@ int (*alpn_select_cb)(SSL *ssl,
 
 #include <sasl/saslutil.h>
 
-#include "http_h2.h"
 #include "http_ws.h"
 #include "prometheus.h"
 #include "retry.h"
@@ -85,32 +78,6 @@ struct http2_stream {
 };
 
 static nghttp2_session_callbacks *http2_callbacks = NULL;
-
-static int _alpn_select_cb(SSL *ssl __attribute__((unused)),
-                           const unsigned char **out, unsigned char *outlen,
-                           const unsigned char *in, unsigned int inlen,
-                           void *arg)
-{
-    struct http_connection *http_conn = (struct http_connection *) arg;
-
-    int r = nghttp2_select_next_protocol((u_char **) out, outlen, in, inlen);
-
-    switch (r) {
-    case 0: /* http/1.1 */
-        break;
-
-    case 1: /* h2 */
-        if (http2_start_session(NULL, http_conn) == 0) break;
-
-        /* Fall through as unsupported */
-        GCC_FALLTHROUGH
-
-    default:
-        return SSL_TLSEXT_ERR_NOACK;
-    }
-
-    return SSL_TLSEXT_ERR_OK;
-}
 
 static ssize_t send_cb(nghttp2_session *session __attribute__((unused)),
                        const uint8_t *data, size_t length,
@@ -516,9 +483,6 @@ HIDDEN void http2_init(struct buf *serverinfo)
         nghttp2_session_callbacks_set_on_frame_send_callback(http2_callbacks,
                                                              &frame_send_cb);
     }
-
-    /* Setup for ALPN */
-    alpn_select_cb = &_alpn_select_cb;
 }
 
 
@@ -1027,7 +991,7 @@ HIDDEN void http2_input(struct transaction_t *txn __attribute__((unused)))
     fatal("http2_input() called, but no Nghttp2", EX_SOFTWARE);
 }
 
-HIDDEN int http2_begin_headers(struct transaction_t *txn __attribute__((unused)))
+HIDDEN void http2_begin_headers(struct transaction_t *txn __attribute__((unused)))
 {
     fatal("http2_begin_headers() called, but no Nghttp2", EX_SOFTWARE);
 }

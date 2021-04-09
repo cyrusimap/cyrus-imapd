@@ -41,8 +41,8 @@
  *
  */
 
-#ifndef HTTPD_H2_H
-#define HTTPD_H2_H
+#ifndef HTTP_H2_H
+#define HTTP_H2_H
 
 #include <config.h>
 
@@ -51,20 +51,13 @@
 
 #else /* !HAVE_NGHTTP2 */
 
+#define NGHTTP2_PROTO_ALPN                 ""
 #define NGHTTP2_CLEARTEXT_PROTO_VERSION_ID ""
 
 #endif /* HAVE_NGHTTP2 */
 
-#ifndef HAVE_SSL
-#define SSL void
-#endif
-
 #include "md5.h"
-
-extern int (*alpn_select_cb)(SSL *ssl,
-                             const unsigned char **out, unsigned char *outlen,
-                             const unsigned char *in, unsigned int inlen,
-                             void *arg);
+#include "util.h"
 
 extern void http2_init(struct buf *serverinfo);
 
@@ -98,4 +91,4 @@ extern int32_t http2_get_streamid(void *http2_strm);
 
 extern void http2_end_stream(void *http2_strm);
 
-#endif /* HTTPD_H2_H */
+#endif /* HTTP_H2_H */

@@ -1112,6 +1112,45 @@ EXPORTED void fatal(const char* s, int code)
 
 
 #ifdef HAVE_SSL
+#define HTTP_1_1_ALPN     "\x8http/1.1"
+
+#define protocmp(in, proto) \
+    (in[0] == proto[0] && memcmp(in+1, proto+1, proto[0]) == 0)
+
+/* Select an application protocol from the client list in order of preference */
+static int alpn_select_cb(SSL *ssl __attribute__((unused)),
+                          const unsigned char **out, unsigned char *outlen,
+                          const unsigned char *in, unsigned int inlen,
+                          void *arg)
+{
+    struct http_connection *http_conn = (struct http_connection *) arg;
+
+    for (; inlen; in += in[0] + 1, inlen -= (in[0] + 1)) {
+        if (protocmp(in, NGHTTP2_PROTO_ALPN)) {
+            /* HTTP/2 */
+            if (http2_enabled() && http2_start_session(NULL, http_conn) == 0) {
+                break;
+            }
+
+            /* Otherwise, continue searching for HTTP/1.1 */
+        }
+        else if (protocmp(in, HTTP_1_1_ALPN)) {
+            /* HTTP/1.1 */
+            break;
+        }
+    }
+
+    if (inlen) {
+        *out = in + 1;
+        *outlen = in[0];
+        return SSL_TLSEXT_ERR_OK;
+    }
+
+    syslog(LOG_NOTICE, "alpn_select_cb failed: %s", http_conn->clienthost);
+
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
+}
+
 static int starttls(struct transaction_t *txn, struct http_connection *conn)
 {
     int https = (txn == NULL);
@@ -1132,12 +1171,10 @@ static int starttls(struct transaction_t *txn, struct http_connection *conn)
         return HTTP_SERVER_ERROR;
     }
 
-    if (http2_enabled()) {
 #ifdef HAVE_TLS_ALPN
-        /* enable TLS ALPN extension */
-        SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, conn);
+    /* enable TLS ALPN extension */
+    SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, conn);
 #endif
-    }
 
     if (!https) {
         /* tell client to start TLS upgrade (RFC 2817) */
