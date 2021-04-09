@@ -461,8 +461,7 @@ struct connect_params {
     /* WebSocket parameters */
     const char *endpoint;
     const char *subprotocol;
-    int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock);
+    const void *data_cb;
 };
 
 struct namespace_t {

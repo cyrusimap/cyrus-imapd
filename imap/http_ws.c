@@ -45,6 +45,7 @@
 #include <sysexits.h>
 
 #include "httpd.h"
+#include "http_ws.h"
 #include "util.h"
 
 #ifdef HAVE_WSLAY
@@ -55,7 +56,6 @@
 #include <sasl/saslutil.h>
 
 #include "http_h2.h"
-#include "http_ws.h"
 #include "retry.h"
 #include "telemetry.h"
 #include "tok.h"
@@ -92,8 +92,7 @@ struct ws_context {
     wslay_event_context_ptr event;
     const char *accept_key;
     const char *protocol;
-    int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock);
+    ws_data_callback *data_cb;
     void *cb_rock;
     struct buf log;
     int log_tail;
@@ -443,11 +442,20 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         }
 
         /* Process the request */
-        r = ctx->data_cb(&inbuf, &outbuf, &ctx->log, &ctx->cb_rock);
+        r = ctx->data_cb(arg->opcode, &inbuf, &outbuf, &ctx->log, &ctx->cb_rock);
         if (r) {
-            err_code = (r == HTTP_SERVER_ERROR ?
-                        WSLAY_CODE_INTERNAL_SERVER_ERROR :
-                        WSLAY_CODE_INVALID_FRAME_PAYLOAD_DATA);
+            switch (r) {
+            case HTTP_SERVER_ERROR:
+                err_code = WSLAY_CODE_INTERNAL_SERVER_ERROR;
+                break;
+            case HTTP_NOT_ACCEPTABLE:
+                err_code = WSLAY_CODE_UNSUPPORTED_DATA;
+                break;
+            default:
+                err_code = WSLAY_CODE_INVALID_FRAME_PAYLOAD_DATA;
+                break;
+            }
+
             err_msg = error_message(r);
             goto err;
         }
@@ -597,9 +605,8 @@ static void parse_extensions(struct transaction_t *txn)
 }
 
 
-HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
-                            int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
-                                           struct buf *logbuf, void **rock))
+HIDDEN int ws_start_channel(struct transaction_t *txn,
+                            const char *protocol, ws_data_callback *data_cb)
 {
     int r;
     const char **hdr, *accept_key = NULL;
@@ -791,7 +798,7 @@ HIDDEN void ws_end_channel(void *ws_ctx)
 
     if (ctx->cb_rock) {
         /* Cleanup cb_rock */
-        ctx->data_cb(NULL, NULL, NULL, &ctx->cb_rock);
+        ctx->data_cb(0, NULL, NULL, NULL, &ctx->cb_rock);
     }
 
     ws_zlib_done(ctx);
@@ -912,10 +919,7 @@ HIDDEN void ws_done() {}
 
 HIDDEN int ws_start_channel(struct transaction_t *txn __attribute__((unused)),
                             const char *protocol __attribute__((unused)),
-                            int (*data_cb)(struct buf *inbuf,
-                                           struct buf *outbuf,
-                                           struct buf *logbuf,
-                                           void **rock) __attribute__((unused)))
+                            ws_data_callback *data_cb __attribute__((unused)))
 {
     fatal("ws_start() called, but no Wslay", EX_SOFTWARE);
 }

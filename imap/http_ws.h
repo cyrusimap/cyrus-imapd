@@ -49,17 +49,18 @@
 #ifdef HAVE_WSLAY
 #include <wslay/wslay.h>
 
-/* Supported WebSocket version for Upgrade */
-#define WS_TOKEN         "websocket"
-#define WS_VERSION       "13"
-
 #else /* !HAVE_WSLAY */
 
-#define WS_TOKEN         ""
-#define WS_VERSION       ""
+enum wslay_opcode {
+    WSLAY_TEXT_FRAME
+};
 
 #endif /* HAVE_WSLAY */
 
+
+/* Supported WebSocket version for Upgrade */
+#define WS_TOKEN         "websocket"
+#define WS_VERSION       "13"
 
 extern void ws_init(struct buf *serverinfo);
 
@@ -67,9 +68,12 @@ extern int ws_enabled();
 
 extern void ws_done();
 
-extern int ws_start_channel(struct transaction_t *txn, const char *sub_prot,
-                            int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
-                                           struct buf *logbuf, void **rock));
+typedef int ws_data_callback(enum wslay_opcode opcode,
+                             struct buf *inbuf, struct buf *outbuf,
+                             struct buf *logbuf, void **rock);
+
+extern int ws_start_channel(struct transaction_t *txn,
+                            const char *sub_prot, ws_data_callback *data_cb);
 
 extern void ws_add_resp_hdrs(struct transaction_t *txn);
 

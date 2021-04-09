@@ -515,8 +515,7 @@ const struct known_meth_t http_methods[] = {
 };
 
 /* WebSocket handler */
-static int ws_echo(struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock);
+static ws_data_callback ws_echo;
 
 static struct connect_params ws_params = {
     "/", NULL /* sub-protocol */, &ws_echo
@@ -4543,7 +4542,8 @@ static int list_well_known(struct transaction_t *txn)
  * WebSockets over HTTP/2 currently only available in:
  *   https://www.google.com/chrome/browser/canary.html
  */
-static int ws_echo(struct buf *inbuf, struct buf *outbuf,
+static int ws_echo(enum wslay_opcode opcode __attribute__((unused)),
+                   struct buf *inbuf, struct buf *outbuf,
                    struct buf *logbuf __attribute__((unused)),
                    void **rock __attribute__((unused)))
 {

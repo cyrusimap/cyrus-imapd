@@ -100,8 +100,7 @@ static int jmap_eventsource(struct transaction_t *txn);
 /* WebSocket handler */
 #define JMAP_WS_PROTOCOL   "jmap"
 
-static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock);
+static ws_data_callback jmap_ws;
 
 static struct connect_params ws_params = {
     JMAP_BASE_URL JMAP_WS_COL, JMAP_WS_PROTOCOL, &jmap_ws
@@ -1108,7 +1107,8 @@ static int jmap_get_session(struct transaction_t *txn)
  * WebSockets over HTTP/2 currently only available in:
  *   https://www.google.com/chrome/browser/canary.html
  */
-static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
+static int jmap_ws(enum wslay_opcode opcode,
+                   struct buf *inbuf, struct buf *outbuf,
                    struct buf *logbuf, void **rock)
 {
     struct transaction_t **txnp = (struct transaction_t **) rock;
@@ -1132,6 +1132,11 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
         transaction_free(txn);
         free(txn);
         return 0;
+    }
+
+    /* Only accept text frames */
+    if (opcode != WSLAY_TEXT_FRAME) {
+        return HTTP_NOT_ACCEPTABLE;
     }
 
     /* Set request payload */
