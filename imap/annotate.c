@@ -416,7 +416,7 @@ EXPORTED void setentryatt(struct entryattlist **l, const char *entry,
     }
 }
 
-EXPORTED char *dumpentryatt(const struct entryattlist *l)
+HIDDEN char *dumpentryatt(const struct entryattlist *l)
 {
     struct buf buf = BUF_INITIALIZER;
 
