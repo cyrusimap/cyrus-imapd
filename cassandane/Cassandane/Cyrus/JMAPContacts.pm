@@ -2687,6 +2687,87 @@ sub test_contact_set_importance_later
     $self->assert_num_equals(-0.1, $fetch->[0][1]{list}[0]{"importance"});
 }
 
+sub test_contact_set_avatar_shared
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared account";
+    $admintalk->create("user.manifold");
+
+    xlog $self, "create #jmap folder";
+    $admintalk->create("user.manifold.#jmap", ['TYPE', 'COLLECTION']);
+
+    my $mantalk = Net::CardDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold.#jmap", admin => 'lrswipkxtecdn');
+
+    xlog $self, "share to user";
+    $admintalk->setacl("user.manifold.#addressbooks.Default", "cassandane" => 'lrswipkxtecdn') or die;
+
+    # avatar
+    xlog $self, "upload avatar - setacl on shared #jmap folder";
+    my $res = $jmap->Upload("some photo", "image/jpeg", "manifold");
+    my $blobId = $res->{blobId};
+
+    xlog $self, "create contact";
+    $res = $jmap->CallMethods([['Contact/set', {
+                    accountId => 'manifold',
+                    create => {"1" => {firstName => "first", lastName => "last",
+                     avatar => {
+                         blobId => $blobId,
+                         size => 10,
+                         type => "image/jpeg",
+                         name => JSON::null
+                      }
+                               }}
+    }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "delete #jmap folder";
+    $admintalk->delete("user.manifold.#jmap") || die;
+
+    # avatar
+    xlog $self, "upload new avatar - create new shared #jmap folder";
+    $res = $jmap->Upload("some other photo", "image/jpeg", "manifold");
+    $blobId = $res->{blobId};
+
+    xlog $self, "update avatar";
+    $res = $jmap->CallMethods([['Contact/set', {
+        accountId => 'manifold',
+        update => {$id =>
+                     {avatar => {
+                         blobId => $blobId,
+                         size => 10,
+                         type => "image/jpeg",
+                         name => JSON::null
+                      }
+                  }
+        }
+    }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+}
+
 sub test_contact_set_importance_shared
     :min_version_3_1 :needs_component_jmap
 {
