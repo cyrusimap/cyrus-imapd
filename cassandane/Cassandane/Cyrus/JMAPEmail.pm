@@ -10989,7 +10989,11 @@ sub test_email_set_filename
     }, {
         name   => "foo" . ("_foo" x 20),
         wantCt => " image/gif;\r\n name=\"=?UTF-8?Q?foo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffo?=\r\n =?UTF-8?Q?o=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo?=\"",
-        wantCd => " attachment;\r\n filename*0*=\"foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_\";\r\n filename*1*=\"foo_foo_foo_foo_foo_foo\"",
+        wantCd => " attachment;\r\n filename*0=\"foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_f\";\r\n filename*1=\"oo_foo_foo_foo_foo_foo\"",
+    }, {
+        name   => "foo" . ("_foo" x 20) . "\N{WHITE SMILING FACE}",
+        wantCt => " image/gif;\r\n name=\"=?UTF-8?Q?foo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffo?=\r\n =?UTF-8?Q?o=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo?=\r\n =?UTF-8?Q?=E2=98=BA?=\"",
+        wantCd => " attachment;\r\n filename*0*=utf-8\'\'foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_fo;\r\n filename*1*=o_foo_foo_foo_foo_foo_foo_foo%E2%98%BA",
     }, {
         name   => 'Incoming Email Flow.xml',
         wantCt => ' image/gif; name="Incoming Email Flow.xml"',
