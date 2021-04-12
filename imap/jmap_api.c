@@ -3027,6 +3027,9 @@ static void add_shareacls(const char *userid, void *val, void *rock)
 
 static int set_upload_rights(const char *accountid)
 {
+    /* XXX  This is currently done by brute force.
+            We could be smarter by only doing a full scan
+            iff r/w is removed for a userid. */
     struct mailbox *mbox = NULL;
     int r = jmap_open_upload_collection(accountid, &mbox);
 
@@ -3197,9 +3200,6 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
 
     if (!r) {
         /* Set proper access rights on JMAP upload folder */
-        /* XXX This is currently done by brute force.
-               We could be smarter by only doing a full scan
-               iff r/w is removed for a userid */
         r = set_upload_rights(owner);
     }
 
