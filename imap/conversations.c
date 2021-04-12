@@ -570,7 +570,7 @@ static int _conversations_set_key(struct conversations_state *state,
     int r;
     struct buf buf = BUF_INITIALIZER;
     int version = CONVERSATIONS_KEY_VERSION;
-    int i;
+    size_t i;
 
     /* XXX: should this be a delete operation? */
     assert(cids->count);

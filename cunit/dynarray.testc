@@ -14,7 +14,7 @@ static void test_basic(void)
     CU_ASSERT_PTR_NULL(dynarray_nth(da, -1));
 
     uint32_t val1 = 0xbeefc0de;
-	dynarray_append(da, &val1);
+    dynarray_append(da, &val1);
 
     CU_ASSERT_EQUAL(dynarray_size(da), 1);
     valp = dynarray_nth(da, 0);
@@ -23,7 +23,7 @@ static void test_basic(void)
     CU_ASSERT_EQUAL(*valp, val1);
 
     uint32_t val2 = 0x00c0fefe;
-	dynarray_append(da, &val2);
+    dynarray_append(da, &val2);
 
     CU_ASSERT_EQUAL(dynarray_size(da), 2);
     valp = dynarray_nth(da, 1);
@@ -37,6 +37,40 @@ static void test_basic(void)
 
 #define CU_ASSERT_MEMEQUAL(actual, expected, sz) \
     CU_ASSERT_EQUAL(memcmp(actual, expected, sz), 0)
+
+static void test_set(void)
+{
+    struct dynarray *da = dynarray_new(sizeof(uint32_t));
+    uint32_t val;
+    const uint32_t zero = 0;
+
+    CU_ASSERT_EQUAL(da->count, 0);
+    CU_ASSERT_PTR_NULL(dynarray_nth(da, 0));
+    CU_ASSERT_PTR_NULL(dynarray_nth(da, -1));
+
+    val = 0xdeadbeef;
+    dynarray_set(da, 5, &val);
+    CU_ASSERT(da->count >= 6);
+    CU_ASSERT(da->alloc >= da->count);
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 0), &zero, sizeof(zero));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 1), &zero, sizeof(zero));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 2), &zero, sizeof(zero));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 3), &zero, sizeof(zero));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 4), &zero, sizeof(zero));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 5), &val, sizeof(val));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, -1), &val, sizeof(val));
+
+    dynarray_set(da, 2, &val);
+    CU_ASSERT(da->count >= 3);
+    CU_ASSERT(da->alloc >= da->count);
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 0), &zero, sizeof(zero));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 1), &zero, sizeof(zero));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 2), &val, sizeof(val));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 3), &zero, sizeof(zero));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 4), &zero, sizeof(zero));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, 5), &val, sizeof(val));
+    CU_ASSERT_MEMEQUAL(dynarray_nth(da, -1), &val, sizeof(val));
+}
 
 static void test_truncate(void)
 {
