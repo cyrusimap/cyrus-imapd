@@ -2888,6 +2888,111 @@ static void add_useracls(const char *userid, void *val, void *rock)
         cyrus_acl_set(aclptr, userid, ACL_MODE_SET, access, NULL, NULL);
 }
 
+struct shared_rock {
+    hash_table *user_access;
+    const char *owner;
+    const char *upload_mboxname;
+};
+
+static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct shared_rock *srock = (struct shared_rock *) vrock;
+    const char *userid;
+    char *nextid = NULL;
+
+    /* skip any special use folders */
+    if (mbentry->mbtype &&
+        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+        return 0;
+    }
+    /* make sure we skip the upload folder itself */
+    else if (!strcmp(mbentry->name, srock->upload_mboxname)) {
+        return 0;
+    }
+
+    /* parse the existing ACL and add to the sum of rights for each user */
+    for (userid = mbentry->acl; userid; userid = nextid) {
+        char *rightstr;
+        int access;
+
+        rightstr = strchr(userid, '\t');
+        if (!rightstr) break;
+        *rightstr++ = '\0';
+
+        nextid = strchr(rightstr, '\t');
+        if (!nextid) break;
+        *nextid++ = '\0';
+
+        cyrus_acl_strtomask(rightstr, &access);
+
+        /* remove any scheduling ACLs */
+        access &= ~DACL_SCHED;
+
+        if (strcmp(userid, srock->owner) && !is_system_user(userid)) {
+            /* limit ACL to JMAP sharing rights */
+            access &= (JACL_READITEMS | JACL_WRITE);
+        }
+
+        if (access) {
+            access |= (uintptr_t) hash_lookup(userid, srock->user_access);
+
+            hash_insert(userid, (void *)((uintptr_t)access), srock->user_access);
+        }
+    }
+
+    return 0;
+}
+
+static void add_shareacls(const char *userid, void *val, void *rock)
+{
+    char **aclptr = rock;
+    int access = (uintptr_t) val;
+
+    cyrus_acl_set(aclptr, userid, ACL_MODE_SET, access, NULL, NULL);
+}
+
+static int set_upload_rights(const char *accountid)
+{
+    /* XXX  This is currently done by brute force.
+            We could be smarter by only doing a full scan
+            iff r/w is removed for a userid. */
+    struct mailbox *mbox = NULL;
+    int r = jmap_open_upload_collection(accountid, &mbox);
+
+    if (r) return r;
+
+    hash_table user_access = HASH_TABLE_INITIALIZER;
+    struct shared_rock srock = { &user_access, accountid, mbox->name };
+
+    /* build the sum of the shared rights for each each user */
+    construct_hash_table(&user_access, 64, 0);
+    mboxlist_usermboxtree(accountid, NULL, &sharedrights_cb, &srock, 0);
+
+    /* create the ACL for the upload folder */
+    char *newacl = xstrdup("");  /* start with empty ACL */
+    hash_enumerate_sorted(&user_access, add_shareacls,  &newacl, cmpstringp_raw);
+    free_hash_table(&user_access, NULL);
+
+    /* ok, change the mailboxes database */
+    r = mboxlist_sync_setacls(mbox->name, newacl, mailbox_modseq_dirty(mbox));
+    if (r) {
+        syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+               mbox->name, error_message(r));
+    }
+    else {
+        /* ok, change the backup in cyrus.header */
+        r = mailbox_set_acl(mbox, newacl);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
+                   mbox->name, error_message(r));
+        }
+    }
+
+    mailbox_close(&mbox);
+
+    return 0;
+}
+
 HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite)
 {
@@ -3017,6 +3122,11 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
             syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
                    mbox->name, error_message(r));
         }
+    }
+
+    if (!r) {
+        /* Set proper access rights on JMAP upload folder */
+        r = set_upload_rights(owner);
     }
 
     if (!r && isdav) {

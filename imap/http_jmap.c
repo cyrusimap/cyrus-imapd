@@ -669,6 +669,36 @@ static int jmap_download(struct transaction_t *txn)
     return res;
 }
 
+static int has_shared_rw_rights_cb(const mbentry_t *mbentry, void *vrock)
+{
+    int *rights = (int *) vrock;
+
+    /* skip any special use folders */
+    if (mbentry->mbtype &&
+        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+        return 0;
+    }
+
+    *rights |= (httpd_myrights(httpd_authstate, mbentry) & JACL_ADDITEMS);
+
+    if (*rights) {
+        /* one writable mailbox is enough to short-circuit the search */
+        return CYRUSDB_DONE;
+    }
+    
+    return 0;
+}
+
+/* See if this account has shared any mailbox with the authenticated user */
+static int has_shared_rw_rights(const char *accountid)
+{
+    int rights = 0;
+
+    mboxlist_usermboxtree(accountid, NULL, &has_shared_rw_rights_cb, &rights, 0);
+
+    return rights;
+}
+
 static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
 {
     mbname_t *mbname;
@@ -704,10 +734,12 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
             goto done;
         }
 
-        int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_CREATE)) {
-            r = IMAP_PERMISSION_DENIED;
-            goto done;
+        if (!strcmp(accountid, httpd_userid)) {
+            int rights = httpd_myrights(httpd_authstate, *mbentry);
+            if (!(rights & ACL_CREATE)) {
+                r = IMAP_PERMISSION_DENIED;
+                goto done;
+            }
         }
 
         if (*mbentry) free((*mbentry)->name);
@@ -739,7 +771,14 @@ static int _create_upload_collection(const char *accountid,
         goto done;
     }
     else if (r == IMAP_PERMISSION_DENIED) {
-        goto done;
+        if (has_shared_rw_rights(accountid)) {
+            /* add rights for the sharee */
+            char rightstr[100];
+            cyrus_acl_masktostr(JACL_READITEMS | JACL_WRITE, rightstr);
+            r = mboxlist_setacl(&jmap_namespace, mbentry->name, httpd_userid,
+                                rightstr, 1, httpd_userid, httpd_authstate);
+        }
+        if (r) goto done;
     }
     else if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (!mbentry) goto done;
@@ -747,6 +786,16 @@ static int _create_upload_collection(const char *accountid,
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
                              &backend_cached, NULL, NULL, httpd_in);
             goto done;
+        }
+
+        int is_shared = 0;
+        if (strcmp(accountid, httpd_userid)) {
+            if (!(has_shared_rw_rights(accountid))) {
+                r = IMAP_PERMISSION_DENIED;
+                goto done;
+            }
+
+            is_shared = 1;
         }
 
         r = mboxlist_createmailbox(mbentry->name, MBTYPE_COLLECTION,
@@ -758,6 +807,30 @@ static int _create_upload_collection(const char *accountid,
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                         mbentry->name, error_message(r));
+            }
+            else if (is_shared) {
+                /* add rights for the sharee */
+                char *newacl = xstrdup((*mailbox)->acl);
+
+                cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
+                              JACL_READITEMS | JACL_WRITE, NULL, NULL);
+
+                /* ok, change the mailboxes database */
+                r = mboxlist_sync_setacls(mbentry->name, newacl,
+                                          mailbox_modseq_dirty(*mailbox));
+                if (r) {
+                    syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+                           mbentry->name, error_message(r));
+                }
+                else {
+                    /* ok, change the backup in cyrus.header */
+                    r = mailbox_set_acl(*mailbox, newacl);
+                    if (r) {
+                        syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
+                               mbentry->name, error_message(r));
+                    }
+                }
+                free(newacl);
             }
             goto done;
         }
