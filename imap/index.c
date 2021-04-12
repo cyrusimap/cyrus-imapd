@@ -5750,7 +5750,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         /* PGP encrypted body part - we don't want to index this,
          * it's a ton of random base64 noise */
     }
-    else if (isbody && !strcmp(type, "TEXT")) {
+    else if (isbody && !strcmp(type, "TEXT") && strcmpsafe(subtype, "RTF")) {
 
         if (str->snippet_iteration >= 2) goto done;
 
@@ -5782,7 +5782,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
         }
     }
-    else if (isbody && !strcmp(type, "APPLICATION")) {
+    else if (isbody && (!strcmp(type, "APPLICATION") || !strcmp(type, "TEXT"))) {
 
 #ifdef USE_HTTPD
         // application/ics is an alias for text/icalendar
