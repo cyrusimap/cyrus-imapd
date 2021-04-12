@@ -158,6 +158,8 @@ EXPORTED void dynarray_set(struct dynarray *da, int idx, void *memb)
     if ((idx = adjust_index_rw(da, idx, 0)) < 0)
         return;
     memcpy(da->data + idx * da->membsize, memb, da->membsize);
+    if (idx >= da->count)
+        da->count = idx + 1;
 }
 
 EXPORTED void *dynarray_nth(const struct dynarray *da, int idx)
