@@ -204,15 +204,26 @@ int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype);
  */
 int mboxname_isjmapuploadmailbox(const char *name, int mbtype);
 
+/*
+ * If (internal) mailbox 'name' is a user's #jmap notifications mailbox
+ * returns boolean
+ */
+int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype);
+
 #define mboxname_isnonimapmailbox(name, mbtype)            \
     (mboxname_iscalendarmailbox(name, mbtype)              \
      || mboxname_isaddressbookmailbox(name, mbtype)        \
      || mboxname_isdavdrivemailbox(name, mbtype)           \
      || mboxname_isdavnotificationsmailbox(name, mbtype)   \
-     || mboxname_isnotesmailbox(name, mbtype)              \
      || mboxname_issubmissionmailbox(name, mbtype)         \
-     || mboxname_ispushsubscriptionmailbox(name, mbtype)  \
-     || mboxname_isjmapuploadmailbox(name, mbtype))
+     || mboxname_ispushsubscriptionmailbox(name, mbtype)   \
+     || mboxname_isjmapuploadmailbox(name, mbtype)         \
+     || mboxname_isjmapnotificationsmailbox(name, mbtype))
+
+#define mboxname_isnondeliverymailbox(name, mbtype)        \
+    (mboxname_isnonimapmailbox(name, mbtype)               \
+     || mboxname_isnotesmailbox(name, mbtype)              \
+     || mboxname_isdeletedmailbox(name, NULL))
 
 /* check if one mboxname is a parent or same as the other */
 int mboxname_is_prefix(const char *longstr, const char *shortstr);
