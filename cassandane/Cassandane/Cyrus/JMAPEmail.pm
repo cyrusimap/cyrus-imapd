@@ -1842,7 +1842,7 @@ sub test_misc_upload_multiaccount
 
     # Create user and share mailbox
     $self->{instance}->create_user("foo");
-    $admintalk->setacl("user.foo", "cassandane", "lrwkxd") or die;
+    $admintalk->setacl("user.foo", "cassandane", "lrwikxd") or die;
 
     # Create user but don't share mailbox
     $self->{instance}->create_user("bar");
