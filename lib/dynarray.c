@@ -76,6 +76,15 @@ EXPORTED void dynarray_free(struct dynarray **dap)
     *dap = NULL;
 }
 
+#define QUANTUM     16
+static inline int grow(int have, int want)
+{
+    int x = MAX(QUANTUM, have);
+    while (x < want)
+        x *= 2;
+    return x;
+}
+
 /*
  * Ensure the index @newalloc exists in the array, if necessary expanding the
  * array, and if necessary NULL-filling all the intervening elements.
@@ -83,15 +92,12 @@ EXPORTED void dynarray_free(struct dynarray **dap)
  * index, so that we can pass data[] to execve() or other routines that
  * assume a NULL terminator.
  */
-#define QUANTUM     16
 static void ensure_alloc(struct dynarray *da, int newalloc)
 {
     assert(newalloc >= 0);
-    if (newalloc)
-        newalloc++;
-    if (newalloc <= da->alloc)
+    if (newalloc < da->alloc)
         return;
-    newalloc = ((newalloc + QUANTUM-1) / QUANTUM) * QUANTUM;
+    newalloc = grow(da->alloc, newalloc + 1);
     da->data = xrealloc(da->data, da->membsize * newalloc);
     memset(da->data + da->alloc * da->membsize, 0, da->membsize * (newalloc-da->alloc));
     da->alloc = newalloc;

@@ -48,6 +48,7 @@
 #include <string.h>
 
 #include "arrayu64.h"
+#include "util.h"
 #include "xmalloc.h"
 
 EXPORTED arrayu64_t *arrayu64_new(void)
@@ -74,11 +75,22 @@ EXPORTED void arrayu64_free(arrayu64_t *au)
 }
 
 #define QUANTUM     16
+static inline size_t grow(size_t have, size_t want)
+{
+    size_t x = MAX(QUANTUM, have);
+    while (x < want)
+        x *= 2;
+    return x;
+}
+
+/* XXX n.b. unlike some other ensure_allocs, this one doesn't always
+ * XXX leave an extra NULL at the end.
+ */
 static void ensure_alloc(arrayu64_t *au, size_t newalloc)
 {
     if (newalloc <= au->alloc)
         return;
-    newalloc = ((newalloc + QUANTUM-1) / QUANTUM) * QUANTUM;
+    newalloc = grow(au->alloc, newalloc);
     au->data = xrealloc(au->data, sizeof(uint64_t) * newalloc);
     memset(au->data + au->alloc, 0, sizeof(uint64_t) * (newalloc - au->alloc));
     au->alloc = newalloc;

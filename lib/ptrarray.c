@@ -45,6 +45,7 @@
 
 #include "ptrarray.h"
 #include <memory.h>
+#include "util.h"
 #include "xmalloc.h"
 
 EXPORTED ptrarray_t *ptrarray_new(void)
@@ -71,21 +72,27 @@ EXPORTED void ptrarray_free(ptrarray_t *pa)
     free(pa);
 }
 
+#define QUANTUM     16
+static inline int grow(int have, int want)
+{
+    int x = MAX(QUANTUM, have);
+    while (x < want)
+        x *= 2;
+    return x;
+}
+
 /*
- * Ensure the index @idx exists in the array, if necessary expanding the
+ * Ensure the index @newalloc exists in the array, if necessary expanding the
  * array, and if necessary NULL-filling all the intervening elements.
  * Note that we always ensure an empty slot past the last reported
  * index, so that we can pass data[] to execve() or other routines that
  * assume a NULL terminator.
  */
-#define QUANTUM     16
 static void ensure_alloc(ptrarray_t *pa, int newalloc)
 {
-    if (newalloc)
-        newalloc++;
-    if (newalloc <= pa->alloc)
+    if (newalloc < pa->alloc)
         return;
-    newalloc = ((newalloc + QUANTUM-1) / QUANTUM) * QUANTUM;
+    newalloc = grow(pa->alloc, newalloc + 1);
     pa->data = xrealloc(pa->data, sizeof(void *) * newalloc);
     memset(pa->data+pa->alloc, 0, sizeof(void *) * (newalloc-pa->alloc));
     pa->alloc = newalloc;

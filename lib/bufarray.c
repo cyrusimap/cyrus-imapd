@@ -79,16 +79,24 @@ EXPORTED void bufarray_free(bufarray_t **ba)
     *ba = NULL;
 }
 
+#define QUANTUM     16
+static inline size_t grow(size_t have, size_t want)
+{
+    size_t x = MAX(QUANTUM, have);
+    while (x < want)
+        x *= 2;
+    return x;
+}
+
 /*
- * Ensure the index @idx exists in the array, if necessary expanding the
+ * Ensure the index @newalloc exists in the array, if necessary expanding the
  * array, and if necessary NULL-filling all the intervening elements.
  */
-#define QUANTUM     16
 static void ba_ensure_alloc(bufarray_t *ba, size_t newalloc)
 {
     if (newalloc < ba->alloc)
         return;
-    newalloc = ((newalloc + QUANTUM) / QUANTUM) * QUANTUM;
+    newalloc = grow(ba->alloc, newalloc + 1);
     ba->items = xrealloc(ba->items, sizeof(struct buf) * newalloc);
     memset(ba->items + ba->alloc, 0, sizeof(struct buf) * (newalloc - ba->alloc));
     ba->alloc = newalloc;
