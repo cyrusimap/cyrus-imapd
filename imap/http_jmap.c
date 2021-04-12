@@ -625,7 +625,7 @@ static int jmap_download(struct transaction_t *txn)
     return res;
 }
 
-static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
+static int has_shared_rw_rights_cb(const mbentry_t *mbentry, void *vrock)
 {
     int *rights = (int *) vrock;
 
@@ -650,7 +650,7 @@ static int has_shared_rw_rights(const char *accountid)
 {
     int rights = 0;
 
-    mboxlist_usermboxtree(accountid, NULL, &sharedrights_cb, &rights, 0);
+    mboxlist_usermboxtree(accountid, NULL, &has_shared_rw_rights_cb, &rights, 0);
 
     return rights;
 }
