@@ -416,18 +416,22 @@ static void _matchmime_tr_begin_part(search_text_receiver_t *rx __attribute__((u
 {
 }
 
-static void _matchmime_tr_append_text(search_text_receiver_t *rx,
+static int _matchmime_tr_append_text(search_text_receiver_t *rx,
                                       const struct buf *text)
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
 
-    if (buf_len(&tr->buf) >= SEARCH_MAX_PARTS_SIZE) return;
+    if (buf_len(&tr->buf) >= config_search_maxsize) {
+        return IMAP_MESSAGE_TOO_LARGE;
+    }
 
-    size_t n = SEARCH_MAX_PARTS_SIZE - buf_len(&tr->buf);
+    size_t n = config_search_maxsize - buf_len(&tr->buf);
     if (n > buf_len(text)) {
         n = buf_len(text);
     }
     buf_appendmap(&tr->buf, buf_base(text), n);
+
+    return 0;
 }
 
 static void _matchmime_tr_end_part(search_text_receiver_t *rx, int part)

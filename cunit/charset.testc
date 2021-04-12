@@ -774,12 +774,14 @@ struct text_rock {
     struct buf out;
 };
 
-static void append_text(const struct buf *text, void *rock)
+static int append_text(const struct buf *text, void *rock)
 {
     struct text_rock *tr = (struct text_rock *)rock;
 
     tr->ncalls++;
     buf_append(&tr->out, text);
+
+    return 0;
 }
 
 #define TESTCASE(in, cs, enc, st, exp) \
@@ -798,7 +800,7 @@ static void append_text(const struct buf *text, void *rock)
         buf_init_ro(&bin, _in, sizeof(_in)-1); \
  \
         r = charset_extract(append_text, &tr, &bin, _cs, _enc, _st, flags); \
-        CU_ASSERT_EQUAL(r, 1); \
+        CU_ASSERT_EQUAL(r, 0); \
         CU_ASSERT_EQUAL(tr.ncalls, 1); \
         CU_ASSERT_STRING_EQUAL(buf_cstring(&tr.out), _exp); \
  \

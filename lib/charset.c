@@ -3057,7 +3057,7 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
 }
 
 /* This is based on charset_searchfile above. */
-EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
+EXPORTED int charset_extract(int (*cb)(const struct buf *, void *),
                              void *rock,
                              const struct buf *data,
                              charset_t charset, int encoding,
@@ -3067,6 +3067,7 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
     struct buf *out;
     size_t i;
     charset_t utf8;
+    int r = 0;
     
     if (charset_debug)
         fprintf(stderr, "charset_extract()\n");
@@ -3085,7 +3086,7 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
             /* silently pretend we indexed it, but actually ignore it */
             convert_free(input);
             charset_free(&utf8);
-            return 1;
+            return 0;
         }
         /* this is text/html data, so we can make ourselves useful by
          * stripping html tags, css and js. */
@@ -3126,20 +3127,23 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
 
         /* process a block of output every so often */
         if (buf_len(out) > 4096) {
-            cb(out, rock);
+            r = cb(out, rock);
             buf_reset(out);
+            if (r) break;
         }
     }
-    /* finish it */
-    convert_flush(input);
-    if (out->len) { 
-        cb(out, rock);
+    if (!r) {
+        /* finish it */
+        convert_flush(input);
+        if (out->len) {
+            r = cb(out, rock);
+        }
     }
 
     convert_free(input);
     charset_free(&utf8);
 
-    return 1;
+    return r;
 }
 
 /*
@@ -3674,7 +3678,7 @@ EXPORTED char *charset_encode_mimephrase(const char *data)
     return buf_release(&buf);
 }
 
-static void extract_plain_cb(const struct buf *buf, void *rock)
+static int extract_plain_cb(const struct buf *buf, void *rock)
 {
     struct buf *dst = (struct buf*) rock;
     const char *p;
@@ -3692,6 +3696,8 @@ static void extract_plain_cb(const struct buf *buf, void *rock)
         }
         buf_appendmap(dst, p, 1);
     }
+
+    return 0;
 }
 
 EXPORTED char *charset_extract_plain(const char *html) {

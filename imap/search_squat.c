@@ -644,7 +644,7 @@ static int do_append(SquatReceiverData *d, const struct buf *text)
     return 0;
 }
 
-static void append_text(search_text_receiver_t *rx,
+static int append_text(search_text_receiver_t *rx,
                         const struct buf *text)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
@@ -655,7 +655,7 @@ static void append_text(search_text_receiver_t *rx,
         if (text->len + d->pending_text.len < SQUAT_WORD_SIZE) {
             /* not enough text yet */
             buf_append(&d->pending_text, text);
-            return;
+            return 0;
         }
 
         /* just went over the threshold */
@@ -669,7 +669,7 @@ static void append_text(search_text_receiver_t *rx,
                             "for mailbox %s: %s",
                             d->doc_name, d->mailbox->name,
                             squat_strerror(s));
-            return;
+            return IMAP_IOERROR;
         }
         d->doc_is_open = 1;
 
@@ -682,7 +682,7 @@ static void append_text(search_text_receiver_t *rx,
     if (!r)
         r = do_append(d, text);
 
-    /* TODO: propagate an error to the caller */
+    return r;
 }
 
 static void end_part(search_text_receiver_t *rx,

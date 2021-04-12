@@ -93,11 +93,6 @@ typedef struct search_snippet_markup {
 
 extern search_snippet_markup_t default_snippet_markup;
 
-/* Maximum size of a query, determined empirically, is a little bit
- * under 8MB.  That seems like more than enough, so let's limit the
- * total amount of parts text to 4 MB. */
-#define SEARCH_MAX_PARTS_SIZE      (4*1024*1024)
-
 /* The functions in search_text_receiver_t get called at least once for each part of every message.
    The invocations form a sequence:
        begin_message(message_t)
@@ -134,7 +129,8 @@ struct search_text_receiver {
                           const struct message_guid *content_guid,
                           const char *type, const char *subtype);
     void (*begin_part)(search_text_receiver_t *, int part);
-    void (*append_text)(search_text_receiver_t *, const struct buf *);
+    /* Returns IMAP_MESSAGE_TOO_LARGE if no more bytes are accepted */
+    int  (*append_text)(search_text_receiver_t *, const struct buf *);
     void (*end_part)(search_text_receiver_t *, int part);
     void (*end_bodypart)(search_text_receiver_t *);
 #define SEARCH_INDEXLEVEL_BASIC 1

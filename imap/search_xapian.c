@@ -1873,8 +1873,7 @@ struct xapian_receiver
     int part;
     const struct message_guid *part_guid;
     const char *partid;
-    unsigned int parts_total;
-    int truncate_warning;
+    unsigned int part_total;
     ptrarray_t segs;
 };
 
@@ -2132,8 +2131,6 @@ static int begin_message(search_text_receiver_t *rx, message_t *msg)
 
     message_guid_copy(&tr->super.guid, guid);
     free_segments((xapian_receiver_t *)tr);
-    tr->super.parts_total = 0;
-    tr->super.truncate_warning = 0;
     return 0;
 }
 
@@ -2154,26 +2151,27 @@ static void begin_part(search_text_receiver_t *rx, int part)
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
 
     tr->part = part;
+    tr->part_total = 0;
 }
 
-static void append_text(search_text_receiver_t *rx,
-                        const struct buf *text)
+static int append_text(search_text_receiver_t *rx,
+                       const struct buf *text)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
     struct segment *seg;
 
     if (tr->part) {
         unsigned len = text->len;
-        if (tr->parts_total + len > SEARCH_MAX_PARTS_SIZE) {
-            if (!tr->truncate_warning++)
-                syslog(LOG_ERR, "Xapian: truncating text from "
-                                "message mailbox %s uid %u",
-                                tr->mailbox->name, tr->uid);
-            len = SEARCH_MAX_PARTS_SIZE - tr->parts_total;
+        if (tr->part_total + len > config_search_maxsize) {
+            syslog(LOG_ERR, "Xapian: truncating text from "
+                    "message mailbox %s uid %u part %s",
+                    tr->mailbox->name, tr->uid,
+                    search_part_as_string(tr->part));
+            len = config_search_maxsize - tr->part_total;
         }
 
         if (len) {
-            tr->parts_total += len;
+            tr->part_total += len;
 
             seg = (struct segment *)ptrarray_tail(&tr->segs);
             if (!seg || seg->is_finished || seg->part != tr->part) {
@@ -2193,6 +2191,12 @@ static void append_text(search_text_receiver_t *rx,
             buf_appendmap(&seg->text, text->s, len);
         }
     }
+
+    if (tr->part_total >= config_search_maxsize) {
+        return IMAP_MESSAGE_TOO_LARGE;
+    }
+
+    return 0;
 }
 
 static void end_part(search_text_receiver_t *rx,

@@ -114,6 +114,7 @@ EXPORTED const char *config_conversations_db;
 EXPORTED const char *config_backup_db;
 EXPORTED int charset_flags;
 EXPORTED int charset_snippet_flags;
+EXPORTED size_t config_search_maxsize;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
@@ -322,6 +323,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         /* All search engines other than Xapian require escaped HTML */
         charset_snippet_flags |= CHARSET_ESCAPEHTML;
     }
+
+    config_search_maxsize = 1024 * config_getint(IMAPOPT_SEARCH_MAXSIZE);
 
     if (!cyrus_init_nodb) {
         /* lookup the database backends */
