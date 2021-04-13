@@ -1273,8 +1273,8 @@ static json_t *participant_from_ical(icalproperty *prop,
     param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
     if (param) {
         name = icalparameter_get_cn(param);
+        if (*name) json_object_set_new(p, "name", json_string(name));
     }
-    json_object_set_new(p, "name", json_string(name ? name : ""));
 
     /* kind */
     const char *kind = NULL;
@@ -1515,8 +1515,10 @@ participant_from_icalorganizer(icalproperty *orga)
     const char *name = NULL;
     if ((param = icalproperty_get_first_parameter(orga, ICAL_CN_PARAMETER))) {
         name = icalparameter_get_cn(param);
+        if (name && *name) {
+            json_object_set_new(jorga, "name", json_string(name));
+        }
     }
-    json_object_set_new(jorga, "name", json_string(name ? name : ""));
 
     /* roles */
     json_object_set_new(jorga, "roles", json_pack("{s:b}", "owner", 1));
@@ -1905,7 +1907,7 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links)
 
     /* name */
     const char *name = icalvalue_get_text(icalproperty_get_value(prop));
-    json_object_set_new(loc, "name", json_string(name ? name : ""));
+    if (name) json_object_set_new(loc, "name", json_string(name));
 
     /* rel */
     const char *rel = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL);
@@ -1913,7 +1915,7 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links)
 
     /* description */
     const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
-    if (desc) {
+    if (desc && *desc) {
         struct buf buf = BUF_INITIALIZER;
         unescape_ical_text(&buf, desc);
         json_object_set_new(loc, "description", json_string(buf_cstring(&buf)));
@@ -2090,14 +2092,14 @@ virtuallocations_from_ical(icalcomponent *comp)
         const char *uri = icalproperty_get_value_as_string(prop);
         if (uri) json_object_set_new(loc, "uri", json_string(uri));
 
-        const char *name = "";
         icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_LABEL_PARAMETER);
-        if (param) name = icalparameter_get_label(param);
-        if (!name) name = "";
-        json_object_set_new(loc, "name", json_string(name));
+        if (param) {
+            const char *name = icalparameter_get_label(param);
+            if (name && *name) json_object_set_new(loc, "name", json_string(name));
+        }
 
         const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
-        if (desc) {
+        if (desc && *desc) {
             struct buf buf = BUF_INITIALIZER;
             unescape_ical_text(&buf, desc);
             json_object_set_new(loc, "description", json_string(buf_cstring(&buf)));
@@ -2320,14 +2322,14 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
 
     /* description */
     if (jmap_wantprop(props, "description") || jmap_wantprop(props, "descriptionContentType")) {
-        const char *desc = "";
-        prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
-        if (prop) {
-            desc = icalproperty_get_description(prop);
-            if (!desc) desc = "";
-        }
         if (jmap_wantprop(props, "description")) {
-            json_object_set_new(event, "description", json_string(desc));
+            prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+            if (prop) {
+                const char *desc = icalproperty_get_description(prop);
+                if (desc && *desc) {
+                    json_object_set_new(event, "description", json_string(desc));
+                }
+            }
         }
         if (jmap_wantprop(props, "descriptionContentType")) {
             json_object_set_new(event, "descriptionContentType", json_string("text/plain"));
@@ -2979,9 +2981,11 @@ participant_to_ical(icalcomponent *comp,
     json_t *jname = json_object_get(jpart, "name");
     if (json_is_string(jname)) {
         const char *name = json_string_value(jname);
-        icalproperty_add_parameter(prop, icalparameter_new_cn(name));
-        if (is_orga) {
-            icalproperty_add_parameter(orga, icalparameter_new_cn(name));
+        if (*name) {
+            icalproperty_add_parameter(prop, icalparameter_new_cn(name));
+            if (is_orga) {
+                icalproperty_add_parameter(orga, icalparameter_new_cn(name));
+            }
         }
     }
     else if (JNOTNULL(jname)) {
@@ -3664,7 +3668,7 @@ description_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *jse
         jmap_parser_invalid(parser, "descriptionContentType");
     }
 
-    if (desc && strlen(desc)) icalcomponent_set_description(comp, desc);
+    if (desc && *desc) icalcomponent_set_description(comp, desc);
 }
 
 /* Create or update the VALARMs in the VEVENT component comp as defined by the
@@ -4327,7 +4331,9 @@ static void
 location_to_ical(icalcomponent *comp, const char *id, json_t *loc)
 {
     const char *name = json_string_value(json_object_get(loc, "name"));
+    if (name && !*name) name = NULL;
     const char *rel = json_string_value(json_object_get(loc, "relativeTo"));
+    if (rel && !*rel) rel = NULL;
 
     /* Gracefully handle bogus values */
     if (rel && !strcmp(rel, "unknown")) rel = NULL;
@@ -4353,11 +4359,11 @@ location_to_ical(icalcomponent *comp, const char *id, json_t *loc)
 
     /* description, timeZone, coordinates */
     const char *s = json_string_value(json_object_get(loc, "description"));
-    if (s) set_icalxparam(prop, JMAPICAL_XPARAM_DESCRIPTION, s, 0);
+    if (s && *s) set_icalxparam(prop, JMAPICAL_XPARAM_DESCRIPTION, s, 0);
     s = json_string_value(json_object_get(loc, "timeZone"));
-    if (s) set_icalxparam(prop, JMAPICAL_XPARAM_TZID, s, 0);
+    if (s && *s) set_icalxparam(prop, JMAPICAL_XPARAM_TZID, s, 0);
     s = json_string_value(json_object_get(loc, "coordinates"));
-    if (s) set_icalxparam(prop, JMAPICAL_XPARAM_GEO, s, 0);
+    if (s && *s) set_icalxparam(prop, JMAPICAL_XPARAM_GEO, s, 0);
 
     /* linkIds */
     json_t *jval;
@@ -4447,7 +4453,9 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
         json_t *jname = json_object_get(loc, "name");
         if (json_is_string(juri)) {
             const char *name = json_string_value(jname);
-            icalproperty_add_parameter(prop, icalparameter_new_label(name));
+            if (*name) {
+                icalproperty_add_parameter(prop, icalparameter_new_label(name));
+            }
         }
         else {
             jmap_parser_invalid(parser, "uri");
@@ -4458,7 +4466,9 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
         json_t *jdescription = json_object_get(loc, "description");
         if (json_is_string(jdescription)) {
             const char *desc = json_string_value(jdescription);
-            set_icalxparam(prop, JMAPICAL_XPARAM_DESCRIPTION, desc, 0);
+            if (desc && *desc) {
+                set_icalxparam(prop, JMAPICAL_XPARAM_DESCRIPTION, desc, 0);
+            }
         }
         else if (JNOTNULL(jdescription)) {
             jmap_parser_invalid(parser, "description");
