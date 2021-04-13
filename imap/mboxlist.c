@@ -810,7 +810,7 @@ EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid,
     const char *data;
     size_t datalen;
     mbentry_t *mbentry = NULL;
-    char *mbname;
+    char *mbname = NULL;
 
     init_internal();
 
@@ -820,8 +820,12 @@ EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid,
     r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
     if (r) return NULL;
 
-    mbname = mbentry->name;
-    mbentry->name = NULL;
+    // only note the name down if it's not deleted
+    if (!(mbentry->mbtype & MBTYPE_DELETED)) {
+        mbname = mbentry->name;
+        mbentry->name = NULL;
+    }
+
     mboxlist_entry_free(&mbentry);
 
     return mbname;
