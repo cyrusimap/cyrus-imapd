@@ -12448,7 +12448,7 @@ EOF
         '/dav/calendars/user/cassandane/Default/testitip.ics',
         $ical, 'Content-Type' => 'text/calendar',
                'Schedule-Sender-Address' => 'itipsender@local',
-               'Schedule-Sender-Name' => 'iTIP Sender',
+               'Schedule-Sender-Name' => '=?utf-8?q?iTIP_=E2=98=BA_Sender?=',
         );
 
     $res = $jmap->CallMethods([
@@ -12459,7 +12459,7 @@ EOF
     $self->assert_str_equals('created', $res->[0][1]{list}[0]{type});
     $self->assert_str_equals('itipsender@local',
         $res->[0][1]{list}[0]{changedBy}{email});
-    $self->assert_str_equals('iTIP Sender',
+    $self->assert_str_equals("iTIP \N{WHITE SMILING FACE} Sender", # assert RFC0247 support
         $res->[0][1]{list}[0]{changedBy}{name});
     $self->assert_null($res->[0][1]{list}[0]{changedBy}{calendarPrincipalId});
 
