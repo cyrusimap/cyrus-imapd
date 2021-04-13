@@ -1503,7 +1503,6 @@ sub test_calendarevent_get_participants
         '375507f588e65ec6eb800757ab94ccd10ad58599' => {
             '@type' => 'Participant',
             name => 'Monty Burns',
-            email => 'smithers@example.com',
             roles => {
                 'owner' => JSON::true,
                 'attendee' => JSON::true,
@@ -1519,7 +1518,6 @@ sub test_calendarevent_get_participants
             '@type' => 'Participant',
             name => 'Homer Simpson',
             participationStatus => 'accepted',
-            email => 'homer@example.com',
             roles => {
                 'optional' => JSON::true,
             },
@@ -1534,7 +1532,6 @@ sub test_calendarevent_get_participants
             '@type' => 'Participant',
             name => 'Carl Carlson',
             participationStatus => 'tentative',
-            email => 'carl@example.com',
             roles => {
                 'attendee' => JSON::true,
             },
@@ -1552,7 +1549,6 @@ sub test_calendarevent_get_participants
             '@type' => 'Participant',
             name => 'Lenny Leonard',
             participationStatus => 'delegated',
-            email => 'lenny@example.com',
             roles => {
                 'attendee' => JSON::true,
             },
@@ -1569,7 +1565,6 @@ sub test_calendarevent_get_participants
             '@type' => 'Participant',
             name => 'Larry Burns',
             participationStatus => 'declined',
-            email => 'larry@example.com',
             roles => {
                 'attendee' => JSON::true,
             },
@@ -1599,7 +1594,6 @@ sub test_calendarevent_get_organizer
         'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
             '@type' => 'Participant',
             name => 'Organizer',
-            email => 'organizer@local',
             roles => {
                 'owner' => JSON::true,
             },
@@ -1612,7 +1606,6 @@ sub test_calendarevent_get_organizer
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
-            email => 'attendee@local',
             roles => {
                 'attendee' => JSON::true,
             },
@@ -1645,7 +1638,6 @@ sub test_calendarevent_organizer_noattendees
         'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
             '@type' => 'Participant',
             name => 'Organizer',
-            email => 'organizer@local',
             roles => {
                 'owner' => JSON::true,
             },
@@ -1677,7 +1669,6 @@ sub test_calendarevent_get_organizer_bogusuri
         '55d3677ce6a79b250d0fc3b5eed5130807d93dd3' => {
             '@type' => 'Participant',
             name => 'Organizer',
-            email => undef,
             roles => {
                 'attendee' => JSON::true,
                 'owner' => JSON::true,
@@ -1691,7 +1682,6 @@ sub test_calendarevent_get_organizer_bogusuri
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
-            email => 'attendee@local',
             roles => {
                 'attendee' => JSON::true,
             },
@@ -1721,7 +1711,6 @@ sub test_calendarevent_get_organizermailto
         'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
             '@type' => 'Participant',
             name => 'Organizer',
-            email => 'organizer@local',
             roles => {
                 'owner' => JSON::true,
                 'attendee' => JSON::true,
@@ -1736,7 +1725,6 @@ sub test_calendarevent_get_organizermailto
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
             name => 'Attendee',
-            email => 'attendee@local',
             roles => {
                 'attendee' => JSON::true,
             },
@@ -3004,7 +2992,6 @@ sub test_calendarevent_set_participants
         "participants" => {
             'foo' => {
                 name => 'Foo',
-                email => 'foo@local',
                 kind => 'individual',
                 roles => {
                     'owner' => JSON::true,
@@ -3018,11 +3005,12 @@ sub test_calendarevent_set_participants
                     'link1' => JSON::true,
                 },
                 participationComment => 'Sure; see you "soon"!',
-                # Auto-generated sendTo{imip}
+                sendTo => {
+                    imip => 'mailto:foo@local',
+                },
             },
             'bar' => {
                 name => 'Bar',
-                email => 'bar@local',
                 kind => 'individual',
                 roles => {
                     'attendee' => JSON::true,
@@ -3039,13 +3027,13 @@ sub test_calendarevent_set_participants
                 linkIds => {
                     'link1' => JSON::true,
                 },
+                email => 'bar2@local', # different email than sendTo
                 sendTo => {
                     imip => 'mailto:bar@local',
                 },
             },
             'bam' => {
                 name => 'Bam',
-                email => 'bam@local',
                 roles => {
                     'attendee' => JSON::true,
                 },
@@ -3054,6 +3042,7 @@ sub test_calendarevent_set_participants
                 },
                 scheduleSequence => 7,
                 scheduleUpdated => '2018-07-06T05:03:02Z',
+                email => 'bam@local', # same email as sendTo
                 sendTo => {
                     imip => 'mailto:bam@local',
                 },
@@ -3076,7 +3065,6 @@ sub test_calendarevent_set_participants
                 roles => {
                     'attendee' => JSON::true,
                 },
-                email => 'resource@local',
                 sendTo => {
                     imip => 'mailto:resource@local',
                 },
@@ -3087,7 +3075,6 @@ sub test_calendarevent_set_participants
                 roles => {
                     'attendee' => JSON::true,
                 },
-                email => 'location@local',
                 locationId => 'loc1',
                 sendTo => {
                     imip => 'mailto:location@local',
@@ -3141,7 +3128,6 @@ sub test_calendarevent_set_participants_patch
         "participants" => {
             'bar' => {
                 name => 'Bar',
-                email => 'bar@local',
                 roles => {
                     'attendee' => JSON::true,
                 },
@@ -3160,7 +3146,6 @@ sub test_calendarevent_set_participants_patch
 
     # Add auto-generated owner participant for ORGANIZER.
     $event->{participants}{'3e6a0e46cc0af22aff762f2e1869f23de7aca482'} = {
-        email => 'foo@local',
         roles => {
             'owner' => JSON::true,
         },
@@ -3214,7 +3199,6 @@ sub test_calendarevent_set_participants_organame
             'foo' => {
                 '@type' => 'Participant',
                 name => 'Foo',
-                email => 'foo@local',
                 roles => {
                     'owner' => JSON::true,
                 },
@@ -3225,10 +3209,12 @@ sub test_calendarevent_set_participants_organame
             'bar' => {
                 '@type' => 'Participant',
                 name => 'Bar',
-                email => 'bar@local',
                 kind => 'individual',
                 roles => {
                     'attendee' => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:bar@local',
                 },
             },
         },
@@ -4617,17 +4603,21 @@ sub test_calendarevent_query_text
                             "participants" => {
                                 "tux" => {
                                     name => "",
-                                    email => "tux\@local",
                                     roles => {
                                         'owner' => JSON::true,
                                     },
                                     locationId => "loc1",
+                                    sendTo => {
+                                        imip => 'tux@local',
+                                    },
                                 },
                                 "qux" => {
                                     name => "Quuks",
-                                    email => "qux\@local",
                                     roles => {
                                         'attendee' => JSON::true,
+                                    },
+                                    sendTo => {
+                                        imip => 'qux@local',
                                     },
                                 },
                             },
@@ -5040,16 +5030,20 @@ sub test_calendarevent_set_schedule_request
     my $participants = {
         "org" => {
             "name" => "Cassandane",
-            "email" => "cassandane\@example.com",
             roles => {
                 'owner' => JSON::true,
+            },
+            sendTo => {
+                imip => 'cassandane@example.com',
             },
         },
         "att" => {
             "name" => "Bugs Bunny",
-            "email" => "bugs\@example.com",
             roles => {
                 'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'bugs@example.com',
             },
         },
     };
@@ -5096,14 +5090,18 @@ sub test_calendarevent_set_schedule_reply
     my $participants = {
         "org" => {
             "name" => "Bugs Bunny",
-            "email" => "bugs\@example.com",
+            sendTo => {
+                imip => 'mailto:bugs@example.com',
+            },
             roles => {
                 'owner' => JSON::true,
             },
         },
         "att" => {
             "name" => "Cassandane",
-            "email" => "cassandane\@example.com",
+            sendTo => {
+                imip => 'mailto:cassandane@example.com',
+            },
             roles => {
                 'attendee' => JSON::true,
             },
@@ -5183,16 +5181,20 @@ sub test_calendarevent_set_schedule_destroy
                             "participants" => {
                                 "org" => {
                                     "name" => "Cassandane",
-                                    "email" => "cassandane\@example.com",
                                     roles => {
                                         'owner' => JSON::true,
+                                    },
+                                    sendTo => {
+                                        imip => 'mailto:cassandane@example.com',
                                     },
                                 },
                                 "att" => {
                                     "name" => "Bugs Bunny",
-                                    "email" => "bugs\@example.com",
                                     roles => {
                                         'attendee' => JSON::true,
+                                    },
+                                    sendTo => {
+                                        imip => 'mailto:bugs@example.com',
                                     },
                                 },
                             },
@@ -5251,16 +5253,20 @@ sub test_calendarevent_set_schedule_cancel
                             "participants" => {
                                 "org" => {
                                     "name" => "Cassandane",
-                                    "email" => "cassandane\@example.com",
                                     roles => {
                                         'owner' => JSON::true,
+                                    },
+                                    sendTo => {
+                                        imip => 'mailto:cassandane@example.com',
                                     },
                                 },
                                 "att" => {
                                     "name" => "Bugs Bunny",
-                                    "email" => "bugs\@example.com",
                                     roles => {
                                         'attendee' => JSON::true,
+                                    },
+                                    sendTo => {
+                                        imip => 'mailto:bugs@example.com',
                                     },
                                 },
                             },
