@@ -4485,7 +4485,8 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
         }
         from = strconcat("<", byemail, ">", NULL);
         if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-name"))) {
-            buf_setcstr(&byname, *hdr);
+            char *val = charset_decode_mimeheader(*hdr, CHARSET_KEEPCASE);
+            if (val) buf_initmcstr(&byname, val);
         }
     }
     else {
