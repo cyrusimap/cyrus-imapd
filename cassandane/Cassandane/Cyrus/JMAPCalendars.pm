@@ -1612,7 +1612,6 @@ sub test_calendarevent_get_organizer
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
-            name => '',
             email => 'attendee@local',
             roles => {
                 'attendee' => JSON::true,
@@ -1692,7 +1691,6 @@ sub test_calendarevent_get_organizer_bogusuri
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
-            name => '',
             email => 'attendee@local',
             roles => {
                 'attendee' => JSON::true,
@@ -3162,7 +3160,6 @@ sub test_calendarevent_set_participants_patch
 
     # Add auto-generated owner participant for ORGANIZER.
     $event->{participants}{'3e6a0e46cc0af22aff762f2e1869f23de7aca482'} = {
-        name => '',
         email => 'foo@local',
         roles => {
             'owner' => JSON::true,
@@ -3401,7 +3398,6 @@ sub test_calendarevent_set_participantid
 
     my $participants = {
         "foo" => {
-            name => "",
             email => 'foo@local',
             roles => {
                 'attendee' => JSON::true,
