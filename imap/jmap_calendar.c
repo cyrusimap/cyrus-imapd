@@ -2043,12 +2043,13 @@ gotevent:
         const char *uniqueid = NULL;
 
         /* Get uniqueid of calendar mailbox */
-        if (!rock->mailbox || strcmp(rock->mailbox->name, cdata->dav.mailbox)) {
-            if (!rock->mbentry || strcmp(rock->mbentry->name, cdata->dav.mailbox)) {
+        if (!rock->mailbox || strcmp(rock->mailbox->uniqueid, cdata->dav.mailbox)) {
+            if (!rock->mbentry || strcmp(rock->mbentry->uniqueid, cdata->dav.mailbox)) {
                 mboxlist_entry_free(&rock->mbentry);
-                r = jmap_mboxlist_lookup(cdata->dav.mailbox, &rock->mbentry, NULL);
+                rock->mbentry = jmap_mbentry_from_dav(rock->req, &cdata->dav);
             }
-            if (rock->mbentry) {
+            if (rock->mbentry &&
+                jmap_hasrights_mbentry(rock->req, rock->mbentry, JACL_READITEMS)) {
                 uniqueid = rock->mbentry->uniqueid;
             }
         }
