@@ -2989,6 +2989,7 @@ static int set_upload_rights(const char *accountid)
     }
 
     mailbox_close(&mbox);
+    free(newacl);
 
     return 0;
 }
