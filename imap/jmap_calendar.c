@@ -2004,6 +2004,31 @@ done:
     return r;
 }
 
+static const char *find_participant_by_addr(json_t *participants, const char *addr)
+{
+    if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
+
+    const char *id;
+    json_t *jpart;
+    json_object_foreach(participants, id, jpart) {
+        json_t *jsendTo = json_object_get(jpart, "sendTo");
+        const char *val = json_string_value(json_object_get(jsendTo, "imip"));
+        if (val && !strncasecmp(val, "mailto:", 7)) {
+            val += 7;
+        }
+        else if (!val) {
+            // email shouldn't be used for scheduling, but it allows
+            // to identify the Participant by their email address
+            val = json_string_value(json_object_get(jpart, "email"));
+        }
+        if (!strcasecmpsafe(val, addr)) {
+            return id;
+        }
+    }
+
+    return NULL;
+}
+
 static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 {
     struct getcalendarevents_rock *rock = vrock;
@@ -2056,22 +2081,12 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     ical = NULL;
 
     /* Add participant id */
+    json_t *jparticipants = json_object_get(jsevent, "participants");
     const char *participant_id = NULL;
     int i;
     for (i = 0; i < strarray_size(&schedule_addresses); i++) {
-        const char *test = strarray_nth(&schedule_addresses, i);
-        if (!strncasecmp(test, "mailto:", 7)) test += 7;
-        const char *key;
-        json_t *participant;
-        json_object_foreach(json_object_get(jsevent, "participants"), key, participant) {
-            const char *email = json_string_value(json_object_get(participant, "email"));
-            if (!email) continue;
-            if (!strncasecmp(email, "mailto:", 7)) email += 7;
-            if (!strcasecmp(email, test)) {
-                participant_id = key;
-                break;
-            }
-        }
+        participant_id = find_participant_by_addr(jparticipants,
+                strarray_nth(&schedule_addresses, i));
         if (participant_id) break;
     }
     json_object_set_new(jsevent, "participantId", participant_id ?
@@ -2571,6 +2586,42 @@ static void remove_itip_properties(icalcomponent *ical)
 
 }
 
+static const char *validate_participant_id(json_t *event,
+                                           strarray_t *schedule_addresses,
+                                           json_t *invalid)
+{
+    json_t *jparticipantId = json_object_get(event, "participantId");
+    if (json_is_string(jparticipantId)) {
+        const char *participant_id = json_string_value(jparticipantId);
+        json_t *jparticipants = json_object_get(event, "participants");
+        json_t *jpart = json_object_get(jparticipants, participant_id);
+
+        json_t *jsendTo = json_object_get(jpart, "sendTo");
+        const char *val = json_string_value(json_object_get(jsendTo, "imip"));
+        if (val && !strncasecmp(val, "mailto:", 7)) {
+            val += 7;
+        }
+        else if (!val) {
+            // email shouldn't be used for scheduling, but it allows
+            // to identify the Participant by their email address
+            val = json_string_value(json_object_get(jpart, "email"));
+        }
+        if (val && *val) {
+            /* Found the participant. Reset schedule address. */
+            strarray_addfirst_case(schedule_addresses, val);
+            return participant_id;
+        }
+        else {
+            json_array_append_new(invalid, json_string("participantId"));
+        }
+    }
+    else if (JNOTNULL(jparticipantId)) {
+        json_array_append_new(invalid, json_string("participantId"));
+    }
+    return NULL;
+}
+
+
 static int setcalendarevents_create(jmap_req_t *req,
                                     const char *account_id,
                                     json_t *event,
@@ -2672,18 +2723,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     ical = jmapical_toical(event, NULL, invalid);
 
     // check that participantId is either not present or is a valid participant
-    json_t *jparticipantId = json_object_get(event, "participantId");
-    if (json_is_string(jparticipantId)) {
-        const char *participant_id = json_string_value(jparticipantId);
-        json_t *participants = json_object_get(event, "participants");
-        json_t *participant = json_object_get(participants, participant_id);
-        const char *email = json_string_value(json_object_get(participant, "email"));
-        if (email) strarray_addfirst_case(&schedule_addresses, email);
-        else json_array_append_new(invalid, json_string("participantId"));
-    }
-    else if (JNOTNULL(jparticipantId)) {
-        json_array_append_new(invalid, json_string("participantId"));
-    }
+    validate_participant_id(event, &schedule_addresses, invalid);
 
     if (json_array_size(invalid)) {
         r = 0;
@@ -2859,27 +2899,16 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
     json_object_del(old_event, "updated");
 
     /* Add participant id to old_event */
+    json_t *jparticipants = json_object_get(old_event, "participants");
     const char *participant_id = NULL;
     int i;
     for (i = 0; i < strarray_size(schedule_addresses); i++) {
-        const char *test = strarray_nth(schedule_addresses, i);
-        if (!strncasecmp(test, "mailto:", 7)) test += 7;
-        const char *key;
-        json_t *participant;
-        json_object_foreach(json_object_get(old_event, "participants"), key, participant) {
-            const char *email = json_string_value(json_object_get(participant, "email"));
-            if (!email) continue;
-            if (!strncasecmp(email, "mailto:", 7)) email += 7;
-            if (!strcasecmp(email, test)) {
-                participant_id = key;
-                break;
-            }
-        }
+        participant_id = find_participant_by_addr(jparticipants,
+                    strarray_nth(schedule_addresses, i));
         if (participant_id) break;
     }
     json_object_set_new(old_event, "participantId", participant_id ?
             json_string(participant_id) : json_null());
-
 
     if (recurid) {
         /* Update or create an override */
@@ -3068,19 +3097,7 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
     }
 
     // check that participantId is either not present or is a valid participant
-    participant_id = NULL;
-    json_t *jparticipantId = json_object_get(new_event, "participantId");
-    if (json_is_string(jparticipantId)) {
-        participant_id = json_string_value(jparticipantId);
-        json_t *participants = json_object_get(new_event, "participants");
-        json_t *participant = json_object_get(participants, participant_id);
-        const char *email = json_string_value(json_object_get(participant, "email"));
-        if (email) strarray_addfirst_case(schedule_addresses, email);
-        else json_array_append_new(invalid, json_string("participantId"));
-    }
-    else if (JNOTNULL(jparticipantId)) {
-        json_array_append_new(invalid, json_string("participantId"));
-    }
+    participant_id = validate_participant_id(new_event, schedule_addresses, invalid);
 
     /* Determine if to bump sequence */
     json_t *jdiff = jmap_patchobject_create(old_event, new_event);
