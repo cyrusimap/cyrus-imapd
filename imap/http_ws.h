@@ -79,8 +79,6 @@ extern void ws_add_resp_hdrs(struct transaction_t *txn);
 
 extern void ws_end_channel(void *ws_ctx);
 
-extern void ws_output(struct transaction_t *txn);
-
 extern void ws_input(struct transaction_t *txn);
 
 #endif /* HTTP_WS_H */

@@ -834,7 +834,7 @@ HIDDEN void ws_end_channel(void *ws_ctx)
 }
 
 
-HIDDEN void ws_output(struct transaction_t *txn)
+static void ws_output(struct transaction_t *txn)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
     wslay_event_context_ptr ev = ctx->event;
@@ -956,11 +956,6 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
 }
 
 HIDDEN void ws_end_channel(void *ws_ctx __attribute__((unused))) {}
-
-HIDDEN void ws_output(struct transaction_t *txn __attribute__((unused)))
-{
-    fatal("ws_output() called, but no Wslay", EX_SOFTWARE);
-}
 
 HIDDEN void ws_input(struct transaction_t *txn __attribute__((unused)))
 {
