@@ -400,6 +400,7 @@ struct protstream *httpd_out = NULL;
 struct protstream *httpd_in = NULL;
 struct protgroup *protin = NULL;
 strarray_t *httpd_log_headers = NULL;
+static struct http_connection http_conn;
 
 static sasl_ssf_t extprops_ssf = 0;
 int https = 0;
@@ -838,7 +839,6 @@ int service_main(int argc __attribute__((unused)),
     int mechcount = 0;
     size_t mechlen;
     struct auth_scheme_t *scheme;
-    struct http_connection http_conn;
 
     /* fatal/shut_down will adjust these, so we need to set them early */
     prometheus_decrement(CYRUS_HTTP_READY_LISTENERS);
@@ -1005,6 +1005,8 @@ void shut_down(int code)
     if (allow_cors) free_wildmats(allow_cors);
 
     strarray_free(httpd_log_headers);
+
+    ws_end_channel(http_conn.ws_ctx);
 
     /* Do any namespace specific cleanup */
     for (i = 0; http_namespaces[i]; i++) {
@@ -1993,6 +1995,8 @@ EXPORTED void transaction_free(struct transaction_t *txn)
     transaction_reset(txn);
 
     ws_end_channel(txn->ws_ctx);
+    txn->conn->ws_ctx = NULL;
+
     http2_end_stream(txn->strm_ctx);
 
     zlib_done(txn->zstrm);
@@ -4630,7 +4634,13 @@ static int meth_get(struct transaction_t *txn,
     /* Upgrade to WebSockets over HTTP/1.1 on root, if requested */
     if (!strcmp(txn->req_uri->path, "/")) {
         if (txn->flags.upgrade & UPGRADE_WS) {
-            return ws_start_channel(txn, NULL, &ws_echo);
+            r = ws_start_channel(txn, NULL, &ws_echo);
+            if (!r) {
+                /* Link the WS context into the connection so we can
+                   properly close the WS during an abnormal shut_down() */
+                http_conn.ws_ctx = txn->ws_ctx;
+            }
+            return r;
         }
 
         if (ws_enabled()) {

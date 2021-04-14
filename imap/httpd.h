@@ -340,6 +340,7 @@ struct http_connection {
 
     void *tls_ctx;                      /* TLS context */
     void *sess_ctx;                     /* HTTP/2+ session context */
+    void *ws_ctx;                       /* WebSocket context (HTTP/1.1 only) */
 
     xmlParserCtxtPtr xml;               /* XML parser content */
 };
