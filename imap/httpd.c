@@ -1010,6 +1010,7 @@ void shut_down(int code)
     strarray_free(httpd_log_headers);
 
     ws_end_channel(http_conn.ws_ctx);
+    http2_end_session(http_conn.sess_ctx);
 
     /* Do any namespace specific cleanup */
     for (i = 0; http_namespaces[i]; i++) {

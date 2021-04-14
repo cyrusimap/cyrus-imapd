@@ -628,6 +628,29 @@ HIDDEN void http2_end_session(void *http2_ctx)
 
     if (!ctx) return;
 
+    /* End the session if we haven't already */
+    if (nghttp2_session_want_read(ctx->session)) {
+        int32_t stream_id =
+            nghttp2_session_get_last_proc_stream_id(ctx->session);
+        const char *msg = "Server unavailable";
+        int r;
+
+        syslog(LOG_DEBUG, "nghttp2_submit_goaway(%s)", msg);
+
+        r = nghttp2_submit_goaway(ctx->session, NGHTTP2_FLAG_NONE, stream_id,
+                                  NGHTTP2_CANCEL,
+                                  (const uint8_t *) msg, strlen(msg));
+        if (r) {
+            syslog(LOG_ERR, "nghttp2_submit_goaway: %s", nghttp2_strerror(r));
+        }
+        else {
+            r = nghttp2_session_send(ctx->session);
+            if (r) {
+                syslog(LOG_ERR, "nghttp2_session_send: %s", nghttp2_strerror(r));
+            }
+        }
+    }
+
     nghttp2_option_del(ctx->options);
     nghttp2_session_del(ctx->session);
     free(ctx);
