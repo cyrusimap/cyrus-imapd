@@ -795,7 +795,27 @@ HIDDEN void ws_end_channel(void *ws_ctx)
     struct ws_context *ctx = (struct ws_context *) ws_ctx;
 
     if (!ctx) return;
-    
+
+    /* Close the WS if we haven't already */
+    if (!wslay_event_get_close_sent(ctx->event)) {
+        const char *msg = "Server unavailable";
+        int r;
+
+        syslog(LOG_DEBUG, "wslay_event_queue_close(%s)", msg);
+
+        r = wslay_event_queue_close(ctx->event, WSLAY_CODE_GOING_AWAY,
+                                    (uint8_t *) msg, strlen(msg));
+        if (r) {
+            syslog(LOG_ERR, "wslay_event_queue_close: %s", wslay_error_as_str(r));
+        }
+        else {
+            r = wslay_event_send(ctx->event);
+            if (r) {
+                syslog(LOG_ERR, "wslay_event_send: %s", wslay_error_as_str(r));
+            }
+        }
+    }
+
     wslay_event_context_free(ctx->event);
     buf_free(&ctx->log);
 
