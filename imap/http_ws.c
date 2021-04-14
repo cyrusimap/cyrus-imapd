@@ -739,15 +739,18 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
 
     /* Tell client that WebSocket negotiation has succeeded */
     if (txn->conn->sess_ctx) {
-        /* Treat WS data as chunked response */
+        /* HTTP/2 - Treat WS data as chunked response */
         txn->flags.te = TE_CHUNKED;
 
         response_header(HTTP_OK, txn);
 
         /* Force the response to the client immediately */
-        prot_flush(httpd_out);
+        prot_flush(txn->conn->pout);
     }
-    else response_header(HTTP_SWITCH_PROT, txn);
+    else {
+        /* HTTP/1.1 */
+        response_header(HTTP_SWITCH_PROT, txn);
+    }
 
     /* Set connection as non-blocking */
     prot_NONBLOCK(txn->conn->pin);
