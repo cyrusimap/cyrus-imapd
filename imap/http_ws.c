@@ -750,6 +750,10 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     else {
         /* HTTP/1.1 */
         response_header(HTTP_SWITCH_PROT, txn);
+
+        /* Link the context into the connection so we can
+           properly close the WS during an abnormal shut_down() */
+        txn->conn->ws_ctx = txn->ws_ctx;
     }
 
     /* Set connection as non-blocking */

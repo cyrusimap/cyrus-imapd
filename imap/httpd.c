@@ -703,6 +703,9 @@ int service_init(int argc __attribute__((unused)),
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
     setproctitle_init(argc, argv, envp);
 
+    /* Initialize HTTP connection */
+    memset(&http_conn, 0, sizeof(struct http_connection));
+
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
     signal(SIGPIPE, SIG_IGN);
@@ -1995,7 +1998,6 @@ EXPORTED void transaction_free(struct transaction_t *txn)
     transaction_reset(txn);
 
     ws_end_channel(txn->ws_ctx);
-    txn->conn->ws_ctx = NULL;
 
     http2_end_stream(txn->strm_ctx);
 
@@ -4634,13 +4636,7 @@ static int meth_get(struct transaction_t *txn,
     /* Upgrade to WebSockets over HTTP/1.1 on root, if requested */
     if (!strcmp(txn->req_uri->path, "/")) {
         if (txn->flags.upgrade & UPGRADE_WS) {
-            r = ws_start_channel(txn, NULL, &ws_echo);
-            if (!r) {
-                /* Link the WS context into the connection so we can
-                   properly close the WS during an abnormal shut_down() */
-                http_conn.ws_ctx = txn->ws_ctx;
-            }
-            return r;
+            return ws_start_channel(txn, NULL, &ws_echo);
         }
 
         if (ws_enabled()) {
