@@ -657,7 +657,7 @@ HIDDEN void http2_end_session(void *http2_ctx)
 }
 
 
-HIDDEN void http2_output(struct transaction_t *txn)
+static void http2_output(struct transaction_t *txn)
 {
     struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
 
@@ -1002,11 +1002,6 @@ HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused))
 
 HIDDEN void http2_end_session(void *http2_ctx __attribute__((unused)))
 {
-}
-
-HIDDEN void http2_output(struct transaction_t *txn __attribute__((unused)))
-{
-    fatal("http2_output() called, but no Nghttp2", EX_SOFTWARE);
 }
 
 HIDDEN void http2_input(struct transaction_t *txn __attribute__((unused)))

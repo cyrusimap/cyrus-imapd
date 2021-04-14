@@ -72,8 +72,6 @@ extern int http2_start_session(struct transaction_t *txn,
 
 extern void http2_end_session(void *http2_ctx);
 
-extern void http2_output(struct transaction_t *txn);
-
 extern void http2_input(struct transaction_t *txn);
 
 extern void http2_begin_headers(struct transaction_t *txn);
