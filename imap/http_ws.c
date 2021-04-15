@@ -98,7 +98,7 @@ struct ws_context {
     int log_tail;
     unsigned ext;                    /* Bitmask of negotiated extension(s) */
 
-    struct protstream *h2_pin;       /* Input protstream when under HTTP/2 */
+    struct buf h2_data;              /* Input data pointer when under HTTP/2 */
 
     union {
         struct {
@@ -156,25 +156,16 @@ static const char *wslay_error_as_str(enum wslay_error err_code)
     }
 }
 
-static ssize_t send_cb(wslay_event_context_ptr ev,
-                       const uint8_t *data, size_t len,
-                       int flags, void *user_data)
+static ssize_t h1_send_cb(wslay_event_context_ptr ev,
+                          const uint8_t *data, size_t len,
+                          int flags __attribute__((unused)),
+                          void *user_data)
 {
     struct transaction_t *txn = (struct transaction_t *) user_data;
-    int r;
 
-    if (txn->conn->sess_ctx) {
-        int last_chunk =
-            (txn->flags.conn & CONN_CLOSE) && !(flags & WSLAY_MSG_MORE);
+    int r = prot_write(txn->conn->pout, (const char *) data, len);
 
-        r = http2_data_chunk(txn, (const char *) data, len,
-                             last_chunk, NULL /* md5ctx */);
-    }
-    else {
-        r = prot_write(txn->conn->pout, (const char *) data, len);
-    }
-
-    syslog(LOG_DEBUG, "ws_send_cb(%zu): %d", len, r);
+    syslog(LOG_DEBUG, "ws_h1_send_cb(%zu): %d", len, r);
 
     if (r) {
         wslay_event_set_error(ev, WSLAY_ERR_CALLBACK_FAILURE);
@@ -184,23 +175,19 @@ static ssize_t send_cb(wslay_event_context_ptr ev,
     return len;
 }
 
-static ssize_t recv_cb(wslay_event_context_ptr ev,
-                       uint8_t *buf, size_t len,
-                       int flags __attribute__((unused)),
-                       void *user_data)
+static ssize_t h1_recv_cb(wslay_event_context_ptr ev,
+                          uint8_t *buf, size_t len,
+                          int flags __attribute__((unused)),
+                          void *user_data)
 {
     struct transaction_t *txn = (struct transaction_t *) user_data;
     struct protstream *pin = txn->conn->pin;
     ssize_t n;
 
-    if (txn->conn->sess_ctx) {
-        pin = ((struct ws_context *) txn->ws_ctx)->h2_pin;
-    }
-
     n = prot_read(pin, (char *) buf, len);
     if (!n) {
         /* No data */
-        if (pin->eof && !pin->fixedsize)
+        if (pin->eof)
             wslay_event_set_error(ev, WSLAY_ERR_NO_MORE_MSG);
         else if (pin->error)
             wslay_event_set_error(ev, WSLAY_ERR_CALLBACK_FAILURE);
@@ -211,8 +198,71 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
     }
 
     syslog(LOG_DEBUG,
-           "ws_recv_cb(%zu): n = %zd, eof = %d, err = '%s', errno = %m",
+           "ws_h1_recv_cb(%zu): n = %zd, eof = %d, err = '%s', errno = %m",
            len, n, pin->eof, pin->error ? pin->error : "");
+
+    return n;
+}
+
+static ssize_t h2_send_cb(wslay_event_context_ptr ev,
+                          const uint8_t *data, size_t len,
+                          int flags, void *user_data)
+{
+    struct transaction_t *txn = (struct transaction_t *) user_data;
+    int last_chunk = (txn->flags.conn & CONN_CLOSE) && !(flags & WSLAY_MSG_MORE);
+
+    int r = http2_data_chunk(txn, (const char *) data, len,
+                             last_chunk, NULL /* md5ctx */);
+
+    syslog(LOG_DEBUG, "ws_h2_send_cb(%zu): %d", len, r);
+
+    if (r) {
+        wslay_event_set_error(ev, WSLAY_ERR_CALLBACK_FAILURE);
+        return -1;
+    }
+
+    return len;
+}
+
+static ssize_t h2_recv_cb(wslay_event_context_ptr ev,
+                          uint8_t *buf, size_t len,
+                          int flags __attribute__((unused)),
+                          void *user_data)
+{
+    struct transaction_t *txn = (struct transaction_t *) user_data;
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    const char *dataptr = buf_base(&ctx->h2_data);
+    size_t datalen = buf_len(&ctx->h2_data);
+    ssize_t n;
+
+    if (!dataptr) {
+        /* New data has been read into the request body */
+        dataptr = buf_base(&txn->req_body.payload);
+        datalen = buf_len(&txn->req_body.payload);
+    }
+
+    if (!datalen) {
+        /* No data */
+        wslay_event_set_error(ev, WSLAY_ERR_WOULDBLOCK);
+
+        /* Reset our input data pointer to NULL */
+        buf_free(&ctx->h2_data);
+
+        n = -1;
+    }
+    else {
+        /* Don't return more data than requested */ 
+        n = (datalen > len) ? len : datalen;
+
+        /* Copy the input data into the output buffer */
+        memcpy(buf, dataptr, n);
+
+        /* Set our input data pointer to the remaining payload (if any) */
+        buf_init_ro(&ctx->h2_data, dataptr + n, datalen - n);
+    }
+
+    syslog(LOG_DEBUG,
+           "ws_h2_recv_cb(%zu): datalen = %zu, n = %zd", len, datalen, n);
 
     return n;
 }
@@ -613,12 +663,12 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     wslay_event_context_ptr ev;
     struct ws_context *ctx;
     struct wslay_event_callbacks callbacks = {
-        recv_cb,
-        send_cb,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
+        NULL, /* recv (assigned below)            */
+        NULL, /* send (assigned below)            */
+        NULL, /* genmask                          */
+        NULL, /* on_frame_recv_start (debug only) */
+        NULL, /* on_frame_recv_chunk              */
+        NULL, /* on_frame_recv_end                */
         on_msg_recv_cb
     };
 
@@ -699,11 +749,17 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
            properly close the WS during an abnormal shut_down() */
         txn->conn->ws_ctx = &txn->ws_ctx;
 
+        callbacks.recv_callback = &h1_recv_cb;
+        callbacks.send_callback = &h1_send_cb;
+
         resp_code = HTTP_SWITCH_PROT;
     }
     else {
         /* HTTP/2 - Treat WS data as chunked response */
         txn->flags.te = TE_CHUNKED;
+
+        callbacks.recv_callback = &h2_recv_cb;
+        callbacks.send_callback = &h2_send_cb;
 
         resp_code = HTTP_OK;
     }
@@ -875,22 +931,14 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
     if (want_read && !goaway) {
         /* Read frame(s) */
-        if (txn->conn->sess_ctx) {
-            /* Data has been read into request body */
-            ctx->h2_pin = prot_readmap(buf_base(&txn->req_body.payload),
-                                       buf_len(&txn->req_body.payload));
-        }
-
         int r = wslay_event_recv(ev);
-
-        if (txn->conn->sess_ctx) {
-            buf_reset(&txn->req_body.payload);
-            prot_free(ctx->h2_pin);
-        }
 
         if (!r) {
             /* Successfully received frames */
             syslog(LOG_DEBUG, "ws_event_recv: success");
+
+            /* Reset request payload buffer */
+            buf_reset(&txn->req_body.payload);
         }
         else if (r == WSLAY_ERR_NO_MORE_MSG) {
             /* Client closed connection */
