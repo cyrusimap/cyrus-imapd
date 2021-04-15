@@ -622,9 +622,9 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
 }
 
 
-HIDDEN void http2_end_session(void *http2_ctx)
+HIDDEN void http2_end_session(void **http2_ctx)
 {
-    struct http2_context *ctx = (struct http2_context *) http2_ctx;
+    struct http2_context *ctx = (struct http2_context *) *http2_ctx;
 
     if (!ctx) return;
 
@@ -654,6 +654,8 @@ HIDDEN void http2_end_session(void *http2_ctx)
     nghttp2_option_del(ctx->options);
     nghttp2_session_del(ctx->session);
     free(ctx);
+
+    *http2_ctx = NULL;
 }
 
 
@@ -1000,7 +1002,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused))
     fatal("http2_start() called, but no Nghttp2", EX_SOFTWARE);
 }
 
-HIDDEN void http2_end_session(void *http2_ctx __attribute__((unused)))
+HIDDEN void http2_end_session(void **http2_ctx __attribute__((unused)))
 {
 }
 

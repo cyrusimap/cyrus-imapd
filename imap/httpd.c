@@ -644,7 +644,7 @@ static void httpd_reset(struct http_connection *conn)
 
     xmlFreeParserCtxt(conn->xml);
 
-    http2_end_session(conn->sess_ctx);
+    http2_end_session(&conn->sess_ctx);
 
     cyrus_reset_stdio();
 
@@ -1010,7 +1010,7 @@ void shut_down(int code)
     strarray_free(httpd_log_headers);
 
     ws_end_channel(http_conn.ws_ctx);
-    http2_end_session(http_conn.sess_ctx);
+    http2_end_session(&http_conn.sess_ctx);
 
     /* Do any namespace specific cleanup */
     for (i = 0; http_namespaces[i]; i++) {
