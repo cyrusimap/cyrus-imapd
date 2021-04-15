@@ -529,7 +529,8 @@ EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused
             save_errno = errno;
             if (stat(path, &sbuf) == -1) {
                 errno = save_errno;
-                syslog(LOG_ERR, "IOERROR: creating directory %s: %m", path);
+                xsyslog(LOG_ERR, "IOERROR: creating directory",
+                                 "path=<%s>", path);
                 free(path);
                 return -1;
             }
@@ -558,7 +559,8 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
         if (link(from, to) == 0) return 0;
         if (errno == EEXIST) {
             if (unlink(to) == -1) {
-                syslog(LOG_ERR, "IOERROR: unlinking to recreate %s: %m", to);
+                xsyslog(LOG_ERR, "IOERROR: unlinking to recreate failed",
+                                 "filename=<%s>", to);
                 return -1;
             }
             if (link(from, to) == 0) return 0;
@@ -567,19 +569,22 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
 
     srcfd = open(from, O_RDONLY, 0666);
     if (srcfd == -1) {
-        syslog(LOG_ERR, "IOERROR: opening %s: %m", from);
+        xsyslog(LOG_ERR, "IOERROR: open failed",
+                         "filename=<%s>", from);
         r = -1;
         goto done;
     }
 
     if (fstat(srcfd, &sbuf) == -1) {
-        syslog(LOG_ERR, "IOERROR: fstat on %s: %m", from);
+        xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                         "filename=<%s>", from);
         r = -1;
         goto done;
     }
 
     if (!sbuf.st_size) {
-        syslog(LOG_ERR, "IOERROR: zero byte file %s: %m", from);
+        xsyslog(LOG_ERR, "IOERROR: zero byte file",
+                         "filename=<%s>", from);
         r = -1;
         goto done;
     }
@@ -587,7 +592,8 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (destfd == -1) {
         if (!(flags & COPYFILE_MKDIR))
-            syslog(LOG_ERR, "IOERROR: creating %s: %m", to);
+            xsyslog(LOG_ERR, "IOERROR: create failed",
+                             "filename=<%s>", to);
         r = -1;
         goto done;
     }
@@ -597,7 +603,8 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     n = retry_write(destfd, src_base, src_size);
 
     if (n == -1 || fsync(destfd)) {
-        syslog(LOG_ERR, "IOERROR: writing %s: %m", to);
+        xsyslog(LOG_ERR, "IOERROR: retry_write failed",
+                         "filename=<%s>", to);
         r = -1;
         unlink(to);  /* remove any rubbish we created */
         goto done;
@@ -625,7 +632,8 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
         ret = utimes(to, tv);
 #endif
         if (ret) {
-            syslog(LOG_ERR, "IOERROR: setting times on %s: %m", to);
+            xsyslog(LOG_ERR, "IOERROR: setting times failed",
+                             "filename=<%s>", to);
             r = -1;
         }
     }
