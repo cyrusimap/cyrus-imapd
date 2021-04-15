@@ -2551,7 +2551,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
 
         r = parse_upload(ki, mailbox, &mrecord, &mannots);
         if (r) {
-            syslog(LOG_ERR, "SYNCERROR: failed to parse uploaded record");
+            xsyslog(LOG_ERR, "SYNCERROR: failed to parse uploaded record", NULL);
             return IMAP_PROTOCOL_ERROR;
         }
 
@@ -2574,8 +2574,9 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             /* GUID mismatch is an error straight away, it only ever happens if we
              * had a split brain - and it will take a full sync to sort out the mess */
             if (!message_guid_equal(&mrecord.guid, &rrecord->guid)) {
-                syslog(LOG_ERR, "SYNCNOTICE: guid mismatch %s %u",
-                       mailbox->name, mrecord.uid);
+                xsyslog(LOG_ERR, "SYNCNOTICE: guid mismatch",
+                                 "mailbox=<%s> uid=<%u>",
+                                 mailbox->name, mrecord.uid);
                 r = IMAP_SYNC_CHECKSUM;
                 goto out;
             }
@@ -2587,8 +2588,12 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
                            mailbox->name, mrecord.uid, rrecord->modseq, mrecord.modseq);
                 }
                 else {
-                    syslog(LOG_ERR, "SYNCNOTICE: higher modseq on replica %s %u (" MODSEQ_FMT " > " MODSEQ_FMT ")",
-                           mailbox->name, mrecord.uid, rrecord->modseq, mrecord.modseq);
+                    xsyslog(LOG_ERR, "SYNCNOTICE: higher modseq on replica",
+                                     "mailbox=<%s> uid=<%u>"
+                                        " replicamodseq=<" MODSEQ_FMT ">"
+                                        " mastermodseq=<" MODSEQ_FMT ">",
+                                     mailbox->name, mrecord.uid,
+                                     rrecord->modseq, mrecord.modseq);
                     r = IMAP_SYNC_CHECKSUM;
                     goto out;
                 }
@@ -2598,8 +2603,9 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
              * that's bad */
             if (!(mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED) &&
                 (rrecord->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-                syslog(LOG_ERR, "SYNCNOTICE: expunged on replica %s %u",
-                       mailbox->name, mrecord.uid);
+                xsyslog(LOG_ERR, "SYNCNOTICE: expunged on replica",
+                                 "mailbox=<%s> uid=<%u>",
+                                 mailbox->name, mrecord.uid);
                 r = IMAP_SYNC_CHECKSUM;
                 goto out;
             }
@@ -2819,8 +2825,9 @@ int sync_apply_mailbox(struct dlist *kin,
             // if they have the same name it's probably an intermediate being
             // promoted.  Intermediates, the gift that keeps on giving.
             if (oldname && strcmp(oldname, mboxname)) {
-                syslog(LOG_ERR, "SYNCNOTICE: failed to create mailbox %s with uniqueid %s (already used by %s)",
-                       mboxname, uniqueid, oldname);
+                xsyslog(LOG_ERR, "SYNCNOTICE: mailbox uniqueid already in use",
+                                 "mailbox=<%s> uniqueid=<%s> usedby=<%s>",
+                                 mboxname, uniqueid, oldname);
                 free(oldname);
                 r = IMAP_MAILBOX_MOVED;
             }
@@ -2848,12 +2855,17 @@ int sync_apply_mailbox(struct dlist *kin,
         struct synccrcs mycrcs = mailbox_synccrcs(mailbox, 0);
         if (since_modseq != mailbox->i.highestmodseq ||
             !mailbox_crceq(since_crcs, mycrcs)) {
-            syslog(LOG_ERR, "SYNCNOTICE: mailbox sync mismatch %s "
-                            "hms (m=%llu,r=%llu) crcs (m=%u/%u,r=%u/%u)",
-                   mailbox->name,
-                   since_modseq, mailbox->i.highestmodseq,
-                   since_crcs.basic, since_crcs.annot,
-                   mycrcs.basic, mycrcs.annot);
+            xsyslog(LOG_ERR, "SYNCNOTICE: mailbox sync mismatch",
+                             "mailbox=<%s>"
+                                " hms_master=<" MODSEQ_FMT ">"
+                                " hms_replica=<" MODSEQ_FMT ">"
+                                " crcs_master=<%u/%u>"
+                                " crcs_replica=<%u/%u>",
+                             mailbox->name,
+                             since_modseq,
+                             mailbox->i.highestmodseq,
+                             since_crcs.basic, since_crcs.annot,
+                             mycrcs.basic, mycrcs.annot);
             r = IMAP_SYNC_CHANGED;
             goto done;
         }
@@ -2884,8 +2896,9 @@ int sync_apply_mailbox(struct dlist *kin,
             mailbox->header_dirty = 1;
         }
         else {
-            syslog(LOG_ERR, "SYNCNOTICE: Mailbox uniqueid changed %s (%s => %s) - retry",
-                   mboxname, mailbox->uniqueid, uniqueid);
+            xsyslog(LOG_ERR, "SYNCNOTICE: mailbox uniqueid changed - retry",
+                             "mailbox=<%s> origuniqueid=<%s> newuniqueid=<%s>",
+                             mboxname, mailbox->uniqueid, uniqueid);
             r = IMAP_MAILBOX_MOVED;
             goto done;
         }
@@ -2938,8 +2951,10 @@ int sync_apply_mailbox(struct dlist *kin,
     /* skip out now, it's going to mismatch for sure! */
     /* 0 is the default case, and should always be overwritten with the real value */
     if (createdmodseq > mailbox->i.createdmodseq && mailbox->i.createdmodseq != 0) {
-        syslog(LOG_NOTICE, "SYNCNOTICE: lower createdmodseq on replica %s - %llu > %llu",
-               mboxname, createdmodseq, mailbox->i.createdmodseq);
+        xsyslog(LOG_NOTICE, "SYNCNOTICE: lower createdmodseq on replica",
+                            "mailbox=<%s> createdmodseq=<" MODSEQ_FMT ">"
+                                " replica_createdmodseq=<" MODSEQ_FMT ">",
+                            mboxname, createdmodseq, mailbox->i.createdmodseq);
     }
 
     /* NOTE - this is optional */
@@ -4301,16 +4316,16 @@ static int mark_missing (struct dlist *kin,
     if (!kl) return 0;
 
     if (strcmp(kl->name, "MISSING")) {
-        syslog(LOG_ERR, "SYNCERROR: Illegal response to RESERVE: %s",
-               kl->name);
+        xsyslog(LOG_ERR, "SYNCERROR: Illegal response to RESERVE",
+                         "name=<%s>", kl->name);
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
 
     /* unmark each missing item */
     for (ki = kl->head; ki; ki = ki->next) {
         if (!message_guid_decode(&tmp_guid, ki->sval)) {
-            syslog(LOG_ERR, "SYNCERROR: reserve: failed to parse GUID %s",
-                   ki->sval);
+            xsyslog(LOG_ERR, "SYNCERROR: reserve: failed to parse GUID",
+                             "sval=<%s>", ki->sval);
             return IMAP_PROTOCOL_BAD_PARAMETERS;
         }
 
@@ -4420,8 +4435,9 @@ static struct db *sync_getcachedb(struct sync_client_state *sync_cs)
 
     int r = cyrusdb_open(dbtype, dbpath, flags, &sync_cs->cachedb);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: failed to open sync cache db %s: %s",
-               dbpath, cyrusdb_strerror(r));
+        xsyslog(LOG_ERR, "DBERROR: failed to open sync cache db",
+                         "dbpath=<%s> error=<%s>",
+                         dbpath, cyrusdb_strerror(r));
     }
 
     return sync_cs->cachedb;
@@ -4627,7 +4643,9 @@ int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
     r = sync_kl_parse(kin, folder_list, sub_list,
                       sieve_list, seen_list, quota_list);
     if (r)
-        syslog(LOG_ERR, "SYNCERROR: %s: Invalid response %s", cmd, dlist_lastkey());
+        xsyslog(LOG_ERR, "SYNCERROR: invalid response",
+                         "command=<%s> response=<%s>",
+                         cmd, dlist_lastkey());
     else {
         // do we have mailboxes to cache?
         struct dlist *kl = NULL;
@@ -5240,8 +5258,9 @@ static int compare_one_record(struct sync_client_state *sync_cs,
     if (!message_guid_equal(&mp->guid, &rp->guid)) {
         char *mguid = xstrdup(message_guid_encode(&mp->guid));
         char *rguid = xstrdup(message_guid_encode(&rp->guid));
-        syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u (%s %s)",
-               mailbox->name, mp->uid, rguid, mguid);
+        xsyslog(LOG_ERR, "SYNCERROR: guid mismatch",
+                         "mailbox=<%s> uid=<%u> rguid=<%s> mguid=<%s>",
+                         mailbox->name, mp->uid, rguid, mguid);
         free(rguid);
         free(mguid);
         /* we will need to renumber both ends to get in sync */
@@ -5382,9 +5401,10 @@ static int mailbox_update_loop(struct sync_client_state *sync_cs,
             else if (rrecord.uid > mrecord->uid) {
                 /* record only exists on the master */
                 if (!(mrecord->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-                    syslog(LOG_ERR, "SYNCNOTICE: only exists on master %s %u (%s)",
-                           mailbox->name, mrecord->uid,
-                           message_guid_encode(&mrecord->guid));
+                    xsyslog(LOG_ERR, "SYNCNOTICE: record only exists on master",
+                                     "mailbox=<%s> uid=<%u> guid=<%s>",
+                                     mailbox->name, mrecord->uid,
+                                     message_guid_encode(&mrecord->guid));
                     r = renumber_one_record(mrecord, kaction);
                     if (r) goto out;
                 }
@@ -5396,9 +5416,10 @@ static int mailbox_update_loop(struct sync_client_state *sync_cs,
                 /* record only exists on the replica */
                 if (!(rrecord.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
                     if (kaction)
-                        syslog(LOG_ERR, "SYNCNOTICE: only exists on replica %s %u (%s)",
-                               mailbox->name, rrecord.uid,
-                               message_guid_encode(&rrecord.guid));
+                        xsyslog(LOG_ERR, "SYNCNOTICE: record only exists on replica",
+                                         "mailbox=<%s> uid=<%u> guid=<%s>",
+                                         mailbox->name, rrecord.uid,
+                                         message_guid_encode(&rrecord.guid));
                     r = copyback_one_record(sync_cs, mailbox, &rrecord, rannots, kaction, part_list);
                     if (r) goto out;
                 }
@@ -5418,8 +5439,9 @@ static int mailbox_update_loop(struct sync_client_state *sync_cs,
             else if (mrecord->modseq <= highestmodseq) {
                 if (kaction) {
                     /* bump our modseq so we sync */
-                    syslog(LOG_NOTICE, "SYNCNOTICE: bumping modseq %s %u",
-                           mailbox->name, mrecord->uid);
+                    xsyslog(LOG_NOTICE, "SYNCNOTICE: bumping modseq",
+                                        "mailbox=<%s> record=<%u>",
+                                        mailbox->name, mrecord->uid);
                     r = mailbox_rewrite_index_record(mailbox, (struct index_record *)mrecord);
                     if (r) goto out;
                 }
@@ -5434,8 +5456,9 @@ static int mailbox_update_loop(struct sync_client_state *sync_cs,
             if (r) goto out;
 
             if (kaction)
-                syslog(LOG_NOTICE, "SYNCNOTICE: only on replica %s %u",
-                       mailbox->name, rrecord.uid);
+                xsyslog(LOG_NOTICE, "SYNCNOTICE: record only exists on replica",
+                                    "mailbox=<%s> uid=<%u>",
+                                    mailbox->name, rrecord.uid);
 
             /* going to need this one */
             r = copyback_one_record(sync_cs, mailbox, &rrecord, rannots, kaction, part_list);
@@ -5550,9 +5573,9 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
      * remote will copy ours when we sync */
     if (mailbox->i.uidvalidity < uidvalidity) {
-        syslog(LOG_NOTICE, "SYNCNOTICE: uidvalidity higher on replica %s"
-               ", updating %u => %u",
-               mailbox->name, mailbox->i.uidvalidity, uidvalidity);
+        xsyslog(LOG_NOTICE, "SYNCNOTICE: uidvalidity higher on replica, updating",
+                            "mailbox=<%s> olduidvalidity=<%u> newuidvalidity=<%u>",
+                            mailbox->name, mailbox->i.uidvalidity, uidvalidity);
         mailbox_index_dirty(mailbox);
         mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox->name, uidvalidity);
     }
@@ -5560,9 +5583,10 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     if (mailbox->i.highestmodseq < highestmodseq) {
         /* highestmodseq on replica is dirty - we must copy and then dirty
          * so we go one higher! */
-        syslog(LOG_NOTICE, "SYNCNOTICE: highestmodseq higher on replica %s"
-               ", updating " MODSEQ_FMT " => " MODSEQ_FMT,
-               mailbox->name, mailbox->i.highestmodseq, highestmodseq+1);
+        xsyslog(LOG_NOTICE, "SYNCNOTICE: highestmodseq higher on replica, updating",
+                            "mailbox=<%s> oldhighestmodseq=<" MODSEQ_FMT ">"
+                                " newhighestmodseq=<" MODSEQ_FMT ">",
+                            mailbox->name, mailbox->i.highestmodseq, highestmodseq+1);
         mailbox->modseq_dirty = 0;
         mailbox->i.highestmodseq = highestmodseq;
         mailbox_modseq_dirty(mailbox);
@@ -5578,8 +5602,9 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     r = mailbox_update_loop(sync_cs, mailbox, kr->head, last_uid,
                             highestmodseq, NULL, part_list);
     if (r) {
-        syslog(LOG_ERR, "SYNCNOTICE: failed to prepare update for %s: %s",
-               mailbox->name, error_message(r));
+        xsyslog(LOG_ERR, "SYNCNOTICE: failed to prepare update",
+                         "mailbox=<%s> error=<%s>",
+                         mailbox->name, error_message(r));
         goto done;
     }
 
@@ -5657,8 +5682,9 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
         sync_send_apply(kexpunge, sync_cs->backend->out);
         r2 = sync_parse_response("EXPUNGE", sync_cs->backend->in, NULL);
         if (r2) {
-            syslog(LOG_ERR, "SYNCERROR: failed to expunge in cleanup %s",
-                   local->name);
+            xsyslog(LOG_ERR, "SYNCERROR: failed to expunge in cleanup",
+                             "name=<%s>",
+                             local->name);
         }
     }
 
@@ -5816,9 +5842,9 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
      * remote will copy ours when we sync */
     if (remote && mailbox->i.uidvalidity < remote->uidvalidity) {
-        syslog(LOG_NOTICE, "SYNCNOTICE: uidvalidity higher on replica %s"
-               ", updating %u => %u",
-               mailbox->name, mailbox->i.uidvalidity, remote->uidvalidity);
+        xsyslog(LOG_NOTICE, "SYNCNOTICE: uidvalidity higher on replica, updating",
+                            "mailbox=<%s> olduidvalidity=<%u> newuidvalidity=<%u>",
+                            mailbox->name, mailbox->i.uidvalidity, remote->uidvalidity);
         mailbox_index_dirty(mailbox);
         mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox->name, remote->uidvalidity);
     }
@@ -6924,7 +6950,9 @@ EXPORTED const char *sync_apply(struct dlist *kin, struct sync_reserve_list *res
     }
 
     else {
-        syslog(LOG_ERR, "SYNCERROR: unknown command %s", kin->name);
+        xsyslog(LOG_ERR, "SYNCERROR: unknown command",
+                         "command=<%s>",
+                         kin->name);
         r = IMAP_PROTOCOL_ERROR;
     }
 
@@ -6975,9 +7003,10 @@ EXPORTED const char *sync_restore(struct dlist *kin,
         state->local_only = 1;
         r = sync_restore_mailbox(kin, reserve_list, state);
     }
-
     else {
-        syslog(LOG_ERR, "SYNCERROR: unknown command %s", kin->name);
+        xsyslog(LOG_ERR, "SYNCERROR: unknown command",
+                         "command=<%s>",
+                         kin->name);
         r = IMAP_PROTOCOL_ERROR;
     }
 
@@ -7052,7 +7081,8 @@ static int do_unmailbox(struct sync_client_state *sync_cs, const char *mboxname)
         r = mboxlist_lookup_allow_all(mboxname, &tombstone, NULL);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             // otherwise we don't change anything on the replica
-            syslog(LOG_NOTICE, "SYNCNOTICE: attempt to UNMAILBOX without a tombstone %s", mboxname);
+            xsyslog(LOG_NOTICE, "SYNCNOTICE: attempt to UNMAILBOX without a tombstone",
+                                "mailbox=<%s>", mboxname);
             r = 0;
             goto skip;
         }
