@@ -164,8 +164,8 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
     /* open and lock the script file */
     script_fd = open(script_fname, O_RDWR);
     if (script_fd == -1) {
-        syslog(LOG_ERR, "IOERROR: unable to open %s for reading: %m",
-                        script_fname);
+        xsyslog(LOG_ERR, "IOERROR: open failed",
+                         "filename=<%s>", script_fname);
         r = IMAP_IOERROR;
         goto done;
     }
@@ -173,8 +173,8 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
     r = lock_setlock(script_fd, /* exclusive */ 1, /* nonblocking */ 0,
                      script_fname);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: unable to obtain lock on %s: %m",
-                        script_fname);
+        xsyslog(LOG_ERR, "IOERROR: lock_setlock failed",
+                         "filename=<%s>", script_fname);
         r = IMAP_IOERROR;
         goto done;
     }
@@ -185,14 +185,16 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
 
         r = fstat(script_fd, &script_stat);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: fstat %s: %m", script_fname);
+            xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                             "filename=<%s>", script_fname);
             r = IMAP_IOERROR;
             goto done;
         }
 
         r = stat(bc_fname, &bc_stat);
         if (r && errno != ENOENT) {
-            syslog(LOG_ERR, "IOERROR: stat %s: %m", bc_fname);
+            xsyslog(LOG_ERR, "IOERROR: stat failed",
+                             "filename=<%s>", bc_fname);
             r = IMAP_IOERROR;
             goto done;
         }
@@ -221,13 +223,16 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
 
     len = strlcpy(new_bc_fname, bc_fname, sizeof(new_bc_fname));
     if (len >= sizeof(new_bc_fname)) {
-        syslog(LOG_ERR, "IOERROR: filename too long: %s", bc_fname);
+        xsyslog(LOG_ERR, "IOERROR: filename too long",
+                         "filename=<%s>", bc_fname);
         r = IMAP_IOERROR;
         goto done;
     }
     len = strlcat(new_bc_fname, ".NEW", sizeof(new_bc_fname));
     if (len >= sizeof(new_bc_fname)) {
-        syslog(LOG_ERR, "IOERROR: filename too long: %s", bc_fname);
+        /* n.b. if we can't append .NEW, then the original name was too long */
+        xsyslog(LOG_ERR, "IOERROR: filename too long",
+                         "filename=<%s>", bc_fname);
         r = IMAP_IOERROR;
         goto done;
     }
@@ -238,8 +243,8 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
     bc_fd = open(new_bc_fname, O_CREAT|O_TRUNC|O_WRONLY,
                                S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (bc_fd < 0) {
-        syslog(LOG_ERR, "IOERROR: unable to open %s for writing: %m",
-                        new_bc_fname);
+        xsyslog(LOG_ERR, "IOERROR: open failed",
+                         "filename=<%s>", new_bc_fname);
         r = IMAP_IOERROR;
         goto done;
     }
@@ -248,8 +253,8 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
 
     script_file = fdopen(script_fd, "r");
     if (!script_file) {
-        syslog(LOG_ERR, "IOERROR: unable to fdopen %s for reading: %m",
-                        script_fname);
+        xsyslog(LOG_ERR, "IOERROR: fdopen failed",
+                         "filename=<%s>", script_fname);
         r = IMAP_IOERROR;
         goto done;
     }
@@ -277,14 +282,16 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
 
     if (fsync(bc_fd) < 0) {
         r = errno;
-        syslog(LOG_ERR, "IOERROR: fsync %s: %m", new_bc_fname);
+        xsyslog(LOG_ERR, "IOERROR: fsync failed",
+                         "filename=<%s>", new_bc_fname);
         goto done;
     }
 
     if (rename(new_bc_fname, bc_fname) < 0) {
         r = errno;
-        syslog(LOG_ERR, "IOERROR: rename %s -> %s: %m",
-                        new_bc_fname, bc_fname);
+        xsyslog(LOG_ERR, "IOERROR: rename failed",
+                         "oldfname=<%s> newfname=<%s>",
+                         new_bc_fname, bc_fname);
         goto done;
     }
 
