@@ -608,7 +608,7 @@ static void parse_extensions(struct transaction_t *txn)
 HIDDEN int ws_start_channel(struct transaction_t *txn,
                             const char *protocol, ws_data_callback *data_cb)
 {
-    int r;
+    int r, resp_code;
     const char **hdr, *accept_key = NULL;
     wslay_event_context_ptr ev;
     struct ws_context *ctx;
@@ -694,6 +694,18 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         r = sasl_encode64((char *) sha1buf, SHA1_DIGEST_LENGTH,
                           (char *) accept_key, WS_AKEY_LEN+1, NULL);
         if (r != SASL_OK) syslog(LOG_WARNING, "sasl_encode64: %d", r);
+
+        /* Link the WS context into the connection so we can
+           properly close the WS during an abnormal shut_down() */
+        txn->conn->ws_ctx = &txn->ws_ctx;
+
+        resp_code = HTTP_SWITCH_PROT;
+    }
+    else {
+        /* HTTP/2 - Treat WS data as chunked response */
+        txn->flags.te = TE_CHUNKED;
+
+        resp_code = HTTP_OK;
     }
 
     if (config_getswitch(IMAPOPT_DEBUG)) {
@@ -738,23 +750,10 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     ctx->log_tail = buf_len(&ctx->log);
 
     /* Tell client that WebSocket negotiation has succeeded */
-    if (txn->conn->sess_ctx) {
-        /* HTTP/2 - Treat WS data as chunked response */
-        txn->flags.te = TE_CHUNKED;
+    response_header(resp_code, txn);
 
-        response_header(HTTP_OK, txn);
-
-        /* Force the response to the client immediately */
-        prot_flush(txn->conn->pout);
-    }
-    else {
-        /* HTTP/1.1 */
-        response_header(HTTP_SWITCH_PROT, txn);
-
-        /* Link the context into the connection so we can
-           properly close the WS during an abnormal shut_down() */
-        txn->conn->ws_ctx = &txn->ws_ctx;
-    }
+    /* Force the response to the client immediately */
+    prot_flush(txn->conn->pout);
 
     /* Set connection as non-blocking */
     prot_NONBLOCK(txn->conn->pin);
