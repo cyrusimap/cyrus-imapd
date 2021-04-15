@@ -2251,7 +2251,8 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
     if (fd != -1) {
         struct stat sbuf;
         if (fstat(fd, &sbuf)) {
-            syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                             "filename=<%s>", fname);
             goto done;
         }
         if (sbuf.st_size) {
@@ -2613,19 +2614,23 @@ static int mboxname_load_counters(const char *mboxname, struct mboxname_counters
             fd = open(fname, O_RDWR | O_CREAT, 0644);
         }
         if (fd == -1) {
-            syslog(LOG_ERR, "IOERROR: failed to create %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: create failed",
+                             "filename=<%s>", fname);
             goto done;
         }
         if (lock_blocking(fd, fname)) {
-            syslog(LOG_ERR, "IOERROR: failed to lock %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: lock_blocking failed",
+                             "filename=<%s>", fname);
             goto done;
         }
         if (fstat(fd, &sbuf)) {
-            syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                             "filename=<%s>", fname);
             goto done;
         }
         if (stat(fname, &fbuf)) {
-            syslog(LOG_ERR, "IOERROR: failed to stat file %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: stat failed",
+                             "filename=<%s>", fname);
             goto done;
         }
         if (sbuf.st_ino == fbuf.st_ino) break;
@@ -2692,7 +2697,8 @@ static int mboxname_set_counters(const char *mboxname, struct mboxname_counters 
     newfd = open(newfname, O_CREAT | O_TRUNC | O_WRONLY, 0644);
     if (newfd == -1) {
         r = IMAP_IOERROR;
-        syslog(LOG_ERR, "IOERROR: failed to open for write %s: %m", newfname);
+        xsyslog(LOG_ERR, "IOERROR: open failed",
+                         "filename=<%s>", newfname);
         goto done;
     }
 
@@ -2703,13 +2709,15 @@ static int mboxname_set_counters(const char *mboxname, struct mboxname_counters 
     n = retry_write(newfd, buf, MV_LENGTH);
     if (n < 0) {
         r = IMAP_IOERROR;
-        syslog(LOG_ERR, "IOERROR: failed to write %s: %m", newfname);
+        xsyslog(LOG_ERR, "IOERROR: retry_write failed",
+                         "filename=<%s>", newfname);
         goto done;
     }
 
     if (fdatasync(newfd)) {
         r = IMAP_IOERROR;
-        syslog(LOG_ERR, "IOERROR: failed to fdatasync %s: %m", newfname);
+        xsyslog(LOG_ERR, "IOERROR: fdatasync failed",
+                         "filename=<%s>", newfname);
         goto done;
     }
 
@@ -2718,7 +2726,9 @@ static int mboxname_set_counters(const char *mboxname, struct mboxname_counters 
 
     if (rename(newfname, fname)) {
         r = IMAP_IOERROR;
-        syslog(LOG_ERR, "IOERROR: failed to rename %s: %m", newfname);
+        xsyslog(LOG_ERR, "IOERROR: rename failed",
+                         "oldfname=<%s> newfname=<%s>",
+                         newfname, fname);
         goto done;
     }
 
@@ -2781,7 +2791,8 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
     }
 
     if (fstat(fd, &sbuf)) {
-        syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+        xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                         "filename=<%s>", fname);
         r = IMAP_IOERROR;
         goto done;
     }
