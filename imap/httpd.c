@@ -644,7 +644,7 @@ static void httpd_reset(struct http_connection *conn)
 
     xmlFreeParserCtxt(conn->xml);
 
-    http2_end_session(&conn->sess_ctx);
+    http2_end_session(&conn->sess_ctx, NULL);
 
     cyrus_reset_stdio();
 
@@ -1002,6 +1002,7 @@ void shut_down(int code)
     int i;
     int bytes_in = 0;
     int bytes_out = 0;
+    const char *msg = NULL;
 
     in_shutdown = 1;
 
@@ -1009,8 +1010,12 @@ void shut_down(int code)
 
     strarray_free(httpd_log_headers);
 
-    ws_end_channel(http_conn.ws_ctx);
-    http2_end_session(&http_conn.sess_ctx);
+    if (code) msg = buf_cstringnull_ifempty(&http_conn.logbuf);
+
+    ws_end_channel(http_conn.ws_ctx, msg);
+    http2_end_session(&http_conn.sess_ctx, msg);
+
+    buf_free(&http_conn.logbuf);
 
     /* Do any namespace specific cleanup */
     for (i = 0; http_namespaces[i]; i++) {
@@ -1100,9 +1105,15 @@ EXPORTED void fatal(const char* s, int code)
         exit(recurse_code);
     }
     recurse_code = code;
-    if (httpd_out) {
+
+    if (http_conn.sess_ctx || http_conn.ws_ctx) {
+        /* Use logbuf to pass fatal string to shut_down() */
+        buf_setcstr(&http_conn.logbuf, s);
+    }
+    else if (httpd_out) {
+        /* Spit out a response if this is a HTTP/1.x connection */
         prot_printf(httpd_out,
-                    "HTTP/1.1 %s\r\n"
+                    "HTTP/1.0 %s\r\n"
                     "Content-Type: text/plain\r\n"
                     "Content-Length: %zu\r\n"
                     "Connection: close\r\n"
@@ -1112,6 +1123,7 @@ EXPORTED void fatal(const char* s, int code)
                     strlen(fatal) + strlen(s) + 2, fatal, s);
         prot_flush(httpd_out);
     }
+
     syslog(LOG_ERR, "%s%s", fatal, s);
     shut_down(code);
 }
@@ -1998,7 +2010,7 @@ EXPORTED void transaction_free(struct transaction_t *txn)
 {
     transaction_reset(txn);
 
-    ws_end_channel(&txn->ws_ctx);
+    ws_end_channel(&txn->ws_ctx, NULL);
 
     http2_end_stream(txn->strm_ctx);
 

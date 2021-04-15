@@ -622,7 +622,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
 }
 
 
-HIDDEN void http2_end_session(void **http2_ctx)
+HIDDEN void http2_end_session(void **http2_ctx, const char *msg)
 {
     struct http2_context *ctx = (struct http2_context *) *http2_ctx;
 
@@ -632,8 +632,9 @@ HIDDEN void http2_end_session(void **http2_ctx)
     if (nghttp2_session_want_read(ctx->session)) {
         int32_t stream_id =
             nghttp2_session_get_last_proc_stream_id(ctx->session);
-        const char *msg = "Server unavailable";
         int r;
+
+        if (!msg) msg = "Server unavailable";
 
         syslog(LOG_DEBUG, "nghttp2_submit_goaway(%s)", msg);
 
@@ -1002,7 +1003,8 @@ HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused))
     fatal("http2_start() called, but no Nghttp2", EX_SOFTWARE);
 }
 
-HIDDEN void http2_end_session(void **http2_ctx __attribute__((unused)))
+HIDDEN void http2_end_session(void **http2_ctx __attribute__((unused)),
+                              const char *msg__attribute__((unused)))
 {
 }
 

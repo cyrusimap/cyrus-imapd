@@ -849,7 +849,7 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
 }
 
 
-HIDDEN void ws_end_channel(void **ws_ctx)
+HIDDEN void ws_end_channel(void **ws_ctx, const char *msg)
 {
     if (!ws_ctx || !*ws_ctx) return;
 
@@ -858,8 +858,9 @@ HIDDEN void ws_end_channel(void **ws_ctx)
 
     /* Close the WS if we haven't already */
     if (!wslay_event_get_close_sent(ev)) {
-        const char *msg = "Server unavailable";
         int r;
+
+        if (!msg) msg = "Server unavailable";
 
         syslog(LOG_DEBUG, "wslay_event_queue_close(%s)", msg);
 
@@ -1005,7 +1006,10 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
 {
 }
 
-HIDDEN void ws_end_channel(void **ws_ctx __attribute__((unused))) {}
+HIDDEN void ws_end_channel(void **ws_ctx __attribute__((unused))
+                           const char *msg __attribute__((unused)))
+{
+}
 
 HIDDEN void ws_input(struct transaction_t *txn __attribute__((unused)))
 {
