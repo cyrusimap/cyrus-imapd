@@ -1004,7 +1004,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused))
 }
 
 HIDDEN void http2_end_session(void **http2_ctx __attribute__((unused)),
-                              const char *msg__attribute__((unused)))
+                              const char *msg __attribute__((unused)))
 {
 }
 
