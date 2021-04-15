@@ -301,10 +301,15 @@ sub test_splitbrain
     if ($self->{instance}->{have_syslog_replacement}) {
         # replication will generate a couple of SYNCERRORS in syslog
         my @syslog = $self->{instance}->getsyslog();
-        $self->assert_matches(
-            qr/\bSYNCERROR: guid mismatch user.cassandane 5\b/,
-            "@syslog"
-        );
+
+        my $pattern = qr{
+            \bSYNCERROR:\sguid\smismatch
+            (?: \suser\.cassandane\s5\b
+              | :\smailbox=<user\.cassandane>\suid=<5>
+            )
+        }x;
+
+        $self->assert_matches($pattern, "@syslog");
     }
     $self->check_replication('cassandane');
 
@@ -353,9 +358,20 @@ sub test_splitbrain_mailbox
         my @mastersyslog = $self->{instance}->getsyslog();
         my @replicasyslog = $self->{replica}->getsyslog();
 
-        # XXX can we use assert_matches here?
-        $self->assert(grep { m/MAILBOX received NO response: IMAP_MAILBOX_MOVED/ } @mastersyslog);
-        $self->assert(grep { m/SYNCNOTICE: failed to create mailbox user.cassandane.dest-name/ } @replicasyslog);
+        my $master_pattern = qr{
+            \bMAILBOX\sreceived\sNO\sresponse:\sIMAP_MAILBOX_MOVED\b
+        }x;
+
+        my $replica_pattern = qr{
+            (?: \bSYNCNOTICE:\sfailed\sto\screate\smailbox
+                \suser\.cassandane\.dest-name\b
+              | \bSYNCNOTICE:\smailbox\suniqueid\salready\sin\suse:
+                \smailbox=<user\.cassandane\.dest-name>
+            )
+        }x;
+
+        $self->assert_matches($master_pattern, "@mastersyslog");
+        $self->assert_matches($replica_pattern, "@replicasyslog");
     }
 
     xlog $self, "Run a full user replication to repair";
@@ -379,12 +395,27 @@ sub test_splitbrain_mailbox
         my @mastersyslog = $self->{instance}->getsyslog();
         my @replicasyslog = $self->{replica}->getsyslog();
 
-        # XXX assert_matches?
+        my $master_pattern = qr{
+            \bdo_folders\(\):\supdate\sfailed:\suser\.cassandane\.foo\b
+        }x;
+
+        my $replica_pattern1 = qr{
+            (?: \bSYNCNOTICE:\sfailed\sto\screate\smailbox
+                \suser\.cassandane\.foo\b
+              | \bSYNCNOTICE:\smailbox\suniqueid\salready\sin\suse:
+                \smailbox=<user\.cassandane\.foo>
+            )
+        }x;
+
+        my $replica_pattern2 = qr{
+            \bRename:\suser.cassandane\.dest-name\s->\suser\.cassandane\.foo\b
+        }x;
+
         # initial failures
-        $self->assert(grep { m/do_folders\(\): update failed: user.cassandane.foo/ } @mastersyslog);
-        $self->assert(grep { m/SYNCNOTICE: failed to create mailbox user.cassandane.foo/ } @replicasyslog);
+        $self->assert_matches($master_pattern, "@mastersyslog");
+        $self->assert_matches($replica_pattern1, "@replicasyslog");
         # later success
-        $self->assert(grep { m/Rename: user.cassandane.dest-name -> user.cassandane.foo/ } @replicasyslog);
+        $self->assert_matches($replica_pattern2, "@replicasyslog");
     }
 
     # replication fixes itself
@@ -1753,7 +1784,15 @@ sub test_reset_on_master
     # XXX is this test useless if we can't check syslog?
     if ($self->{instance}->{have_syslog_replacement}) {
         my @mastersyslog = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/SYNCNOTICE: attempt to UNMAILBOX without a tombstone user.user2.no/, "@mastersyslog");
+
+        my $pattern = qr{
+            \bSYNCNOTICE:\sattempt\sto\sUNMAILBOX\swithout\sa\stombstone
+            (?: \suser\.user2\.no\b
+              | :\smailbox=<user\.user2\.no>
+            )
+        }x;
+
+        $self->assert_matches($pattern, "@mastersyslog");
     }
 }
 
