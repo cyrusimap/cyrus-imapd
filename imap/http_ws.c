@@ -753,7 +753,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
 
         /* Link the context into the connection so we can
            properly close the WS during an abnormal shut_down() */
-        txn->conn->ws_ctx = txn->ws_ctx;
+        txn->conn->ws_ctx = &txn->ws_ctx;
     }
 
     /* Set connection as non-blocking */
@@ -794,9 +794,9 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
 }
 
 
-HIDDEN void ws_end_channel(void *ws_ctx)
+HIDDEN void ws_end_channel(void **ws_ctx)
 {
-    struct ws_context *ctx = (struct ws_context *) ws_ctx;
+    struct ws_context *ctx = (struct ws_context *) *ws_ctx;
 
     if (!ctx) return;
 
@@ -831,6 +831,8 @@ HIDDEN void ws_end_channel(void *ws_ctx)
     ws_zlib_done(ctx);
 
     free(ctx);
+
+    *ws_ctx = NULL;
 }
 
 
@@ -955,7 +957,7 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
 {
 }
 
-HIDDEN void ws_end_channel(void *ws_ctx __attribute__((unused))) {}
+HIDDEN void ws_end_channel(void **ws_ctx __attribute__((unused))) {}
 
 HIDDEN void ws_input(struct transaction_t *txn __attribute__((unused)))
 {

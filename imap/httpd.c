@@ -1998,7 +1998,7 @@ EXPORTED void transaction_free(struct transaction_t *txn)
 {
     transaction_reset(txn);
 
-    ws_end_channel(txn->ws_ctx);
+    ws_end_channel(&txn->ws_ctx);
 
     http2_end_stream(txn->strm_ctx);
 
