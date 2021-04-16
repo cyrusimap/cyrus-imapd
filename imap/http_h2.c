@@ -67,7 +67,7 @@
 struct http2_context {
     nghttp2_session *session;           /* HTTP/2 session */
     nghttp2_option *options;            /* Config options for HTTP/2 session */
-    unsigned ws_count;                  /* Count of WebSocket streams */
+    arrayu64_t ws_ids;                  /* Array of WebSocket stream ids */
 };
 
 /* HTTP/2 stream context */
@@ -115,7 +115,7 @@ static ssize_t recv_cb(nghttp2_session *session __attribute__((unused)),
            output from being submitted */
         prot_NONBLOCK(pin);
     }
-    else if (!((struct http2_context *) conn->sess_ctx)->ws_count) {
+    else if (!arrayu64_size(&((struct http2_context *) conn->sess_ctx)->ws_ids)) {
         /* No data (and no WebSockets) -  block next time (for client timeout) */
         prot_BLOCK(pin);
 
@@ -363,17 +363,16 @@ static int frame_recv_cb(nghttp2_session *session,
         /* Handle errors (success responses handled by method functions) */
         if (ret) error_response(ret, txn);
 
-        if (txn->flags.conn & CONN_CLOSE) {
-            int32_t stream_id =
-                nghttp2_session_get_last_proc_stream_id(ctx->session);
+        int32_t stream_id = nghttp2_session_get_last_proc_stream_id(ctx->session);
 
+        if (txn->flags.conn & CONN_CLOSE) {
             syslog(LOG_DEBUG, "nghttp2_submit_goaway()");
             nghttp2_submit_goaway(session, NGHTTP2_FLAG_NONE, stream_id,
                                   NGHTTP2_NO_ERROR, NULL, 0);
         }
         else if (txn->ws_ctx) {
-            /* Increment WebSocket stream count */
-            ctx->ws_count++;
+            /* Add to WebSocket stream id array */
+            arrayu64_append(&ctx->ws_ids, stream_id);
         }
 
         break;
@@ -394,10 +393,13 @@ static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
 
     if (txn) {
         if (txn->ws_ctx) {
-            /* Decrement WebSocket stream count */
+            /* Remove from WebSocket stream id array */
             struct http2_context *http2_ctx =
                 (struct http2_context *) txn->conn->sess_ctx;
-            if (--http2_ctx->ws_count == 0) {
+
+            arrayu64_remove_all(&http2_ctx->ws_ids, stream_id);
+
+            if (arrayu64_size(&http2_ctx->ws_ids) == 0) {
                 /* No WebSockets -  block next time (for client timeout) */
                 prot_BLOCK(txn->conn->pin);
             }
@@ -630,14 +632,26 @@ HIDDEN void http2_end_session(void **http2_ctx, const char *msg)
 
     /* End the session if we haven't already */
     if (nghttp2_session_want_read(ctx->session)) {
-        int32_t stream_id =
-            nghttp2_session_get_last_proc_stream_id(ctx->session);
+        int32_t stream_id;
         int r;
 
         if (!msg) msg = "Server unavailable";
 
+        /* Close all streams with open WebSocket channels */
+        while ((stream_id = arrayu64_pop(&ctx->ws_ids))) {
+            struct transaction_t *txn =
+                nghttp2_session_get_stream_user_data(ctx->session, stream_id);
+
+            ws_end_channel(&txn->ws_ctx, msg);
+
+            syslog(LOG_DEBUG, "nghttp2_submit_rst stream()");
+            nghttp2_submit_rst_stream(ctx->session, NGHTTP2_FLAG_NONE,
+                                      stream_id, NGHTTP2_CANCEL);
+        }
+
         syslog(LOG_DEBUG, "nghttp2_submit_goaway(%s)", msg);
 
+        stream_id = nghttp2_session_get_last_proc_stream_id(ctx->session);
         r = nghttp2_submit_goaway(ctx->session, NGHTTP2_FLAG_NONE, stream_id,
                                   NGHTTP2_CANCEL,
                                   (const uint8_t *) msg, strlen(msg));
@@ -654,6 +668,7 @@ HIDDEN void http2_end_session(void **http2_ctx, const char *msg)
 
     nghttp2_option_del(ctx->options);
     nghttp2_session_del(ctx->session);
+    arrayu64_fini(&ctx->ws_ids);
     free(ctx);
 
     *http2_ctx = NULL;
