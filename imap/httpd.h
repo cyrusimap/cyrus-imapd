@@ -337,6 +337,7 @@ struct http_connection {
     const char *clienthost;             /* Name of client host */
     int logfd;                          /* Telemetry log file */
     struct buf logbuf;                  /* Telemetry log buffer */
+    const char *fatal;                  /* String passed to fatal() */
 
     void *tls_ctx;                      /* TLS context */
     void *sess_ctx;                     /* HTTP/2+ session context */

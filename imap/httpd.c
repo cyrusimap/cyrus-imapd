@@ -1010,7 +1010,7 @@ void shut_down(int code)
 
     strarray_free(httpd_log_headers);
 
-    if (code) msg = buf_cstringnull_ifempty(&http_conn.logbuf);
+    if (code) msg = http_conn.fatal;
 
     ws_end_channel(http_conn.ws_ctx, msg);
     http2_end_session(&http_conn.sess_ctx, msg);
@@ -1107,8 +1107,8 @@ EXPORTED void fatal(const char* s, int code)
     recurse_code = code;
 
     if (http_conn.sess_ctx || http_conn.ws_ctx) {
-        /* Use logbuf to pass fatal string to shut_down() */
-        buf_setcstr(&http_conn.logbuf, s);
+        /* Pass fatal string to shut_down() */
+        http_conn.fatal = s;
     }
     else if (httpd_out) {
         /* Spit out a response if this is a HTTP/1.x connection */
