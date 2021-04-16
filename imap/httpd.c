@@ -646,6 +646,8 @@ static void httpd_reset(struct http_connection *conn)
 
     http2_end_session(&conn->sess_ctx, NULL);
 
+    conn->ws_ctx = NULL;
+
     cyrus_reset_stdio();
 
     conn->clienthost = "[local]";
