@@ -2788,24 +2788,24 @@ static int write_entry(struct mailbox *mailbox,
 
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
-    if (mailbox) {
-        struct annotate_metadata oldmdata;
-        r = read_old_value(d, key, keylen, &oldval, &oldmdata);
+    struct annotate_metadata oldmdata;
+    r = read_old_value(d, key, keylen, &oldval, &oldmdata);
+    if (r) goto out;
+
+    /* if the value is identical, don't touch the mailbox */
+    if (oldval.len == value->len && (!value->len || !memcmp(oldval.s, value->s, value->len)))
+        goto out;
+
+    if (!maywrite) {
+        r = IMAP_PERMISSION_DENIED;
         if (r) goto out;
+    }
 
-        /* if the value is identical, don't touch the mailbox */
-        if (oldval.len == value->len && (!value->len || !memcmp(oldval.s, value->s, value->len)))
-            goto out;
-
+    if (mailbox) {
         if (!ignorequota) {
             quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
             qdiffs[QUOTA_ANNOTSTORAGE] = value->len - (quota_t)oldval.len;
             r = mailbox_quota_check(mailbox, qdiffs);
-            if (r) goto out;
-        }
-
-        if (!maywrite) {
-            r = IMAP_PERMISSION_DENIED;
             if (r) goto out;
         }
 
