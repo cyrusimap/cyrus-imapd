@@ -651,6 +651,216 @@ sub test_motd
 }
 
 #
+# Test the /shared/foobar server annotation replicates correctly
+#
+sub test_shared_global_annot_replication
+    :Replication :SyncLog :AnnotationAllowUndefined
+{
+    my ($self) = @_;
+
+    xlog $self, "testing /shared/foobar";
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    $self->assert_not_null($self->{replica});
+
+    my $imaptalk = $self->{master_store}->get_client();
+
+    my $res;
+    my $entry = '/shared/foobar';
+    my $value1 = "Hello World this is a value - with a random annot";
+
+    xlog $self, "initial value is NIL";
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({
+        "" => { $entry => undef }
+    }, $res);
+
+    xlog $self, "cannot set the value as ordinary user";
+    $imaptalk->setmetadata("", $entry, $value1);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert($imaptalk->get_last_error() =~ m/permission denied/i);
+
+    xlog $self, "can set the value as admin";
+    $imaptalk = $self->{adminstore}->get_client();
+    $imaptalk->setmetadata("", $entry, $value1);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "can get the set value back";
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $expected = {
+            "" => { $entry => $value1 }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    $self->{adminstore}->disconnect();
+    $imaptalk = $self->{adminstore}->get_client();
+
+    xlog $self, "the annot gives the same value in the new connection";
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $expected = {
+            "" => { $entry => $value1 }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    xlog $self, "replica value is NIL";
+    $imaptalk = $self->{replica_store}->get_client();
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({
+        "" => { $entry => undef }
+    }, $res);
+
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+
+    xlog $self, "the annot gives the same value on the replica";
+    $imaptalk = $self->{replica_store}->get_client();
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $expected = {
+            "" => { $entry => $value1 }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    xlog $self, "can delete value";
+    $imaptalk = $self->{adminstore}->get_client();
+    $imaptalk->setmetadata("", $entry, undef);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $expected = {
+            "" => { $entry => undef }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    xlog $self, "run replication to clear annot";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+
+    xlog $self, "replica value is NIL";
+    $imaptalk = $self->{replica_store}->get_client();
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({
+        "" => { $entry => undef }
+    }, $res);
+}
+
+#
+# Test the /private/foobar server annotation replicates correctly
+#
+sub test_private_global_annot_replication
+    :Replication :SyncLog :AnnotationAllowUndefined
+{
+    my ($self) = @_;
+
+    xlog $self, "testing /private/foobar";
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    $self->assert_not_null($self->{replica});
+
+    my $imaptalk = $self->{master_store}->get_client();
+
+    my $res;
+    my $entry = '/private/foobar';
+    my $value1 = "Hello World this is a value - with a random annot";
+
+    xlog $self, "initial value is NIL";
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({
+        "" => { $entry => undef }
+    }, $res);
+
+    xlog $self, "can set the value as ordinary user";
+    $imaptalk->setmetadata("", $entry, $value1);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "can get the set value back";
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $expected = {
+            "" => { $entry => $value1 }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    $self->{master_store}->disconnect();
+    $imaptalk = $self->{master_store}->get_client();
+
+    xlog $self, "the annot gives the same value in the new connection";
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $expected = {
+            "" => { $entry => $value1 }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    xlog $self, "replica value is NIL";
+    $imaptalk = $self->{replica_store}->get_client();
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({
+        "" => { $entry => undef }
+    }, $res);
+
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+
+    xlog $self, "the annot gives the same value on the replica";
+    $imaptalk = $self->{replica_store}->get_client();
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $expected = {
+            "" => { $entry => $value1 }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    xlog $self, "can delete value";
+    $imaptalk = $self->{master_store}->get_client();
+    $imaptalk->setmetadata("", $entry, undef);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $expected = {
+            "" => { $entry => undef }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    xlog $self, "run replication to clear annot";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+
+    xlog $self, "replica value is NIL";
+    $imaptalk = $self->{replica_store}->get_client();
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({
+        "" => { $entry => undef }
+    }, $res);
+}
+
+#
 # Test the /shared/vendor/cmu/cyrus-imapd/size annotation
 # which reports the total byte count of the RFC822 message
 # sizes in the mailbox.
