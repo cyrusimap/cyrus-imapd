@@ -3415,19 +3415,26 @@ int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate)
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     buf_init_ro(&value, mapval, maplen);
 
-    r = mailbox_open_iwl(mboxname, &mailbox);
-    if (!r) r = sync_mailbox_version_check(&mailbox);
-    if (r) goto done;
-
     appendattvalue(&attvalues,
                    *userid ? "value.priv" : "value.shared",
                    &value);
     appendentryatt(&entryatts, entry, attvalues);
+
     astate = annotate_state_new();
+    if (*mboxname) {
+        r = mailbox_open_iwl(mboxname, &mailbox);
+        if (r) goto done;
+        r = sync_mailbox_version_check(&mailbox);
+        if (r) goto done;
+        r = annotate_state_set_mailbox(astate, mailbox);
+        if (r) goto done;
+    }
+    else {
+        r = annotate_state_set_server(astate);
+        if (r) goto done;
+    }
     annotate_state_set_auth(astate,
                             sstate->userisadmin, userid, sstate->authstate);
-    r = annotate_state_set_mailbox(astate, mailbox);
-    if (r) goto done;
 
     r = annotate_state_store(astate, entryatts);
 
@@ -3466,21 +3473,26 @@ int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate)
     if (!dlist_getatom(kin, "USERID", &userid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    r = mailbox_open_iwl(mboxname, &mailbox);
-    if (!r)
-        r = sync_mailbox_version_check(&mailbox);
-    if (r)
-        goto done;
-
     appendattvalue(&attvalues,
                    *userid ? "value.priv" : "value.shared",
                    &empty);
     appendentryatt(&entryatts, entry, attvalues);
+
     astate = annotate_state_new();
+    if (*mboxname) {
+        r = mailbox_open_iwl(mboxname, &mailbox);
+        if (r) goto done;
+        r = sync_mailbox_version_check(&mailbox);
+        if (r) goto done;
+        r = annotate_state_set_mailbox(astate, mailbox);
+        if (r) goto done;
+    }
+    else {
+        r = annotate_state_set_server(astate);
+        if (r) goto done;
+    }
     annotate_state_set_auth(astate,
                             sstate->userisadmin, userid, sstate->authstate);
-    r = annotate_state_set_mailbox(astate, mailbox);
-    if (r) goto done;
 
     r = annotate_state_store(astate, entryatts);
 
