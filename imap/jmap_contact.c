@@ -1489,8 +1489,8 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     hash_table labels = HASH_TABLE_INITIALIZER;
     construct_hash_table(&labels, 10, 0);
     for (entry = card->properties; entry; entry = entry->next) {
-        if (!strcasecmp(entry->name, "X-ABLabel")) {
-            hash_insert(entry->group, entry->v.value, &labels);
+        if (!strcasecmpsafe(entry->name, "X-ABLabel")) {
+            hash_insert(entry->group ? entry->group : "", entry->v.value, &labels);
         }
     }
 
@@ -1548,10 +1548,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
         const struct vparse_param *param;
         const char *type = "other";
-        const char *label = NULL;
-        if (entry->group) {
-            label = hash_lookup(entry->group, &labels);
-        }
+        const char *label = hash_lookup(entry->group ? entry->group : "", &labels);
         for (param = entry->params; param; param = param->next) {
             if (!strcasecmp(param->name, "type")) {
                 if (!strcasecmp(param->value, "home")) {
