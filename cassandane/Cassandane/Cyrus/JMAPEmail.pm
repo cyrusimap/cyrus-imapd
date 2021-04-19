@@ -10965,7 +10965,7 @@ sub test_blob_download
 }
 
 sub test_email_set_filename
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20775,7 +20775,7 @@ EOF
 }
 
 sub test_email_set_update_no_id
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_4 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
