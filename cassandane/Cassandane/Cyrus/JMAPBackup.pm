@@ -574,16 +574,20 @@ sub test_restore_calendars_all
                     "participants" => {
                         "org" => {
                             "name" => "Cassandane",
-                            "email" => "cassandane\@example.com",
                             roles => {
                                 'owner' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
                             },
                         },
                         "att" => {
                             "name" => "Bugs Bunny",
-                            "email" => "bugs\@example.com",
                             roles => {
                                 'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:bugs@example.com',
                             },
                         },
                     },
@@ -603,17 +607,21 @@ sub test_restore_calendars_all
                     "participants" => {
                         "org" => {
                             "name" => "Cassandane",
-                            "email" => "cassandane\@example.com",
                             roles => {
                                 'owner' => JSON::true,
                             },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
                         },
                         "att" => {
-                        "name" => "Bugs Bunny",
-                        "email" => "bugs\@example.com",
-                        roles => {
-                            'attendee' => JSON::true,
-                        },
+                            "name" => "Bugs Bunny",
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:bugs@example.com',
+                            },
                     },
                 },
             }
@@ -753,16 +761,20 @@ sub test_restore_calendars_all_dryrun
                     "participants" => {
                         "org" => {
                             "name" => "Cassandane",
-                            "email" => "cassandane\@example.com",
                             roles => {
                                 'owner' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
                             },
                         },
                         "att" => {
                             "name" => "Bugs Bunny",
-                            "email" => "bugs\@example.com",
                             roles => {
                                 'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:bugs@example.com',
                             },
                         },
                     },
@@ -782,17 +794,21 @@ sub test_restore_calendars_all_dryrun
                     "participants" => {
                         "org" => {
                             "name" => "Cassandane",
-                            "email" => "cassandane\@example.com",
                             roles => {
                                 'owner' => JSON::true,
                             },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
                         },
                         "att" => {
-                        "name" => "Bugs Bunny",
-                        "email" => "bugs\@example.com",
-                        roles => {
-                            'attendee' => JSON::true,
-                        },
+                            "name" => "Bugs Bunny",
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:bugs@example.com',
+                            },
                     },
                 },
             }
