@@ -54,7 +54,7 @@ gitstamp_fmt = "%b %d %Y"
 extensions.append('sphinxlocal.sitemap')
 
 # We publish master branch at /dev
-# Other branches are available at multiple locations (3.0 is at 3.0 and stable and /).
+# Other branches are available at multiple locations (3.4 is at 3.4 and stable and /).
 # Supply all webroots that this set of docs is available at.
 sitemap_website = ["https://www.cyrusimap.org/dev/"]
 
@@ -431,7 +431,7 @@ epub_exclude_files = ['search.html']
 rst_prolog = """
 .. |imap_last_stable_version| replace:: 3.2.6
 .. |imap_last_stable_branch| replace:: `cyrus-imapd-3.2`
-.. |imap_current_stable_version| replace:: 3.4.0-rc1
+.. |imap_current_stable_version| replace:: 3.4.0
 .. |imap_current_stable_branch| replace:: `cyrus-imapd-3.4`
 .. |imap_latest_development_version| replace:: 3.5.0-alpha0
 .. |imap_latest_development_branch| replace:: master
@@ -446,7 +446,7 @@ rst_prolog = """
 .. |sasl_current_stable_version| replace:: 2.1.27
 .. |imap_stable_release_notes| raw:: html
 
-    <a href="3.4/x/3.4.0-rc1.html">3.4.0-rc1</a>
+    <a href="3.4/x/3.4.0.html">3.4.0</a>
 
 .. |imap_development_release_notes| raw:: html
 
