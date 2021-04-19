@@ -1613,10 +1613,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         json_t *item = json_object();
         const struct vparse_param *param;
         const char *type = "other";
-        const char *label = NULL;
-        if (entry->group) {
-            label = hash_lookup(entry->group, &labels);
-        }
+        const char *label = hash_lookup(entry->group ? entry->group : "", &labels);
         for (param = entry->params; param; param = param->next) {
             if (!strcasecmp(param->name, "type")) {
                 if (!strcasecmp(param->value, "home")) {
@@ -1662,10 +1659,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         json_t *item = json_object();
         const struct vparse_param *param;
         const char *type = "other";
-        const char *label = NULL;
-        if (entry->group) {
-            label = hash_lookup(entry->group, &labels);
-        }
+        const char *label = hash_lookup(entry->group ? entry->group : "", &labels);
         for (param = entry->params; param; param = param->next) {
             if (!strcasecmp(param->name, "type")) {
                 if (!strcasecmp(param->value, "home")) {
