@@ -1489,7 +1489,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     hash_table labels = HASH_TABLE_INITIALIZER;
     construct_hash_table(&labels, 10, 0);
     for (entry = card->properties; entry; entry = entry->next) {
-        if (!strcasecmp(entry->name, APPLE_LABEL_PROPERTY)) {
+        if (!strcasecmp(entry->name, VCARD_APPLE_LABEL_PROPERTY)) {
             hash_insert(entry->group, entry->v.value, &labels);
         }
     }
@@ -3232,7 +3232,7 @@ static struct vparse_entry *_card_multi(struct vparse_card *card,
 static int _emails_to_card(struct vparse_card *card,
                            json_t *arg, json_t *invalid)
 {
-    vparse_delete_entries_and_apple_labels(card, "email");
+    vparse_delete_entries(card, NULL, "email");
 
     int i;
     int size = json_array_size(arg);
@@ -3276,7 +3276,7 @@ static int _emails_to_card(struct vparse_card *card,
             buf_printf(&buf, "email%d", i);
             group = buf_cstring(&buf);
 
-            vparse_add_entry(card, group, APPLE_LABEL_PROPERTY, label);
+            vparse_add_entry(card, group, VCARD_APPLE_LABEL_PROPERTY, label);
         }
 
         struct vparse_entry *entry = vparse_add_entry(card, group, "EMAIL", value);
@@ -3298,7 +3298,7 @@ static int _emails_to_card(struct vparse_card *card,
 static int _phones_to_card(struct vparse_card *card,
                            json_t *arg, json_t *invalid)
 {
-    vparse_delete_entries_and_apple_labels(card, "tel");
+    vparse_delete_entries(card, NULL, "tel");
 
     int i;
     int size = json_array_size(arg);
@@ -3342,7 +3342,7 @@ static int _phones_to_card(struct vparse_card *card,
             buf_printf(&buf, "tel%d", i);
             group = buf_cstring(&buf);
 
-            vparse_add_entry(card, group, APPLE_LABEL_PROPERTY, label);
+            vparse_add_entry(card, group, VCARD_APPLE_LABEL_PROPERTY, label);
         }
 
         struct vparse_entry *entry = vparse_add_entry(card, group, "TEL", value);
@@ -3452,7 +3452,7 @@ static int _online_to_card(struct vparse_card *card,
 static int _addresses_to_card(struct vparse_card *card,
                               json_t *arg, json_t *invalid)
 {
-    vparse_delete_entries_and_apple_labels(card, "adr");
+    vparse_delete_entries(card, NULL, "adr");
 
     int i;
     int size = json_array_size(arg);
@@ -3509,7 +3509,7 @@ static int _addresses_to_card(struct vparse_card *card,
             buf_printf(&buf, "adr%d", i);
             group = buf_cstring(&buf);
 
-            vparse_add_entry(card, group, APPLE_LABEL_PROPERTY, label);
+            vparse_add_entry(card, group, VCARD_APPLE_LABEL_PROPERTY, label);
         }
 
         struct vparse_entry *entry = vparse_add_entry(card, group, "ADR", NULL);

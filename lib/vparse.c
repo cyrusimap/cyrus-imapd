@@ -1033,10 +1033,11 @@ EXPORTED void vparse_replace_entry(struct vparse_card *card, const char *group, 
     }
 }
 
-static void _delete_entries(struct vparse_card *card,
-                            const char *group, const char *name,
-                            hash_table *props_using_label_counts)
+EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group, const char *name)
 {
+    hash_table props_using_label_counts = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&props_using_label_counts, 10, 0);
+
     struct vparse_entry **entryp = &card->properties;
     while (*entryp) {
         struct vparse_entry *entry = *entryp;
@@ -1046,43 +1047,28 @@ static void _delete_entries(struct vparse_card *card,
             _free_entry(entry);
         }
         else {
-            if (entry->group && props_using_label_counts) {
-                /* Count properties associated with an Apple label in this group */
-                uintptr_t count = (uintptr_t) hash_lookup(entry->group,
-                                                          props_using_label_counts);
+            /* Count properties associated with an Apple label */
+            if (entry->group) {
+                uintptr_t count =
+                    (uintptr_t) hash_lookup(entry->group, &props_using_label_counts);
 
-                if (strcasecmpsafe(entry->name, APPLE_LABEL_PROPERTY)) {
+                if (strcasecmpsafe(entry->name, VCARD_APPLE_LABEL_PROPERTY)) {
                     /* NOT a label property, count it */
                     count++;
                 }
-                hash_insert(entry->group, (void *) count, props_using_label_counts);
+                hash_insert(entry->group, (void *) count, &props_using_label_counts);
             }
 
             entryp = &((*entryp)->next);
         }
     }
-}
 
-EXPORTED void vparse_delete_entries(struct vparse_card *card,
-                                    const char *group, const char *name)
-{
-    _delete_entries(card, group, name, NULL);
-}
-
-EXPORTED void vparse_delete_entries_and_apple_labels(struct vparse_card *card,
-                                                     const char *name)
-{
-    hash_table props_using_label_counts = HASH_TABLE_INITIALIZER;
-
-    construct_hash_table(&props_using_label_counts, 10, 0);
-
-    _delete_entries(card, NULL, name, &props_using_label_counts);
-
-    /* Now remove orphaned label entries */
-    struct vparse_entry **entryp = &card->properties;
+    /* Now remove orphaned Apple label entries */
+    entryp = &card->properties;
     while (*entryp) {
         struct vparse_entry *entry = *entryp;
-        if (!strcasecmpsafe(entry->name, APPLE_LABEL_PROPERTY) && entry->group &&
+        if (entry->group &&
+            !strcasecmpsafe(entry->name, VCARD_APPLE_LABEL_PROPERTY) &&
             (uintptr_t) hash_lookup(entry->group, &props_using_label_counts) == 0) {
             *entryp = entry->next;
             entry->next = NULL; /* so free doesn't walk the chain */

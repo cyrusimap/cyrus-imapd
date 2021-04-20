@@ -5,7 +5,7 @@
 #include "util.h"
 #include "strarray.h"
 
-#define APPLE_LABEL_PROPERTY "X-ABLabel"
+#define VCARD_APPLE_LABEL_PROPERTY "X-ABLabel"
 
 enum parse_error {
 PE_OK = 0,
@@ -93,7 +93,6 @@ extern struct vparse_card *vparse_new_card(const char *type);
 extern void vparse_free_card(struct vparse_card *card);
 extern void vparse_free_entry(struct vparse_entry *entry);
 extern void vparse_delete_entries(struct vparse_card *card, const char *group, const char *name);
-extern void vparse_delete_entries_and_apple_labels(struct vparse_card *card, const char *name);
 extern struct vparse_entry *vparse_get_entry(struct vparse_card *card, const char *group, const char *name);
 extern struct vparse_entry *vparse_add_entry(struct vparse_card *card, const char *group, const char *name, const char *value);
 extern void vparse_replace_entry(struct vparse_card *card, const char *group, const char *name, const char *value);
