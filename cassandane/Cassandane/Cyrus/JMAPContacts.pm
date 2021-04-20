@@ -3527,9 +3527,9 @@ sub test_contact_get_invalid_utf8
 
     my $basedir = $self->{instance}->{basedir};
     copy('data/vcard/invalid-utf8.eml',
-         $basedir.'/data/user/cassandane/#addressbooks/1.') or die;
+         $basedir.'/data/user/cassandane/#addressbooks/Default/1.') or die;
     $self->{instance}->run_command({ cyrus => 1 },
-        'reconstruct', 'user.cassandane.#addressbooks');
+        'reconstruct', 'user.cassandane.#addressbooks.Default');
 
     $res = $jmap->CallMethods([
         ['Contact/get', {
