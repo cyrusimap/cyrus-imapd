@@ -3543,5 +3543,99 @@ sub test_contact_get_invalid_utf8
     }], $res->[0][1]{list}[0]{emails});
 }
 
+sub test_contact_apple_label_handling
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "create a contact with 3 labels: unassociated, shared, & unshared";
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$id
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+X-ABLabel:this-should-not-crash-cyrus
+foo.ADR:;;123 Main Street;Any Town;LA;91921-1234;U.S.A.
+foo.X-ABLabel:foo
+foo.EMAIL;TYPE=work:bubba\@local
+bar.X-ABLabel:bar
+bar.TEL;VALUE=uri;TYPE="home":tel:+1-555-555-5555
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['Contact/get', {
+            properties => ['addresses', 'emails', 'phones'],
+        }, 'R1']
+    ]);
+
+    $id = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($id);
+    $self->assert_equals("foo", $res->[0][1]{list}[0]{addresses}[0]{label});
+    $self->assert_equals("foo", $res->[0][1]{list}[0]{emails}[0]{label});
+    $self->assert_equals("bar", $res->[0][1]{list}[0]{phones}[0]{label});
+
+    xlog $self, "update contact";
+    $res = $jmap->CallMethods([['Contact/set', {
+        update => {
+            $id => {
+                emails => [{
+                    type => "work",
+                    label => undef,
+                    value => "bubba\@local"
+                }],
+                phones => [{
+                    type => "home",
+                    label => undef,
+                    value => "tel:+1-555-555-5555"
+                }]
+            }
+        }
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            properties => ['addresses', 'emails', 'phones', 'blobId'],
+        }, 'R1']
+    ]);
+
+    $self->assert_equals("foo", $res->[0][1]{list}[0]{addresses}[0]{label});
+    $self->assert_null($res->[0][1]{list}[0]{emails}[0]{label});
+    $self->assert_null($res->[0][1]{list}[0]{phones}[0]{label});
+
+    xlog $self, "download and check content";
+    my $blob = $jmap->Download({ accept => 'text/vcard' },
+                               'cassandane', $res->[0][1]{list}[0]{blobId});
+
+    $self->assert_matches(qr/X-ABLabel:this-should-not-crash-cyrus/,
+                          $blob->{content});
+    $self->assert_matches(qr/foo\.X-ABLabel/, $blob->{content});
+    $self->assert_null(grep { m/bar\.X-ABLabel/ } $blob->{content});
+}
+
 
 1;
