@@ -1489,7 +1489,8 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     hash_table labels = HASH_TABLE_INITIALIZER;
     construct_hash_table(&labels, 10, 0);
     for (entry = card->properties; entry; entry = entry->next) {
-        if (!strcasecmp(entry->name, VCARD_APPLE_LABEL_PROPERTY)) {
+        if (entry->group &&
+            !strcasecmpsafe(entry->name, VCARD_APPLE_LABEL_PROPERTY)) {
             hash_insert(entry->group, entry->v.value, &labels);
         }
     }
