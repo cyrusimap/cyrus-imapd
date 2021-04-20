@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <fcntl.h>
 
+#include "hash.h"
 #include "vparse.h"
 #include "xmalloc.h"
 
@@ -1034,6 +1035,9 @@ EXPORTED void vparse_replace_entry(struct vparse_card *card, const char *group, 
 
 EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group, const char *name)
 {
+    hash_table props_using_label_counts = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&props_using_label_counts, 10, 0);
+
     struct vparse_entry **entryp = &card->properties;
     while (*entryp) {
         struct vparse_entry *entry = *entryp;
@@ -1043,9 +1047,39 @@ EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group,
             _free_entry(entry);
         }
         else {
+            /* Count properties associated with an Apple label */
+            if (entry->group) {
+                uintptr_t count =
+                    (uintptr_t) hash_lookup(entry->group, &props_using_label_counts);
+
+                if (strcasecmpsafe(entry->name, VCARD_APPLE_LABEL_PROPERTY)) {
+                    /* NOT a label property, count it */
+                    count++;
+                }
+                hash_insert(entry->group, (void *) count, &props_using_label_counts);
+            }
+
             entryp = &((*entryp)->next);
         }
     }
+
+    /* Now remove orphaned Apple label entries */
+    entryp = &card->properties;
+    while (*entryp) {
+        struct vparse_entry *entry = *entryp;
+        if (entry->group &&
+            !strcasecmpsafe(entry->name, VCARD_APPLE_LABEL_PROPERTY) &&
+            (uintptr_t) hash_lookup(entry->group, &props_using_label_counts) == 0) {
+            *entryp = entry->next;
+            entry->next = NULL; /* so free doesn't walk the chain */
+            _free_entry(entry);
+        }
+        else {
+            entryp = &((*entryp)->next);
+        }
+    }
+
+    free_hash_table(&props_using_label_counts, NULL);
 }
 
 EXPORTED struct vparse_param *vparse_get_param(struct vparse_entry *entry, const char *name)

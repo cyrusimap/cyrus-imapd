@@ -1489,7 +1489,8 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     hash_table labels = HASH_TABLE_INITIALIZER;
     construct_hash_table(&labels, 10, 0);
     for (entry = card->properties; entry; entry = entry->next) {
-        if (!strcasecmp(entry->name, "X-ABLabel")) {
+        if (entry->group &&
+            !strcasecmpsafe(entry->name, VCARD_APPLE_LABEL_PROPERTY)) {
             hash_insert(entry->group, entry->v.value, &labels);
         }
     }
@@ -3276,7 +3277,7 @@ static int _emails_to_card(struct vparse_card *card,
             buf_printf(&buf, "email%d", i);
             group = buf_cstring(&buf);
 
-            vparse_add_entry(card, group, "X-ABLabel", label);
+            vparse_add_entry(card, group, VCARD_APPLE_LABEL_PROPERTY, label);
         }
 
         struct vparse_entry *entry = vparse_add_entry(card, group, "EMAIL", value);
@@ -3342,7 +3343,7 @@ static int _phones_to_card(struct vparse_card *card,
             buf_printf(&buf, "tel%d", i);
             group = buf_cstring(&buf);
 
-            vparse_add_entry(card, group, "X-ABLabel", label);
+            vparse_add_entry(card, group, VCARD_APPLE_LABEL_PROPERTY, label);
         }
 
         struct vparse_entry *entry = vparse_add_entry(card, group, "TEL", value);
@@ -3509,7 +3510,7 @@ static int _addresses_to_card(struct vparse_card *card,
             buf_printf(&buf, "adr%d", i);
             group = buf_cstring(&buf);
 
-            vparse_add_entry(card, group, "X-ABLabel", label);
+            vparse_add_entry(card, group, VCARD_APPLE_LABEL_PROPERTY, label);
         }
 
         struct vparse_entry *entry = vparse_add_entry(card, group, "ADR", NULL);
