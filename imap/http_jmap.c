@@ -1228,12 +1228,18 @@ static int jmap_ws(enum wslay_opcode opcode,
             ret = jmap_api(txn, req, &res, &my_jmap_settings);
         }
         else if (!strcmpsafe(type, "WebSocketPushEnable")) {
-            /* XXX  Ignore until supported */
-            ret = 0;
+            /* Log request */
+            spool_replace_header(xstrdup(":jmap"),
+                                 "WebSocketPushEnable", txn->req_hdrs);
+            /* XXX  Do nothing until supported */
+            ret = HTTP_NO_CONTENT;
         }
         else if (!strcmpsafe(type, "WebSocketPushDisable")) {
-            /* XXX  Ignore until supported */
-            ret = 0;
+            /* Log request */
+            spool_replace_header(xstrdup(":jmap"),
+                                 "WebSocketPushDisable", txn->req_hdrs);
+            /* XXX  Do nothing until supported */
+            ret = HTTP_NO_CONTENT;
         }
         else {
             buf_reset(&txn->buf);
