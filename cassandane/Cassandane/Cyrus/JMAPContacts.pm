@@ -3579,6 +3579,8 @@ foo.X-ABLabel:foo
 foo.EMAIL;TYPE=work:bubba\@local
 bar.X-ABLabel:bar
 bar.TEL;VALUE=uri;TYPE="home":tel:+1-555-555-5555
+email0.X-ABLabel:aaa
+email0.EMAIL;TYPE=work:shrimp\@local
 END:VCARD
 EOF
 
@@ -3606,6 +3608,16 @@ EOF
                     type => "work",
                     label => undef,
                     value => "bubba\@local"
+                },
+                {       
+                    type => "work",
+                    label => "aaa",
+                    value => "shrimp\@local"
+                },
+                {       
+                    type => "personal",
+                    label => "bbb",
+                    value => "gump\@local"
                 }],
                 phones => [{
                     type => "home",
@@ -3633,8 +3645,19 @@ EOF
 
     $self->assert_matches(qr/X-ABLabel:this-should-not-crash-cyrus/,
                           $blob->{content});
+
     $self->assert_matches(qr/foo\.X-ABLabel/, $blob->{content});
+    $self->assert_matches(qr/foo\.ADR/, $blob->{content});
+
+    $self->assert_null(grep { m/foo\.EMAIL/ } $blob->{content});
+    $self->assert_null(grep { m/email0\./ } $blob->{content});
+    $self->assert_matches(qr/email1\.X-ABLabel/, $blob->{content});
+    $self->assert_matches(qr/email1\.EMAIL/, $blob->{content});
+    $self->assert_matches(qr/email2\.X-ABLabel/, $blob->{content});
+    $self->assert_matches(qr/email2\.EMAIL/, $blob->{content});
+
     $self->assert_null(grep { m/bar\.X-ABLabel/ } $blob->{content});
+    $self->assert_null(grep { m/bar\.TEL/ } $blob->{content});
 }
 
 
