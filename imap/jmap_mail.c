@@ -10760,6 +10760,9 @@ static void _email_update_parse(json_t *jemail,
             mailboxids = NULL;
         }
     }
+    else if (!json_object_size(mailboxids)) {
+        jmap_parser_invalid(parser, "mailboxIds");
+    }
     update->mailboxids = mailboxids;
 
     /* Is snoozed being overwritten or patched? */
@@ -12309,15 +12312,38 @@ static void _email_update_bulk(jmap_req_t *req,
         struct email_update *update = xzmalloc(sizeof(struct email_update));
         update->email_id = email_id;
         _email_update_parse(jval, &parser, update);
+
+        /* Validate patched mailbox ids */
+        if (update->patch_mailboxids && !json_array_size(parser.invalid)) {
+            json_t *cur = _email_mailboxes(req, email_id);
+            if (!json_object_size(cur)) {
+                json_object_set_new(not_updated, email_id,
+                        json_pack("{s:s}", "type", "notFound"));
+            }
+            else {
+                json_t *new = jmap_patchobject_apply(cur, update->mailboxids, NULL);
+                if (!json_object_size(new)) {
+                    jmap_parser_invalid(&parser, "mailboxIds");
+                }
+                json_decref(new);
+            }
+            json_decref(cur);
+        }
+
+        /* Report invalid properties */
         if (json_array_size(parser.invalid)) {
             json_object_set_new(not_updated, email_id,
                     json_pack("{s:s s:O}", "type", "invalidProperties",
                         "properties", parser.invalid));
-            _email_update_free(update);
         }
-        else {
+
+        /* Add update to batch */
+        if (!json_array_size(parser.invalid) &&
+                !json_object_get(not_updated, email_id)) {
             ptrarray_append(&updates, update);
         }
+        else _email_update_free(update);
+
         jmap_parser_fini(&parser);
     }
     if (ptrarray_size(&updates)) {
