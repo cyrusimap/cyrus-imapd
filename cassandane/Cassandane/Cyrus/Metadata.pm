@@ -1231,8 +1231,15 @@ sub test_msg_replication_new_bot_mse_gul
     if ($self->{instance}->{have_syslog_replacement}) {
         # We should have generated a SYNCERROR or two
         my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/SYNCERROR: guid mismatch user.cassandane 1/,
-                              "@lines");
+
+        my $pattern = qr{
+            \bSYNCERROR:\sguid\smismatch
+            (?: \suser\.cassandane\s1\b
+              | :\smailbox=<user\.cassandane>\suid=<1>
+            )
+        }x;
+
+        $self->assert_matches($pattern, "@lines");
     }
 }
 
@@ -1293,8 +1300,15 @@ sub test_msg_replication_new_bot_mse_guh
     if ($self->{instance}->{have_syslog_replacement}) {
         # We should have generated a SYNCERROR or two
         my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/SYNCERROR: guid mismatch user.cassandane 1/,
-                              "@lines");
+
+        my $pattern = qr{
+            \bSYNCERROR:\sguid\smismatch
+            (?: \suser\.cassandane\s1\b
+              | :\smailbox=<user\.cassandane>\suid=<1>
+            )
+        }x;
+
+        $self->assert_matches($pattern, "@lines");
     }
 }
 
