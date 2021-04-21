@@ -495,6 +495,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         r = ctx->data_cb(arg->opcode, &inbuf, &outbuf, &ctx->log, &ctx->cb_rock);
         if (r) {
             switch (r) {
+            case HTTP_NO_CONTENT:
+                /* Nothing to output */
+                break;
             case HTTP_SERVER_ERROR:
                 err_code = WSLAY_CODE_INTERNAL_SERVER_ERROR;
                 break;
