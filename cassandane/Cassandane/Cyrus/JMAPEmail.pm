@@ -20994,4 +20994,120 @@ sub test_email_query_guidsearch_mixedfilter2
     $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
 }
 
+sub test_email_set_update_mailboxids_nonempty
+    :min_version_3_4 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['id'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+            }
+        }, 'R2'],
+    ], $using);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    my $mboxA = $res->[1][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[1][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email => {
+                    mailboxIds => {
+                        $mboxA => JSON::true,
+                        $mboxB => JSON::true,
+                    },
+                    subject => 'test',
+                    from => [{
+                        email => 'from@local'
+                    }] ,
+                    to => [{
+                        email => 'to@local'
+                    }] ,
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'email',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => ['#email'],
+            properties => ['mailboxIds'],
+        }, 'R2'],
+    ], $using);
+    my $emailId = $res->[0][1]{created}{email}{id};
+    $self->assert_not_null($emailId);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId => {
+                    mailboxIds => {},
+                },
+            },
+        }, 'R1'],
+        ['Email/set', {
+            update => {
+                $emailId => {
+                    mailboxIds => undef,
+                },
+            },
+        }, 'R2'],
+        ['Email/set', {
+            update => {
+                $emailId => {
+                    'mailboxIds'.$mboxA => undef,
+                    'mailboxIds'.$mboxB => undef,
+                },
+            },
+        }, 'R3'],
+        ['Email/set', {
+            update => {
+                $emailId => {
+                    mailboxIds => [],
+                },
+            },
+        }, 'R4'],
+        ['Email/get', {
+            ids => [$emailId],
+            properties => ['mailboxIds'],
+        }, 'R5'],
+    ], $using);
+
+    $self->assert_deep_equals({
+        type => 'invalidProperties',
+        properties => ['mailboxIds'],
+    }, $res->[0][1]{notUpdated}{$emailId});
+
+    $self->assert_str_equals($emailId, $res->[4][1]{list}[0]{id});
+}
+
 1;
