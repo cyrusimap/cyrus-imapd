@@ -41,7 +41,6 @@
  * Author: Sébastien Michel from Atos Worldline
  */
 #include <config.h>
-#include "imap/mboxevent.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -65,7 +64,7 @@
 #include "times.h"
 #include "xmalloc.h"
 
-#include "mboxevent.h"
+#include "imap/mboxevent.h"
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "notify.h"
