@@ -849,3 +849,285 @@ done:
     }
     return is_valid;
 }
+
+EXPORTED json_t *jmap_header_as_raw(const char *raw,
+                                    enum header_form form __attribute__((unused)))
+{
+    if (!raw) return json_null();
+
+    size_t len = strlen(raw);
+    if (len > 1 && raw[len-1] == '\n' && raw[len-2] == '\r') len -= 2;
+    return json_stringn(raw, len);
+}
+
+static char *_decode_mimeheader(const char *raw)
+{
+    if (!raw) return NULL;
+
+    int is_8bit = 0;
+    const char *p;
+    for (p = raw; *p; p++) {
+        if (*p & 0x80) {
+            is_8bit = 1;
+            break;
+        }
+    }
+
+    char *val = NULL;
+    if (is_8bit) {
+        int r = 0;
+        const char *cval = jmap_decode_to_utf8("utf-8", ENCODING_NONE,
+                                               raw, strlen(raw), 0.0, &val, &r);
+        if (!val) val = xstrdupnull(cval);
+    }
+    if (!val) {
+        val = charset_decode_mimeheader(raw, CHARSET_KEEPCASE);
+    }
+    return val;
+}
+
+EXPORTED json_t *jmap_header_as_text(const char *raw,
+                                     enum header_form form __attribute__((unused)))
+{
+    if (!raw) return json_null();
+
+    /* TODO this could be optimised to omit unfolding, decoding
+     * or normalisation, or all, if ASCII */
+    /* Unfold and remove CRLF */
+    char *unfolded = charset_unfold(raw, strlen(raw), 0);
+    char *p = strchr(unfolded, '\r');
+    while (p && *(p + 1) != '\n') {
+        p = strchr(p + 1, '\r');
+    }
+    if (p) *p = '\0';
+
+    /* Trim starting SP */
+    const char *trimmed = unfolded;
+    while (isspace(*trimmed)) {
+        trimmed++;
+    }
+
+    /* Decode header */
+    char *decoded = _decode_mimeheader(trimmed);
+
+    /* Convert to Unicode NFC */
+    char *normalized = charset_utf8_normalize(decoded);
+
+    json_t *result = json_string(normalized);
+    free(normalized);
+    free(decoded);
+    free(unfolded);
+    return result;
+}
+
+EXPORTED json_t *jmap_header_as_date(const char *raw,
+                                        enum header_form form __attribute__((unused)))
+{
+    if (!raw) return json_null();
+
+    struct offsettime t;
+    if (offsettime_from_rfc5322(raw, &t, DATETIME_FULL) == -1) {
+        if (!strchr(raw, '\r')) return json_null();
+        char *tmp = charset_unfold(raw, strlen(raw), CHARSET_UNFOLD_SKIPWS);
+        int r = offsettime_from_rfc5322(tmp, &t, DATETIME_FULL);
+        free(tmp);
+        if (r == -1) return json_null();
+    }
+
+    char datestr[ISO8601_DATETIME_MAX+1] = "";
+    offsettime_to_iso8601(&t, datestr, sizeof(datestr), 1);
+    return json_string(datestr);
+}
+
+static void _remove_ws(char *s)
+{
+    char *d = s;
+    do {
+        while (isspace(*s))
+            s++;
+    } while ((*d++ = *s++));
+}
+
+EXPORTED json_t *jmap_header_as_urls(const char *raw,
+                                     enum header_form form __attribute__((unused)))
+{
+    if (!raw) return json_null();
+
+    /* A poor man's implementation of RFC 2369, returning anything
+     * between < and >. */
+    json_t *urls = json_array();
+    const char *base = raw;
+    const char *top = raw + strlen(raw);
+    while (base < top) {
+        const char *lo = strchr(base, '<');
+        if (!lo) break;
+        const char *hi = strchr(lo, '>');
+        if (!hi) break;
+        char *tmp = charset_unfold(lo + 1, hi - lo - 1, CHARSET_UNFOLD_SKIPWS);
+        _remove_ws(tmp);
+        if (*tmp) json_array_append_new(urls, json_string(tmp));
+        free(tmp);
+        base = hi + 1;
+    }
+    if (!json_array_size(urls)) {
+        json_decref(urls);
+        urls = json_null();
+    }
+    return urls;
+}
+
+EXPORTED json_t *jmap_header_as_messageids(const char *raw,
+                                           enum header_form form __attribute__((unused)))
+{
+    if (!raw) return json_null();
+    json_t *msgids = json_array();
+    char *unfolded = charset_unfold(raw, strlen(raw), CHARSET_UNFOLD_SKIPWS);
+
+    const char *p = unfolded;
+
+    while (*p) {
+        /* Skip preamble */
+        while (isspace(*p) || *p == ',') p++;
+        if (!*p) break;
+
+        /* Find end of id */
+        const char *q = p;
+        if (*p == '<') {
+            while (*q && *q != '>') q++;
+        }
+        else {
+            while (*q && !isspace(*q)) q++;
+        }
+
+        /* Read id */
+        char *val = xstrndup(*p == '<' ? p + 1 : p,
+                             *q == '>' ? q - p - 1 : q - p);
+        if (*p == '<') {
+            _remove_ws(val);
+        }
+        if (*val) {
+            /* calculate the value that would be created if this was
+             * fed back into an Email/set and make sure it would
+             * validate */
+            char *msgid = strconcat("<", val, ">", NULL);
+            int r = conversations_check_msgid(msgid, strlen(msgid));
+            if (!r) json_array_append_new(msgids, json_string(val));
+            free(msgid);
+        }
+        free(val);
+
+        /* Reset iterator */
+        p = *q ? q + 1 : q;
+    }
+
+
+    if (!json_array_size(msgids)) {
+        json_decref(msgids);
+        msgids = json_null();
+    }
+    free(unfolded);
+    return msgids;
+}
+
+EXPORTED json_t *jmap_header_as_addresses(const char *raw, enum header_form form)
+{
+    if (!raw) return json_null();
+
+    struct address *addrs = NULL;
+    parseaddr_list(raw, &addrs);
+    json_t *result = jmap_emailaddresses_from_addr(addrs, form);
+    parseaddr_free(addrs);
+    return result;
+}
+
+EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
+                                               enum header_form form)
+{
+    if (!addr) return json_null();
+
+    json_t *result = json_array();
+
+    const char *groupname = NULL;
+    json_t *addresses = json_array();
+
+    struct buf buf = BUF_INITIALIZER;
+    while (addr) {
+        const char *domain = addr->domain;
+        if (!strcmpsafe(domain, "unspecified-domain")) {
+            domain = NULL;
+        }
+        if (!addr->name && addr->mailbox && !domain) {
+            /* Start of group. */
+            if (form == HEADER_FORM_GROUPEDADDRESSES) {
+                if (form == HEADER_FORM_GROUPEDADDRESSES) {
+                    if (groupname || json_array_size(addresses)) {
+                        json_t *group = json_object();
+                        json_object_set_new(group, "name",
+                                groupname ? json_string(groupname) : json_null());
+                        json_object_set_new(group, "addresses", addresses);
+                        json_array_append_new(result, group);
+                        addresses = json_array();
+                    }
+                    groupname = NULL;
+                }
+                groupname = addr->mailbox;
+            }
+        }
+        else if (!addr->name && !addr->mailbox) {
+            /* End of group */
+            if (form == HEADER_FORM_GROUPEDADDRESSES) {
+                if (groupname || json_array_size(addresses)) {
+                    json_t *group = json_object();
+                    json_object_set_new(group, "name",
+                            groupname ? json_string(groupname) : json_null());
+                    json_object_set_new(group, "addresses", addresses);
+                    json_array_append_new(result, group);
+                    addresses = json_array();
+                }
+                groupname = NULL;
+            }
+        }
+        else {
+            /* Regular address */
+            json_t *jemailaddr = json_object();
+            if (addr->name) {
+                char *tmp = _decode_mimeheader(addr->name);
+                if (tmp) json_object_set_new(jemailaddr, "name", json_string(tmp));
+                free(tmp);
+            } else {
+                json_object_set_new(jemailaddr, "name", json_null());
+            }
+            if (addr->mailbox) {
+                buf_setcstr(&buf, addr->mailbox);
+                if (domain) {
+                    buf_putc(&buf, '@');
+                    buf_appendcstr(&buf, domain);
+                }
+                json_object_set_new(jemailaddr, "email", json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            } else {
+                json_object_set_new(jemailaddr, "email", json_null());
+            }
+            json_array_append_new(addresses, jemailaddr);
+        }
+        addr = addr->next;
+    }
+    buf_free(&buf);
+
+    if (form == HEADER_FORM_GROUPEDADDRESSES) {
+        if (groupname || json_array_size(addresses)) {
+            json_t *group = json_object();
+            json_object_set_new(group, "name",
+                    groupname ? json_string(groupname) : json_null());
+            json_object_set_new(group, "addresses", addresses);
+            json_array_append_new(result, group);
+        }
+        else json_decref(addresses);
+    }
+    else {
+        json_decref(result);
+        result = addresses;
+    }
+
+    return result;
+}
