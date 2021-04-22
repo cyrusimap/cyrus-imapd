@@ -1279,7 +1279,7 @@ void mboxevent_extract_content_msgrec(struct mboxevent *event,
 
     if (msgrecord_get_size(msgrec, &record_size) ||
         msgrecord_get_header_size(msgrec, &header_size)) {
-        syslog(LOG_ERR, "mobxevent: can't determine content size");
+        syslog(LOG_ERR, "mboxevent: can't determine content size");
         return;
     }
 
