@@ -41,7 +41,6 @@
  * Author: Sébastien Michel from Atos Worldline
  */
 #include <config.h>
-#include "imap/mboxevent.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
