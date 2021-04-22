@@ -64,6 +64,7 @@
 #include "times.h"
 #include "xmalloc.h"
 
+#include "jmap_util.h"
 #include "mboxevent.h"
 #include "mboxname.h"
 #include "msgrecord.h"
@@ -143,6 +144,7 @@ static struct mboxevent event_template =
     { EVENT_COUNTERS, "vnd.fastmail.counters", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_EMAILID, "vnd.cmu.emailid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_JMAP_EMAIL, "vnd.cmu.jmapEmail", EVENT_PARAM_JSON, { 0 }, 0 },
 
     /* calendar params for calalarmd/notifyd */
     { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -395,8 +397,18 @@ EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
     strarray_fini(&event->flagnames);
 
     for (i = 0; i <= MAX_PARAM; i++) {
-        if (event->params[i].filled && event->params[i].type == EVENT_PARAM_STRING)
-            free(event->params[i].value.s);
+        if (event->params[i].filled) {
+            switch (event->params[i].type) {
+            case EVENT_PARAM_STRING:
+                free(event->params[i].value.s);
+                break;
+            case EVENT_PARAM_JSON:
+                json_decref(event->params[i].value.j);
+                break;
+            default:
+                break;
+            }
+        }
     }
 
     if (event->prev)
@@ -552,6 +564,9 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_MESSAGE_THREADID:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_THREADID) &&
                (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
+    case EVENT_JMAP_EMAIL:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_JMAPEMAIL) &&
+               (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
     case EVENT_MESSAGES:
         if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
             return 1;
@@ -891,10 +906,41 @@ EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
     }
 }
 
+static const char *emailid(struct message_guid *guid)
+{
+    static char id[26];
+
+    id[0] = 'M';
+    memcpy(id+1, message_guid_encode(guid), 24);
+    id[25] = '\0';
+
+    return id;
+}
+
+static const char *threadid(bit64 cid)
+{
+    static char id[18];
+
+    if (!cid) {
+        id[0] = 'N';
+        id[1] = 'I';
+        id[2] = 'L';
+        id[3] = '\0';
+    }
+    else {
+        id[0] = 'T';
+        memcpy(id+1, conversation_id_encode(cid), 16);
+        id[17] = '\0';
+    }
+
+    return id;
+}
+
 EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *mailbox,
                                        struct index_record *record)
 {
     char *msgid = NULL;
+    struct body *body = NULL;
 
     if (!event)
         return;
@@ -947,28 +993,56 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
     /* add message EMAILID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_EMAILID)) {
-        char emailid[26];
-        emailid[0] = 'M';
-        memcpy(emailid+1, message_guid_encode(&record->guid), 24);
-        emailid[25] = '\0';
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, xstrdup(emailid));
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID,
+                          xstrdup(emailid(&record->guid)));
     }
 
     /* add message THREADID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_THREADID)) {
-        char threadid[18];
-        if (!record->cid) {
-            threadid[0] = 'N';
-            threadid[1] = 'I';
-            threadid[2] = 'L';
-            threadid[3] = '\0';
-        }
-        else {
-            threadid[0] = 'T';
-            memcpy(threadid+1, conversation_id_encode(record->cid), 16);
-            threadid[17] = '\0';
-        }
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid));
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID,
+                          xstrdup(threadid(record->cid)));
+    }
+
+    /* add vnd.cmu.jmapEmail */
+    if (mboxevent_expected_param(event->type, EVENT_JMAP_EMAIL)) {
+        if (mailbox_cacherecord(mailbox, record))
+            return;
+        message_read_bodystructure(record, &body);
+
+        json_t *email =
+            json_pack("{ s:s s:s s:o s:o s:o s:o s:o s:o s:o s:o s:o s:o }",
+                      "id", emailid(&record->guid),
+                      "threadId", threadid(record->cid),
+                      "sentAt",
+                      jmap_header_as_date(body->date, HEADER_FORM_DATE),
+                      "subject",
+                      jmap_header_as_text(body->subject, HEADER_FORM_TEXT),
+                      "from",
+                      jmap_emailaddresses_from_addr(body->from,
+                                                    HEADER_FORM_ADDRESSES),
+                      "sender",
+                      jmap_emailaddresses_from_addr(body->sender,
+                                                    HEADER_FORM_ADDRESSES),
+                      "replyTo",
+                      jmap_emailaddresses_from_addr(body->reply_to,
+                                                    HEADER_FORM_ADDRESSES),
+                      "to",
+                      jmap_emailaddresses_from_addr(body->to,
+                                                    HEADER_FORM_ADDRESSES),
+                      "cc",
+                      jmap_emailaddresses_from_addr(body->cc,
+                                                    HEADER_FORM_ADDRESSES),
+                      "bcc",
+                      jmap_emailaddresses_from_addr(body->bcc,
+                                                    HEADER_FORM_ADDRESSES),
+                      "inReplyTo",
+                      jmap_header_as_messageids(body->in_reply_to,
+                                                HEADER_FORM_MESSAGEIDS),
+                      "messageId",
+                      jmap_header_as_messageids(body->message_id,
+                                                HEADER_FORM_MESSAGEIDS));
+
+        FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
     }
 
     /* add vnd.cmu.envelope */
@@ -990,13 +1064,14 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
     if ((mailbox->mbtype & (MBTYPES_DAV)) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
-        struct body *body = NULL;
         const char *resource = NULL;
         struct param *param;
 
-        if (mailbox_cacherecord(mailbox, record))
-            return;
-        message_read_bodystructure(record, &body);
+        if (!body) {
+            if (mailbox_cacherecord(mailbox, record))
+                return;
+            message_read_bodystructure(record, &body);
+        }
 
         for (param = body->disposition_params; param; param = param->next) {
             if (!strcmp(param->attribute, "FILENAME")) {
@@ -1030,12 +1105,16 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         }
     }
 #endif // WITH_DAV
+
+    if (body) message_free_body(body);
+    free(body);
 }
 
 EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *msgrec)
 {
     int r;
     uint32_t uid;
+    struct body *body = NULL;
 
     if (!event)
         return;
@@ -1115,11 +1194,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
             return;
         }
-        char emailid[26];
-        emailid[0] = 'M';
-        memcpy(emailid+1, message_guid_encode(&guid), 24);
-        emailid[25] = '\0';
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, xstrdup(emailid));
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, xstrdup(emailid(&guid)));
     }
 
     /* add message THREADID */
@@ -1129,19 +1204,59 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
             return;
         }
-        char threadid[18];
-        if (!cid) {
-            threadid[0] = 'N';
-            threadid[1] = 'I';
-            threadid[2] = 'L';
-            threadid[3] = '\0';
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid(cid)));
+    }
+
+    /* add vnd.cmu.jmapEmail */
+    if (mboxevent_expected_param(event->type, EVENT_JMAP_EMAIL)) {
+        struct message_guid guid;
+        bit64 cid;
+        if ((r = msgrecord_get_guid(msgrec, &guid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
+            return;
         }
-        else {
-            threadid[0] = 'T';
-            memcpy(threadid+1, conversation_id_encode(cid), 16);
-            threadid[17] = '\0';
+        if ((r = msgrecord_get_cid(msgrec, &cid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
+            return;
         }
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid));
+        if ((r = msgrecord_extract_bodystructure(msgrec, &body))) {
+            syslog(LOG_ERR, "mboxevent: can't extract body: %s", error_message(r));
+            return;
+        }
+        json_t *email =
+            json_pack("{ s:s s:s s:o s:o s:o s:o s:o s:o s:o s:o s:o s:o }",
+                      "id", emailid(&guid),
+                      "threadId", threadid(cid),
+                      "sentAt",
+                      jmap_header_as_date(body->date, HEADER_FORM_DATE),
+                      "subject",
+                      jmap_header_as_text(body->subject, HEADER_FORM_TEXT),
+                      "from",
+                      jmap_emailaddresses_from_addr(body->from,
+                                                    HEADER_FORM_ADDRESSES),
+                      "sender",
+                      jmap_emailaddresses_from_addr(body->sender,
+                                                    HEADER_FORM_ADDRESSES),
+                      "replyTo",
+                      jmap_emailaddresses_from_addr(body->reply_to,
+                                                    HEADER_FORM_ADDRESSES),
+                      "to",
+                      jmap_emailaddresses_from_addr(body->to,
+                                                    HEADER_FORM_ADDRESSES),
+                      "cc",
+                      jmap_emailaddresses_from_addr(body->cc,
+                                                    HEADER_FORM_ADDRESSES),
+                      "bcc",
+                      jmap_emailaddresses_from_addr(body->bcc,
+                                                    HEADER_FORM_ADDRESSES),
+                      "inReplyTo",
+                      jmap_header_as_messageids(body->in_reply_to,
+                                                HEADER_FORM_MESSAGEIDS),
+                      "messageId",
+                      jmap_header_as_messageids(body->message_id,
+                                                HEADER_FORM_MESSAGEIDS));
+
+        FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
     }
 
     /* add vnd.cmu.envelope */
@@ -1173,12 +1288,16 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     if ((mailbox->mbtype & (MBTYPES_DAV)) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
-        struct body *body = NULL;
         const char *resource = NULL;
         struct param *param;
 
-        r = msgrecord_extract_bodystructure(msgrec, &body);
-        if (r) return;
+        if (!body) {
+            r = msgrecord_extract_bodystructure(msgrec, &body);
+            if (r) {
+                syslog(LOG_ERR, "mboxevent: can't extract body: %s", error_message(r));
+                return;
+            }
+        }
 
         for (param = body->disposition_params; param; param = param->next) {
             if (!strcmp(param->attribute, "FILENAME")) {
@@ -1210,11 +1329,11 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(""));
             }
         }
-
-        if (body) message_free_body(body);
-        free(body);
     }
 #endif // WITH_DAV
+
+    if (body) message_free_body(body);
+    free(body);
 }
 
 void mboxevent_extract_copied_record(struct mboxevent *event,
@@ -1773,6 +1892,9 @@ static char *json_formatter(enum event_type type, struct event_parameter params[
                 }
 
                 json_object_set_new(event_json, params[param].name, jarray);
+                break;
+            case EVENT_PARAM_JSON:
+                json_object_set(event_json, params[param].name, params[param].value.j);
                 break;
             }
             break;
