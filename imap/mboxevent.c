@@ -63,7 +63,9 @@
 #include "map.h"
 #include "times.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
 
+#include "jmap_util.h"
 #include "mboxevent.h"
 #include "mboxname.h"
 #include "msgrecord.h"
@@ -891,6 +893,20 @@ EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
     }
 }
 
+static const char *threadid(bit64 cid)
+{
+    static char id[JMAP_THREADID_SIZE];
+
+    if (!cid) {
+        strlcpy(id, "NIL", JMAP_THREADID_SIZE);
+    }
+    else {
+        jmap_set_threadid(cid, id);
+    }
+
+    return id;
+}
+
 EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *mailbox,
                                        struct index_record *record)
 {
@@ -947,28 +963,15 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
     /* add message EMAILID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_EMAILID)) {
-        char emailid[26];
-        emailid[0] = 'M';
-        memcpy(emailid+1, message_guid_encode(&record->guid), 24);
-        emailid[25] = '\0';
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, xstrdup(emailid));
+        char *emailid = xmalloc(JMAP_EMAILID_SIZE);
+        jmap_set_emailid(&record->guid, emailid);
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
     }
 
     /* add message THREADID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_THREADID)) {
-        char threadid[18];
-        if (!record->cid) {
-            threadid[0] = 'N';
-            threadid[1] = 'I';
-            threadid[2] = 'L';
-            threadid[3] = '\0';
-        }
-        else {
-            threadid[0] = 'T';
-            memcpy(threadid+1, conversation_id_encode(record->cid), 16);
-            threadid[17] = '\0';
-        }
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid));
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID,
+                          xstrdup(threadid(record->cid)));
     }
 
     /* add vnd.cmu.envelope */
@@ -1115,11 +1118,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
             return;
         }
-        char emailid[26];
-        emailid[0] = 'M';
-        memcpy(emailid+1, message_guid_encode(&guid), 24);
-        emailid[25] = '\0';
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, xstrdup(emailid));
+        char *emailid = xmalloc(JMAP_EMAILID_SIZE);
+        jmap_set_emailid(&guid, emailid);
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
     }
 
     /* add message THREADID */
@@ -1129,19 +1130,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
             return;
         }
-        char threadid[18];
-        if (!cid) {
-            threadid[0] = 'N';
-            threadid[1] = 'I';
-            threadid[2] = 'L';
-            threadid[3] = '\0';
-        }
-        else {
-            threadid[0] = 'T';
-            memcpy(threadid+1, conversation_id_encode(cid), 16);
-            threadid[17] = '\0';
-        }
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid));
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid(cid)));
     }
 
     /* add vnd.cmu.envelope */

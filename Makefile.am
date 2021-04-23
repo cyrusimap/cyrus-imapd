@@ -1013,6 +1013,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/imapparse.h \
 	imap/index.c \
 	imap/index.h \
+	imap/jmap_util.c \
+	imap/jmap_util.h \
 	imap/json_support.h \
 	imap/mailbox.c \
 	imap/mailbox.h \
@@ -1326,8 +1328,6 @@ nodist_imap_httpd_SOURCES += \
 	imap/jmap_err.h
 
 imap_libcyrus_imap_la_SOURCES += \
-	imap/jmap_util.c \
-	imap/jmap_util.h \
 	imap/json_support.c \
 	imap/json_support.h
 
