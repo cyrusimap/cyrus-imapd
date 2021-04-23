@@ -458,7 +458,7 @@ static void get_searchparts(const char *key, const char *val, void *rock)
 
     basedir = user_hash_xapian(srock->userid, val);
     if (basedir) {
-        struct buf buf;
+        struct buf buf = BUF_INITIALIZER;
 
         buf_initm(&buf, basedir, strlen(basedir));
         buf_appendcstr(&buf, XAPIAN_DIRNAME);
