@@ -184,16 +184,23 @@ static ssize_t h1_recv_cb(wslay_event_context_ptr ev,
     ssize_t n;
 
     n = prot_read(pin, (char *) buf, len);
-    if (!n) {
-        /* No data */
-        if (pin->eof)
-            wslay_event_set_error(ev, WSLAY_ERR_NO_MORE_MSG);
-        else if (pin->error)
-            wslay_event_set_error(ev, WSLAY_ERR_CALLBACK_FAILURE);
-        else
-            wslay_event_set_error(ev, WSLAY_ERR_WOULDBLOCK);
+    if (n) {
+        /* We received some data - don't block next time
+           Note: This callback gets called multiple times until it
+           would block.  We don't actually want to block and prevent
+           output from being submitted */
+        prot_NONBLOCK(pin);
+    }
+    else {
+        /* No data -  block next time (for client timeout) */
+        prot_BLOCK(pin);
 
-        n = -1;
+        /* XXX  Wslay seems to treat any other error as catastrophic and
+           sends a close frame on its own, bypassing the logic in ws_input().
+           Always return WOULDBLOCK here so we can return appropriate 
+           status codes and message strings in ws_input().
+        */
+        wslay_event_set_error(ev, WSLAY_ERR_WOULDBLOCK);
     }
 
     xsyslog(LOG_DEBUG, "WS recv", "len=<%zu>, n=<%zd>, eof=<%d>, err=<%s>",
@@ -823,9 +830,6 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     /* Force the response to the client immediately */
     prot_flush(txn->conn->pout);
 
-    /* Set connection as non-blocking */
-    prot_NONBLOCK(txn->conn->pin);
-
     /* Don't do telemetry logging in prot layer */
     prot_setlog(txn->conn->pin, PROT_NO_FD);
     prot_setlog(txn->conn->pout, PROT_NO_FD);
@@ -869,7 +873,7 @@ HIDDEN void ws_end_channel(void **ws_ctx, const char *msg)
     wslay_event_context_ptr ev = ctx->event;
 
     /* Close the WS if we haven't already */
-    if (!wslay_event_get_close_sent(ev)) {
+    if (wslay_event_get_write_enabled(ev) && !wslay_event_get_close_sent(ev)) {
         int r;
 
         if (!msg) msg = "Server unavailable";
@@ -937,13 +941,26 @@ HIDDEN void ws_input(struct transaction_t *txn)
     int want_read = wslay_event_want_read(ev);
     int want_write = wslay_event_want_write(ev);
     int goaway = txn->flags.conn & CONN_CLOSE;
+    struct protstream *pin = txn->conn->pin;
 
     errno = 0;
 
-    xsyslog(LOG_DEBUG, "WS input", "eof=<%d>, want read=<%d>, want write=<%d>",
-            txn->conn->pin->eof, want_read, want_write);
+    xsyslog(LOG_DEBUG, "WS input",
+            "goaway=<%d>, eof=<%d>, want read=<%d>, want write=<%d>",
+            goaway, prot_IS_EOF(pin), want_read, want_write);
 
-    if (want_read && !goaway) {
+    if (prot_IS_EOF(pin)) {
+        /* Client closed connection */
+        syslog(LOG_DEBUG, "client closed connection");
+        wslay_event_shutdown_write(ev);
+        txn->flags.conn = CONN_CLOSE;
+    }
+    else if (prot_error(pin)) {
+        /* Client timeout or I/O error */
+        goaway = 1;
+        txn->error.desc = prot_error(pin);
+    }
+    else if (want_read && !goaway) {
         /* Read frame(s) */
         int r = wslay_event_recv(ev);
 
@@ -954,24 +971,12 @@ HIDDEN void ws_input(struct transaction_t *txn)
             /* Reset request payload buffer */
             buf_reset(&txn->req_body.payload);
         }
-        else if (r == WSLAY_ERR_NO_MORE_MSG) {
-            /* Client closed connection */
-            xsyslog(LOG_DEBUG, "WS: client closed connection", NULL);
-            txn->flags.conn = CONN_CLOSE;
-        }
         else {
             /* Failure */
             xsyslog(LOG_DEBUG, "WS recv failed", "err=<%s>, prot err=<%s>",
-                    wslay_error_as_str(r), prot_error(txn->conn->pin));
+                    wslay_error_as_str(r), prot_error(pin));
             goaway = 1;
-
-            if (r == WSLAY_ERR_CALLBACK_FAILURE) {
-                /* Client timeout */
-                txn->error.desc = prot_error(txn->conn->pin);
-            }
-            else {
-                txn->error.desc = wslay_error_as_str(r);
-            }
+            txn->error.desc = wslay_error_as_str(r);
         }
     }
 
