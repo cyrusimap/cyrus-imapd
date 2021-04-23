@@ -4400,7 +4400,7 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
 
         /* name */
         json_t *jname = json_object_get(loc, "name");
-        if (json_is_string(juri)) {
+        if (json_is_string(jname)) {
             const char *name = json_string_value(jname);
             if (*name) {
                 icalproperty_add_parameter(prop, icalparameter_new_label(name));
