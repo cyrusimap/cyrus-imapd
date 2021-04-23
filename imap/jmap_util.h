@@ -168,4 +168,13 @@ extern json_t *jmap_header_as_addresses(const char *raw, enum header_form form);
 extern json_t *jmap_emailaddresses_from_addr(struct address *addr,
                                              enum header_form form);
 
+#define JMAP_BLOBID_SIZE 42
+extern void jmap_set_blobid(const struct message_guid *guid, char *buf);
+
+#define JMAP_EMAILID_SIZE 26
+extern void jmap_set_emailid(const struct message_guid *guid, char *buf);
+
+#define JMAP_THREADID_SIZE 18
+extern void jmap_set_threadid(conversation_id_t cid, char *buf);
+
 #endif /* JMAP_UTIL_H */

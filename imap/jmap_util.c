@@ -1131,3 +1131,24 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
 
     return result;
 }
+
+EXPORTED void jmap_set_blobid(const struct message_guid *guid, char *buf)
+{
+    buf[0] = 'G';
+    memcpy(buf+1, message_guid_encode(guid), JMAP_BLOBID_SIZE-2);
+    buf[JMAP_BLOBID_SIZE-1] = '\0';
+}
+
+EXPORTED void jmap_set_emailid(const struct message_guid *guid, char *buf)
+{
+    buf[0] = 'M';
+    memcpy(buf+1, message_guid_encode(guid), JMAP_EMAILID_SIZE-2);
+    buf[JMAP_EMAILID_SIZE-1] = '\0';
+}
+
+EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)
+{
+    buf[0] = 'T';
+    memcpy(buf+1, conversation_id_encode(cid), JMAP_THREADID_SIZE-2);
+    buf[JMAP_THREADID_SIZE-1] = 0;
+}
