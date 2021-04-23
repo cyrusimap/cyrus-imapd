@@ -921,22 +921,21 @@ EXPORTED json_t *jmap_header_as_text(const char *raw,
 }
 
 EXPORTED json_t *jmap_header_as_date(const char *raw,
-                                     enum header_form form __attribute__((unused)))
+                                        enum header_form form __attribute__((unused)))
 {
     if (!raw) return json_null();
 
-    time_t t;
-    if (time_from_rfc5322(raw, &t, DATETIME_FULL) == -1) {
+    struct offsettime t;
+    if (offsettime_from_rfc5322(raw, &t, DATETIME_FULL) == -1) {
         if (!strchr(raw, '\r')) return json_null();
         char *tmp = charset_unfold(raw, strlen(raw), CHARSET_UNFOLD_SKIPWS);
-        int r = time_from_rfc5322(tmp, &t, DATETIME_FULL);
+        int r = offsettime_from_rfc5322(tmp, &t, DATETIME_FULL);
         free(tmp);
         if (r == -1) return json_null();
     }
 
-    char cbuf[RFC3339_DATETIME_MAX+1];
-    cbuf[RFC3339_DATETIME_MAX] = '\0';
-    time_to_rfc3339(t, cbuf, RFC3339_DATETIME_MAX+1);
+    char cbuf[ISO8601_DATETIME_MAX+1] = "";
+    offsettime_to_iso8601(&t, cbuf, sizeof(cbuf), 1);
     return json_string(cbuf);
 }
 

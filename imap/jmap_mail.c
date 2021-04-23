@@ -6113,12 +6113,7 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         else if (!strcmp("sentAt", lcasename)) {
             jval = json_null();
             if (want_form == HEADER_FORM_DATE) {
-                struct offsettime t;
-                if (offsettime_from_rfc5322(part->date, &t, DATETIME_FULL) != -1) {
-                    char datestr[30];
-                    offsettime_to_iso8601(&t, datestr, 30, 1);
-                    jval = json_string(datestr);
-                }
+                jval = jmap_header_as_date(part->date, HEADER_FORM_DATE);
             }
         }
         if (jval) return jval;
@@ -6498,14 +6493,8 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     }
     /* sentAt */
     if (jmap_wantprop(props, "sentAt")) {
-        json_t *jsent_at = json_null();
-        struct offsettime t;
-        if (offsettime_from_rfc5322(part->date, &t, DATETIME_FULL) != -1) {
-            char datestr[30];
-            offsettime_to_iso8601(&t, datestr, 30, 1);
-            jsent_at = json_string(datestr);
-        }
-        json_object_set_new(email, "sentAt", jsent_at);
+        json_object_set_new(email, "sentAt",
+                            jmap_header_as_date(part->date, HEADER_FORM_DATE));
     }
 
     return r;
