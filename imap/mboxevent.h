@@ -45,6 +45,8 @@
 #ifndef _MBOXEVENT_H
 #define _MBOXEVENT_H
 
+#include <jansson.h>
+
 #include "strarray.h"
 
 #include "mailbox.h"
@@ -139,6 +141,7 @@ enum event_param {
     EVENT_COUNTERS,
     EVENT_MESSAGE_EMAILID,
     EVENT_MESSAGE_THREADID,
+    EVENT_JMAP_EMAIL,
     EVENT_CALENDAR_ALARM_TIME,
     EVENT_CALENDAR_ALARM_RECIPIENTS,
     EVENT_CALENDAR_USER_ID,
@@ -177,7 +180,8 @@ enum event_param {
 enum event_param_type {
     EVENT_PARAM_INT,
     EVENT_PARAM_STRING,
-    EVENT_PARAM_ARRAY
+    EVENT_PARAM_ARRAY,
+    EVENT_PARAM_JSON
 };
 
 struct event_parameter {
@@ -188,6 +192,7 @@ struct event_parameter {
         char *s;
         uint64_t u;
         strarray_t *a;
+        json_t *j;
     } value;
     int filled;
 };
@@ -222,6 +227,11 @@ struct mboxevent {
 #define FILL_UNSIGNED_PARAM(e,p,v) do { \
     e->params[p].value.u = v; \
     e->params[p].type = EVENT_PARAM_INT; \
+    e->params[p].filled = 1; \
+} while (0)
+#define FILL_JSON_PARAM(e,p,v) do { \
+    e->params[p].value.j = v; \
+    e->params[p].type = EVENT_PARAM_JSON; \
     e->params[p].filled = 1; \
 } while (0)
 
@@ -300,6 +310,7 @@ void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
  * - vnd.cmu.midset from Message-Id in ENVELOPE structure
  * - messageSize
  * - bodyStructure
+ * - vnd.cmu.jmapEmail
  *
  * Called once per message and always before mboxevent_extract_mailbox
  */
@@ -313,6 +324,7 @@ void mboxevent_extract_record(struct mboxevent *event,
  * - vnd.cmu.midset from Message-Id in ENVELOPE structure
  * - messageSize
  * - bodyStructure
+ * - vnd.cmu.jmapEmail
  *
  * Called once per message and always before mboxevent_extract_mailbox
  */
