@@ -108,6 +108,8 @@ struct ws_context {
     } pmce;
 };
 
+static int ws_timeout;
+
 
 static const char *wslay_opcode_as_str(enum wslay_opcode opcode)
 {
@@ -608,6 +610,9 @@ HIDDEN void ws_init(struct http_connection *conn __attribute__((unused)),
                     struct buf *serverinfo)
 {
     buf_printf(serverinfo, " Wslay/%s", WSLAY_VERSION);
+
+    ws_timeout = config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm');
+    if (ws_timeout < 0) ws_timeout = 0;
 }
 
 
@@ -833,6 +838,9 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     /* Don't do telemetry logging in prot layer */
     prot_setlog(txn->conn->pin, PROT_NO_FD);
     prot_setlog(txn->conn->pout, PROT_NO_FD);
+
+    /* Set inactivity timer */
+    prot_settimeout(txn->conn->pin, ws_timeout);
 
     return 0;
 }

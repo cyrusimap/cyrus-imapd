@@ -1,0 +1,14 @@
+Description:
+
+Adds an inactivity timeout for WebSocket connections.
+
+
+Config changes:
+
+Adds 'websocket_timeout' option.
+
+
+Upgrade instructions:
+
+Previously, WebSocket connections had no inactivity timeout.
+They now have a default inactivity timeout of 30m.
