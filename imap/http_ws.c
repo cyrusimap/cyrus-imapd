@@ -93,7 +93,6 @@ struct ws_context {
     const char *accept_key;
     const char *protocol;
     ws_data_callback *data_cb;
-    void *cb_rock;
     struct buf log;
     int log_tail;
     unsigned ext;                    /* Bitmask of negotiated extension(s) */
@@ -492,7 +491,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         }
 
         /* Process the request */
-        r = ctx->data_cb(arg->opcode, &inbuf, &outbuf, &ctx->log, &ctx->cb_rock);
+        r = ctx->data_cb(txn, arg->opcode, &inbuf, &outbuf, &ctx->log);
         if (r) {
             switch (r) {
             case HTTP_NO_CONTENT:
@@ -894,11 +893,6 @@ HIDDEN void ws_end_channel(void **ws_ctx, const char *msg)
 
     wslay_event_context_free(ev);
     buf_free(&ctx->log);
-
-    if (ctx->cb_rock) {
-        /* Cleanup cb_rock */
-        ctx->data_cb(0, NULL, NULL, NULL, &ctx->cb_rock);
-    }
 
     ws_zlib_done(ctx);
 

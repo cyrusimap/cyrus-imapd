@@ -1205,35 +1205,15 @@ static int jmap_get_session(struct transaction_t *txn)
  *   https://github.com/websockets/wscat
  *   https://chrome.google.com/webstore/detail/web-socket-client/lifhekgaodigcpmnakfhaaaboididbdn
  *
- * WebSockets over HTTP/2 currently only available in:
- *   https://www.google.com/chrome/browser/canary.html
+ * WebSockets over HTTP/2 currently only available in Chrome:
+ *   https://www.chromestatus.com/feature/6251293127475200
+ *   (using --enable-experimental-web-platform-features)
  */
-static int jmap_ws(enum wslay_opcode opcode,
-                   struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock)
+static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
+                   struct buf *inbuf, struct buf *outbuf, struct buf *logbuf)
 {
-    struct transaction_t **txnp = (struct transaction_t **) rock;
-    struct transaction_t *txn = *txnp;
     json_t *req = NULL, *res = NULL;
     int ret;
-
-    if (!txn) {
-        /* Create a transaction rock to use for API requests */
-        txn = *txnp = xzmalloc(sizeof(struct transaction_t));
-
-        /* Create header cache */
-        txn->req_hdrs = spool_new_hdrcache();
-        if (!txn->req_hdrs) {
-            free(txn);
-            return HTTP_SERVER_ERROR;
-        }
-    }
-    else if (!inbuf) {
-        /* Free transaction rock */
-        transaction_free(txn);
-        free(txn);
-        return 0;
-    }
 
     /* Only accept text frames */
     if (opcode != WSLAY_TEXT_FRAME) {

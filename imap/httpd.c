@@ -1895,10 +1895,73 @@ EXPORTED int process_request(struct transaction_t *txn)
 }
 
 
+static void transaction_reset(struct transaction_t *txn)
+{
+    txn->meth = METH_UNKNOWN;
+
+    memset(&txn->flags, 0, sizeof(struct txn_flags_t));
+    txn->flags.ver = VER_1_1;
+    txn->flags.vary = VARY_AE;
+
+    memset(&txn->req_line, 0, sizeof(struct request_line_t));
+
+    /* Reset Bearer auth scheme for each transaction */
+    avail_auth_schemes &= ~AUTH_BEARER;
+
+    if (txn->req_uri) xmlFreeURI(txn->req_uri);
+    txn->req_uri = NULL;
+
+    /* XXX - split this into a req_tgt cleanup */
+    free(txn->req_tgt.userid);
+    mboxlist_entry_free(&txn->req_tgt.mbentry);
+    memset(&txn->req_tgt, 0, sizeof(struct request_target_t));
+
+    free_hash_table(&txn->req_qparams, (void (*)(void *)) &freestrlist);
+
+    if (txn->req_hdrs) spool_free_hdrcache(txn->req_hdrs);
+    txn->req_hdrs = NULL;
+
+    txn->req_body.flags = 0;
+    buf_reset(&txn->req_body.payload);
+
+    txn->auth_chal.param = NULL;
+    txn->location = NULL;
+    memset(&txn->error, 0, sizeof(struct error_t));
+
+    strarray_fini(&txn->resp_body.links);
+    memset(&txn->resp_body, 0,  /* Don't zero the response payload buffer */
+           sizeof(struct resp_body_t) - sizeof(struct buf));
+    buf_reset(&txn->resp_body.payload);
+
+    /* Pre-allocate our working buffer */
+    buf_reset(&txn->buf);
+    buf_ensure(&txn->buf, 1024);
+}
+
+
+EXPORTED void transaction_free(struct transaction_t *txn)
+{
+    /* Cleanup auxiliary stream contexts */
+    txn_done_t proc;
+    while ((proc = ptrarray_pop(&txn->done_callbacks))) proc(txn);
+    ptrarray_fini(&txn->done_callbacks);
+
+    transaction_reset(txn);
+
+    buf_free(&txn->req_body.payload);
+    buf_free(&txn->resp_body.payload);
+    buf_free(&txn->zbuf);
+    buf_free(&txn->buf);
+}
+
+
 static int http1_input(struct transaction_t *txn)
 {
     struct request_line_t *req_line = &txn->req_line;
     int ignore_empty = 1, ret = 0;
+
+    /* Reset txn state */
+    transaction_reset(txn);
 
     do {
         /* Read request-line */
@@ -1963,66 +2026,6 @@ static int http1_input(struct transaction_t *txn)
 }
 
 
-static void transaction_reset(struct transaction_t *txn)
-{
-    txn->meth = METH_UNKNOWN;
-
-    memset(&txn->flags, 0, sizeof(struct txn_flags_t));
-    txn->flags.ver = VER_1_1;
-    txn->flags.vary = VARY_AE;
-
-    memset(&txn->req_line, 0, sizeof(struct request_line_t));
-
-    /* Reset Bearer auth scheme for each transaction */
-    avail_auth_schemes &= ~AUTH_BEARER;
-
-    if (txn->req_uri) xmlFreeURI(txn->req_uri);
-    txn->req_uri = NULL;
-
-    /* XXX - split this into a req_tgt cleanup */
-    free(txn->req_tgt.userid);
-    mboxlist_entry_free(&txn->req_tgt.mbentry);
-    memset(&txn->req_tgt, 0, sizeof(struct request_target_t));
-
-    free_hash_table(&txn->req_qparams, (void (*)(void *)) &freestrlist);
-
-    if (txn->req_hdrs) spool_free_hdrcache(txn->req_hdrs);
-    txn->req_hdrs = NULL;
-
-    txn->req_body.flags = 0;
-    buf_reset(&txn->req_body.payload);
-
-    txn->auth_chal.param = NULL;
-    txn->location = NULL;
-    memset(&txn->error, 0, sizeof(struct error_t));
-
-    strarray_fini(&txn->resp_body.links);
-    memset(&txn->resp_body, 0,  /* Don't zero the response payload buffer */
-           sizeof(struct resp_body_t) - sizeof(struct buf));
-    buf_reset(&txn->resp_body.payload);
-
-    /* Pre-allocate our working buffer */
-    buf_reset(&txn->buf);
-    buf_ensure(&txn->buf, 1024);
-}
-
-
-EXPORTED void transaction_free(struct transaction_t *txn)
-{
-    /* Cleanup auxiliary stream contexts */
-    txn_done_t proc;
-    while ((proc = ptrarray_pop(&txn->done_callbacks))) proc(txn);
-    ptrarray_fini(&txn->done_callbacks);
-
-    transaction_reset(txn);
-
-    buf_free(&txn->req_body.payload);
-    buf_free(&txn->resp_body.payload);
-    buf_free(&txn->zbuf);
-    buf_free(&txn->buf);
-}
-
-
 /*
  * Top-level command loop parsing
  */
@@ -2032,6 +2035,7 @@ static void cmdloop(struct http_connection *conn)
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
+    transaction_reset(&txn);
     txn.conn = conn;
 
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
@@ -2048,9 +2052,6 @@ static void cmdloop(struct http_connection *conn)
 
     do {
         int ret = 0;
-
-        /* Reset txn state */
-        transaction_reset(&txn);
 
         /* make sure nothing leaked */
         assert(!open_mailboxes_exist());
@@ -4593,13 +4594,14 @@ static int list_well_known(struct transaction_t *txn)
  *   https://chrome.google.com/webstore/detail/simple-websocket-client/gobngblklhkgmjhbpbdlkglbhhlafjnh
  *   https://chrome.google.com/webstore/detail/web-socket-client/lifhekgaodigcpmnakfhaaaboididbdn
  *
- * WebSockets over HTTP/2 currently only available in:
- *   https://www.google.com/chrome/browser/canary.html
+ * WebSockets over HTTP/2 currently only available in Chrome:
+ *   https://www.chromestatus.com/feature/6251293127475200
+ *   (using --enable-experimental-web-platform-features)
  */
-static int ws_echo(enum wslay_opcode opcode __attribute__((unused)),
+static int ws_echo(struct transaction_t *txn __attribute__((unused)),
+                   enum wslay_opcode opcode __attribute__((unused)),
                    struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf __attribute__((unused)),
-                   void **rock __attribute__((unused)))
+                   struct buf *logbuf __attribute__((unused)))
 {
     buf_init_ro(outbuf, buf_base(inbuf), buf_len(inbuf));
 

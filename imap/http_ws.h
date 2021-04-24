@@ -66,9 +66,9 @@ extern void ws_init(struct http_connection *conn, struct buf *serverinfo);
 
 extern int ws_enabled();
 
-typedef int ws_data_callback(enum wslay_opcode opcode,
+typedef int ws_data_callback(struct transaction_t *txn, enum wslay_opcode opcode,
                              struct buf *inbuf, struct buf *outbuf,
-                             struct buf *logbuf, void **rock);
+                             struct buf *logbuf);
 
 extern int ws_start_channel(struct transaction_t *txn,
                             const char *sub_prot, ws_data_callback *data_cb);
