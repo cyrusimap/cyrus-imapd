@@ -888,6 +888,7 @@ HIDDEN void ws_end_channel(void **ws_ctx, const char *msg)
 
         xsyslog(LOG_DEBUG, "WS close", "msg=<%s>", msg);
 
+        syslog(LOG_DEBUG, "wslay_event_queue_close(%s)", msg);
         r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
                                     (uint8_t *) msg, strlen(msg));
         if (r) {
@@ -990,17 +991,9 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
     if (goaway) {
         /* Tell client we are closing session */
-        xsyslog(LOG_WARNING, "closing connection", "msg=<%s>", txn->error.desc);
-
-        xsyslog(LOG_DEBUG, "WS close", NULL);
-        int r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
-                                        (uint8_t *) txn->error.desc,
-                                        strlen(txn->error.desc));
-        if (r) {
-            xsyslog(LOG_ERR, "WS close failed", "err=<%s", wslay_error_as_str(r));
-        }
-
+        ws_end_channel(&txn->ws_ctx, txn->error.desc);
         txn->flags.conn = CONN_CLOSE;
+        return;
     }
 
     /* Write frame(s) */
