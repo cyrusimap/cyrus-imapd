@@ -415,6 +415,40 @@ static void on_frame_recv_start_cb(wslay_event_context_ptr ev __attribute__((unu
 #define COMP_FAILED_ERR    "Compressing message failed"
 #define DECOMP_FAILED_ERR  "Decompressing message failed"
 
+static int queue_msg(struct transaction_t *txn, struct buf *outbuf,
+                     struct wslay_event_msg *msgarg, uint8_t *rsv,
+                     const char **pmce_str, const char **err_msg)
+{
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+
+    /* Compress the server response, if supported by the client */
+    if (ctx->ext & EXT_PMCE_DEFLATE) {
+        int r = zlib_compress(txn,
+                              ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
+                              buf_base(outbuf), buf_len(outbuf));
+        if (r) {
+            syslog(LOG_ERR, "queue_response(): zlib_compress() failed");
+
+            if (err_msg) *err_msg = COMP_FAILED_ERR;
+            return WSLAY_CODE_INTERNAL_SERVER_ERROR;
+        }
+
+        /* Trim the trailing 4 bytes */
+        buf_truncate(&txn->zbuf, buf_len(&txn->zbuf) - 4);
+        buf_move(outbuf, &txn->zbuf);
+
+        *rsv |= WSLAY_RSV1_BIT;
+        if (pmce_str) *pmce_str = "deflate";
+    }
+
+    /* Queue the server response */
+    msgarg->msg = (const uint8_t *) buf_base(outbuf);
+    msgarg->msg_length = buf_len(outbuf);
+    wslay_event_queue_msg_ex(ctx->event, msgarg, *rsv);
+
+    return 0;
+}
+
 static void on_msg_recv_cb(wslay_event_context_ptr ev,
                            const struct wslay_event_on_msg_recv_arg *arg,
                            void *user_data)
@@ -535,32 +569,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             buf_reset(&txn->buf);
         }
 
-        /* Compress the server response, if supported by the client */
-        size_t orig_len = buf_len(&outbuf);
-        if (ctx->ext & EXT_PMCE_DEFLATE) {
-            r = zlib_compress(txn,
-                              ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
-                              buf_base(&outbuf), buf_len(&outbuf));
-            if (r) {
-                xsyslog(LOG_ERR, "WS: zlib_compress() failed", NULL);
-
-                err_code = WSLAY_CODE_INTERNAL_SERVER_ERROR;
-                err_msg = COMP_FAILED_ERR;
-                goto err;
-            }
-
-            /* Trim the trailing 4 bytes */
-            buf_truncate(&txn->zbuf, buf_len(&txn->zbuf) - 4);
-            buf_move(&outbuf, &txn->zbuf);
-
-            rsv |= WSLAY_RSV1_BIT;
-            pmce_str = "deflate";
-        }
-
         /* Queue the server response */
-        msgarg.msg = (const uint8_t *) buf_base(&outbuf);
-        msgarg.msg_length = buf_len(&outbuf);
-        wslay_event_queue_msg_ex(ev, &msgarg, rsv);
+        size_t orig_len = buf_len(&outbuf);
+        err_code = queue_msg(txn, &outbuf, &msgarg, &rsv, &pmce_str, &err_msg);
 
         /* Log the server response */
         buf_printf(&ctx->log,
@@ -1001,6 +1012,16 @@ HIDDEN void ws_input(struct transaction_t *txn)
     return;
 }
 
+HIDDEN void ws_send(struct transaction_t *txn, struct buf *outbuf)
+{
+    struct wslay_event_msg msgarg = { WSLAY_TEXT_FRAME, NULL, 0 };
+    uint8_t rsv = WSLAY_RSV_NONE;
+
+    if (!queue_msg(txn, outbuf, &msgarg, &rsv, NULL, NULL)) {
+        ws_output(txn);
+    }
+}
+
 #else /* !HAVE_WSLAY */
 
 HIDDEN void ws_init(struct http_connection *conn __attribute__((unused)),
@@ -1027,6 +1048,12 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
 HIDDEN void ws_input(struct transaction_t *txn __attribute__((unused)))
 {
     fatal("ws_input() called, but no Wslay", EX_SOFTWARE);
+}
+
+HIDDEN void ws_send(struct transaction_t *txn __attribute__((unused)),
+                    struct buf *outbuf __attribute__((unused)))
+{
+    fatal("ws_send() called, but no Wslay", EX_SOFTWARE);
 }
 
 #endif /* HAVE_WSLAY */
