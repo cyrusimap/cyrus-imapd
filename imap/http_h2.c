@@ -468,7 +468,8 @@ static int begin_frame_cb(nghttp2_session *session __attribute__((unused)),
 }
 
 
-static void _end_session_ex(struct http_connection *conn, const char *msg)
+static void _end_session_ex(struct http_connection *conn,
+                            unsigned err, const char *msg)
 {
     struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
 
@@ -480,6 +481,7 @@ static void _end_session_ex(struct http_connection *conn, const char *msg)
         int r;
 
         if (!msg) msg = "Server unavailable";
+        else if (!err) err = NGHTTP2_CANCEL;
 
         /* Close all streams with open WebSocket channels */
         while ((stream_id = arrayu64_pop(&ctx->ws_ids))) {
@@ -490,14 +492,13 @@ static void _end_session_ex(struct http_connection *conn, const char *msg)
 
             syslog(LOG_DEBUG, "nghttp2_submit_rst stream()");
             nghttp2_submit_rst_stream(ctx->session, NGHTTP2_FLAG_NONE,
-                                      stream_id, NGHTTP2_CANCEL);
+                                      stream_id, err);
         }
 
         syslog(LOG_DEBUG, "nghttp2_submit_goaway(%s)", msg);
 
         stream_id = nghttp2_session_get_last_proc_stream_id(ctx->session);
-        r = nghttp2_submit_goaway(ctx->session, NGHTTP2_FLAG_NONE, stream_id,
-                                  NGHTTP2_CANCEL,
+        r = nghttp2_submit_goaway(ctx->session, NGHTTP2_FLAG_NONE, stream_id, err,
                                   (const uint8_t *) msg, strlen(msg));
         if (r) {
             syslog(LOG_ERR, "nghttp2_submit_goaway: %s", nghttp2_strerror(r));
@@ -520,7 +521,7 @@ static void _end_session_ex(struct http_connection *conn, const char *msg)
 
 static void _shutdown(struct http_connection *conn, const char *msg)
 {
-    _end_session_ex(conn, msg);
+    _end_session_ex(conn, 0, msg);
     nghttp2_session_callbacks_del(http2_callbacks);
 }
 
@@ -597,7 +598,7 @@ static int nghttp2_extended_connect = 0;
 
 static void _end_session(struct http_connection *conn)
 {
-    _end_session_ex(conn, NULL);
+    _end_session_ex(conn, 0, NULL);
 }
 
 HIDDEN int http2_start_session(struct transaction_t *txn,
