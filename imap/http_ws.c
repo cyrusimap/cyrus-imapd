@@ -1009,7 +1009,7 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
 {
 }
 
-HIDDEN void ws_end_channel(void **ws_ctx __attribute__((unused))
+HIDDEN void ws_end_channel(void **ws_ctx __attribute__((unused)),
                            const char *msg __attribute__((unused)))
 {
 }
