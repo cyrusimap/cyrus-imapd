@@ -1233,8 +1233,12 @@ static struct prot_waitevent *jmap_ws_pusher(struct protstream *s __attribute__(
     struct mboxname_counters cur_counters;
     struct buf buf = BUF_INITIALIZER;
 
+    xsyslog(LOG_DEBUG, "JMAP WS push", "accountid=<%s>", jpush->accountid);
+
     if (mboxname_read_counters(jpush->inboxname, &cur_counters)) {
         /* Something went wrong - don't reschedule */
+        xsyslog(LOG_NOTICE, "Failed to read counters",
+                "accountid=<%s>", jpush->accountid);
         return ev;
     }
 
@@ -1245,7 +1249,7 @@ static struct prot_waitevent *jmap_ws_pusher(struct protstream *s __attribute__(
         modseq_t *modseq = (modseq_t *)((size_t) &jpush->counters + dtype->offset);
         modseq_t *cur_modseq = (modseq_t *)((size_t) &cur_counters + dtype->offset);
 
-        if (*modseq && (*modseq < *cur_modseq)) {
+        if (*modseq < *cur_modseq) {
             *modseq = *cur_modseq;
 
             buf_reset(&buf);
@@ -1290,11 +1294,14 @@ static int jmap_ws_push_enable(struct transaction_t *txn, json_t *req)
     struct ws_push_ctx *jpush = ws_get_app_data(ctx);
     json_t *types = req ? json_object_get(req, "dataTypes") : NULL;
 
+    xsyslog(LOG_DEBUG, "JMAP WS push enable",
+            "jpush=<%p>, types=<%p>", jpush, types);
+
     if (json_is_array(types)) {
         /* Enable */
         json_t *pushState = json_object_get(req, "pushState");
         struct mboxname_counters cur_counters;
-        modseq_t lastmodseq = 0;
+        modseq_t lastmodseq = ULLONG_MAX;
 
         if (!jpush) {
             jpush = xzmalloc(sizeof(struct ws_push_ctx));
@@ -1311,12 +1318,21 @@ static int jmap_ws_push_enable(struct transaction_t *txn, json_t *req)
             goto disable;
         }
 
+        /* Initialize our tracking modseqs to the maximum value */
+        const struct datatype_t *dtype;
+        for (dtype = dataTypes; dtype->name; dtype++) {
+            modseq_t *modseq =
+                (modseq_t *)((size_t) &jpush->counters + dtype->offset);
+
+            *modseq = ULLONG_MAX;
+        }
+
         size_t i;
         json_t *jval;
         json_array_foreach(types, i, jval) {
             const char *type = json_string_value(jval);
-            const struct datatype_t *dtype;
 
+            /* Set the start modseq for the specified types */
             for (dtype = dataTypes; dtype->name; dtype++) {
                 modseq_t *modseq =
                     (modseq_t *)((size_t) &jpush->counters + dtype->offset);
@@ -1324,7 +1340,7 @@ static int jmap_ws_push_enable(struct transaction_t *txn, json_t *req)
                     (modseq_t *)((size_t) &cur_counters + dtype->offset);
 
                 if (!strcmpsafe(type, dtype->name)) {
-                    *modseq = lastmodseq ? lastmodseq : *cur_modseq;
+                    *modseq = (lastmodseq < ULLONG_MAX) ? lastmodseq : *cur_modseq;
                     break;
                 }
             }
@@ -1336,7 +1352,7 @@ static int jmap_ws_push_enable(struct transaction_t *txn, json_t *req)
                                             &jmap_ws_pusher, txn);
         }
 
-        if (lastmodseq) {
+        if (lastmodseq < ULLONG_MAX) {
             /* Send all changes now */
             jmap_ws_pusher(txn->conn->pin, jpush->wait, txn);
         }
