@@ -930,10 +930,8 @@ static json_t *jmap_email(struct message_guid *guid, bit64 cid, struct body *bod
     return json_pack("{ s:s s:s s:o s:o s:o s:o s:o s:o s:o s:o s:o s:o }",
                      "id", emailid,
                      "threadId", threadid(cid),
-                     "sentAt",
-                     jmap_header_as_date(body->date, HEADER_FORM_DATE),
-                     "subject",
-                     jmap_header_as_text(body->subject, HEADER_FORM_TEXT),
+                     "sentAt", jmap_header_as_date(body->date),
+                     "subject", jmap_header_as_text(body->subject),
                      "from",
                      jmap_emailaddresses_from_addr(body->from,
                                                    HEADER_FORM_ADDRESSES),
@@ -953,11 +951,9 @@ static json_t *jmap_email(struct message_guid *guid, bit64 cid, struct body *bod
                      jmap_emailaddresses_from_addr(body->bcc,
                                                    HEADER_FORM_ADDRESSES),
                      "inReplyTo",
-                     jmap_header_as_messageids(body->in_reply_to,
-                                               HEADER_FORM_MESSAGEIDS),
+                     jmap_header_as_messageids(body->in_reply_to),
                      "messageId",
-                     jmap_header_as_messageids(body->message_id,
-                                               HEADER_FORM_MESSAGEIDS));
+                     jmap_header_as_messageids(body->message_id));
 }
 
 EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *mailbox,

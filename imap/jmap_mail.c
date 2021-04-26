@@ -6084,15 +6084,15 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         json_t *jval = NULL;
         if (!strcmp("messageId", lcasename)) {
             jval = want_form == HEADER_FORM_MESSAGEIDS ?
-                jmap_header_as_messageids(part->message_id, want_form) : json_null();
+                jmap_header_as_messageids(part->message_id) : json_null();
         }
         else if (!strcmp("inReplyTo", lcasename)) {
             jval = want_form == HEADER_FORM_MESSAGEIDS ?
-                jmap_header_as_messageids(part->in_reply_to, want_form) : json_null();
+                jmap_header_as_messageids(part->in_reply_to) : json_null();
         }
         if (!strcmp("subject", lcasename)) {
             jval = want_form == HEADER_FORM_TEXT ?
-                jmap_header_as_text(part->subject, want_form) : json_null();
+                jmap_header_as_text(part->subject) : json_null();
         }
         if (!strcmp("from", lcasename)) {
             jval = want_form & (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES) ?
@@ -6113,14 +6113,14 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         else if (!strcmp("sentAt", lcasename)) {
             jval = json_null();
             if (want_form == HEADER_FORM_DATE) {
-                jval = jmap_header_as_date(part->date, HEADER_FORM_DATE);
+                jval = jmap_header_as_date(part->date);
             }
         }
         if (jval) return jval;
     }
 
     /* Determine header form converter */
-    json_t* (*conv)(const char *raw, enum header_form want_form);
+    json_t* (*conv)(const char *raw);
     switch (want_form) {
         case HEADER_FORM_TEXT:
             conv = jmap_header_as_text;
@@ -6129,8 +6129,10 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
             conv = jmap_header_as_date;
             break;
         case HEADER_FORM_ADDRESSES:
-        case HEADER_FORM_GROUPEDADDRESSES:
             conv = jmap_header_as_addresses;
+            break;
+        case HEADER_FORM_GROUPEDADDRESSES:
+            conv = jmap_header_as_groupedaddresses;
             break;
         case HEADER_FORM_MESSAGEIDS:
             conv = jmap_header_as_messageids;
@@ -6153,7 +6155,7 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         int r = message_get_field(msg->_m, lcasename, MESSAGE_RAW|MESSAGE_LAST, &buf);
         if (r) return json_null();
         json_t *jval = NULL;
-        if (buf_len(&buf)) jval = conv(buf_cstring(&buf), want_form);
+        if (buf_len(&buf)) jval = conv(buf_cstring(&buf));
         buf_free(&buf);
         if (jval) return jval;
     }
@@ -6176,14 +6178,14 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         for (i = 0; i < json_array_size(jheaders); i++) {
             json_t *jheader = json_array_get(jheaders, i);
             json_t *jheaderval = json_object_get(jheader, "value");
-            json_array_append_new(allvals, conv(json_string_value(jheaderval), want_form));
+            json_array_append_new(allvals, conv(json_string_value(jheaderval)));
         }
         return allvals;
     }
 
     json_t *jheader = json_array_get(jheaders, json_array_size(jheaders) - 1);
     json_t *jheaderval = json_object_get(jheader, "value");
-    return conv(json_string_value(jheaderval), want_form);
+    return conv(json_string_value(jheaderval));
 }
 
 static const struct blob_header_t {
@@ -6459,12 +6461,12 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     /* messageId */
     if (jmap_wantprop(props, "messageId")) {
         json_object_set_new(email, "messageId",
-                jmap_header_as_messageids(part->message_id, HEADER_FORM_MESSAGEIDS));
+                jmap_header_as_messageids(part->message_id));
     }
     /* inReplyTo */
     if (jmap_wantprop(props, "inReplyTo")) {
         json_object_set_new(email, "inReplyTo",
-                jmap_header_as_messageids(part->in_reply_to, HEADER_FORM_MESSAGEIDS));
+                jmap_header_as_messageids(part->in_reply_to));
     }
     /* from */
     if (jmap_wantprop(props, "from")) {
@@ -6489,12 +6491,12 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     /* subject */
     if (jmap_wantprop(props, "subject")) {
         json_object_set_new(email, "subject",
-                jmap_header_as_text(part->subject, HEADER_FORM_TEXT));
+                jmap_header_as_text(part->subject));
     }
     /* sentAt */
     if (jmap_wantprop(props, "sentAt")) {
         json_object_set_new(email, "sentAt",
-                            jmap_header_as_date(part->date, HEADER_FORM_DATE));
+                            jmap_header_as_date(part->date));
     }
 
     return r;

@@ -850,8 +850,7 @@ done:
     return is_valid;
 }
 
-EXPORTED json_t *jmap_header_as_raw(const char *raw,
-                                    enum header_form form __attribute__((unused)))
+EXPORTED json_t *jmap_header_as_raw(const char *raw)
 {
     if (!raw) return json_null();
 
@@ -886,8 +885,7 @@ static char *_decode_mimeheader(const char *raw)
     return val;
 }
 
-EXPORTED json_t *jmap_header_as_text(const char *raw,
-                                     enum header_form form __attribute__((unused)))
+EXPORTED json_t *jmap_header_as_text(const char *raw)
 {
     if (!raw) return json_null();
 
@@ -920,8 +918,7 @@ EXPORTED json_t *jmap_header_as_text(const char *raw,
     return result;
 }
 
-EXPORTED json_t *jmap_header_as_date(const char *raw,
-                                        enum header_form form __attribute__((unused)))
+EXPORTED json_t *jmap_header_as_date(const char *raw)
 {
     if (!raw) return json_null();
 
@@ -948,8 +945,7 @@ static void _remove_ws(char *s)
     } while ((*d++ = *s++));
 }
 
-EXPORTED json_t *jmap_header_as_urls(const char *raw,
-                                     enum header_form form __attribute__((unused)))
+EXPORTED json_t *jmap_header_as_urls(const char *raw)
 {
     if (!raw) return json_null();
 
@@ -976,8 +972,7 @@ EXPORTED json_t *jmap_header_as_urls(const char *raw,
     return urls;
 }
 
-EXPORTED json_t *jmap_header_as_messageids(const char *raw,
-                                           enum header_form form __attribute__((unused)))
+EXPORTED json_t *jmap_header_as_messageids(const char *raw)
 {
     if (!raw) return json_null();
     json_t *msgids = json_array();
@@ -1029,7 +1024,7 @@ EXPORTED json_t *jmap_header_as_messageids(const char *raw,
     return msgids;
 }
 
-EXPORTED json_t *jmap_header_as_addresses(const char *raw, enum header_form form)
+static json_t *_header_as_addresses(const char *raw, enum header_form form)
 {
     if (!raw) return json_null();
 
@@ -1038,6 +1033,16 @@ EXPORTED json_t *jmap_header_as_addresses(const char *raw, enum header_form form
     json_t *result = jmap_emailaddresses_from_addr(addrs, form);
     parseaddr_free(addrs);
     return result;
+}
+
+EXPORTED json_t *jmap_header_as_addresses(const char *raw)
+{
+    return _header_as_addresses(raw, HEADER_FORM_ADDRESSES);
+}
+
+EXPORTED json_t *jmap_header_as_groupedaddresses(const char *raw)
+{
+    return _header_as_addresses(raw, HEADER_FORM_GROUPEDADDRESSES);
 }
 
 EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
