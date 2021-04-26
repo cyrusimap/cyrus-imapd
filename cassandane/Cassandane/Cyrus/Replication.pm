@@ -1879,12 +1879,9 @@ sub test_sync_log_mailbox_with_spaces
 }
 
 sub test_intermediate_rename
-    :AllowMoves :Replication :NoStartInstances :DelayedDelete :min_version_3_3
+    :AllowMoves :Replication :SyncLog :DelayedDelete :min_version_3_3
 {
     my ($self) = @_;
-
-    $self->{instance}->{config}->set('sync_log' => 1);
-    $self->_start_instances();
 
     my $mtalk = $self->{master_store}->get_client();
 
@@ -1908,12 +1905,9 @@ sub test_intermediate_rename
 }
 
 sub test_clean_remote_shutdown_while_rolling
-    :CSyncReplication :NoStartInstances :min_version_3_5
+    :CSyncReplication :SyncLog :min_version_3_5
 {
     my ($self) = @_;
-
-    $self->{instance}->{config}->set('sync_log' => 1);
-    $self->_start_instances();
 
     my $mtalk = $self->{master_store}->get_client();
 

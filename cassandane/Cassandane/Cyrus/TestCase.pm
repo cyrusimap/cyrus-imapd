@@ -192,6 +192,9 @@ magic(ReverseACLs => sub {
 magic(RightNow => sub {
     shift->config_set(sync_rightnow_channel => '""');
 });
+magic(SyncLog => sub {
+    shift->config_set(sync_log => 1);
+});
 magic(Replication => sub { shift->want('replica'); });
 magic(CSyncReplication => sub {
     my ($self) = @_;

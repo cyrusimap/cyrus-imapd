@@ -562,12 +562,9 @@ sub test_rename_user
 }
 
 sub test_rename_deepuser
-    :AllowMoves :Replication :NoStartInstances
+    :AllowMoves :Replication :SyncLog
 {
     my ($self) = @_;
-
-    $self->{instance}->{config}->set('sync_log' => 1);
-    $self->_start_instances();
 
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
 
@@ -640,12 +637,9 @@ sub test_rename_paths
 }
 
 sub test_rename_deepuser_unixhs
-    :AllowMoves :Replication :NoStartInstances :UnixHierarchySep
+    :AllowMoves :Replication :SyncLog :UnixHierarchySep
 {
     my ($self) = @_;
-
-    $self->{instance}->{config}->set('sync_log' => 1);
-    $self->_start_instances();
 
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
 
