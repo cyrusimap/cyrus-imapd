@@ -1,0 +1,14 @@
+Description:
+
+Changes the Contact.importance property from a shared to a per-user
+property.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+TBD - We might need to do some special handling for existing shared entries.

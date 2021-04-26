@@ -102,7 +102,8 @@ static int _json_to_card(struct jmap_req *req,
                          ptrarray_t *blobs,
                          jmap_contact_errors_t *errors);
 
-static json_t *jmap_contact_from_vcard(struct vparse_card *card,
+static json_t *jmap_contact_from_vcard(const char *userid,
+                                       struct vparse_card *card,
                                        struct mailbox *mailbox,
                                        struct index_record *record);
 
@@ -1152,7 +1153,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
             }
         }
         else {
-            flags = mailbox_extract_flags(mailbox, &record, req->accountid);
+            flags = mailbox_extract_flags(mailbox, &record, req->userid);
             annots = mailbox_extract_annots(mailbox, &record);
 
             r = _json_to_card(req, cdata, card, arg, flags, &annots, &blobs, &errors);
@@ -1170,7 +1171,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                     annotate_state_t *state = NULL;
                     r = mailbox_get_annotate_state(mailbox, record.uid, &state);
                     annotate_state_set_auth(state, 0,
-                                            req->accountid, req->authstate);
+                                            req->userid, req->authstate);
                     if (!r) r = annotate_state_store(state, annots);
                     if (!r) r = mailbox_rewrite_index_record(mailbox, &record);
                     if (!r) json_object_set_new(set.updated, uid, json_null());
@@ -1186,7 +1187,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                    kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                    req->accountid, resource);
             r = carddav_store(this_mailbox, card, resource,
-                              record.createdmodseq, flags, &annots, req->accountid,
+                              record.createdmodseq, flags, &annots, req->userid,
                               req->authstate, ignorequota);
             if (!r) {
                 struct index_record record;
@@ -1214,7 +1215,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                 }
 
                 r = carddav_remove(mailbox, olduid,
-                                   /*isreplace*/!newmailbox, req->accountid);
+                                   /*isreplace*/!newmailbox, req->userid);
             }
         }
 
@@ -1310,7 +1311,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                "jmap: remove %s %s/%s",
                kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                req->accountid, uid);
-        r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->accountid);
+        r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
                              "kind=<%s> mailbox=<%s> olduid=<%u>",
@@ -1476,7 +1477,8 @@ static const char *_servicetype(const char *type)
 }
 
 /* Convert the VCARD card to jmap properties */
-static json_t *jmap_contact_from_vcard(struct vparse_card *card,
+static json_t *jmap_contact_from_vcard(const char *userid,
+                                       struct vparse_card *card,
                                        struct mailbox *mailbox,
                                        struct index_record *record)
 {
@@ -1823,7 +1825,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     // NOTE: using buf_free here because annotatemore_msg_lookup uses
     // buf_init_ro on the buffer, which blats the base pointer.
     buf_free(&buf);
-    annotatemore_msg_lookup(mailbox->name, record->uid, annot, "", &buf);
+    annotatemore_msg_lookup(mailbox->name, record->uid, annot, userid, &buf);
     double val = 0;
     if (buf.len) val = strtod(buf_cstring(&buf), NULL);
 
@@ -2007,7 +2009,8 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     }
 
     /* Convert the VCARD to a JMAP contact. */
-    obj = jmap_contact_from_vcard(vcard->objects, crock->mailbox, &record);
+    obj = jmap_contact_from_vcard(crock->req->userid, vcard->objects,
+                                  crock->mailbox, &record);
     vparse_free_card(vcard);
 
 gotvalue:
@@ -2869,7 +2872,8 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
      */
     entry = crock->kind == CARDDAV_KIND_GROUP ?
         jmap_group_from_vcard(vcard->objects) :
-        jmap_contact_from_vcard(vcard->objects, crock->mailbox, &record);
+        jmap_contact_from_vcard(crock->req->userid, vcard->objects,
+                                crock->mailbox, &record);
     vparse_free_card(vcard);
 
 gotvalue:
@@ -3841,7 +3845,7 @@ static int _json_to_card(struct jmap_req *req,
             has_noncontent = 1;
             double dval = json_number_value(jval);
             const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
-            const char *attrib = "value.shared";
+            const char *attrib = "value.priv";
             struct buf buf = BUF_INITIALIZER;
             if (dval) {
                 buf_printf(&buf, "%e", dval);
@@ -4167,10 +4171,10 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
 
     syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name);
     r = carddav_store(*mailbox, card, resourcename, 0, flags, &annots,
-                      req->accountid, req->authstate, ignorequota);
+                      req->userid, req->authstate, ignorequota);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "carddav_store failed for user %s: %s",
-               req->accountid, error_message(r));
+               req->userid, error_message(r));
         goto done;
     }
     r = 0;
@@ -4275,7 +4279,8 @@ static void _contact_copy(jmap_req_t *req,
     }
 
     /* Patch JMAP event */
-    json_t *src_card = jmap_contact_from_vcard(vcard->objects, src_mbox, &record);
+    json_t *src_card = jmap_contact_from_vcard(req->userid, vcard->objects,
+                                               src_mbox, &record);
     if (src_card) {
         json_t *avatar = json_object_get(src_card, "avatar");
         if (avatar) {
