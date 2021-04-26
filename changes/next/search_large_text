@@ -1,0 +1,18 @@
+Description:
+
+Improves search index and snippet generation latency by stopping early
+for overlong text.
+
+Config changes:
+
+Adds the `search_maxsize` option. The formerly hardcoded maximum size of
+4Mb is kept as the default value.
+
+Includes the new `X-Truncate-Size` HTTP header in requests to the attachment
+body extractor service. The value of this header is `search_maxsize` in bytes.
+
+Upgrade instructions:
+
+The former implementation applied the search_maxsize limit to the total of
+email bodies that contain text. This patch changes this to apply the limit
+to each body part separately. This may result in larger search indexes.

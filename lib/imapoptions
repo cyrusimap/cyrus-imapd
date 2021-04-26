@@ -2264,6 +2264,12 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The maximum number of seconds to run a search for before aborting.  Default
    of no value means search "forever" until other timeouts. */
 
+{ "search_maxsize", 4096, INT, "3.5.0" }
+/* The maximum size in kilobytes to index for each message part. Message
+   contents that occur after this byte offset will not be indexed or
+   search snippets generated from.
+   Default is 4Mb. Xapian-only. */
+
 { "search_queryscan", 5000, INT, "3.1.7" }
 /* The minimum number of records require to do a direct scan of all G keys
  * rather than indexed lookups.  A value of 0 means always do indexed lookups.

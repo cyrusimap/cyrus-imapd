@@ -5122,10 +5122,10 @@ static void stuff_part(search_text_receiver_t *receiver,
     receiver->end_part(receiver, part);
 }
 
-static void extract_cb(const struct buf *text, void *rock)
+static int extract_cb(const struct buf *text, void *rock)
 {
     struct getsearchtext_rock *str = (struct getsearchtext_rock *)rock;
-    str->receiver->append_text(str->receiver, text);
+    return str->receiver->append_text(str->receiver, text);
 }
 
 #ifdef USE_HTTPD
@@ -5476,10 +5476,11 @@ static int extract_attachment(const char *type, const char *subtype,
                 "Connection: Keep-Alive\r\n"
                 "Keep-Alive: timeout=%u\r\n"
                 "Accept: text/plain\r\n"
+                "X-Truncate-Length: " SIZE_T_FMT "\r\n"
                 "\r\n",
                 ext->path, guidstr, HTTP_VERSION,
                 (int) hostlen, be->hostname, CYRUS_VERSION,
-                IDLE_TIMEOUT);
+                IDLE_TIMEOUT, config_search_maxsize);
     prot_flush(be->out);
 
     /* Read GET response */
@@ -5547,10 +5548,12 @@ static int extract_attachment(const char *type, const char *subtype,
                     "Accept: text/plain\r\n"
                     "Content-Type: %s/%s%s\r\n"
                     "Content-Length: " SIZE_T_FMT "\r\n"
+                    "X-Truncate-Length: " SIZE_T_FMT "\r\n"
                     "\r\n",
                     ext->path, guidstr, HTTP_VERSION,
                     (int) hostlen, be->hostname, CYRUS_VERSION, IDLE_TIMEOUT,
-                    type, subtype, buf_cstring(&buf), buf_len(data));
+                    type, subtype, buf_cstring(&buf), buf_len(data),
+                    config_search_maxsize);
         prot_putbuf(be->out, data);
         prot_flush(be->out);
 

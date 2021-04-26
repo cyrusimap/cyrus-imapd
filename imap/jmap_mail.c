@@ -1211,7 +1211,7 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
     return buf_release(&buf);
 }
 
-static void _html_to_plain_cb(const struct buf *buf, void *rock)
+static int _html_to_plain_cb(const struct buf *buf, void *rock)
 {
     struct buf *dst = (struct buf*) rock;
     const char *p;
@@ -1229,6 +1229,8 @@ static void _html_to_plain_cb(const struct buf *buf, void *rock)
         }
         buf_appendmap(dst, p, 1);
     }
+
+    return 0;
 }
 
 static char *_html_to_plain(const char *html) {
@@ -5178,8 +5180,8 @@ static void _snippet_tr_begin_part(search_text_receiver_t *rx, int part)
     if (sr->next->begin_part) sr->next->begin_part(sr->next, part);
 }
 
-static void _snippet_tr_append_text(search_text_receiver_t *rx,
-                                    const struct buf *text)
+static int _snippet_tr_append_text(search_text_receiver_t *rx,
+                                   const struct buf *text)
 {
     struct snippet_receiver *sr = (struct snippet_receiver*) rx;
 
@@ -5189,7 +5191,9 @@ static void _snippet_tr_append_text(search_text_receiver_t *rx,
                     json_string(buf_cstring(text)));
         }
     }
-    if (sr->next->append_text) sr->next->append_text(sr->next, text);
+
+    return (sr->next->append_text) ?
+        sr->next->append_text(sr->next, text) : 0;
 }
 
 static void _snippet_tr_end_part(search_text_receiver_t *rx, int part)

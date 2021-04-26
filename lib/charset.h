@@ -142,11 +142,17 @@ extern char *charset_unfold(const char *s, size_t len, int flags);
 
 extern int charset_decode(struct buf *dst, const char *src, size_t len, int encoding);
 
-/* Extract the body text for the message denoted by 'uid', convert its
-   text to the canonical form for searching, and pass the converted text
-   down in a series of invocations of the callback 'cb'.  This is
-   called by index_getsearchtext to extract the MIME body parts. */
-extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
+/* Extract the body text contained in 'data' and with character encoding
+ * 'charset' and body-part encoding 'encoding'. The 'subtype' argument
+ * defines the MIME subtype (assuming that the main type is 'text').
+ * Extraction is done by a series of invocations of the callback 'cb'.
+ * Extraction stops when either the body text is fully extracted, or
+ * 'cb' returns a non-zero value, which is then returned to the caller.
+ * If 'charset' is unknown, then the function returns early without
+ * error and never calls 'cb'.
+ * Note: This function is called by index_getsearchtext to extract
+ * the MIME body parts. */
+extern int charset_extract(int (*cb)(const struct buf *text, void *rock),
                            void *rock,
                            const struct buf *data,
                            charset_t charset, int encoding,
