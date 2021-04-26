@@ -3660,5 +3660,81 @@ EOF
     $self->assert_null(grep { m/bar\.TEL/ } $blob->{content});
 }
 
+sub test_contact_set_importance_peruser
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+		'https://cyrusimap.org/ns/jmap/contacts',
+    ]);
+    $admin->setacl("user.cassandane.#addressbooks.Default",
+        "manifold" => 'lrswipkxtecdn') or die;
+
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                c1 => {
+                    lastName => 'test',
+                    importance => 1.0,
+                },
+            },
+        }, 'R1'],
+        ['Contact/get', {
+            ids => ['#c1'],
+            properties => ['importance'],
+        }, 'R2'],
+    ]);
+    my $contactId = $res->[0][1]{created}{c1}{id};
+    $self->assert_not_null($contactId);
+    $self->assert_equals(1.0, $res->[1][1]{list}[0]{importance});
+
+    $res = $manjmap->CallMethods([
+        ['Contact/get', {
+            accountId => 'cassandane',
+            ids => [$contactId],
+            properties => ['importance'],
+        }, 'R1'],
+        ['Contact/set', {
+            accountId => 'cassandane',
+            update => {
+                $contactId => {
+                    importance => 2.0,
+                },
+            },
+        }, 'R2'],
+        ['Contact/get', {
+            accountId => 'cassandane',
+            ids => [$contactId],
+            properties => ['importance'],
+        }, 'R3'],
+    ]);
+
+    $self->assert_equals(0.0, $res->[0][1]{list}[0]{importance});
+    $self->assert(exists $res->[1][1]{updated}{$contactId});
+    $self->assert_equals(2.0, $res->[2][1]{list}[0]{importance});
+
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            ids => ['#c1'],
+            properties => ['importance'],
+        }, 'R1'],
+    ]);
+    $self->assert_equals(1.0, $res->[0][1]{list}[0]{importance});
+}
+
 
 1;
