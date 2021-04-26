@@ -618,7 +618,7 @@ HIDDEN void ws_init(struct http_connection *conn __attribute__((unused)),
 
 HIDDEN int ws_enabled()
 {
-    return 1;
+    return (ws_timeout > 0);
 }
 
 
