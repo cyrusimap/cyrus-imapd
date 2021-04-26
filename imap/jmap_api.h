@@ -289,15 +289,6 @@ extern int jmap_findblob_exact(jmap_req_t *req, const char *accountid,
                                struct mailbox **mbox, msgrecord_t **mr,
                                struct buf *blob);
 
-#define JMAP_BLOBID_SIZE 42
-extern void jmap_set_blobid(const struct message_guid *guid, char *buf);
-
-#define JMAP_EMAILID_SIZE 26
-extern void jmap_set_emailid(const struct message_guid *guid, char *buf);
-
-#define JMAP_THREADID_SIZE 18
-extern void jmap_set_threadid(conversation_id_t cid, char *buf);
-
 /* JMAP states */
 extern json_t* jmap_getstate(jmap_req_t *req, int mbtype, int refresh);
 extern json_t *jmap_fmtstate(modseq_t modseq);

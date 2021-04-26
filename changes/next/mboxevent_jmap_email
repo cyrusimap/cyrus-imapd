@@ -1,0 +1,17 @@
+Description:
+
+Adds the 'vnd.cmu.jmapEmail' selector to the 'event_extra_params' option
+which will include a JMAP Email object in the event message.
+
+Config changes:
+
+The 'vnd.cmu.jmapEmail' selector to the 'event_extra_params' option can be
+more parser friendly than 'vnd.cmu.envelope' and includes the same data,
+plus the 'emailId' and 'threadId' data items. 
+
+
+Upgrade instructions:
+
+When adding 'vnd.cmu.jmapEmail' it would make sense to remove all of
+'vnd.cmu.envelope', 'vnd.cmu.emailid', and 'vnd.cmu.threadid' as these
+would add redundant data to the event message.

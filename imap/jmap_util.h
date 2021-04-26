@@ -48,6 +48,7 @@
 
 #include "hash.h"
 #include "message.h"
+#include "parseaddr.h"
 #include "smtpclient.h"
 
 #define JMAP_SUBMISSION_HDR "Content-Description"
@@ -146,5 +147,35 @@ extern int jmap_decode_rawdata_blobid(const char *blobid,
                                       char **useridptr,
                                       char **subpartptr,
                                       struct message_guid *guid);
+
+enum header_form {
+    HEADER_FORM_UNKNOWN          = 0, /* MUST be zero so we can cast to void* */
+    HEADER_FORM_RAW              = 1 << 0,
+    HEADER_FORM_TEXT             = 1 << 1,
+    HEADER_FORM_DATE             = 1 << 2,
+    HEADER_FORM_URLS             = 1 << 3,
+    HEADER_FORM_MESSAGEIDS       = 1 << 4,
+    HEADER_FORM_ADDRESSES        = 1 << 5,
+    HEADER_FORM_GROUPEDADDRESSES = 1 << 6
+};
+
+extern json_t *jmap_header_as_raw(const char *raw);
+extern json_t *jmap_header_as_text(const char *raw);
+extern json_t *jmap_header_as_date(const char *raw);
+extern json_t *jmap_header_as_urls(const char *raw);
+extern json_t *jmap_header_as_messageids(const char *raw);
+extern json_t *jmap_header_as_addresses(const char *raw);
+extern json_t *jmap_header_as_groupedaddresses(const char *raw);
+extern json_t *jmap_emailaddresses_from_addr(struct address *addr,
+                                             enum header_form form);
+
+#define JMAP_BLOBID_SIZE 42
+extern void jmap_set_blobid(const struct message_guid *guid, char *buf);
+
+#define JMAP_EMAILID_SIZE 26
+extern void jmap_set_emailid(const struct message_guid *guid, char *buf);
+
+#define JMAP_THREADID_SIZE 18
+extern void jmap_set_threadid(conversation_id_t cid, char *buf);
 
 #endif /* JMAP_UTIL_H */
