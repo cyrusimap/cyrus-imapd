@@ -535,6 +535,8 @@ EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused
                 return -1;
             }
         }
+        if (errno == EEXIST)
+            errno = 0;
         *p = '/';
     }
 
