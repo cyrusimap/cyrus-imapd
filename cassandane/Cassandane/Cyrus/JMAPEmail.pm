@@ -15524,8 +15524,14 @@ sub test_email_get_header_last_value
             properties => ['header:x-tra:asDate']
         }, 'R2'],
     ]);
-    $self->assert_str_equals('2019-08-23T05:12:06Z',
-        $res->[1][1]{list}[0]{'header:x-tra:asDate'});
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min > 4)) {
+        $self->assert_str_equals('2019-08-22T23:12:06-06:00',
+                                 $res->[1][1]{list}[0]{'header:x-tra:asDate'});
+    } else {
+        $self->assert_str_equals('2019-08-23T05:12:06Z',
+                                 $res->[1][1]{list}[0]{'header:x-tra:asDate'});
+    }
 }
 
 sub test_email_matchmime
