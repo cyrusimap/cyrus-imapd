@@ -270,14 +270,14 @@ static struct email_sortfield email_sortfields[] = {
     }
 };
 
-#define JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL 20
-#define JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL 100 /* defined in mailbox_user_flag */
-
 #define jmap_openmbox_by_guidrec(req, rec, mbox, rw)           \
     ((rec->version > CONV_GUIDREC_BYNAME_VERSION) ?            \
      jmap_openmbox_by_uniqueid(req, rec->mailbox, mbox, rw) :  \
      jmap_openmbox(req, rec->mailbox, mbox, rw))
 
+
+#define JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL 20
+#define JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL 100 /* defined in mailbox_user_flag */
 
 HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 {
