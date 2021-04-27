@@ -944,8 +944,12 @@ static int findaccounts_cb(struct findall_data *data, void *vrock)
     const mbentry_t *mbentry = data->mbentry;
 
     /* Skip any special use folders (#jmap, #calendars, #notifications, etc.) */
-    if (mbentry->mbtype &&
-        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+    switch (mbtype_isa(mbentry->mbtype)) {
+    case MBTYPE_EMAIL:
+    case MBTYPE_CALENDAR:
+    case MBTYPE_ADDRESSBOOK:
+        break;
+    default:
         return 0;
     }
 
@@ -2915,13 +2919,18 @@ static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
     const char *userid;
     char *nextid = NULL;
 
-    /* skip any special use folders */
-    if (mbentry->mbtype &&
-        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+    /* Skip any special use folders (#jmap, #calendars, #notifications, etc.) */
+    switch (mbtype_isa(mbentry->mbtype)) {
+    case MBTYPE_EMAIL:
+    case MBTYPE_CALENDAR:
+    case MBTYPE_ADDRESSBOOK:
+        break;
+    default:
         return 0;
     }
+
     /* make sure we skip the upload folder itself */
-    else if (!strcmp(mbentry->name, srock->upload_mboxname)) {
+    if (!strcmp(mbentry->name, srock->upload_mboxname)) {
         return 0;
     }
 
