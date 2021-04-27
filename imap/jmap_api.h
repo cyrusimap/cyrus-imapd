@@ -190,8 +190,23 @@ typedef struct {
     hash_table methods;
     json_t *server_capabilities;
     long limits[JMAP_NUM_LIMITS];
+    // internal state
     ptrarray_t getblob_handlers; // array of jmap_getblob_handler
+    ptrarray_t event_handlers; // array of (malloced) jmap_handlers
 } jmap_settings_t;
+
+
+enum jmap_handler_event {
+    JMAP_HANDLE_SHUTDOWN      = (1 << 0), /* executed when httpd is shutdown. req is NULL */
+    JMAP_HANDLE_CLOSE_CONN    = (1 << 1), /* executed when connection is closed. req is NULL */
+    JMAP_HANDLE_BEFORE_METHOD = (1 << 2)  /* executed before each method call. req is set */
+};
+
+struct jmap_handler {
+    int eventmask;
+    void(*handler)(enum jmap_handler_event event, jmap_req_t* req, void *rock);
+    void *rock;
+};
 
 enum jmap_method_flags {
     JMAP_READ_WRITE  = (1 << 0),  /* user can change state with this method */

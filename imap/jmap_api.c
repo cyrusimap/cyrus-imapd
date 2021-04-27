@@ -828,6 +828,15 @@ HIDDEN int jmap_api(struct transaction_t *txn,
             goto done;
         }
 
+        /* Call any pre-processors. */
+        int i;
+        for (i = 0; i < ptrarray_size(&settings->event_handlers); i++) {
+            struct jmap_handler *h = ptrarray_nth(&settings->event_handlers, i);
+            if (h->eventmask & JMAP_HANDLE_BEFORE_METHOD) {
+                h->handler(JMAP_HANDLE_BEFORE_METHOD, &req, h->rock);
+            }
+        }
+
         /* Call the message processor. */
         r = mp->proc(&req);
 
