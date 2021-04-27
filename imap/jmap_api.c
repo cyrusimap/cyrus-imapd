@@ -927,6 +927,13 @@ static int findaccounts_cb(struct findall_data *data, void *vrock)
 
     struct findaccounts_rock *rock = vrock;
     const mbentry_t *mbentry = data->mbentry;
+
+    /* Skip any special use folders (#jmap, #calendars, #notifications, etc.) */
+    if (mbentry->mbtype &&
+        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+        return 0;
+    }
+
     mbname_t *mbname = mbname_from_intname(mbentry->name);
 
     if (strcmp(buf_cstring(&rock->current_accountid), mbname_userid(mbname))) {
