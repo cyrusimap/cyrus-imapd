@@ -84,6 +84,7 @@ static time_t compile_time;
 static void jmap_init(struct buf *serverinfo);
 static int  jmap_need_auth(struct transaction_t *txn);
 static int  jmap_auth(const char *userid);
+static void jmap_reset(void);
 static void jmap_shutdown(void);
 
 /* HTTP method handlers */
@@ -113,7 +114,7 @@ struct namespace_t namespace_jmap = {
     jmap_need_auth, /*authschemes*/0,
     /*mbtype*/0, 
     (ALLOW_READ | ALLOW_POST | ALLOW_READONLY),
-    &jmap_init, &jmap_auth, NULL, &jmap_shutdown, NULL, /*bearer*/NULL,
+    &jmap_init, &jmap_auth, &jmap_reset, &jmap_shutdown, NULL, /*bearer*/NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -145,7 +146,11 @@ struct namespace_t namespace_jmap = {
  */
 
 static jmap_settings_t my_jmap_settings = {
-    HASH_TABLE_INITIALIZER, NULL, { 0 }, PTRARRAY_INITIALIZER
+    HASH_TABLE_INITIALIZER,
+    NULL,
+    { 0 },
+    PTRARRAY_INITIALIZER,
+    PTRARRAY_INITIALIZER
 };
 
 static void jmap_init(struct buf *serverinfo)
@@ -208,10 +213,33 @@ static int jmap_need_auth(struct transaction_t *txn __attribute__((unused)))
     return HTTP_UNAUTHORIZED;
 }
 
+static void jmap_reset(void)
+{
+    int i;
+    for (i = 0; i < ptrarray_size(&my_jmap_settings.event_handlers); i++) {
+        struct jmap_handler *h =
+            ptrarray_nth(&my_jmap_settings.event_handlers, i);
+        if (h->eventmask & JMAP_HANDLE_CLOSE_CONN) {
+            h->handler(JMAP_HANDLE_CLOSE_CONN, NULL, h->rock);
+        }
+    }
+}
+
 static void jmap_shutdown(void)
 {
     free_hash_table(&my_jmap_settings.methods, NULL);
     json_decref(my_jmap_settings.server_capabilities);
+    ptrarray_fini(&my_jmap_settings.getblob_handlers);
+    int i;
+    for (i = 0; i < ptrarray_size(&my_jmap_settings.event_handlers); i++) {
+        struct jmap_handler *h =
+            ptrarray_nth(&my_jmap_settings.event_handlers, i);
+        if (h->eventmask & JMAP_HANDLE_SHUTDOWN) {
+            h->handler(JMAP_HANDLE_SHUTDOWN, NULL, h->rock);
+        }
+        free(h);
+    }
+    ptrarray_fini(&my_jmap_settings.event_handlers);
 }   
 
 
