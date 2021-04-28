@@ -363,6 +363,7 @@ struct transaction_t {
     struct http_connection *conn;       /* Global connection context */
     void *strm_ctx;                     /* HTTP/2+ stream context */
     void *ws_ctx;                       /* WebSocket channel context */
+    void *push_ctx;                     /* Push notifications context */
 
     unsigned meth;                      /* Index of Method to be performed */
     struct txn_flags_t flags;           /* Flags for this txn */
