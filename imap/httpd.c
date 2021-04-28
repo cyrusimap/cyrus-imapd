@@ -115,7 +115,21 @@ static unsigned accept_encodings = 0;
 #ifdef HAVE_ZLIB
 #include <zlib.h>
 
-HIDDEN void *zlib_init()
+static void zlib_done(struct transaction_t *txn)
+{
+    if (txn) {
+        z_stream *zstrm = txn->zstrm;
+
+        if (zstrm) {
+            deflateEnd(zstrm);
+            free(zstrm);
+        }
+
+        txn->zstrm = NULL;
+    }
+}
+
+HIDDEN void zlib_init(struct transaction_t *txn)
 {
     z_stream *zstrm = xzmalloc(sizeof(z_stream));
 
@@ -124,11 +138,12 @@ HIDDEN void *zlib_init()
                      16+MAX_WBITS /* gzip */,
                      MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) != Z_OK) {
         free(zstrm);
-        return NULL;
     }
     else {
+        txn->zstrm = zstrm;
+        ptrarray_add(&txn->done_callbacks, &zlib_done);
+
         accept_encodings |= CE_DEFLATE | CE_GZIP;
-        return zstrm;
     }
 }
 
@@ -201,16 +216,9 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
     return 0;
 }
 
-static void zlib_done(z_stream *zstrm)
-{
-    if (zstrm) {
-        deflateEnd(zstrm);
-        free(zstrm);
-    }
-}
 #else /* !HAVE_ZLIB */
 
-HIDDEN void *zlib_init() { return NULL; }
+HIDDEN void zlib_init(struct transaction_t *txn __attribute__((unused))) { }
 
 HIDDEN int zlib_compress(struct transaction_t *txn __attribute__((unused)),
                          unsigned flags __attribute__((unused)),
@@ -220,15 +228,24 @@ HIDDEN int zlib_compress(struct transaction_t *txn __attribute__((unused)),
     fatal("Compression requested, but no zlib", EX_SOFTWARE);
 }
 
-static void zlib_done(void *zstrm __attribute__((unused))) { }
-
 #endif /* HAVE_ZLIB */
 
 
 #ifdef HAVE_BROTLI
 #include <brotli/encode.h>
 
-HIDDEN void *brotli_init()
+static void brotli_done(struct transaction_t *txn)
+{
+    if (txn) {
+        BrotliEncoderState *brotli = txn->brotli;
+
+        if (brotli) BrotliEncoderDestroyInstance(brotli);
+
+        txn->brotli = NULL;
+    }
+}
+
+HIDDEN void brotli_init(struct transaction_t *txn)
 {
     BrotliEncoderState *brotli = BrotliEncoderCreateInstance(NULL, NULL, NULL);
 
@@ -241,9 +258,10 @@ HIDDEN void *brotli_init()
                                   BROTLI_DEFAULT_WINDOW);
         BrotliEncoderSetParameter(brotli, BROTLI_PARAM_LGBLOCK,
                                   BROTLI_MAX_INPUT_BLOCK_BITS);
-    }
 
-    return brotli;
+        txn->brotli = brotli;
+        ptrarray_add(&txn->done_callbacks, &brotli_done);
+    }
 }
 
 static int brotli_compress(struct transaction_t *txn,
@@ -275,20 +293,15 @@ static int brotli_compress(struct transaction_t *txn,
 
     if (BrotliEncoderIsFinished(brotli)) {
         BrotliEncoderDestroyInstance(brotli);
-        txn->brotli = brotli_init();
+        brotli_init(txn);
     }
 
     return 0;
 }
 
-static void brotli_done(BrotliEncoderState *brotli)
-{
-    if (brotli) BrotliEncoderDestroyInstance(brotli);
-}
-
 #else /* !HAVE_BROTLI */
 
-HIDDEN void *brotli_init() { return NULL; }
+HIDDEN void brotli_init(struct transaction_t *txn __attribute__((unused))) { }
 
 static int brotli_compress(struct transaction_t *txn __attribute__((unused)),
                            unsigned flags __attribute__((unused)),
@@ -298,8 +311,6 @@ static int brotli_compress(struct transaction_t *txn __attribute__((unused)),
     fatal("Brotli Compression requested, but not available", EX_SOFTWARE);
 }
 
-static void brotli_done(void *brotli __attribute__((unused))) {}
-
 #endif /* HAVE_BROTLI */
 
 
@@ -307,7 +318,18 @@ static void brotli_done(void *brotli __attribute__((unused))) {}
 #include <zstd.h>
 #include <zstd_errors.h>
 
-HIDDEN void *zstd_init()
+static void zstd_done(struct transaction_t *txn)
+{
+    if (txn) {
+        ZSTD_CCtx *cctx = txn->zstd;
+
+        if (cctx) ZSTD_freeCCtx(cctx);
+
+        txn->zstd = NULL;
+    }
+}
+
+HIDDEN void zstd_init(struct transaction_t *txn)
 {
     ZSTD_CCtx *cctx = ZSTD_createCCtx();
 
@@ -315,9 +337,10 @@ HIDDEN void *zstd_init()
         ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel,
                                ZSTD_CLEVEL_DEFAULT);
         ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
-    }
 
-    return cctx;
+        txn->zstd = cctx;
+        ptrarray_add(&txn->done_callbacks, &zstd_done);
+    }
 }
 
 static int zstd_compress(struct transaction_t *txn,
@@ -350,14 +373,9 @@ static int zstd_compress(struct transaction_t *txn,
     return 0;
 }
 
-static void zstd_done(ZSTD_CCtx *cctx)
-{
-    if (cctx) ZSTD_freeCCtx(cctx);
-}
-
 #else /* !HAVE_ZSTD */
 
-HIDDEN void *zstd_init() { return NULL; }
+HIDDEN void zstd_init(struct transaction_t *txn __attribute__((unused))) { }
 
 static int zstd_compress(struct transaction_t *txn __attribute__((unused)),
                            unsigned flags __attribute__((unused)),
@@ -366,8 +384,6 @@ static int zstd_compress(struct transaction_t *txn __attribute__((unused)),
 {
     fatal("Zstandard Compression requested, but not available", EX_SOFTWARE);
 }
-
-static void zstd_done(void *brotli __attribute__((unused))) {}
 
 #endif /* HAVE_ZSTD */
 
@@ -1983,15 +1999,12 @@ static void transaction_reset(struct transaction_t *txn)
 
 EXPORTED void transaction_free(struct transaction_t *txn)
 {
+    txn_done_t proc;
+
+    while ((proc = ptrarray_pop(&txn->done_callbacks))) proc(txn);
+    ptrarray_fini(&txn->done_callbacks);
+
     transaction_reset(txn);
-
-    ws_end_channel(&txn->ws_ctx, NULL);
-
-    http2_end_stream(txn->strm_ctx);
-
-    zlib_done(txn->zstrm);
-    zstd_done(txn->zstd);
-    brotli_done(txn->brotli);
 
     buf_free(&txn->req_body.payload);
     buf_free(&txn->resp_body.payload);
@@ -2012,9 +2025,9 @@ static void cmdloop(struct http_connection *conn)
     txn.conn = conn;
 
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
-        txn.zstrm = zlib_init();
-        txn.zstd = zstd_init();
-        txn.brotli = brotli_init();
+        zlib_init(&txn);
+        brotli_init(&txn);
+        zstd_init(&txn);
     }
 
     /* Enable command timer */

@@ -153,6 +153,24 @@ static ssize_t data_source_read_cb(nghttp2_session *sess __attribute__((unused))
     return n;
 }
 
+static void _end_stream(struct transaction_t *txn)
+{
+    if (txn) {
+        struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
+
+        if (strm) {
+            int i;
+
+            for (i = 0; i < HTTP2_MAX_HEADERS; i++) {
+                free(strm->resp_hdrs[i].value);
+            }
+            free(strm);
+        }
+
+        txn->strm_ctx = NULL;
+    }
+}
+
 static int begin_headers_cb(nghttp2_session *session,
                             const nghttp2_frame *frame, void *user_data)
 {
@@ -173,9 +191,9 @@ static int begin_headers_cb(nghttp2_session *session,
     txn->req_line.ver = HTTP2_VERSION;
 
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
-        txn->zstrm = zlib_init();
-        txn->brotli = brotli_init();
-        txn->zstd = zstd_init();
+        zlib_init(txn);
+        brotli_init(txn);
+        zstd_init(txn);
     }
 
 
@@ -183,6 +201,7 @@ static int begin_headers_cb(nghttp2_session *session,
 
     strm->id = frame->hd.stream_id;
     txn->strm_ctx = strm;
+    ptrarray_add(&txn->done_callbacks, &_end_stream);
 
     /* Create header cache */
     if (!(txn->req_hdrs = spool_new_hdrcache())) {
@@ -985,19 +1004,6 @@ HIDDEN int32_t http2_get_streamid(void *http2_strm)
     return strm ? strm->id : 0;
 }
 
-HIDDEN void http2_end_stream(void *http2_strm)
-{
-    struct http2_stream *strm = (struct http2_stream *) http2_strm;
-    int i;
-
-    if (!strm) return;
-
-    for (i = 0; i < HTTP2_MAX_HEADERS; i++) {
-        free(strm->resp_hdrs[i].value);
-    }
-    free(strm);
-}
-
 #else /* !HAVE_NGHTTP2 */
 
 HIDDEN void http2_init(struct buf *serverinfo __attribute__((unused))) {}
@@ -1061,7 +1067,5 @@ HIDDEN int32_t http2_get_streamid(void *http2_strm __attribute__((unused)))
 {
     return 0;
 }
-
-HIDDEN void http2_end_stream(void *http2_strm __attribute__((unused))) {}
 
 #endif /* HAVE_NGHTTP2 */

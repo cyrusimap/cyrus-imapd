@@ -352,6 +352,7 @@ struct transaction_t {
     struct http_connection *conn;       /* Global connection context */
     void *strm_ctx;                     /* HTTP/2+ stream context */
     void *ws_ctx;                       /* WebSocket channel context */
+
     unsigned meth;                      /* Index of Method to be performed */
     struct txn_flags_t flags;           /* Flags for this txn */
     struct request_line_t req_line;     /* Parsed request-line */
@@ -383,7 +384,15 @@ struct transaction_t {
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
     void *zstd;                         /* Zstandard compression context */
+
+    ptrarray_t done_callbacks;          /* Array of auxiliary functions
+                                           to be called when freeing the txn.
+                                           Used to cleanup the commpression,
+                                           HTTP/2, WebSocket contexts. */
 };
+
+typedef void (*txn_done_t)(struct transaction_t *txn);
+
 
 /* HTTP version flags */
 enum {
@@ -596,11 +605,11 @@ extern int http_allow_noauth(struct transaction_t *txn);
 extern int http_allow_noauth_get(struct transaction_t *txn);
 extern int http_read_req_body(struct transaction_t *txn);
 
-extern void *zlib_init();
+extern void zlib_init(struct transaction_t *txn);
 extern int zlib_compress(struct transaction_t *txn, unsigned flags,
                          const char *buf, unsigned len);
 
-extern void *zstd_init();
-extern void *brotli_init();
+extern void brotli_init(struct transaction_t *txn);
+extern void zstd_init(struct transaction_t *txn);
 
 #endif /* HTTPD_H */

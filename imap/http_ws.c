@@ -658,6 +658,11 @@ static void parse_extensions(struct transaction_t *txn)
 }
 
 
+static void _end_channel(struct transaction_t *txn)
+{
+    ws_end_channel(&txn->ws_ctx, NULL);
+}
+
 HIDDEN int ws_start_channel(struct transaction_t *txn,
                             const char *protocol, ws_data_callback *data_cb)
 {
@@ -787,6 +792,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     ctx->protocol = protocol;
     ctx->data_cb = data_cb;
     txn->ws_ctx = ctx;
+    ptrarray_add(&txn->done_callbacks, &_end_channel);
 
     /* Check for supported WebSocket extensions */
     parse_extensions(txn);
