@@ -290,6 +290,7 @@ static void replica_connect(void)
         _exit(1);
     }
 
+#ifdef HAVE_ZLIB
     if (do_compress && !sync_cs.backend->in->zstrm) {
         fprintf(stderr, "Failed to enable compression to server '%s'\n",
                 servername);
@@ -297,6 +298,7 @@ static void replica_connect(void)
                 servername);
         _exit(1);
     }
+#endif
 
     if (verbose > 1) {
         prot_setlog(sync_cs.backend->in, fileno(stderr));
