@@ -104,7 +104,7 @@ EXPORTED jmap_push_ctx_t *jmap_push_init(struct transaction_t *txn,
         const char *type = strarray_nth(types, i);
 
         for (dtype = dataTypes; dtype->name; dtype++) {
-            if (!strcmpsafe(type, dtype->name)) {
+            if (!strcmpsafe(type, dtype->name) || !strcmpsafe(type, "*")) {
                 modseq_t *modseq =
                     (modseq_t *)((size_t) &jpush->counters + dtype->offset);
 
@@ -117,7 +117,7 @@ EXPORTED jmap_push_ctx_t *jmap_push_init(struct transaction_t *txn,
                     *modseq = lastmodseq;
                 }
 
-                break;
+                if (*type != '*') break;
             }
         }
     }
