@@ -99,6 +99,8 @@ struct ws_context {
 
     struct buf h2_data;              /* Input data pointer when under HTTP/2 */
 
+    void *app_data;                  /* Application-specific data */
+
     union {
         struct {
             void *zstrm;             /* Zlib decompression context */
@@ -1022,6 +1024,22 @@ HIDDEN void ws_send(struct transaction_t *txn, struct buf *outbuf)
     }
 }
 
+HIDDEN void *ws_set_app_data(void *ws_ctx, void *data)
+{
+    struct ws_context *ctx = (struct ws_context *) ws_ctx;
+    void *olddata = ctx->app_data;
+
+    ctx->app_data = data;
+    return olddata;
+}
+
+HIDDEN void *ws_get_app_data(void *ws_ctx)
+{
+    struct ws_context *ctx = (struct ws_context *) ws_ctx;
+
+    return ctx->app_data;
+}
+
 #else /* !HAVE_WSLAY */
 
 HIDDEN void ws_init(struct http_connection *conn __attribute__((unused)),
@@ -1054,6 +1072,17 @@ HIDDEN void ws_send(struct transaction_t *txn __attribute__((unused)),
                     struct buf *outbuf __attribute__((unused)))
 {
     fatal("ws_send() called, but no Wslay", EX_SOFTWARE);
+}
+
+HIDDEN void *ws_set_app_data(void *ws_ctx __attribute__((unused)),
+                             void *data __attribute__((unused)))
+{
+    return NULL;
+}
+
+HIDDEN void *ws_get_app_data(void *ws_ctx __attribute__((unused)))
+{
+    return NULL;
 }
 
 #endif /* HAVE_WSLAY */
