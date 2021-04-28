@@ -651,23 +651,18 @@ static void httpd_reset(struct http_connection *conn)
 
     if (protin) protgroup_reset(protin);
 
-#ifdef HAVE_SSL
-    if (conn->tls_ctx) {
-        tls_reset_servertls((SSL **) &conn->tls_ctx);
-        conn->tls_ctx = NULL;
-    }
-#endif
+    /* Reset auxiliary connection contexts */
+    conn_reset_t proc;
+    while ((proc = ptrarray_pop(&conn->reset_callbacks))) proc(conn);
+    ptrarray_fini(&conn->reset_callbacks);
 
     xmlFreeParserCtxt(conn->xml);
 
-    http2_end_session(&conn->sess_ctx, NULL);
-
-    conn->ws_ctx = NULL;
-
     cyrus_reset_stdio();
 
+    conn->fatal = NULL;
     conn->clienthost = "[local]";
-    buf_free(&conn->logbuf);
+    buf_reset(&conn->logbuf);
     if (conn->logfd != -1) {
         close(conn->logfd);
         conn->logfd = -1;
@@ -789,8 +784,10 @@ int service_init(int argc __attribute__((unused)),
                SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
                LIBXML_DOTTED_VERSION, JANSSON_VERSION);
 
-    http2_init(&serverinfo);
-    ws_init(&serverinfo);
+    memset(&http_conn, 0, sizeof(struct http_connection));
+
+    http2_init(&http_conn, &serverinfo);
+    ws_init(&http_conn, &serverinfo);
 
 #ifdef HAVE_SSL
     version = OPENSSL_VERSION_NUMBER;
@@ -874,7 +871,6 @@ int service_main(int argc __attribute__((unused)),
     protgroup_insert(protin, httpd_in);
 
     /* Setup HTTP connection */
-    memset(&http_conn, 0, sizeof(struct http_connection));
     http_conn.pin = httpd_in;
     http_conn.pout = httpd_out;
     http_conn.logfd = -1;
@@ -1030,8 +1026,13 @@ void shut_down(int code)
 
     if (code) msg = http_conn.fatal;
 
-    ws_end_channel(http_conn.ws_ctx, msg);
-    http2_end_session(&http_conn.sess_ctx, msg);
+    /* Cleanup auxiliary connection contexts */
+    conn_shutdown_t proc;
+    while ((proc = ptrarray_pop(&http_conn.shutdown_callbacks))) {
+        proc(&http_conn, msg);
+    }
+    ptrarray_fini(&http_conn.shutdown_callbacks);
+    ptrarray_fini(&http_conn.reset_callbacks);
 
     buf_free(&http_conn.logbuf);
 
@@ -1089,13 +1090,7 @@ void shut_down(int code)
                "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
                session_id(), bytes_in, bytes_out);
 
-#ifdef HAVE_SSL
-    tls_shutdown_serverengine();
-#endif
-
     saslprops_free(&saslprops);
-
-    http2_done();
 
     cyrus_done();
 
@@ -1160,6 +1155,20 @@ struct tls_alpn_t http_alpn_map[] = {
     { NULL,       NULL,             NULL }
 };
 
+static void _reset_tls(struct http_connection *conn)
+{
+    if (conn) {
+        tls_reset_servertls((SSL **) &conn->tls_ctx);
+        conn->tls_ctx = NULL;
+    }
+}
+
+static void _shutdown_tls(struct http_connection *conn __attribute__((unused)),
+                          const char *msg __attribute__((unused)))
+{
+    tls_shutdown_serverengine();
+}
+
 static int starttls(struct transaction_t *txn, struct http_connection *conn)
 {
     int https = (txn == NULL);
@@ -1218,6 +1227,9 @@ static int starttls(struct transaction_t *txn, struct http_connection *conn)
     /* tell the prot layer about our new layers */
     prot_settls(httpd_in, conn->tls_ctx);
     prot_settls(httpd_out, conn->tls_ctx);
+
+    ptrarray_add(&conn->reset_callbacks, &_reset_tls);
+    ptrarray_add(&conn->shutdown_callbacks, &_shutdown_tls);
 
     httpd_tls_required = 0;
 
@@ -1999,8 +2011,8 @@ static void transaction_reset(struct transaction_t *txn)
 
 EXPORTED void transaction_free(struct transaction_t *txn)
 {
+    /* Cleanup auxiliary stream contexts */
     txn_done_t proc;
-
     while ((proc = ptrarray_pop(&txn->done_callbacks))) proc(txn);
     ptrarray_fini(&txn->done_callbacks);
 

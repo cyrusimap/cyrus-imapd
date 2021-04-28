@@ -59,18 +59,14 @@
 #include "md5.h"
 #include "util.h"
 
-extern void http2_init(struct buf *serverinfo);
+extern void http2_init(struct http_connection *conn, struct buf *serverinfo);
 
 extern int http2_enabled();
-
-extern void http2_done();
 
 extern int http2_preface(struct http_connection *conn);
 
 extern int http2_start_session(struct transaction_t *txn,
                                struct http_connection *conn);
-
-extern void http2_end_session(void **http2_ctx, const char *msg);
 
 extern void http2_input(struct transaction_t *txn);
 

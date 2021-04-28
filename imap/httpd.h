@@ -344,7 +344,18 @@ struct http_connection {
     void **ws_ctx;                      /* WebSocket context (HTTP/1.1 only) */
 
     xmlParserCtxtPtr xml;               /* XML parser content */
+
+    ptrarray_t reset_callbacks;         /* Array of functions to reset
+                                           auxiliary connection contexts
+                                           (e.g. TLS, HTTP/2, WebSockets) */
+
+    ptrarray_t shutdown_callbacks;      /* Array of functions to cleanup
+                                           auxiliary connection contexts
+                                           (e.g. TLS, HTTP/2, WebSockets) */
 };
+
+typedef void (*conn_reset_t)(struct http_connection *conn);
+typedef void (*conn_shutdown_t)(struct http_connection *conn, const char *msg);
 
 
 /* Transaction context */
@@ -385,10 +396,9 @@ struct transaction_t {
     void *brotli;                       /* Brotli compression context */
     void *zstd;                         /* Zstandard compression context */
 
-    ptrarray_t done_callbacks;          /* Array of auxiliary functions
-                                           to be called when freeing the txn.
-                                           Used to cleanup the commpression,
-                                           HTTP/2, WebSocket contexts. */
+    ptrarray_t done_callbacks;          /* Array of functions to cleanup
+                                           auxiliary stream contexts
+                                           (e.g. compression, HTTP/2, WS) */
 };
 
 typedef void (*txn_done_t)(struct transaction_t *txn);

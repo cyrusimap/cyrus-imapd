@@ -468,7 +468,63 @@ static int begin_frame_cb(nghttp2_session *session __attribute__((unused)),
 }
 
 
-HIDDEN void http2_init(struct buf *serverinfo)
+static void _end_session_ex(struct http_connection *conn, const char *msg)
+{
+    struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
+
+    if (!ctx) return;
+
+    /* End the session if we haven't already */
+    if (nghttp2_session_want_read(ctx->session)) {
+        int32_t stream_id;
+        int r;
+
+        if (!msg) msg = "Server unavailable";
+
+        /* Close all streams with open WebSocket channels */
+        while ((stream_id = arrayu64_pop(&ctx->ws_ids))) {
+            struct transaction_t *txn =
+                nghttp2_session_get_stream_user_data(ctx->session, stream_id);
+
+            ws_end_channel(&txn->ws_ctx, msg);
+
+            syslog(LOG_DEBUG, "nghttp2_submit_rst stream()");
+            nghttp2_submit_rst_stream(ctx->session, NGHTTP2_FLAG_NONE,
+                                      stream_id, NGHTTP2_CANCEL);
+        }
+
+        syslog(LOG_DEBUG, "nghttp2_submit_goaway(%s)", msg);
+
+        stream_id = nghttp2_session_get_last_proc_stream_id(ctx->session);
+        r = nghttp2_submit_goaway(ctx->session, NGHTTP2_FLAG_NONE, stream_id,
+                                  NGHTTP2_CANCEL,
+                                  (const uint8_t *) msg, strlen(msg));
+        if (r) {
+            syslog(LOG_ERR, "nghttp2_submit_goaway: %s", nghttp2_strerror(r));
+        }
+        else {
+            r = nghttp2_session_send(ctx->session);
+            if (r) {
+                syslog(LOG_ERR, "nghttp2_session_send: %s", nghttp2_strerror(r));
+            }
+        }
+    }
+
+    nghttp2_option_del(ctx->options);
+    nghttp2_session_del(ctx->session);
+    arrayu64_fini(&ctx->ws_ids);
+    free(ctx);
+
+    conn->sess_ctx = NULL;
+}
+
+static void _shutdown(struct http_connection *conn, const char *msg)
+{
+    _end_session_ex(conn, msg);
+    nghttp2_session_callbacks_del(http2_callbacks);
+}
+
+HIDDEN void http2_init(struct http_connection *conn, struct buf *serverinfo)
 {
     int r;
 
@@ -504,17 +560,14 @@ HIDDEN void http2_init(struct buf *serverinfo)
         nghttp2_session_callbacks_set_on_frame_send_callback(http2_callbacks,
                                                              &frame_send_cb);
     }
+
+    ptrarray_add(&conn->shutdown_callbacks, &_shutdown);
 }
 
 
 HIDDEN int http2_enabled()
 {
     return (http2_callbacks != NULL);
-}
-
-HIDDEN void http2_done()
-{
-    nghttp2_session_callbacks_del(http2_callbacks);
 }
 
 
@@ -541,6 +594,11 @@ static int nghttp2_extended_connect = 1;
 #define NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL 0x08
 static int nghttp2_extended_connect = 0;
 #endif
+
+static void _end_session(struct http_connection *conn)
+{
+    _end_session_ex(conn, NULL);
+}
 
 HIDDEN int http2_start_session(struct transaction_t *txn,
                                struct http_connection *conn)
@@ -583,6 +641,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
     }
 
     conn->sess_ctx = ctx;
+    ptrarray_add(&conn->reset_callbacks, &_end_session);
 
     if (txn && (txn->flags.conn & CONN_UPGRADE)) {
         struct http2_stream *strm;
@@ -640,57 +699,6 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
     }
 
     return 0;
-}
-
-
-HIDDEN void http2_end_session(void **http2_ctx, const char *msg)
-{
-    struct http2_context *ctx = (struct http2_context *) *http2_ctx;
-
-    if (!ctx) return;
-
-    /* End the session if we haven't already */
-    if (nghttp2_session_want_read(ctx->session)) {
-        int32_t stream_id;
-        int r;
-
-        if (!msg) msg = "Server unavailable";
-
-        /* Close all streams with open WebSocket channels */
-        while ((stream_id = arrayu64_pop(&ctx->ws_ids))) {
-            struct transaction_t *txn =
-                nghttp2_session_get_stream_user_data(ctx->session, stream_id);
-
-            ws_end_channel(&txn->ws_ctx, msg);
-
-            syslog(LOG_DEBUG, "nghttp2_submit_rst stream()");
-            nghttp2_submit_rst_stream(ctx->session, NGHTTP2_FLAG_NONE,
-                                      stream_id, NGHTTP2_CANCEL);
-        }
-
-        syslog(LOG_DEBUG, "nghttp2_submit_goaway(%s)", msg);
-
-        stream_id = nghttp2_session_get_last_proc_stream_id(ctx->session);
-        r = nghttp2_submit_goaway(ctx->session, NGHTTP2_FLAG_NONE, stream_id,
-                                  NGHTTP2_CANCEL,
-                                  (const uint8_t *) msg, strlen(msg));
-        if (r) {
-            syslog(LOG_ERR, "nghttp2_submit_goaway: %s", nghttp2_strerror(r));
-        }
-        else {
-            r = nghttp2_session_send(ctx->session);
-            if (r) {
-                syslog(LOG_ERR, "nghttp2_session_send: %s", nghttp2_strerror(r));
-            }
-        }
-    }
-
-    nghttp2_option_del(ctx->options);
-    nghttp2_session_del(ctx->session);
-    arrayu64_fini(&ctx->ws_ids);
-    free(ctx);
-
-    *http2_ctx = NULL;
 }
 
 
@@ -1006,14 +1014,15 @@ HIDDEN int32_t http2_get_streamid(void *http2_strm)
 
 #else /* !HAVE_NGHTTP2 */
 
-HIDDEN void http2_init(struct buf *serverinfo __attribute__((unused))) {}
+HIDDEN void http2_init(struct http_connection *conn __attribute__((unused)),
+                       struct buf *serverinfo __attribute__((unused)))
+{
+}
 
 HIDDEN int http2_enabled()
 {
     return 0;
 }
-
-HIDDEN void http2_done() {}
 
 HIDDEN int http2_preface(struct http_connection *conn __attribute__((unused)))
 {
@@ -1024,11 +1033,6 @@ HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused))
                                struct http_connection *c __attribute__((unused)))
 {
     fatal("http2_start() called, but no Nghttp2", EX_SOFTWARE);
-}
-
-HIDDEN void http2_end_session(void **http2_ctx __attribute__((unused)),
-                              const char *msg __attribute__((unused)))
-{
 }
 
 HIDDEN void http2_input(struct transaction_t *txn __attribute__((unused)))

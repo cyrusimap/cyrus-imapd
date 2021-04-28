@@ -598,7 +598,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 }
 
 
-HIDDEN void ws_init(struct buf *serverinfo)
+HIDDEN void ws_init(struct http_connection *conn __attribute__((unused)),
+                    struct buf *serverinfo)
 {
     buf_printf(serverinfo, " Wslay/%s", WSLAY_VERSION);
 }
@@ -609,11 +610,6 @@ HIDDEN int ws_enabled()
     return 1;
 }
 
-
-HIDDEN void ws_done()
-{
-    return;
-}
 
 /* Parse Sec-WebSocket-Extensions header(s) for interesting extensions */
 static void parse_extensions(struct transaction_t *txn)
@@ -658,9 +654,15 @@ static void parse_extensions(struct transaction_t *txn)
 }
 
 
+static void _h1_shutdown(struct http_connection *conn, const char *msg)
+{
+    ws_end_channel(conn->ws_ctx, msg);
+}
+
 static void _end_channel(struct transaction_t *txn)
 {
     ws_end_channel(&txn->ws_ctx, NULL);
+    txn->conn->ws_ctx = NULL;
 }
 
 HIDDEN int ws_start_channel(struct transaction_t *txn,
@@ -758,6 +760,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         /* Link the WS context into the connection so we can
            properly close the WS during an abnormal shut_down() */
         txn->conn->ws_ctx = &txn->ws_ctx;
+        ptrarray_add(&txn->conn->shutdown_callbacks, &_h1_shutdown);
 
         callbacks.recv_callback = &h1_recv_cb;
         callbacks.send_callback = &h1_send_cb;
@@ -1001,14 +1004,15 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
 #else /* !HAVE_WSLAY */
 
-HIDDEN void ws_init(struct buf *serverinfo __attribute__((unused))) {}
+HIDDEN void ws_init(struct http_connection *conn __attribute__((unused)),
+                    struct buf *serverinfo __attribute__((unused)))
+{
+}
 
 HIDDEN int ws_enabled()
 {
     return 0;
 }
-
-HIDDEN void ws_done() {}
 
 HIDDEN int ws_start_channel(struct transaction_t *txn __attribute__((unused)),
                             const char *protocol __attribute__((unused)),
