@@ -115,13 +115,11 @@ static ssize_t recv_cb(nghttp2_session *session __attribute__((unused)),
            output from being submitted */
         prot_NONBLOCK(pin);
     }
-    else if (!arrayu64_size(&((struct http2_context *) conn->sess_ctx)->ws_ids)) {
-        /* No data (and no WebSockets) -  block next time (for client timeout) */
+    else {
+        /* No data -  block next time (for client timeout) */
         prot_BLOCK(pin);
 
-        if (pin->eof) n = NGHTTP2_ERR_EOF;
-        else if (pin->error) n = NGHTTP2_ERR_CALLBACK_FAILURE;
-        else n = NGHTTP2_ERR_WOULDBLOCK;
+        n = NGHTTP2_ERR_WOULDBLOCK;
     }
 
     syslog(LOG_DEBUG,
@@ -419,8 +417,8 @@ static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
             arrayu64_remove_all(&http2_ctx->ws_ids, stream_id);
 
             if (arrayu64_size(&http2_ctx->ws_ids) == 0) {
-                /* No WebSockets -  block next time (for client timeout) */
-                prot_BLOCK(txn->conn->pin);
+                /* No WebSockets -  Reset inactivity timer */
+                prot_settimeout(txn->conn->pin, httpd_timeout);
             }
         }
 
@@ -736,8 +734,19 @@ HIDDEN void http2_input(struct transaction_t *txn)
     syslog(LOG_DEBUG, "http2_input()  goaway: %d, eof: %d, want read: %d",
            goaway, prot_IS_EOF(pin), want_read);
 
-
-    if (want_read && !goaway) {
+    if (prot_IS_EOF(pin)) {
+        /* Client closed connection */
+        syslog(LOG_DEBUG, "client closed connection");
+        nghttp2_session_terminate_session(ctx->session, NGHTTP2_NO_ERROR);
+        txn->flags.conn = CONN_CLOSE;
+    }
+    else if (prot_error(pin)) {
+        /* Client timeout or I/O error */
+        goaway = 1;
+        txn->error.desc = prot_error(pin);
+        err = NGHTTP2_REFUSED_STREAM;
+    }
+    else if (want_read && !goaway) {
         /* Read frame(s) */
         int r = nghttp2_session_recv(ctx->session);
 
@@ -756,41 +765,22 @@ HIDDEN void http2_input(struct transaction_t *txn)
                    nghttp2_strerror(r), prot_error(pin));
             goaway = 1;
 
-            if (r == NGHTTP2_ERR_CALLBACK_FAILURE) {
-                /* Client timeout */
-                txn->error.desc = prot_error(pin);
-                err = NGHTTP2_REFUSED_STREAM;
-            }
-            else {
-                txn->error.desc = nghttp2_strerror(r);
+            txn->error.desc = nghttp2_strerror(r);
 
-                if (r == NGHTTP2_ERR_NOMEM)
-                    err = NGHTTP2_INTERNAL_ERROR;
-                else if (r == NGHTTP2_ERR_BAD_CLIENT_MAGIC)
-                    err = NGHTTP2_PROTOCOL_ERROR;
-                else if (r == NGHTTP2_ERR_FLOODED)
-                    err = NGHTTP2_ENHANCE_YOUR_CALM;
-            }
+            if (r == NGHTTP2_ERR_BAD_CLIENT_MAGIC)
+              err = NGHTTP2_PROTOCOL_ERROR;
+            else if (r == NGHTTP2_ERR_FLOODED)
+              err = NGHTTP2_ENHANCE_YOUR_CALM;
+            else
+              err = NGHTTP2_INTERNAL_ERROR;
         }
     }
 
     if (goaway) {
         /* Tell client we are closing session */
-        int32_t stream_id =
-            nghttp2_session_get_last_proc_stream_id(ctx->session);
-
-        syslog(LOG_WARNING, "%s, closing connection", txn->error.desc);
-
-        syslog(LOG_DEBUG, "nghttp2_submit_goaway()");
-        int r = nghttp2_submit_goaway(ctx->session,
-                                      NGHTTP2_FLAG_NONE, stream_id, err,
-                                      (const uint8_t *) txn->error.desc,
-                                      strlen(txn->error.desc));
-        if (r) {
-            syslog(LOG_ERR, "nghttp2_submit_goaway: %s", nghttp2_strerror(r));
-        }
-
+        _end_session_ex(txn->conn, err, txn->error.desc);
         txn->flags.conn = CONN_CLOSE;
+        return;
     }
 
     /* Write frame(s) */
