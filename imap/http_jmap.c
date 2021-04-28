@@ -102,6 +102,7 @@ static int jmap_eventsource(struct transaction_t *txn);
 #define JMAP_WS_PROTOCOL   "jmap"
 
 static ws_data_callback jmap_ws;
+static int push_poll;
 
 static struct connect_params ws_params = {
     JMAP_BASE_URL JMAP_WS_COL, JMAP_WS_PROTOCOL, &jmap_ws
@@ -191,11 +192,14 @@ static void jmap_init(struct buf *serverinfo)
 #endif
 
     if (ws_enabled()) {
+        push_poll = config_getduration(IMAPOPT_WEBSOCKET_PUSHPOLL, 's');
+        if (push_poll < 0) push_poll = 0;
+
         json_object_set_new(my_jmap_settings.server_capabilities,
                 JMAP_URN_WEBSOCKET,
                 json_pack("{s:s s:b}",
                           "url", "wss:" JMAP_BASE_URL JMAP_WS_COL,
-                          "supportsPush", 0));
+                          "supportsPush", push_poll));
     }
 }
 
@@ -1198,6 +1202,161 @@ static int jmap_get_session(struct transaction_t *txn)
 }
 
 
+static const struct datatype_t {
+    const char *name;
+    size_t offset;
+} dataTypes[] = {
+    { "Mailbox",         offsetof(struct mboxname_counters, mailfoldersmodseq)   },
+    { "Email",           offsetof(struct mboxname_counters, mailmodseq)          },
+    { "EmailSubmission", offsetof(struct mboxname_counters, submissionmodseq)    },
+    { "Calendar",        offsetof(struct mboxname_counters, caldavfoldersmodseq) },
+    { "CalendarEvent",   offsetof(struct mboxname_counters, caldavmodseq)        },
+    { "Contact",         offsetof(struct mboxname_counters, carddavmodseq)       },
+    { "Notes",           offsetof(struct mboxname_counters, notesmodseq)         },
+    { NULL,              0 }
+};
+
+struct ws_push_ctx {
+    char *accountid;
+    char *inboxname;
+    struct prot_waitevent *wait;
+    struct mboxname_counters counters;
+};
+
+static struct prot_waitevent *jmap_ws_pusher(struct protstream *s __attribute__((unused)),
+                                             struct prot_waitevent *ev,
+                                             void *rock)
+{
+    struct transaction_t *txn = (struct transaction_t *) rock;
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    struct ws_push_ctx *jpush = ws_get_app_data(ctx);
+    struct mboxname_counters cur_counters;
+    struct buf buf = BUF_INITIALIZER;
+
+    if (mboxname_read_counters(jpush->inboxname, &cur_counters)) {
+        /* Something went wrong - don't reschedule */
+        return ev;
+    }
+
+    /* See if anything has changed */
+    json_t *changed = json_object();
+    const struct datatype_t *dtype;
+    for (dtype = dataTypes; dtype->name; dtype++) {
+        modseq_t *modseq = (modseq_t *)((size_t) &jpush->counters + dtype->offset);
+        modseq_t *cur_modseq = (modseq_t *)((size_t) &cur_counters + dtype->offset);
+
+        if (*modseq && (*modseq < *cur_modseq)) {
+            *modseq = *cur_modseq;
+
+            buf_reset(&buf);
+            buf_printf(&buf, MODSEQ_FMT, *modseq);
+            json_object_set_new(changed, dtype->name, json_string(buf_cstring(&buf)));
+        }
+    }
+
+    if (json_object_size(changed)) {
+        buf_reset(&buf);
+        buf_printf(&buf, MODSEQ_FMT, cur_counters.highestmodseq);
+
+        json_t *jstate = json_pack("{ s:s s:{ s:o } s:s }",
+                                   "@type", "StateChange",
+                                   "changed", jpush->accountid, changed,
+                                   "pushState", buf_cstring(&buf));
+
+        /* Send the StateChange object */
+        size_t flags = JSON_PRESERVE_ORDER |
+            (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+        buf_initmcstr(&buf, json_dumps(jstate, flags));
+        ws_send(txn, &buf);
+        prot_flush(txn->conn->pout);
+
+        json_decref(jstate);
+    }
+    else {
+        json_decref(changed);
+    }
+
+    buf_free(&buf);
+    
+    /* Schedule our next update */
+    ev->mark = time(NULL) + push_poll;
+
+    return ev;
+}
+
+static int jmap_ws_push_enable(struct transaction_t *txn, json_t *req)
+{
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    struct ws_push_ctx *jpush = ws_get_app_data(ctx);
+    json_t *types = req ? json_object_get(req, "dataTypes") : NULL;
+
+    if (json_is_array(types)) {
+        /* Enable */
+        json_t *pushState = json_object_get(req, "pushState");
+        struct mboxname_counters cur_counters;
+        modseq_t lastmodseq = 0;
+
+        if (!jpush) {
+            jpush = xzmalloc(sizeof(struct ws_push_ctx));
+            jpush->accountid = xstrdup(httpd_userid);
+            jpush->inboxname = mboxname_user_mbox(jpush->accountid, NULL);
+            ws_set_app_data(ctx, jpush);
+        }
+
+        if (json_is_string(pushState)) {
+            lastmodseq = atomodseq_t(json_string_value(pushState));
+        }
+        else if (mboxname_read_counters(jpush->inboxname, &cur_counters)) {
+            /* Something went wrong */
+            goto disable;
+        }
+
+        size_t i;
+        json_t *jval;
+        json_array_foreach(types, i, jval) {
+            const char *type = json_string_value(jval);
+            const struct datatype_t *dtype;
+
+            for (dtype = dataTypes; dtype->name; dtype++) {
+                modseq_t *modseq =
+                    (modseq_t *)((size_t) &jpush->counters + dtype->offset);
+                modseq_t *cur_modseq =
+                    (modseq_t *)((size_t) &cur_counters + dtype->offset);
+
+                if (!strcmpsafe(type, dtype->name)) {
+                    *modseq = lastmodseq ? lastmodseq : *cur_modseq;
+                    break;
+                }
+            }
+        }
+
+        if (!jpush->wait) {
+            /* Schedule our first update */
+            jpush->wait = prot_addwaitevent(txn->conn->pin, time(NULL) + push_poll,
+                                            &jmap_ws_pusher, txn);
+        }
+
+        if (lastmodseq) {
+            /* Send all changes now */
+            jmap_ws_pusher(txn->conn->pin, jpush->wait, txn);
+        }
+
+        return HTTP_NO_CONTENT;
+    }
+
+  disable:
+    if (jpush) {
+        /* Disable */
+        if (jpush->wait) prot_removewaitevent(txn->conn->pin, jpush->wait);
+        free(jpush->accountid);
+        free(jpush->inboxname);
+        free(jpush);
+        ws_set_app_data(ctx, NULL);
+    }
+
+    return HTTP_NO_CONTENT;
+}
+
 /*
  * WebSockets data callback ('jmap' sub-protocol): Process JMAP API request.
  *
@@ -1215,8 +1374,13 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
     json_t *req = NULL, *res = NULL;
     int ret;
 
-    /* Only accept text frames */
-    if (opcode != WSLAY_TEXT_FRAME) {
+    if (opcode == WSLAY_CONNECTION_CLOSE) {
+        /* Cleanup pusher */
+        jmap_ws_push_enable(txn, NULL);
+        return 0;
+    }
+    else if (opcode != WSLAY_TEXT_FRAME) {
+        /* Only accept text frames */
         return HTTP_NOT_ACCEPTABLE;
     }
 
@@ -1239,15 +1403,13 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
             /* Log request */
             spool_replace_header(xstrdup(":jmap"),
                                  xstrdup("WebSocketPushEnable"), txn->req_hdrs);
-            /* XXX  Do nothing until supported */
-            ret = HTTP_NO_CONTENT;
+            ret = jmap_ws_push_enable(txn, req);
         }
         else if (!strcmpsafe(type, "WebSocketPushDisable")) {
             /* Log request */
             spool_replace_header(xstrdup(":jmap"),
                                  xstrdup("WebSocketPushDisable"), txn->req_hdrs);
-            /* XXX  Do nothing until supported */
-            ret = HTTP_NO_CONTENT;
+            ret = jmap_ws_push_enable(txn, NULL);
         }
         else {
             buf_reset(&txn->buf);

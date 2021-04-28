@@ -2996,6 +2996,13 @@ of the incoming network interface, or if no record is found, the
 .PP
    If no unit is specified, minutes is assumed. */
 
+{ "websocket_pushpoll", "60s", DURATION, "UNRELEASED" }
+/* The interval for polling for mailbox changes when push has been
+   enabled on a WebSocket channel.  The minimum value is 1 second.
+   A value of 0 will disable push.
+.PP
+   If no unit is specified, seconds is assumed. */
+
 { "xbackup_enabled", 0, SWITCH, "3.0.0" }
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin
    users can use this command to provoke a replication of specified users
