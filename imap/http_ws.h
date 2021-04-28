@@ -79,7 +79,4 @@ extern void ws_input(struct transaction_t *txn);
 
 extern void ws_send(struct transaction_t *txn, struct buf *outbuf);
 
-extern void *ws_set_app_data(void *ws_ctx, void *data);
-extern void *ws_get_app_data(void *ws_ctx);
-
 #endif /* HTTP_WS_H */
