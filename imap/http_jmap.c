@@ -1236,28 +1236,37 @@ static struct prot_waitevent *ws_push(struct protstream *s __attribute__((unused
 static void ws_push_enable(struct transaction_t *txn, json_t *req)
 {
     jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
-    json_t *types = json_object_get(req, "dataTypes");
+    json_t *jtypes = json_object_get(req, "dataTypes");
     json_t *pushState = json_object_get(req, "pushState");
+    strarray_t types = STRARRAY_INITIALIZER;
     modseq_t lastmodseq = ULLONG_MAX;
 
     xsyslog(LOG_DEBUG, "JMAP WS push enable",
-            "jpush=<%p>, types=<%p>", jpush, types);
+            "jpush=<%p>, jtypes=<%p>", jpush, jtypes);
 
-    if (!json_array_size(types)) {
+    if (!json_array_size(jtypes)) {
         jmap_push_done(txn);
         return;
+    }
+
+    size_t i;
+    json_t *jval;
+    json_array_foreach(jtypes, i, jval) {
+        strarray_append(&types, json_string_value(jval));
     }
 
     if (json_is_string(pushState)) {
         lastmodseq = atomodseq_t(json_string_value(pushState));
     }
 
-    jpush = jmap_push_init(txn, httpd_userid, types, lastmodseq, &ws_push);
+    jpush = jmap_push_init(txn, httpd_userid, &types, lastmodseq, &ws_push);
 
     if (jpush && (lastmodseq < ULLONG_MAX)) {
         /* Send all changes now */
         ws_push(txn->conn->pin, jpush->wait, txn);
     }
+
+    strarray_fini(&types);
 }
 
 /*

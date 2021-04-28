@@ -69,14 +69,12 @@ static const struct datatype_t {
 
 EXPORTED jmap_push_ctx_t *jmap_push_init(struct transaction_t *txn,
                                          const char *accountid,
-                                         json_t *types, modseq_t lastmodseq,
+                                         strarray_t *types, modseq_t lastmodseq,
                                          prot_waiteventcallback_t *ev)
 {
     jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
     struct mboxname_counters cur_counters;
     const struct datatype_t *dtype;
-
-    if (!json_is_array(types)) return jpush;
 
     if (!jpush) {
         jpush = xzmalloc(sizeof(jmap_push_ctx_t));
@@ -101,10 +99,9 @@ EXPORTED jmap_push_ctx_t *jmap_push_init(struct transaction_t *txn,
     }
 
     /* Set the start modseq for the specified types */
-    size_t i;
-    json_t *jval;
-    json_array_foreach(types, i, jval) {
-        const char *type = json_string_value(jval);
+    int i;
+    for (i = 0; i < strarray_size(types); i++) {
+        const char *type = strarray_nth(types, i);
 
         for (dtype = dataTypes; dtype->name; dtype++) {
             if (!strcmpsafe(type, dtype->name)) {

@@ -63,7 +63,7 @@ typedef struct jmap_push_ctx {
 
 extern jmap_push_ctx_t *jmap_push_init(struct transaction_t *txn,
                                        const char *accountid,
-                                       json_t *types, modseq_t lastmodseq,
+                                       strarray_t *types, modseq_t lastmodseq,
                                        prot_waiteventcallback_t *ev);
 
 extern void jmap_push_done(struct transaction_t *txn);
