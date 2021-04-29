@@ -1084,9 +1084,14 @@ static int mboxlist_update_entry(const char *name,
     else {
         r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
         if (!r && old && old->uniqueid) {
-            mboxlist_id_to_key(old->uniqueid, &key);
-            r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key),
-                               txn, /*force*/1);
+            mbentry_t *mbentry = NULL;
+            int r1 = mboxlist_lookup_by_uniqueid(old->uniqueid, &mbentry, txn);
+            if (!r1 && !strcmp(old->name, mbentry->name)) {
+                mboxlist_id_to_key(old->uniqueid, &key);
+                r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key),
+                                   txn, /*force*/1);
+            }
+            mboxlist_entry_free(&mbentry);
         }
     }
 
