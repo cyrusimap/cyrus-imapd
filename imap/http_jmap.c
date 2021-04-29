@@ -1202,6 +1202,21 @@ static int jmap_get_session(struct transaction_t *txn)
 }
 
 
+static void buf_appendjson(struct buf *buf, json_t *json, size_t flags)
+{
+    /* Determine length of JSON encoding */
+    size_t size = json_dumpb(json, NULL, 0, flags);
+
+    /* Grow the buffer */
+    buf_ensure(buf, size);
+
+    /* Append the JSON encoding */
+    size = json_dumpb(json, (char *) buf_base(buf) + buf_len(buf), size, flags);
+
+    /* Set the new buffer length */
+    buf_truncate(buf, buf_len(buf) + size);
+}
+
 static struct prot_waitevent *ws_push(struct protstream *s __attribute__((unused)),
                                       struct prot_waitevent *ev,
                                       void *rock)
@@ -1223,7 +1238,9 @@ static struct prot_waitevent *ws_push(struct protstream *s __attribute__((unused
         /* Send the StateChange object */
         size_t flags = JSON_PRESERVE_ORDER |
             (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
-        buf_initmcstr(buf, json_dumps(jstate, flags));
+        buf_reset(buf);
+        buf_appendjson(buf, jstate, flags);
+
         ws_send(txn, buf);
         prot_flush(txn->conn->pout);
     }
@@ -1384,8 +1401,89 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
     return ret;
 }
 
-/* Handle a GET on the eventsource endpoint */
-static int jmap_eventsource(struct transaction_t *txn __attribute__((unused)))
+static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused)),
+                                      struct prot_waitevent *ev,
+                                      void *rock)
 {
-    return HTTP_NO_CONTENT;
+    struct transaction_t *txn = (struct transaction_t *) rock;
+    jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
+    json_t *jstate = jmap_push_get_state(jpush, ev);
+    struct buf *buf = &jpush->buf;
+    const char *event = NULL;
+
+    xsyslog(LOG_DEBUG, "JMAP eventSource push", "accountid=<%s>", jpush->accountid);
+
+    buf_reset(buf);
+
+    if (jstate) {
+        /* 'state' event */
+        event = "state";
+        buf_printf(buf, "id: " MODSEQ_FMT "\n", jpush->counters.highestmodseq);
+    }
+    else {  /* XXX  Determine if/when to send a ping */
+        /* 'ping' event */
+        event = "ping";
+        jstate = json_pack("{ s:i }", "interval", jmap_push_poll);
+    }
+
+    /* Build the response */
+    buf_printf(buf, "event: %s\ndata: ", event);
+    buf_appendjson(buf, jstate, JSON_PRESERVE_ORDER | JSON_COMPACT);
+    buf_appendcstr(buf, "\n\n\n");
+
+    /* Send the response */
+    write_body(0, txn, buf_base(buf), buf_len(buf));
+    prot_flush(txn->conn->pout);
+
+    /* Cleanup */
+    json_decref(jstate);
+
+    return ev;
+}
+
+/* Handle a GET on the eventsource endpoint */
+static int jmap_eventsource(struct transaction_t *txn)
+{
+    jmap_push_ctx_t *jpush = NULL;
+    modseq_t lastmodseq = ULLONG_MAX;
+
+    const char **hdr;
+    if (txn->req_hdrs &&
+        (hdr = spool_getheader(txn->req_hdrs, "Last-Event-Id"))) {
+        lastmodseq = atomodseq_t(*hdr);
+    }
+
+    struct strlist *param;
+    if ((param = hash_lookup("types", &txn->req_qparams))) {
+        strarray_t *types = strarray_split(param->s, ",", STRARRAY_TRIM);
+
+        jpush = jmap_push_init(txn, httpd_userid, types, lastmodseq, &es_push);
+        strarray_free(types);
+    }
+
+    if ((param = hash_lookup("closeafter", &txn->req_qparams)) &&
+        !strcmpsafe(param->s, "state")) {
+        /* XXX  determine how to use closeafter */
+    }
+
+    if ((param = hash_lookup("ping", &txn->req_qparams))) {
+        /* XXX  parse ping value and determine how to use it */
+    }
+
+    if (!jpush) {
+        return HTTP_NO_CONTENT;
+    }
+
+    txn->meth = METH_HEAD;  /* Suppress Content-Length */
+    txn->resp_body.type = "text/event-stream";
+    txn->flags.conn = CONN_KEEPALIVE;
+    txn->flags.cc = CC_NOCACHE;
+    response_header(HTTP_OK, txn);
+
+    if (lastmodseq < ULLONG_MAX) {
+        /* Send all changes now */
+        es_push(txn->conn->pin, jpush->wait, txn);
+    }
+
+    return 0;
 }
