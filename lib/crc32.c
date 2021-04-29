@@ -613,7 +613,7 @@ static const uint32_t crc32_lookup[16][256] =
 
 #if BYTE_ORDER != LITTLE_ENDIAN
 /* swap endianness */
-# if defined(__GNUC__) && __GNUC_PREREQ(4, 3)
+# if defined(__GNUC__) && ((__GNU__ == 4 && __GNUC_MINOR >= 3) || __GNU__ > 4)
 #  define swap(x) __builtin_bswap32(x)
 # else
 #  ifdef HAVE_DECLARE_OPTIMIZE
