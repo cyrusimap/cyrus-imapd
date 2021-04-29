@@ -108,4 +108,14 @@ sub test_alternate_quotadb_path
     # TODO more/better checks
 }
 
+sub test_mboxlistdb_skiplist
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set(mboxlist_db => 'skiplist');
+    $self->{instance}->start();
+
+    # 'ctl_cyrusdb -r' will run on startup, and it should not crash!
+}
+
 1;
