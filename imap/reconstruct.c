@@ -146,7 +146,7 @@ int main(int argc, char **argv)
 
     construct_hash_table(&unqid_table, 2047, 1);
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUMIoOnV:u")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxdgGqRUMIoOnV:u")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -170,6 +170,10 @@ int main(int argc, char **argv)
 
         case 'n':
             reconstruct_flags &= ~RECONSTRUCT_MAKE_CHANGES;
+            break;
+
+        case 'd':
+            reconstruct_flags |= RECONSTRUCT_REPAIR_MBOXLIST;
             break;
 
         case 'g':
@@ -395,6 +399,7 @@ static void usage(void)
 
     fprintf(stderr, "-C <config-file>   use <config-file> instead of config from imapd.conf");
     fprintf(stderr, "-p <partition>     use this indicated partition for search\n");
+    fprintf(stderr, "-d                 check mailboxes database and insert missing entries\n");
     fprintf(stderr, "-x                 do not import metadata, create new\n");
     fprintf(stderr, "-r                 recursively reconstruct\n");
     fprintf(stderr, "-f                 examine filesystem underneath the mailbox\n");
@@ -453,6 +458,19 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     signals_poll();
 
     name = mbname_intname(data->mbname);
+
+    if (reconstruct_flags & RECONSTRUCT_REPAIR_MBOXLIST) {
+        /* Skip tombstones */
+        if (!(data->mbentry->mbtype & MBTYPE_DELETED)) {
+            mbentry_t *mbentry = NULL;
+            r = mboxlist_lookup_by_uniqueid(data->mbentry->uniqueid, &mbentry, NULL);
+            if (r == IMAP_MAILBOX_NONEXISTENT) {
+                mboxlist_update((struct mboxlist_entry *) data->mbentry, 1);
+            }
+            mboxlist_entry_free(&mbentry);
+        }
+        return 0;
+    }
 
     /* don't repeat */
     if (hash_lookup(name, &rrock->visited)) return 0;
