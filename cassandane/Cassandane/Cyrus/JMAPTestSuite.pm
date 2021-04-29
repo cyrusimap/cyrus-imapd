@@ -264,7 +264,7 @@ sub run_test
                 or die "Cannot open $errfile for reading: $!";
             while (readline FH) {
                 chomp;
-                xlog $self, $_;
+                xlog $_;
             }
             close FH;
         }
