@@ -1220,6 +1220,13 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, support non-standard JMAP extensions.  If not enabled,
    only IETF standard JMAP functionality is supported. */
 
+{ "jmap_pushpoll", "60s", DURATION, "UNRELEASED" }
+/* The interval for polling for changes on an EventSource connection or
+   when push has been ennabled on a WebSocket channel.
+   The minimum value is 1 second. A value of 0 will disable push.
+.PP
+   If no unit is specified, seconds is assumed. */
+
 { "jmap_set_has_attachment", 1, SWITCH, "3.1.5" }
 /* If enabled, the $hasAttachment flag is determined and set for new messages
    created with the JMAP Email/set or Email/import methods. This option should
@@ -2995,13 +3002,6 @@ of the incoming network interface, or if no record is found, the
    disable WebSockets.
 .PP
    If no unit is specified, minutes is assumed. */
-
-{ "websocket_pushpoll", "60s", DURATION, "UNRELEASED" }
-/* The interval for polling for mailbox changes when push has been
-   enabled on a WebSocket channel.  The minimum value is 1 second.
-   A value of 0 will disable push.
-.PP
-   If no unit is specified, seconds is assumed. */
 
 { "xbackup_enabled", 0, SWITCH, "3.0.0" }
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin

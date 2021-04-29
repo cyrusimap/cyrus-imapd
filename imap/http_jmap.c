@@ -192,14 +192,14 @@ static void jmap_init(struct buf *serverinfo)
 #endif
 
     if (ws_enabled()) {
-        push_poll = config_getduration(IMAPOPT_WEBSOCKET_PUSHPOLL, 's');
-        if (push_poll < 0) push_poll = 0;
+        jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL, 's');
+        if (jmap_push_poll < 0) jmap_push_poll = 0;
 
         json_object_set_new(my_jmap_settings.server_capabilities,
                 JMAP_URN_WEBSOCKET,
                 json_pack("{s:s s:b}",
                           "url", "wss:" JMAP_BASE_URL JMAP_WS_COL,
-                          "supportsPush", push_poll));
+                          "supportsPush", jmap_push_poll));
     }
 }
 
@@ -1444,6 +1444,8 @@ static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused
 /* Handle a GET on the eventsource endpoint */
 static int jmap_eventsource(struct transaction_t *txn)
 {
+    if (!jmap_push_poll) return HTTP_NO_CONTENT;
+
     jmap_push_ctx_t *jpush = NULL;
     modseq_t lastmodseq = ULLONG_MAX;
 
