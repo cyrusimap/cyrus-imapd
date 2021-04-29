@@ -497,18 +497,18 @@ static json_t *_header_as_date(const char *raw, enum header_form form __attribut
 {
     if (!raw) return json_null();
 
-    time_t t;
-    if (time_from_rfc5322(raw, &t, DATETIME_FULL) == -1) {
+    struct offsettime t;
+    if (offsettime_from_rfc5322(raw, &t, DATETIME_FULL) == -1) {
         if (!strchr(raw, '\r')) return json_null();
         char *tmp = charset_unfold(raw, strlen(raw), CHARSET_UNFOLD_SKIPWS);
-        int r = time_from_rfc5322(tmp, &t, DATETIME_FULL);
+        int r = offsettime_from_rfc5322(tmp, &t, DATETIME_FULL);
         free(tmp);
         if (r == -1) return json_null();
     }
 
-    char cbuf[RFC3339_DATETIME_MAX+1];
-    cbuf[RFC3339_DATETIME_MAX] = '\0';
-    time_to_rfc3339(t, cbuf, RFC3339_DATETIME_MAX+1);
+    char cbuf[ISO8601_DATETIME_MAX+1] = "";
+    offsettime_to_iso8601(&t, cbuf, sizeof(cbuf), 1);
+
     return json_string(cbuf);
 }
 
@@ -6074,12 +6074,7 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         else if (!strcmp("sentAt", lcasename)) {
             jval = json_null();
             if (want_form == HEADER_FORM_DATE) {
-                struct offsettime t;
-                if (offsettime_from_rfc5322(part->date, &t, DATETIME_FULL) != -1) {
-                    char datestr[30];
-                    offsettime_to_iso8601(&t, datestr, 30, 1);
-                    jval = json_string(datestr);
-                }
+                jval = _header_as_date(part->date, HEADER_FORM_DATE);
             }
         }
         if (jval) return jval;
@@ -6459,14 +6454,8 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     }
     /* sentAt */
     if (jmap_wantprop(props, "sentAt")) {
-        json_t *jsent_at = json_null();
-        struct offsettime t;
-        if (offsettime_from_rfc5322(part->date, &t, DATETIME_FULL) != -1) {
-            char datestr[30];
-            offsettime_to_iso8601(&t, datestr, 30, 1);
-            jsent_at = json_string(datestr);
-        }
-        json_object_set_new(email, "sentAt", jsent_at);
+        json_object_set_new(email, "sentAt",
+                            _header_as_date(part->date, HEADER_FORM_DATE));
     }
 
     return r;
