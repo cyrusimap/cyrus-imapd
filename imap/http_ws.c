@@ -665,14 +665,55 @@ static void parse_extensions(struct transaction_t *txn)
 }
 
 
+static void _end_channel_ex(void **ws_ctx, const char *msg)
+{
+    if (!ws_ctx || !*ws_ctx) return;
+
+    struct ws_context *ctx = (struct ws_context *) *ws_ctx;
+    wslay_event_context_ptr ev = ctx->event;
+
+    /* Close the WS if we haven't already */
+    if (wslay_event_get_write_enabled(ev) && !wslay_event_get_close_sent(ev)) {
+        int r;
+
+        if (!msg) msg = "Server unavailable";
+
+        xsyslog(LOG_DEBUG, "WS close", "msg=<%s>", msg);
+
+        syslog(LOG_DEBUG, "wslay_event_queue_close(%s)", msg);
+        r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
+                                    (uint8_t *) msg, strlen(msg));
+        if (r) {
+            xsyslog(LOG_ERR, "WS close failed",
+                    "err=<%s>", wslay_error_as_str(r));
+        }
+        else {
+            r = wslay_event_send(ev);
+            if (r) {
+                xsyslog(LOG_ERR, "WS send failed",
+                        "err=<%s>", wslay_error_as_str(r));
+            }
+        }
+    }
+
+    wslay_event_context_free(ev);
+    buf_free(&ctx->log);
+
+    ws_zlib_done(ctx);
+
+    free(ctx);
+
+    *ws_ctx = NULL;
+}
+
 static void _h1_shutdown(struct http_connection *conn, const char *msg)
 {
-    ws_end_channel(conn->ws_ctx, msg);
+    _end_channel_ex(conn->ws_ctx, msg);
 }
 
 static void _end_channel(struct transaction_t *txn)
 {
-    ws_end_channel(&txn->ws_ctx, NULL);
+    _end_channel_ex(&txn->ws_ctx, NULL);
     txn->conn->ws_ctx = NULL;
 }
 
@@ -873,48 +914,6 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
 }
 
 
-HIDDEN void ws_end_channel(void **ws_ctx, const char *msg)
-{
-    if (!ws_ctx || !*ws_ctx) return;
-
-    struct ws_context *ctx = (struct ws_context *) *ws_ctx;
-    wslay_event_context_ptr ev = ctx->event;
-
-    /* Close the WS if we haven't already */
-    if (wslay_event_get_write_enabled(ev) && !wslay_event_get_close_sent(ev)) {
-        int r;
-
-        if (!msg) msg = "Server unavailable";
-
-        xsyslog(LOG_DEBUG, "WS close", "msg=<%s>", msg);
-
-        syslog(LOG_DEBUG, "wslay_event_queue_close(%s)", msg);
-        r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
-                                    (uint8_t *) msg, strlen(msg));
-        if (r) {
-            xsyslog(LOG_ERR, "WS close failed",
-                    "err=<%s>", wslay_error_as_str(r));
-        }
-        else {
-            r = wslay_event_send(ev);
-            if (r) {
-                xsyslog(LOG_ERR, "WS send failed",
-                        "err=<%s>", wslay_error_as_str(r));
-            }
-        }
-    }
-
-    wslay_event_context_free(ev);
-    buf_free(&ctx->log);
-
-    ws_zlib_done(ctx);
-
-    free(ctx);
-
-    *ws_ctx = NULL;
-}
-
-
 static void ws_output(struct transaction_t *txn)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
@@ -991,7 +990,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
     if (goaway) {
         /* Tell client we are closing session */
-        ws_end_channel(&txn->ws_ctx, txn->error.desc);
+        _end_channel_ex(&txn->ws_ctx, txn->error.desc);
         txn->flags.conn = CONN_CLOSE;
         return;
     }
@@ -1022,11 +1021,6 @@ HIDDEN int ws_start_channel(struct transaction_t *txn __attribute__((unused)),
 }
 
 HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
-{
-}
-
-HIDDEN void ws_end_channel(void **ws_ctx __attribute__((unused)),
-                           const char *msg __attribute__((unused)))
 {
 }
 

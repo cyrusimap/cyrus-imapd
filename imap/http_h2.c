@@ -423,6 +423,7 @@ static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
         }
 
         /* Memory cleanup */
+        nghttp2_session_set_stream_user_data(session, stream_id, NULL);
         transaction_free(txn);
         free(txn);
     }
@@ -467,7 +468,7 @@ static int begin_frame_cb(nghttp2_session *session __attribute__((unused)),
 
 
 static void _end_session_ex(struct http_connection *conn,
-                            unsigned err, const char *msg)
+                            nghttp2_error_code err, const char *msg)
 {
     struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
 
@@ -483,10 +484,7 @@ static void _end_session_ex(struct http_connection *conn,
 
         /* Close all streams with open WebSocket channels */
         while ((stream_id = arrayu64_pop(&ctx->ws_ids))) {
-            struct transaction_t *txn =
-                nghttp2_session_get_stream_user_data(ctx->session, stream_id);
-
-            ws_end_channel(&txn->ws_ctx, msg);
+            stream_close_cb(ctx->session, stream_id, err, conn);
 
             syslog(LOG_DEBUG, "nghttp2_submit_rst stream()");
             nghttp2_submit_rst_stream(ctx->session, NGHTTP2_FLAG_NONE,
