@@ -56,6 +56,7 @@ extern int jmap_push_poll;
 typedef struct jmap_push_ctx {
     char *accountid;
     char *inboxname;
+    unsigned closeafter : 1;
     struct prot_waitevent *wait;
     struct mboxname_counters counters;
     struct buf buf;

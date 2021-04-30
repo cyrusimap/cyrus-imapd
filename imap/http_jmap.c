@@ -1419,6 +1419,10 @@ static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused
         /* 'state' event */
         event = "state";
         buf_printf(buf, "id: " MODSEQ_FMT "\n", jpush->counters.highestmodseq);
+
+        if (jpush->closeafter) {
+            txn->flags.conn = CONN_CLOSE;
+        }
     }
     else {  /* XXX  Determine if/when to send a ping */
         /* 'ping' event */
@@ -1465,7 +1469,7 @@ static int jmap_eventsource(struct transaction_t *txn)
 
     if ((param = hash_lookup("closeafter", &txn->req_qparams)) &&
         !strcmpsafe(param->s, "state")) {
-        /* XXX  determine how to use closeafter */
+        jpush->closeafter = 1;
     }
 
     if ((param = hash_lookup("ping", &txn->req_qparams))) {
