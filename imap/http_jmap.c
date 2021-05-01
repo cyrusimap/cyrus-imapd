@@ -1467,6 +1467,10 @@ static int jmap_eventsource(struct transaction_t *txn)
         strarray_free(types);
     }
 
+    if (!jpush) {
+        return HTTP_NO_CONTENT;
+    }
+
     if ((param = hash_lookup("closeafter", &txn->req_qparams)) &&
         !strcmpsafe(param->s, "state")) {
         jpush->closeafter = 1;
@@ -1476,14 +1480,16 @@ static int jmap_eventsource(struct transaction_t *txn)
         /* XXX  parse ping value and determine how to use it */
     }
 
-    if (!jpush) {
-        return HTTP_NO_CONTENT;
-    }
-
-    txn->meth = METH_HEAD;  /* Suppress Content-Length */
+    txn->meth = METH_CONNECT;  /* Suppress Content-Length & Accept-Ranges */
     txn->resp_body.type = "text/event-stream";
     txn->flags.conn = CONN_KEEPALIVE;
     txn->flags.cc = CC_NOCACHE;
+
+    if (txn->flags.ver >= VER_2) {
+        /* Prevent end of stream */
+        txn->flags.te = TE_CHUNKED;
+    }
+
     response_header(HTTP_OK, txn);
 
     if (lastmodseq < ULLONG_MAX) {
