@@ -1422,6 +1422,7 @@ static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused
 
         if (jpush->closeafter) {
             txn->flags.conn = CONN_CLOSE;
+            ev->mark = 0;  // exit prot wait loop
         }
     }
     else {  /* XXX  Determine if/when to send a ping */
@@ -1497,7 +1498,7 @@ static int jmap_eventsource(struct transaction_t *txn)
         es_push(txn->conn->pin, jpush->wait, txn);
     }
 
-    if (txn->flags.ver < VER_2) {
+    if (!(txn->flags.conn & CONN_CLOSE) && txn->flags.ver < VER_2) {
         /* Block until we timeout or get unexpected input */
         prot_peek(txn->conn->pin);
         txn->flags.conn |= CONN_CLOSE;
