@@ -684,6 +684,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         strm->id = nghttp2_session_get_last_proc_stream_id(ctx->session);
         txn->strm_ctx = strm;
         txn->flags.ver = VER_2;
+        ptrarray_add(&txn->done_callbacks, &_end_stream);
     }
 
     /* Don't do telemetry logging in prot layer */
