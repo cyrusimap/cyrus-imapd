@@ -149,8 +149,7 @@ EXPORTED void jmap_push_done(struct transaction_t *txn)
     txn->push_ctx = NULL;
 }
 
-EXPORTED json_t *jmap_push_get_state(jmap_push_ctx_t *jpush,
-                                     struct prot_waitevent *ev)
+EXPORTED json_t *jmap_push_get_state(jmap_push_ctx_t *jpush)
 {
     struct mboxname_counters cur_counters;
     struct buf *buf = &jpush->buf;
@@ -191,9 +190,6 @@ EXPORTED json_t *jmap_push_get_state(jmap_push_ctx_t *jpush,
     else {
         json_decref(changed);
     }
-
-    /* Schedule our next update */
-    ev->mark = time(NULL) + jmap_push_poll;
 
     return jstate;
 }

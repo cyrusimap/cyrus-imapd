@@ -1223,7 +1223,7 @@ static struct prot_waitevent *ws_push(struct protstream *s __attribute__((unused
 {
     struct transaction_t *txn = (struct transaction_t *) rock;
     jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
-    json_t *jstate = jmap_push_get_state(jpush, ev);
+    json_t *jstate = jmap_push_get_state(jpush);
     struct buf *buf = &jpush->buf;
 
     xsyslog(LOG_DEBUG, "JMAP WS push", "accountid=<%s>", jpush->accountid);
@@ -1246,6 +1246,9 @@ static struct prot_waitevent *ws_push(struct protstream *s __attribute__((unused
     }
 
     json_decref(jstate);
+
+    /* Schedule our next event */
+    ev->mark = time(NULL) + jmap_push_poll;
 
     return ev;
 }
@@ -1407,41 +1410,74 @@ static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused
 {
     struct transaction_t *txn = (struct transaction_t *) rock;
     jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
-    json_t *jstate = jmap_push_get_state(jpush, ev);
+    json_t *jstate = NULL;
     struct buf *buf = &jpush->buf;
     const char *event = NULL;
+    time_t now = time(NULL);
+    int do_close = 0;
 
-    xsyslog(LOG_DEBUG, "JMAP eventSource push", "accountid=<%s>", jpush->accountid);
+    xsyslog(LOG_DEBUG, "JMAP eventSource push",
+            "accountid=<%s>, now=<%ld>, next_poll=<%ld>, next_ping=<%ld>",
+            jpush->accountid, now, jpush->next_poll, jpush->next_ping);
 
     buf_reset(buf);
 
-    if (jstate) {
-        /* 'state' event */
-        event = "state";
-        buf_printf(buf, "id: " MODSEQ_FMT "\n", jpush->counters.highestmodseq);
+    if (now >= jpush->next_poll) {
+        jstate = jmap_push_get_state(jpush);
 
-        if (jpush->closeafter) {
-            txn->flags.conn = CONN_CLOSE;
-            ev->mark = 0;  // exit prot wait loop
+        jpush->next_poll = now + jmap_push_poll;
+
+        if (jstate) {
+            /* 'state' event */
+            event = "state";
+            buf_reset(buf);
+            buf_printf(buf, "id: " MODSEQ_FMT "\n", jpush->counters.highestmodseq);
+
+            if (jpush->closeafter) {
+                do_close = 1;
+            }
         }
     }
-    else {  /* XXX  Determine if/when to send a ping */
+    else {
         /* 'ping' event */
         event = "ping";
-        jstate = json_pack("{ s:i }", "interval", jmap_push_poll);
+        jstate = json_pack("{ s:i }", "interval", jpush->ping);
     }
 
-    /* Build the response */
-    buf_printf(buf, "event: %s\ndata: ", event);
-    buf_appendjson(buf, jstate, JSON_PRESERVE_ORDER | JSON_COMPACT);
-    buf_appendcstr(buf, "\n\n\n");
+    if (jstate) {
+        /* Build the response */
+        buf_printf(buf, "event: %s\ndata: ", event);
+        buf_appendjson(buf, jstate, JSON_PRESERVE_ORDER | JSON_COMPACT);
+        buf_appendcstr(buf, "\n\n");
 
-    /* Send the response */
-    write_body(0, txn, buf_base(buf), buf_len(buf));
-    prot_flush(txn->conn->pout);
+        /* Send the response */
+        write_body(0, txn, buf_base(buf), buf_len(buf));
+        prot_flush(txn->conn->pout);
 
-    /* Cleanup */
-    json_decref(jstate);
+        /* Cleanup */
+        json_decref(jstate);
+
+        if (do_close) {
+            jmap_push_done(txn);
+
+            if (txn->flags.ver >= VER_2) {
+                /* End of stream */
+                write_body(0, txn, NULL, 0);
+                prot_flush(txn->conn->pout);
+            }
+            else {
+                /* Force exit out of blocking read */
+                shutdown(txn->conn->pin->fd, SHUT_RD);
+            }
+
+            return NULL;
+        }
+
+        jpush->next_ping = (jpush->ping > 0) ? now + jpush->ping : INT_MAX;
+    }
+
+    /* Schedule our next event */
+    ev->mark = MIN(jpush->next_ping, jpush->next_poll);
 
     return ev;
 }
@@ -1453,6 +1489,7 @@ static int jmap_eventsource(struct transaction_t *txn)
 
     jmap_push_ctx_t *jpush = NULL;
     modseq_t lastmodseq = ULLONG_MAX;
+    time_t now = time(NULL);
 
     const char **hdr;
     if (txn->req_hdrs &&
@@ -1478,8 +1515,9 @@ static int jmap_eventsource(struct transaction_t *txn)
     }
 
     if ((param = hash_lookup("ping", &txn->req_qparams))) {
-        /* XXX  parse ping value and determine how to use it */
+        jpush->ping = atoi(param->s);
     }
+    jpush->next_ping = (jpush->ping > 0) ? now + jpush->ping : INT_MAX;
 
     txn->meth = METH_CONNECT;  /* Suppress Content-Length & Accept-Ranges */
     txn->resp_body.type = "text/event-stream";
@@ -1495,10 +1533,16 @@ static int jmap_eventsource(struct transaction_t *txn)
 
     if (lastmodseq < ULLONG_MAX) {
         /* Send all changes now */
-        es_push(txn->conn->pin, jpush->wait, txn);
+        jpush->next_poll = now;
+    }
+    else {
+        jpush->next_poll = now + jmap_push_poll;
     }
 
-    if (!(txn->flags.conn & CONN_CLOSE) && txn->flags.ver < VER_2) {
+    /* Schedule our first event */
+    jpush->wait->mark = MIN(jpush->next_ping, jpush->next_poll);
+
+    if (txn->flags.ver < VER_2) {
         /* Block until we timeout or get unexpected input */
         prot_peek(txn->conn->pin);
         txn->flags.conn |= CONN_CLOSE;

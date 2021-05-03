@@ -56,6 +56,9 @@ extern int jmap_push_poll;
 typedef struct jmap_push_ctx {
     char *accountid;
     char *inboxname;
+    int ping;
+    time_t next_ping;
+    time_t next_poll;
     unsigned closeafter : 1;
     struct prot_waitevent *wait;
     struct mboxname_counters counters;
@@ -69,7 +72,6 @@ extern jmap_push_ctx_t *jmap_push_init(struct transaction_t *txn,
 
 extern void jmap_push_done(struct transaction_t *txn);
 
-extern json_t *jmap_push_get_state(jmap_push_ctx_t *jpush,
-                                   struct prot_waitevent *ev);
+extern json_t *jmap_push_get_state(jmap_push_ctx_t *jpush);
 
 #endif /* JMAP_PUSH_H */
