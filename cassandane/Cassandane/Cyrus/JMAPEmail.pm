@@ -6963,6 +6963,21 @@ sub test_email_query_attachmenttype
 
     my $blobId = $jmap->Upload('some_data', "application/octet")->{blobId};
 
+    my $rfc822Msg = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $rfc822Msg =~ s/\r?\n/\r\n/gs;
+    my $rfc822MsgBlobId = $jmap->Upload($rfc822Msg, "message/rfc822")->{blobId};
+    $self->assert_not_null($rfc822MsgBlobId);
+
     my $inboxid = $self->getinbox()->{id};
 
     my $res = $jmap->CallMethods([
@@ -7010,6 +7025,28 @@ sub test_email_query_attachmenttype
             blobId => $blobId,
             type => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           }],
+      },
+      "5" => {
+          mailboxIds => {$inboxid => JSON::true},
+          from => [ { name => "", email => "elmer\@acme.local" } ] ,
+          to => [ { name => "", email => "porky\@acme.local" } ],
+          subject => "embeddedmsg",
+          bodyStructure => {
+              subParts => [{
+                      partId => "text",
+                      type => "text/plain"
+                  },{
+                      blobId => $rfc822MsgBlobId,
+                      disposition => "attachment",
+                      type => "message/rfc822"
+                  }],
+              type => "multipart/mixed",
+          },
+          bodyValues => {
+              text => {
+                  value => "Hello World",
+              },
+          },
       }
       }}, 'R1']
     ]);
@@ -7017,6 +7054,7 @@ sub test_email_query_attachmenttype
     my $idTxt = $res->[0][1]{created}{"2"}{id};
     my $idDoc = $res->[0][1]{created}{"3"}{id};
     my $idWord = $res->[0][1]{created}{"4"}{id};
+    my $idRfc822Msg = $res->[0][1]{created}{"5"}{id};
     $self->assert_not_null($idGif);
     $self->assert_not_null($idTxt);
     $self->assert_not_null($idDoc);
@@ -7062,7 +7100,12 @@ sub test_email_query_attachmenttype
                 attachmentType => 'document',
             }],
         },
-        wantIds => [$idTxt],
+        wantIds => [$idTxt, $idRfc822Msg],
+    }, {
+        filter => {
+            attachmentType => 'email',
+        },
+        wantIds => [$idRfc822Msg],
     });
 
     my $using = [
