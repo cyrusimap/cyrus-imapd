@@ -354,6 +354,7 @@ extern int message_foreach_section(message_t *m,
                                void *rock),
                    void *rock);
 extern int message_get_leaf_types(message_t *m, strarray_t *types);
+extern int message_get_types(message_t *m, strarray_t *types);
 
 
 /* less shitty interface */
