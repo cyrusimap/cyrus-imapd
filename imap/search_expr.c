@@ -1462,7 +1462,7 @@ static int search_contenttype_match(message_t *m,
     int i;
     char combined[128];
 
-    if (!message_get_leaf_types(m, &types)) {
+    if (!message_get_types(m, &types)) {
         for (i = 0 ; i < types.count ; i+= 2) {
             const char *type = types.data[i];
             const char *subtype = types.data[i+1];

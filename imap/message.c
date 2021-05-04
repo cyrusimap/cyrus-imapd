@@ -4750,18 +4750,19 @@ static int message_map_file(message_t *m, const char *fname)
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
-static void body_get_leaf_types(struct body *body, strarray_t *types)
+static void body_get_types(struct body *body, strarray_t *types, int leafs_only)
 {
     int i;
 
-    if (strcmpsafe(body->type, "MULTIPART") &&
-        strcmpsafe(body->type, "MESSAGE")) {
+    if (!leafs_only ||
+            (strcmpsafe(body->type, "MULTIPART") &&
+             strcmpsafe(body->type, "MESSAGE"))) {
         strarray_append(types, body->type);
         strarray_append(types, body->subtype);
     }
 
     for (i = 0; i < body->numparts; i++) {
-        body_get_leaf_types(&body->subpart[i], types);
+        body_get_types(&body->subpart[i], types, leafs_only);
     }
 }
 
@@ -4880,7 +4881,15 @@ EXPORTED int message_get_leaf_types(message_t *m, strarray_t *types)
 {
     int r = message_need(m, M_CACHEBODY);
     if (r) return r;
-    body_get_leaf_types(m->body, types);
+    body_get_types(m->body, types, 1);
+    return 0;
+}
+
+EXPORTED int message_get_types(message_t *m, strarray_t *types)
+{
+    int r = message_need(m, M_CACHEBODY);
+    if (r) return r;
+    body_get_types(m->body, types, 0);
     return 0;
 }
 

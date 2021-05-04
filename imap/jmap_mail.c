@@ -1306,6 +1306,15 @@ static void _email_search_string(search_expr_t *parent,
 
 static void _email_search_type(search_expr_t *parent, const char *s, strarray_t *perf_filters)
 {
+    if (!strcasecmp(s, "email") || !strcasecmp(s, "message/rfc822")) {
+        // XXX these do not get indexed in Xapian
+        search_expr_t *e = search_expr_new(parent, SEOP_MATCH);
+        e->attr = search_attr_find("contenttype");
+        e->value.s = xstrdup("message/rfc822");
+        _email_search_perf_attr(e->attr, perf_filters);
+        return;
+    }
+
     strarray_t types = STRARRAY_INITIALIZER;
 
     /* Handle type wildcards */
@@ -1351,9 +1360,6 @@ static void _email_search_type(search_expr_t *parent, const char *s, strarray_t 
         strarray_append(&types, "application/vnd.oasis.opendocument.presentation-template");
         strarray_append(&types, "application/x-iwork-keynote-sffkey");
         strarray_append(&types, "application/vnd.apple.keynote");
-    }
-    else if (!strcasecmp(s, "email")) {
-        strarray_append(&types, "message/rfc822");
     }
     else if (!strcasecmp(s, "pdf")) {
         strarray_append(&types, "application/pdf");
