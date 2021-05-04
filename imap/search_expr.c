@@ -1449,12 +1449,15 @@ out:
 
 /* ====================================================================== */
 
-static int search_contenttype_match(message_t *m, const union search_value *v,
+static int search_contenttype_match(message_t *m,
+                                    const union search_value *v __attribute__((unused)),
                                     void *internalised,
                                     void *data1 __attribute__((unused)))
 {
     int r;
-    comp_pat *pat = (comp_pat *)internalised;
+    struct search_string_internal *internal = internalised;
+    comp_pat *pat = internal->pat;
+    const char *s = internal->s;
     strarray_t types = STRARRAY_INITIALIZER;
     int i;
     char combined[128];
@@ -1465,16 +1468,16 @@ static int search_contenttype_match(message_t *m, const union search_value *v,
             const char *subtype = types.data[i+1];
 
             /* match against type */
-            r = charset_searchstring(v->s, pat, type, strlen(type), charset_flags);
+            r = charset_searchstring(s, pat, type, strlen(type), charset_flags);
             if (r) goto out;    // success
 
             /* match against subtype */
-            r = charset_searchstring(v->s, pat, subtype, strlen(subtype), charset_flags);
+            r = charset_searchstring(s, pat, subtype, strlen(subtype), charset_flags);
             if (r) goto out;    // success
 
             /* match against combined type_subtype */
             snprintf(combined, sizeof(combined), "%s/%s", type, subtype);
-            r = charset_searchstring(v->s, pat, combined, strlen(combined), charset_flags);
+            r = charset_searchstring(s, pat, combined, strlen(combined), charset_flags);
             if (r) goto out;    // success
         }
     }
