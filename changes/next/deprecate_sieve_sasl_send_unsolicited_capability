@@ -1,0 +1,3 @@
+Description:
+
+Deprecate sieve_sasl_send_unsolicited_capability in lib/imapoptions
