@@ -3848,7 +3848,7 @@ static int _json_to_card(struct jmap_req *req,
             const char *attrib = "value.priv";
             struct buf buf = BUF_INITIALIZER;
             if (dval) {
-                buf_printf(&buf, "%e", dval);
+                buf_printf(&buf, "%.17g", dval);
             }
             setentryatt(annotsp, ns, attrib, &buf);
             buf_free(&buf);
