@@ -3782,5 +3782,96 @@ sub test_contact_set_toolarge
 
 }
 
+sub test_contact_get_apple_countrycode
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$id
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+item1.ADR;type=WORK:;;2 Example Avenue;Anytown;NY;01111;USA
+item1.X-ABADR:US
+item1.X-ABLabel:xyz
+item2.ADR;type=WORK:;;Beispielstrasse 2;IrgendwoStadt;IrgendwoLand;00000;Germany
+item2.X-ABADR:de
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['Contact/get', {
+            properties => ['addresses']
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('us', $res->[0][1]{list}[0]{addresses}[0]{countryCode});
+    $self->assert_str_equals('xyz', $res->[0][1]{list}[0]{addresses}[0]{label});
+    $self->assert_str_equals('de', $res->[0][1]{list}[0]{addresses}[1]{countryCode});
+}
+
+sub test_contact_set_apple_countrycode
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact1 => {
+                    lastName => "Smith",
+                    addresses => [{
+                        type => "work",
+                        label => "xyz",
+                        street => "2 Example Avenue",
+                        locality => "Anytown",
+                        region => "NY",
+                        postcode => "01111",
+                        country => "USA",
+                        countryCode => "us"
+                    }, {
+                        type => "work",
+                        street => "Beispielstrasse 2",
+                        locality => 'IrgendwoStadt',
+                        region => 'IrgendwoLand',
+                        postcode => '00000',
+                        country => "Germany",
+                        countryCode => 'DE',
+                    }],
+                },
+            },
+        }, 'R1'],
+        ['Contact/get', {
+            ids => ['#contact1'],
+            properties => ['addresses'],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('us', $res->[1][1]{list}[0]{addresses}[0]{countryCode});
+    $self->assert_str_equals('xyz', $res->[1][1]{list}[0]{addresses}[0]{label});
+    $self->assert_str_equals('de', $res->[1][1]{list}[0]{addresses}[1]{countryCode});
+}
 
 1;
