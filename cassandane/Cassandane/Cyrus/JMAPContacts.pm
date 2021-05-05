@@ -3736,5 +3736,30 @@ sub test_contact_set_importance_peruser
     $self->assert_equals(1.0, $res->[0][1]{list}[0]{importance});
 }
 
+sub test_contact_set_importance_float
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                c1 => {
+                    lastName => 'test',
+                    importance => -122.129545321514,
+                },
+            },
+        }, 'R1'],
+        ['Contact/get', {
+            ids => ['#c1'],
+            properties => ['importance'],
+        }, 'R2'],
+    ]);
+    my $contactId = $res->[0][1]{created}{c1}{id};
+    $self->assert_not_null($contactId);
+    $self->assert_equals(-122.129545321514, $res->[1][1]{list}[0]{importance});
+}
+
 
 1;
