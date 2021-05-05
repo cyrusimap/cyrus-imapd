@@ -3723,7 +3723,7 @@ sub test_contact_set_importance_peruser
         }, 'R3'],
     ]);
 
-    $self->assert_equals(0.0, $res->[0][1]{list}[0]{importance});
+    $self->assert_equals(1.0, $res->[0][1]{list}[0]{importance});
     $self->assert(exists $res->[1][1]{updated}{$contactId});
     $self->assert_equals(2.0, $res->[2][1]{list}[0]{importance});
 
