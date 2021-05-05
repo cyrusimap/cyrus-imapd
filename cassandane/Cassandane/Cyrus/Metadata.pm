@@ -566,6 +566,69 @@ sub test_createspecialuse
     }, $res);
 }
 
+sub test_comment
+{
+    my ($self) = @_;
+
+    xlog $self, "testing /shared/comment";
+
+    my $imaptalk = $self->{store}->get_client();
+    my $res;
+    my $entry = '/shared/comment';
+    my $value1 = "Hello World this is a value";
+
+    xlog $self, "initial value is NIL";
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({
+        "" => { $entry => undef }
+    }, $res);
+
+    xlog $self, "cannot set the value as ordinary user";
+    $imaptalk->setmetadata("", $entry, $value1);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert($imaptalk->get_last_error() =~ m/permission denied/i);
+
+    xlog $self, "can set the value as admin";
+    $imaptalk = $self->{adminstore}->get_client();
+    $imaptalk->setmetadata("", $entry, $value1);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "can get the set value back";
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $expected = {
+            "" => { $entry => $value1 }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    xlog $self, "the annot gives the same value in a new connection";
+    $self->{adminstore}->disconnect();
+    $imaptalk = $self->{adminstore}->get_client();
+    $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $expected = {
+            "" => { $entry => $value1 }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    xlog $self, "can delete value";
+    $imaptalk->setmetadata("", $entry, undef);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $expected = {
+            "" => { $entry => undef }
+    };
+    $self->assert_deep_equals($expected, $res);
+}
+
 #
 # Test the /shared/motd server annotation.
 #
