@@ -96,6 +96,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
 static int required_set_rights(json_t *props);
 static int _json_to_card(struct jmap_req *req,
                          struct carddav_data *cdata,
+                         const char *mboxname,
                          struct vparse_card *card,
                          json_t *arg, strarray_t *flags,
                          struct entryattlist **annotsp,
@@ -1156,7 +1157,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
             flags = mailbox_extract_flags(mailbox, &record, req->userid);
             annots = mailbox_extract_annots(mailbox, &record);
 
-            r = _json_to_card(req, cdata, card, arg, flags, &annots, &blobs, &errors);
+            r = _json_to_card(req, cdata, mailbox->name, card, arg, flags,
+                    &annots, &blobs, &errors);
             if (r == HTTP_NO_CONTENT) {
                 r = 0;
                 if (!newmailbox) {
@@ -1825,7 +1827,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     // NOTE: using buf_free here because annotatemore_msg_lookup uses
     // buf_init_ro on the buffer, which blats the base pointer.
     buf_free(&buf);
-    annotatemore_msg_lookup(mailbox->name, record->uid, annot, userid, &buf);
+    annotatemore_msg_lookupmask(mailbox->name, record->uid, annot, userid, &buf);
     double val = 0;
     if (buf.len) val = strtod(buf_cstring(&buf), NULL);
 
@@ -3767,6 +3769,7 @@ static void _make_fn(struct vparse_card *card)
 
 static int _json_to_card(struct jmap_req *req,
                          struct carddav_data *cdata,
+                         const char *mboxname,
                          struct vparse_card *card,
                          json_t *arg, strarray_t *flags,
                          struct entryattlist **annotsp,
@@ -3845,10 +3848,11 @@ static int _json_to_card(struct jmap_req *req,
             has_noncontent = 1;
             double dval = json_number_value(jval);
             const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
-            const char *attrib = "value.priv";
+            const char *attrib = mboxname_userownsmailbox(req->userid, mboxname) ?
+                "value.shared" : "value.priv";
             struct buf buf = BUF_INITIALIZER;
             if (dval) {
-                buf_printf(&buf, "%e", dval);
+                buf_printf(&buf, "%.17g", dval);
             }
             setentryatt(annotsp, ns, attrib, &buf);
             buf_free(&buf);
@@ -4159,7 +4163,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     }
     else {
         flags = strarray_new();
-        r = _json_to_card(req, cdata, card, jcard, flags, &annots, &blobs, errors);
+        r = _json_to_card(req, cdata, mboxname, card, jcard, flags, &annots, &blobs, errors);
 
         logfmt = "jmap: create contact %s/%s (%s)";
     }
