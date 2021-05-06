@@ -4427,4 +4427,74 @@ EOF
                           $response->{headers}->{'cache-control'});
 }
 
+sub test_put_reject_no_attendee_or_organizer
+    :min_version_3_5 :needs_component_httpd
+{
+    my ($self) = @_;
+    my $CalDAV = $self->{caldav};
+
+    my $card = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+DTEND:20160831T183000Z
+TRANSP:OPAQUE
+SUMMARY:An Event
+UID:event1
+ATTENDEE:foo@local
+DTSTART:20160831T153000Z
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $response = $CalDAV->{ua}->request('PUT',
+        $CalDAV->request_url('Default/test.ics'), {
+            content => $card,
+            headers => {
+                'Content-Type' => 'text/calendar',
+                'Authorization' => $CalDAV->auth_header(),
+            },
+        },
+    );
+    $self->assert_num_equals(403, $response->{status});
+    $self->assert_matches(qr{Missing ORGANIZER}, $response->{content});
+
+    $card = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+DTEND:20160831T183000Z
+TRANSP:OPAQUE
+SUMMARY:An Event
+UID:event1
+ORGANIZER:foo@local
+DTSTART:20160831T153000Z
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $response = $CalDAV->{ua}->request('PUT',
+        $CalDAV->request_url('Default/test.ics'), {
+            content => $card,
+            headers => {
+                'Content-Type' => 'text/calendar',
+                'Authorization' => $CalDAV->auth_header(),
+            },
+        },
+    );
+    $self->assert_num_equals(403, $response->{status});
+    $self->assert_matches(qr{Missing ATTENDEE}, $response->{content});
+}
+
+
 1;
