@@ -766,6 +766,37 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     return mbname;
 }
 
+EXPORTED mbname_t *mbname_from_extnameUTF8(const char *extname, const struct namespace *ns, const char *userid)
+{
+    mbname_t *mbname;
+    char *freeme = NULL;
+
+    if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
+        charset_t cs = charset_lookupname("utf-8");
+        if (cs == CHARSET_UNKNOWN_CHARSET) {
+            /* huh? */
+            syslog(LOG_INFO, "charset utf-8 is unknown");
+            return NULL;
+        }
+
+        /* Encode mailbox name in IMAP UTF-7 */
+        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
+        charset_free(&cs);
+
+        if (!freeme) {
+            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
+            return NULL;
+        }
+
+        extname = freeme;
+    }
+
+    mbname = mbname_from_extname(extname, ns, userid);
+    free(freeme);
+
+    return mbname;
+}
+
 EXPORTED mbname_t *mbname_from_path(const char *path)
 {
     int absolute = 0;
