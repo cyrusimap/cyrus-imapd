@@ -85,6 +85,10 @@
 #include "ical_support.h"
 #include "vcard_support.h"
 #endif /* WITH_DAV */
+#ifdef USE_SIEVE
+#include "sieve_db.h"
+#include "sievedir.h"
+#endif
 #include "crc32.h"
 #include "md5.h"
 #include "global.h"
@@ -193,6 +197,12 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
 static struct webdav_db *mailbox_open_webdav(struct mailbox *);
 static int mailbox_commit_dav(struct mailbox *mailbox);
 static int mailbox_abort_dav(struct mailbox *mailbox);
+#endif
+
+#ifdef USE_SIEVE
+static int mailbox_commit_sieve(struct mailbox *mailbox);
+static int mailbox_abort_sieve(struct mailbox *mailbox);
+static int mailbox_delete_sieve(struct mailbox *mailbox);
 #endif
 
 static inline void flags_to_str_internal(uint32_t flags, char *flagstr)
@@ -2909,6 +2919,11 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
     if (r) return r;
 #endif
 
+#ifdef USE_SIEVE
+    r = mailbox_abort_sieve(mailbox);
+    if (r) return r;
+#endif
+
     /* try to commit sub parts first */
     r = mailbox_abort_cache(mailbox);
     if (r) return r;
@@ -2954,6 +2969,11 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
     /* try to commit sub parts first */
 #ifdef WITH_DAV
     r = mailbox_commit_dav(mailbox);
+    if (r) return r;
+#endif
+
+#ifdef USE_SIEVE
+    r = mailbox_commit_sieve(mailbox);
     if (r) return r;
 #endif
 
@@ -3927,6 +3947,227 @@ EXPORTED int mailbox_add_email_alarms(struct mailbox *mailbox)
 }
 #endif // WITH_JMAP
 
+#ifdef USE_SIEVE
+static struct sieve_db *mailbox_open_sieve(struct mailbox *mailbox)
+{
+    if (!mailbox->sievedir) {
+        char *userid = mboxname_to_userid(mailbox->name);
+        mailbox->sievedir = xstrdup(user_sieve_path(userid));
+        free(userid);
+    }
+    if (!mailbox->local_sieve) {
+        mailbox->local_sieve = sievedb_open_mailbox(mailbox);
+        int r = sievedb_begin(mailbox->local_sieve);
+        if (r) {
+            sievedb_abort(mailbox->local_sieve);
+            sievedb_close(mailbox->local_sieve);
+            mailbox->local_sieve = NULL;
+        }
+    }
+    return mailbox->local_sieve;
+}
+
+static int mailbox_update_sieve(struct mailbox *mailbox,
+                              const struct index_record *old,
+                              struct index_record *new)
+{
+    struct sieve_db *sievedb = NULL;
+    struct param *param;
+    struct body *body = NULL;
+    struct sieve_data *sdata = NULL;
+    const char *id = NULL, *name = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
+    int isexpunged = (new->internal_flags & FLAG_INTERNAL_EXPUNGED ? 1 : 0);
+    int isactive = (new->system_flags & FLAG_FLAGGED ? 1 : 0);
+    int r = 0;
+
+    if (mbtype_isa(mailbox->mbtype) != MBTYPE_SIEVE) return 0;
+
+    /* never have Sieve on deleted mailboxes */
+    if (mboxname_isdeletedmailbox(mailbox->name, NULL)) return 0;
+
+    /* conditions in which there's nothing to do */
+    if (!new) return 0;
+
+    /* phantom record - never really existed here */
+    if (!old && isexpunged) return 0;
+
+    r = mailbox_cacherecord(mailbox, new);
+    if (r) goto done;
+
+    /* Get script id from filename param in Content-Disposition header */
+    message_read_bodystructure(new, &body);
+    for (param = body->disposition_params; param; param = param->next) {
+        if (!strcmp(param->attribute, "FILENAME")) {
+            id = param->value;
+        }
+    }
+
+    assert(id);
+
+    /* Get script name from Subject */
+    name = body->subject;
+
+    sievedb = mailbox_open_sieve(mailbox);
+
+    /* Find existing record for this id */
+    sievedb_lookup_id(sievedb, id, &sdata, /*tombstones*/1);
+
+    /* if updated by a newer UID, skip - this record doesn't refer to the current item */
+    if (sdata->imap_uid > new->uid) goto done;
+
+    if (new->internal_flags & FLAG_INTERNAL_UNLINKED) {
+        /* is there an existing record? */
+        if (!sdata->imap_uid) goto done;
+
+        /* delete entry */
+        r = sievedb_delete(sievedb, sdata->rowid);
+    }
+    else if (sdata->imap_uid == new->uid) {
+        /* just a flags update to an existing record */
+        if (isexpunged) {
+            r = sievedir_delete_script(mailbox->sievedir, name);
+        }
+        else if (isactive) {
+            if (!sdata->isactive) {
+                r = sievedir_activate_script(mailbox->sievedir, name);
+            }
+        }
+        else if (sdata->isactive) {
+            r = sievedir_deactivate_script(mailbox->sievedir);
+        }
+
+        if (r) {
+            r = IMAP_IOERROR;
+            goto done;
+        }
+
+        sdata->modseq = new->modseq;
+        sdata->alive = !isexpunged;
+        sdata->isactive = isactive;
+        r = sievedb_write(sievedb, sdata);
+    }
+    else {
+        /* Load message containing the script */
+        r = mailbox_map_record(mailbox, new, &msg_buf);
+        if (r) goto done;
+
+        const char *content = buf_cstring(&msg_buf) + new->header_size;
+        char *errors = NULL;
+
+        r = sievedir_put_script(mailbox->sievedir, name, content, &errors);
+
+        if (!r && isactive) {
+            r = sievedir_activate_script(mailbox->sievedir, name);
+        }
+
+        if (r) {
+            r = IMAP_IOERROR;
+            goto done;
+        }
+
+        sdata->mailbox = mailbox->name;
+        sdata->imap_uid = new->uid;
+        sdata->modseq = new->modseq;
+        sdata->createdmodseq = new->createdmodseq;
+        sdata->alive = !isexpunged;
+        sdata->isactive = isactive;
+        sdata->id = id;
+        sdata->name = name;
+        sdata->content = content;
+
+        if (!sdata->creationdate)
+            sdata->creationdate = new->internaldate;
+
+        r = sievedb_write(sievedb, sdata);
+    }
+
+done:
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    buf_free(&msg_buf);
+
+    return r;
+}
+
+
+static int mailbox_delete_sieve(struct mailbox *mailbox)
+{
+    struct sieve_db *sievedb = NULL;
+
+    if (mbtype_isa(mailbox->mbtype) != MBTYPE_SIEVE) return 0;
+
+    sievedb = sievedb_open_mailbox(mailbox);
+    if (sievedb) {
+        int r = sievedb_delmbox(sievedb, mailbox->name);
+        sievedb_close(sievedb);
+        if (r) return r;
+    }
+
+    return 0;
+}
+
+static int mailbox_commit_sieve(struct mailbox *mailbox)
+{
+    int r;
+
+    free(mailbox->sievedir);
+    mailbox->sievedir = NULL;
+
+    if (mailbox->local_sieve) {
+        r = sievedb_commit(mailbox->local_sieve);
+        sievedb_close(mailbox->local_sieve);
+        mailbox->local_sieve = NULL;
+        if (r) return r;
+    }
+
+    return 0;
+}
+
+static int mailbox_abort_sieve(struct mailbox *mailbox)
+{
+    int r;
+
+    free(mailbox->sievedir);
+    mailbox->sievedir = NULL;
+
+    if (mailbox->local_sieve) {
+        r = sievedb_abort(mailbox->local_sieve);
+        sievedb_close(mailbox->local_sieve);
+        mailbox->local_sieve = NULL;
+        if (r) return r;
+    }
+
+    return 0;
+}
+
+EXPORTED int mailbox_add_sieve(struct mailbox *mailbox)
+{
+    const message_t *msg;
+    int r = 0;
+
+    if (mbtype_isa(mailbox->mbtype) != MBTYPE_SIEVE)
+        return 0;
+
+    if (mboxname_isdeletedmailbox(mailbox->name, NULL))
+        return 0;
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        struct index_record copyrecord = *record;
+        r = mailbox_update_sieve(mailbox, NULL, &copyrecord);
+        if (r) break;
+        /* in THEORY there maybe changes here that we should be saving... */
+    }
+    mailbox_iter_done(&iter);
+
+    return r;
+}
+#endif // USE_SIEVE
+
 EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mailbox, int allow_deleted)
 {
     if (!mailbox_has_conversations_full(mailbox, allow_deleted))
@@ -4036,6 +4277,11 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
 
 #ifdef WITH_JMAP
     r = mailbox_update_email_alarms(mailbox, old, new);
+    if (r) return r;
+#endif
+
+#ifdef USE_SIEVE
+    r = mailbox_update_sieve(mailbox, old, new);
     if (r) return r;
 #endif
 
@@ -5775,6 +6021,12 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
     if (r) return r;
 #endif
 
+#ifdef USE_SIEVE
+    /* remove any Sieve records */
+    r = mailbox_delete_sieve(mailbox);
+    if (r) return r;
+#endif
+
     /* clean up annotations */
     r = annotate_delete_mailbox(mailbox);
     if (r) return r;
@@ -5905,6 +6157,11 @@ EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
     r = mailbox_delete_dav(mailbox);
     if (r) return r;
 #endif /* WITH_DAV */
+
+#ifdef USE_SIEVE
+    r = mailbox_delete_sieve(mailbox);
+    if (r) return r;
+#endif /* USE_SIEVE */
 
     return mailbox_delete_internal(mailboxptr);
 }
