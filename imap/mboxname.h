@@ -106,6 +106,7 @@ mbname_t *mbname_from_userid(const char *userid);
 mbname_t *mbname_from_localdom(const char *localpart, const char *domain);
 mbname_t *mbname_from_intname(const char *intname);
 mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid);
+mbname_t *mbname_from_extnameUTF8(const char *extname, const struct namespace *ns, const char *userid);
 mbname_t *mbname_from_extsub(const char *extsub, const struct namespace *ns, const char *userid);
 mbname_t *mbname_from_recipient(const char *recip, const struct namespace *ns);
 mbname_t *mbname_from_path(const char *path);
