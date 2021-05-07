@@ -94,6 +94,7 @@ static int usage(const char *error)
     fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-p] [-m] [-i] [-l] [-R] [-1] [mailbox name]\n");
     fprintf(stderr, "\n");
     fprintf(stderr,"\t-p\targument is a UNIX path, not mailbox\n");
+    fprintf(stderr,"\t-7\tmailbox argument is in modified UTF7 rather than UTF8\n");
     fprintf(stderr,"\t-m\tlist the contents of the metadata directory (if different from the data directory)\n");
     fprintf(stderr,"\t-i\tprint ID of each mailbox\n");
     fprintf(stderr,"\t-l\tlong listing format\n");
@@ -121,8 +122,16 @@ static int usage(const char *error)
 
 #define SPECIALS           " !\"#$&'()*,;<>?[\\]^`{|}~"
 
-static int print_name(const char *name)
+static int print_name(const char *name, int utf8)
 {
+    char *utf8name = NULL;
+
+    if (utf8) {
+        charset_t imaputf7 = charset_lookupname("imap-mailbox-name");
+        utf8name = charset_to_utf8(name, strlen(name), imaputf7, ENCODING_NONE);
+        name = utf8name;
+    }
+
     size_t n = strcspn(name, SPECIALS);
 
     if (n == strlen(name)) {
@@ -152,6 +161,8 @@ static int print_name(const char *name)
         /* Use single quotes */
         n = printf("'%s'", name);
     }
+
+    free(utf8name);
 
     return n;
 }
@@ -187,13 +198,14 @@ static void long_list(struct stat *statp)
 }
 
 struct list_opts {
-    int recurse;
-    int ids;
-    int longlist;
-    int meta;
-    int colorize;
-    int columns;
-    int column_size;
+    unsigned utf8     : 1;
+    unsigned recurse  : 1;
+    unsigned ids      : 1;
+    unsigned longlist : 1;
+    unsigned meta     : 1;
+    unsigned colorize : 1;
+    unsigned columns;
+    unsigned column_size;
 };
 
 struct list_rock {
@@ -255,7 +267,7 @@ static int list_cb(struct findall_data *data, void *rock)
         buf_appendcstr(&lrock->buf, child_name);
         child_name = buf_cstring(&lrock->buf);
     }
-    r = print_name(child_name);
+    r = print_name(child_name, lrock->opts->utf8);
     if (*color) printf("%s", ANSI_COLOR_RESET);
 
     if (lrock->opts->column_size) {
@@ -342,12 +354,17 @@ int main(int argc, char **argv)
 
     // capture options
     struct list_opts opts =
-        { 0, 0, 0, 0, isatty(STDOUT_FILENO), 4 /* default to 4 columns */, 0 };
+        { 1 /* default to UTF8 */, 0, 0, 0, 0,
+          isatty(STDOUT_FILENO), 4 /* default to 4 columns */, 0 };
 
-    while ((opt = getopt(argc, argv, "C:milR1p")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:7milR1p")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
+            break;
+
+        case '7':
+            opts.utf8 = 0;
             break;
 
         case 'R':
@@ -396,7 +413,12 @@ int main(int argc, char **argv)
     r = IMAP_MAILBOX_NONEXISTENT;
     if (!is_path && (optind != argc)) {
         /* Is this an actual mailbox name */
-        mbname = mbname_from_extname(argv[optind], &cyr_ls_namespace, "cyrus");
+        if (opts.utf8) {
+            mbname = mbname_from_extnameUTF8(argv[optind], &cyr_ls_namespace, "cyrus");
+        }
+        else {
+            mbname = mbname_from_extname(argv[optind], &cyr_ls_namespace, "cyrus");
+        }
 
         r = mboxlist_lookup_allow_all(mbname_intname(mbname), NULL, NULL);
     }
