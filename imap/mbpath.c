@@ -81,6 +81,7 @@ static int usage(const char *error)
     fprintf(stderr,"\t-m\toutput the path to the metadata files (if different from the message files)\n");
     fprintf(stderr,"\t-q\tquietly drop any error messages\n");
     fprintf(stderr,"\t-s\tstop on error\n");
+    fprintf(stderr,"\t-7\tmailbox arguments are in modified UTF7 rather than UTF8\n");
     fprintf(stderr,"\t-u\targuments are user, not mailbox\n");
     fprintf(stderr,"\t-d\targuments are domain, not mailbox\n");
     fprintf(stderr,"\t-p\targuments are UNIX path, not mailbox\n");
@@ -104,6 +105,7 @@ struct options_t {
     unsigned mode          : 2;
     unsigned paths         : 5;
     unsigned do_json       : 1;
+    unsigned utf8          : 1;
 };
 
 #define DO_ARCHIVE  (1<<0)
@@ -290,7 +292,7 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     // capture options
-    struct options_t opts = { 0, 0, 0, 0, 0, 0, 0 };
+    struct options_t opts = { 0, 0, 0, 0, 0, 0, 0, 1 /* default to UTF8 */ };
 
     while ((opt = getopt(argc, argv, "C:7ajlmqsudpADMSU")) != EOF) {
         switch(opt) {
@@ -299,6 +301,7 @@ int main(int argc, char **argv)
             break;
 
         case '7':
+            opts.utf8 = 0;
             break;
 
         case 'a':
@@ -407,6 +410,9 @@ int main(int argc, char **argv)
         }
         else if (opts.mode == MODE_PATH) {
             mbname = mbname_from_path(argv[i]);
+        }
+        else if (opts.utf8) {
+            mbname = mbname_from_extnameUTF8(argv[i], &mbpath_namespace, "cyrus");
         }
         else {
             mbname = mbname_from_extname(argv[i], &mbpath_namespace, "cyrus");
