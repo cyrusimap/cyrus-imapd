@@ -4322,19 +4322,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
     }
 
-    /* Make sure neither or both ORGANIZER and ATTENDEE are set */
-    int has_org = icalcomponent_get_first_property(comp,
-            ICAL_ORGANIZER_PROPERTY) != NULL;
-    int has_att = icalcomponent_get_first_property(comp,
-            ICAL_ATTENDEE_PROPERTY) != NULL;
-    if (has_org != has_att) {
-        txn->error.desc = has_org ?
-            "Missing ATTENDEE property" : "Missing ORGANIZER property";
-        txn->error.precond = CALDAV_VALID_OBJECT;
-        ret = HTTP_FORBIDDEN;
-        goto done;
-    }
-
     /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     kind = icalcomponent_isa(comp);
     uid = icalcomponent_get_uid(comp);
@@ -4386,19 +4373,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         if (!organizer && nextorg) organizer = nextorg;
         if (nextorg && strcmp(organizer, nextorg)) {
             txn->error.precond = CALDAV_SAME_ORGANIZER;
-            ret = HTTP_FORBIDDEN;
-            goto done;
-        }
-
-        /* Make sure neither or both ORGANIZER and ATTENDEE are set */
-        has_org = icalcomponent_get_first_property(nextcomp,
-                ICAL_ORGANIZER_PROPERTY) != NULL;
-        has_att = icalcomponent_get_first_property(nextcomp,
-                ICAL_ATTENDEE_PROPERTY) != NULL;
-        if (has_org != has_att) {
-            txn->error.desc = has_org ?
-                "Missing ATTENDEE property" : "Missing ORGANIZER property";
-            txn->error.precond = CALDAV_VALID_OBJECT;
             ret = HTTP_FORBIDDEN;
             goto done;
         }
