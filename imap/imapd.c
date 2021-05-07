@@ -13492,7 +13492,8 @@ static int recursivematch_cb(struct findall_data *data, void *rockp)
             r = mboxname_iscalendarmailbox(intname, 0) ||
                 mboxname_isaddressbookmailbox(intname, 0) ||
                 mboxname_isdavdrivemailbox(intname, 0) ||
-                mboxname_isdavnotificationsmailbox(intname, 0);
+                mboxname_isdavnotificationsmailbox(intname, 0) ||
+                mboxname_issievemailbox(intname, 0);
 
             if (!data->mbname) mbname_free(&mbname);
 
