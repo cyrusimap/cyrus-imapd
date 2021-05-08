@@ -3446,7 +3446,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
                     cnt = 11;
                 }
             }
-            else if (cnt >= ENCODED_MAX_LINE_LEN) {
+            else if (cnt >= ENCODED_MAX_LINE_LEN && next != '\r' && next != '\n') {
                 /* add soft line break to body */
                 buf_appendcstr(&buf, "=\r\n");
                 cnt = 0;
