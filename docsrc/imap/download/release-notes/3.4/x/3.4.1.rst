@@ -1,0 +1,53 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.4.1 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.1/cyrus-imapd-3.4.1.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.1/cyrus-imapd-3.4.1.tar.gz.sig
+
+.. _relnotes-3.4.1-changes:
+
+Changes since 3.4.0
+===================
+
+Security fixes:
+---------------
+
+* Fixed CVE-2021-32056_: Remote authenticated users could bypass intended
+  access restrictions on certain server annotations.  Additionally, a
+  long-standing bug in replication did not allow server annotations to be
+  replicated.  Combining these two bugs, a remote authenticated user could
+  stall replication, requiring administrator intervention.
+
+.. _CVE-2021-32056: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-32056
+
+Build changes
+-------------
+
+* Fixed :issue:`3462`: using GLIBC-only macro to check for GCC features
+  (thanks Andy Fiddaman)
+
+Bug fixes
+---------
+
+* Fixed :issue:`3456`: per-server annotations were unable to replicate
+* Fixed :issue:`3468`: `ctl_cyrusdb -r` assertion on startup when mboxlist_db
+  configured to "skiplist" (thanks Felix J. Ogris)
+* Fixed: JMAP email updates must result in non-empty mailboxIds
+* Fixed: output JMAP dates as Dates, not UTCDates
+
+Fixes to nonstandard JMAP extensions
+------------------------------------
+
+(These extensions are not yet formally standardised, and are only available
+with the `jmap_nonstandard_extensions` :cyrusman:`imapd.conf(5)` option
+enabled.)
+
+* Fixed: JMAP Calendars Extension - gracefully handle empty property values
+* Fixed: JMAP Calendars Extension - ignore empty string default values in
+  events
+* Fixed: JMAP Calendars Extension - do not use Participant.email for scheduling
