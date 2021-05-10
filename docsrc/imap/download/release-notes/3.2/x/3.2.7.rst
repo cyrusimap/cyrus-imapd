@@ -1,0 +1,38 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.2.7 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.7/cyrus-imapd-3.2.7.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.7/cyrus-imapd-3.2.7.tar.gz.sig
+
+.. _relnotes-3.2.7-changes:
+
+Changes since 3.2.6
+===================
+
+Security fixes:
+---------------
+
+* Fixed CVE-2021-32056_: Remote authenticated users could bypass intended
+  access restrictions on certain server annotations.  Additionally, a
+  long-standing bug in replication did not allow server annotations to be
+  replicated.  Combining these two bugs, a remote authenticated user could
+  stall replication, requiring administrator intervention.
+
+.. _CVE-2021-32056: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-32056
+
+Build changes
+-------------
+
+* Fixed: various symbols were missing explicit symbol visibility
+
+Bug fixes
+---------
+
+* Fixed :issue:`3225`: xapian get_stopper() did not use the cached stoppers
+  (thanks Дилян Палаузов)
+* Fixed :issue:`2882`: reordered HTTP auth schemes to order expected by browsers
