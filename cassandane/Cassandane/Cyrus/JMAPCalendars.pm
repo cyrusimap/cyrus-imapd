@@ -1491,7 +1491,7 @@ sub test_calendarevent_get_description
 }
 
 sub test_calendarevent_get_participants
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1583,7 +1583,7 @@ sub test_calendarevent_get_participants
 }
 
 sub test_calendarevent_get_organizer
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1622,7 +1622,7 @@ sub test_calendarevent_get_organizer
 }
 
 sub test_calendarevent_organizer_noattendees
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1654,7 +1654,7 @@ sub test_calendarevent_organizer_noattendees
 }
 
 sub test_calendarevent_get_organizer_bogusuri
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1699,7 +1699,7 @@ sub test_calendarevent_get_organizer_bogusuri
 }
 
 sub test_calendarevent_get_organizermailto
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -2966,7 +2966,7 @@ sub test_calendarevent_set_recurrence_patch
 }
 
 sub test_calendarevent_set_participants
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -3105,7 +3105,7 @@ sub test_calendarevent_set_participants
 }
 
 sub test_calendarevent_set_participants_patch
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -3175,7 +3175,7 @@ sub test_calendarevent_set_participants_patch
 }
 
 sub test_calendarevent_set_participants_organame
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -3375,7 +3375,7 @@ sub test_calendarevent_set_alerts_description
 }
 
 sub test_calendarevent_set_participantid
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -5080,7 +5080,7 @@ sub test_calendarevent_set_schedule_request
 }
 
 sub test_calendarevent_set_schedule_reply
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
 
