@@ -36,3 +36,4 @@ Bug fixes
 * Fixed :issue:`3225`: xapian get_stopper() did not use the cached stoppers
   (thanks Дилян Палаузов)
 * Fixed :issue:`2882`: reordered HTTP auth schemes to order expected by browsers
+* Fixed :issue:`3456`: per-server annotations were unable to replicate
