@@ -63,7 +63,7 @@ static const struct datatype_t {
     { "Calendar",        offsetof(struct mboxname_counters, caldavfoldersmodseq) },
     { "CalendarEvent",   offsetof(struct mboxname_counters, caldavmodseq)        },
     { "Contact",         offsetof(struct mboxname_counters, carddavmodseq)       },
-    { "Notes",           offsetof(struct mboxname_counters, notesmodseq)         },
+    { "Note",            offsetof(struct mboxname_counters, notesmodseq)         },
     { NULL,              0 }
 };
 
