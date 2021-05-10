@@ -1711,6 +1711,78 @@ sub test_calendarevent_organizer_noattendees
     $self->assert($res->{content} =~ m/ATTENDEE/);
 }
 
+sub test_calendarevent_attendee_noorganizer
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my ($eventId, $ical) = $self->icalfile('attendee_noorganizer');
+    my $event = $self->putandget_vevent($eventId, $ical);
+    my $wantParticipants = {
+        '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
+            '@type' => 'Participant',
+            'sendTo' => {
+                'imip' => 'mailto:attendee@local'
+            },
+            'roles' => {
+                'attendee' => JSON::true
+            },
+            'participationStatus' => 'needs-action',
+            'expectReply' => JSON::false,
+            'scheduleSequence' => 0
+        }
+    };
+    $self->assert_deep_equals($wantParticipants, $event->{participants});
+    $self->assert_null($event->{replyTo});
+
+    xlog "Update event via JMAP";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    participants => $wantParticipants,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['participants', 'replyTo', 'x-href'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_deep_equals($wantParticipants, $res->[1][1]{list}[0]{participants});
+    $self->assert_null($res->[1][1]{list}[0]{replyTo});
+
+    my $xhref = $res->[1][1]{list}[0]{'x-href'};
+    $self->assert_not_null($xhref);
+
+    xlog "Validate no ORGANIZER got added";
+    $res = $caldav->Request('GET', $xhref);
+    $self->assert(not($res->{content} =~ m/ORGANIZER/));
+    $self->assert($res->{content} =~ m/ATTENDEE/);
+
+    xlog "Create event with no replyTo via JMAP (should fail)";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    calendarId => 'Default',
+                    title => "title",
+                    "start"=> "2015-11-07T09:00:00",
+                    "duration"=> "PT2H",
+                    "timeZone" => "Europe/London",
+                    participants => $wantParticipants,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals(['replyTo', 'participants'],
+        $res->[0][1]{notCreated}{1}{properties});
+}
+
 sub test_calendarevent_get_organizer_bogusuri
     :min_version_3_4 :needs_component_jmap
 {
