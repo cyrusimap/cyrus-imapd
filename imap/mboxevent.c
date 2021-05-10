@@ -146,6 +146,7 @@ static struct mboxevent event_template =
     { EVENT_MESSAGE_EMAILID, "vnd.cmu.emailid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_JMAP_EMAIL, "vnd.fastmail.jmapEmail", EVENT_PARAM_JSON, { 0 }, 0 },
+    { EVENT_JMAP_STATES, "vnd.fastmail.jmapStates", EVENT_PARAM_JSON, { 0 }, 0 },
 
     /* calendar params for calalarmd/notifyd */
     { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -568,6 +569,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_JMAP_EMAIL:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPEMAIL) &&
                (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
+    case EVENT_JMAP_STATES:
+        return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPSTATES;
     case EVENT_MESSAGES:
         if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
             return 1;
@@ -1558,6 +1561,34 @@ EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
     }
 }
 
+static struct jmap_state_t
+{
+    const char *type;
+    size_t offset;
+} jmap_states[] = {
+    { "Mailbox",
+      offsetof(struct mboxname_counters, mailfoldersmodseq) },
+    { "Email",
+      offsetof(struct mboxname_counters, mailmodseq) },
+    { "EmailSubmission",
+      offsetof(struct mboxname_counters, submissionmodseq) },
+    { "Calendar",
+      offsetof(struct mboxname_counters, caldavfoldersmodseq) },
+    { "CalendarEvent",
+      offsetof(struct mboxname_counters, caldavmodseq) },
+    { "Contact",
+      offsetof(struct mboxname_counters, carddavmodseq) },
+    { "ContactGroup",
+      offsetof(struct mboxname_counters, carddavmodseq) },
+    { "Note",
+      offsetof(struct mboxname_counters, notesmodseq) },
+    { "Quota",
+      offsetof(struct mboxname_counters, quotamodseq) },
+    { "Racl",
+      offsetof(struct mboxname_counters, raclmodseq) },
+    { NULL, 0 }
+};
+
 EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
                                         struct mailbox *mailbox)
 {
@@ -1662,6 +1693,27 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
                            counters.uidvalidity);
 
         FILL_STRING_PARAM(event, EVENT_COUNTERS, buf_release(&value));
+    }
+
+    /* add vnd.fastmail.jmapStates */
+    if (mboxevent_expected_param(event->type, EVENT_JMAP_STATES)) {
+        struct mboxname_counters counters;
+
+        int r = mboxname_read_counters(mailbox->name, &counters);
+        if (!r) {
+            json_t *states = json_object();
+            struct jmap_state_t *state;
+
+            for (state = jmap_states; state->type; state++) {
+                modseq_t *modseq = (modseq_t *)(state->offset + (size_t) &counters);
+                char buf[21];  /* unsigned long long is 20 chars */
+
+                snprintf(buf, sizeof(buf), MODSEQ_FMT, *modseq);
+                json_object_set_new(states, state->type, json_string(buf));
+            }
+
+            FILL_JSON_PARAM(event, EVENT_JMAP_STATES, states);
+        }
     }
 }
 
