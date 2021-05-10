@@ -145,7 +145,7 @@ static struct mboxevent event_template =
     { EVENT_COUNTERS, "vnd.fastmail.counters", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_EMAILID, "vnd.cmu.emailid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
-    { EVENT_JMAP_EMAIL, "vnd.cmu.jmapEmail", EVENT_PARAM_JSON, { 0 }, 0 },
+    { EVENT_JMAP_EMAIL, "vnd.fastmail.jmapEmail", EVENT_PARAM_JSON, { 0 }, 0 },
 
     /* calendar params for calalarmd/notifyd */
     { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -566,7 +566,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_THREADID) &&
                (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
     case EVENT_JMAP_EMAIL:
-        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_JMAPEMAIL) &&
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPEMAIL) &&
                (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
     case EVENT_MESSAGES:
         if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
@@ -1024,7 +1024,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
                           xstrdup(threadid(record->cid)));
     }
 
-    /* add vnd.cmu.jmapEmail */
+    /* add vnd.fastmail.jmapEmail */
     if (mboxevent_expected_param(event->type, EVENT_JMAP_EMAIL)) {
         if (mailbox_cacherecord(mailbox, record))
             return;
@@ -1199,7 +1199,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid(cid)));
     }
 
-    /* add vnd.cmu.jmapEmail */
+    /* add vnd.fastmail.jmapEmail */
     if (mboxevent_expected_param(event->type, EVENT_JMAP_EMAIL)) {
         struct message_guid guid;
         bit64 cid;
