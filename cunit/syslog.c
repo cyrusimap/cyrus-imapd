@@ -157,6 +157,11 @@ __syslog_chk(int prio, int whatever __attribute__((unused)),
     vlog(prio, fmt, args);
     va_end(args);
 }
+
+/* glibc might define a syslog() macro, which is not wanted here */
+#ifdef syslog
+#undef syslog
+#endif
 #endif
 
 EXPORTED void syslog(int prio, const char *fmt, ...)
