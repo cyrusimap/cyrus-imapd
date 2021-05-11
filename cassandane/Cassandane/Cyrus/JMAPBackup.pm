@@ -1727,52 +1727,52 @@ sub test_restore_notes
 
     # force creation of notes mailbox prior to creating notes
     my $res = $jmap->CallMethods([
-        ['Notes/set', {
+        ['Note/set', {
          }, "R0"]
     ]);
 
     xlog "create notes";
-    $res = $jmap->CallMethods([['Notes/set', {create => {
+    $res = $jmap->CallMethods([['Note/set', {create => {
                         "a" => {title => "a"},
                         "b" => {title => "b"},
                         "c" => {title => "c"}
                     }}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $noteA = $res->[0][1]{created}{"a"}{id};
     my $noteB = $res->[0][1]{created}{"b"}{id};
     my $noteC = $res->[0][1]{created}{"c"}{id};
 
     xlog "destroy note C";
-    $res = $jmap->CallMethods([['Notes/set', {
+    $res = $jmap->CallMethods([['Note/set', {
                     destroy => [$noteC]
                 }, "R1.5"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R1.5', $res->[0][2]);
 
     sleep 2;
     xlog "destroy note A, update note B, create note D";
-    $res = $jmap->CallMethods([['Notes/set', {
+    $res = $jmap->CallMethods([['Note/set', {
                     destroy => [$noteA],
                     update => {$noteB => {title => "B"}},
                     create => {"d" => {title => "d"}}
                 }, "R2"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R2', $res->[0][2]);
     my $noteD = $res->[0][1]{created}{"d"}{id};
 
     xlog "destroy note D, create note E";
-    $res = $jmap->CallMethods([['Notes/set', {
+    $res = $jmap->CallMethods([['Note/set', {
                     destroy => [$noteD],
                     create => {
                         "e" => {title => "e"}
                     }
                 }, "R4"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R4', $res->[0][2]);
     my $noteE = $res->[0][1]{created}{"e"}{id};
     my $state = $res->[0][1]{newState};
@@ -1791,12 +1791,12 @@ sub test_restore_notes
 
     xlog "get restored notes";
     $res = $jmap->CallMethods([
-        ['Notes/get', {
+        ['Note/get', {
             properties => ['title', 'isFlagged'],
          }, "R6"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/get', $res->[0][0]);
+    $self->assert_str_equals('Note/get', $res->[0][0]);
     $self->assert_str_equals('R6', $res->[0][2]);
 
     my @got = sort { $a->{title} cmp $b->{title} } @{$res->[0][1]{list}};
@@ -1808,12 +1808,12 @@ sub test_restore_notes
 
     xlog "get note updates";
     $res = $jmap->CallMethods([
-        ['Notes/changes', {
+        ['Note/changes', {
             sinceState => $state
          }, "R8.5"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/changes', $res->[0][0]);
+    $self->assert_str_equals('Note/changes', $res->[0][0]);
     $self->assert_str_equals('R8.5', $res->[0][2]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
@@ -1836,20 +1836,20 @@ sub test_restore_notes_all
 
     # force creation of notes mailbox prior to creating notes
     my $res = $jmap->CallMethods([
-        ['Notes/set', {
+        ['Note/set', {
          }, "R0"]
     ]);
 
     sleep 2;
     xlog "create notes";
-    $res = $jmap->CallMethods([['Notes/set', {create => {
+    $res = $jmap->CallMethods([['Note/set', {create => {
                         "a" => {title => "a"},
                         "b" => {title => "b"},
                         "c" => {title => "c"},
                         "d" => {title => "d"}
                     }}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $noteA = $res->[0][1]{created}{"a"}{id};
     my $noteB = $res->[0][1]{created}{"b"}{id};
@@ -1857,28 +1857,28 @@ sub test_restore_notes_all
     my $noteD = $res->[0][1]{created}{"d"}{id};
 
     xlog "destroy note A, update note B";
-    $res = $jmap->CallMethods([['Notes/set', {
+    $res = $jmap->CallMethods([['Note/set', {
                     destroy => [$noteA],
                     update => {$noteB => {title => "B"}}
                 }, "R2"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R2', $res->[0][2]);
 
     xlog "get notes";
     $res = $jmap->CallMethods([
-        ['Notes/get', {
+        ['Note/get', {
             properties => ['title', 'isFlagged'],
          }, "R3"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/get', $res->[0][0]);
+    $self->assert_str_equals('Note/get', $res->[0][0]);
     $self->assert_str_equals('R3', $res->[0][2]);
 
     my @expect = sort { $a->{title} cmp $b->{title} } @{$res->[0][1]{list}};
 
     sleep 1;
     xlog "destroy note C, update notes B and D, create note E";
-    $res = $jmap->CallMethods([['Notes/set', {
+    $res = $jmap->CallMethods([['Note/set', {
                     destroy => [$noteC],
                     update => {
                         $noteB => {isFlagged => JSON::true},
@@ -1889,7 +1889,7 @@ sub test_restore_notes_all
                     }
                 }, "R4"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R4', $res->[0][2]);
     my $noteE = $res->[0][1]{created}{"e"}{id};
     my $state = $res->[0][1]{newState};
@@ -1908,12 +1908,12 @@ sub test_restore_notes_all
 
     xlog "get restored notes";
     $res = $jmap->CallMethods([
-        ['Notes/get', {
+        ['Note/get', {
             properties => ['title', 'isFlagged'],
          }, "R6"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/get', $res->[0][0]);
+    $self->assert_str_equals('Note/get', $res->[0][0]);
     $self->assert_str_equals('R6', $res->[0][2]);
 
     my @got = sort { $a->{title} cmp $b->{title} } @{$res->[0][1]{list}};
@@ -1922,12 +1922,12 @@ sub test_restore_notes_all
 
     xlog "get note updates";
     $res = $jmap->CallMethods([
-        ['Notes/changes', {
+        ['Note/changes', {
             sinceState => $state
          }, "R6.5"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/changes', $res->[0][0]);
+    $self->assert_str_equals('Note/changes', $res->[0][0]);
     $self->assert_str_equals('R6.5', $res->[0][2]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
@@ -1953,23 +1953,23 @@ sub test_restore_notes_all
 
     xlog "get restored notes";
     $res = $jmap->CallMethods([
-        ['Notes/get', {
+        ['Note/get', {
             properties => ['title', 'isFlagged'],
          }, "R8"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/get', $res->[0][0]);
+    $self->assert_str_equals('Note/get', $res->[0][0]);
     $self->assert_str_equals('R8', $res->[0][2]);
     $self->assert_deep_equals([], $res->[0][1]{list});
 
     xlog "get note updates";
     $res = $jmap->CallMethods([
-        ['Notes/changes', {
+        ['Note/changes', {
             sinceState => $state
          }, "R8.5"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/changes', $res->[0][0]);
+    $self->assert_str_equals('Note/changes', $res->[0][0]);
     $self->assert_str_equals('R8.5', $res->[0][2]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
@@ -1989,20 +1989,20 @@ sub test_restore_notes_all_dryrun
 
     # force creation of notes mailbox prior to creating notes
     my $res = $jmap->CallMethods([
-        ['Notes/set', {
+        ['Note/set', {
          }, "R0"]
     ]);
 
     sleep 2;
     xlog "create notes";
-    $res = $jmap->CallMethods([['Notes/set', {create => {
+    $res = $jmap->CallMethods([['Note/set', {create => {
                         "a" => {title => "a"},
                         "b" => {title => "b"},
                         "c" => {title => "c"},
                         "d" => {title => "d"}
                     }}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $noteA = $res->[0][1]{created}{"a"}{id};
     my $noteB = $res->[0][1]{created}{"b"}{id};
@@ -2010,28 +2010,28 @@ sub test_restore_notes_all_dryrun
     my $noteD = $res->[0][1]{created}{"d"}{id};
 
     xlog "destroy note A, update note B";
-    $res = $jmap->CallMethods([['Notes/set', {
+    $res = $jmap->CallMethods([['Note/set', {
                     destroy => [$noteA],
                     update => {$noteB => {title => "B"}}
                 }, "R2"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R2', $res->[0][2]);
 
     xlog "get notes";
     $res = $jmap->CallMethods([
-        ['Notes/get', {
+        ['Note/get', {
             properties => ['title', 'isFlagged'],
          }, "R3"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/get', $res->[0][0]);
+    $self->assert_str_equals('Note/get', $res->[0][0]);
     $self->assert_str_equals('R3', $res->[0][2]);
 
     my @expect = sort { $a->{title} cmp $b->{title} } @{$res->[0][1]{list}};
 
     sleep 1;
     xlog "destroy note C, update notes B and D, create note E";
-    $res = $jmap->CallMethods([['Notes/set', {
+    $res = $jmap->CallMethods([['Note/set', {
                     destroy => [$noteC],
                     update => {
                         $noteB => {isFlagged => JSON::true},
@@ -2042,7 +2042,7 @@ sub test_restore_notes_all_dryrun
                     }
                 }, "R4"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R4', $res->[0][2]);
     my $noteE = $res->[0][1]{created}{"e"}{id};
     my $state = $res->[0][1]{newState};
@@ -2062,12 +2062,12 @@ sub test_restore_notes_all_dryrun
 
     xlog "get note updates";
     $res = $jmap->CallMethods([
-        ['Notes/changes', {
+        ['Note/changes', {
             sinceState => $state
          }, "R6.5"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Notes/changes', $res->[0][0]);
+    $self->assert_str_equals('Note/changes', $res->[0][0]);
     $self->assert_str_equals('R6.5', $res->[0][2]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
