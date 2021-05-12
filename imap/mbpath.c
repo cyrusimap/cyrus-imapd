@@ -73,7 +73,7 @@ static struct namespace mbpath_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: mbpath [-C <alt_config>] [-l] [-m] [-q] [-s] [-u|d|p] [-a|A|D|M|S|U] <mailbox name>...\n");
+    fprintf(stderr,"usage: mbpath [-C <alt_config>] [-l] [-m] [-q] [-s] [-u|p] [-a|A|D|M|S|U] <mailbox name>...\n");
     fprintf(stderr, "\n");
     fprintf(stderr,"\t-j\tprint all values as a JSON object\n");
     fprintf(stderr,"\t-a\tprint all values with prefixes\n");
@@ -83,7 +83,6 @@ static int usage(const char *error)
     fprintf(stderr,"\t-s\tstop on error\n");
     fprintf(stderr,"\t-7\tmailbox arguments are in modified UTF7 rather than UTF8\n");
     fprintf(stderr,"\t-u\targuments are user, not mailbox\n");
-    fprintf(stderr,"\t-d\targuments are domain, not mailbox\n");
     fprintf(stderr,"\t-p\targuments are UNIX path, not mailbox\n");
     fprintf(stderr,"\t-A\tpartition archive directory\n");
     fprintf(stderr,"\t-D\tpartition data directory (*default*)\n");
@@ -101,7 +100,6 @@ struct options_t {
     unsigned quiet         : 1;
     unsigned stop_on_error : 1;
     unsigned localonly     : 1;
-    unsigned foundone      : 1;
     unsigned mode          : 2;
     unsigned paths         : 5;
     unsigned do_json       : 1;
@@ -116,8 +114,7 @@ struct options_t {
 #define DO_ALL      (DO_ARCHIVE | DO_DATA | DO_META | DO_SIEVE | DO_USER)
 
 #define MODE_USER   1
-#define MODE_DOMAIN 2
-#define MODE_PATH   3
+#define MODE_PATH   2
 
 static void find_tier(const char *key, const char *val __attribute__((unused)), void *rock)
 {
@@ -234,9 +231,6 @@ static int do_paths(struct findall_data *data, void *rock)
         print_json(data->mbname, data->mbentry);
     }
     else {
-        if (opts->mode == MODE_DOMAIN) {
-            printf("\nUserid: %s\n", mbname_userid(data->mbname));
-        }
         if (opts->paths & DO_ARCHIVE) {
             const char *path = mbentry_archivepath(data->mbentry, 0);
             if (opts->paths == DO_ALL) printf("Archive: ");
@@ -266,8 +260,6 @@ static int do_paths(struct findall_data *data, void *rock)
         }
     }
 
-    opts->foundone = 1;
-
     return 0;
 }
 
@@ -292,9 +284,9 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     // capture options
-    struct options_t opts = { 0, 0, 0, 0, 0, 0, 0, 1 /* default to UTF8 */ };
+    struct options_t opts = { 0, 0, 0, 0, 0, 0, 1 /* default to UTF8 */ };
 
-    while ((opt = getopt(argc, argv, "C:7ajlmqsudpADMSU")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:7ajlmqsupADMSU")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -336,12 +328,6 @@ int main(int argc, char **argv)
             if (opts.mode)
                 usage("Multiple modes given");
             opts.mode = MODE_USER;
-            break;
-
-        case 'd':
-            if (opts.mode)
-                usage("Multiple modes given");
-            opts.mode = MODE_DOMAIN;
             break;
 
         case 'p':
@@ -398,14 +384,9 @@ int main(int argc, char **argv)
     for (i = optind; i < argc; i++) {
         /* Translate mailboxname */
         mbname_t *mbname = NULL;
-        const char *extname;
+        mbentry_t *mbentry = NULL;
 
-        if (opts.mode == MODE_DOMAIN) {
-            char *userid = strconcat("%@", argv[i], NULL); // all inboxen
-            mbname = mbname_from_userid(userid);
-            free(userid);
-        }
-        else if (opts.mode == MODE_USER) {
+        if (opts.mode == MODE_USER) {
             mbname = mbname_from_userid(argv[i]);
         }
         else if (opts.mode == MODE_PATH) {
@@ -418,19 +399,16 @@ int main(int argc, char **argv)
             mbname = mbname_from_extname(argv[i], &mbpath_namespace, "cyrus");
         }
 
-        extname = mbname_extname(mbname, &mbpath_namespace, "cyrus");
-        if (extname) {
-            r = mboxlist_findall(&mbpath_namespace, extname,
-                                 /*isadmin*/1, NULL, NULL, &do_paths, &opts);
-            if (!r && !opts.foundone) {
-                r = IMAP_MAILBOX_NONEXISTENT;
-            }
+        r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
+        if (!r) {
+            struct findall_data data = { NULL, 0, mbentry, mbname, 1 /* exact */};
+
+            do_paths(&data, &opts);
         }
         else {
-            r = IMAP_MAILBOX_NONEXISTENT;
-        }
-        if (r) {
             if (!opts.quiet && (r == IMAP_MAILBOX_NONEXISTENT)) {
+                const char *extname =
+                    mbname_extname(mbname, &mbpath_namespace, "cyrus");
                 fprintf(stderr, "Invalid mailbox name: '%s'", argv[i]);
                 if (extname && strcmp(extname, argv[i]))
                     fprintf(stderr, " ('%s')\n", extname);
@@ -448,6 +426,7 @@ int main(int argc, char **argv)
             }
         }
         mbname_free(&mbname);
+        mboxlist_entry_free(&mbentry);
     }
 
     cyrus_done();
