@@ -194,8 +194,8 @@ static void jmap_init(struct buf *serverinfo)
         json_object_set_new(my_jmap_settings.server_capabilities,
                 JMAP_URN_WEBSOCKET,
                 json_pack("{s:s s:b}",
-                          "webSocketUrl", "wss:" JMAP_BASE_URL JMAP_WS_COL,
-                          "supportsWebSocketPush", 0));
+                          "url", "wss:" JMAP_BASE_URL JMAP_WS_COL,
+                          "supportsPush", 0));
     }
 }
 
