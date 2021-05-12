@@ -15,7 +15,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **mbpath** [ **-C** *config-file* ] [ **-l** ] [ **-m** ] [ **-q** ] [ **-s** ] [ **-u** | **-d** ] [ **-a** | **-A** | **-M** | **-S** | **-U** ] [ *mailbox-names*... ]
+    **mbpath** [ **-C** *config-file* ] [ **-l** ] [ **-m** ] [ **-q** ] [ **-s** ] [ **-u** | **-p** ] [ **-a** | **-A** | **-M** | **-S** | **-U** ] [ *mailbox-names*... ]
 
 Description
 ===========
@@ -58,10 +58,9 @@ Options
 
     The specified *mailbox-names* are users, not mailboxes.
 
-.. option:: -d
+.. option:: -p
 
-    The specified *mailbox-names* are domains, not mailboxes.
-    Path(s) for every user INBOX in the domain will be listed.
+    The specified *mailbox-names* are UNIX mailbox paths, not mailboxes.
 
 Selectors
 =========
