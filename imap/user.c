@@ -572,7 +572,7 @@ EXPORTED char *user_hash_xapian(const char *userid, const char *root)
     }
     else {
         char path[MAX_MAILBOX_PATH+1];
-        mboxname_id_hash(path, MAX_MAILBOX_PATH, "", mbentry->uniqueid);
+        mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mbentry->uniqueid);
 
         basedir = strconcat(root,
                             FNAME_USERDIR,
