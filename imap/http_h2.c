@@ -789,7 +789,7 @@ HIDDEN void http2_begin_headers(struct transaction_t *txn)
 
 
 HIDDEN void http2_add_header(struct transaction_t *txn,
-                             const char  *name, struct buf *value)
+                             const char *name, struct buf *value)
 {
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
@@ -840,7 +840,7 @@ HIDDEN int http2_end_headers(struct transaction_t *txn, long code)
     int r;
 
     syslog(LOG_DEBUG,
-           "end_resp_headers(code = %ld, len = %ld, flags.te = %#x)",
+           "http2_end_headers(code = %ld, len = %ld, flags.te = %#x)",
            code, txn->resp_body.len, txn->flags.te);
 
     if (txn->conn->logfd != -1) {
@@ -851,8 +851,17 @@ HIDDEN int http2_end_headers(struct transaction_t *txn, long code)
     switch (code) {
     case 0:
         /* Trailer */
-        flags = NGHTTP2_FLAG_END_STREAM;
-        break;
+        syslog(LOG_DEBUG, "%s(id=%d)", "nghttp2_submit_trailers", strm->id);
+
+        r = nghttp2_submit_trailer(ctx->session, strm->id,
+                                   strm->resp_hdrs, strm->num_resp_hdrs);
+        if (r) {
+            syslog(LOG_ERR, "%s: %s",
+                   "nghttp2_submit_trailers", nghttp2_strerror(r));
+        }
+
+        return r;
+
 
     case HTTP_CONTINUE:
     case HTTP_PROCESSING:
@@ -878,21 +887,13 @@ HIDDEN int http2_end_headers(struct transaction_t *txn, long code)
     }
 
     syslog(LOG_DEBUG, "%s(id=%d, flags=%#x)",
-           code ? "nghttp2_submit headers" : "nghttp2_submit_trailers",
-           strm->id, flags);
+           "nghttp2_submit headers", strm->id, flags);
 
-    if (code) {
-        r = nghttp2_submit_headers(ctx->session, flags, strm->id, NULL,
-                                   strm->resp_hdrs, strm->num_resp_hdrs, NULL);
-    }
-    else {
-        r = nghttp2_submit_trailer(ctx->session, strm->id,
-                                   strm->resp_hdrs, strm->num_resp_hdrs);
-    }
+    r = nghttp2_submit_headers(ctx->session, flags, strm->id, NULL,
+                               strm->resp_hdrs, strm->num_resp_hdrs, NULL);
     if (r) {
         syslog(LOG_ERR, "%s: %s",
-               code ? "nghttp2_submit headers" : "nghttp2_submit_trailers",
-               nghttp2_strerror(r));
+               "nghttp2_submit headers", nghttp2_strerror(r));
     }
 
     return r;
@@ -961,15 +962,16 @@ HIDDEN int http2_data_chunk(struct transaction_t *txn,
         return HTTP_SERVER_ERROR;
     }
     else {
+        /* Write frame(s) */
         http2_output(txn);
 
         if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
-            begin_resp_headers(txn, 0);
+            http2_begin_headers(txn);
             if (txn->flags.trailer & TRAILER_CMD5) content_md5_hdr(txn, md5);
             if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
                 simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
             }
-            end_resp_headers(txn, 0);
+            http2_end_headers(txn, 0);
         }
     }
 
