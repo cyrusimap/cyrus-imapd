@@ -513,6 +513,12 @@ static int capabilities_cb(const mbentry_t *mbentry, void *vrock)
         return 0;
     }
 
+    /* Skip any special use folders (#jmap, #calendars, #notifications, etc.) */
+    if (mbentry->mbtype &&
+        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+        return 0;
+    }
+
     int rights = _rights_for_mbentry(rock->authstate, mbentry, rock->mboxrights);
     if (!(rights & JACL_LOOKUP)) return 0;
     rock->is_visible = 1;
