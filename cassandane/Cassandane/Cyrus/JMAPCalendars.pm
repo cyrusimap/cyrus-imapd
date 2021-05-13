@@ -627,7 +627,7 @@ sub test_calendar_set_sharewith
         $self->assert_str_equals('lrswitedn', $map{paraphrase});
     }
 
-    xlog $self, "Remove the access for manifold";
+    xlog $self, "Remove the access for paraphrase";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'master',
@@ -674,7 +674,7 @@ sub test_calendar_set_sharewith
         %map = @$acl;
         $self->assert_str_equals('lrswitedn', $map{cassandane});
         $self->assert_str_equals('lrswitedn', $map{manifold});
-        $self->assert_str_equals('lr', $map{paraphrase});
+        $self->assert_null($map{paraphrase});
     }
 }
 
