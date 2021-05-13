@@ -8124,8 +8124,10 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
             return HTTP_FORBIDDEN;
         }
         /* Fetch index record for the resource */
-        oldrecord = &record;
-        mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
+        if (!mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record) &&
+            record.uid == cdata->dav.imap_uid) {
+            oldrecord = &record;
+        }
     }
 
     /* Remove all X-LIC-ERROR properties */

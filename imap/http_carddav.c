@@ -646,8 +646,10 @@ static int store_resource(struct transaction_t *txn,
 
     if (cdata->dav.imap_uid) {
         /* Fetch index record for the resource */
-        oldrecord = &record;
-        mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
+        if (!mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record) &&
+            record.uid == cdata->dav.imap_uid) {
+            oldrecord = &record;
+        }
     }
 
     /* Create and cache RFC 5322 header fields for resource */
