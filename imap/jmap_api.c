@@ -2949,7 +2949,10 @@ static void add_shareacls(const char *userid, void *val, void *rock)
     char **aclptr = rock;
     int access = (uintptr_t) val;
 
-    cyrus_acl_set(aclptr, userid, ACL_MODE_SET, access, NULL, NULL);
+    if (access & JACL_WRITE)
+        cyrus_acl_set(aclptr, userid, ACL_MODE_SET, access, NULL, NULL);
+    else
+        cyrus_acl_remove(aclptr, userid, NULL, NULL);
 }
 
 static int set_upload_rights(const char *accountid)
