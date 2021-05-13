@@ -619,7 +619,11 @@ static int store_resource(struct transaction_t *txn,
     }
 
     /* Check for changed UID on existing resource */
-    carddav_lookup_resource(davdb, txn->req_tgt.mbentry, resource, &cdata, 0);
+    /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
+       XXX  because we may have been called as part of a COPY/MOVE */
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
+    carddav_lookup_resource(davdb, &mbentry, resource, &cdata, 0);
     if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
         txn->error.precond = CARDDAV_UID_CONFLICT;
         ret = HTTP_FORBIDDEN;

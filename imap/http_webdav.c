@@ -659,7 +659,11 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     if (!buf) return HTTP_FORBIDDEN;
 
     /* Find message UID for the resource */
-    webdav_lookup_resource(db, txn->req_tgt.mbentry, resource, &wdata, 0);
+    /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
+       XXX  because we may have been called as part of a COPY/MOVE */
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
+    webdav_lookup_resource(db, &mbentry, resource, &wdata, 0);
 
     if (wdata->dav.imap_uid) {
         /* Fetch index record for the resource */
