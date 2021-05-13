@@ -646,9 +646,15 @@ static int store_resource(struct transaction_t *txn,
 
     if (cdata->dav.imap_uid) {
         /* Fetch index record for the resource */
-        if (!mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record) &&
-            record.uid == cdata->dav.imap_uid) {
+        int r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+        if (!r) {
             oldrecord = &record;
+        }
+        else {
+            xsyslog(LOG_ERR,
+                    "Couldn't find index record corresponding to CardDAV DB record",
+                    "mailbox=<%s> record=<%u> error=<%s>",
+                    mailbox->name, cdata->dav.imap_uid, error_message(r));
         }
     }
 

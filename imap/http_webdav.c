@@ -663,9 +663,15 @@ static int webdav_put(struct transaction_t *txn, void *obj,
 
     if (wdata->dav.imap_uid) {
         /* Fetch index record for the resource */
-        if (!mailbox_find_index_record(mailbox, wdata->dav.imap_uid, &record) &&
-            record.uid == wdata->dav.imap_uid) {
+        int r = mailbox_find_index_record(mailbox, wdata->dav.imap_uid, &record);
+        if (!r) {
             oldrecord = &record;
+        }
+        else {
+            xsyslog(LOG_ERR,
+                    "Couldn't find index record corresponding to WebDAV DB record",
+                    "mailbox=<%s> record=<%u> error=<%s>",
+                    mailbox->name, wdata->dav.imap_uid, error_message(r));
         }
     }
 
