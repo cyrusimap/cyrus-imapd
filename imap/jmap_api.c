@@ -514,8 +514,12 @@ static int capabilities_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     /* Skip any special use folders (#jmap, #calendars, #notifications, etc.) */
-    if (mbentry->mbtype &&
-        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+    switch (mbtype_isa(mbentry->mbtype)) {
+    case MBTYPE_EMAIL:
+    case MBTYPE_CALENDAR:
+    case MBTYPE_ADDRESSBOOK:
+        break;
+    default:
         return 0;
     }
 
