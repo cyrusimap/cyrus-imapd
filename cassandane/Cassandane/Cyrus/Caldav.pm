@@ -4427,4 +4427,82 @@ EOF
                           $response->{headers}->{'cache-control'});
 }
 
+sub test_event_move
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid1 = "d4643cf9-4552-4a3e-8d6c-5f318bcc5b79";
+    my $href = "$CalendarId/$uuid1.ics";
+    my $card1 = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid1
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:Test Event 1
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card1, 'Content-Type' => 'text/calendar');
+
+    my $DestCal = $CalDAV->GetCalendar($CalendarId);
+
+    my $uuid2 = "event2\@example.com";
+    my $card2 = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example Corp.//CalDAV Client//EN
+BEGIN:VEVENT
+DTSTART;TZID=US/Eastern:20160913T100000
+DURATION:PT1H
+SUMMARY:Event #2
+UID:$uuid2
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+BEGIN:VALARM
+UID:uuid-alarm
+ACTION:DISPLAY
+DESCRIPTION:Your event 'Yep' already started.
+TRIGGER:PT10M
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+    $href = "Default/$uuid2.ics";
+
+    $CalDAV->Request('PUT', $href, $card2, 'Content-Type' => 'text/calendar');
+
+    my $SrcCal = $CalDAV->GetCalendar('Default');
+
+    $CalDAV->MoveEvent($href, $CalendarId);
+
+    my ($adds, $removes, $errors) = $CalDAV->SyncEvents('Default', syncToken => $SrcCal->{syncToken});
+    $self->assert_deep_equals([], $adds);
+    $self->assert_equals(1, scalar @$removes);
+    $self->assert_str_equals("/dav/calendars/user/cassandane/" . $href, $removes->[0]);
+    $self->assert_deep_equals([], $errors);
+
+    ($adds, $removes, $errors) = $CalDAV->SyncEvents($CalendarId, syncToken => $DestCal->{syncToken});
+
+    $self->assert_equals(1, scalar @$adds);
+    $self->assert_str_equals($adds->[0]{uid}, $uuid2);
+    $self->assert_deep_equals([], $removes);
+    $self->assert_deep_equals([], $errors);
+}
+
 1;
