@@ -8124,7 +8124,11 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
 
     /* Find message UID for the resource, if exists */
-    caldav_lookup_resource(caldavdb, txn->req_tgt.mbentry, resource, &cdata, 0);
+    /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
+       XXX  because we may have been called as part of a COPY/MOVE */
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
+    caldav_lookup_resource(caldavdb, &mbentry, resource, &cdata, 0);
 
     /* does it already exist? */
     if (cdata->dav.imap_uid) {
