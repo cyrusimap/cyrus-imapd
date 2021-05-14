@@ -784,8 +784,6 @@ int service_init(int argc __attribute__((unused)),
                SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
                LIBXML_DOTTED_VERSION, JANSSON_VERSION);
 
-    memset(&http_conn, 0, sizeof(struct http_connection));
-
     http2_init(&http_conn, &serverinfo);
     ws_init(&http_conn, &serverinfo);
 
