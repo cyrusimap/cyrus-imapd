@@ -61,7 +61,7 @@ int tls_enabled(void);
 
 struct tls_alpn_t {
     const char *id;
-    unsigned (*is_available)(void *rock);
+    unsigned (*check_availabilty)(void *rock);
     void *rock;
 };
 
