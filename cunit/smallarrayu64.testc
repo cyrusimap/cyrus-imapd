@@ -1,0 +1,82 @@
+#include "cunit/cyrunit.h"
+#include "xmalloc.h"
+#include "smallarrayu64.h"
+
+static void test_fini_null(void)
+{
+    /* _fini(NULL) is harmless */
+    smallarrayu64_fini(NULL);
+    /* _free(NULL) is harmless */
+    smallarrayu64_free(NULL);
+}
+
+static void test_append(void)
+{
+    smallarrayu64_t sa = SMALLARRAYU64_INITIALIZER;
+
+    /* Append small integers until prealloc buffer is full */
+    int i;
+    for (i = 0; i < SMALLARRAYU64_ALLOC; i++) {
+        smallarrayu64_append(&sa, i);
+        CU_ASSERT_EQUAL(smallarrayu64_size(&sa), i + 1);
+        CU_ASSERT_EQUAL(sa.use_spillover, i == SMALLARRAYU64_ALLOC - 1);
+        CU_ASSERT_EQUAL(sa.spillover.count, 0);
+    }
+
+    /* Append next integer */
+    smallarrayu64_append(&sa, SMALLARRAYU64_ALLOC);
+    CU_ASSERT_EQUAL(smallarrayu64_size(&sa), SMALLARRAYU64_ALLOC + 1);
+    CU_ASSERT_EQUAL(sa.count, SMALLARRAYU64_ALLOC);
+    CU_ASSERT_EQUAL(sa.use_spillover, 1);
+    CU_ASSERT_EQUAL(sa.spillover.count, 1);
+
+    smallarrayu64_fini(&sa);
+}
+
+static void test_append_largenum(void)
+{
+    smallarrayu64_t sa = SMALLARRAYU64_INITIALIZER;
+
+    smallarrayu64_append(&sa, 12);
+    smallarrayu64_append(&sa, 24);
+    smallarrayu64_append(&sa, 36);
+
+    CU_ASSERT_EQUAL(sa.count, 3);
+    CU_ASSERT_EQUAL(sa.use_spillover, 0);
+    CU_ASSERT_EQUAL(sa.spillover.count, 0);
+
+    smallarrayu64_append(&sa, 2222222L);
+
+    CU_ASSERT_EQUAL(sa.count, 3);
+    CU_ASSERT_EQUAL(sa.use_spillover, 1);
+    CU_ASSERT_EQUAL(sa.spillover.count, 1);
+
+    smallarrayu64_fini(&sa);
+}
+
+static void test_nth(void)
+{
+    smallarrayu64_t sa = SMALLARRAYU64_INITIALIZER;
+    uint64_t vals[] = { 12L, 24L, 36L, 2222222L, 48L };
+    ssize_t nvals = sizeof(vals) / sizeof(vals[0]);
+
+    ssize_t i;
+    for (i = 0; i < nvals; i++) {
+        smallarrayu64_append(&sa, vals[i]);
+    }
+    for (i = 0; i < nvals; i++) {
+        CU_ASSERT_EQUAL(smallarrayu64_nth(&sa, i), vals[i]);
+    }
+
+    /* negative index */
+    CU_ASSERT_EQUAL(smallarrayu64_nth(&sa, -nvals), vals[0]);
+    CU_ASSERT_EQUAL(smallarrayu64_nth(&sa, -1), vals[nvals-1]);
+
+    /* out of index */
+    CU_ASSERT_EQUAL(smallarrayu64_nth(&sa, nvals), 0);
+    CU_ASSERT_EQUAL(smallarrayu64_nth(&sa, -nvals-1), 0);
+
+    smallarrayu64_fini(&sa);
+}
+
+/* vim: set ft=c: */
