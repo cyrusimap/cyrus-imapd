@@ -2685,13 +2685,10 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
 
     if (!propstat) {
         /* Prescreen "property" request */
-        if (fctx->req_tgt->collection ||
-            (fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2) {
-            /* Add namespaces for possible privileges */
-            ensure_ns(fctx->ns, NS_CYRUS, fctx->root, XML_NS_CYRUS, "CY");
-            if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR) {
-                ensure_ns(fctx->ns, NS_CALDAV, fctx->root, XML_NS_CALDAV, "C");
-            }
+        /* Add namespaces for possible privileges */
+        ensure_ns(fctx->ns, NS_CYRUS, fctx->root, XML_NS_CYRUS, "CY");
+        if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR) {
+            ensure_ns(fctx->ns, NS_CALDAV, fctx->root, XML_NS_CALDAV, "C");
         }
 
         return 0;
