@@ -66,6 +66,7 @@ sub new
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
+                 sync_log => 'yes',
                  jmap_nonstandard_extensions => 'yes');
 
     return $class->SUPER::new({
@@ -4171,6 +4172,82 @@ sub test_calendarevent_query
     $res = $jmap->CallMethods([ ['CalendarEvent/query', { position => -1 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+}
+
+sub test_calendarevent_query_deleted_calendar
+    :min_version_3_3 :needs_component_jmap :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "create calendars A and B";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    create => {
+                        "1" => {
+                            name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
+                        },
+                        "2" => {
+                            name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
+                        }
+                    }}, "R1"]
+        ]);
+    my $calidA = $res->[0][1]{created}{"1"}{id};
+    my $calidB = $res->[0][1]{created}{"2"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog $self, "create event #1 in calendar $calidA and event #2 in calendar $calidB";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    create => {
+                        "1" => {
+                            "calendarId" => $calidA,
+                            "title" => "foo",
+                            "description" => "bar",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::false,
+                            "start" => "2016-07-01T10:00:00",
+                            "timeZone" => "Europe/Vienna",
+                            "duration" => "PT1H",
+                        },
+                        "2" => {
+                            "calendarId" => $calidB,
+                            "title" => "foo",
+                            "description" => "",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::true,
+                            "start" => "2016-01-01T00:00:00",
+                            "duration" => "P2D",
+                            "timeZone" => undef,
+                        }
+                    }}, "R1"]]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+
+    xlog $self, "get filtered calendar event list";
+    $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                    "filter" => {
+                        "after" => "2015-12-31T00:00:00Z",
+                        "before" => "2016-12-31T23:59:59Z"
+                    }
+                }, "R1"] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+
+    xlog $self, "CalDAV delete calendar as cassandane";
+    $caldav->DeleteCalendar("/dav/calendars/user/cassandane/$calidA");
+
+    xlog $self, "get filtered calendar event list";
+    $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                    "filter" => {
+                        "after" => "2015-12-31T00:00:00Z",
+                        "before" => "2016-12-31T23:59:59Z"
+                    }
+                }, "R1"] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
 }
 
 sub test_calendarevent_query_shared
