@@ -5253,8 +5253,8 @@ sub test_email_query_inmailbox_null
     $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
 }
 
-sub test_email_query_cached
-    :min_version_3_1 :needs_component_jmap :JMAPSearchDB :JMAPExtensions
+sub test_email_query_cached_legacy
+    :min_version_3_1 :max_version_3_4 :needs_component_jmap :JMAPSearchDB :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5334,8 +5334,131 @@ sub test_email_query_cached
     $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
 }
 
+sub test_email_query_cached
+    :min_version_3_5 :needs_component_jmap :JMAPQueryCacheMaxAge1s :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create emails";
+    $res = $self->make_message("foo 1") || die;
+    $res = $self->make_message("foo 2") || die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $query1 = {
+        filter => {
+            subject => 'foo',
+        },
+        sort => [{ property => 'subject' }],
+    };
+
+    my $query2 = {
+        filter => {
+            subject => 'foo',
+        },
+        sort => [{ property => 'subject', isAscending => JSON::false }],
+    };
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    xlog $self, "run query #1";
+    $res = $jmap->CallMethods([['Email/query', $query1, 'R1']], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+
+    xlog $self, "re-run query #1";
+    $res = $jmap->CallMethods([['Email/query', $query1, 'R1']], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{isCached});
+
+    xlog $self, "run query #2";
+    $res = $jmap->CallMethods([['Email/query', $query2, 'R1']], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+
+    xlog $self, "re-run query #2";
+    $res = $jmap->CallMethods([['Email/query', $query2, 'R1']], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{isCached});
+
+    xlog $self, "change Email state";
+    $res = $self->make_message("foo 3") || die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "re-run query #2";
+    $res = $jmap->CallMethods([['Email/query', $query2, 'R1']], $using);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+}
+
+sub test_email_query_cached_evict_slow
+    :min_version_3_5 :needs_component_jmap :JMAPQueryCacheMaxAge1s :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    $self->make_message("foo") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                text => 'foo',
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                text => 'foo',
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{isCached});
+
+    sleep(2);
+
+    $res = $jmap->CallMethods([
+        ['Identity/get', {
+            # evict cache
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                text => 'foo',
+            },
+        }, 'R2'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[1][1]->{performance}{details}{isCached});
+}
+
 sub test_email_query_issue2905
-    :min_version_3_1 :needs_component_jmap :JMAPSearchDB
+    :min_version_3_1 :needs_component_jmap :JMAPQueryCacheMaxAge1s
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6269,7 +6392,9 @@ sub email_query_window_internal
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     xlog $self, "list all emails";
-    $res = $jmap->CallMethods([['Email/query', { }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/query', {
+        calculateTotal => JSON::true,
+    }, "R1"]]);
     $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(4, $res->[0][1]->{total});
 
@@ -6281,6 +6406,7 @@ sub email_query_window_internal
         ['Email/query', {
             position => 1,
             filter => $filter,
+            calculateTotal => JSON::true,
         }, "R1"]
     ], $using);
     $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
@@ -6293,6 +6419,7 @@ sub email_query_window_internal
         ['Email/query', {
             position => 4,
             filter => $filter,
+            calculateTotal => JSON::true,
         }, "R1"]
     ], $using);
     $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
@@ -6305,6 +6432,7 @@ sub email_query_window_internal
             position => 1,
             limit => 1,
             filter => $filter,
+            calculateTotal => JSON::true,
         }, "R1"]
     ], $using);
     $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
@@ -6318,6 +6446,7 @@ sub email_query_window_internal
         ['Email/query', {
             anchor => @{$ids}[1],
             filter => $filter,
+            calculateTotal => JSON::true,
         }, "R1"]
     ], $using);
     $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
@@ -6332,6 +6461,7 @@ sub email_query_window_internal
             anchor => @{$ids}[1],
             anchorOffset => 1,
             filter => $filter,
+            calculateTotal => JSON::true,
         }, "R1"]
     ], $using);
     $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
@@ -6346,6 +6476,7 @@ sub email_query_window_internal
             anchor => @{$ids}[2],
             anchorOffset => -1,
             filter => $filter,
+            calculateTotal => JSON::true,
         }, "R1"]
     ], $using);
     $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
@@ -6361,6 +6492,7 @@ sub email_query_window_internal
             anchorOffset => 1,
             limit => 2,
             filter => $filter,
+            calculateTotal => JSON::true,
         }, "R1"]
     ], $using);
     $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
@@ -6378,7 +6510,7 @@ sub test_email_query_window
 }
 
 sub test_email_query_window_cached
-    :min_version_3_1 :needs_component_jmap :JMAPSearchDB :JMAPExtensions
+    :min_version_3_1 :needs_component_jmap :JMAPQueryCacheMaxAge1s :JMAPExtensions
 {
     my ($self) = @_;
     $self->email_query_window_internal();
@@ -6414,6 +6546,7 @@ sub test_email_query_long
         position => 0,
         collapseThreads => JSON::true,
         sort => [{ property => "id" }],
+        calculateTotal => JSON::true,
     }, "R1"]]);
     $self->assert_num_equals(60, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(100, $res->[0][1]->{total});
@@ -6426,6 +6559,7 @@ sub test_email_query_long
         anchor => $res->[0][1]->{ids}[55],
         collapseThreads => JSON::true,
         sort => [{ property => "id" }],
+        calculateTotal => JSON::true,
     }, "R1"]]);
     $self->assert_num_equals(5, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(100, $res->[0][1]->{total});
@@ -16041,7 +16175,7 @@ EOF
 }
 
 sub test_email_query_position
-    :min_version_3_1 :needs_component_jmap :JMAPSearchDB :JMAPExtensions
+    :min_version_3_1 :needs_component_jmap :JMAPQueryCacheMaxAge1s :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16155,7 +16289,7 @@ sub test_email_query_position
 }
 
 sub test_email_query_negative_position
-    :min_version_3_1 :needs_component_jmap :JMAPSearchDB :JMAPExtensions
+    :min_version_3_1 :needs_component_jmap :JMAPQueryCacheMaxAge1s :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
