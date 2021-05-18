@@ -703,6 +703,7 @@ extern void mailbox_iter_done(struct mailbox_iter **iterp);
 struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int recalc);
 
 extern int mailbox_add_dav(struct mailbox *mailbox);
+extern int mailbox_delete_dav(struct mailbox *mailbox);
 extern int mailbox_add_email_alarms(struct mailbox *mailbox);
 
 /* Rename a CID.  Note - this is just one mailbox! */

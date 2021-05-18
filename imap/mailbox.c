@@ -181,7 +181,6 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
 static struct webdav_db *mailbox_open_webdav(struct mailbox *);
 static int mailbox_commit_dav(struct mailbox *mailbox);
 static int mailbox_abort_dav(struct mailbox *mailbox);
-static int mailbox_delete_dav(struct mailbox *mailbox);
 #endif
 
 static inline void flags_to_str_internal(uint32_t flags, char *flagstr)
@@ -5797,7 +5796,7 @@ static int mailbox_delete_webdav(struct mailbox *mailbox)
     return 0;
 }
 
-static int mailbox_delete_dav(struct mailbox *mailbox)
+EXPORTED int mailbox_delete_dav(struct mailbox *mailbox)
 {
     switch (mbtype_isa(mailbox->mbtype)) {
     case MBTYPE_ADDRESSBOOK:
