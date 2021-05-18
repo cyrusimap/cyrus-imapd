@@ -10654,7 +10654,7 @@ static void _email_updateplan_error(struct email_updateplan *plan, int errcode, 
     json_decref(err);
 }
 
-static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptrarray_t *updates)
+static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     hash_table copyupdates_by_mbox_id = HASH_TABLE_INITIALIZER;
     construct_hash_table(&copyupdates_by_mbox_id, ptrarray_size(updates)+1, 0);
@@ -10852,6 +10852,8 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
     hash_iter_free(&iter);
 
     free_hash_table(&copyupdates_by_mbox_id, _ptrarray_free_p);
+
+    return 0;
 }
 
 static void _email_bulkupdate_checklimits(struct email_bulkupdate *bulk)
@@ -10997,7 +10999,7 @@ static int _flag_update_changes_not_seen(json_t *new, json_t *old)
     return 0;
 }
 
-static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarray_t *updates)
+static int _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     int i;
 
@@ -11008,14 +11010,7 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
             /* There's something terribly wrong. Abort all updates. */
             syslog(LOG_ERR, "_email_bulkupdate_plan_keywords: can't open seen.db: %s",
                             error_message(r));
-            for (i = 0; i < ptrarray_size(updates); i++) {
-                struct email_update *update = ptrarray_nth(updates, i);
-                if (json_object_get(bulk->set_errors, update->email_id) == NULL) {
-                    json_object_set_new(bulk->set_errors, update->email_id,
-                            jmap_server_error(r));
-                }
-            }
-            return;
+            return r;
         }
     }
 
@@ -11165,9 +11160,11 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
     hash_iter_free(&iter);
 
     free_hash_table(&seenseq_by_mbox_id, (void(*)(void*))seqset_free);
+
+    return 0;
 }
 
-static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
+static int  _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                                           ptrarray_t *updates)
 {
     char *snoozed_mboxid = NULL, *inboxid = NULL;
@@ -11314,21 +11311,26 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
 
     free(snoozed_mboxid);
     free(inboxid);
+
+    return 0;
 }
 
 
-static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *updates)
+static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     int i;
 
     /* Pre-process snooze updates */
-    _email_bulkupdate_plan_snooze(bulk, updates);
+    int r = _email_bulkupdate_plan_snooze(bulk, updates);
+    if (r) return r;
 
     /* Plan mailbox copies, moves and deletes */
-    _email_bulkupdate_plan_mailboxids(bulk, updates);
+    r = _email_bulkupdate_plan_mailboxids(bulk, updates);
+    if (r) return r;
 
     /* Pre-process keyword updates */
-    _email_bulkupdate_plan_keywords(bulk, updates);
+    r = _email_bulkupdate_plan_keywords(bulk, updates);
+    if (r) return r;
 
     /* Check mailbox count and keyword limits per email */
     _email_bulkupdate_checklimits(bulk);
@@ -11390,9 +11392,11 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
         ptrarray_sort(&plan->snooze, _email_uidrec_compareuid_cb);
     }
     hash_iter_free(&iter);
+
+    return 0;
 }
 
-static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk, ptrarray_t *updates)
+static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     int i;
     bulk->req = req;
@@ -11566,7 +11570,7 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
 
 
     /* Map updates to update plan */
-    _email_bulkupdate_plan(bulk, updates);
+    return _email_bulkupdate_plan(bulk, updates);
 }
 
 static void _email_bulkupdate_dump(struct email_bulkupdate *bulk, json_t *jdump)
@@ -12067,8 +12071,19 @@ static void _email_update_bulk(jmap_req_t *req,
     }
     if (ptrarray_size(&updates)) {
         /* Build and execute bulk update */
-        _email_bulkupdate_open(req, &bulkupdate, &updates);
-        _email_bulkupdate_exec(&bulkupdate, updated, not_updated, debug);
+        int r = _email_bulkupdate_open(req, &bulkupdate, &updates);
+        if (!r) {
+            _email_bulkupdate_exec(&bulkupdate, updated, not_updated, debug);
+        }
+        else {
+            for (i = 0; i < ptrarray_size(&updates); i++) {
+                struct email_update *update = ptrarray_nth(&updates, i);
+                if (!json_object_get(not_updated, update->email_id)) {
+                    json_object_set_new(not_updated, update->email_id,
+                            jmap_server_error(r));
+                }
+            }
+        }
         _email_bulkupdate_close(&bulkupdate);
     }
     else {
