@@ -578,7 +578,7 @@ sub test_require_conversations
 }
 
 sub test_eventsource
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
