@@ -3390,14 +3390,18 @@ static int guidsearch_rank_expr(struct conversations_state *cstate,
         struct buf hash0 = BUF_INITIALIZER, hash = BUF_INITIALIZER;
         search_expr_t *child = e->children;
         int rank = guidsearch_rank_clause(cstate, child, &hash0);
-        if (rank == 1 || rank == -1) return -1;
-        for (child = child->next ; child; child = child->next) {
-            int childrank = guidsearch_rank_clause(cstate, child, &hash);
-            if (childrank == 1 || childrank == -1 || buf_cmp(&hash0, &hash)) {
-                rank = -1;
-                break;
+        if (rank == 1 || rank == -1) {
+            rank = -1;
+        }
+        else {
+            for (child = child->next ; child; child = child->next) {
+                int childrank = guidsearch_rank_clause(cstate, child, &hash);
+                if (childrank == 1 || childrank == -1 || buf_cmp(&hash0, &hash)) {
+                    rank = -1;
+                    break;
+                }
+                else rank |= childrank;
             }
-            rank |= childrank;
         }
         buf_free(&hash0);
         buf_free(&hash);
