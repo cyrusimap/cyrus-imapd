@@ -1015,9 +1015,9 @@ sub test_calendar_set_destroydefault
     ]);
     $self->assert_not_null($res);
 
-    my $errType = $res->[0][1]{notDestroyed}{"Default"}{type};
-    $self->assert_str_equals("isDefault", $errType);
-    $errType = $res->[0][1]{notDestroyed}{"Inbox"}{type};
+    $self->assert_deep_equals(['Default'], $res->[0][1]{destroyed});
+
+    my $errType = $res->[0][1]{notDestroyed}{"Inbox"}{type};
     $self->assert_str_equals("notFound", $errType);
     $errType = $res->[0][1]{notDestroyed}{"Outbox"}{type};
     $self->assert_str_equals("notFound", $errType);
