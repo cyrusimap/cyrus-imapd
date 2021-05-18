@@ -1408,17 +1408,6 @@ static int jmap_calendar_set(struct jmap_req *req)
             uid = newuid;
         }
 
-        /* Do not allow to remove the default calendar. */
-        char *defaultname = caldav_scheddefault(req->accountid);
-        if (!strcmp(uid, defaultname)) {
-            /* XXX - The isDefault set error is not documented in the spec. */
-            json_t *err = json_pack("{s:s}", "type", "isDefault");
-            json_object_set_new(set.not_destroyed, uid, err);
-            free(defaultname);
-            continue;
-        }
-        free(defaultname);
-
         /* Make sure we don't delete special calendars */
         char *mboxname = caldav_mboxname(req->accountid, uid);
         mbname_t *mbname = mbname_from_intname(mboxname);
