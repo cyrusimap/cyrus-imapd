@@ -60,6 +60,7 @@ sub new
     $config->set(caldav_realm => 'Cassandane');
     $config->set(httpmodules => 'carddav caldav');
     $config->set(httpallowcompress => 'no');
+    $config->set(vcard_max_size => 100000);
     return $class->SUPER::new({
         adminstore => 1,
         config => $config,
@@ -626,6 +627,37 @@ EOF
     my $path = $CardDAV->NewContact($Id, $VCard);
     my $res = $CardDAV->GetContact($path);
     $self->assert_str_equals($res->{properties}{version}[0]{value}, '3.0');
+}
+
+sub test_too_large
+    :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+    my $href = "$Id/bar.vcf";
+
+    my $notes = ('x') x 100000;
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:123456789
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+NOTE:$notes
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    # vcard should be rejected
+    eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
+    my $Err = $@;
+    $self->assert_matches(qr/max-resource-size/, $Err);
 }
 
 1;

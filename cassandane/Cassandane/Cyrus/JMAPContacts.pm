@@ -65,6 +65,7 @@ sub new
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
+                 vcard_max_size => 100000,
                  jmap_nonstandard_extensions => 'yes');
 
     return $class->SUPER::new({
@@ -3759,6 +3760,26 @@ sub test_contact_set_importance_float
     my $contactId = $res->[0][1]{created}{c1}{id};
     $self->assert_not_null($contactId);
     $self->assert_equals(-122.129545321514, $res->[1][1]{list}[0]{importance});
+}
+
+sub test_contact_set_toolarge
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                1 => {
+                    lastName => 'name',
+                    notes => ('x' x 100000),
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('tooLarge', $res->[0][1]{notCreated}{1}{type});
+
 }
 
 
