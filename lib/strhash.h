@@ -43,6 +43,7 @@
  */
 
 #ifndef _STRHASH_H_
+#include <stdint.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -57,6 +58,9 @@
 #include <syslog.h>
 #include <errno.h>
 
-unsigned strhash(const char *string);
+unsigned strhash_seeded_djb2(uint32_t seed, const char *string);
+
+#define strhash(in)             strhash_seeded_djb2((0),  (in))
+#define strhash_seeded(sd, in)  strhash_seeded_djb2((sd), (in))
 
 #endif /* _STRHASH_H_ */
