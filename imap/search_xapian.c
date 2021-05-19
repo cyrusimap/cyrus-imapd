@@ -1091,7 +1091,7 @@ struct xapian_builder {
     int opts;
     struct opnode *root;
     ptrarray_t stack;       /* points to opnode* */
-    int (*proc)(const char *, uint32_t, uint32_t, const strarray_t *, void *);
+    int (*proc)(const char *, uint32_t, uint32_t, const char *, void *);
     int (*proc_guidsearch)(const conv_guidrec_t*,size_t,void*);
     void *rock;
 };
@@ -1455,58 +1455,16 @@ static int normalise_dnfclause(const struct opnode *expr, struct opnode **normal
     return 0;
 }
 
-struct xapian_match {
-    bitvector_t uids;
-    hashu64_table partids_by_uid;
-};
-
-static void xapian_match_free_partids(uint64_t key __attribute__((unused)),
-                                      void *data,
-                                      void *rock __attribute__((unused)))
-{
-    strarray_free((strarray_t*)data);
-}
-
-static void xapian_match_reset(struct xapian_match *match)
-{
-    bv_fini(&match->uids);
-    if (match->partids_by_uid.size) {
-        hashu64_enumerate(&match->partids_by_uid, xapian_match_free_partids, NULL);
-    }
-    free_hashu64_table(&match->partids_by_uid, NULL);
-}
-
-struct xapian_run_rock {
-    xapian_builder_t *bb;
-    struct xapian_match *matches;
-};
-
 static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct xapian_run_rock *xrock = rock;
-    xapian_builder_t *bb = xrock->bb;
-    struct xapian_match *matches = xrock->matches;
+    xapian_builder_t *bb = rock;
 
     if (!(bb->opts & SEARCH_MULTIPLE)) {
         if (strcmp(rec->mboxname, bb->mailbox->name))
             return 0;
     }
 
-    struct xapian_match *match = matches + rec->foldernum;
-    bv_set(&match->uids, rec->uid);
-    if (rec->part) {
-        if (!match->partids_by_uid.size) {
-            construct_hashu64_table(&match->partids_by_uid, 1024, 0);
-        }
-        strarray_t *partids = hashu64_lookup(rec->uid, &match->partids_by_uid);
-        if (!partids) {
-            partids = strarray_new();
-            hashu64_insert(rec->uid, partids, &match->partids_by_uid);
-        }
-        strarray_add(partids, rec->part);
-    }
-
-    return 0;
+    return bb->proc(rec->mboxname, 0, rec->uid, rec->part, bb->rock);
 }
 
 
@@ -1517,8 +1475,7 @@ static int memcmp40(const void *a, const void *b)
 
 static int xapian_run_cb(void *data, size_t nmemb, void *rock)
 {
-    struct xapian_run_rock *xrock = rock;
-    xapian_builder_t *bb = xrock->bb;
+    xapian_builder_t *bb = rock;
 
     int r = cmd_cancelled(/*insearch*/1);
     if (r) return r;
@@ -1528,7 +1485,7 @@ static int xapian_run_cb(void *data, size_t nmemb, void *rock)
 
     qsort(data, nmemb, 41, memcmp40); // byte 41 is always zero
 
-    return conversations_iterate_searchset(cstate, data, nmemb, xapian_run_guid_cb, xrock);
+    return conversations_iterate_searchset(cstate, data, nmemb, xapian_run_guid_cb, bb);
 }
 
 struct xapian_run_guidsearch_rock {
@@ -1651,35 +1608,9 @@ static int run_query(xapian_builder_t *bb)
         r = IMAP_NOTFOUND;
         goto out;
     }
-    uint32_t num_folders = conversations_num_folders(cstate);
-    struct xapian_match *result = xzmalloc(sizeof(struct xapian_match) * num_folders);
-    struct xapian_run_rock xrock = { bb, result };
     // sort the response by GUID for more efficient later handling
-    r = xapian_query_run(bb->lock.db, xq, xapian_run_cb, &xrock);
+    r = xapian_query_run(bb->lock.db, xq, xapian_run_cb, bb);
 
-    if (result) {
-        r = 0;
-        uint32_t j;
-        for (j = 0; j < num_folders; j++) {
-            struct xapian_match *match = result + j;
-            if (bv_count(&match->uids)) {
-                const char *mboxname = conversations_folder_name(cstate, j);
-                int uid;
-                for (uid = bv_next_set(&match->uids, 0); uid != -1;
-                        uid = bv_next_set(&match->uids, uid+1)) {
-                    strarray_t *partids = NULL;
-                    if (match->partids_by_uid.size) {
-                        partids = hashu64_lookup(uid, &match->partids_by_uid);
-                    }
-                    r = bb->proc(mboxname, /*uidvalidity*/0, uid, partids, bb->rock);
-                    if (r) break;
-                }
-            }
-            xapian_match_reset(match);
-        }
-    }
-
-    free(result);
 out:
     if (root && root != bb->root) opnode_delete(root);
     xapian_query_free(xq);

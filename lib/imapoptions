@@ -1121,10 +1121,19 @@ Blank lines and lines beginning with ``#'' are ignored.
    the same has to be done (cyr_dbtool) for each subscription database
    See improved_mboxlist_sort.html.*/
 
-{ "jmap_emailsearch_db_path", NULL, STRING, "3.1.6" }
+{ "jmap_emailsearch_db_path", NULL, STRING, "3.1.6", "UNRELEASED" }
 /* The absolute path to the JMAP email search cache file.  If not
    specified, JMAP Email/query and Email/queryChanges will not
    cache email search results. */
+
+{ "jmap_querycache_max_age", "0m", DURATION, "UNRELEASED" }
+/* The duration after which unused cached JMAP query results
+   must be evicted from process memory. If non-zero, then the
+   full result of the last query (before windowing) is stored
+   in-memory. Subsequent queries with the same expression and
+   query state can then page through the cached result.
+   A zero value disables query result caching.
+   This feature currently only is enabled for Email/query. */
 
 { "jmap_preview_annot", NULL, STRING, "3.1.1" }
 /* The name of the per-message annotation, if any, to store message

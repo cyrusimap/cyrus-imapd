@@ -54,8 +54,7 @@
 #include "search_sort.h"
 
 typedef int (*search_hit_cb_t)(const char *mboxname, uint32_t uidvalidity,
-                               uint32_t uid, const strarray_t *partids,
-                               void *rock);
+                               uint32_t uid, const char *partid, void *rock);
 
 typedef int (*search_hitguid_cb_t)(const conv_guidrec_t *rec, size_t nguids,
                                    void *rock);

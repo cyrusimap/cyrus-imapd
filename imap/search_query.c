@@ -51,6 +51,7 @@
 #endif
 
 #include "assert.h"
+#include "cyr_qsort_r.h"
 #include "search_expr.h"
 #include "search_query.h"
 #include "imapd.h"
@@ -60,6 +61,7 @@
 #include "bsearch.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+#include "smallarrayu64.h"
 #include "statuscache.h"
 
 /* generated headers are not necessarily in current directory */
@@ -80,13 +82,10 @@ EXPORTED search_query_t *search_query_new(struct index_state *state,
     ptrarray_init(&query->merged_msgdata);
     construct_hash_table(&query->folders_by_name, 128, 0);
     ptrarray_init(&query->folders_by_id);
+    construct_hashu64_table(&query->partid_by_num, 1024, 0);
+    construct_hash_table(&query->partnum_by_id, 1024, 0);
 
     return query;
-}
-
-static void folder_free_partids(void *data)
-{
-    strarray_free((strarray_t*)data);
 }
 
 static void folder_free(void *data)
@@ -96,7 +95,7 @@ static void folder_free(void *data)
     free(folder->mboxname);
     bv_fini(&folder->uids);
     bv_fini(&folder->found_uids);
-    free_hashu64_table(&folder->partids, folder_free_partids);
+    dynarray_fini(&folder->partnums);
     free(folder);
 }
 
@@ -129,6 +128,9 @@ EXPORTED void search_query_free(search_query_t *query)
         free(saved);
     }
     ptrarray_fini(&query->saved_msgdata);
+
+    free_hash_table(&query->partnum_by_id, NULL);
+    free_hashu64_table(&query->partid_by_num, free);
 
     free(query);
 }
@@ -458,6 +460,22 @@ struct subquery_rock {
     int is_excluded;
 };
 
+static int folder_partnum_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                                  const void *vb,
+                                                  void *rock __attribute__((unused)))
+{
+    const struct search_folder_partnum *a = va;
+    const struct search_folder_partnum *b = vb;
+
+    if (a->uid == b->uid) {
+        if (a->partnum == b->partnum)
+            return 0;
+        else
+            return a->partnum < b->partnum ? -1 : 1;
+    }
+    else return a->uid < b->uid ? -1 : 1;
+}
+
 /*
  * After an indexed subquery is run, we have accumulated a number of
  * found UID hits in folders.  Here we check those UIDs for a) not
@@ -554,6 +572,13 @@ static void subquery_post_enginesearch(const char *key, void *data, void *rock)
     if (query->sortcrit && nmsgs)
         query_load_msgdata(query, folder, state, msgno_list, nmsgs);
 
+    /* sort partnums by uid */
+    if (dynarray_size(&folder->partnums)) {
+        cyr_qsort_r(folder->partnums.data, folder->partnums.count,
+                sizeof(struct search_folder_partnum),
+                folder_partnum_cmp, NULL);
+    }
+
     folder->found_dirty = 0;
     r = 0;
 
@@ -604,7 +629,6 @@ EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
         bop = SEARCH_OP_OR;
         break;
 
-    case SEOP_MATCH:
     case SEOP_FUZZYMATCH:
         if (e->attr && search_can_match(e->op, e->attr->part)) {
             if (e->attr->flags & SEA_ISLIST) {
@@ -629,7 +653,7 @@ EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
 }
 
 static int add_found_uid(const char *mboxname, uint32_t uidvalidity,
-                             uint32_t uid, const strarray_t *partids,
+                             uint32_t uid, const char *partid,
                              void *rock)
 {
     struct subquery_rock *qr = rock;
@@ -637,19 +661,18 @@ static int add_found_uid(const char *mboxname, uint32_t uidvalidity,
     if (folder) {
         bv_set(&folder->found_uids, uid);
         folder->found_dirty = 1;
-        if (partids && !qr->is_excluded) {
-            if (!folder->partids.size) {
-                if (!construct_hashu64_table(&folder->partids, 4096, 0))
-                    return IMAP_INTERNAL;
+        if (partid && qr->query->want_partids && !qr->is_excluded) {
+            uint32_t partnum = (uint32_t)(uintptr_t) hash_lookup(partid, &qr->query->partnum_by_id);
+            if (!partnum) {
+                partnum = ++qr->query->partnum_seq;
+                hash_insert(partid, (void*)(uintptr_t) partnum, &qr->query->partnum_by_id);
+                hashu64_insert(partnum, xstrdup(partid), &qr->query->partid_by_num);
             }
-            strarray_t *have_partids = hashu64_lookup(uid, &folder->partids);
-            if (have_partids) {
-                int i;
-                for (i = 0; i < strarray_size(partids); i++) {
-                    strarray_add(have_partids, strarray_nth(partids, i));
-                }
+            if (!folder->partnums.membsize) {
+                dynarray_init(&folder->partnums, sizeof(struct search_folder_partnum));
             }
-            else hashu64_insert(uid, strarray_dup(partids), &folder->partids);
+            struct search_folder_partnum pnumuid = { uid, partnum };
+            dynarray_append(&folder->partnums, &pnumuid);
         }
     }
     return 0;
