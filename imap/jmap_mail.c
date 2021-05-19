@@ -4044,7 +4044,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     memset(&touched_ids, 0, sizeof(hash_table));
     construct_hash_table(&touched_ids, mdcount + 1, 0);
 
-    hashu64_table touched_cids = HASH_TABLE_INITIALIZER;
+    hashu64_table touched_cids = HASHU64_TABLE_INITIALIZER;
     memset(&touched_cids, 0, sizeof(hashu64_table));
     construct_hashu64_table(&touched_cids, mdcount + 1, 0);
 
