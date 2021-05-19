@@ -1100,15 +1100,12 @@ HIDDEN int jmap_openmbox(jmap_req_t *req, const char *name,
 HIDDEN int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
                                      struct mailbox **mboxp, int rw)
 {
-    mbentry_t *mbentry = NULL;
+    const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, id);
 
-    int r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
-
-    if (!r && mbentry) r = jmap_openmbox(req, mbentry->name, mboxp, rw);
-
-    mboxlist_entry_free(&mbentry);
-
-    return r;
+    if (mbentry)
+        return jmap_openmbox(req, mbentry->name, mboxp, rw);
+    else
+        return IMAP_MAILBOX_NONEXISTENT;
 }
 
 HIDDEN int jmap_isopenmbox(jmap_req_t *req, const char *name)
@@ -3305,7 +3302,11 @@ EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req,
 
     if (!mbentry) {
         int r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
-        if (r || !mbentry || (mbentry->mbtype & MBTYPE_DELETED)) {
+        if (r || !mbentry || (mbentry->mbtype & MBTYPE_DELETED) ||
+            /* make sure the user can "see" the mailbox */
+            !(jmap_myrights_mbentry(req, mbentry) & JACL_LOOKUP) ||
+            /* keep the lookup scoped to accountid */
+            !mboxname_userownsmailbox(req->accountid, mbentry->name)) {
             mboxlist_entry_free(&mbentry);
             return NULL;
         }
