@@ -446,7 +446,8 @@ static const struct precond_t {
     { "no-uid-conflict", NS_CARDDAV },
     { "addressbook-collection-location-ok", NS_CARDDAV },
     { "supported-filter", NS_CARDDAV },
-    { "supported-collation", NS_CARDDAV }
+    { "supported-collation", NS_CARDDAV },
+    { "max-resource-size", NS_CARDDAV },
 };
 
 

@@ -958,6 +958,9 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                 case IMAP_QUOTA_EXCEEDED:
                     err = json_pack("{s:s}", "type", "overQuota");
                     break;
+                case IMAP_MESSAGE_TOO_LARGE:
+                    err = json_pack("{s:s}", "type", "tooLarge");
+                    break;
                 default:
                     err = jmap_server_error(r);
             }
@@ -1244,6 +1247,9 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                     break;
                 case IMAP_QUOTA_EXCEEDED:
                     err = json_pack("{s:s}", "type", "overQuota");
+                    break;
+                case IMAP_MESSAGE_TOO_LARGE:
+                    err = json_pack("{s:s}", "type", "tooLarge");
                     break;
                 default:
                     err = jmap_server_error(r);
