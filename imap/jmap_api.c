@@ -3289,8 +3289,9 @@ HIDDEN int jmap_mboxlist_lookup(const char *name,
     return 0;
 }
 
-EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req,
-                                                   const char *id)
+static const mbentry_t *_mbentry_by_uniqueid(jmap_req_t *req,
+                                             const char *id,
+                                             int scope)
 {
     mbentry_t *mbentry = NULL;
 
@@ -3306,7 +3307,7 @@ EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req,
             /* make sure the user can "see" the mailbox */
             !(jmap_myrights_mbentry(req, mbentry) & JACL_LOOKUP) ||
             /* keep the lookup scoped to accountid */
-            !mboxname_userownsmailbox(req->accountid, mbentry->name)) {
+            (scope && !mboxname_userownsmailbox(req->accountid, mbentry->name))) {
             mboxlist_entry_free(&mbentry);
             return NULL;
         }
@@ -3317,9 +3318,15 @@ EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req,
     return mbentry;
 }
 
+EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req,
+                                                   const char *id)
+{
+    return _mbentry_by_uniqueid(req, id, 1/*scope*/);
+}
+
 EXPORTED mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id)
 {
-    const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, id);
+    const mbentry_t *mbentry = _mbentry_by_uniqueid(req, id, 1/*scope*/);
     if (!mbentry) return NULL;
     return mboxlist_entry_copy(mbentry);
 }
@@ -3375,7 +3382,12 @@ EXPORTED mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav)
         if (jmap_mboxlist_lookup(dav->mailbox, &mbentry, NULL)) return NULL;
     }
     else {
-        mbentry = jmap_mbentry_by_uniqueid_copy(req, dav->mailbox);
+        /* XXX  DAV DB scopes the lookup to a single account.
+           XXX  And scoping the mailbox to req->accountid will break Foo/copy */
+        const mbentry_t *mbe =
+            _mbentry_by_uniqueid(req, dav->mailbox, 0/*scope*/);
+        if (!mbe) return NULL;
+        mbentry =  mboxlist_entry_copy(mbe);
     }
 
     return mbentry;
