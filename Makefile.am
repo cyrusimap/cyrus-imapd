@@ -626,6 +626,7 @@ cunit_TESTS += \
 	cunit/squat.testc \
 	cunit/strarray.testc \
 	cunit/strconcat.testc \
+	cunit/strhash.testc \
 	cunit/times.testc \
 	cunit/tok.testc
 
