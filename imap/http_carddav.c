@@ -91,6 +91,7 @@
 
 static struct carddav_db *auth_carddavdb = NULL;
 static time_t compile_time;
+static int vcard_max_size;
 
 static void my_carddav_init(struct buf *serverinfo);
 static int my_carddav_auth(const char *userid);
@@ -131,6 +132,10 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop, xmlNodePtr resp,
                                  struct propstat propstat[], void *rock);
+static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
+                            struct propfind_ctx *fctx,
+                            xmlNodePtr prop, xmlNodePtr resp,
+                            struct propstat propstat[], void *rock);
 static int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
                                struct propfind_ctx *fctx,
                                xmlNodePtr prop, xmlNodePtr resp,
@@ -292,7 +297,7 @@ static const struct prop_entry carddav_props[] = {
       propfind_collationset, NULL, NULL },
     { "max-resource-size", NS_CARDDAV,
       PROP_COLLECTION,
-      NULL, NULL, NULL },
+      propfind_maxsize, NULL, NULL },
 
     /* Apple Calendar Server properties */
     { "getctag", NS_CS,
@@ -398,6 +403,9 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
     namespace_principal.allow |= ALLOW_CARD;
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
+
+    vcard_max_size = config_getint(IMAPOPT_VCARD_MAX_SIZE);
+    if (vcard_max_size <= 0) vcard_max_size = INT_MAX;
 }
 
 
@@ -574,6 +582,7 @@ static int store_resource(struct transaction_t *txn,
         !vcard->objects->type ||
         strcasecmp(vcard->objects->type, "vcard")) {
         txn->error.precond = CARDDAV_VALID_DATA;
+        txn->error.desc = "Not a vCard";
         return HTTP_FORBIDDEN;
     }
 
@@ -589,6 +598,7 @@ static int store_resource(struct transaction_t *txn,
             version = propval;
             if (strcmp(version, "3.0")) {
                 txn->error.precond = CARDDAV_SUPP_DATA;
+                txn->error.desc = "Not a version 3 vCard";
                 return HTTP_FORBIDDEN;
             }
         }
@@ -603,6 +613,7 @@ static int store_resource(struct transaction_t *txn,
     /* Sanity check data */
     if (!version || !uid || !fullname) {
         txn->error.precond = CARDDAV_VALID_DATA;
+        txn->error.desc = "Missing a mandatory vCard property";
         return HTTP_FORBIDDEN;
     }
 
@@ -644,6 +655,13 @@ static int store_resource(struct transaction_t *txn,
         }
     }
 
+    struct buf *buf = vcard_as_buf(vcard);
+    if (buf_len(buf) > (size_t) vcard_max_size) {
+        buf_free(buf);
+        txn->error.precond = CARDDAV_MAX_SIZE;
+        return HTTP_FORBIDDEN;
+    }
+
     if (cdata->dav.imap_uid) {
         /* Fetch index record for the resource */
         int r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
@@ -683,7 +701,6 @@ static int store_resource(struct transaction_t *txn,
     spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
 
     /* Store the resource */
-    struct buf *buf = vcard_as_buf(vcard);
     int r = dav_store_resource(txn, buf_cstring(buf), 0,
                               mailbox, oldrecord, cdata->dav.createdmodseq, NULL);
     buf_destroy(buf);
@@ -1200,6 +1217,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     if (!(vcard && vcard->objects &&
           vparse_restriction_check(vcard->objects))) {
         txn->error.precond = CARDDAV_VALID_DATA;
+        txn->error.desc = !(vcard && vcard->objects) ? "Not a vCard" : "Failed restriction checks";
         return HTTP_FORBIDDEN;
     }
 
@@ -1572,6 +1590,25 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
 
     return 0;
 }
+
+/* Callback to fetch CARDDAV:max-resource-size */
+static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
+                            struct propfind_ctx *fctx,
+                            xmlNodePtr prop __attribute__((unused)),
+                            xmlNodePtr resp __attribute__((unused)),
+                            struct propstat propstat[],
+                            void *rock __attribute__((unused)))
+{
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, "%d", vcard_max_size);
+    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
+
+    return 0;
+}
+
 
 /* Callback to fetch CY:address-groups */
 int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,

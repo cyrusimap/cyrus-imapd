@@ -58,6 +58,10 @@
 #include "xstrlcat.h"
 #include "xmalloc.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
+
 
 #define NUM_BUFS 10
 
@@ -1107,6 +1111,12 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     time_t now = time(0);
     char *freeme = NULL;
     char datestr[80];
+    static int vcard_max_size = -1;
+
+    if (vcard_max_size < 0) {
+        vcard_max_size = config_getint(IMAPOPT_VCARD_MAX_SIZE);
+        if (vcard_max_size <= 0) vcard_max_size = INT_MAX;
+    }
 
     init_internal();
 
@@ -1120,12 +1130,18 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     time_to_iso8601(now, datestr, sizeof(datestr), 0);
     vparse_replace_entry(vcard, NULL, "REV", datestr);
 
+    /* Check size of vCard */
+    struct buf buf = BUF_INITIALIZER;
+    vparse_tobuf(vcard, &buf);
+    if (buf_len(&buf) > (size_t) vcard_max_size) {
+        buf_free(&buf);
+        return IMAP_MESSAGE_TOO_LARGE;
+    }
+
     /* Create header for resource */
     const char *uid = vparse_stringval(vcard, "uid");
     const char *fullname = vparse_stringval(vcard, "fn");
     if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
-    struct buf buf = BUF_INITIALIZER;
-    vparse_tobuf(vcard, &buf);
     char *mbuserid = mboxname_to_userid(mailbox->name);
 
     time_to_rfc5322(now, datestr, sizeof(datestr));

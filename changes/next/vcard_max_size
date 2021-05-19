@@ -1,0 +1,14 @@
+
+Description:
+
+Adds 'vcard_max_size' option to limit the size of vCards that can be stored.
+
+
+Config changes:
+
+Adds 'vcard_max_size' option.
+
+
+Upgrade instructions:
+
+None.
