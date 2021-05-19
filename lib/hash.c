@@ -44,6 +44,9 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
       assert(size);
 
       table->size  = size;
+      do {
+        table->seed = rand();
+      } while (table->seed == 0);
 
       /* Allocate the table -- different for using memory pools and not */
       if(use_mpool) {
@@ -72,7 +75,7 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
 
 EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
-      unsigned val = strhash(key) % table->size;
+      unsigned val = strhash_seeded(table->seed, key) % table->size;
       bucket *ptr, *newptr;
       bucket **prev;
 
@@ -159,7 +162,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
       if (!table->size)
           return NULL;
 
-      val = strhash(key) % table->size;
+      val = strhash_seeded(table->seed, key) % table->size;
 
       if (!(table->table)[val])
             return NULL;
@@ -183,7 +186,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
  * since it will leak memory until you get rid of the entire hash table */
 EXPORTED void *hash_del(const char *key, hash_table *table)
 {
-      unsigned val = strhash(key) % table->size;
+      unsigned val = strhash_seeded(table->seed, key) % table->size;
       bucket *ptr, *last = NULL;
 
       if (!(table->table)[val])
