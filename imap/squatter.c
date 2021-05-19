@@ -528,8 +528,7 @@ error:
 }
 
 static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
-                            uint32_t uid,
-                            const strarray_t *partids __attribute__((unused)),
+                            uint32_t uid, const char *partid __attribute__((unused)),
                             void *rock)
 {
     int single = *(int *)rock;
