@@ -676,6 +676,32 @@ sub test_calendar_set_sharewith
         $self->assert_str_equals('lrswitedn', $map{cassandane});
         $self->assert_str_equals('lrswitedn', $map{manifold});
         $self->assert_null($map{paraphrase});
+
+        xlog $self, "Remove the access for cassandane";
+        $res = $jmap->CallMethods([
+                ['Calendar/set', {
+                        accountId => 'master',
+                        update => { "$CalendarId" => {
+                                "shareWith/cassandane" => undef,
+                 }}}, "R1"]
+        ]);
+
+        # GET session
+        my $RawRequest = {
+            headers => {
+                'Authorization' => $jmap->auth_header(),
+            },
+            content => '',
+        };
+        my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+        if ($ENV{DEBUGJMAP}) {
+            warn "JMAP " . Dumper($RawRequest, $RawResponse);
+        }
+        $self->assert_str_equals('200', $RawResponse->{status});
+        my $session = eval { decode_json($RawResponse->{content}) };
+        $self->assert_not_null($session);
+        $self->assert_not_null($session->{accounts}{cassandane});
+        $self->assert_null($session->{accounts}{master});
     }
 }
 
