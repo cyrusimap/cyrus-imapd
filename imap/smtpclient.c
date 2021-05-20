@@ -394,12 +394,25 @@ done:
     return r;
 }
 
-static int smtpclient_schk(smtpclient_t *sm)
+static int smtpclient_schk(smtpclient_t *sm, json_t *fromaddr)
 {
     int r = 0;
 
     /* Say SCHK */
-    buf_setcstr(&sm->buf, "SCHK\r\n");
+    buf_setcstr(&sm->buf, "SCHK");
+    if (fromaddr) {
+        /* Add FROMADDR= parameters */
+        size_t i;
+        json_t *jval;
+        json_array_foreach(fromaddr, i, jval) {
+            const char *s = json_string_value(json_object_get(jval, "email"));
+            if (s) {
+                buf_appendcstr(&sm->buf, " FROMADDR=");
+                smtp_encode_esmtp_value(s, &sm->buf);
+            }
+        }
+    }
+    buf_appendcstr(&sm->buf, "\r\n");
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
     buf_reset(&sm->buf);
@@ -672,7 +685,7 @@ static int validate_envelope(smtp_envelope_t *env)
     return 0;
 }
 
-EXPORTED int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct protstream *data)
+static int smtpclient_sendenv(smtpclient_t *sm, smtp_envelope_t *env)
 {
     int r = 0;
 
@@ -694,31 +707,46 @@ EXPORTED int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct 
     r = smtpclient_rcpt_to(sm, &env->rcpts);
     if (r) goto done;
 
-    if (data) {
-        r = smtpclient_data(sm, data);
-        if (r) goto done;
-    }
-    else {
-        /* simply pre-flighting the envelope */
-        if (CAPA(sm->backend, SMTPCLIENT_CAPA_SENDCHECK)) {
-            r = smtpclient_schk(sm);
-        }
-        else {
-            r = smtpclient_rset(sm);
-        }
-        if (r) goto done;
-    }
-
 done:
     return r;
 }
 
-EXPORTED int smtpclient_send(smtpclient_t *sm, smtp_envelope_t *env, struct buf *data)
+EXPORTED int smtpclient_sendprot(smtpclient_t *sm,
+                                 smtp_envelope_t *env, struct protstream *data)
 {
+    int r = smtpclient_sendenv(sm, env);
+    if (r) return r;
+
+    return smtpclient_data(sm, data);
+}
+
+EXPORTED int smtpclient_send(smtpclient_t *sm,
+                             smtp_envelope_t *env, struct buf *data)
+{
+
     struct protstream *p = prot_readmap(buf_base(data), buf_len(data));
     smtpclient_set_size(sm, buf_len(data));
     int r = smtpclient_sendprot(sm, env, p);
     prot_free(p);
+    return r;
+}
+
+EXPORTED int smtpclient_sendcheck(smtpclient_t *sm, smtp_envelope_t *env,
+                                  size_t size, json_t *fromaddr)
+{
+    if (size > 0) smtpclient_set_size(sm, size);
+
+    int r = smtpclient_sendenv(sm, env);
+    if (r) return r;
+
+    /* simply pre-flighting the envelope */
+    if (CAPA(sm->backend, SMTPCLIENT_CAPA_SENDCHECK)) {
+        r = smtpclient_schk(sm, fromaddr);
+    }
+    else {
+        r = smtpclient_rset(sm);
+    }
+
     return r;
 }
 

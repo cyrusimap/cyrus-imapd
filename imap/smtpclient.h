@@ -112,6 +112,11 @@ extern int smtpclient_open_host(const char *addr, smtpclient_t **smp);
 extern int smtpclient_send(smtpclient_t *sm, smtp_envelope_t *env, struct buf *data);
 extern int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct protstream *data);
 
+/* Perform SMTP envelope (and optionally size and/or From: header address checks)
+   without sending data */
+extern int smtpclient_sendcheck(smtpclient_t *sm, smtp_envelope_t *env,
+                                size_t size, json_t *fromaddr);
+
 /* Close the SMTP client and free its memory */
 extern int smtpclient_close(smtpclient_t **smp);
 
