@@ -299,13 +299,7 @@ static void address_to_smtp(smtp_addr_t *smtpaddr, json_t *addr)
         }
         /* Encode xtext value */
         if (json_is_string(val)) {
-            const char *p;
-            for (p = json_string_value(val); *p; p++) {
-                if (('!' <= *p && *p <= '~') && *p != '=' && *p != '+') {
-                    buf_putc(&xtext, *p);
-                }
-                else buf_printf(&xtext, "+%02X", *p);
-            }
+            smtp_encode_esmtp_value(json_string_value(val), &xtext);
         }
         /* Build parameter */
         smtp_param_t *param = xzmalloc(sizeof(smtp_param_t));

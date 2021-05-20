@@ -863,6 +863,19 @@ EXPORTED int smtp_is_valid_esmtp_value(const char *val)
     return 1;
 }
 
+/* Encodes into the current location of the struct buf.
+   The caller must buf_reset() before calling is necessary. */
+EXPORTED void smtp_encode_esmtp_value(const char *val, struct buf *xtext)
+{
+    const char *p;
+    for (p = val; *p; p++) {
+        if (('!' <= *p && *p <= '~') && *p != '=' && *p != '+') {
+            buf_putc(xtext, *p);
+        }
+        else buf_printf(xtext, "+%02X", *p);
+    }
+}
+
 
 EXPORTED smtp_addr_t *smtp_envelope_set_from(smtp_envelope_t *env, const char *addr)
 {

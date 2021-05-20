@@ -81,6 +81,10 @@ extern int smtp_is_valid_esmtp_keyword(const char *val);
  * as defined in RFC 5321, section 4.1.2. */
 extern int smtp_is_valid_esmtp_value(const char *val);
 
+/* Encode val as an esmtp-value
+ * as defined in RFC 5321, section 4.1.2. */
+extern void smtp_encode_esmtp_value(const char *val, struct buf *xtext);
+
 /* Set the MAIL FROM address in env and return the new value.
  * Any existing address is deallocated. */
 extern smtp_addr_t *smtp_envelope_set_from(smtp_envelope_t *env, const char *addr);
