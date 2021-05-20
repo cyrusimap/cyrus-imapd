@@ -683,6 +683,14 @@ static void _emailsubmission_create(jmap_req_t *req,
         json_decref(rcpts);
         json_object_set_new(myenvelope, "rcptTo", rcptTo);
     }
+    else if (holduntil) {
+        hash_table props = HASH_TABLE_INITIALIZER;
+        construct_hash_table(&props, 1, 0);
+        hash_insert("from", (void*)1, &props);
+        r = jmap_email_get_with_props(req, &props, mr, &msg);
+        free_hash_table(&props, NULL);
+        if (r) goto done;
+    }
 
     /* Validate envelope */
     if (!json_array_size(json_object_get(envelope, "rcptTo"))) {
@@ -745,8 +753,8 @@ static void _emailsubmission_create(jmap_req_t *req,
 
     if (holduntil) {
         /* Pre-flight the message */
-        smtpclient_set_size(*sm, buf_len(&buf));
-        r = smtpclient_sendprot(*sm, &smtpenv, NULL);
+        r = smtpclient_sendcheck(*sm, &smtpenv,
+                                 buf_len(&buf), json_object_get(msg, "from"));
     }
     else {
         /* Send message */
