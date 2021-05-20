@@ -404,6 +404,7 @@ static const struct precond_t {
     { "supported-filter", NS_CALDAV },
     { "valid-filter", NS_CALDAV },
     { "supported-collation", NS_CALDAV },
+    { "max-resource-size", NS_CALDAV },
 
     /* RSCALE (RFC 7529) preconditions */
     { "supported-rscale", NS_CALDAV },

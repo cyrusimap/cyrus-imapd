@@ -125,6 +125,7 @@ static int rscale_cmp(const void *a, const void *b)
 static struct caldav_db *auth_caldavdb = NULL;
 static time_t compile_time;
 static struct buf ical_prodid_buf = BUF_INITIALIZER;
+static int icalendar_max_size;
 
 unsigned config_allowsched = IMAP_ENUM_CALDAV_ALLOWSCHEDULING_OFF;
 const char *ical_prodid = NULL;
@@ -745,6 +746,9 @@ static void my_caldav_init(struct buf *serverinfo)
     tok_fini(&tok);
 
     utc_zone = icaltimezone_get_utc_timezone();
+
+    icalendar_max_size = config_getint(IMAPOPT_ICALENDAR_MAX_SIZE);
+    if (icalendar_max_size <= 0) icalendar_max_size = INT_MAX;
 }
 
 static int _create_mailbox(const char *userid, const char *mailboxname,
@@ -4316,6 +4320,13 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
+    if (icalendar_max_size != INT_MAX &&
+        strlen(icalcomponent_as_ical_string(ical)) > (size_t) icalendar_max_size) {
+        txn->error.precond = CALDAV_MAX_SIZE;
+        ret = HTTP_FORBIDDEN;
+        goto done;
+    }
+
     comp = icalcomponent_get_first_real_component(ical);
     if (rscale_calendars) {
         /* Grab RRULE to check RSCALE */
@@ -6163,17 +6174,10 @@ static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
                             struct propstat propstat[],
                             void *rock __attribute__((unused)))
 {
-    static int maxsize = 0;
-
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    if (!maxsize) {
-        maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
-        if (!maxsize) maxsize = INT_MAX;
-    }
-
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%d", maxsize);
+    buf_printf(&fctx->buf, "%d", icalendar_max_size);
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
 

@@ -1063,6 +1063,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backwards compatibility, if no unit is specified, minutes
    is assumed. */
 
+{ "icalendar_max_size", 0, INT, "UNRELEASED" }
+/* Maximum allowed iCalendar size.
+   If non-zero, CalDAV and JMAP will reject storage of resources whose
+   iCalendar representation is larger than \fIicalendar_max_size\fR bytes.
+   If set to 0, this will allow iCalendar resources of any size (the default). */
+
 { "idlesocket", "{configdirectory}/socket/idle", STRING, "2.3.17" }
 /* Unix domain socket that idled listens on. */
 
