@@ -965,7 +965,7 @@ int main(int argc, char **argv)
 
         /* squat flags */
         {"squat-annot", no_argument, 0, 'a' },
-        {"squat-skip", optional_argument, 0, 's' },
+        {"squat-skip", required_argument, 0, 's' },
 
         /* synclog-mode flags */
         {"synclog", required_argument, 0, 'f' },
@@ -1106,16 +1106,13 @@ int main(int argc, char **argv)
 
         case 's':
             if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
-            if (optarg) {
+            {
                 char *end;
                 long val = strtol(optarg, &end, 10);
                 if (val < 0 || val > INT_MAX || *end) {
                     usage(argv[0]);
                 }
                 skip_unmodified = (int) val;
-            }
-            else {
-                skip_unmodified = 60;
             }
             mode = INDEXER;
             break;

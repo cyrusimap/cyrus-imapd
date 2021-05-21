@@ -1,0 +1,12 @@
+Description:
+
+Changes the squatter -s option to require an argument
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None. Optional argument handling of the -s option was broken already.
