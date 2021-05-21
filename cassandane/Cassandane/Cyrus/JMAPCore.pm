@@ -578,7 +578,7 @@ sub test_require_conversations
 }
 
 sub test_eventsource
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -608,11 +608,26 @@ sub test_eventsource
         $url = "http://".$http->host().":".$http->port().$url;
     }
 
+    $RawRequest->{headers}->{'Last-Event-Id'} = '0';
     $RawResponse = $jmap->ua->get($url, $RawRequest);
     if ($ENV{DEBUGJMAP}) {
         warn "JMAP " . Dumper($RawRequest, $RawResponse);
     }
-    $self->assert_str_equals('204', $RawResponse->{status});
+    $self->assert_str_equals('200', $RawResponse->{status});
+    $self->assert_str_equals('text/event-stream',
+                             $RawResponse->{headers}{'content-type'});
+    $self->assert_null($RawResponse->{headers}{'content-length'});
+
+    my %event = $RawResponse->{content} =~ /^(\w+): ?(.*)$/mg;
+    $self->assert_not_null($event{id});
+    $self->assert_str_equals('state', $event{event});
+
+    my $data = eval { decode_json($event{data}) };
+    $self->assert_not_null($data);
+    $self->assert_str_equals('StateChange', $data->{'@type'});
+    $self->assert_not_null($data->{changed});
+    $self->assert_not_null($data->{changed}->{cassandane});
+    $self->assert_not_null($data->{changed}->{cassandane}->{Email});
 }
 
 1;
