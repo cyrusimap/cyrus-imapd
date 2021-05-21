@@ -116,7 +116,7 @@ sub test_simple
 
 # XXX version gated to 3.4+ for now to keep travis happy, but if we
 # XXX backport the fix we should change or remove the gate...
-sub test_skip_unmodified_slow
+sub test_skip_unmodified
     :SearchEngineSquat :min_version_3_4
 {
     my ($self) = @_;
