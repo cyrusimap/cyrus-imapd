@@ -71,3 +71,18 @@ EXPORTED unsigned strhash_seeded_djb2(uint32_t seed, const char *string)
 
     return hash;
 }
+
+EXPORTED unsigned strhash_legacy(const char *string)
+{
+    unsigned ret_val = 0;
+    int i;
+
+    while (*string)
+    {
+        i = (int) *string;
+        ret_val ^= i;
+        ret_val <<= 1;
+        string ++;
+    }
+    return ret_val;
+}

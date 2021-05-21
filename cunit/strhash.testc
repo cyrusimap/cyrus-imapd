@@ -159,6 +159,7 @@ static void test_quality(void)
             line[nread - 1] = '\0';
 
         unsigned hash = strhash_seeded_djb2(0, line) % NBUCKETS;
+//        unsigned hash = strhash_legacy(line) % NBUCKETS;
 
         buckets[hash]++;
         inputs++;
