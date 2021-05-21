@@ -93,7 +93,6 @@ struct ws_context {
     const char *accept_key;
     const char *protocol;
     ws_data_callback *data_cb;
-    void *cb_rock;
     struct buf log;
     int log_tail;
     unsigned ext;                    /* Bitmask of negotiated extension(s) */
@@ -108,6 +107,8 @@ struct ws_context {
         } deflate;
     } pmce;
 };
+
+static int ws_timeout;
 
 
 static const char *wslay_opcode_as_str(enum wslay_opcode opcode)
@@ -185,16 +186,23 @@ static ssize_t h1_recv_cb(wslay_event_context_ptr ev,
     ssize_t n;
 
     n = prot_read(pin, (char *) buf, len);
-    if (!n) {
-        /* No data */
-        if (pin->eof)
-            wslay_event_set_error(ev, WSLAY_ERR_NO_MORE_MSG);
-        else if (pin->error)
-            wslay_event_set_error(ev, WSLAY_ERR_CALLBACK_FAILURE);
-        else
-            wslay_event_set_error(ev, WSLAY_ERR_WOULDBLOCK);
+    if (n) {
+        /* We received some data - don't block next time
+           Note: This callback gets called multiple times until it
+           would block.  We don't actually want to block and prevent
+           output from being submitted */
+        prot_NONBLOCK(pin);
+    }
+    else {
+        /* No data -  block next time (for client timeout) */
+        prot_BLOCK(pin);
 
-        n = -1;
+        /* XXX  Wslay seems to treat any other error as catastrophic and
+           sends a close frame on its own, bypassing the logic in ws_input().
+           Always return WOULDBLOCK here so we can return appropriate 
+           status codes and message strings in ws_input().
+        */
+        wslay_event_set_error(ev, WSLAY_ERR_WOULDBLOCK);
     }
 
     xsyslog(LOG_DEBUG, "WS recv", "len=<%zu>, n=<%zd>, eof=<%d>, err=<%s>",
@@ -407,6 +415,40 @@ static void on_frame_recv_start_cb(wslay_event_context_ptr ev __attribute__((unu
 #define COMP_FAILED_ERR    "Compressing message failed"
 #define DECOMP_FAILED_ERR  "Decompressing message failed"
 
+static int queue_msg(struct transaction_t *txn, struct buf *outbuf,
+                     struct wslay_event_msg *msgarg, uint8_t *rsv,
+                     const char **pmce_str, const char **err_msg)
+{
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+
+    /* Compress the server response, if supported by the client */
+    if (ctx->ext & EXT_PMCE_DEFLATE) {
+        int r = zlib_compress(txn,
+                              ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
+                              buf_base(outbuf), buf_len(outbuf));
+        if (r) {
+            syslog(LOG_ERR, "queue_response(): zlib_compress() failed");
+
+            if (err_msg) *err_msg = COMP_FAILED_ERR;
+            return WSLAY_CODE_INTERNAL_SERVER_ERROR;
+        }
+
+        /* Trim the trailing 4 bytes */
+        buf_truncate(&txn->zbuf, buf_len(&txn->zbuf) - 4);
+        buf_move(outbuf, &txn->zbuf);
+
+        *rsv |= WSLAY_RSV1_BIT;
+        if (pmce_str) *pmce_str = "deflate";
+    }
+
+    /* Queue the server response */
+    msgarg->msg = (const uint8_t *) buf_base(outbuf);
+    msgarg->msg_length = buf_len(outbuf);
+    wslay_event_queue_msg_ex(ctx->event, msgarg, *rsv);
+
+    return 0;
+}
+
 static void on_msg_recv_cb(wslay_event_context_ptr ev,
                            const struct wslay_event_on_msg_recv_arg *arg,
                            void *user_data)
@@ -492,7 +534,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         }
 
         /* Process the request */
-        r = ctx->data_cb(arg->opcode, &inbuf, &outbuf, &ctx->log, &ctx->cb_rock);
+        r = ctx->data_cb(txn, arg->opcode, &inbuf, &outbuf, &ctx->log);
         if (r) {
             switch (r) {
             case HTTP_NO_CONTENT:
@@ -527,32 +569,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             buf_reset(&txn->buf);
         }
 
-        /* Compress the server response, if supported by the client */
-        size_t orig_len = buf_len(&outbuf);
-        if (ctx->ext & EXT_PMCE_DEFLATE) {
-            r = zlib_compress(txn,
-                              ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
-                              buf_base(&outbuf), buf_len(&outbuf));
-            if (r) {
-                xsyslog(LOG_ERR, "WS: zlib_compress() failed", NULL);
-
-                err_code = WSLAY_CODE_INTERNAL_SERVER_ERROR;
-                err_msg = COMP_FAILED_ERR;
-                goto err;
-            }
-
-            /* Trim the trailing 4 bytes */
-            buf_truncate(&txn->zbuf, buf_len(&txn->zbuf) - 4);
-            buf_move(&outbuf, &txn->zbuf);
-
-            rsv |= WSLAY_RSV1_BIT;
-            pmce_str = "deflate";
-        }
-
         /* Queue the server response */
-        msgarg.msg = (const uint8_t *) buf_base(&outbuf);
-        msgarg.msg_length = buf_len(&outbuf);
-        wslay_event_queue_msg_ex(ev, &msgarg, rsv);
+        size_t orig_len = buf_len(&outbuf);
+        err_code = queue_msg(txn, &outbuf, &msgarg, &rsv, &pmce_str, &err_msg);
 
         /* Log the server response */
         buf_printf(&ctx->log,
@@ -598,22 +617,21 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 }
 
 
-HIDDEN void ws_init(struct buf *serverinfo)
+HIDDEN void ws_init(struct http_connection *conn __attribute__((unused)),
+                    struct buf *serverinfo)
 {
     buf_printf(serverinfo, " Wslay/%s", WSLAY_VERSION);
+
+    ws_timeout = config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm');
+    if (ws_timeout < 0) ws_timeout = 0;
 }
 
 
 HIDDEN int ws_enabled()
 {
-    return 1;
+    return (ws_timeout > 0);
 }
 
-
-HIDDEN void ws_done()
-{
-    return;
-}
 
 /* Parse Sec-WebSocket-Extensions header(s) for interesting extensions */
 static void parse_extensions(struct transaction_t *txn)
@@ -657,6 +675,58 @@ static void parse_extensions(struct transaction_t *txn)
     }
 }
 
+
+static void _end_channel_ex(void **ws_ctx, const char *msg)
+{
+    if (!ws_ctx || !*ws_ctx) return;
+
+    struct ws_context *ctx = (struct ws_context *) *ws_ctx;
+    wslay_event_context_ptr ev = ctx->event;
+
+    /* Close the WS if we haven't already */
+    if (wslay_event_get_write_enabled(ev) && !wslay_event_get_close_sent(ev)) {
+        int r;
+
+        if (!msg) msg = "Server unavailable";
+
+        xsyslog(LOG_DEBUG, "WS close", "msg=<%s>", msg);
+
+        syslog(LOG_DEBUG, "wslay_event_queue_close(%s)", msg);
+        r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
+                                    (uint8_t *) msg, strlen(msg));
+        if (r) {
+            xsyslog(LOG_ERR, "WS close failed",
+                    "err=<%s>", wslay_error_as_str(r));
+        }
+        else {
+            r = wslay_event_send(ev);
+            if (r) {
+                xsyslog(LOG_ERR, "WS send failed",
+                        "err=<%s>", wslay_error_as_str(r));
+            }
+        }
+    }
+
+    wslay_event_context_free(ev);
+    buf_free(&ctx->log);
+
+    ws_zlib_done(ctx);
+
+    free(ctx);
+
+    *ws_ctx = NULL;
+}
+
+static void _h1_shutdown(struct http_connection *conn, const char *msg)
+{
+    _end_channel_ex(conn->ws_ctx, msg);
+}
+
+static void _end_channel(struct transaction_t *txn)
+{
+    _end_channel_ex(&txn->ws_ctx, NULL);
+    txn->conn->ws_ctx = NULL;
+}
 
 HIDDEN int ws_start_channel(struct transaction_t *txn,
                             const char *protocol, ws_data_callback *data_cb)
@@ -753,6 +823,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         /* Link the WS context into the connection so we can
            properly close the WS during an abnormal shut_down() */
         txn->conn->ws_ctx = &txn->ws_ctx;
+        ptrarray_add(&txn->conn->shutdown_callbacks, &_h1_shutdown);
 
         callbacks.recv_callback = &h1_recv_cb;
         callbacks.send_callback = &h1_send_cb;
@@ -787,6 +858,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     ctx->protocol = protocol;
     ctx->data_cb = data_cb;
     txn->ws_ctx = ctx;
+    ptrarray_add(&txn->done_callbacks, &_end_channel);
 
     /* Check for supported WebSocket extensions */
     parse_extensions(txn);
@@ -815,12 +887,12 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     /* Force the response to the client immediately */
     prot_flush(txn->conn->pout);
 
-    /* Set connection as non-blocking */
-    prot_NONBLOCK(txn->conn->pin);
-
     /* Don't do telemetry logging in prot layer */
     prot_setlog(txn->conn->pin, PROT_NO_FD);
     prot_setlog(txn->conn->pout, PROT_NO_FD);
+
+    /* Set inactivity timer */
+    prot_settimeout(txn->conn->pin, ws_timeout);
 
     return 0;
 }
@@ -850,52 +922,6 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
                    "; server_no_context_takeover" : "",
                    ctx->pmce.deflate.max_wbits);
     }
-}
-
-
-HIDDEN void ws_end_channel(void **ws_ctx, const char *msg)
-{
-    if (!ws_ctx || !*ws_ctx) return;
-
-    struct ws_context *ctx = (struct ws_context *) *ws_ctx;
-    wslay_event_context_ptr ev = ctx->event;
-
-    /* Close the WS if we haven't already */
-    if (!wslay_event_get_close_sent(ev)) {
-        int r;
-
-        if (!msg) msg = "Server unavailable";
-
-        xsyslog(LOG_DEBUG, "WS close", "msg=<%s>", msg);
-
-        r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
-                                    (uint8_t *) msg, strlen(msg));
-        if (r) {
-            xsyslog(LOG_ERR, "WS close failed",
-                    "err=<%s>", wslay_error_as_str(r));
-        }
-        else {
-            r = wslay_event_send(ev);
-            if (r) {
-                xsyslog(LOG_ERR, "WS send failed",
-                        "err=<%s>", wslay_error_as_str(r));
-            }
-        }
-    }
-
-    wslay_event_context_free(ev);
-    buf_free(&ctx->log);
-
-    if (ctx->cb_rock) {
-        /* Cleanup cb_rock */
-        ctx->data_cb(0, NULL, NULL, NULL, &ctx->cb_rock);
-    }
-
-    ws_zlib_done(ctx);
-
-    free(ctx);
-
-    *ws_ctx = NULL;
 }
 
 
@@ -934,13 +960,26 @@ HIDDEN void ws_input(struct transaction_t *txn)
     int want_read = wslay_event_want_read(ev);
     int want_write = wslay_event_want_write(ev);
     int goaway = txn->flags.conn & CONN_CLOSE;
+    struct protstream *pin = txn->conn->pin;
 
     errno = 0;
 
-    xsyslog(LOG_DEBUG, "WS input", "eof=<%d>, want read=<%d>, want write=<%d>",
-            txn->conn->pin->eof, want_read, want_write);
+    xsyslog(LOG_DEBUG, "WS input",
+            "goaway=<%d>, eof=<%d>, want read=<%d>, want write=<%d>",
+            goaway, prot_IS_EOF(pin), want_read, want_write);
 
-    if (want_read && !goaway) {
+    if (prot_IS_EOF(pin)) {
+        /* Client closed connection */
+        syslog(LOG_DEBUG, "client closed connection");
+        wslay_event_shutdown_write(ev);
+        txn->flags.conn = CONN_CLOSE;
+    }
+    else if (prot_error(pin)) {
+        /* Client timeout or I/O error */
+        goaway = 1;
+        txn->error.desc = prot_error(pin);
+    }
+    else if (want_read && !goaway) {
         /* Read frame(s) */
         int r = wslay_event_recv(ev);
 
@@ -951,40 +990,20 @@ HIDDEN void ws_input(struct transaction_t *txn)
             /* Reset request payload buffer */
             buf_reset(&txn->req_body.payload);
         }
-        else if (r == WSLAY_ERR_NO_MORE_MSG) {
-            /* Client closed connection */
-            xsyslog(LOG_DEBUG, "WS: client closed connection", NULL);
-            txn->flags.conn = CONN_CLOSE;
-        }
         else {
             /* Failure */
             xsyslog(LOG_DEBUG, "WS recv failed", "err=<%s>, prot err=<%s>",
-                    wslay_error_as_str(r), prot_error(txn->conn->pin));
+                    wslay_error_as_str(r), prot_error(pin));
             goaway = 1;
-
-            if (r == WSLAY_ERR_CALLBACK_FAILURE) {
-                /* Client timeout */
-                txn->error.desc = prot_error(txn->conn->pin);
-            }
-            else {
-                txn->error.desc = wslay_error_as_str(r);
-            }
+            txn->error.desc = wslay_error_as_str(r);
         }
     }
 
     if (goaway) {
         /* Tell client we are closing session */
-        xsyslog(LOG_WARNING, "closing connection", "msg=<%s>", txn->error.desc);
-
-        xsyslog(LOG_DEBUG, "WS close", NULL);
-        int r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
-                                        (uint8_t *) txn->error.desc,
-                                        strlen(txn->error.desc));
-        if (r) {
-            xsyslog(LOG_ERR, "WS close failed", "err=<%s", wslay_error_as_str(r));
-        }
-
+        _end_channel_ex(&txn->ws_ctx, txn->error.desc);
         txn->flags.conn = CONN_CLOSE;
+        return;
     }
 
     /* Write frame(s) */
@@ -993,16 +1012,27 @@ HIDDEN void ws_input(struct transaction_t *txn)
     return;
 }
 
+HIDDEN void ws_send(struct transaction_t *txn, struct buf *outbuf)
+{
+    struct wslay_event_msg msgarg = { WSLAY_TEXT_FRAME, NULL, 0 };
+    uint8_t rsv = WSLAY_RSV_NONE;
+
+    if (!queue_msg(txn, outbuf, &msgarg, &rsv, NULL, NULL)) {
+        ws_output(txn);
+    }
+}
+
 #else /* !HAVE_WSLAY */
 
-HIDDEN void ws_init(struct buf *serverinfo __attribute__((unused))) {}
+HIDDEN void ws_init(struct http_connection *conn __attribute__((unused)),
+                    struct buf *serverinfo __attribute__((unused)))
+{
+}
 
 HIDDEN int ws_enabled()
 {
     return 0;
 }
-
-HIDDEN void ws_done() {}
 
 HIDDEN int ws_start_channel(struct transaction_t *txn __attribute__((unused)),
                             const char *protocol __attribute__((unused)),
@@ -1015,14 +1045,15 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
 {
 }
 
-HIDDEN void ws_end_channel(void **ws_ctx __attribute__((unused)),
-                           const char *msg __attribute__((unused)))
-{
-}
-
 HIDDEN void ws_input(struct transaction_t *txn __attribute__((unused)))
 {
     fatal("ws_input() called, but no Wslay", EX_SOFTWARE);
+}
+
+HIDDEN void ws_send(struct transaction_t *txn __attribute__((unused)),
+                    struct buf *outbuf __attribute__((unused)))
+{
+    fatal("ws_send() called, but no Wslay", EX_SOFTWARE);
 }
 
 #endif /* HAVE_WSLAY */

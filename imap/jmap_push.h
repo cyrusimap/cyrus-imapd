@@ -1,6 +1,6 @@
-/* httpd_ws.h -WebSocket support functions
+/* jmap_push.h -- Routines for handling JMAP Push API requests
  *
- * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2021 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,42 +41,37 @@
  *
  */
 
-#ifndef HTTP_WS_H
-#define HTTP_WS_H
+#ifndef JMAP_PUSH_H
+#define JMAP_PUSH_H
 
-#include <config.h>
+#include <jansson.h>
 
-#ifdef HAVE_WSLAY
-#include <wslay/wslay.h>
+#include "httpd.h"
+#include "mboxname.h"
+#include "prot.h"
+#include "util.h"
 
-#else /* !HAVE_WSLAY */
+extern int jmap_push_poll;
 
-enum wslay_opcode {
-    WSLAY_TEXT_FRAME
-};
+typedef struct jmap_push_ctx {
+    char *accountid;
+    char *inboxname;
+    int ping;
+    time_t next_ping;
+    time_t next_poll;
+    unsigned closeafter : 1;
+    struct prot_waitevent *wait;
+    struct mboxname_counters counters;
+    struct buf buf;
+} jmap_push_ctx_t;
 
-#endif /* HAVE_WSLAY */
+extern jmap_push_ctx_t *jmap_push_init(struct transaction_t *txn,
+                                       const char *accountid,
+                                       strarray_t *types, modseq_t lastmodseq,
+                                       prot_waiteventcallback_t *ev);
 
+extern void jmap_push_done(struct transaction_t *txn);
 
-/* Supported WebSocket version for Upgrade */
-#define WS_TOKEN         "websocket"
-#define WS_VERSION       "13"
+extern json_t *jmap_push_get_state(jmap_push_ctx_t *jpush);
 
-extern void ws_init(struct http_connection *conn, struct buf *serverinfo);
-
-extern int ws_enabled();
-
-typedef int ws_data_callback(struct transaction_t *txn, enum wslay_opcode opcode,
-                             struct buf *inbuf, struct buf *outbuf,
-                             struct buf *logbuf);
-
-extern int ws_start_channel(struct transaction_t *txn,
-                            const char *sub_prot, ws_data_callback *data_cb);
-
-extern void ws_add_resp_hdrs(struct transaction_t *txn);
-
-extern void ws_input(struct transaction_t *txn);
-
-extern void ws_send(struct transaction_t *txn, struct buf *outbuf);
-
-#endif /* HTTP_WS_H */
+#endif /* JMAP_PUSH_H */

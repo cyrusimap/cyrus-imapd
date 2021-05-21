@@ -1,0 +1,13 @@
+Description:
+
+Implements JMAP Push over WebSockets and EventSource.
+
+
+Config changes:
+
+Adds 'jmap_pushpoll' option.
+
+
+Upgrade instructions:
+
+None.

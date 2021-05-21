@@ -115,7 +115,21 @@ static unsigned accept_encodings = 0;
 #ifdef HAVE_ZLIB
 #include <zlib.h>
 
-HIDDEN void *zlib_init()
+static void zlib_done(struct transaction_t *txn)
+{
+    if (txn) {
+        z_stream *zstrm = txn->zstrm;
+
+        if (zstrm) {
+            deflateEnd(zstrm);
+            free(zstrm);
+        }
+
+        txn->zstrm = NULL;
+    }
+}
+
+HIDDEN void zlib_init(struct transaction_t *txn)
 {
     z_stream *zstrm = xzmalloc(sizeof(z_stream));
 
@@ -124,11 +138,12 @@ HIDDEN void *zlib_init()
                      16+MAX_WBITS /* gzip */,
                      MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) != Z_OK) {
         free(zstrm);
-        return NULL;
     }
     else {
+        txn->zstrm = zstrm;
+        ptrarray_add(&txn->done_callbacks, &zlib_done);
+
         accept_encodings |= CE_DEFLATE | CE_GZIP;
-        return zstrm;
     }
 }
 
@@ -201,16 +216,9 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
     return 0;
 }
 
-static void zlib_done(z_stream *zstrm)
-{
-    if (zstrm) {
-        deflateEnd(zstrm);
-        free(zstrm);
-    }
-}
 #else /* !HAVE_ZLIB */
 
-HIDDEN void *zlib_init() { return NULL; }
+HIDDEN void zlib_init(struct transaction_t *txn __attribute__((unused))) { }
 
 HIDDEN int zlib_compress(struct transaction_t *txn __attribute__((unused)),
                          unsigned flags __attribute__((unused)),
@@ -220,15 +228,24 @@ HIDDEN int zlib_compress(struct transaction_t *txn __attribute__((unused)),
     fatal("Compression requested, but no zlib", EX_SOFTWARE);
 }
 
-static void zlib_done(void *zstrm __attribute__((unused))) { }
-
 #endif /* HAVE_ZLIB */
 
 
 #ifdef HAVE_BROTLI
 #include <brotli/encode.h>
 
-HIDDEN void *brotli_init()
+static void brotli_done(struct transaction_t *txn)
+{
+    if (txn) {
+        BrotliEncoderState *brotli = txn->brotli;
+
+        if (brotli) BrotliEncoderDestroyInstance(brotli);
+
+        txn->brotli = NULL;
+    }
+}
+
+HIDDEN void brotli_init(struct transaction_t *txn)
 {
     BrotliEncoderState *brotli = BrotliEncoderCreateInstance(NULL, NULL, NULL);
 
@@ -241,9 +258,10 @@ HIDDEN void *brotli_init()
                                   BROTLI_DEFAULT_WINDOW);
         BrotliEncoderSetParameter(brotli, BROTLI_PARAM_LGBLOCK,
                                   BROTLI_MAX_INPUT_BLOCK_BITS);
-    }
 
-    return brotli;
+        txn->brotli = brotli;
+        ptrarray_add(&txn->done_callbacks, &brotli_done);
+    }
 }
 
 static int brotli_compress(struct transaction_t *txn,
@@ -275,20 +293,15 @@ static int brotli_compress(struct transaction_t *txn,
 
     if (BrotliEncoderIsFinished(brotli)) {
         BrotliEncoderDestroyInstance(brotli);
-        txn->brotli = brotli_init();
+        brotli_init(txn);
     }
 
     return 0;
 }
 
-static void brotli_done(BrotliEncoderState *brotli)
-{
-    if (brotli) BrotliEncoderDestroyInstance(brotli);
-}
-
 #else /* !HAVE_BROTLI */
 
-HIDDEN void *brotli_init() { return NULL; }
+HIDDEN void brotli_init(struct transaction_t *txn __attribute__((unused))) { }
 
 static int brotli_compress(struct transaction_t *txn __attribute__((unused)),
                            unsigned flags __attribute__((unused)),
@@ -298,8 +311,6 @@ static int brotli_compress(struct transaction_t *txn __attribute__((unused)),
     fatal("Brotli Compression requested, but not available", EX_SOFTWARE);
 }
 
-static void brotli_done(void *brotli __attribute__((unused))) {}
-
 #endif /* HAVE_BROTLI */
 
 
@@ -307,7 +318,18 @@ static void brotli_done(void *brotli __attribute__((unused))) {}
 #include <zstd.h>
 #include <zstd_errors.h>
 
-HIDDEN void *zstd_init()
+static void zstd_done(struct transaction_t *txn)
+{
+    if (txn) {
+        ZSTD_CCtx *cctx = txn->zstd;
+
+        if (cctx) ZSTD_freeCCtx(cctx);
+
+        txn->zstd = NULL;
+    }
+}
+
+HIDDEN void zstd_init(struct transaction_t *txn)
 {
     ZSTD_CCtx *cctx = ZSTD_createCCtx();
 
@@ -315,9 +337,10 @@ HIDDEN void *zstd_init()
         ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel,
                                ZSTD_CLEVEL_DEFAULT);
         ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
-    }
 
-    return cctx;
+        txn->zstd = cctx;
+        ptrarray_add(&txn->done_callbacks, &zstd_done);
+    }
 }
 
 static int zstd_compress(struct transaction_t *txn,
@@ -350,14 +373,9 @@ static int zstd_compress(struct transaction_t *txn,
     return 0;
 }
 
-static void zstd_done(ZSTD_CCtx *cctx)
-{
-    if (cctx) ZSTD_freeCCtx(cctx);
-}
-
 #else /* !HAVE_ZSTD */
 
-HIDDEN void *zstd_init() { return NULL; }
+HIDDEN void zstd_init(struct transaction_t *txn __attribute__((unused))) { }
 
 static int zstd_compress(struct transaction_t *txn __attribute__((unused)),
                            unsigned flags __attribute__((unused)),
@@ -366,8 +384,6 @@ static int zstd_compress(struct transaction_t *txn __attribute__((unused)),
 {
     fatal("Zstandard Compression requested, but not available", EX_SOFTWARE);
 }
-
-static void zstd_done(void *brotli __attribute__((unused))) {}
 
 #endif /* HAVE_ZSTD */
 
@@ -635,23 +651,18 @@ static void httpd_reset(struct http_connection *conn)
 
     if (protin) protgroup_reset(protin);
 
-#ifdef HAVE_SSL
-    if (conn->tls_ctx) {
-        tls_reset_servertls((SSL **) &conn->tls_ctx);
-        conn->tls_ctx = NULL;
-    }
-#endif
+    /* Reset auxiliary connection contexts */
+    conn_reset_t proc;
+    while ((proc = ptrarray_pop(&conn->reset_callbacks))) proc(conn);
+    ptrarray_fini(&conn->reset_callbacks);
 
     xmlFreeParserCtxt(conn->xml);
 
-    http2_end_session(&conn->sess_ctx, NULL);
-
-    conn->ws_ctx = NULL;
-
     cyrus_reset_stdio();
 
+    conn->fatal = NULL;
     conn->clienthost = "[local]";
-    buf_free(&conn->logbuf);
+    buf_reset(&conn->logbuf);
     if (conn->logfd != -1) {
         close(conn->logfd);
         conn->logfd = -1;
@@ -773,8 +784,8 @@ int service_init(int argc __attribute__((unused)),
                SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
                LIBXML_DOTTED_VERSION, JANSSON_VERSION);
 
-    http2_init(&serverinfo);
-    ws_init(&serverinfo);
+    http2_init(&http_conn, &serverinfo);
+    ws_init(&http_conn, &serverinfo);
 
 #ifdef HAVE_SSL
     version = OPENSSL_VERSION_NUMBER;
@@ -858,7 +869,6 @@ int service_main(int argc __attribute__((unused)),
     protgroup_insert(protin, httpd_in);
 
     /* Setup HTTP connection */
-    memset(&http_conn, 0, sizeof(struct http_connection));
     http_conn.pin = httpd_in;
     http_conn.pout = httpd_out;
     http_conn.logfd = -1;
@@ -1014,8 +1024,13 @@ void shut_down(int code)
 
     if (code) msg = http_conn.fatal;
 
-    ws_end_channel(http_conn.ws_ctx, msg);
-    http2_end_session(&http_conn.sess_ctx, msg);
+    /* Cleanup auxiliary connection contexts */
+    conn_shutdown_t proc;
+    while ((proc = ptrarray_pop(&http_conn.shutdown_callbacks))) {
+        proc(&http_conn, msg);
+    }
+    ptrarray_fini(&http_conn.shutdown_callbacks);
+    ptrarray_fini(&http_conn.reset_callbacks);
 
     buf_free(&http_conn.logbuf);
 
@@ -1073,13 +1088,7 @@ void shut_down(int code)
                "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
                session_id(), bytes_in, bytes_out);
 
-#ifdef HAVE_SSL
-    tls_shutdown_serverengine();
-#endif
-
     saslprops_free(&saslprops);
-
-    http2_done();
 
     cyrus_done();
 
@@ -1144,6 +1153,20 @@ struct tls_alpn_t http_alpn_map[] = {
     { NULL,       NULL,             NULL }
 };
 
+static void _reset_tls(struct http_connection *conn)
+{
+    if (conn) {
+        tls_reset_servertls((SSL **) &conn->tls_ctx);
+        conn->tls_ctx = NULL;
+    }
+}
+
+static void _shutdown_tls(struct http_connection *conn __attribute__((unused)),
+                          const char *msg __attribute__((unused)))
+{
+    tls_shutdown_serverengine();
+}
+
 static int starttls(struct transaction_t *txn, struct http_connection *conn)
 {
     int https = (txn == NULL);
@@ -1202,6 +1225,9 @@ static int starttls(struct transaction_t *txn, struct http_connection *conn)
     /* tell the prot layer about our new layers */
     prot_settls(httpd_in, conn->tls_ctx);
     prot_settls(httpd_out, conn->tls_ctx);
+
+    ptrarray_add(&conn->reset_callbacks, &_reset_tls);
+    ptrarray_add(&conn->shutdown_callbacks, &_shutdown_tls);
 
     httpd_tls_required = 0;
 
@@ -1869,10 +1895,73 @@ EXPORTED int process_request(struct transaction_t *txn)
 }
 
 
+static void transaction_reset(struct transaction_t *txn)
+{
+    txn->meth = METH_UNKNOWN;
+
+    memset(&txn->flags, 0, sizeof(struct txn_flags_t));
+    txn->flags.ver = VER_1_1;
+    txn->flags.vary = VARY_AE;
+
+    memset(&txn->req_line, 0, sizeof(struct request_line_t));
+
+    /* Reset Bearer auth scheme for each transaction */
+    avail_auth_schemes &= ~AUTH_BEARER;
+
+    if (txn->req_uri) xmlFreeURI(txn->req_uri);
+    txn->req_uri = NULL;
+
+    /* XXX - split this into a req_tgt cleanup */
+    free(txn->req_tgt.userid);
+    mboxlist_entry_free(&txn->req_tgt.mbentry);
+    memset(&txn->req_tgt, 0, sizeof(struct request_target_t));
+
+    free_hash_table(&txn->req_qparams, (void (*)(void *)) &freestrlist);
+
+    if (txn->req_hdrs) spool_free_hdrcache(txn->req_hdrs);
+    txn->req_hdrs = NULL;
+
+    txn->req_body.flags = 0;
+    buf_reset(&txn->req_body.payload);
+
+    txn->auth_chal.param = NULL;
+    txn->location = NULL;
+    memset(&txn->error, 0, sizeof(struct error_t));
+
+    strarray_fini(&txn->resp_body.links);
+    memset(&txn->resp_body, 0,  /* Don't zero the response payload buffer */
+           sizeof(struct resp_body_t) - sizeof(struct buf));
+    buf_reset(&txn->resp_body.payload);
+
+    /* Pre-allocate our working buffer */
+    buf_reset(&txn->buf);
+    buf_ensure(&txn->buf, 1024);
+}
+
+
+EXPORTED void transaction_free(struct transaction_t *txn)
+{
+    /* Cleanup auxiliary stream contexts */
+    txn_done_t proc;
+    while ((proc = ptrarray_pop(&txn->done_callbacks))) proc(txn);
+    ptrarray_fini(&txn->done_callbacks);
+
+    transaction_reset(txn);
+
+    buf_free(&txn->req_body.payload);
+    buf_free(&txn->resp_body.payload);
+    buf_free(&txn->zbuf);
+    buf_free(&txn->buf);
+}
+
+
 static int http1_input(struct transaction_t *txn)
 {
     struct request_line_t *req_line = &txn->req_line;
     int ignore_empty = 1, ret = 0;
+
+    /* Reset txn state */
+    transaction_reset(txn);
 
     do {
         /* Read request-line */
@@ -1937,69 +2026,6 @@ static int http1_input(struct transaction_t *txn)
 }
 
 
-static void transaction_reset(struct transaction_t *txn)
-{
-    txn->meth = METH_UNKNOWN;
-
-    memset(&txn->flags, 0, sizeof(struct txn_flags_t));
-    txn->flags.ver = VER_1_1;
-    txn->flags.vary = VARY_AE;
-
-    memset(&txn->req_line, 0, sizeof(struct request_line_t));
-
-    /* Reset Bearer auth scheme for each transaction */
-    avail_auth_schemes &= ~AUTH_BEARER;
-
-    if (txn->req_uri) xmlFreeURI(txn->req_uri);
-    txn->req_uri = NULL;
-
-    /* XXX - split this into a req_tgt cleanup */
-    free(txn->req_tgt.userid);
-    mboxlist_entry_free(&txn->req_tgt.mbentry);
-    memset(&txn->req_tgt, 0, sizeof(struct request_target_t));
-
-    free_hash_table(&txn->req_qparams, (void (*)(void *)) &freestrlist);
-
-    if (txn->req_hdrs) spool_free_hdrcache(txn->req_hdrs);
-    txn->req_hdrs = NULL;
-
-    txn->req_body.flags = 0;
-    buf_reset(&txn->req_body.payload);
-
-    txn->auth_chal.param = NULL;
-    txn->location = NULL;
-    memset(&txn->error, 0, sizeof(struct error_t));
-
-    strarray_fini(&txn->resp_body.links);
-    memset(&txn->resp_body, 0,  /* Don't zero the response payload buffer */
-           sizeof(struct resp_body_t) - sizeof(struct buf));
-    buf_reset(&txn->resp_body.payload);
-
-    /* Pre-allocate our working buffer */
-    buf_reset(&txn->buf);
-    buf_ensure(&txn->buf, 1024);
-}
-
-
-EXPORTED void transaction_free(struct transaction_t *txn)
-{
-    transaction_reset(txn);
-
-    ws_end_channel(&txn->ws_ctx, NULL);
-
-    http2_end_stream(txn->strm_ctx);
-
-    zlib_done(txn->zstrm);
-    zstd_done(txn->zstd);
-    brotli_done(txn->brotli);
-
-    buf_free(&txn->req_body.payload);
-    buf_free(&txn->resp_body.payload);
-    buf_free(&txn->zbuf);
-    buf_free(&txn->buf);
-}
-
-
 /*
  * Top-level command loop parsing
  */
@@ -2009,12 +2035,13 @@ static void cmdloop(struct http_connection *conn)
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
+    transaction_reset(&txn);
     txn.conn = conn;
 
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
-        txn.zstrm = zlib_init();
-        txn.zstd = zstd_init();
-        txn.brotli = brotli_init();
+        zlib_init(&txn);
+        brotli_init(&txn);
+        zstd_init(&txn);
     }
 
     /* Enable command timer */
@@ -2025,9 +2052,6 @@ static void cmdloop(struct http_connection *conn)
 
     do {
         int ret = 0;
-
-        /* Reset txn state */
-        transaction_reset(&txn);
 
         /* make sure nothing leaked */
         assert(!open_mailboxes_exist());
@@ -4570,13 +4594,14 @@ static int list_well_known(struct transaction_t *txn)
  *   https://chrome.google.com/webstore/detail/simple-websocket-client/gobngblklhkgmjhbpbdlkglbhhlafjnh
  *   https://chrome.google.com/webstore/detail/web-socket-client/lifhekgaodigcpmnakfhaaaboididbdn
  *
- * WebSockets over HTTP/2 currently only available in:
- *   https://www.google.com/chrome/browser/canary.html
+ * WebSockets over HTTP/2 currently only available in Chrome:
+ *   https://www.chromestatus.com/feature/6251293127475200
+ *   (using --enable-experimental-web-platform-features)
  */
-static int ws_echo(enum wslay_opcode opcode __attribute__((unused)),
+static int ws_echo(struct transaction_t *txn __attribute__((unused)),
+                   enum wslay_opcode opcode __attribute__((unused)),
                    struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf __attribute__((unused)),
-                   void **rock __attribute__((unused)))
+                   struct buf *logbuf __attribute__((unused)))
 {
     buf_init_ro(outbuf, buf_base(inbuf), buf_len(inbuf));
 

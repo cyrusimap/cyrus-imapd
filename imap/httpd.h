@@ -344,7 +344,18 @@ struct http_connection {
     void **ws_ctx;                      /* WebSocket context (HTTP/1.1 only) */
 
     xmlParserCtxtPtr xml;               /* XML parser content */
+
+    ptrarray_t reset_callbacks;         /* Array of functions to reset
+                                           auxiliary connection contexts
+                                           (e.g. TLS, HTTP/2, WebSockets) */
+
+    ptrarray_t shutdown_callbacks;      /* Array of functions to cleanup
+                                           auxiliary connection contexts
+                                           (e.g. TLS, HTTP/2, WebSockets) */
 };
+
+typedef void (*conn_reset_t)(struct http_connection *conn);
+typedef void (*conn_shutdown_t)(struct http_connection *conn, const char *msg);
 
 
 /* Transaction context */
@@ -352,6 +363,8 @@ struct transaction_t {
     struct http_connection *conn;       /* Global connection context */
     void *strm_ctx;                     /* HTTP/2+ stream context */
     void *ws_ctx;                       /* WebSocket channel context */
+    void *push_ctx;                     /* Push notifications context */
+
     unsigned meth;                      /* Index of Method to be performed */
     struct txn_flags_t flags;           /* Flags for this txn */
     struct request_line_t req_line;     /* Parsed request-line */
@@ -383,7 +396,14 @@ struct transaction_t {
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
     void *zstd;                         /* Zstandard compression context */
+
+    ptrarray_t done_callbacks;          /* Array of functions to cleanup
+                                           auxiliary stream contexts
+                                           (e.g. compression, HTTP/2, WS) */
 };
+
+typedef void (*txn_done_t)(struct transaction_t *txn);
+
 
 /* HTTP version flags */
 enum {
@@ -596,11 +616,11 @@ extern int http_allow_noauth(struct transaction_t *txn);
 extern int http_allow_noauth_get(struct transaction_t *txn);
 extern int http_read_req_body(struct transaction_t *txn);
 
-extern void *zlib_init();
+extern void zlib_init(struct transaction_t *txn);
 extern int zlib_compress(struct transaction_t *txn, unsigned flags,
                          const char *buf, unsigned len);
 
-extern void *zstd_init();
-extern void *brotli_init();
+extern void brotli_init(struct transaction_t *txn);
+extern void zstd_init(struct transaction_t *txn);
 
 #endif /* HTTPD_H */

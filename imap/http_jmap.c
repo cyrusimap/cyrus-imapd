@@ -51,6 +51,7 @@
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "http_ws.h"
+#include "jmap_push.h"
 #include "mboxname.h"
 #include "proxy.h"
 #include "times.h"
@@ -191,11 +192,14 @@ static void jmap_init(struct buf *serverinfo)
 #endif
 
     if (ws_enabled()) {
+        jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL, 's');
+        if (jmap_push_poll < 0) jmap_push_poll = 0;
+
         json_object_set_new(my_jmap_settings.server_capabilities,
                 JMAP_URN_WEBSOCKET,
                 json_pack("{s:s s:b}",
                           "url", "wss:" JMAP_BASE_URL JMAP_WS_COL,
-                          "supportsPush", 0));
+                          "supportsPush", jmap_push_poll));
     }
 }
 
@@ -1198,6 +1202,93 @@ static int jmap_get_session(struct transaction_t *txn)
 }
 
 
+static void buf_appendjson(struct buf *buf, json_t *json, size_t flags)
+{
+    /* Determine length of JSON encoding */
+    size_t size = json_dumpb(json, NULL, 0, flags);
+
+    /* Grow the buffer */
+    buf_ensure(buf, size);
+
+    /* Append the JSON encoding */
+    size = json_dumpb(json, (char *) buf_base(buf) + buf_len(buf), size, flags);
+
+    /* Set the new buffer length */
+    buf_truncate(buf, buf_len(buf) + size);
+}
+
+static struct prot_waitevent *ws_push(struct protstream *s __attribute__((unused)),
+                                      struct prot_waitevent *ev,
+                                      void *rock)
+{
+    struct transaction_t *txn = (struct transaction_t *) rock;
+    jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
+    json_t *jstate = jmap_push_get_state(jpush);
+    struct buf *buf = &jpush->buf;
+
+    xsyslog(LOG_DEBUG, "JMAP WS push", "accountid=<%s>", jpush->accountid);
+
+    if (jstate) {
+        /* Add pushState */
+        buf_reset(buf);
+        buf_printf(buf, MODSEQ_FMT, jpush->counters.highestmodseq);
+
+        json_object_set_new(jstate, "pushState", json_string(buf_cstring(buf)));
+
+        /* Send the StateChange object */
+        size_t flags = JSON_PRESERVE_ORDER |
+            (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+        buf_reset(buf);
+        buf_appendjson(buf, jstate, flags);
+
+        ws_send(txn, buf);
+        prot_flush(txn->conn->pout);
+    }
+
+    json_decref(jstate);
+
+    /* Schedule our next event */
+    ev->mark = time(NULL) + jmap_push_poll;
+
+    return ev;
+}
+
+static void ws_push_enable(struct transaction_t *txn, json_t *req)
+{
+    jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
+    json_t *jtypes = json_object_get(req, "dataTypes");
+    json_t *pushState = json_object_get(req, "pushState");
+    strarray_t types = STRARRAY_INITIALIZER;
+    modseq_t lastmodseq = ULLONG_MAX;
+
+    xsyslog(LOG_DEBUG, "JMAP WS push enable",
+            "jpush=<%p>, jtypes=<%p>", jpush, jtypes);
+
+    if (!json_array_size(jtypes)) {
+        jmap_push_done(txn);
+        return;
+    }
+
+    size_t i;
+    json_t *jval;
+    json_array_foreach(jtypes, i, jval) {
+        strarray_append(&types, json_string_value(jval));
+    }
+
+    if (json_is_string(pushState)) {
+        lastmodseq = atomodseq_t(json_string_value(pushState));
+    }
+
+    jpush = jmap_push_init(txn, httpd_userid, &types, lastmodseq, &ws_push);
+
+    if (jpush && (lastmodseq < ULLONG_MAX)) {
+        /* Send all changes now */
+        ws_push(txn->conn->pin, jpush->wait, txn);
+    }
+
+    strarray_fini(&types);
+}
+
 /*
  * WebSockets data callback ('jmap' sub-protocol): Process JMAP API request.
  *
@@ -1205,38 +1296,18 @@ static int jmap_get_session(struct transaction_t *txn)
  *   https://github.com/websockets/wscat
  *   https://chrome.google.com/webstore/detail/web-socket-client/lifhekgaodigcpmnakfhaaaboididbdn
  *
- * WebSockets over HTTP/2 currently only available in:
- *   https://www.google.com/chrome/browser/canary.html
+ * WebSockets over HTTP/2 currently only available in Chrome:
+ *   https://www.chromestatus.com/feature/6251293127475200
+ *   (using --enable-experimental-web-platform-features)
  */
-static int jmap_ws(enum wslay_opcode opcode,
-                   struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock)
+static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
+                   struct buf *inbuf, struct buf *outbuf, struct buf *logbuf)
 {
-    struct transaction_t **txnp = (struct transaction_t **) rock;
-    struct transaction_t *txn = *txnp;
     json_t *req = NULL, *res = NULL;
     int ret;
 
-    if (!txn) {
-        /* Create a transaction rock to use for API requests */
-        txn = *txnp = xzmalloc(sizeof(struct transaction_t));
-
-        /* Create header cache */
-        txn->req_hdrs = spool_new_hdrcache();
-        if (!txn->req_hdrs) {
-            free(txn);
-            return HTTP_SERVER_ERROR;
-        }
-    }
-    else if (!inbuf) {
-        /* Free transaction rock */
-        transaction_free(txn);
-        free(txn);
-        return 0;
-    }
-
-    /* Only accept text frames */
     if (opcode != WSLAY_TEXT_FRAME) {
+        /* Only accept text frames */
         return HTTP_NOT_ACCEPTABLE;
     }
 
@@ -1259,14 +1330,14 @@ static int jmap_ws(enum wslay_opcode opcode,
             /* Log request */
             spool_replace_header(xstrdup(":jmap"),
                                  xstrdup("WebSocketPushEnable"), txn->req_hdrs);
-            /* XXX  Do nothing until supported */
+            ws_push_enable(txn, req);
             ret = HTTP_NO_CONTENT;
         }
         else if (!strcmpsafe(type, "WebSocketPushDisable")) {
             /* Log request */
             spool_replace_header(xstrdup(":jmap"),
                                  xstrdup("WebSocketPushDisable"), txn->req_hdrs);
-            /* XXX  Do nothing until supported */
+            jmap_push_done(txn);
             ret = HTTP_NO_CONTENT;
         }
         else {
@@ -1333,8 +1404,149 @@ static int jmap_ws(enum wslay_opcode opcode,
     return ret;
 }
 
-/* Handle a GET on the eventsource endpoint */
-static int jmap_eventsource(struct transaction_t *txn __attribute__((unused)))
+static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused)),
+                                      struct prot_waitevent *ev,
+                                      void *rock)
 {
-    return HTTP_NO_CONTENT;
+    struct transaction_t *txn = (struct transaction_t *) rock;
+    jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
+    json_t *jstate = NULL;
+    struct buf *buf = &jpush->buf;
+    const char *event = NULL;
+    time_t now = time(NULL);
+    int do_close = 0;
+
+    xsyslog(LOG_DEBUG, "JMAP eventSource push",
+            "accountid=<%s>, now=<%ld>, next_poll=<%ld>, next_ping=<%ld>",
+            jpush->accountid, now, jpush->next_poll, jpush->next_ping);
+
+    buf_reset(buf);
+
+    if (now >= jpush->next_poll) {
+        jstate = jmap_push_get_state(jpush);
+
+        jpush->next_poll = now + jmap_push_poll;
+
+        if (jstate) {
+            /* 'state' event */
+            event = "state";
+            buf_reset(buf);
+            buf_printf(buf, "id: " MODSEQ_FMT "\n", jpush->counters.highestmodseq);
+
+            if (jpush->closeafter) {
+                do_close = 1;
+            }
+        }
+    }
+    else {
+        /* 'ping' event */
+        event = "ping";
+        jstate = json_pack("{ s:i }", "interval", jpush->ping);
+    }
+
+    if (jstate) {
+        /* Build the response */
+        buf_printf(buf, "event: %s\ndata: ", event);
+        buf_appendjson(buf, jstate, JSON_PRESERVE_ORDER | JSON_COMPACT);
+        buf_appendcstr(buf, "\n\n");
+
+        /* Send the response */
+        write_body(0, txn, buf_base(buf), buf_len(buf));
+        prot_flush(txn->conn->pout);
+
+        /* Cleanup */
+        json_decref(jstate);
+
+        if (do_close) {
+            jmap_push_done(txn);
+
+            if (txn->flags.ver >= VER_2) {
+                /* End of stream */
+                write_body(0, txn, NULL, 0);
+                prot_flush(txn->conn->pout);
+            }
+            else {
+                /* Force exit out of blocking read */
+                shutdown(txn->conn->pin->fd, SHUT_RD);
+            }
+
+            return NULL;
+        }
+
+        jpush->next_ping = (jpush->ping > 0) ? now + jpush->ping : INT_MAX;
+    }
+
+    /* Schedule our next event */
+    ev->mark = MIN(jpush->next_ping, jpush->next_poll);
+
+    return ev;
+}
+
+/* Handle a GET on the eventsource endpoint */
+static int jmap_eventsource(struct transaction_t *txn)
+{
+    if (!jmap_push_poll) return HTTP_NO_CONTENT;
+
+    jmap_push_ctx_t *jpush = NULL;
+    modseq_t lastmodseq = ULLONG_MAX;
+    time_t now = time(NULL);
+
+    const char **hdr;
+    if (txn->req_hdrs &&
+        (hdr = spool_getheader(txn->req_hdrs, "Last-Event-Id"))) {
+        lastmodseq = atomodseq_t(*hdr);
+    }
+
+    struct strlist *param;
+    if ((param = hash_lookup("types", &txn->req_qparams))) {
+        strarray_t *types = strarray_split(param->s, ",", STRARRAY_TRIM);
+
+        jpush = jmap_push_init(txn, httpd_userid, types, lastmodseq, &es_push);
+        strarray_free(types);
+    }
+
+    if (!jpush) {
+        return HTTP_NO_CONTENT;
+    }
+
+    if ((param = hash_lookup("closeafter", &txn->req_qparams)) &&
+        !strcmpsafe(param->s, "state")) {
+        jpush->closeafter = 1;
+    }
+
+    if ((param = hash_lookup("ping", &txn->req_qparams))) {
+        jpush->ping = atoi(param->s);
+    }
+    jpush->next_ping = (jpush->ping > 0) ? now + jpush->ping : INT_MAX;
+
+    txn->meth = METH_CONNECT;  /* Suppress Content-Length & Accept-Ranges */
+    txn->resp_body.type = "text/event-stream";
+    txn->flags.conn = CONN_KEEPALIVE;
+    txn->flags.cc = CC_NOCACHE;
+
+    if (txn->flags.ver >= VER_2) {
+        /* Prevent end of stream */
+        txn->flags.te = TE_CHUNKED;
+    }
+
+    response_header(HTTP_OK, txn);
+
+    if (lastmodseq < ULLONG_MAX) {
+        /* Send all changes now */
+        jpush->next_poll = now;
+    }
+    else {
+        jpush->next_poll = now + jmap_push_poll;
+    }
+
+    /* Schedule our first event */
+    jpush->wait->mark = MIN(jpush->next_ping, jpush->next_poll);
+
+    if (txn->flags.ver < VER_2) {
+        /* Block until we timeout or get unexpected input */
+        prot_peek(txn->conn->pin);
+        txn->flags.conn |= CONN_CLOSE;
+    }
+
+    return 0;
 }
