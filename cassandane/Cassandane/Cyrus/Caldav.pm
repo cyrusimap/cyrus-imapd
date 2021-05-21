@@ -102,6 +102,7 @@ sub new
     $config->set(httpmodules => 'caldav');
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
+    $config->set(icalendar_max_size => 100000);
     return $class->SUPER::new({
         config => $config,
         adminstore => 1,
@@ -4503,6 +4504,43 @@ EOF
     $self->assert_str_equals($adds->[0]{uid}, $uuid2);
     $self->assert_deep_equals([], $removes);
     $self->assert_deep_equals([], $errors);
+}
+
+sub test_put_toolarge
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "d4643cf9-4552-4a3e-8d6c-5f318bcc5b79";
+    my $href = "$CalendarId/$uuid.ics";
+    my $desc = ('x') x 100000;
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+DTEND:20160831T183000Z
+TRANSP:OPAQUE
+SUMMARY:Event
+DESCRIPTION:$desc
+UID:$uuid
+DTSTART:20160831T153000Z
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    eval { $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar') };
+    my $Err = $@;
+    $self->assert_matches(qr/max-resource-size/, $Err);
 }
 
 1;

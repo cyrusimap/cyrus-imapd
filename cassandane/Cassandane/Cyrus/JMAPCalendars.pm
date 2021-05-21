@@ -67,6 +67,7 @@ sub new
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
                  sync_log => 'yes',
+                 icalendar_max_size => 100000,
                  jmap_nonstandard_extensions => 'yes');
 
     return $class->SUPER::new({
@@ -7251,6 +7252,39 @@ EOF
 
     $self->assert_str_equals("#junk", $res->[1][1]{notParsable}[0]);
     $self->assert_str_equals("foo", $res->[1][1]{notFound}[0]);
+}
+
+sub test_calendarevent_set_too_large
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "create calendar";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => {
+                        "1" => {
+                            name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true
+                        }
+             }}, "R1"]]);
+    my $calid = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "create event in calendar";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            "calendarId" => $calid,
+                            "title" => "foo",
+                            "description" => ('x' x 100000),
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "duration" => "P1D",
+                            "timeZone" => undef,
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_equals('tooLarge', $res->[0][1]{notCreated}{1}{type});
 }
 
 1;
