@@ -2578,6 +2578,12 @@ static int setcalendarevents_create(jmap_req_t *req,
     const char *calendarId = NULL;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
 
+    static int icalendar_max_size = -1;
+    if (icalendar_max_size < 0) {
+        icalendar_max_size = config_getint(IMAPOPT_ICALENDAR_MAX_SIZE);
+        if (icalendar_max_size <= 0) icalendar_max_size = INT_MAX;
+    }
+ 
     if ((uid = (char *) json_string_value(json_object_get(event, "uid")))) {
         /* Use custom iCalendar UID from request object */
         uid = xstrdup(uid);
@@ -2658,6 +2664,12 @@ static int setcalendarevents_create(jmap_req_t *req,
         }
     }
     ical = jmapical_toical(event, NULL, invalid);
+
+    if (icalendar_max_size != INT_MAX &&
+        strlen(icalcomponent_as_ical_string(ical)) > (size_t) icalendar_max_size) {
+        r = IMAP_MESSAGE_TOO_LARGE;
+        goto done;
+    }
 
     // check that participantId is either not present or is a valid participant
     validate_participant_id(event, &schedule_addresses, invalid);
@@ -3082,6 +3094,12 @@ static int setcalendarevents_update(jmap_req_t *req,
     const char *calendarId = NULL;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
 
+    static int icalendar_max_size = -1;
+    if (icalendar_max_size < 0) {
+        icalendar_max_size = config_getint(IMAPOPT_ICALENDAR_MAX_SIZE);
+        if (icalendar_max_size <= 0) icalendar_max_size = INT_MAX;
+    }
+
     /* Validate calendarId */
     pe = jmap_readprop(event_patch, "calendarId", 0, invalid, "s", &calendarId);
     if (pe > 0 && *calendarId && *calendarId == '#') {
@@ -3159,6 +3177,12 @@ static int setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     else if (r) goto done;
+
+    if (icalendar_max_size != INT_MAX &&
+        strlen(icalcomponent_as_ical_string(ical)) > (size_t) icalendar_max_size) {
+        r = IMAP_MESSAGE_TOO_LARGE;
+        goto done;
+    }
 
     if (calendarId) {
         /* Check, if we need to move the event. */
@@ -3472,6 +3496,9 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                 case IMAP_QUOTA_EXCEEDED:
                     err = json_pack("{s:s}", "type", "overQuota");
                     break;
+                case IMAP_MESSAGE_TOO_LARGE:
+                    err = json_pack("{s:s}", "type", "tooLarge");
+                    break;
                 default:
                     err = jmap_server_error(r);
             }
@@ -3540,6 +3567,9 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                     case HTTP_NO_STORAGE:
                     case IMAP_QUOTA_EXCEEDED:
                         err = json_pack("{s:s}", "type", "overQuota");
+                        break;
+                    case IMAP_MESSAGE_TOO_LARGE:
+                        err = json_pack("{s:s}", "type", "tooLarge");
                         break;
                     default:
                         err = jmap_server_error(r);
