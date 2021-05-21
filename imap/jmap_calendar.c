@@ -2665,7 +2665,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
     ical = jmapical_toical(event, NULL, invalid);
 
-    if (icalendar_max_size != INT_MAX &&
+    if (icalendar_max_size != INT_MAX && ical &&
         strlen(icalcomponent_as_ical_string(ical)) > (size_t) icalendar_max_size) {
         r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
@@ -3178,7 +3178,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
     else if (r) goto done;
 
-    if (icalendar_max_size != INT_MAX &&
+    if (icalendar_max_size != INT_MAX && ical &&
         strlen(icalcomponent_as_ical_string(ical)) > (size_t) icalendar_max_size) {
         r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
