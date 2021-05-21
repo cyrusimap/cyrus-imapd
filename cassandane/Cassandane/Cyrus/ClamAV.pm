@@ -105,7 +105,7 @@ sub test_aaasetup
 
 # This test uses the AV engine, which can be very slow to initialise.
 sub test_remove_infected_slow
-    :needs_dependency_clamav
+    :needs_dependency_clamav :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -144,8 +144,8 @@ sub test_remove_infected_slow
         }, 'cyr_virusscan', '-r');
 
     # check the output
-    # user.cassandane                                    1  UNREAD  Eicar-Test-Signature
-    # shared.folder                                      1  UNREAD  Eicar-Test-Signature
+    # user.cassandane                       1  UNREAD  Eicar-Test-Signature
+    # shared.folder                         1  UNREAD  Eicar-Test-Signature
     {
         local $/;
         open my $fh, '<', $out
