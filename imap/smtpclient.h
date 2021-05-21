@@ -45,6 +45,7 @@
 
 #include "prot.h"
 #include "ptrarray.h"
+#include "strarray.h"
 #include "util.h"
 
 /* A parameter for SMTP envelope address, identified by key.
@@ -112,10 +113,10 @@ extern int smtpclient_open_host(const char *addr, smtpclient_t **smp);
 extern int smtpclient_send(smtpclient_t *sm, smtp_envelope_t *env, struct buf *data);
 extern int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct protstream *data);
 
-/* Perform SMTP envelope (and optionally size and/or From: header address checks)
+/* Check the SMTP envelope (and optionally size and/or From: header addresses)
    without sending data */
 extern int smtpclient_sendcheck(smtpclient_t *sm, smtp_envelope_t *env,
-                                size_t size, json_t *fromaddr);
+                                size_t size, strarray_t *fromaddr);
 
 /* Close the SMTP client and free its memory */
 extern int smtpclient_close(smtpclient_t **smp);

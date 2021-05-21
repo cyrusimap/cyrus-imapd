@@ -394,7 +394,7 @@ done:
     return r;
 }
 
-static int smtpclient_schk(smtpclient_t *sm, json_t *fromaddr)
+static int smtpclient_schk(smtpclient_t *sm, strarray_t *fromaddr)
 {
     int r = 0;
 
@@ -402,14 +402,10 @@ static int smtpclient_schk(smtpclient_t *sm, json_t *fromaddr)
     buf_setcstr(&sm->buf, "SCHK");
     if (fromaddr) {
         /* Add FROMADDR= parameters */
-        size_t i;
-        json_t *jval;
-        json_array_foreach(fromaddr, i, jval) {
-            const char *s = json_string_value(json_object_get(jval, "email"));
-            if (s) {
-                buf_appendcstr(&sm->buf, " FROMADDR=");
-                smtp_encode_esmtp_value(s, &sm->buf);
-            }
+        int i;
+        for (i = 0; i < strarray_size(fromaddr); i++) {
+            buf_appendcstr(&sm->buf, " FROMADDR=");
+            smtp_encode_esmtp_value(strarray_nth(fromaddr, i), &sm->buf);
         }
     }
     buf_appendcstr(&sm->buf, "\r\n");
@@ -732,7 +728,7 @@ EXPORTED int smtpclient_send(smtpclient_t *sm,
 }
 
 EXPORTED int smtpclient_sendcheck(smtpclient_t *sm, smtp_envelope_t *env,
-                                  size_t size, json_t *fromaddr)
+                                  size_t size, strarray_t *fromaddr)
 {
     if (size > 0) smtpclient_set_size(sm, size);
 
@@ -892,7 +888,7 @@ EXPORTED int smtp_is_valid_esmtp_value(const char *val)
 }
 
 /* Encodes into the current location of the struct buf.
-   The caller must buf_reset() before calling is necessary. */
+   The caller must buf_reset() before calling, if necessary. */
 EXPORTED void smtp_encode_esmtp_value(const char *val, struct buf *xtext)
 {
     const char *p;

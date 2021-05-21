@@ -753,8 +753,20 @@ static void _emailsubmission_create(jmap_req_t *req,
 
     if (holduntil) {
         /* Pre-flight the message */
-        r = smtpclient_sendcheck(*sm, &smtpenv,
-                                 buf_len(&buf), json_object_get(msg, "from"));
+        json_t *jfromaddr = json_object_get(msg, "from");
+        strarray_t fromaddr = STRARRAY_INITIALIZER;
+        if (jfromaddr) {
+            size_t i;
+            json_t *jval;
+            json_array_foreach(jfromaddr, i, jval) {
+                const char *s = json_string_value(json_object_get(jval, "email"));
+                if (s) {
+                    strarray_append(&fromaddr, s);
+                }
+            }
+        }
+        r = smtpclient_sendcheck(*sm, &smtpenv, buf_len(&buf), &fromaddr);
+        strarray_fini(&fromaddr);
     }
     else {
         /* Send message */
