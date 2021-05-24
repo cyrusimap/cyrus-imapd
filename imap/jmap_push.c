@@ -64,6 +64,7 @@ static const struct datatype_t {
     { "CalendarEvent",   offsetof(struct mboxname_counters, caldavmodseq)        },
     { "Contact",         offsetof(struct mboxname_counters, carddavmodseq)       },
     { "Note",            offsetof(struct mboxname_counters, notesmodseq)         },
+    { "SieveScript",     offsetof(struct mboxname_counters, sievemodseq)         },
     { NULL,              0 }
 };
 
