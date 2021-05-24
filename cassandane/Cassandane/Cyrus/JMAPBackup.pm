@@ -1719,7 +1719,7 @@ sub test_restore_mail_full
 }
 
 sub test_restore_notes
-    :min_version_3_3 :needs_component_jmap
+    :min_version_3_5 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1828,7 +1828,7 @@ sub test_restore_notes
 }
 
 sub test_restore_notes_all
-    :min_version_3_3 :needs_component_jmap
+    :min_version_3_5 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1981,7 +1981,7 @@ sub test_restore_notes_all
 }
 
 sub test_restore_notes_all_dryrun
-    :min_version_3_3 :needs_component_jmap
+    :min_version_3_5 :needs_component_jmap
 {
     my ($self) = @_;
 
