@@ -1027,7 +1027,7 @@ sub test_calendar_set_badname
     $self->assert_deep_equals(["name"], $errProp);
 }
 
-sub test_calendar_set_destroydefault
+sub test_calendar_set_destroyspecials
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -1042,9 +1042,20 @@ sub test_calendar_set_destroydefault
     ]);
     $self->assert_not_null($res);
 
-    $self->assert_deep_equals(['Default'], $res->[0][1]{destroyed});
+    my $errType;
 
-    my $errType = $res->[0][1]{notDestroyed}{"Inbox"}{type};
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min >= 5)) {
+        # Default calendar may be destroyed from 3.5+
+        $self->assert_deep_equals(['Default'], $res->[0][1]{destroyed});
+    }
+    else {
+        # but previously, this was forbidden
+        $errType = $res->[0][1]{notDestroyed}{"Default"}{type};
+        $self->assert_str_equals("isDefault", $errType);
+    }
+
+    $errType = $res->[0][1]{notDestroyed}{"Inbox"}{type};
     $self->assert_str_equals("notFound", $errType);
     $errType = $res->[0][1]{notDestroyed}{"Outbox"}{type};
     $self->assert_str_equals("notFound", $errType);
