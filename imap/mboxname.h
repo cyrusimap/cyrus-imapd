@@ -340,6 +340,10 @@ struct mboxname_counters {
     modseq_t jmapnotificationdeletedmodseq;
     modseq_t jmapnotificationfoldersmodseq;
     modseq_t jmapnotificationfoldersdeletedmodseq;
+    modseq_t sievemodseq;
+    modseq_t sievedeletedmodseq;
+    modseq_t sievefoldersmodseq;
+    modseq_t sievefoldersdeletedmodseq;
     uint32_t uidvalidity;
 };
 

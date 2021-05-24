@@ -1582,6 +1582,8 @@ static struct jmap_state_t
       offsetof(struct mboxname_counters, carddavmodseq) },
     { "Note",
       offsetof(struct mboxname_counters, notesmodseq) },
+    { "SieveScript",
+      offsetof(struct mboxname_counters, sievemodseq) },
     { "Quota",
       offsetof(struct mboxname_counters, quotamodseq) },
     { "Racl",
