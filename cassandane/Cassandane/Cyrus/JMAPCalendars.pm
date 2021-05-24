@@ -7266,7 +7266,7 @@ EOF
 }
 
 sub test_calendarevent_set_too_large
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_5 :needs_component_jmap
 {
     my ($self) = @_;
 

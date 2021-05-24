@@ -4507,7 +4507,7 @@ EOF
 }
 
 sub test_put_toolarge
-    :needs_component_httpd
+    :min_version_3_5 :needs_component_httpd
 {
     my ($self) = @_;
 
