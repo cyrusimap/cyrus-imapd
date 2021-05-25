@@ -4865,7 +4865,7 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
     json_array_foreach(parse.blob_ids, i, jval) {
         const char *blobid = json_string_value(jval);
         icalcomponent *ical = NULL;
-        json_t *event = NULL;
+        json_t *events = NULL;
         int r = 0;
 
         if (!blobid) continue;
@@ -4889,12 +4889,21 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
 
         ical = icalparser_parse_string(buf_cstring(&ctx.blob));
         if (ical) {
-            event = jmapical_tojmap(ical, props);
+            events = jmapical_tojmap_all(ical, props);
             icalcomponent_free(ical);
         }
 
-        if (event) {
-            json_object_set_new(parse.parsed, blobid, event);
+        if (events) {
+            if (json_array_size(events) > 1) {
+                json_object_set_new(parse.parsed, blobid,
+                                    json_pack("{ s:s s:o }",
+                                              "@type", "jsgroup",
+                                              "entries", events));
+            }
+            else {
+                json_object_set(parse.parsed, blobid, json_array_get(events, 0));
+                json_decref(events);
+            }
         }
         else {
             json_array_append_new(parse.not_parsable, json_string(blobid));
