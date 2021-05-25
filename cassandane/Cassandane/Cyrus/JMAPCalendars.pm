@@ -7218,18 +7218,59 @@ sub test_calendarevent_parse_singlecommand
 
     my $jmap = $self->{jmap};
 
-    my $id = '97c46ea4-4182-493c-87ef-aee4edc2d38b';
-    my $ical = <<EOF;
+    my $id1 = '97c46ea4-4182-493c-87ef-aee4edc2d38b';
+    my $ical1 = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
 BEGIN:VEVENT
-UID:$id
+UID:$id1
 SUMMARY:bar
 DESCRIPTION:
 TRANSP:OPAQUE
 DTSTART;VALUE=DATE:20151008
 DTEND;VALUE=DATE:20151009
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $id2 = '100959BC664CA650E933C892C@example.com';
+    my $ical2 = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example Corp.//Example Client//EN
+BEGIN:VEVENT
+UID:$id1
+SUMMARY:foo
+DESCRIPTION:
+TRANSP:OPAQUE
+DTSTART;VALUE=DATE:20151008
+DTEND;VALUE=DATE:20151009
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20060206T001121Z
+TRANSP:TRANSPARENT
+STATUS:TENTATIVE
+DTSTART;TZID=US/Eastern:20060102T120000
+DURATION:PT1H
+RRULE:FREQ=DAILY;COUNT=5
+RDATE;TZID=US/Eastern;VALUE=PERIOD:20060102T150000/PT2H
+SUMMARY:Event #2
+DESCRIPTION:We are having a meeting all this week at 12 pm fo
+ r one hour\, with an additional meeting on the first day 2 h
+ ours long.\nPlease bring your own lunch for the 12 pm meetin
+ gs.
+UID:$id2
+CONFERENCE;FEATURE=PHONE;
+ LABEL=Attendee dial-in:tel:+1-888-555-0456,,,555123
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20060206T001121Z
+DTSTART;TZID=US/Eastern:20060104T140000
+DURATION:PT1H
+RECURRENCE-ID;TZID=US/Eastern:20060104T120000
+SUMMARY:Event #2 bis
+UID:$id2
 END:VEVENT
 END:VCALENDAR
 EOF
@@ -7243,12 +7284,14 @@ EOF
     my $res = $jmap->CallMethods([
         ['Blob/set',
            { create => {
-               "ical" => { content => $ical, type => 'text/calendar' },
+               "ical1" => { content => $ical1, type => 'text/calendar' },
+               "ical2" => { content => $ical2, type => 'text/calendar' },
                "junk" => { content => 'foo bar', type => 'text/calendar' }
              } }, 'R0'],
         ['CalendarEvent/parse', {
-            blobIds => [ "#ical", "foo", "#junk" ],
-            properties => [ "uid", "title", "start" ]
+            blobIds => [ "#ical1", "foo", "#junk", "#ical2" ],
+            properties => [ "\@type", "uid", "title", "start",
+                            "recurrenceRule", "recurrenceOverrides" ]
          }, "R1"]],
         $using);
     $self->assert_not_null($res);
@@ -7257,9 +7300,20 @@ EOF
 
     $self->assert_str_equals('CalendarEvent/parse', $res->[1][0]);
     $self->assert_str_equals('R1', $res->[1][2]);
-    $self->assert_str_equals($id, $res->[1][1]{parsed}{"#ical"}{uid});
-    $self->assert_str_equals("bar", $res->[1][1]{parsed}{"#ical"}{title});
-    $self->assert_str_equals("2015-10-08T00:00:00", $res->[1][1]{parsed}{"#ical"}{start});
+    $self->assert_str_equals($id1, $res->[1][1]{parsed}{"#ical1"}{uid});
+    $self->assert_str_equals("bar", $res->[1][1]{parsed}{"#ical1"}{title});
+    $self->assert_str_equals("2015-10-08T00:00:00", $res->[1][1]{parsed}{"#ical1"}{start});
+    $self->assert_null($res->[1][1]{parsed}{"#ical1"}{recurrenceRule});
+    $self->assert_null($res->[1][1]{parsed}{"#ical1"}{recurrenceOverrides});
+
+    $self->assert_str_equals("jsgroup", $res->[1][1]{parsed}{"#ical2"}{"\@type"});
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{parsed}{"#ical2"}{entries}});
+    $self->assert_str_equals($id2, $res->[1][1]{parsed}{"#ical2"}{entries}[0]{uid});
+    $self->assert_str_equals("Event #2", $res->[1][1]{parsed}{"#ical2"}{entries}[0]{title});
+    $self->assert_not_null($res->[1][1]{parsed}{"#ical2"}{entries}[0]{recurrenceRule});
+    $self->assert_not_null($res->[1][1]{parsed}{"#ical2"}{entries}[0]{recurrenceOverrides});
+    $self->assert_str_equals($id1, $res->[1][1]{parsed}{"#ical2"}{entries}[1]{uid});
+    $self->assert_str_equals("foo", $res->[1][1]{parsed}{"#ical2"}{entries}[1]{title});
 
     $self->assert_str_equals("#junk", $res->[1][1]{notParsable}[0]);
     $self->assert_str_equals("foo", $res->[1][1]{notFound}[0]);
