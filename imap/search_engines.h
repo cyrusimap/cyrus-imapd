@@ -195,6 +195,7 @@ struct search_engine {
     int (*check_config)(char **errstr);
     int (*langstats)(const char *userid, ptrarray_t *lstats, size_t *total_docs);
     int (*can_match)(enum search_op matchop, int partnum);
+    int (*upgrade)(const char *userid);
 };
 
 /* Returns the configured search engine */
@@ -248,6 +249,8 @@ int search_compact(const char *userid, const strarray_t *reindextiers,
                    const strarray_t *srctiers, const char *desttier, int verbose);
 int search_deluser(const char *userid);
 int search_check_config(char **errstr);
+
+int search_upgrade(const char *userid);
 
 int search_can_match(enum search_op matchop, int partnum);
 
