@@ -1995,18 +1995,20 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
             /* note: messageid doesn't have <> wrappers because it already includes them */
             syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
-                   "sysflags=<%s> guid=<%s> messageid=%s",
+                   "sysflags=<%s> guid=<%s> messageid=%s size=<%u>",
                    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
                    record->modseq, flagstr,
-                   message_guid_encode(&record->guid), change->msgid);
+                   message_guid_encode(&record->guid), change->msgid,
+                   record->size);
 
         if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
             syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
-                   "sysflags=<%s> guid=<%s>",
+                   "sysflags=<%s> guid=<%s> size=<%u>",
                    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
                    record->modseq, flagstr,
-                   message_guid_encode(&record->guid));
+                   message_guid_encode(&record->guid),
+                   record->size);
 
         if ((record->internal_flags & FLAG_INTERNAL_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
