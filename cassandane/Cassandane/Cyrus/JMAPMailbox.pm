@@ -4773,4 +4773,53 @@ sub test_mailbox_intermediate_no_emails
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 }
 
+sub test_mailbox_changes_rename
+    :min_version_3_5 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+
+    $imap->create('INBOX.foo');
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', { }, 'R1'],
+    ]);
+    my $fooId;
+    if ($res->[0][1]{list}[0]{name} eq 'foo') {
+        $fooId = $res->[0][1]{list}[0]{id};
+    }
+    else {
+        $fooId = $res->[0][1]{list}[1]{id};
+    }
+    $self->assert_not_null($fooId);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    $imap->create('INBOX.bar');
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/changes', {
+            sinceState => $state,
+        }, 'R1'],
+    ]);
+    my $barId = $res->[0][1]{created}[0];
+    $self->assert_not_null($barId);
+    $state = $res->[0][1]{newState};
+    $self->assert_not_null($state);
+
+
+    $imap->rename('INBOX.foo', 'INBOX.bar.foo');
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/changes', {
+            sinceState => $state,
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([$fooId], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+}
+
 1;
