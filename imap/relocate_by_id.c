@@ -177,6 +177,7 @@ int main(int argc, char **argv)
             const char *name = mbentry->name;
             const char *path = NULL;
             char *userid = NULL;
+            char *extname = NULL;
             strarray_t *oldpaths = strarray_new();
             strarray_t *newpaths = strarray_new();
             strarray_t *subs = NULL;
@@ -300,8 +301,7 @@ int main(int argc, char **argv)
                 mappedfile_close(&activefile);
             }
 
-            char *extname =
-                mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
+            extname = mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
 
             if (!quiet) printf("\nRelocating: %s\n", extname);
 
