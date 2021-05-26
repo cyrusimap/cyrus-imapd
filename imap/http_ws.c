@@ -909,6 +909,9 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
 
     if (ctx->accept_key) {
         simple_hdr(txn, "Sec-WebSocket-Accept", "%s", ctx->accept_key);
+
+        /* Reset working buffer which is holding the accept_key */
+        buf_reset(&txn->buf);
     }
 
     if (ctx->protocol) {
