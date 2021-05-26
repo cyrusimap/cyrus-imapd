@@ -585,13 +585,6 @@ HIDDEN int http2_preface(struct http_connection *conn)
 }
 
 
-#if HAVE_DECL_NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL
-static int nghttp2_extended_connect = 1;
-#else
-#define NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL 0x08
-static int nghttp2_extended_connect = 0;
-#endif
-
 static void _end_session(struct http_connection *conn)
 {
     _end_session_ex(conn, 0, NULL);
@@ -620,12 +613,6 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
                "nghttp2_option_new: %s", nghttp2_strerror(r));
         free(ctx);
         return HTTP_SERVER_ERROR;
-    }
-
-    if (ws_enabled() && !nghttp2_extended_connect) {
-        /* Need to forcefully allow :scheme, :path, :protocol pseudo-headers
-           (this version of libnghttp2 doesn't understand extended CONNECT) */
-        nghttp2_option_set_no_http_messaging(ctx->options, 1);
     }
 
     r = nghttp2_session_server_new2(&ctx->session,
