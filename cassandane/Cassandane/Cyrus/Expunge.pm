@@ -105,6 +105,54 @@ sub test_status_after_expunge
     $self->assert_equals(0, $stat->{messages});
 }
 
+sub test_auditlog_size
+    :min_version_3_5
+{
+    my ($self, $folder, %params) = @_;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $subfolder = 'INBOX.foo';
+
+    xlog $self, "First create a sub folder";
+    $talk->create($subfolder)
+        or die "Cannot create folder $subfolder: $@";
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Generate messages in $subfolder";
+    $store->set_folder($subfolder);
+    $store->_select();
+    for (1..5) {
+        $self->make_message("Message $subfolder $_");
+    }
+    $talk->unselect();
+    $talk->select($subfolder);
+
+    # discard syslogs from setup
+    $self->{instance}->getsyslog();
+
+    my $resp = $talk->fetch('1,3,5', 'RFC822.SIZE');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($resp);
+    my %expected_sizes = map {
+        $_ => $resp->{$_}->{'rfc822.size'}
+    } keys %{$resp};
+
+    $talk->store('1,3,5', '+flags', '(\\Deleted \\Seen)');
+    $talk->expunge();
+
+    my @auditlogs = grep {
+        m/auditlog: expunge/
+    } $self->{instance}->getsyslog();
+
+    my %actual_sizes = map {
+        m/ uid=<([0-9]+)>.* size=<([0-9]+)>/
+    } @auditlogs;
+
+    $self->assert_deep_equals(\%expected_sizes, \%actual_sizes);
+}
+
 sub test_allowdeleted
     :AllowDeleted :DelayedExpunge :min_version_3_1
 {
