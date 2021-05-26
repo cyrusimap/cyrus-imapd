@@ -3705,6 +3705,7 @@ EXPORTED int mboxlist_set_racls(int enabled)
         if (!r) r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key), "", 0, &tid);
         if (!r) have_racl = 1;
     }
+    buf_free(&key);
 
     if (!modified_mbdb || !tid) return r;
 
@@ -3713,7 +3714,6 @@ EXPORTED int mboxlist_set_racls(int enabled)
     else
         cyrusdb_commit(mbdb, tid);
 
-    buf_free(&key);
     return r;
 }
 
