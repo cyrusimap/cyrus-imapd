@@ -1052,6 +1052,7 @@ const struct search_engine squat_search_engine = {
     /* deluser */NULL,
     /* check_config */NULL,
     /* langstats */NULL,
-    can_match
+    can_match,
+    /* upgrade */NULL
 };
 

@@ -59,6 +59,7 @@
 #include "global.h"
 #include "ical_support.h"
 #include "ptrarray.h"
+#include "mappedfile.h"
 #include "mboxkey.h"
 #include "mboxlist.h"
 #include "mboxname.h"
@@ -93,6 +94,8 @@ static int nochanges = 0;
 struct search_rock {
     const char *userid;
     const char *userpath;
+    strarray_t tiernames;
+    arrayu64_t tiergens;
     strarray_t *oldpaths;
     strarray_t *newpaths;
 };
@@ -255,9 +258,46 @@ int main(int argc, char **argv)
                 }
 
                 /* Add xapian tier paths */
-                struct search_rock rock =
-                    { argv[i], userpath, oldpaths, newpaths };
-                config_foreachoverflowstring(get_searchparts, &rock);
+                char *activefname = user_hash_meta(userid, FNAME_XAPIANSUFFIX);
+                struct mappedfile *activefile = NULL;
+
+                r = mappedfile_open(&activefile, activefname, 0);
+                if (r) {
+                    fprintf(stderr,
+                            "Failed to open activefile for %s: %s\n",
+                            activefname, error_message(r));
+                    goto cleanup;
+                }
+
+                strarray_t *items = strarray_nsplit(mappedfile_base(activefile),
+                        mappedfile_size(activefile), NULL, 1);
+
+                struct buf buf = BUF_INITIALIZER;
+                if (items) {
+                    struct search_rock rock = {
+                        userid, userpath,
+                        STRARRAY_INITIALIZER,
+                        ARRAYU64_INITIALIZER,
+                        oldpaths, newpaths,
+                    };
+                    int j;
+                    for (j = 0; j < strarray_size(items); j++) {
+                        const char *item = strarray_nth(items, j);
+                        const char *col = strrchr(item, ':');
+                        if (!col) continue;
+                        buf_setmap(&buf, item, col-item);
+                        strarray_append(&rock.tiernames, buf_cstring(&buf));
+                        arrayu64_append(&rock.tiergens, atoi(col+1));
+                    }
+                    config_foreachoverflowstring(get_searchparts, &rock);
+
+                    strarray_fini(&rock.tiernames);
+                    arrayu64_fini(&rock.tiergens);
+                }
+                strarray_free(items);
+                buf_free(&buf);
+
+                mappedfile_close(&activefile);
             }
 
             char *extname =
@@ -327,6 +367,14 @@ int main(int argc, char **argv)
                                     userid, error_message(r));
                         }
 #endif
+
+                        /* Rewrite search database */
+                        r = search_upgrade(userid);
+                        if (r) {
+                            fprintf(stderr,
+                                    "Failed to upgrade search index for %s: %s\n",
+                                    userid, error_message(r));
+                        }
                     }
                 }
             }
@@ -452,20 +500,30 @@ static int relocate(const char *old, const char *new)
 static void get_searchparts(const char *key, const char *val, void *rock)
 {
     struct search_rock *srock = (struct search_rock *) rock;
-    char *basedir;
 
-    if (!strstr(key, "searchpartition-")) return;
+    const char *p = strstr(key, "searchpartition-");
+    if (!p) return;
+    char *tier = xstrndup(key, p - key);
 
-    basedir = user_hash_xapian(srock->userid, val);
-    if (basedir) {
-        struct buf buf = BUF_INITIALIZER;
+    char *basedir = user_hash_xapian(srock->userid, val);
+    if (!basedir) return;
 
-        buf_initm(&buf, basedir, strlen(basedir));
-        buf_appendcstr(&buf, XAPIAN_DIRNAME);
-        strarray_appendm(srock->oldpaths, buf_release(&buf));
+    struct buf buf = BUF_INITIALIZER;
+    int i;
+    for (i = 0; i < strarray_size(&srock->tiernames); i++) {
+        if (!strcmp(tier, strarray_nth(&srock->tiernames, i))) {
+            uint64_t gen = arrayu64_nth(&srock->tiergens, i);
 
-        buf_setcstr(&buf, val);
-        buf_printf(&buf, FNAME_USERDIR "%s" XAPIAN_DIRNAME, srock->userpath);
-        strarray_appendm(srock->newpaths, buf_release(&buf));
+            buf_setcstr(&buf, basedir);
+            buf_appendcstr(&buf, XAPIAN_DIRNAME);
+            if (gen) buf_printf(&buf, ".%lu", gen);
+            strarray_append(srock->oldpaths, buf_cstring(&buf));
+
+            buf_setcstr(&buf, val);
+            buf_printf(&buf, FNAME_USERDIR "%s" XAPIAN_DIRNAME, srock->userpath);
+            if (gen) buf_printf(&buf, ".%lu", gen);
+            strarray_append(srock->newpaths, buf_cstring(&buf));
+        }
     }
+    buf_free(&buf);
 }
