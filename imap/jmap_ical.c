@@ -4406,10 +4406,9 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
                 icalproperty_add_parameter(prop, icalparameter_new_label(name));
             }
         }
-        else {
-            jmap_parser_invalid(parser, "uri");
+        else if (JNOTNULL(jname)) {
+            jmap_parser_invalid(parser, "name");
         }
-
 
         /* description */
         json_t *jdescription = json_object_get(loc, "description");
