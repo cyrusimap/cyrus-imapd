@@ -427,7 +427,8 @@ typedef void (*txn_done_t)(struct transaction_t *txn);
 enum {
     VER_1_0 =           0,
     VER_1_1 =           1,
-    VER_2 =             2
+    VER_2 =             2,
+    VER_3 =             3,
 };
 
 /* Connection token flags */

@@ -1282,6 +1282,8 @@ imap_httpd_SOURCES = \
 	imap/http_dblookup.c \
 	imap/http_h2.c \
 	imap/http_h2.h \
+	imap/http_h3.c \
+	imap/http_h3.h \
 	imap/http_ischedule.c \
 	imap/http_jwt.c \
 	imap/http_jwt.h \

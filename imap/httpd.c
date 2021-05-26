@@ -69,6 +69,7 @@
 
 #include "httpd.h"
 #include "http_h2.h"
+#include "http_h3.h"
 #include "http_jwt.h"
 #include "http_proxy.h"
 #include "http_ws.h"
@@ -873,6 +874,7 @@ int service_init(int argc __attribute__((unused)),
     r = 0;
 
     http2_enabled = http2_init(&http_conn, &serverinfo);
+    http3_init(&http_conn, &serverinfo);
     ws_enabled = ws_init(&http_conn, &serverinfo);
 
 #ifdef HAVE_ZLIB
@@ -1269,6 +1271,10 @@ static int tls_init(int client_auth, struct buf *serverinfo)
     if (status == 0) buf_appendcstr(serverinfo, "-dev");
     else if (status < 15) buf_printf(serverinfo, "-beta%u", status);
     else if (patch) buf_putc(serverinfo, patch + 'a' - 1);
+
+#ifdef HAVE_QUIC_TLS
+    buf_appendcstr(&serverinfo, "+quic");
+#endif
 
     if (!tls_enabled()) return HTTP_UNAVAILABLE;
 
