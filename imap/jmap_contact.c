@@ -1549,180 +1549,157 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     json_object_set_new(obj, "jobTitle", jmap_utf8string(item));
 
     json_t *adr = json_array();
-
-    for (entry = card->properties; entry; entry = entry->next) {
-        if (strcasecmp(entry->name, "adr")) continue;
-        json_t *item = json_object();
-
-        /* XXX - type and label */
-        const strarray_t *a = entry->v.values;
-
-        const struct vparse_param *param;
-        const char *type = "other";
-        const char *label = NULL;
-        if (entry->group) {
-            label = hash_lookup(entry->group, &labels);
-        }
-        for (param = entry->params; param; param = param->next) {
-            if (!strcasecmp(param->name, "type")) {
-                if (!strcasecmp(param->value, "home")) {
-                    type = "home";
-                }
-                else if (!strcasecmp(param->value, "work")) {
-                    type = "work";
-                }
-                else if (!strcasecmp(param->value, "billing")) {
-                    type = "billing";
-                }
-                else if (!strcasecmp(param->value, "postal")) {
-                    type = "postal";
-                }
-            }
-            else if (!strcasecmp(param->name, "label")) {
-                label = param->value;
-            }
-        }
-        json_object_set_new(item, "type", json_string(type));
-        json_object_set_new(item, "label", label ? json_string(label) : json_null());
-
-        const char *pobox = strarray_safenth(a, 0);
-        const char *extended = strarray_safenth(a, 1);
-        const char *street = strarray_safenth(a, 2);
-        buf_reset(&buf);
-        if (*pobox) {
-            buf_appendcstr(&buf, pobox);
-            if (extended || street) buf_putc(&buf, '\n');
-        }
-        if (*extended) {
-            buf_appendcstr(&buf, extended);
-            if (street) buf_putc(&buf, '\n');
-        }
-        if (*street) {
-            buf_appendcstr(&buf, street);
-        }
-
-        json_object_set_new(item, "street",
-                            jmap_utf8string(buf_cstring(&buf)));
-        json_object_set_new(item, "locality",
-                            jmap_utf8string(strarray_safenth(a, 3)));
-        json_object_set_new(item, "region",
-                            jmap_utf8string(strarray_safenth(a, 4)));
-        json_object_set_new(item, "postcode",
-                            jmap_utf8string(strarray_safenth(a, 5)));
-        json_object_set_new(item, "country",
-                            jmap_utf8string(strarray_safenth(a, 6)));
-
-        json_array_append_new(adr, item);
-    }
-
-    json_object_set_new(obj, "addresses", adr);
-
-    /* emails - we need to open code this, because it's repeated */
     json_t *emails = json_array();
-
-    int defaultIndex = -1;
-    int i = 0;
-    for (entry = card->properties; entry; entry = entry->next) {
-        if (strcasecmp(entry->name, "email")) continue;
-        json_t *item = json_object();
-        const struct vparse_param *param;
-        const char *type = "other";
-        const char *label = NULL;
-        if (entry->group) {
-            label = hash_lookup(entry->group, &labels);
-        }
-        for (param = entry->params; param; param = param->next) {
-            if (!strcasecmp(param->name, "type")) {
-                if (!strcasecmp(param->value, "home")) {
-                    type = "personal";
-                }
-                else if (!strcasecmp(param->value, "work")) {
-                    type = "work";
-                }
-                else if (!strcasecmp(param->value, "pref")) {
-                    if (defaultIndex < 0)
-                        defaultIndex = i;
-                }
-            }
-            else if (!strcasecmp(param->name, "label")) {
-                label = param->value;
-            }
-        }
-        json_object_set_new(item, "type", json_string(type));
-        if (label) json_object_set_new(item, "label", json_string(label));
-
-        json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
-
-        json_array_append_new(emails, item);
-        i++;
-    }
-
-    if (defaultIndex < 0)
-        defaultIndex = 0;
-    int size = json_array_size(emails);
-    for (i = 0; i < size; i++) {
-        json_t *item = json_array_get(emails, i);
-        json_object_set_new(item, "isDefault",
-                            i == defaultIndex ? json_true() : json_false());
-    }
-
-    json_object_set_new(obj, "emails", emails);
-
-    /* address - we need to open code this, because it's repeated */
     json_t *phones = json_array();
+    json_t *online = json_array();
+    int emailIndex = 0, defaultEmailIndex = -1;
 
     for (entry = card->properties; entry; entry = entry->next) {
-        if (strcasecmp(entry->name, "tel")) continue;
-        json_t *item = json_object();
         const struct vparse_param *param;
-        const char *type = "other";
         const char *label = NULL;
+        size_t label_len = 0;
+
+        /* Apple label */
         if (entry->group) {
             label = hash_lookup(entry->group, &labels);
-        }
-        for (param = entry->params; param; param = param->next) {
-            if (!strcasecmp(param->name, "type")) {
-                if (!strcasecmp(param->value, "home")) {
-                    type = "home";
-                }
-                else if (!strcasecmp(param->value, "work")) {
-                    type = "work";
-                }
-                else if (!strcasecmp(param->value, "cell")) {
-                    type = "mobile";
-                }
-                else if (!strcasecmp(param->value, "mobile")) {
-                    type = "mobile";
-                }
-                else if (!strcasecmp(param->value, "fax")) {
-                    type = "fax";
-                }
-                else if (!strcasecmp(param->value, "pager")) {
-                    type = "pager";
-                }
-            }
-            else if (!strcasecmp(param->name, "label")) {
-                label = param->value;
+            label_len = strlen(label);
+
+            /* Check and adjust for weird (localized?) labels */
+            if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
+                label += 4;
+                label_len -= 8;
             }
         }
-        json_object_set_new(item, "type", json_string(type));
-        if (label) json_object_set_new(item, "label", json_string(label));
 
-        json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
-
-        json_array_append_new(phones, item);
-    }
-
-    json_object_set_new(obj, "phones", phones);
-
-    /* address - we need to open code this, because it's repeated */
-    json_t *online = json_array();
-
-    for (entry = card->properties; entry; entry = entry->next) {
-        if (!strcasecmp(entry->name, "url")) {
+        if (!strcasecmp(entry->name, "adr")) {
             json_t *item = json_object();
-            const struct vparse_param *param;
-            const char *label = NULL;
+            const char *type = "other";
+
+            for (param = entry->params; param; param = param->next) {
+                if (!strcasecmp(param->name, "type")) {
+                    if (!strcasecmp(param->value, "home")) {
+                        type = "home";
+                    }
+                    else if (!strcasecmp(param->value, "work")) {
+                        type = "work";
+                    }
+                    else if (!strcasecmp(param->value, "billing")) {
+                        type = "billing";
+                    }
+                    else if (!strcasecmp(param->value, "postal")) {
+                        type = "postal";
+                    }
+                }
+                else if (!strcasecmp(param->name, "label")) {
+                    label = param->value;
+                    label_len = strlen(label);
+                }
+            }
+            json_object_set_new(item, "type", json_string(type));
+            json_object_set_new(item, "label",
+                                label ? json_stringn(label, label_len) : json_null());
+
+            const strarray_t *a = entry->v.values;
+            const char *pobox = strarray_safenth(a, 0);
+            const char *extended = strarray_safenth(a, 1);
+            const char *street = strarray_safenth(a, 2);
+            buf_reset(&buf);
+            if (*pobox) {
+                buf_appendcstr(&buf, pobox);
+                if (extended || street) buf_putc(&buf, '\n');
+            }
+            if (*extended) {
+                buf_appendcstr(&buf, extended);
+                if (street) buf_putc(&buf, '\n');
+            }
+            if (*street) {
+                buf_appendcstr(&buf, street);
+            }
+
+            json_object_set_new(item, "street",
+                                jmap_utf8string(buf_cstring(&buf)));
+            json_object_set_new(item, "locality",
+                                jmap_utf8string(strarray_safenth(a, 3)));
+            json_object_set_new(item, "region",
+                                jmap_utf8string(strarray_safenth(a, 4)));
+            json_object_set_new(item, "postcode",
+                                jmap_utf8string(strarray_safenth(a, 5)));
+            json_object_set_new(item, "country",
+                                jmap_utf8string(strarray_safenth(a, 6)));
+
+            json_array_append_new(adr, item);
+        }
+        else if (!strcasecmp(entry->name, "email")) {
+            json_t *item = json_object();
+            const char *type = "other";
+            for (param = entry->params; param; param = param->next) {
+                if (!strcasecmp(param->name, "type")) {
+                    if (!strcasecmp(param->value, "home")) {
+                        type = "personal";
+                    }
+                    else if (!strcasecmp(param->value, "work")) {
+                        type = "work";
+                    }
+                    else if (!strcasecmp(param->value, "pref")) {
+                        if (defaultEmailIndex < 0)
+                            defaultEmailIndex = emailIndex;
+                    }
+                }
+                else if (!strcasecmp(param->name, "label")) {
+                    label = param->value;
+                    label_len = strlen(label);
+                }
+            }
+            json_object_set_new(item, "type", json_string(type));
+            if (label) {
+                json_object_set_new(item, "label", json_stringn(label, label_len));
+            }
+
+            json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
+
+            json_array_append_new(emails, item);
+            emailIndex++;
+        }
+        else if (!strcasecmp(entry->name, "tel")) {
+            json_t *item = json_object();
+            const char *type = "other";
+            for (param = entry->params; param; param = param->next) {
+                if (!strcasecmp(param->name, "type")) {
+                    if (!strcasecmp(param->value, "home")) {
+                        type = "home";
+                    }
+                    else if (!strcasecmp(param->value, "work")) {
+                        type = "work";
+                    }
+                    else if (!strcasecmp(param->value, "cell")) {
+                        type = "mobile";
+                    }
+                    else if (!strcasecmp(param->value, "mobile")) {
+                        type = "mobile";
+                    }
+                    else if (!strcasecmp(param->value, "fax")) {
+                        type = "fax";
+                    }
+                    else if (!strcasecmp(param->value, "pager")) {
+                        type = "pager";
+                    }
+                }
+                else if (!strcasecmp(param->name, "label")) {
+                    label = param->value;
+                    label_len = strlen(label);
+                }
+            }
+            json_object_set_new(item, "type", json_string(type));
+            if (label) {
+                json_object_set_new(item, "label", json_stringn(label, label_len));
+            }
+
+            json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
+
+            json_array_append_new(phones, item);
+        }
+        else if (!strcasecmp(entry->name, "url")) {
+            json_t *item = json_object();
             for (param = entry->params; param; param = param->next) {
                 if (!strcasecmp(param->name, "label")) {
                     label = param->value;
@@ -1733,10 +1710,8 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             json_object_set_new(item, "value", json_string(entry->v.value));
             json_array_append_new(online, item);
         }
-        if (!strcasecmp(entry->name, "impp")) {
+        else if (!strcasecmp(entry->name, "impp")) {
             json_t *item = json_object();
-            const struct vparse_param *param;
-            const char *label = NULL;
             for (param = entry->params; param; param = param->next) {
                 if (!strcasecmp(param->name, "x-service-type")) {
                     label = _servicetype(param->value);
@@ -1747,10 +1722,8 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
             json_array_append_new(online, item);
         }
-        if (!strcasecmp(entry->name, "x-social-profile")) {
+        else if (!strcasecmp(entry->name, "x-social-profile")) {
             json_t *item = json_object();
-            const struct vparse_param *param;
-            const char *label = NULL;
             const char *value = NULL;
             for (param = entry->params; param; param = param->next) {
                 if (!strcasecmp(param->name, "type")) {
@@ -1766,10 +1739,8 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                                 jmap_utf8string(value ? value : entry->v.value));
             json_array_append_new(online, item);
         }
-        if (!strcasecmp(entry->name, "x-fm-online-other")) {
+        else if (!strcasecmp(entry->name, "x-fm-online-other")) {
             json_t *item = json_object();
-            const struct vparse_param *param;
-            const char *label = NULL;
             for (param = entry->params; param; param = param->next) {
                 if (!strcasecmp(param->name, "label")) {
                     label = param->value;
@@ -1782,6 +1753,18 @@ static json_t *jmap_contact_from_vcard(const char *userid,
         }
     }
 
+    if (defaultEmailIndex < 0)
+        defaultEmailIndex = 0;
+    int i, size = json_array_size(emails);
+    for (i = 0; i < size; i++) {
+        json_t *item = json_array_get(emails, i);
+        json_object_set_new(item, "isDefault",
+                            i == defaultEmailIndex ? json_true() : json_false());
+    }
+
+    json_object_set_new(obj, "addresses", adr);
+    json_object_set_new(obj, "emails", emails);
+    json_object_set_new(obj, "phones", phones);
     json_object_set_new(obj, "online", online);
 
     item = vparse_stringval(card, "nickname");
