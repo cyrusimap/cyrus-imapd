@@ -4158,6 +4158,19 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         *(data->only_counts_changed) = 0;
     }
 
+    /* Determine where to report that update. Note that we even report
+     * hidden mailboxes in order to allow clients remove unshared and
+     * deleted mailboxes */
+    json_t *dest = NULL;
+    if (mbentry->createdmodseq <= data->since_modseq) {
+        if ((mbentry->mbtype & MBTYPE_DELETED) ||
+                !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
+            dest = data->destroyed;
+        }
+        else dest = data->updated;
+    }
+    else dest = data->created;
+
     /* Is this a more recent update for an id that we have already seen?
      * (check all three) */
     json_t *old[3];
@@ -4169,30 +4182,28 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         json_t *val = json_object_get(old[i], mbentry->uniqueid);
         if (!val) continue;
         modseq = (modseq_t)json_integer_value(json_object_get(val, "modseq"));
-        if (modseq <= mbmodseq) {
+        if (modseq < mbmodseq) {
+            /* use new update */
             json_object_del(old[i], mbentry->uniqueid);
+        } else if (modseq == mbmodseq) {
+            /* most likely a rename: report it in 'updated' */
+            if (dest == data->updated) {
+                json_object_del(old[i], mbentry->uniqueid);
+            }
+            else if (i == 1) {
+                return 0;
+            }
         } else {
+            /* keep old update */
             return 0;
         }
     }
 
-    /* OK, report that update. Note that we even report hidden mailboxes
-     * in order to allow clients remove unshared and deleted mailboxes */
-    json_t *dest = NULL;
-
-    if ((mbentry->mbtype & MBTYPE_DELETED) || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
-        if (mbentry->createdmodseq <= data->since_modseq)
-            dest = data->destroyed;
-    } else {
-        if (mbentry->createdmodseq <= data->since_modseq)
-            dest = data->updated;
-        else
-            dest = data->created;
-    }
-
+    /* OK, report that update */
     if (dest)
         json_object_set_new(dest, mbentry->uniqueid,
-                            json_pack("{s:s s:i}", "id", mbentry->uniqueid, "modseq", mbmodseq));
+                            json_pack("{s:s s:i}", "id",
+                                mbentry->uniqueid, "modseq", mbmodseq));
 
     return 0;
 }
