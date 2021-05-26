@@ -515,4 +515,37 @@ sub test_duplicate_suppression_on_badmbox
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
 
+sub test_auditlog_size
+    :min_version_3_5
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing whether appended message size is auditlogged";
+
+    # discard syslogs from setup
+    $self->{instance}->getsyslog();
+
+    xlog $self, "Deliver a message";
+    my $folder = "INBOX";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, user => "cassandane");
+
+    xlog $self, "Check that the message made it";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    xlog $self, "Check the correct size was auditlogged";
+    my @appends = grep {
+        m/auditlog: append .* uid=<1>/
+    } $self->{instance}->getsyslog();
+    $self->assert_num_equals(1, scalar @appends);
+
+    # delivery will add some headers, so it will be larger
+    my $expected_size = $msgs{1}->size();
+    my ($actual_size) = $appends[0] =~ m/ size=<([0-9]+)>/;
+    $self->assert_num_gte($expected_size, $actual_size);
+}
+
 1;
