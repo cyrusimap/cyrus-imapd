@@ -3576,7 +3576,7 @@ TITLE:Shrimp Man
 REV:2008-04-24T19:52:43Z
 X-ABLabel:this-should-not-crash-cyrus
 foo.ADR:;;123 Main Street;Any Town;LA;91921-1234;U.S.A.
-foo.X-ABLabel:foo
+foo.X-ABLabel:_\$!<foo>!\$_
 foo.EMAIL;TYPE=work:bubba\@local
 bar.X-ABLabel:bar
 bar.TEL;VALUE=uri;TYPE="home":tel:+1-555-555-5555
