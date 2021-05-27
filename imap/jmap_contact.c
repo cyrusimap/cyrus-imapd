@@ -1566,7 +1566,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
 
             /* Check and adjust for weird (localized?) labels */
             if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
-                label += 4;      // skip "_%!<" prefix
+                label += 4;      // skip "_$!<" prefix
                 label_len -= 8;  // and trim ">!$_" suffix
             }
         }
