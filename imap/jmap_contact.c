@@ -1566,8 +1566,8 @@ static json_t *jmap_contact_from_vcard(const char *userid,
 
             /* Check and adjust for weird (localized?) labels */
             if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
-                label += 4;
-                label_len -= 8;
+                label += 4;      // skip "_%!<" prefix
+                label_len -= 8;  // and trim ">!$_" suffix
             }
         }
 
@@ -1651,6 +1651,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 }
             }
             json_object_set_new(item, "type", json_string(type));
+            json_object_set_new(item, "isDefault", json_false());
             if (label) {
                 json_object_set_new(item, "label", json_stringn(label, label_len));
             }
@@ -1755,12 +1756,8 @@ static json_t *jmap_contact_from_vcard(const char *userid,
 
     if (defaultEmailIndex < 0)
         defaultEmailIndex = 0;
-    int i, size = json_array_size(emails);
-    for (i = 0; i < size; i++) {
-        json_t *item = json_array_get(emails, i);
-        json_object_set_new(item, "isDefault",
-                            i == defaultEmailIndex ? json_true() : json_false());
-    }
+    json_object_set_new(json_array_get(emails, defaultEmailIndex),
+                        "isDefault", json_true());
 
     json_object_set_new(obj, "addresses", adr);
     json_object_set_new(obj, "emails", emails);
@@ -1789,6 +1786,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     struct message_guid guid;
     char *type = NULL;
     json_t *file = NULL;
+    size_t size;
 
     if (photo &&
         (size = vcard_prop_decode_value(photo, NULL, &type, &guid))) {
