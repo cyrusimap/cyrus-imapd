@@ -1290,7 +1290,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
         goto done;
     }
 
-    /* Commit the append to the calendar mailbox */
+    /* Commit the append to the addressbook mailbox */
     r = append_commit(&as);
     if (r) {
         syslog(LOG_ERR, "append_commit() failed");
