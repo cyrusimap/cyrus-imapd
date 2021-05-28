@@ -5068,6 +5068,13 @@ static int meth_delete_resource(struct transaction_t *txn,
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     needrights = DACL_RMRSRC;
+    if (txn->req_tgt.namespace == &namespace_calendar) {
+        /* JMAP introduced the right to remove an event
+         * only if it is organized by the user (or there
+         * is no organizer at all). The CalDAV namespace
+         * needs to to assert this right later. */
+        needrights |= DACL_RMOWNRSRC;
+    }
     if (!(rights & needrights)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -7110,6 +7117,14 @@ int meth_put(struct transaction_t *txn, void *params)
             return HTTP_NOT_ALLOWED;
 
         reqd_rights = DACL_WRITECONT;
+
+        if (txn->req_tgt.namespace == &namespace_calendar) {
+            /* JMAP introduced the right to update an event
+             * only if it is organized by the user (or there
+             * is no organizer at all). The CalDAV namespace
+             * needs to to assert this right later. */
+            reqd_rights |= DACL_UPDATEOWNRSRC;
+        }
 
         if (txn->req_tgt.allow & ALLOW_USERDATA) reqd_rights |= DACL_PROPRSRC;
     }
