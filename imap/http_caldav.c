@@ -1556,17 +1556,36 @@ static int caldav_check_precond(struct transaction_t *txn,
     const char **hdr;
     int precond = 0;
 
-    if (txn->meth == METH_DELETE && !cdata) {
-        /* Must not delete default scheduling calendar */
-        char *defaultname = caldav_scheddefault(httpd_userid);
-        char *defaultmboxname = caldav_mboxname(httpd_userid, defaultname);
-        if (!strcmp(mailbox_name(mailbox), defaultmboxname)) {
-            precond = HTTP_FORBIDDEN;
-            txn->error.precond = CALDAV_DEFAULT_NEEDED;
+    if (txn->meth == METH_DELETE) {
+        if (!cdata) {
+            /* Must not delete default scheduling calendar */
+            char *defaultname = caldav_scheddefault(httpd_userid);
+            char *defaultmboxname = caldav_mboxname(httpd_userid, defaultname);
+            if (!strcmp(mailbox_name(mailbox), defaultmboxname)) {
+                precond = HTTP_FORBIDDEN;
+                txn->error.precond = CALDAV_DEFAULT_NEEDED;
+            }
+            free(defaultmboxname);
+            free(defaultname);
+            if (precond) return precond;
         }
-        free(defaultmboxname);
-        free(defaultname);
-        if (precond) return precond;
+        else {
+            int rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
+            if (!(rights & DACL_RMRSRC) && (rights & DACL_RMOWNRSRC)) {
+                /* User may delete events with no organizer or where
+                 * they are organizer. */
+                if (cdata->organizer) {
+                    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+                    get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                            txn->req_tgt.userid, &schedule_addresses);
+                    if (strarray_find(&schedule_addresses, cdata->organizer, 0) < 0) {
+                        precond = HTTP_FORBIDDEN;
+                    }
+                    strarray_fini(&schedule_addresses);
+                    if (precond) return precond;
+                }
+            }
+        }
     }
 
     /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
@@ -4407,7 +4426,8 @@ static int personalize_resource(struct transaction_t *txn,
                                 struct caldav_data *cdata,
                                 const char *userid,
                                 icalcomponent **store_me,
-                                icalcomponent **userdata)
+                                icalcomponent **userdata,
+                                const strarray_t *schedule_addresses)
 {
     int is_owner, rights, read_only, ret = 0;
     mbname_t *mbname;
@@ -4430,6 +4450,17 @@ static int personalize_resource(struct transaction_t *txn,
     if (rights & DACL_WRITECONT) {
         /* User has read-write access */
         read_only = 0;
+    }
+    else if (cdata->dav.imap_uid && (rights & DACL_UPDATEOWNRSRC) &&
+            (!cdata->organizer ||
+             (schedule_addresses &&
+              strarray_find(schedule_addresses, cdata->organizer, 0) >= 0))) {
+        /* User may update resource whey they are organizer */
+        read_only = 0;
+    }
+    else if (rights & DACL_UPDATEPRIVATE) {
+        /* User may only update their per-user properties */
+        read_only = 1;
     }
     else if (cdata->dav.imap_uid &&
              !(mailbox->i.options & OPT_IMAP_SHAREDSEEN)) {
@@ -4487,7 +4518,6 @@ static int personalize_resource(struct transaction_t *txn,
         if (!ret) ret = write_personal_data(owner, mailbox, cdata->dav.imap_uid,
                                             cdata->dav.modseq, usedefaultalerts,
                                             *userdata);
-
         if (ret) goto done;
 
         if (read_only) {
@@ -4536,11 +4566,13 @@ static int personalize_resource(struct transaction_t *txn,
 
         if (ret) goto done;
 
-        if (cdata->dav.imap_uid && !num_changes) {
-            /* No resource to store (per-user data change only) */
-            ret = HTTP_NO_CONTENT;
-            *store_me = NULL;
-            goto done;
+        if (cdata->dav.imap_uid) {
+            if (!num_changes) {
+                /* No resource to store (per-user data change only) */
+                ret = HTTP_NO_CONTENT;
+                *store_me = NULL;
+                goto done;
+            }
         }
 
         cdata->comp_flags.shared = 1;
@@ -8919,7 +8951,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     else if (userid && (namespace_calendar.allow & ALLOW_USERDATA) && !is_secretarymode) {
         usedefaultalerts = icalcomponent_read_usedefaultalerts(ical) > 0;
         ret = personalize_resource(txn, mailbox, ical,
-                                   cdata, userid, &store_ical, &userdata);
+                cdata, userid, &store_ical, &userdata, schedule_addresses);
         if (ret) goto done;
 
         if (store_ical != ical) {
