@@ -46,11 +46,22 @@ all clean install::
 
 all:: syntax
 
-SCRIPTS := $(shell find . -type f -name '*.pl' | sort)
+# utils/annotator.pl depends on modules installed with Cyrus, which it
+# will only be able to find when invoked by Cyrus::Instance (which sets
+# up $PERL5LIB appropriately) or when the system coincidentally also has
+# a real Cyrus installation on it.  So we can't rely on it to pass a
+# simple 'perl -c' check unless Cyrus is available.
+SCRIPTS := $(shell find . -type f -name '*.pl' \
+                   | grep -v 'utils\/annotator.pl' | sort)
 
 MODULES := $(shell find . -type f -name '*.pm' | sort)
 
-CYRUS_PERL_PATHS := $(shell $(PERL) utils/cyrus-perl-paths.pl)
+# define NOCYRUS to skip utils/annotator.pl, allowing the rest of the
+# checks to proceed when no Cyrus install exists
+ifndef NOCYRUS
+    SCRIPTS += $(shell find . -type f -name 'annotator.pl')
+    CYRUS_PERL_PATHS := $(shell $(PERL) utils/cyrus-perl-paths.pl)
+endif
 
 SYNTAX_rules =
 
