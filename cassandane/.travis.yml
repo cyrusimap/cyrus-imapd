@@ -58,7 +58,7 @@ install:
 - cpanm --notest https://github.com/cyrusimap/Net-CalDAVTalk.git
 - cpanm --notest https://github.com/cyrusimap/Net-CardDAVTalk.git
 script:
-- make
+- make NOCYRUS=1
 branches:
   only:
   - master
