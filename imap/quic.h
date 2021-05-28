@@ -1,4 +1,4 @@
-/* http_h3.c - HTTP/3 support functions
+/* quic.h - QUIC support functions
  *
  * Copyright (c) 1994-2021 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,56 +41,18 @@
  *
  */
 
-#include <sysexits.h>
-#include <syslog.h>
+#ifndef QUIC_H
+#define QUIC_H
 
-#include "httpd.h"
-#include "http_h3.h"
-#include "quic.h"
+#include <config.h>
 
-#ifdef HAVE_NGHTTP3
+#include "tls.h"
+#include "util.h"
 
-#include <nghttp3/nghttp3.h>
+extern int quic_enabled(const struct tls_alpn_t alpn_map[]);
 
-static const struct tls_alpn_t http3_alpn_map[] = {
-    { "h3",    NULL, NULL },
-    { "h3-32", NULL, NULL },
-    { "h3-29", NULL, NULL },
-    { NULL,    NULL, NULL }
-};
+extern void quic_init(struct http_connection *conn, struct buf *serverinfo);
 
-HIDDEN int http3_enabled()
-{
-    return quic_enabled(http3_alpn_map);
-}
+extern void quic_input(struct http_connection *conn);
 
-HIDDEN void http3_init(struct http_connection *conn __attribute__((unused)),
-                       struct buf *serverinfo)
-{
-    buf_printf(serverinfo, " Nghttp3/%s", NGHTTP3_VERSION);
-    quic_init(conn, serverinfo);
-}
-
-HIDDEN void http3_input(struct http_connection *conn)
-{
-    quic_input(conn);
-}
- 
-#else /* !HAVE_NGHTTP3 */
-
-HIDDEN void http3_init(struct http_connection *conn __attribute__((unused)),
-                       struct buf *serverinfo __attribute__((unused)))
-{
-}
-
-HIDDEN int http3_enabled()
-{
-    return 0;
-}
-
-HIDDEN void http3_input(struct transaction_t *txn __attribute__((unused)))
-{
-    fatal("http3_input() called, but no Nghttp3", EX_SOFTWARE);
-}
-
-#endif /* HAVE_NGHTTP3 */
+#endif /* QUIC_H */

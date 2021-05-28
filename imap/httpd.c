@@ -829,7 +829,7 @@ int service_init(int argc __attribute__((unused)),
         case '3': /* HTTP/3 */
             http3 = 1;
             if (!http3_enabled()) {
-                fatal("http3: required HTTP/3 & QUIC libraries not available",
+                fatal("http3: required HTTP/3, QUIC, and OpenSSL options not available",
                       EX_CONFIG);
             }
             break;
