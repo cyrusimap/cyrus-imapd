@@ -2263,8 +2263,7 @@ static int parse_connection(struct transaction_t *txn)
                             txn->flags.upgrade |= UPGRADE_TLS;
                         }
                         else if (http2_enabled() &&
-                                 !strncasecmp(upgrade[0],
-                                              NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
+                                 !strncasecmp(upgrade[0], HTTP2_CLEARTEXT_ID,
                                               strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to HTTP/2 */
                             txn->flags.conn |= CONN_UPGRADE;
@@ -2618,7 +2617,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     struct resp_body_t *resp_body = &txn->resp_body;
     struct buf *logbuf = &txn->conn->logbuf;
     const char *upgrd_tokens[] =
-        { TLS_VERSION, NGHTTP2_CLEARTEXT_PROTO_VERSION_ID, WS_TOKEN, NULL };
+        { TLS_VERSION, HTTP2_CLEARTEXT_ID, WS_TOKEN, NULL };
     const char *te[] = { "deflate", "gzip", "chunked", NULL };
     const char *ce[] = { "deflate", "gzip", "br", "zstd", NULL };
 

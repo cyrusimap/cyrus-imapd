@@ -48,16 +48,12 @@
 
 #ifdef HAVE_NGHTTP2
 #include <nghttp2/nghttp2.h>
-
-#else /* !HAVE_NGHTTP2 */
-
-#define NGHTTP2_PROTO_ALPN                 ""
-#define NGHTTP2_CLEARTEXT_PROTO_VERSION_ID ""
-
-#endif /* HAVE_NGHTTP2 */
+#endif
 
 #include "md5.h"
 #include "util.h"
+
+#define HTTP2_CLEARTEXT_ID  "h2c"
 
 extern void http2_init(struct http_connection *conn, struct buf *serverinfo);
 
