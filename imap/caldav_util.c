@@ -705,7 +705,9 @@ static int personalize_resource(struct transaction_t *txn,
                                 struct caldav_data *cdata,
                                 const char *userid,
                                 icalcomponent **store_me,
-                                icalcomponent **userdata)
+                                icalcomponent **userdata,
+                                const strarray_t *schedule_addresses)
+
 {
     int is_owner, rights, read_only, ret = 0;
     mbname_t *mbname;
@@ -730,6 +732,17 @@ static int personalize_resource(struct transaction_t *txn,
     if (rights & DACL_WRITECONT) {
         /* User has read-write access */
         read_only = 0;
+    }
+    else if (cdata->dav.imap_uid && (rights & DACL_UPDATEOWNRSRC) &&
+            (!cdata->organizer ||
+             (schedule_addresses &&
+              strarray_find(schedule_addresses, cdata->organizer, 0) >= 0))) {
+        /* User may update resource whey they are organizer */
+        read_only = 0;
+    }
+    else if (rights & DACL_UPDATEPRIVATE) {
+        /* User may only update their per-user properties */
+        read_only = 1;
     }
     else if (cdata->dav.imap_uid &&
              !(mailbox->i.options & OPT_IMAP_SHAREDSEEN)) {
@@ -836,11 +849,13 @@ static int personalize_resource(struct transaction_t *txn,
 
         if (ret) goto done;
 
-        if (cdata->dav.imap_uid && !num_changes) {
-            /* No resource to store (per-user data change only) */
-            ret = HTTP_NO_CONTENT;
-            *store_me = NULL;
-            goto done;
+        if (cdata->dav.imap_uid) {
+            if (!num_changes) {
+                /* No resource to store (per-user data change only) */
+                ret = HTTP_NO_CONTENT;
+                *store_me = NULL;
+                goto done;
+            }
         }
 
         cdata->comp_flags.shared = 1;
@@ -992,7 +1007,8 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     else if (userid && (namespace_calendar.allow & ALLOW_USERDATA) && !is_secretarymode) {
         usedefaultalerts = icalcomponent_read_usedefaultalerts(ical) > 0;
         ret = personalize_resource(txn, mailbox, ical,
-                                   cdata, userid, &store_ical, &userdata);
+                cdata, userid, &store_ical, &userdata, schedule_addresses);
+
         if (ret) goto done;
 
         if (store_ical != ical) {
