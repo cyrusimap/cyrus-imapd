@@ -1063,17 +1063,36 @@ static int caldav_check_precond(struct transaction_t *txn,
     const char **hdr;
     int precond = 0;
 
-    if (txn->meth == METH_DELETE && !cdata) {
-        /* Must not delete default scheduling calendar */
-        char *defaultname = caldav_scheddefault(httpd_userid);
-        char *defaultmboxname = caldav_mboxname(httpd_userid, defaultname);
-        if (!strcmp(mailbox_name(mailbox), defaultmboxname)) {
-            precond = HTTP_FORBIDDEN;
-            txn->error.precond = CALDAV_DEFAULT_NEEDED;
+    if (txn->meth == METH_DELETE) {
+        if (!cdata) {
+            /* Must not delete default scheduling calendar */
+            char *defaultname = caldav_scheddefault(httpd_userid);
+            char *defaultmboxname = caldav_mboxname(httpd_userid, defaultname);
+            if (!strcmp(mailbox_name(mailbox), defaultmboxname)) {
+                precond = HTTP_FORBIDDEN;
+                txn->error.precond = CALDAV_DEFAULT_NEEDED;
+            }
+            free(defaultmboxname);
+            free(defaultname);
+            if (precond) return precond;
         }
-        free(defaultmboxname);
-        free(defaultname);
-        if (precond) return precond;
+        else {
+            int rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
+            if (!(rights & DACL_RMRSRC) && (rights & DACL_RMOWNRSRC)) {
+                /* User may delete events with no organizer or where
+                 * they are organizer. */
+                if (cdata->organizer) {
+                    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+                    get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                            txn->req_tgt.userid, &schedule_addresses);
+                    if (strarray_find(&schedule_addresses, cdata->organizer, 0) < 0) {
+                        precond = HTTP_FORBIDDEN;
+                    }
+                    strarray_fini(&schedule_addresses);
+                    if (precond) return precond;
+                }
+            }
+        }
     }
 
     /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
