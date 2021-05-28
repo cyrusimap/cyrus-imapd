@@ -1147,7 +1147,7 @@ static unsigned h2_is_available(void *http_conn)
     return (http2_enabled() && http2_start_session(NULL, http_conn) == 0);
 }
 
-struct tls_alpn_t http_alpn_map[] = {
+static const struct tls_alpn_t http_alpn_map[] = {
     { "h2",       &h2_is_available, &http_conn },
     { "http/1.1", NULL,             NULL },
     { NULL,       NULL,             NULL }
@@ -1189,7 +1189,7 @@ static int starttls(struct transaction_t *txn, struct http_connection *conn)
 
 #ifdef HAVE_TLS_ALPN
     /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, http_alpn_map);
+    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) http_alpn_map);
 #endif
 
     if (!https) {
