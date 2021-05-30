@@ -421,6 +421,7 @@ static struct http_connection http_conn;
 static sasl_ssf_t extprops_ssf = 0;
 int https = 0;
 int httpd_tls_required = 0;
+int httpd_tls_enabled = 0;
 unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
 unsigned long config_httpmodules;
 int config_httpprettytelemetry;
@@ -476,7 +477,8 @@ struct backend **backend_cached = NULL;
 
 /* end PROXY stuff */
 
-static int starttls(struct transaction_t *txn, struct http_connection *conn);
+static int tls_init(int client_auth, struct buf *serverinfo);
+static void starttls(struct http_connection *conn, int timeout);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -708,8 +710,6 @@ int service_init(int argc __attribute__((unused)),
 {
     int r, events, opt, i;
     int allow_trace = config_getswitch(IMAPOPT_HTTPALLOWTRACE);
-    unsigned long version;
-    unsigned int status, patch, fix, minor, major;
 
     LIBXML_TEST_VERSION
 
@@ -744,10 +744,6 @@ int service_init(int argc __attribute__((unused)),
         switch(opt) {
         case 's': /* https (do TLS right away) */
             https = 1;
-            if (!tls_enabled()) {
-                fatal("https: required OpenSSL options not present",
-                      EX_CONFIG);
-            }
             break;
 
         case 'q':
@@ -784,32 +780,29 @@ int service_init(int argc __attribute__((unused)),
                SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
                LIBXML_DOTTED_VERSION, JANSSON_VERSION);
 
+    r = tls_init(!https, &serverinfo);
+    if (r && https) {
+        switch (r) {
+        case HTTP_NOT_IMPLEMENTED:
+            fatal("https: no OpenSSL support", EX_CONFIG);
+        case HTTP_UNAVAILABLE:
+            fatal("https: required OpenSSL options not present", EX_CONFIG);
+        case HTTP_SERVER_ERROR:
+            fatal("https: TLS engine initialization failure", EX_SOFTWARE);
+        }
+    }
+
     http2_init(&http_conn, &serverinfo);
     ws_init(&http_conn, &serverinfo);
-
-#ifdef HAVE_SSL
-    version = OPENSSL_VERSION_NUMBER;
-    status  = version & 0x0f; version >>= 4;
-    patch   = version & 0xff; version >>= 8;
-    fix     = version & 0xff; version >>= 8;
-    minor   = version & 0xff; version >>= 8;
-    major   = version & 0xff;
-    
-    buf_printf(&serverinfo, " OpenSSL/%u.%u.%u", major, minor, fix);
-
-    if (status == 0) buf_appendcstr(&serverinfo, "-dev");
-    else if (status < 15) buf_printf(&serverinfo, "-beta%u", status);
-    else if (patch) buf_putc(&serverinfo, patch + 'a' - 1);
-#endif
 
 #ifdef HAVE_ZLIB
     buf_printf(&serverinfo, " Zlib/%s", ZLIB_VERSION);
 #endif
 #ifdef HAVE_BROTLI
-    version = BrotliEncoderVersion();
-    fix     = version & 0xfff; version >>= 12;
-    minor   = version & 0xfff; version >>= 12;
-    major   = version & 0xfff;
+    unsigned long version = BrotliEncoderVersion();
+    unsigned int fix      = version & 0xfff; version >>= 12;
+    unsigned int minor    = version & 0xfff; version >>= 12;
+    unsigned int major    = version & 0xfff;
 
     buf_printf(&serverinfo, " Brotli/%u.%u.%u", major, minor, fix);
 #endif
@@ -943,7 +936,7 @@ int service_main(int argc __attribute__((unused)),
     /* we were connected on https port so we should do
        TLS negotiation immediately */
     if (https == 1) {
-        if (starttls(NULL, &http_conn) != 0) shut_down(0);
+        starttls(&http_conn, 180 /* timeout */);
     }
     else if (http2_preface(&http_conn)) {
         /* HTTP/2 client connection preface */
@@ -1167,23 +1160,26 @@ static void _shutdown_tls(struct http_connection *conn __attribute__((unused)),
     tls_shutdown_serverengine();
 }
 
-static int starttls(struct transaction_t *txn, struct http_connection *conn)
+static int tls_init(int client_auth, struct buf *serverinfo)
 {
-    int https = (txn == NULL);
-    int result;
+    unsigned long version = OPENSSL_VERSION_NUMBER;
+    unsigned int status   = version & 0x0f; version >>= 4;
+    unsigned int patch    = version & 0xff; version >>= 8;
+    unsigned int fix      = version & 0xff; version >>= 8;
+    unsigned int minor    = version & 0xff; version >>= 8;
+    unsigned int major    = version & 0xff;
+    
+    buf_printf(serverinfo, " OpenSSL/%u.%u.%u", major, minor, fix);
+
+    if (status == 0) buf_appendcstr(serverinfo, "-dev");
+    else if (status < 15) buf_printf(serverinfo, "-beta%u", status);
+    else if (patch) buf_putc(serverinfo, patch + 'a' - 1);
+
+    if (!tls_enabled()) return HTTP_UNAVAILABLE;
+
     SSL_CTX *ctx = NULL;
-
-    if (!conn) conn = txn->conn;
-
-    result=tls_init_serverengine("http",
-                                 5,        /* depth to verify */
-                                 !https,   /* can client auth? */
-                                 &ctx);
-
-    if (result == -1) {
+    if (tls_init_serverengine("http", 5 /* depth */, client_auth, &ctx) == -1) {
         syslog(LOG_ERR, "error initializing TLS");
-
-        if (txn) txn->error.desc = "Error initializing TLS";
         return HTTP_SERVER_ERROR;
     }
 
@@ -1192,39 +1188,30 @@ static int starttls(struct transaction_t *txn, struct http_connection *conn)
     SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) http_alpn_map);
 #endif
 
-    if (!https) {
-        /* tell client to start TLS upgrade (RFC 2817) */
-        response_header(HTTP_SWITCH_PROT, txn);
-    }
+    httpd_tls_enabled = 1;
 
-    result=tls_start_servertls(0, /* read */
-                               1, /* write */
-                               https ? 180 : httpd_timeout,
-                               &saslprops,
-                               (SSL **) &conn->tls_ctx);
+    return 0;
+}
+
+static void starttls(struct http_connection *conn, int timeout)
+{
+    int result = tls_start_servertls(conn->pin->fd, conn->pout->fd,
+                                     timeout, &saslprops, (SSL **) &conn->tls_ctx);
 
     /* if error */
     if (result == -1) {
-        syslog(LOG_NOTICE, "starttls failed: %s", conn->clienthost);
-
-        if (txn) txn->error.desc = "Error negotiating TLS";
-        return HTTP_BAD_REQUEST;
+        fatal("Error negotiating TLS", EX_TEMPFAIL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, httpd_saslconn);
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
-        if (https == 0) {
-            fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
-        } else {
-            shut_down(0);
-        }
+        fatal("saslprops_set_tls() failed", EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
-    prot_settls(httpd_in, conn->tls_ctx);
-    prot_settls(httpd_out, conn->tls_ctx);
+    prot_settls(conn->pin, conn->tls_ctx);
+    prot_settls(conn->pout, conn->tls_ctx);
 
     ptrarray_add(&conn->reset_callbacks, &_reset_tls);
     ptrarray_add(&conn->shutdown_callbacks, &_shutdown_tls);
@@ -1232,12 +1219,16 @@ static int starttls(struct transaction_t *txn, struct http_connection *conn)
     httpd_tls_required = 0;
 
     avail_auth_schemes |= AUTH_BASIC;
-
-    return 0;
 }
 #else
-static int starttls(struct transaction_t *txn __attribute__((unused)),
-                    struct http_connection *conn __attribute__((unused)))
+static int tls_init(int client_auth __attribute__((unused)),
+                    struct buf *serverinfo __attribute__((unused)))
+{
+    return HTTP_NOT_IMPLEMENTED;
+}
+
+static void starttls(struct http_connection *conn __attribute__((unused)),
+                     int timeout __attribute__((unused)))
 {
     fatal("starttls() called, but no OpenSSL", EX_SOFTWARE);
 }
@@ -1487,10 +1478,9 @@ static int preauth_check_hdrs(struct transaction_t *txn)
         }
 
         if (txn->flags.upgrade & UPGRADE_TLS) {
-            if ((ret = starttls(txn, NULL))) {
-                txn->flags.conn = CONN_CLOSE;
-                return ret;
-            }
+            /* Tell client to start TLS upgrade (RFC 2817) */
+            response_header(HTTP_SWITCH_PROT, txn);
+            starttls(txn->conn, httpd_timeout);
 
             /* Don't advertise TLS Upgrade anymore */
             txn->flags.upgrade &= ~UPGRADE_TLS;
@@ -1510,7 +1500,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     }
     else if (!txn->conn->tls_ctx && txn->flags.ver == VER_1_1) {
         /* Advertise available upgrade protocols */
-        if (tls_enabled() &&
+        if (httpd_tls_enabled &&
             config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
             txn->flags.upgrade |= UPGRADE_TLS;
         }
@@ -2255,7 +2245,7 @@ static int parse_connection(struct transaction_t *txn)
                         spool_getheader(txn->req_hdrs, "Upgrade");
 
                     if (upgrade && upgrade[0]) {
-                        if (!txn->conn->tls_ctx && tls_enabled() &&
+                        if (!txn->conn->tls_ctx && httpd_tls_enabled &&
                             !strncasecmp(upgrade[0], TLS_VERSION,
                                          strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to TLS */
