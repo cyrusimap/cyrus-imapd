@@ -159,7 +159,8 @@ HIDDEN int backup_real_open(struct backup **backupp,
                 r = IMAP_MAILBOX_NONEXISTENT;
                 break;
             default:
-                syslog(LOG_ERR, "IOERROR: open %s: %m", backup->data_fname);
+                xsyslog(LOG_ERR, "IOERROR: open failed",
+                                 "filename=<%s>", backup->data_fname);
                 r = IMAP_IOERROR;
                 break;
             }
@@ -173,7 +174,8 @@ HIDDEN int backup_real_open(struct backup **backupp,
                 r = IMAP_MAILBOX_LOCKED;
             }
             else {
-                syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", backup->data_fname);
+                xsyslog(LOG_ERR, "IOERROR: lock_setlock failed",
+                                 "filename=<%s>", backup->data_fname);
                 r = IMAP_IOERROR;
             }
             goto error;
@@ -182,7 +184,8 @@ HIDDEN int backup_real_open(struct backup **backupp,
         r = fstat(fd, &sbuf1);
         if (!r) r = stat(backup->data_fname, &sbuf2);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: (f)stat %s: %m", backup->data_fname);
+            xsyslog(LOG_ERR, "IOERROR: stat failed",
+                             "filename=<%s>", backup->data_fname);
             r = IMAP_IOERROR;
             close(fd);
             goto error;
@@ -205,7 +208,9 @@ HIDDEN int backup_real_open(struct backup **backupp,
 
         r = rename(backup->index_fname, oldindex_fname);
         if (r && errno != ENOENT) {
-            syslog(LOG_ERR, "IOERROR: rename %s %s: %m", backup->index_fname, oldindex_fname);
+            xsyslog(LOG_ERR, "IOERROR: rename failed",
+                             "source=<%s> dest=<%s>",
+                             backup->index_fname, oldindex_fname);
             r = IMAP_IOERROR;
             goto error;
         }
@@ -218,7 +223,8 @@ HIDDEN int backup_real_open(struct backup **backupp,
         struct stat data_statbuf;
         r = fstat(backup->fd, &data_statbuf);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: fstat %s: %m", backup->data_fname);
+            xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                             "filename=<%s>", backup->data_fname);
             r = IMAP_IOERROR;
             goto error;
         }
@@ -226,13 +232,15 @@ HIDDEN int backup_real_open(struct backup **backupp,
             struct stat index_statbuf;
             r = stat(backup->index_fname, &index_statbuf);
             if (r && errno != ENOENT) {
-                syslog(LOG_ERR, "IOERROR: stat %s: %m", backup->index_fname);
+                xsyslog(LOG_ERR, "IOERROR: stat failed",
+                                 "filename=<%s>", backup->index_fname);
                 r = IMAP_IOERROR;
                 goto error;
             }
 
             if ((r && errno == ENOENT) || index_statbuf.st_size == 0) {
-                syslog(LOG_ERR, "reindex needed: %s", backup->index_fname);
+                xsyslog(LOG_ERR, "IOERROR: reindex needed",
+                                 "filename=<%s>", backup->index_fname);
                 r = IMAP_MAILBOX_BADFORMAT;
                 goto error;
             }
@@ -531,13 +539,15 @@ EXPORTED int backup_stat(const struct backup *backup,
 
     r = fstat(backup->fd, &data_statbuf);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: fstat %s: %m", backup->data_fname);
+        xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                         "filename=<%s>", backup->data_fname);
         return IMAP_IOERROR;
     }
 
     r = stat(backup->index_fname, &index_statbuf);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: stat %s: %m", backup->index_fname);
+        xsyslog(LOG_ERR, "IOERROR: stat failed",
+                         "filename=<%s>", backup->index_fname);
         return IMAP_IOERROR;
     }
 
@@ -555,7 +565,8 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
     int r = gzuc_read(gzuc, buf, len);
 
     if (r < 0)
-        syslog(LOG_ERR, "IOERROR: gzuc_read returned %i", r);
+        xsyslog(LOG_ERR, "IOERROR: gzuc_read failed",
+                         "return=<%d>", r);
     if (r < -1)
         errno = EIO;
 
@@ -741,7 +752,8 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
                   O_RDWR | O_APPEND, /* no O_CREAT */
                   S_IRUSR | S_IWUSR);
     if (old.fd < 0) {
-        syslog(LOG_ERR, "IOERROR: open %s: %m", old.fname);
+        xsyslog(LOG_ERR, "IOERROR: open failed",
+                         "filename=<%s>", old.fname);
         r = -1;
         goto error;
     }
@@ -749,7 +761,8 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
     /* non-blocking, to avoid deadlock */
     r = lock_setlock(old.fd, /*excl*/ 1, /*nb*/ 1, old.fname);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", old.fname);
+        xsyslog(LOG_ERR, "IOERROR: lock_setlock failed",
+                         "filename=<%s>", old.fname);
         goto error;
     }
 

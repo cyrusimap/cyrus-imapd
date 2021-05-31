@@ -721,7 +721,8 @@ static void cmdloop(void)
 
         }
 
-        syslog(LOG_ERR, "IOERROR: received bad command: %s", cmd.s);
+        xsyslog(LOG_ERR, "IOERROR: received bad command",
+                         "command=<%s>", cmd.s);
         prot_printf(backupd_out, "BAD IMAP_PROTOCOL_ERROR Unrecognized command\r\n");
         eatline(backupd_in, c);
         continue;
@@ -923,7 +924,8 @@ static int cmd_apply_message(struct dlist *dl)
             close(fd);
         }
         else {
-            syslog(LOG_ERR, "IOERROR: %s open %s: %m", __func__, fname);
+            xsyslog(LOG_ERR, "IOERROR: open failed",
+                             "filename=<%s>", fname);
             r = IMAP_IOERROR;
         }
 
