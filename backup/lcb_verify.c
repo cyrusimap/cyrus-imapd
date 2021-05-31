@@ -286,7 +286,8 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
                     close(fd);
                 }
                 else {
-                    syslog(LOG_ERR, "IOERROR: %s open %s: %m", __func__, fname);
+                    xsyslog(LOG_ERR, "IOERROR: open failed",
+                                     "filename=<%s>", fname);
                     if (out)
                         fprintf(out, "error reading staging file for message %i\n", message->id);
                     r = -1;

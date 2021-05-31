@@ -208,10 +208,11 @@ EXPORTED int backup_prepare_message_upload(struct backup *backup,
             prot_free(ps);
             ps = NULL;
             if (c == EOF) {
-                syslog(LOG_ERR, "IOERROR: couldn't parse message %s from chunk %d of backup %s",
-                       message_guid_encode(&msgid->guid),
-                       chunk->id,
-                       backup->data_fname);
+                xsyslog(LOG_ERR, "IOERROR: parse_backup_line failed",
+                                 "guid=<%s> chunk=<%d> backup=<%s>",
+                                 message_guid_encode(&msgid->guid),
+                                 chunk->id,
+                                 backup->data_fname);
                 r = IMAP_IOERROR;
             }
         }

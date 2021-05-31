@@ -76,7 +76,9 @@ static int retry_gzwrite(gzFile gzfile, const char *str, size_t len, const char 
         else {
             int r;
             const char *err = gzerror(gzfile, &r);
-            syslog(LOG_ERR, "IOERROR: %s gzwrite %s: %s", __func__, fname, err);
+            xsyslog(LOG_ERR, "IOERROR: gzwrite failed",
+                             "filename=<%s> error=<%s>",
+                             fname, err);
 
             if (r == Z_STREAM_ERROR)
                 fatal("gzwrite: invalid stream", EX_IOERR);
