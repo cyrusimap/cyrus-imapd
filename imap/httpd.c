@@ -828,10 +828,6 @@ int service_init(int argc __attribute__((unused)),
         switch(opt) {
         case '3': /* HTTP/3 */
             http3 = 1;
-            if (!http3_enabled()) {
-                fatal("http3: required HTTP/3, QUIC, and OpenSSL options not available",
-                      EX_CONFIG);
-            }
             break;
 
         case 's': /* https (do TLS right away) */
@@ -870,20 +866,35 @@ int service_init(int argc __attribute__((unused)),
                LIBXML_DOTTED_VERSION, JANSSON_VERSION);
 
     r = tls_init(!https, &serverinfo);
-    if (r && https) {
+    if (http3) {
+        if (!r) r = http3_init(&http_conn, &serverinfo);
+
+        if (r) {
+            switch (r) {
+            case HTTP_NOT_IMPLEMENTED:
+                fatal("HTTP/3: no HTTP/3, QUIC, or OpenSSL support", EX_CONFIG);
+            case HTTP_UNAVAILABLE:
+                fatal("HTTP/3: required QUIC/OpenSSL options not present", EX_CONFIG);
+            default:
+                fatal("HTTP/3: QUIC TLS engine initialization failure", EX_SOFTWARE);
+            }
+        }
+    }
+    else if (https && r) {
         switch (r) {
         case HTTP_NOT_IMPLEMENTED:
             fatal("https: no OpenSSL support", EX_CONFIG);
         case HTTP_UNAVAILABLE:
             fatal("https: required OpenSSL options not present", EX_CONFIG);
-        case HTTP_SERVER_ERROR:
+        default:
             fatal("https: TLS engine initialization failure", EX_SOFTWARE);
         }
     }
+    else {
+        http2_enabled = http2_init(&http_conn, &serverinfo);
+    }
     r = 0;
 
-    http2_enabled = http2_init(&http_conn, &serverinfo);
-    http3_init(&http_conn, &serverinfo);
     ws_enabled = ws_init(&http_conn, &serverinfo);
 
 #ifdef HAVE_ZLIB

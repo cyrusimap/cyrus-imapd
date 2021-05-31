@@ -47,6 +47,9 @@
 #include "httpd.h"
 #include "quic.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+
 #if defined(HAVE_NGTCP2) && defined(HAVE_QUIC_TLS) && defined(HAVE_TLS_ALPN)
 
 #include <ngtcp2/ngtcp2.h>
@@ -132,21 +135,18 @@ static const SSL_QUIC_METHOD quic_method = {
     send_alert,
 };
 
-HIDDEN int quic_enabled(const struct tls_alpn_t alpn_map[])
+HIDDEN int quic_init(const struct tls_alpn_t alpn_map[],
+                     struct buf *serverinfo)
 {
-    if (!tls_enabled() || !alpn_map || !alpn_map[0].id) return 0;
+    buf_printf(serverinfo, " Ngtcp2/%s", NGTCP2_VERSION);
 
-    /* Setup QUIC TLS context */
+    if (!(alpn_map && alpn_map[0].id)) return HTTP_UNAVAILABLE;
+
+    /* Setup QUIC TLS context (SSL_CTX already initialized by tls_init() */
     SSL_CTX *ctx = NULL;
-    int r = tls_init_serverengine("quic",
-                                  5,   /* depth to verify */
-                                  0,   /* can client auth? */
-                                  &ctx);
-
-    if (r == -1) {
+    if (tls_init_serverengine("quic", 5, 1, &ctx) == -1) {
         syslog(LOG_ERR, "error initializing QUIC TLS");
-
-        return 0;
+        return HTTP_SERVER_ERROR;
     }
 
     long options = SSL_CTX_get_options(ctx);
@@ -156,15 +156,14 @@ HIDDEN int quic_enabled(const struct tls_alpn_t alpn_map[])
     SSL_CTX_set_options(ctx, options);
     SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) alpn_map);
 
-    return SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION)
-        && SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION)
-        && SSL_CTX_set_quic_method(ctx, &quic_method);
-}
+    if (!(SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION)
+          && SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION)
+          && SSL_CTX_set_quic_method(ctx, &quic_method))) {
+        syslog(LOG_ERR, "error initializing QUIC TLS");
+        return HTTP_SERVER_ERROR;
+    }
 
-HIDDEN void quic_init(struct http_connection *conn __attribute__((unused)),
-                      struct buf *serverinfo)
-{
-    buf_printf(serverinfo, " Ngtcp2/%s", NGTCP2_VERSION);
+    return 0;
 }
 
 HIDDEN void quic_input(struct http_connection *conn)
@@ -186,14 +185,10 @@ HIDDEN void quic_input(struct http_connection *conn)
 
 #else /* !HAVE_NGTCP2 */
 
-HIDDEN int quic_enabled(const struct tls_alpn_t alpn_map[] __attribute__((unused)))
+HIDDEN int quic_init(const struct tls_alpn_t alpn_map[] __attribute__((unused)),
+                     struct buf *serverinfo __attribute__((unused)))
 {
-    return 0;
-}
-
-HIDDEN void quic_init(struct http_connection *conn __attribute__((unused)),
-                      struct buf *serverinfo __attribute__((unused)))
-{
+    return HTTP_NOT_IMPLEMENTED;
 }
 
 HIDDEN void quic_input(struct http_connection *conn __attribute__((unused)))

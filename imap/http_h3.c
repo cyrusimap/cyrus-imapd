@@ -48,6 +48,9 @@
 #include "http_h3.h"
 #include "quic.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+
 #ifdef HAVE_NGHTTP3
 
 #include <nghttp3/nghttp3.h>
@@ -59,16 +62,12 @@ static const struct tls_alpn_t http3_alpn_map[] = {
     { NULL,    NULL, NULL }
 };
 
-HIDDEN int http3_enabled()
-{
-    return quic_enabled(http3_alpn_map);
-}
-
-HIDDEN void http3_init(struct http_connection *conn __attribute__((unused)),
-                       struct buf *serverinfo)
+HIDDEN int http3_init(struct http_connection *conn __attribute__((unused)),
+                      struct buf *serverinfo)
 {
     buf_printf(serverinfo, " Nghttp3/%s", NGHTTP3_VERSION);
-    quic_init(conn, serverinfo);
+
+    return quic_init(http3_alpn_map, serverinfo);
 }
 
 HIDDEN void http3_input(struct http_connection *conn)
@@ -78,14 +77,10 @@ HIDDEN void http3_input(struct http_connection *conn)
  
 #else /* !HAVE_NGHTTP3 */
 
-HIDDEN void http3_init(struct http_connection *conn __attribute__((unused)),
-                       struct buf *serverinfo __attribute__((unused)))
+HIDDEN int http3_init(struct http_connection *conn __attribute__((unused)),
+                      struct buf *serverinfo __attribute__((unused)))
 {
-}
-
-HIDDEN int http3_enabled()
-{
-    return 0;
+    return HTTP_NOT_IMPLEMENTED;
 }
 
 HIDDEN void http3_input(struct transaction_t *txn __attribute__((unused)))

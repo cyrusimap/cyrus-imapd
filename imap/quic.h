@@ -49,9 +49,7 @@
 #include "tls.h"
 #include "util.h"
 
-extern int quic_enabled(const struct tls_alpn_t alpn_map[]);
-
-extern void quic_init(struct http_connection *conn, struct buf *serverinfo);
+extern int quic_init(const struct tls_alpn_t alpn_map[], struct buf *serverinfo);
 
 extern void quic_input(struct http_connection *conn);
 

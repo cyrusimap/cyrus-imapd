@@ -48,9 +48,7 @@
 
 #include "util.h"
 
-extern int http3_enabled();
-
-extern void http3_init(struct http_connection *conn, struct buf *serverinfo);
+extern int http3_init(struct http_connection *conn, struct buf *serverinfo);
 
 extern void http3_input(struct http_connection *conn);
 
