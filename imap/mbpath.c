@@ -194,10 +194,13 @@ int main(int argc, char **argv)
     int sel = 0;
     int do_json = 0;
 
-    while ((opt = getopt(argc, argv, "C:ajlmqsuADMSU")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:7ajlmqsuADMSU")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
+            break;
+
+        case '7':
             break;
 
         case 'a':
