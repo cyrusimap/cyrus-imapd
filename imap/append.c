@@ -277,8 +277,9 @@ EXPORTED int append_commit(struct appendstate *as)
      * duplicate DB consistency */
     r = mailbox_commit(as->mailbox);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: committing mailbox append %s: %s",
-               as->mailbox->name, error_message(r));
+        xsyslog(LOG_ERR, "IOERROR: committing mailbox append",
+                         "mailbox=<%s> error=<%s>",
+                         as->mailbox->name, error_message(r));
         append_abort(as);
         return r;
     }
@@ -367,8 +368,8 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
         }
     }
     if (!f) {
-        syslog(LOG_ERR, "IOERROR: creating message file %s: %m",
-               stagefile);
+        xsyslog(LOG_ERR, "IOERROR: creating message file",
+                         "filename=<%s>", stagefile);
         strarray_fini(&stage->parts);
         free(stage);
         return NULL;
@@ -999,8 +1000,8 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         if (r) {
             /* oh well, we tried */
 
-            syslog(LOG_ERR, "IOERROR: creating message file %s: %m",
-                   stagefile);
+            xsyslog(LOG_ERR, "IOERROR: creating message file",
+                             "filename=<%s>", stagefile);
             unlink(stagefile);
             goto out;
         }
@@ -1191,7 +1192,8 @@ EXPORTED int append_removestage(struct stagemsg *stage)
     while ((p = strarray_pop(&stage->parts))) {
         /* unlink the staging file */
         if (unlink(p) != 0) {
-            syslog(LOG_ERR, "IOERROR: error unlinking file %s: %m", p);
+            xsyslog(LOG_ERR, "IOERROR: error unlinking file",
+                             "filename=<%s>", p);
         }
         free(p);
     }
@@ -1245,7 +1247,8 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     unlink(fname);
     destfile = fopen(fname, "w+");
     if (!destfile) {
-        syslog(LOG_ERR, "IOERROR: creating message file %s: %m", fname);
+        xsyslog(LOG_ERR, "IOERROR: creating message file",
+                         "filename=<%s>", fname);
         r = IMAP_IOERROR;
         goto out;
     }
@@ -1513,8 +1516,10 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
             r = msgrecord_set_userflags(dst_msgrec, dst_user_flags);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: unable to copy user flags from %s to %s for UID %u: %s",
-                        mailbox->name, as->mailbox->name, src_uid, error_message(r));
+                xsyslog(LOG_ERR, "IOERROR: unable to copy user flags",
+                                 "source=<%s> dest=<%s> uid=<%u> error=<%s>",
+                                 mailbox->name, as->mailbox->name,
+                                 src_uid, error_message(r));
             }
         }
         else {
@@ -1641,14 +1646,16 @@ static int append_addseen(struct mailbox *mailbox,
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: append_addseen failed to open DB for %s", userid);
+        xsyslog(LOG_ERR, "IOERROR: seen_open failed",
+                         "userid=<%s>", userid);
         goto done;
     }
 
     r = seen_lockread(seendb, mailbox->uniqueid, &sd);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: append_addseen failed to read old value for %s/%s",
-               userid, mailbox->uniqueid);
+        xsyslog(LOG_ERR, "IOERROR: seen_lockread failed",
+                         "userid=<%s> uniqueid=<%s>",
+                         userid, mailbox->uniqueid);
         goto done;
     }
 
@@ -1665,8 +1672,9 @@ static int append_addseen(struct mailbox *mailbox,
     sd.lastchange = time(NULL);
     r = seen_write(seendb, mailbox->uniqueid, &sd);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: append_addseen failed to write new value for %s/%s",
-               userid, mailbox->uniqueid);
+        xsyslog(LOG_ERR, "IOERROR: seen_write failed",
+                         "userid=<%s> uniqueid=<%s>",
+                         userid, mailbox->uniqueid);
     }
     seen_freedata(&sd);
 
