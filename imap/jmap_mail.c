@@ -1517,7 +1517,7 @@ static void emailsearch_folders_value_free(struct emailsearch_folders_value **va
 }
 
 static struct emailsearch_folders_value *
-_emailsearch_folders_value_new(jmap_req_t *req,
+emailsearch_folders_value_new(jmap_req_t *req,
                               json_t *jmboxids,
                               int is_otherthan,
                               int want_expunged)
@@ -1554,24 +1554,24 @@ _emailsearch_folders_value_new(jmap_req_t *req,
     return val;
 }
 
-struct _emailsearch_folders_internal
+struct emailsearch_folders_internal
 {
     struct conversations_state *cstate;
     int is_filtered_folder;
 };
 
-static void _emailsearch_folders_internalise(struct index_state *state,
+static void emailsearch_folders_internalise(struct index_state *state,
                                             const union search_value *v,
                                             void **internalisedp)
 {
     if (*internalisedp) {
-        struct _emailsearch_folders_internal *internal = *internalisedp;
+        struct emailsearch_folders_internal *internal = *internalisedp;
         free(internal);
         *internalisedp = NULL;
     }
     if (state && v) {
-        struct _emailsearch_folders_internal *internal =
-            xzmalloc(sizeof(struct _emailsearch_folders_internal));
+        struct emailsearch_folders_internal *internal =
+            xzmalloc(sizeof(struct emailsearch_folders_internal));
         internal->cstate = mailbox_get_cstate(state->mailbox);
 
         struct emailsearch_folders_value *val = v->v;
@@ -1604,7 +1604,7 @@ static void _emailsearch_folders_internalise(struct index_state *state,
     }
 }
 
-static int _emailsearch_folders_match_cb(const conv_guidrec_t *rec, void *rock)
+static int emailsearch_folders_match_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct emailsearch_folders_value *val = rock;
     if (!val->want_expunged &&
@@ -1616,12 +1616,12 @@ static int _emailsearch_folders_match_cb(const conv_guidrec_t *rec, void *rock)
     return !isset == !val->is_otherthan ? 0 : IMAP_OK_COMPLETED;
 }
 
-static int _emailsearch_folders_match(message_t *m,
+static int emailsearch_folders_match(message_t *m,
                                      const union search_value *v,
                                      void *internalised,
                                      void *data1 __attribute__((unused)))
 {
-    struct _emailsearch_folders_internal *internal = internalised;
+    struct emailsearch_folders_internal *internal = internalised;
     struct emailsearch_folders_value *val = v->v;
 
     if ((internal->is_filtered_folder && !val->is_otherthan) ||
@@ -1636,11 +1636,11 @@ static int _emailsearch_folders_match(message_t *m,
     int r = message_get_guid(m, &guid);
     if (r) return 0;
     r = conversations_guid_foreach(internal->cstate,
-            message_guid_encode(guid), _emailsearch_folders_match_cb, val);
+            message_guid_encode(guid), emailsearch_folders_match_cb, val);
     return r == IMAP_OK_COMPLETED;
 }
 
-static void _emailsearch_folders_serialise(struct buf *buf,
+static void emailsearch_folders_serialise(struct buf *buf,
                                           const union search_value *v)
 {
     struct emailsearch_folders_value *val = v->v;
@@ -1663,7 +1663,7 @@ static void _emailsearch_folders_serialise(struct buf *buf,
     buf_putc(buf, ')');
 }
 
-static int _emailsearch_folders_unserialise(struct protstream* prot,
+static int emailsearch_folders_unserialise(struct protstream* prot,
                                            union search_value *v)
 {
     struct dlist *dl = NULL;
@@ -1688,7 +1688,7 @@ static int _emailsearch_folders_unserialise(struct protstream* prot,
     }
     else {
         xsyslog(LOG_ERR, "expected is_otherthan", NULL);
-        _emailsearch_folders_value_free(&val);
+        emailsearch_folders_value_free(&val);
         goto done;
     }
     if (dlist_print_iter_step(iter, &buf)) {
@@ -1698,7 +1698,7 @@ static int _emailsearch_folders_unserialise(struct protstream* prot,
     }
     else {
         xsyslog(LOG_ERR, "expected want_expunged", NULL);
-        _emailsearch_folders_value_free(&val);
+        emailsearch_folders_value_free(&val);
         goto done;
     }
     while (iter && dlist_print_iter_step(iter, &buf)) {
@@ -1715,7 +1715,7 @@ done:
     return c;
 }
 
-static void _emailsearch_folders_duplicate(union search_value *new,
+static void emailsearch_folders_duplicate(union search_value *new,
                                            const union search_value *old)
 {
     struct emailsearch_folders_value *newv =
@@ -1732,37 +1732,37 @@ static void _emailsearch_folders_duplicate(union search_value *new,
     new->v = newv;
 }
 
-static void _emailsearch_folders_free(union search_value *v)
+static void emailsearch_folders_free(union search_value *v)
 {
     struct emailsearch_folders_value *val = v->v;
-    _emailsearch_folders_value_free(&val);
+    emailsearch_folders_value_free(&val);
 }
 
-static const search_attr_t _emailsearch_folders_attr = {
+static const search_attr_t emailsearch_folders_attr = {
     "jmap_folders",
     SEA_MUTABLE,
     SEARCH_PART_NONE,
     SEARCH_COST_CONV,
-    _emailsearch_folders_internalise,
+    emailsearch_folders_internalise,
     /*cmp*/NULL,
-    _emailsearch_folders_match,
-    _emailsearch_folders_serialise,
-    _emailsearch_folders_unserialise,
+    emailsearch_folders_match,
+    emailsearch_folders_serialise,
+    emailsearch_folders_unserialise,
     /*get_countability*/NULL,
-    _emailsearch_folders_duplicate,
-    _emailsearch_folders_free,
+    emailsearch_folders_duplicate,
+    emailsearch_folders_free,
     (void*)0 /*is_otherthan*/
 };
 
 /* ====================================================================== */
 
-static void _emailsearch_headermatch_internalise(struct index_state *state __attribute__((unused)),
+static void emailsearch_headermatch_internalise(struct index_state *state __attribute__((unused)),
                                                  const union search_value *v __attribute__((unused)),
                                                  void **internalisedp __attribute__((unused)))
 {
 }
 
-static int _emailsearch_headermatch_match(message_t *msg,
+static int emailsearch_headermatch_match(message_t *msg,
                                           const union search_value *v,
                                           void *internalised __attribute__((unused)),
                                           void *data1 __attribute__((unused)))
@@ -1770,7 +1770,7 @@ static int _emailsearch_headermatch_match(message_t *msg,
     return jmap_headermatch_match((struct jmap_headermatch *)v->v, msg);
 }
 
-static void _emailsearch_headermatch_serialise(struct buf *buf,
+static void emailsearch_headermatch_serialise(struct buf *buf,
                                                const union search_value *v)
 {
     struct jmap_headermatch *hm = v->v;
@@ -1794,7 +1794,7 @@ static void _emailsearch_headermatch_serialise(struct buf *buf,
     dlist_free(&dl);
 }
 
-static int _emailsearch_headermatch_unserialise(struct protstream* prot,
+static int emailsearch_headermatch_unserialise(struct protstream* prot,
                                                 union search_value *v)
 {
     struct dlist *dl = NULL;
@@ -1822,48 +1822,48 @@ static int _emailsearch_headermatch_unserialise(struct protstream* prot,
     return c;
 }
 
-static void _emailsearch_headermatch_duplicate(union search_value *new,
+static void emailsearch_headermatch_duplicate(union search_value *new,
                                                const union search_value *old)
 {
     new->v = jmap_headermatch_dup((struct jmap_headermatch *)old->v);
 }
 
-static void _emailsearch_headermatch_free(union search_value *v)
+static void emailsearch_headermatch_free(union search_value *v)
 {
     struct jmap_headermatch *hm = v->v;
     jmap_headermatch_free(&hm);
     v->v = NULL;
 }
 
-static const search_attr_t _emailsearch_headermatch_attr_uncached = {
+static const search_attr_t emailsearch_headermatch_attr_uncached = {
     "jmap_headermatch_uncached",
     /*flags*/0,
     SEARCH_PART_NONE,
     SEARCH_COST_BODY,
-    _emailsearch_headermatch_internalise,
+    emailsearch_headermatch_internalise,
     /*cmp*/NULL,
-    _emailsearch_headermatch_match,
-    _emailsearch_headermatch_serialise,
-    _emailsearch_headermatch_unserialise,
+    emailsearch_headermatch_match,
+    emailsearch_headermatch_serialise,
+    emailsearch_headermatch_unserialise,
     /*get_countability*/NULL,
-    _emailsearch_headermatch_duplicate,
-    _emailsearch_headermatch_free,
+    emailsearch_headermatch_duplicate,
+    emailsearch_headermatch_free,
     NULL
 };
 
-static const search_attr_t _emailsearch_headermatch_attr_cached = {
+static const search_attr_t emailsearch_headermatch_attr_cached = {
     "jmap_headermatch_cached",
     /*flags*/0,
     SEARCH_PART_NONE,
     SEARCH_COST_CACHE,
-    _emailsearch_headermatch_internalise,
+    emailsearch_headermatch_internalise,
     /*cmp*/NULL,
-    _emailsearch_headermatch_match,
-    _emailsearch_headermatch_serialise,
-    _emailsearch_headermatch_unserialise,
+    emailsearch_headermatch_match,
+    emailsearch_headermatch_serialise,
+    emailsearch_headermatch_unserialise,
     /*get_countability*/NULL,
-    _emailsearch_headermatch_duplicate,
-    _emailsearch_headermatch_free,
+    emailsearch_headermatch_duplicate,
+    emailsearch_headermatch_free,
     NULL
 };
 
@@ -1997,8 +1997,8 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             // use the right cost, the query optimizer will need it
             const search_attr_t *attr = search_attr_find_field(hdr);
             e->attr = attr->cost == SEARCH_COST_CACHE ?
-                &_emailsearch_headermatch_attr_cached :
-                &_emailsearch_headermatch_attr_uncached;
+                &emailsearch_headermatch_attr_cached :
+                &emailsearch_headermatch_attr_uncached;
             e->value.v = jmap_headermatch_new(hdr, str, cmp);
 
             _email_search_perf_attr(e->attr, perf_filters);
@@ -2008,10 +2008,10 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             json_t *myval = json_array();
             json_array_append(myval, val);
             struct emailsearch_folders_value *v =
-                _emailsearch_folders_value_new(req, myval, 0, want_expunged);
+                emailsearch_folders_value_new(req, myval, 0, want_expunged);
             if (v) {
                 search_expr_t *e = search_expr_new(this, SEOP_MATCH);
-                e->attr = &_emailsearch_folders_attr;
+                e->attr = &emailsearch_folders_attr;
                 e->value.v = v;
                 strarray_add(perf_filters, "mailbox");
             }
@@ -2023,10 +2023,10 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
 
         if (JNOTNULL((val = json_object_get(filter, "inMailboxOtherThan")))) {
             struct emailsearch_folders_value *v =
-                _emailsearch_folders_value_new(req, val, 1, want_expunged);
+                emailsearch_folders_value_new(req, val, 1, want_expunged);
             if (v) {
                 search_expr_t *e = search_expr_new(this, SEOP_MATCH);
-                e->attr = &_emailsearch_folders_attr;
+                e->attr = &emailsearch_folders_attr;
                 e->value.v = v;
                 strarray_add(perf_filters, "mailbox");
             }
@@ -2148,7 +2148,7 @@ static int convert_foldermatch(search_expr_t *e,
     }
 
     char *folderm = strarray_pop(&val->foldernames);
-    _emailsearch_folders_value_free(&val);
+    emailsearch_folders_value_free(&val);
     e->attr = search_attr_find("folder");
     e->value.s = folderm;
 
@@ -2190,7 +2190,7 @@ static void convert_folderclause(search_expr_t *clause,
     }
 }
 
-static int _emailsearch_normalise(search_expr_t **rootp, int *is_imapfolderptr)
+static int emailsearch_normalise(search_expr_t **rootp, int *is_imapfolderptr)
 {
     if (is_imapfolderptr) *is_imapfolderptr = 0;
 
@@ -2424,7 +2424,7 @@ struct emailsearch {
     struct index_init init;
 };
 
-static void _emailsearch_fini(struct emailsearch *search)
+static void emailsearch_fini(struct emailsearch *search)
 {
     if (!search) return;
 
@@ -2451,7 +2451,7 @@ static int _jmap_checkfolder(const char *mboxname, void *rock)
     return 0;
 }
 
-static void _emailsearch_init(struct emailsearch *search,
+static void emailsearch_init(struct emailsearch *search,
                               jmap_req_t *req,
                               json_t *filter,
                               json_t *jsort,
@@ -2469,7 +2469,7 @@ static void _emailsearch_init(struct emailsearch *search,
 
     search->expr_dnf = search_expr_duplicate(search->expr_orig);
 
-    int r = _emailsearch_normalise(&search->expr_dnf, &search->is_imapfolder);
+    int r = emailsearch_normalise(&search->expr_dnf, &search->is_imapfolder);
     if (r == IMAP_SEARCH_SLOW) {
         *err = json_pack("{s:s s:s}", "type", "unsupportedFilter",
                 "description", "search too complex");
@@ -2870,7 +2870,7 @@ static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state 
                         ge->op = GSEOP_FALSE;
                     }
                 }
-                else if (e->attr == &_emailsearch_folders_attr) {
+                else if (e->attr == &emailsearch_folders_attr) {
                     // inMailbox or inMailboxOtherThan filter, JMAP-style
                     struct emailsearch_folders_value *val = e->value.v;
                     ge = xzmalloc(sizeof(struct guidsearch_expr));
@@ -3142,7 +3142,7 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
         case SEOP_MATCH:
             // check for supported MATCH expressions
             if (e->attr == search_attr_find("folder") ||
-                e->attr == &_emailsearch_folders_attr) {
+                e->attr == &emailsearch_folders_attr) {
                 /* inMailbox
                  * inMailboxOtherThan */
                 if (nonxapian_hash) {
@@ -3710,7 +3710,7 @@ static int emailquery_search(jmap_req_t *req,
     int r = 0;
 
     struct emailsearch search;
-    _emailsearch_init(&search, req, q->super.filter, q->super.sort,
+    emailsearch_init(&search, req, q->super.filter, q->super.sort,
             contactgroups, 0, q->want_partids, 0, errp);
     if (*errp) goto done;
 
@@ -3746,7 +3746,7 @@ static int emailquery_search(jmap_req_t *req,
     qr->is_guidsearch = is_guidsearch;
 
 done:
-    _emailsearch_fini(&search);
+    emailsearch_fini(&search);
     return r;
 }
 
@@ -4323,7 +4323,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     }
 
     struct emailsearch search;
-    _emailsearch_init(&search, req, query->filter, query->sort,
+    emailsearch_init(&search, req, query->filter, query->sort,
                       &contactfilter->contactgroups,
                       /*want_expunged*/1,
                       /*want_partids*/0,
@@ -4510,7 +4510,7 @@ done:
         }
         else *err = jmap_server_error(r);
     }
-    _emailsearch_fini(&search);
+    emailsearch_fini(&search);
 }
 
 static void _email_querychanges_uncollapsed(jmap_req_t *req,
@@ -4538,7 +4538,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     }
 
     struct emailsearch search;
-    _emailsearch_init(&search, req, query->filter, query->sort,
+    emailsearch_init(&search, req, query->filter, query->sort,
                       &contactfilter->contactgroups,
                       /*want_expunged*/1,
                       /*want_partids*/0,
@@ -4673,7 +4673,7 @@ done:
         }
         else *err = jmap_server_error(r);
     }
-    _emailsearch_fini(&search);
+    emailsearch_fini(&search);
 }
 
 static int jmap_email_querychanges(jmap_req_t *req)
@@ -4739,7 +4739,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
 
     struct emailsearch search;
-    _emailsearch_init(&search, req, filter, sort,
+    emailsearch_init(&search, req, filter, sort,
                       /*contactgroups*/NULL,
                       /*want_expunged*/1,
                       /*want_partids*/0,
@@ -4826,7 +4826,7 @@ done:
         }
         else *err = jmap_server_error(r);
     }
-    _emailsearch_fini(&search);
+    emailsearch_fini(&search);
 }
 
 static int jmap_email_changes(jmap_req_t *req)
@@ -4870,7 +4870,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
 
     struct emailsearch search;
-    _emailsearch_init(&search, req, filter, sort,
+    emailsearch_init(&search, req, filter, sort,
                       /*contactgroups*/NULL,
                       /*want_expunged*/1,
                       /*want_partids*/0,
@@ -4943,7 +4943,7 @@ done:
         }
         else *err = jmap_server_error(r);
     }
-    _emailsearch_fini(&search);
+    emailsearch_fini(&search);
 }
 
 static int jmap_thread_changes(jmap_req_t *req)
