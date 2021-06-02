@@ -295,8 +295,8 @@ magic(NoMunge8Bit => sub {
 magic(RFC2047_UTF8 => sub {
     shift->config_set(rfc2047_utf8 => 'yes');
 });
-magic(JMAPSearchDB => sub {
-    shift->config_set('jmap_emailsearch_db_path' => '@basedir@/search/jmap_emailsearch.db');
+magic(JMAPQueryCacheMaxAge1s => sub {
+    shift->config_set('jmap_querycache_max_age' => '1s');
 });
 magic(JMAPNoHasAttachment => sub {
     shift->config_set('jmap_set_has_attachment' => 'no');
