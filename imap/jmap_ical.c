@@ -2784,8 +2784,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
 static void
 participant_roles_to_ical(icalproperty *prop,
                           struct jmap_parser *parser,
-                          json_t *roles,
-                          int is_replyto)
+                          json_t *roles)
 {
     if (!json_object_size(roles)) {
         jmap_parser_invalid(parser, "roles");
@@ -2823,8 +2822,6 @@ participant_roles_to_ical(icalproperty *prop,
 
     /* Map roles */
     json_object_foreach(roles, key, jval) {
-        if (!strcasecmp(key, "ATTENDEE")) continue;
-        if (!strcasecmp(key, "OWNER") && is_replyto) continue;  // ORGANIZER
         if (!strcasecmp(key, "CHAIR") && ical_role == ICAL_ROLE_CHAIR) continue;
         if (!strcasecmp(key, "OPTIONAL") && ical_role == ICAL_ROLE_OPTPARTICIPANT) continue;
         if (!strcasecmp(key, "INFORMATIONAL") && ical_role == ICAL_ROLE_NONPARTICIPANT) continue;
@@ -2922,7 +2919,8 @@ participant_to_ical(icalcomponent *comp,
                     json_t *participants,
                     json_t *links,
                     const char *orga_uri,
-                    hash_table *caladdress_by_participant_id)
+                    hash_table *caladdress_by_participant_id,
+                    int allow_organizer_attendee_only)
 {
     const char *caladdress = hash_lookup(id, caladdress_by_participant_id);
     icalproperty *prop = icalproperty_new_attendee(caladdress);
@@ -2930,7 +2928,7 @@ participant_to_ical(icalcomponent *comp,
     icaltimezone *utc = icaltimezone_get_utc_timezone();
 
     icalproperty *orga = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    int is_orga = match_uri(caladdress, orga_uri);
+    int is_orga = orga_uri ? match_uri(caladdress, orga_uri) : 0;
     if (is_orga) set_icalxparam(orga, JMAPICAL_XPARAM_ID, id, 1);
 
     /* name */
@@ -3032,7 +3030,7 @@ participant_to_ical(icalcomponent *comp,
     /* roles */
     json_t *roles = json_object_get(jpart, "roles");
     if (json_object_size(roles)) {
-        participant_roles_to_ical(prop, parser, roles, is_orga);
+        participant_roles_to_ical(prop, parser, roles);
     }
     else if (roles) {
         jmap_parser_invalid(parser, "roles");
@@ -3229,9 +3227,13 @@ participant_to_ical(icalcomponent *comp,
     if (is_orga) {
         /* We might get away by not creating an ATTENDEE, if the
          * participant is owner of the event and all its JSCalendar
-         * properties can be mapped to the ORGANIZER property. */
+         * properties can be mapped to the ORGANIZER property.
+         * But only if there is at least one other ATTENDEE, or the
+         * original data already only contained an ORGANIZER. */
         json_t *jorga = participant_from_icalorganizer(orga);
-        if (participant_equals(jorga, jpart)) {
+        if (participant_equals(jorga, jpart) &&
+                (hash_numrecords(caladdress_by_participant_id) > 1 ||
+                 allow_organizer_attendee_only)) {
             icalproperty_free(prop);
             prop = NULL;
         }
@@ -3245,16 +3247,33 @@ participant_to_ical(icalcomponent *comp,
 /* Create or update the ORGANIZER and ATTENDEEs in the VEVENT component comp as
  * defined by the participants and replyTo property. */
 static void
-participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
+participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event,
+                     icalcomponent *oldical)
 {
     /* Purge existing ATTENDEEs and ORGANIZER */
     remove_icalprop(comp, ICAL_ATTENDEE_PROPERTY);
     remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
 
+    /* iCalendar events may only contain an ORGANIZER or an ATTENDEE.
+     * We allow to update such events, but we reject them during creation. */
+    int allow_organizer_attendee_only = 0;
+    if (oldical) {
+        icalcomponent_kind kind = icalcomponent_isa(comp);
+        icalcomponent *oldcomp;
+        for (oldcomp = icalcomponent_get_first_component(oldical, kind);
+             oldcomp;
+             oldcomp = icalcomponent_get_next_component(oldical, kind)) {
+            if ((icalcomponent_get_first_property(oldcomp, ICAL_ORGANIZER_PROPERTY) == NULL) !=
+                (icalcomponent_get_first_property(oldcomp, ICAL_ATTENDEE_PROPERTY) == NULL)) {
+                allow_organizer_attendee_only = 1;
+                break;
+            }
+        }
+    }
+
     json_t *jval = NULL;
     const char *key = NULL;
 
-    /* If participants are set, replyTo must be set */
     json_t *replyTo = json_object_get(event, "replyTo");
     if (JNOTNULL(replyTo) && !json_object_size(replyTo)) {
         jmap_parser_invalid(parser, "replyTo");
@@ -3263,12 +3282,14 @@ participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *ev
     if (JNOTNULL(participants) && !json_object_size(participants)) {
         jmap_parser_invalid(parser, "participants");
     }
-    if (JNOTNULL(replyTo) != JNOTNULL(participants)) {
-        jmap_parser_invalid(parser, "replyTo");
-        jmap_parser_invalid(parser, "participants");
-        return;
+    if (!allow_organizer_attendee_only) {
+        /* If participants are set, replyTo must be set */
+        if (JNOTNULL(replyTo) != JNOTNULL(participants)) {
+            jmap_parser_invalid(parser, "replyTo");
+            jmap_parser_invalid(parser, "participants");
+            return;
+        }
     }
-    else if (!JNOTNULL(replyTo)) return;
 
     /* OK, there's both replyTo and participants set. */
 
@@ -3303,34 +3324,36 @@ participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *ev
         hash_insert(key, caladdress, &caladdress_by_participant_id);
     }
 
-    /* Pick the ORGANIZER URI */
     const char *orga_method = NULL;
-    if (json_object_get(replyTo, "imip")) {
-        orga_method = "imip";
-    }
-    else if (json_object_get(replyTo, "other")) {
-        orga_method = "other";
-    }
-    else {
-        orga_method = json_object_iter_key(json_object_iter(replyTo));
-    }
-    const char *orga_uri = json_string_value(json_object_get(replyTo, orga_method));
-
-    /* Create the ORGANIZER property */
-    icalproperty *orga = icalproperty_new_organizer(orga_uri);
-    /* Keep track of the RSVP URIs and their method */
-    if (json_object_size(replyTo) > 1 || (strcmp(orga_method, "imip") && strcmp(orga_method, "other"))) {
-        struct buf buf = BUF_INITIALIZER;
-        json_object_foreach(replyTo, key, jval) {
-            buf_setcstr(&buf, key);
-            buf_putc(&buf, ':');
-            buf_appendcstr(&buf, json_string_value(jval));
-            set_icalxparam(orga, JMAPICAL_XPARAM_RSVP_URI, buf_cstring(&buf), 0);
+    const char *orga_uri = NULL;
+    if (JNOTNULL(replyTo)) {
+        /* Pick the ORGANIZER URI */
+        if (json_object_get(replyTo, "imip")) {
+            orga_method = "imip";
         }
-        buf_free(&buf);
-    }
-    icalcomponent_add_property(comp, orga);
+        else if (json_object_get(replyTo, "other")) {
+            orga_method = "other";
+        }
+        else {
+            orga_method = json_object_iter_key(json_object_iter(replyTo));
+        }
+        orga_uri = json_string_value(json_object_get(replyTo, orga_method));
 
+        /* Create the ORGANIZER property */
+        icalproperty *orga = icalproperty_new_organizer(orga_uri);
+        /* Keep track of the RSVP URIs and their method */
+        if (json_object_size(replyTo) > 1 || (strcmp(orga_method, "imip") && strcmp(orga_method, "other"))) {
+            struct buf buf = BUF_INITIALIZER;
+            json_object_foreach(replyTo, key, jval) {
+                buf_setcstr(&buf, key);
+                buf_putc(&buf, ':');
+                buf_appendcstr(&buf, json_string_value(jval));
+                set_icalxparam(orga, JMAPICAL_XPARAM_RSVP_URI, buf_cstring(&buf), 0);
+            }
+            buf_free(&buf);
+        }
+        icalcomponent_add_property(comp, orga);
+    }
 
     /* Process participants */
     jmap_parser_push(parser, "participants");
@@ -3354,7 +3377,8 @@ participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *ev
 
         /* Map participant to iCalendar */
         participant_to_ical(comp, parser, key, jval, participants, links,
-                            orga_uri, &caladdress_by_participant_id);
+                            orga_uri, &caladdress_by_participant_id,
+                            allow_organizer_attendee_only);
         jmap_parser_pop(parser);
     }
     jmap_parser_pop(parser);
@@ -4940,7 +4964,7 @@ calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
     }
 
     /* replyTo and participants */
-    participants_to_ical(comp, parser, event);
+    participants_to_ical(comp, parser, event, oldical);
 
     /* participantId: readonly */
 
