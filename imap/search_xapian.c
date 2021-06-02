@@ -1464,7 +1464,14 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
             return 0;
     }
 
-    return bb->proc(rec->mailbox, 0, rec->uid, rec->part, bb->rock);
+    mbentry_t *mbentry = NULL;
+    int r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
+
+    r = bb->proc(mbentry->name, 0, rec->uid, rec->part, bb->rock);
+
+    mboxlist_entry_free(&mbentry);
+
+    return r;
 }
 
 
