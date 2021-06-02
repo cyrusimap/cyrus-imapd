@@ -57,6 +57,15 @@ my $testdir;
 my $authortestdir;
 my %suppressed;
 
+# Tests for behaviour that has changed over time, where older releases
+# contain the older behaviour and can no longer pass the updated test.
+# The value is the first version number that is supposed to work.
+# Same as the :min_version annotations on native Cassandane tests, but
+# dot-separated.  See skip_before() below for implementation details.
+my %notbefore = (
+    't:Email:get:header-header-field-name' => '3.5',
+);
+
 sub cyrus_version_supports_jmap
 {
     my ($maj, $min) = Cassandane::Instance->get_version();
@@ -132,6 +141,34 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+# n.b. similar to _skip_version() in Cassandane::Unit::TestCase
+sub skip_before
+{
+    my ($lim) = @_;
+
+    my ($lim_major, $lim_minor, $lim_revision, $lim_commits)
+        = map { 0 + $_ } split /\./, $lim;
+    return if not defined $lim_major;
+
+    my ($major, $minor, $revision, $commits) =
+        Cassandane::Instance->get_version();
+
+    return 1 if $major < $lim_major; # too old, skip!
+    return if $major > $lim_major;   # definitely new enough
+
+    return if not defined $lim_minor; # don't check deeper if caller doesn't care
+    return 1 if $minor < $lim_minor;
+    return if $minor > $lim_minor;
+
+    return if not defined $lim_revision;
+    return 1 if $revision < $lim_revision;
+
+    return if not defined $lim_commits;
+    return 1 if $commits < $lim_commits;
+
+    return;
+}
+
 sub find_tests
 {
     my ($dir) = @_;
@@ -147,6 +184,9 @@ sub find_tests
             $file =~ s/^$basedir\/?//;
             $file =~ s{/}{:}g;
             return if $suppressed{$file};
+            if (exists $notbefore{$file} and skip_before($notbefore{$file})) {
+                return;
+            }
             push @tests, "test_$file";
         },
         $dir,
