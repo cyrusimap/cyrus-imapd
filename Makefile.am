@@ -646,7 +646,8 @@ cunit_TESTS = \
 	cunit/quota.testc \
 	cunit/rfc822tok.testc \
 	cunit/search_expr.testc \
-	cunit/seqset.testc
+	cunit/seqset.testc \
+	cunit/smallarrayu64.testc
 
 if SIEVE
 cunit_TESTS += cunit/sieve.testc
@@ -787,6 +788,7 @@ include_HEADERS = \
 	lib/retry.h \
 	lib/rfc822tok.h \
 	lib/signals.h \
+	lib/smallarrayu64.h \
 	lib/sqldb.h \
 	lib/strarray.h \
 	lib/strhash.h \
@@ -1530,6 +1532,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/libconfig.c \
 	lib/mpool.c \
 	lib/retry.c \
+	lib/smallarrayu64.c \
 	lib/strarray.c \
 	lib/strhash.c \
 	lib/util.c \

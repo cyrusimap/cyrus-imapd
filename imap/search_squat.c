@@ -450,8 +450,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     for (uid = 1 ; uid <= bb->mailbox->i.last_uid; uid++) {
         if (bv_isset(&bb->stack[0].msg_vector, uid)) {
             r = proc(bb->mailbox->name,
-                     bb->mailbox->i.uidvalidity,
-                     uid, NULL, rock);
+                     bb->mailbox->i.uidvalidity, uid, NULL, rock);
             if (r) goto out;
         }
     }

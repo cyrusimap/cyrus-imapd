@@ -49,6 +49,7 @@
 #include "util.h"
 #include "bitvector.h"
 #include "ptrarray.h"
+#include "dynarray.h"
 #include "search_engines.h"
 
 struct sortcrit;            /* imapd.h */
@@ -56,6 +57,11 @@ struct searchargs;          /* imapd.h */
 typedef struct search_subquery search_subquery_t;
 typedef struct search_query search_query_t;
 typedef struct search_folder search_folder_t;
+
+struct search_folder_partnum {
+    uint32_t uid;
+    uint32_t partnum;
+};
 
 struct search_folder {
     char *mboxname;
@@ -67,7 +73,7 @@ struct search_folder {
     bitvector_t uids;
     bitvector_t found_uids;
     int found_dirty;
-    hashu64_table partids; /* maps uid to starray_t* of part ids */
+    dynarray_t partnums; /* list of struct search_folder_partnum */
 };
 
 struct search_subquery {
@@ -110,6 +116,7 @@ struct search_query {
     int verbose;
     int ignore_timer;
     int attachments_in_any;
+    int want_partids;
 
     /*
      * A query comprises multiple sub-queries logically ORed together.
@@ -161,6 +168,13 @@ struct search_query {
      * folder, guid.
      */
     ptrarray_t merged_msgdata;
+
+    /* A map from string message part ids to a unique numeric
+     * identifier. This allows to save good chunk of string mallocs */
+    hashu64_table partid_by_num;
+    hash_table partnum_by_id;
+    uint32_t partnum_seq;
+
 };
 
 extern search_query_t *search_query_new(struct index_state *state,
