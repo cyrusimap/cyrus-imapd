@@ -1562,12 +1562,14 @@ static json_t *jmap_contact_from_vcard(const char *userid,
         /* Apple label */
         if (entry->group) {
             label = hash_lookup(entry->group, &labels);
-            label_len = strlen(label);
+            if (label) {
+                label_len = strlen(label);
 
-            /* Check and adjust for weird (localized?) labels */
-            if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
-                label += 4;      // skip "_$!<" prefix
-                label_len -= 8;  // and trim ">!$_" suffix
+                /* Check and adjust for weird (localized?) labels */
+                if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
+                    label += 4;      // skip "_$!<" prefix
+                    label_len -= 8;  // and trim ">!$_" suffix
+                }
             }
         }
 
