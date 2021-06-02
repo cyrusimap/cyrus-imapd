@@ -4752,17 +4752,23 @@ sub test_mailbox_intermediate_no_emails
     my %byname = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
 
     xlog $self, "three emails in the Inbox";
-    $res = $jmap->CallMethods([['Email/query', { filter => { inMailbox => $byname{Inbox} } }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/query',
+                                { filter => { inMailbox => $byname{Inbox} },
+                                  calculateTotal => JSON::true }, "R1"]]);
     $self->assert_num_equals(3, $res->[0][1]{total});
     $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "no emails in the Intermediate mailbox";
-    $res = $jmap->CallMethods([['Email/query', { filter => { inMailbox => $byname{Inter} } }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/query',
+                                { filter => { inMailbox => $byname{Inter} },
+                                  calculateTotal => JSON::true }, "R1"]]);
     $self->assert_num_equals(0, $res->[0][1]{total});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "one email in the deep mailbox";
-    $res = $jmap->CallMethods([['Email/query', { filter => { inMailbox => $byname{Mediate} } }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/query',
+                                { filter => { inMailbox => $byname{Mediate} },
+                                  calculateTotal => JSON::true }, "R1"]]);
     $self->assert_num_equals(1, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 }
