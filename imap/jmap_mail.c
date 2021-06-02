@@ -3854,7 +3854,7 @@ static void emailquery_buildresult(struct emailquery *q,
     }
 
     /* Slice matches to query window [pos,pos+n) */
-    size_t pos, n = 0;
+    size_t pos = 0, n = 0;
     emailquery_cache_slice(q, qc, &pos, &n, errp);
     if (errp && *errp) return;
 
