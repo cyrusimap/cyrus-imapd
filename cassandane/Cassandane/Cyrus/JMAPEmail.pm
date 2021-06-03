@@ -5254,7 +5254,8 @@ sub test_email_query_inmailbox_null
 }
 
 sub test_email_query_cached_legacy
-    :min_version_3_1 :max_version_3_4 :needs_component_jmap :JMAPSearchDB :JMAPExtensions
+    :min_version_3_1 :max_version_3_4 :needs_component_jmap
+    :JMAPSearchDBLegacy :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16174,8 +16175,9 @@ EOF
     );
 }
 
-sub test_email_query_position
-    :min_version_3_1 :needs_component_jmap :JMAPQueryCacheMaxAge1s :JMAPExtensions
+sub test_email_query_position_legacy
+    :min_version_3_1 :max_version_3_4 :needs_component_jmap
+    :JMAPSearchDBLegacy :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16288,8 +16290,124 @@ sub test_email_query_position
     $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
 }
 
-sub test_email_query_negative_position
-    :min_version_3_1 :needs_component_jmap :JMAPQueryCacheMaxAge1s :JMAPExtensions
+sub test_email_query_position
+    :min_version_3_5 :needs_component_jmap :JMAPQueryCacheMaxAge1s
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Creating emails";
+    foreach my $i (1..9) {
+        $self->make_message("test") || die;
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Query emails";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{ property => 'id' }],
+        }, 'R1'],
+    ]);
+    my @emailIds = @{$res->[0][1]{ids}};
+    $self->assert_num_equals(9, scalar @emailIds);
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    xlog "Query with positive position (in range)";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => 1,
+            limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R1'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => 1,
+            limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => 1,
+            limit => 2,
+            disableGuidSearch => JSON::false,
+        }, 'R3'],
+    ], $using);
+    my @wantIds = @emailIds[1..2];
+    # Check UID search
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
+    $self->assert_num_equals(1, $res->[0][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
+    $self->assert_num_equals(1, $res->[1][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    # Check GUID search
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isCached});
+    $self->assert_num_equals(1, $res->[2][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+
+    xlog "Create dummy message to invalidate query cache";
+    $self->make_message("dummy") || die;
+
+    xlog "Query with positive position (out of range)";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => 100,
+            limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R1'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => 100,
+            limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => 100,
+            limit => 2,
+            disableGuidSearch => JSON::false,
+        }, 'R3'],
+    ], $using);
+    @wantIds = ();
+    # Check UID search
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
+    $self->assert_num_equals(9, $res->[0][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
+    $self->assert_num_equals(9, $res->[1][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    # Check GUID search
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isCached});
+    $self->assert_num_equals(9, $res->[2][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+}
+
+sub test_email_query_negative_position_legacy
+    :min_version_3_1 :max_version_3_4 :needs_component_jmap
+    :JMAPSearchDBLegacy :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16349,6 +16467,121 @@ sub test_email_query_negative_position
     $self->assert_num_equals(6, $res->[0][1]{position});
     $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
+    $self->assert_num_equals(6, $res->[1][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    # Check GUID search
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    $self->assert_num_equals(6, $res->[2][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+
+    xlog "Create dummy message to invalidate query cache";
+    $self->make_message("dummy") || die;
+
+    xlog "Query with negative position (out of range)";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => -100,
+            limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R1'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => -100,
+            limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => -100,
+            limit => 2,
+            disableGuidSearch => JSON::false,
+        }, 'R3'],
+    ], $using);
+    @wantIds = @emailIds[0..1];
+    # Check UID search
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
+    $self->assert_num_equals(0, $res->[0][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
+    $self->assert_num_equals(0, $res->[1][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    # Check GUID search
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    $self->assert_num_equals(0, $res->[2][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+}
+
+sub test_email_query_negative_position
+    :min_version_3_5 :needs_component_jmap :JMAPQueryCacheMaxAge1s
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Creating emails";
+    foreach my $i (1..9) {
+        $self->make_message("test") || die;
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Query emails";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{ property => 'id' }],
+        }, 'R1'],
+    ]);
+    my @emailIds = @{$res->[0][1]{ids}};
+    $self->assert_num_equals(9, scalar @emailIds);
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    xlog "Query with negative position (in range)";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => -3,
+            limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R1'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => -3,
+            limit => 2,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+        ['Email/query', {
+            filter => { subject => 'test' },
+            sort => [{ property => 'id' }],
+            position => -3,
+            limit => 2,
+            disableGuidSearch => JSON::false,
+        }, 'R3'],
+    ], $using);
+    my @wantIds = @emailIds[6..7];
+    # Check UID search
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
+    $self->assert_num_equals(6, $res->[0][1]{position});
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+
     $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
     $self->assert_num_equals(6, $res->[1][1]{position});
     $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});

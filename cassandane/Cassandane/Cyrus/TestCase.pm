@@ -295,6 +295,13 @@ magic(NoMunge8Bit => sub {
 magic(RFC2047_UTF8 => sub {
     shift->config_set(rfc2047_utf8 => 'yes');
 });
+magic(JMAPSearchDBLegacy => sub {
+    # XXX Needed for JMAPEmail.email_query_..._legacy (3.1-3.4).
+    # XXX Don't use in newer tests, and remove this someday when 3.4 is
+    # XXX obsolete.
+    shift->config_set('jmap_emailsearch_db_path' =>
+                      '@basedir@/search/jmap_emailsearch.db');
+});
 magic(JMAPQueryCacheMaxAge1s => sub {
     shift->config_set('jmap_querycache_max_age' => '1s');
 });
