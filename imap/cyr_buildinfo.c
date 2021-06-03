@@ -167,10 +167,17 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "ldap", json_false());
 #endif
 #ifdef HAVE_SSL
-    json_object_set_new(dependency, "openssl", json_true());
+    json_t *openssl = json_object();
+#ifdef HAVE_QUIC_TLS
+    json_object_set_new(openssl, "quic", json_true());
+#else
+    json_object_set_new(openssl, "quic", json_false());
+#endif
+
+    json_object_set_new(dependency, "openssl", openssl);
 #else
     json_object_set_new(dependency, "openssl", json_false());
-#endif
+#endif /* HAVE_SSL */
 #ifdef HAVE_ZLIB
     json_object_set_new(dependency, "zlib", json_true());
 #else
@@ -200,6 +207,16 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "nghttp2", json_true());
 #else
     json_object_set_new(dependency, "nghttp2", json_false());
+#endif
+#ifdef HAVE_NGHTTP3
+    json_object_set_new(dependency, "nghttp3", json_true());
+#else
+    json_object_set_new(dependency, "nghttp3", json_false());
+#endif
+#ifdef HAVE_NGTCP2
+    json_object_set_new(dependency, "ngtcp2", json_true());
+#else
+    json_object_set_new(dependency, "ngtcp2", json_false());
 #endif
 #ifdef HAVE_WSLAY
     json_object_set_new(dependency, "wslay", json_true());
