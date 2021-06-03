@@ -1765,23 +1765,41 @@ static int normalise_dnfclause(const struct opnode *expr, struct opnode **normal
     return 0;
 }
 
-static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
+struct xapian_run_guid_rock {
+    xapian_builder_t *bb;
+    strarray_t mboxname_by_foldernum;
+};
+
+static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *vrock)
 {
-    xapian_builder_t *bb = rock;
+    struct xapian_run_guid_rock *rock = vrock;
+    xapian_builder_t *bb = rock->bb;
 
     if (!(bb->opts & SEARCH_MULTIPLE)) {
         if (conversations_guid_mbox_cmp(rec, bb->mailbox))
             return 0;
     }
 
-    mbentry_t *mbentry = NULL;
-    int r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
+    const char *mboxname;
+    if (rec->version > CONV_GUIDREC_BYNAME_VERSION) {
+        mboxname = strarray_nth(&rock->mboxname_by_foldernum, rec->foldernum);
+        if (!mboxname) {
+            mbentry_t *mbentry = NULL;
+            int r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
+            if (r) {
+                xsyslog(LOG_ERR, "failed to lookup mbentry", "uniqueid=<%s>",
+                        rec->mailbox);
+                return r;
+            }
+            char *mymboxname = xstrdup(mbentry->name);
+            mboxlist_entry_free(&mbentry);
+            strarray_setm(&rock->mboxname_by_foldernum, rec->foldernum, mymboxname);
+            mboxname = mymboxname;
+        }
+    }
+    else mboxname = rec->mailbox;
 
-    r = bb->proc(mbentry->name, 0, rec->uid, rec->part, bb->rock);
-
-    mboxlist_entry_free(&mbentry);
-
-    return r;
+    return bb->proc(mboxname, 0, rec->uid, rec->part, bb->rock);
 }
 
 
@@ -1806,7 +1824,14 @@ static int xapian_run_cb(void *data, size_t nmemb, void *rock)
 
     qsort(data, nmemb, 41, memcmp40); // byte 41 is always zero
 
-    return conversations_iterate_searchset(cstate, data, nmemb, xapian_run_guid_cb, bb);
+    struct xapian_run_guid_rock guid_rock = { bb, STRARRAY_INITIALIZER };
+    strarray_truncate(&guid_rock.mboxname_by_foldernum,
+            conversations_num_folders(cstate) + 1);
+    r = conversations_iterate_searchset(cstate, data, nmemb,
+            xapian_run_guid_cb, &guid_rock);
+    strarray_fini(&guid_rock.mboxname_by_foldernum);
+
+    return r;
 }
 
 struct xapian_run_guidsearch_rock {
