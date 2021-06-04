@@ -2566,7 +2566,7 @@ static int setcalendarevents_create(jmap_req_t *req,
                                     json_t *invalid,
                                     json_t *create)
 {
-    int r, pe;
+    int r = 0, pe;
     int needrights = JACL_ADDITEMS|JACL_SETMETADATA;
     char *uid = NULL;
 
@@ -2585,36 +2585,34 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
  
     /* Validate uid */
-    if (db) {
-        struct caldav_data *mycdata = NULL;
-        if ((uid = (char *) json_string_value(json_object_get(event, "uid")))) {
-            /* Use custom iCalendar UID from request object */
-            uid = xstrdup(uid);
+    struct caldav_data *mycdata = NULL;
+    if ((uid = (char *) json_string_value(json_object_get(event, "uid")))) {
+        /* Use custom iCalendar UID from request object */
+        uid = xstrdup(uid);
+        r = caldav_lookup_uid(db, uid, &mycdata);
+        if (r == CYRUSDB_NOTFOUND) {
+            r = 0;
+        }
+        else if (!r) {
+            json_array_append_new(invalid, json_string("uid"));
+        }
+    }  else {
+        /* Create a iCalendar UID */
+        static int maxattempts = 3;
+        int i;
+        for (i = 0; i < maxattempts; i++) {
+            free(uid);
+            uid = xstrdup(makeuuid());
             r = caldav_lookup_uid(db, uid, &mycdata);
             if (r == CYRUSDB_NOTFOUND) {
                 r = 0;
+                break;
             }
-            else if (!r) {
-                json_array_append_new(invalid, json_string("uid"));
-            }
-        }  else {
-            /* Create a iCalendar UID */
-            static int maxattempts = 3;
-            int i;
-            for (i = 0; i < maxattempts; i++) {
-                free(uid);
-                uid = xstrdup(makeuuid());
-                r = caldav_lookup_uid(db, uid, &mycdata);
-                if (r == CYRUSDB_NOTFOUND) {
-                    r = 0;
-                    break;
-                }
-            }
-            if (i == maxattempts) {
-                errno = 0;
-                xsyslog(LOG_ERR, "can not create unique uid", "attempts=<%d>", i);
-                r = IMAP_INTERNAL;
-            }
+        }
+        if (i == maxattempts) {
+            errno = 0;
+            xsyslog(LOG_ERR, "can not create unique uid", "attempts=<%d>", i);
+            r = IMAP_INTERNAL;
         }
     }
     if (r) goto done;
