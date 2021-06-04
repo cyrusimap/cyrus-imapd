@@ -4087,15 +4087,50 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     struct buf buf = BUF_INITIALIZER;
     ptrarray_t blobs = PTRARRAY_INITIALIZER;
     property_blob_t *blob;
+    char *mboxname = NULL;
 
-    if ((uid = (char *) json_string_value(json_object_get(jcard, "uid")))) {
-        /* Use custom vCard UID from request object */
-        uid = xstrdup(uid);
-    }  else {
-        /* Create a vCard UID */
-        uid = xstrdup(makeuuid());
-        json_object_set_new(item, "uid", json_string(uid));
+    /* Validate uid */
+    struct carddav_db *db = carddav_open_userid(req->accountid);
+    if (!db) {
+        xsyslog(LOG_ERR, "can not open carddav db", "accountid=<%s>",
+                req->accountid);
+        r = IMAP_INTERNAL;
     }
+    if (!r) {
+        struct carddav_data *mycdata = NULL;
+        if ((uid = (char *) json_string_value(json_object_get(jcard, "uid")))) {
+            /* Use custom vCard UID from request object */
+            uid = xstrdup(uid);
+            r = carddav_lookup_uid(db, uid, &mycdata);
+            if (r == CYRUSDB_NOTFOUND) {
+                r = 0;
+            }
+            else if (!r) {
+                json_array_append_new(invalid, json_string("uid"));
+            }
+        }  else {
+            /* Create a vCard UID */
+            static int maxattempts = 3;
+            int i;
+            for (i = 0; i < maxattempts; i++) {
+                free(uid);
+                uid = xstrdup(makeuuid());
+                r = carddav_lookup_uid(db, uid, &mycdata);
+                if (r == CYRUSDB_NOTFOUND) {
+                    json_object_set_new(item, "uid", json_string(uid));
+                    r = 0;
+                    break;
+                }
+            }
+            if (i == maxattempts) {
+                errno = 0;
+                xsyslog(LOG_ERR, "can not create unique uid", "attempts=<%d>", i);
+                r = IMAP_INTERNAL;
+            }
+        }
+    }
+    carddav_close(db);
+    if (r) goto done;
 
     /* Determine mailbox and resource name of card.
      * We attempt to reuse the UID as DAV resource name; but
@@ -4129,7 +4164,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     else {
         json_object_set_new(item, "addressbookId", json_string(addressbookId));
     }
-    char *mboxname = mboxname_abook(req->accountid, addressbookId);
+    mboxname = mboxname_abook(req->accountid, addressbookId);
     json_object_del(jcard, "addressbookId");
     addressbookId = NULL;
 
@@ -4339,6 +4374,7 @@ static void _contact_copy(jmap_req_t *req,
                 *set_err = json_pack("{s:s s:o}", "type", "blobNotFound",
                                      "notFound", errors.blobNotFound);
             }
+            else *set_err = jmap_server_error(r);
         }
         json_decref(item);
         goto done;
