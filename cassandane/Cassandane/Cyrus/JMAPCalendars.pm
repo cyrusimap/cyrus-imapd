@@ -7514,4 +7514,52 @@ sub test_calendarevent_set_too_large
     $self->assert_str_equals('tooLarge', $res->[0][1]{notCreated}{1}{type});
 }
 
+sub test_calendarevent_set_reject_duplicate_uid
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                eventA => {
+                    calendarId => 'Default',
+                    uid => '123456789',
+                    title => 'eventA',
+                    start => '2021-04-06T12:30:00',
+                },
+            }
+        }, 'R1'],
+    ]);
+    my $eventA = $res->[0][1]{created}{eventA}{id};
+    $self->assert_not_null($eventA);
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                calendarB => {
+                    name => 'calendarB',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                eventB => {
+                    calendarId => '#calendarB',
+                    uid => '123456789',
+                    title => 'eventB',
+                    start => '2021-04-06T12:30:00',
+                },
+            }
+        }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{calendarB});
+    $self->assert_str_equals('invalidProperties',
+        $res->[1][1]{notCreated}{eventB}{type});
+    $self->assert_deep_equals(['uid'],
+        $res->[1][1]{notCreated}{eventB}{properties});
+}
+
+
 1;
