@@ -1314,6 +1314,9 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
     /* Set request payload */
     buf_init_ro(&txn->req_body.payload, buf_base(inbuf), buf_len(inbuf));
 
+    /* Always start with fresh working buffer */
+    buf_reset(&txn->buf);
+
     /* Parse the JSON request */
     ret = parse_json_body(txn, &req);
     if (ret) {

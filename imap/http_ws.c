@@ -524,13 +524,12 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             struct iovec iov[2];
             int niov = 0;
 
-            assert(!buf_len(&txn->buf));
+            buf_reset(&txn->buf);
             buf_printf(&txn->buf, "<" TIME_T_FMT "<", time(NULL));  /* timestamp */
             WRITEV_ADD_TO_IOVEC(iov, niov,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&inbuf), buf_len(&inbuf));
             writev(logfd, iov, niov);
-            buf_reset(&txn->buf);
         }
 
         /* Process the request */
@@ -566,7 +565,6 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&outbuf), buf_len(&outbuf));
             writev(logfd, iov, niov);
-            buf_reset(&txn->buf);
         }
 
         /* Queue the server response */
