@@ -629,6 +629,7 @@ EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
         bop = SEARCH_OP_OR;
         break;
 
+    case SEOP_MATCH:
     case SEOP_FUZZYMATCH:
         if (e->attr && search_can_match(e->op, e->attr->part)) {
             if (e->attr->flags & SEA_ISLIST) {
