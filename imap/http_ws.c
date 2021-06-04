@@ -560,7 +560,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             struct iovec iov[2];
             int niov = 0;
 
-            assert(!buf_len(&txn->buf));
+            buf_reset(&txn->buf);
             buf_printf(&txn->buf, ">" TIME_T_FMT ">", time(NULL));  /* timestamp */
             WRITEV_ADD_TO_IOVEC(iov, niov,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
