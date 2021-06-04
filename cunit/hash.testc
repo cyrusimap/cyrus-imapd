@@ -117,6 +117,9 @@ static void test_empty(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
 
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
+
     /* free the hash table */
     free_hash_table(&ht, NULL);
 }
@@ -146,6 +149,9 @@ static void test_reinsert(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(1, count);
 
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(1, hash_numrecords(&ht));
+
     /* re-insert into the hash table */
     d = hash_insert(KEY0, VALUE1, &ht);
     /* get the old value back */
@@ -160,6 +166,9 @@ static void test_reinsert(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(1, count);
 
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(1, hash_numrecords(&ht));
+
     /* delete from the hash table */
     d = hash_del(KEY0, &ht);
     CU_ASSERT_PTR_EQUAL(VALUE1, d);
@@ -172,6 +181,9 @@ static void test_reinsert(void)
     count = 0;
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
+
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
 
     /* free the hash table */
     free_hash_table(&ht, NULL);
@@ -239,6 +251,9 @@ static void test_many(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(N, count);
 
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(N, hash_numrecords(&ht));
+
     /* delete from the hash table */
     for (i = 0 ; i < N ; i++) {
         d = hash_del(key(i), &ht);
@@ -255,6 +270,9 @@ static void test_many(void)
     count = 0;
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
+
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
 
     /* free the hash table */
     freed_count = 0;
@@ -285,6 +303,9 @@ static void test_freeing_nonempty(void)
     count = 0;
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(N, count);
+
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(N, hash_numrecords(&ht));
 
     /* free the hash table */
     freed_count = 0;
