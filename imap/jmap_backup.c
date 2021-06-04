@@ -1471,7 +1471,6 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         const char *guid = message_guid_encode(&record->guid);
-        conversation_id_t cid = 0;
         const char *msgid = NULL;
         int isdestroyed_msg = isdestroyed_mbox;
         int ignore_draft = 0;
