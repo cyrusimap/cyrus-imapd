@@ -6351,12 +6351,14 @@ sub test_misc_collapsethreads_issue2024
 
 sub email_query_window_internal
 {
-    my ($self, $wantGuidSearch, $filter) = @_;
+    my ($self, %params) = @_;
     my %exp;
     my $jmap = $self->{jmap};
     my $res;
 
-    $wantGuidSearch ||= JSON::false;
+    $params{filter} //= undef;
+    $params{wantGuidSearch} //= JSON::false;
+    $params{calculateTotal} //= JSON::true;
 
     my $using = [
         'urn:ietf:params:jmap:core',
@@ -6406,85 +6408,103 @@ sub email_query_window_internal
     $res = $jmap->CallMethods([
         ['Email/query', {
             position => 1,
-            filter => $filter,
-            calculateTotal => JSON::true,
+            filter => $params{filter},
+            calculateTotal => $params{calculateTotal},
         }, "R1"]
     ], $using);
-    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals($params{wantGuidSearch},
+        $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
-    $self->assert_num_equals(4, $res->[0][1]->{total});
+    if ($params{calculateTotal}) {
+        $self->assert_num_equals(4, $res->[0][1]->{total});
+    }
 
     xlog $self, "list emails from position 4";
     $res = $jmap->CallMethods([
         ['Email/query', {
             position => 4,
-            filter => $filter,
-            calculateTotal => JSON::true,
+            filter => $params{filter},
+            calculateTotal => $params{calculateTotal},
         }, "R1"]
     ], $using);
-    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals($params{wantGuidSearch},
+        $res->[0][1]{performance}{details}{isGuidSearch});
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
-    $self->assert_num_equals(4, $res->[0][1]->{total});
+    if ($params{calculateTotal}) {
+        $self->assert_num_equals(4, $res->[0][1]->{total});
+    }
 
     xlog $self, "limit emails from position 1 to one email";
     $res = $jmap->CallMethods([
         ['Email/query', {
             position => 1,
             limit => 1,
-            filter => $filter,
-            calculateTotal => JSON::true,
+            filter => $params{filter},
+            calculateTotal => $params{calculateTotal},
         }, "R1"]
     ], $using);
-    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals($params{wantGuidSearch},
+        $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..1];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
-    $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
+    if ($params{calculateTotal}) {
+        $self->assert_num_equals(4, $res->[0][1]->{total});
+    }
 
     xlog $self, "anchor at 2nd email";
     $res = $jmap->CallMethods([
         ['Email/query', {
             anchor => @{$ids}[1],
-            filter => $filter,
-            calculateTotal => JSON::true,
+            filter => $params{filter},
+            calculateTotal => $params{calculateTotal},
         }, "R1"]
     ], $using);
-    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals($params{wantGuidSearch},
+        $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
-    $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
+    if ($params{calculateTotal}) {
+        $self->assert_num_equals(4, $res->[0][1]->{total});
+    }
 
     xlog $self, "anchor at 2nd email and offset 1";
     $res = $jmap->CallMethods([
         ['Email/query', {
             anchor => @{$ids}[1],
             anchorOffset => 1,
-            filter => $filter,
-            calculateTotal => JSON::true,
+            filter => $params{filter},
+            calculateTotal => $params{calculateTotal},
         }, "R1"]
     ], $using);
-    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals($params{wantGuidSearch},
+        $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[2..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
-    $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(2, $res->[0][1]->{position});
+    if ($params{calculateTotal}) {
+        $self->assert_num_equals(4, $res->[0][1]->{total});
+    }
 
     xlog $self, "anchor at 3rd email and offset -1";
     $res = $jmap->CallMethods([
         ['Email/query', {
             anchor => @{$ids}[2],
             anchorOffset => -1,
-            filter => $filter,
-            calculateTotal => JSON::true,
+            filter => $params{filter},
+            calculateTotal => $params{calculateTotal},
         }, "R1"]
     ], $using);
-    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals($params{wantGuidSearch},
+        $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
-    $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
+    if ($params{calculateTotal}) {
+        $self->assert_num_equals(4, $res->[0][1]->{total});
+    }
 
     xlog $self, "anchor at 1st email offset 1 and limit 2";
     $res = $jmap->CallMethods([
@@ -6492,15 +6512,18 @@ sub email_query_window_internal
             anchor => @{$ids}[0],
             anchorOffset => 1,
             limit => 2,
-            filter => $filter,
-            calculateTotal => JSON::true,
+            filter => $params{filter},
+            calculateTotal => $params{calculateTotal},
         }, "R1"]
     ], $using);
-    $self->assert_equals($wantGuidSearch, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals($params{wantGuidSearch},
+        $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..2];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
-    $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
+    if ($params{calculateTotal}) {
+        $self->assert_num_equals(4, $res->[0][1]->{total});
+    }
 }
 
 sub test_email_query_window
@@ -6521,7 +6544,16 @@ sub test_email_query_window_guidsearch
     :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
-    $self->email_query_window_internal(JSON::true, { subject => 'Email' });
+
+    # guidsearch supports calculating total if version >= 3.5
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    my $calculateTotal = ($maj > 3 || ($maj == 3 && $min >= 5)) ? JSON::true : JSON::false;
+
+    $self->email_query_window_internal(
+        wantGuidSearch => JSON::true,
+        calculateTotal => $calculateTotal,
+        filter => { subject => 'Email'},
+    );
 }
 
 sub test_email_query_long
