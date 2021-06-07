@@ -662,7 +662,8 @@ static void httpd_reset(struct http_connection *conn)
 
     cyrus_reset_stdio();
 
-    conn->fatal = NULL;
+    conn->close = 0;
+    conn->close_str = NULL;
     conn->clienthost = "[local]";
     buf_reset(&conn->logbuf);
     if (conn->logfd != -1) {
@@ -1007,7 +1008,6 @@ void shut_down(int code)
     int i;
     int bytes_in = 0;
     int bytes_out = 0;
-    const char *msg = NULL;
 
     in_shutdown = 1;
 
@@ -1015,12 +1015,10 @@ void shut_down(int code)
 
     strarray_free(httpd_log_headers);
 
-    if (code) msg = http_conn.fatal;
-
     /* Cleanup auxiliary connection contexts */
-    conn_shutdown_t proc;
-    while ((proc = ptrarray_pop(&http_conn.shutdown_callbacks))) {
-        proc(&http_conn, msg);
+    conn_shutdown_t shutdown;
+    while ((shutdown = ptrarray_pop(&http_conn.shutdown_callbacks))) {
+        shutdown(&http_conn);
     }
     ptrarray_fini(&http_conn.shutdown_callbacks);
     ptrarray_fini(&http_conn.reset_callbacks);
@@ -1112,7 +1110,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (http_conn.sess_ctx || http_conn.ws_ctx) {
         /* Pass fatal string to shut_down() */
-        http_conn.fatal = s;
+        http_conn.close_str = s;
     }
     else if (httpd_out) {
         /* Spit out a response if this is a HTTP/1.x connection */
@@ -1154,8 +1152,7 @@ static void _reset_tls(struct http_connection *conn)
     }
 }
 
-static void _shutdown_tls(struct http_connection *conn __attribute__((unused)),
-                          const char *msg __attribute__((unused)))
+static void _shutdown_tls(struct http_connection *conn __attribute__((unused)))
 {
     tls_shutdown_serverengine();
 }
@@ -1960,7 +1957,6 @@ static int http1_input(struct transaction_t *txn)
             txn->error.desc = prot_error(httpd_in);
             if (txn->error.desc && strcmp(txn->error.desc, PROT_EOF_STRING)) {
                 /* client timed out */
-                syslog(LOG_WARNING, "%s, closing connection", txn->error.desc);
                 ret = HTTP_TIMEOUT;
             }
             else {
@@ -2059,8 +2055,8 @@ static void cmdloop(struct http_connection *conn)
             if (shutdown_file(txn.buf.s, txn.buf.alloc) ||
                 (httpd_userid &&
                  userdeny(httpd_userid, config_ident, txn.buf.s, txn.buf.alloc))) {
-                txn.error.desc = txn.buf.s;
-                txn.flags.conn = CONN_CLOSE;
+                conn->close_str = txn.buf.s;
+                conn->close = 1;
                 ret = HTTP_SHUTDOWN;
                 break;
             }
@@ -2077,27 +2073,41 @@ static void cmdloop(struct http_connection *conn)
         /* Start command timer */
         cmdtime_starttimer();
 
-        if (txn.conn->sess_ctx) {
+        if (conn->sess_ctx) {
             /* HTTP/2 input */
-            http2_input(&txn);
+            http2_input(conn);
         }
-        else if (txn.ws_ctx) {
-            /* WebSocket over HTTP/1.1 input */
-            ws_input(&txn);
-        }
-        else if (!ret) {
-            /* HTTP/1.x request */
-            http1_input(&txn);
+        else {
+            if (txn.ws_ctx) {
+                /* WebSocket over HTTP/1.1 input */
+                ws_input(&txn);
+            }
+            else if (!ret) {
+                /* HTTP/1.x request */
+                http1_input(&txn);
+            }
+
+            if (txn.flags.conn & CONN_CLOSE) {
+                /* HTTP/1.x is single stream, so close the entire connection */
+                txn.conn->close = 1;
+                if (!txn.conn->close_str) {
+                    txn.conn->close_str = txn.error.desc;
+                }
+            }
         }
 
         if (ret == HTTP_SHUTDOWN) {
             syslog(LOG_WARNING,
-                   "Shutdown file: \"%s\", closing connection", txn.error.desc);
+                   "Shutdown file: \"%s\", closing connection", conn->close_str);
             protgroup_free(protin);
             shut_down(0);
         }
 
-    } while (!(txn.flags.conn & CONN_CLOSE));
+    } while (!conn->close);
+
+    if (conn->close_str) {
+        syslog(LOG_WARNING, "%s, closing connection", conn->close_str);
+    }
 
     /* Memory cleanup */
     transaction_free(&txn);

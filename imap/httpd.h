@@ -337,7 +337,8 @@ struct http_connection {
     const char *clienthost;             /* Name of client host */
     int logfd;                          /* Telemetry log file */
     struct buf logbuf;                  /* Telemetry log buffer */
-    const char *fatal;                  /* String passed to fatal() */
+    unsigned close : 1;                 /* Close connection flag */
+    const char *close_str;              /* Reason for closing connection */
 
     void *tls_ctx;                      /* TLS context */
     void *sess_ctx;                     /* HTTP/2+ session context */
@@ -355,7 +356,7 @@ struct http_connection {
 };
 
 typedef void (*conn_reset_t)(struct http_connection *conn);
-typedef void (*conn_shutdown_t)(struct http_connection *conn, const char *msg);
+typedef void (*conn_shutdown_t)(struct http_connection *conn);
 
 
 /* Transaction context */

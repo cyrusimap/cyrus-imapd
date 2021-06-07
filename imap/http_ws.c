@@ -674,11 +674,13 @@ static void parse_extensions(struct transaction_t *txn)
 }
 
 
-static void _end_channel_ex(void **ws_ctx, const char *msg)
+static void _end_channel(struct transaction_t *txn)
 {
-    if (!ws_ctx || !*ws_ctx) return;
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    const char *msg = txn->conn->close_str ? txn->conn->close_str : txn->error.desc;
 
-    struct ws_context *ctx = (struct ws_context *) *ws_ctx;
+    if (!ctx) return;
+
     wslay_event_context_ptr ev = ctx->event;
 
     /* Close the WS if we haven't already */
@@ -712,18 +714,17 @@ static void _end_channel_ex(void **ws_ctx, const char *msg)
 
     free(ctx);
 
-    *ws_ctx = NULL;
+    txn->ws_ctx = NULL;
 }
 
-static void _h1_shutdown(struct http_connection *conn, const char *msg)
+static void _h1_shutdown(struct http_connection *conn)
 {
-    _end_channel_ex(conn->ws_ctx, msg);
-}
+    if (!conn->ws_ctx || !*conn->ws_ctx) return;
 
-static void _end_channel(struct transaction_t *txn)
-{
-    _end_channel_ex(&txn->ws_ctx, NULL);
-    txn->conn->ws_ctx = NULL;
+    struct transaction_t txn =  // dummy transaction
+        { .conn = conn, .ws_ctx = *conn->ws_ctx, .error = { .desc = NULL } };
+
+    _end_channel(&txn);
 }
 
 HIDDEN int ws_start_channel(struct transaction_t *txn,
@@ -939,8 +940,9 @@ static void ws_output(struct transaction_t *txn)
         /* Send queued frame(s) */
         int r = wslay_event_send(ev);
         if (r) {
-            xsyslog(LOG_ERR, "WS send failed", "err=<%s>", wslay_error_as_str(r));
+            xsyslog(LOG_DEBUG, "WS send failed", "err=<%s>", wslay_error_as_str(r));
             txn->flags.conn = CONN_CLOSE;
+            txn->error.desc = wslay_error_as_str(r);
         }
     }
     else if (!want_read) {
@@ -957,7 +959,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
     wslay_event_context_ptr ev = ctx->event;
     int want_read = wslay_event_want_read(ev);
     int want_write = wslay_event_want_write(ev);
-    int goaway = txn->flags.conn & CONN_CLOSE;
+    int goaway = txn->conn->close || (txn->flags.conn & CONN_CLOSE);
     struct protstream *pin = txn->conn->pin;
 
     errno = 0;
@@ -999,7 +1001,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
     if (goaway) {
         /* Tell client we are closing session */
-        _end_channel_ex(&txn->ws_ctx, txn->error.desc);
+        _end_channel(txn);
         txn->flags.conn = CONN_CLOSE;
         return;
     }

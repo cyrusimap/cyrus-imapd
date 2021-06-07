@@ -380,16 +380,10 @@ static int frame_recv_cb(nghttp2_session *session,
         /* Handle errors (success responses handled by method functions) */
         if (ret) error_response(ret, txn);
 
-        int32_t stream_id = nghttp2_session_get_last_proc_stream_id(ctx->session);
-
-        if (txn->flags.conn & CONN_CLOSE) {
-            syslog(LOG_DEBUG, "nghttp2_submit_goaway()");
-            nghttp2_submit_goaway(session, NGHTTP2_FLAG_NONE, stream_id,
-                                  NGHTTP2_NO_ERROR, NULL, 0);
-        }
-        else if (txn->ws_ctx) {
+        if (txn->ws_ctx) {
             /* Add to WebSocket stream id array */
-            arrayu64_append(&ctx->ws_ids, stream_id);
+            arrayu64_append(&ctx->ws_ids,
+                            nghttp2_session_get_last_proc_stream_id(ctx->session));
         }
 
         break;
@@ -468,9 +462,10 @@ static int begin_frame_cb(nghttp2_session *session __attribute__((unused)),
 
 
 static void _end_session_ex(struct http_connection *conn,
-                            nghttp2_error_code err, const char *msg)
+                            nghttp2_error_code err)
 {
     struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
+    const char *msg = conn->close_str;
 
     if (!ctx) return;
 
@@ -515,9 +510,9 @@ static void _end_session_ex(struct http_connection *conn,
     conn->sess_ctx = NULL;
 }
 
-static void _shutdown(struct http_connection *conn, const char *msg)
+static void _shutdown(struct http_connection *conn)
 {
-    _end_session_ex(conn, 0, msg);
+    _end_session_ex(conn, 0);
     nghttp2_session_callbacks_del(http2_callbacks);
 }
 
@@ -587,7 +582,7 @@ HIDDEN int http2_preface(struct http_connection *conn)
 
 static void _end_session(struct http_connection *conn)
 {
-    _end_session_ex(conn, 0, NULL);
+    _end_session_ex(conn, 0);
 }
 
 HIDDEN int http2_start_session(struct transaction_t *txn,
@@ -687,34 +682,34 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
 }
 
 
-static void http2_output(struct transaction_t *txn)
+static void http2_output(struct http_connection *conn)
 {
-    struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
+    struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
 
     if (nghttp2_session_want_write(ctx->session)) {
         /* Send queued frame(s) */
         int r = nghttp2_session_send(ctx->session);
         if (r) {
             syslog(LOG_ERR, "nghttp2_session_send: %s", nghttp2_strerror(r));
-            txn->flags.conn = CONN_CLOSE;
+            conn->close = 1;
         }
     }
     else if (!nghttp2_session_want_read(ctx->session)) {
         /* We're done */
         syslog(LOG_DEBUG, "closing connection");
-        txn->flags.conn = CONN_CLOSE;
+        conn->close = 1;
         return;
     }
 }
 
 
-HIDDEN void http2_input(struct transaction_t *txn)
+HIDDEN void http2_input(struct http_connection *conn)
 {
-    struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
+    struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
     int want_read = nghttp2_session_want_read(ctx->session);
-    int goaway = txn->flags.conn & CONN_CLOSE;
+    int goaway = conn->close;
     nghttp2_error_code err = goaway ? NGHTTP2_REFUSED_STREAM : NGHTTP2_NO_ERROR;
-    struct protstream *pin = txn->conn->pin;
+    struct protstream *pin = conn->pin;
 
     syslog(LOG_DEBUG, "http2_input()  goaway: %d, eof: %d, want read: %d",
            goaway, prot_IS_EOF(pin), want_read);
@@ -723,12 +718,12 @@ HIDDEN void http2_input(struct transaction_t *txn)
         /* Client closed connection */
         syslog(LOG_DEBUG, "client closed connection");
         nghttp2_session_terminate_session(ctx->session, NGHTTP2_NO_ERROR);
-        txn->flags.conn = CONN_CLOSE;
+        conn->close = 1;
     }
     else if (prot_error(pin)) {
         /* Client timeout or I/O error */
         goaway = 1;
-        txn->error.desc = prot_error(pin);
+        conn->close_str = prot_error(pin);
         err = NGHTTP2_REFUSED_STREAM;
     }
     else if (want_read && !goaway) {
@@ -742,7 +737,7 @@ HIDDEN void http2_input(struct transaction_t *txn)
         else if (r == NGHTTP2_ERR_EOF) {
             /* Client closed connection */
             syslog(LOG_DEBUG, "client closed connection");
-            txn->flags.conn = CONN_CLOSE;
+            conn->close = 1;
         }
         else {
             /* Failure */
@@ -750,7 +745,7 @@ HIDDEN void http2_input(struct transaction_t *txn)
                    nghttp2_strerror(r), prot_error(pin));
             goaway = 1;
 
-            txn->error.desc = nghttp2_strerror(r);
+            conn->close_str = nghttp2_strerror(r);
 
             if (r == NGHTTP2_ERR_BAD_CLIENT_MAGIC)
               err = NGHTTP2_PROTOCOL_ERROR;
@@ -763,13 +758,13 @@ HIDDEN void http2_input(struct transaction_t *txn)
 
     if (goaway) {
         /* Tell client we are closing session */
-        _end_session_ex(txn->conn, err, txn->error.desc);
-        txn->flags.conn = CONN_CLOSE;
+        _end_session_ex(conn, err);
+        conn->close = 1;
         return;
     }
 
     /* Write frame(s) */
-    http2_output(txn);
+    http2_output(conn);
 
     return;
 }
@@ -967,7 +962,7 @@ HIDDEN int http2_data_chunk(struct transaction_t *txn,
     }
     else {
         /* Write frame(s) */
-        http2_output(txn);
+        http2_output(txn->conn);
 
         if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
             http2_begin_headers(txn);
