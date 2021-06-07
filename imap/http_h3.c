@@ -62,12 +62,11 @@ static const struct tls_alpn_t http3_alpn_map[] = {
     { NULL,    NULL, NULL }
 };
 
-HIDDEN int http3_init(struct http_connection *conn __attribute__((unused)),
-                      struct buf *serverinfo)
+HIDDEN int http3_init(struct http_connection *conn, struct buf *serverinfo)
 {
     buf_printf(serverinfo, " Nghttp3/%s", NGHTTP3_VERSION);
 
-    return quic_init(http3_alpn_map, serverinfo);
+    return quic_init(conn, http3_alpn_map, serverinfo);
 }
 
 HIDDEN void http3_input(struct http_connection *conn)
@@ -83,7 +82,7 @@ HIDDEN int http3_init(struct http_connection *conn __attribute__((unused)),
     return HTTP_NOT_IMPLEMENTED;
 }
 
-HIDDEN void http3_input(struct transaction_t *txn __attribute__((unused)))
+HIDDEN void http3_input(struct http_connection *conn __attribute__((unused)))
 {
     fatal("http3_input() called, but no Nghttp3", EX_SOFTWARE);
 }
