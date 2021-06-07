@@ -347,6 +347,36 @@ sub test_plus_address_partial_virtdom
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
 
+sub test_plus_address_shared
+    :AltNamespace :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $shared_mailbox = 'shared/foo';
+
+    $admintalk->create($shared_mailbox);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl($shared_mailbox, 'cassandane' => 'lrs');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl($shared_mailbox, 'anyone' => 'p');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    my $ret = $self->{instance}->deliver(
+        $msgs{1},
+        user => "+$shared_mailbox\@example.com"
+    );
+    $self->assert_equals(0, $ret);
+
+    xlog $self, "Check that the message made it";
+    $self->{store}->set_folder("Shared Folders/$shared_mailbox");
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}
 
 sub test_duplicate_suppression_off
     :DuplicateSuppressionOff :NoAltNameSpace
