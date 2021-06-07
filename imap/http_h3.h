@@ -52,4 +52,6 @@ extern int http3_enabled();
 
 extern void http3_init(struct http_connection *conn, struct buf *serverinfo);
 
+extern void http3_input(struct http_connection *conn);
+
 #endif /* HTTP_H3_H */

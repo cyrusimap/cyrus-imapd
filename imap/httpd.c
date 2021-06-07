@@ -423,6 +423,7 @@ char *httpd_altsvc = NULL;
 static struct http_connection http_conn;
 
 static sasl_ssf_t extprops_ssf = 0;
+int http3 = 0;
 int https = 0;
 static int httpd_tls_required = 0;
 static int httpd_tls_enabled = 0;
@@ -823,8 +824,16 @@ int service_init(int argc __attribute__((unused)),
 
     mboxevent_setnamespace(&httpd_namespace);
 
-    while ((opt = getopt(argc, argv, "sp:q")) != EOF) {
+    while ((opt = getopt(argc, argv, "3sp:q")) != EOF) {
         switch(opt) {
+        case '3': /* HTTP/3 */
+            http3 = 1;
+            if (!http3_enabled()) {
+                fatal("http3: required HTTP/3 & QUIC libraries not available",
+                      EX_CONFIG);
+            }
+            break;
+
         case 's': /* https (do TLS right away) */
             https = 1;
             break;
@@ -1093,7 +1102,7 @@ void service_abort(int error)
 
 void usage(void)
 {
-    prot_printf(httpd_out, "%s: usage: httpd [-C <alt_config>] [-s]\r\n",
+    prot_printf(httpd_out, "%s: usage: httpd [-C <alt_config>] [-3 | -s]\r\n",
                 error_message(HTTP_SERVER_ERROR));
     prot_flush(httpd_out);
     exit(EX_USAGE);
@@ -1273,7 +1282,7 @@ static int tls_init(int client_auth, struct buf *serverinfo)
     else if (patch) buf_putc(serverinfo, patch + 'a' - 1);
 
 #ifdef HAVE_QUIC_TLS
-    buf_appendcstr(&serverinfo, "+quic");
+    buf_appendcstr(serverinfo, "+quic");
 #endif
 
     if (!tls_enabled()) return HTTP_UNAVAILABLE;
@@ -2196,7 +2205,11 @@ static void cmdloop(struct http_connection *conn)
         /* Start command timer */
         cmdtime_starttimer();
 
-        if (conn->sess_ctx) {
+        if (http3) {
+            /* HTTP/3 input */
+            http3_input(conn);
+        }
+        else if (conn->sess_ctx) {
             /* HTTP/2 input */
             http2_input(conn);
         }

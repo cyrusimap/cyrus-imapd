@@ -61,6 +61,23 @@ HIDDEN void http3_init(struct http_connection *conn __attribute__((unused)),
     buf_printf(serverinfo, " Ngtcp2/%s", NGTCP2_VERSION);
 }
 
+HIDDEN void http3_input(struct http_connection *conn)
+{
+    struct sockaddr_storage sfrom_storage;
+    struct sockaddr *sfrom = (struct sockaddr *) &sfrom_storage;
+    socklen_t sfromsiz = sizeof(struct sockaddr_storage);
+    char buf[4096];
+    ssize_t n;
+
+    /* Simple echo server to get us started */
+    n = recvfrom(conn->pin->fd, buf, sizeof(buf), 0, sfrom, &sfromsiz);
+    if (n < 0) return;
+
+    n = sendto(conn->pout->fd, buf, n, 0, sfrom, sfromsiz);
+
+    return;
+}
+ 
 #else /* !HAVE_NGHTTP3 */
 
 HIDDEN void http3_init(struct http_connection *conn __attribute__((unused)),
