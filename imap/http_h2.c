@@ -1007,7 +1007,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused))
     fatal("http2_start() called, but no Nghttp2", EX_SOFTWARE);
 }
 
-HIDDEN void http2_input(struct transaction_t *txn __attribute__((unused)))
+HIDDEN void http2_input(struct http_connection *conn __attribute__((unused)))
 {
     fatal("http2_input() called, but no Nghttp2", EX_SOFTWARE);
 }
