@@ -224,6 +224,10 @@ sub list_annotations
         }
     }
 
+        if ($annot->{userid} eq '[.OwNeR.]') {
+            $annot->{userid} = 'cassandane'; # XXX - strip owner from $mailbox?
+        }
+
         push(@annots, $annot);
     }
     close(TMP);
