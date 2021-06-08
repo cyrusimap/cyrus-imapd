@@ -2278,4 +2278,22 @@ sub get_servername
 
     return $self->{config}->get('servername');
 }
+
+sub run_mbpath
+{
+    my ($self, @opts) = @_;
+    my $filename = $self->get_basedir() . "/cyr_info.out";
+    $self->run_command({
+        cyrus => 1,
+        redirects => {
+            stdout => $filename,
+        },
+    }, 'mbpath', '-j', @opts);
+    open(FH, "<$filename") || return;
+    local $/ = undef;
+    my $str = <FH>;
+    close(FH);
+    return decode_json($str);
+}
+
 1;
