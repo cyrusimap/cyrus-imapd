@@ -1792,6 +1792,88 @@ links_from_ical(icalcomponent *comp, struct jmapical_jmapcontext *jmapctx)
     return ret;
 }
 
+HIDDEN json_t *jmapical_alert_from_ical(icalcomponent *valarm)
+{
+    /* Determine TRIGGER and RELATED parameter */
+    struct icaltriggertype trigger = {
+        icaltime_null_time(), icaldurationtype_null_duration()
+    };
+    icalparameter_related related = ICAL_RELATED_START;
+    icalproperty *triggerprop = icalcomponent_get_first_property(valarm, ICAL_TRIGGER_PROPERTY);
+    if (triggerprop) {
+        trigger = icalproperty_get_trigger(triggerprop);
+        icalparameter *param = icalproperty_get_first_parameter(triggerprop, ICAL_RELATED_PARAMETER);
+        if (param) {
+            related = icalparameter_get_related(param);
+            if (related != ICAL_RELATED_START && related != ICAL_RELATED_END) {
+                return NULL;
+            }
+        }
+    }
+
+    json_t *alert = json_pack("{s:s}", "@type", "Alert");
+    struct buf buf = BUF_INITIALIZER;
+    icalproperty *prop;
+
+    /* trigger */
+    json_t *jtrigger = json_object();
+    if (!icaldurationtype_is_null_duration(trigger.duration) ||
+            icaltime_is_null_time(trigger.time)) {
+
+        /* Convert to offset trigger */
+        json_object_set_new(jtrigger, "@type", json_string("OffsetTrigger"));
+        struct jmapical_duration duration = JMAPICAL_DURATION_INITIALIZER;
+        jmapical_duration_from_icalduration(trigger.duration, &duration);
+
+        /* relativeTo */
+        const char *relative_to = related == ICAL_RELATED_START ?  "start" : "end";
+        json_object_set_new(jtrigger, "relativeTo", json_string(relative_to));
+
+        /* offset*/
+        jmapical_duration_as_string(&duration, &buf);
+        json_object_set_new(jtrigger, "offset", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    } else {
+        /* Convert to absolute trigger */
+        json_object_set_new(jtrigger, "@type", json_string("AbsoluteTrigger"));
+
+        struct jmapical_datetime when = JMAPICAL_DATETIME_INITIALIZER;
+        jmapical_datetime_from_icalprop(triggerprop, &when);
+        jmapical_utcdatetime_as_string(&when, &buf);
+
+        /* when */
+        json_object_set_new(jtrigger, "when", json_string(buf_cstring(&buf)));
+    }
+    json_object_set_new(alert, "trigger", jtrigger);
+
+    /*  action */
+    const char *action = "display";
+    prop = icalcomponent_get_first_property(valarm, ICAL_ACTION_PROPERTY);
+    if (prop && icalproperty_get_action(prop) == ICAL_ACTION_EMAIL) {
+        action = "email";
+    }
+    json_object_set_new(alert, "action", json_string(action));
+
+    /* acknowledged */
+    if ((prop = icalcomponent_get_acknowledged_property(valarm))) {
+        struct jmapical_datetime tstamp = JMAPICAL_DATETIME_INITIALIZER;
+        jmapical_datetime_from_icalprop(prop, &tstamp);
+        jmapical_utcdatetime_as_string(&tstamp, &buf);
+        json_t *jval = json_string(buf_cstring(&buf));
+        buf_reset(&buf);
+        json_object_set_new(alert, "acknowledged", jval);
+    }
+
+    /* relatedTo */
+    json_t *jrelatedto = relatedto_from_ical(valarm);
+    if (JNOTNULL(jrelatedto)) {
+        json_object_set_new(alert, "relatedTo", jrelatedto);
+    }
+
+    buf_free(&buf);
+    return alert;
+}
+
 /* Convert the VALARMS in the VEVENT comp to CalendarEvent alerts.
  * Adds any ATTACH properties found in VALARM components to the
  * event 'links' property. */
@@ -1800,93 +1882,18 @@ alerts_from_ical(icalcomponent *comp)
 {
     json_t* alerts = json_object();
     icalcomponent* alarm;
-    struct buf buf = BUF_INITIALIZER;
 
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
          alarm;
          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
-
-        icalproperty* prop;
-        json_t *alert = json_pack("{s:s}", "@type", "Alert");
 
         /* alert id */
         const char *id = icalcomponent_get_uid(alarm);
         char keybuf[JMAPICAL_SHA1KEY_LEN];
         if (!id) id = sha1key(icalcomponent_as_ical_string(alarm), keybuf);
 
-        /* Determine TRIGGER and RELATED parameter */
-        struct icaltriggertype trigger = {
-            icaltime_null_time(), icaldurationtype_null_duration()
-        };
-        icalparameter_related related = ICAL_RELATED_START;
-        icalproperty *triggerprop = icalcomponent_get_first_property(alarm, ICAL_TRIGGER_PROPERTY);
-        if (triggerprop) {
-            trigger = icalproperty_get_trigger(triggerprop);
-            icalparameter *param = icalproperty_get_first_parameter(triggerprop, ICAL_RELATED_PARAMETER);
-            if (param) {
-                related = icalparameter_get_related(param);
-                if (related != ICAL_RELATED_START && related != ICAL_RELATED_END) {
-                    continue;
-                }
-            }
-        }
-
-        /* trigger */
-        json_t *jtrigger = json_object();
-        if (!icaldurationtype_is_null_duration(trigger.duration) ||
-             icaltime_is_null_time(trigger.time)) {
-
-            /* Convert to offset trigger */
-            json_object_set_new(jtrigger, "@type", json_string("OffsetTrigger"));
-            struct jmapical_duration duration = JMAPICAL_DURATION_INITIALIZER;
-            jmapical_duration_from_icalduration(trigger.duration, &duration);
-
-            /* relativeTo */
-            const char *relative_to = related == ICAL_RELATED_START ?  "start" : "end";
-            json_object_set_new(jtrigger, "relativeTo", json_string(relative_to));
-
-            /* offset*/
-            jmapical_duration_as_string(&duration, &buf);
-            json_object_set_new(jtrigger, "offset", json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        } else {
-            /* Convert to absolute trigger */
-            json_object_set_new(jtrigger, "@type", json_string("AbsoluteTrigger"));
-
-            struct jmapical_datetime when = JMAPICAL_DATETIME_INITIALIZER;
-            jmapical_datetime_from_icalprop(triggerprop, &when);
-            jmapical_utcdatetime_as_string(&when, &buf);
-
-            /* when */
-            json_object_set_new(jtrigger, "when", json_string(buf_cstring(&buf)));
-        }
-        json_object_set_new(alert, "trigger", jtrigger);
-
-        /*  action */
-        const char *action = "display";
-        prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
-        if (prop && icalproperty_get_action(prop) == ICAL_ACTION_EMAIL) {
-            action = "email";
-        }
-        json_object_set_new(alert, "action", json_string(action));
-
-        /* acknowledged */
-        if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
-			struct jmapical_datetime tstamp = JMAPICAL_DATETIME_INITIALIZER;
-			jmapical_datetime_from_icalprop(prop, &tstamp);
-			jmapical_utcdatetime_as_string(&tstamp, &buf);
-			json_t *jval = json_string(buf_cstring(&buf));
-			buf_reset(&buf);
-			json_object_set_new(alert, "acknowledged", jval);
-        }
-
-        /* relatedTo */
-        json_t *jrelatedto = relatedto_from_ical(alarm);
-        if (JNOTNULL(jrelatedto)) {
-            json_object_set_new(alert, "relatedTo", jrelatedto);
-        }
-
-        json_object_set_new(alerts, id, alert);
+        json_t *alert = jmapical_alert_from_ical(alarm);
+        if (alert) json_object_set_new(alerts, id, alert);
     }
 
     if (!json_object_size(alerts)) {
@@ -1894,7 +1901,6 @@ alerts_from_ical(icalcomponent *comp)
         alerts = json_null();
     }
 
-    buf_free(&buf);
     return alerts;
 }
 
@@ -2228,7 +2234,6 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     hash_table *wantprops = NULL;
     json_t *event = json_pack("{s:s}", "@type", "jsevent");
     struct buf buf = BUF_INITIALIZER;
-    char *tzid_start = NULL;
 
     if (jmap_wantprop(props, "recurrenceOverrides") && !is_override) {
         /* Fetch all properties if recurrenceOverrides are requested,
@@ -2238,9 +2243,9 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     }
 
     /* Handle bogus mix of floating and time zoned types */
-    tzid_start = xstrdupnull(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
+    const char *tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (!tzid_start) {
-        tzid_start = xstrdupnull(tzid_from_ical(comp, ICAL_DTEND_PROPERTY));
+        tzid_start = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
     }
 
     /* start */
@@ -2249,6 +2254,11 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
         if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
             icaltimetype dtstart = dtstart_from_ical(comp);
             jmapical_datetime_from_icaltime(dtstart, &start);
+            /* Reread tzid since dtstart_from_ical has freed its memory */
+            tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
+            if (!tzid_start) {
+                tzid_start = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
+            }
         }
         jmapical_localdatetime_as_string(&start, &buf);
         json_object_set_new(event, "start", json_string(buf_cstring(&buf)));
@@ -2500,9 +2510,15 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
 
     /* useDefaultAlerts */
     if (jmap_wantprop(props, "useDefaultAlerts")) {
-        const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_USEDEFALERTS);
+        const char *v = get_icalxprop_value(comp, "X-APPLE-DEFAULT-ALARM");
+        if (!v) {
+            /* Our previous jscalendar draft implementation used a custom
+             * extension property to denote useDefaultAlerts. We won't
+             * write this property anymore but fall back reading it. */
+            v = get_icalxprop_value(comp, "X-JMAP-USEDEFAULTALERTS");
+        }
         json_object_set_new(event, "useDefaultAlerts",
-                json_boolean(v && !strcasecmp(v, "true")));
+                json_boolean(!strcasecmpsafe(v, "true")));
     }
 
     /* alerts */
@@ -2521,7 +2537,6 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     }
 
     buf_free(&buf);
-    free(tzid_start);
     return event;
 }
 
@@ -3774,13 +3789,174 @@ description_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *jse
     if (desc && *desc) icalcomponent_set_description(comp, desc);
 }
 
+HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
+                                             struct jmap_parser *parser,
+                                             const char *alert_uid,
+                                             const char *summary,
+                                             const char *description,
+                                             const char *email_recipient)
+{
+    icalcomponent *alarm = icalcomponent_new_valarm();
+    icalproperty *prop;
+    icalparameter *param;
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    size_t invalid_prop_count = json_array_size(parser->invalid);
+
+    validate_type(parser, alert, "Alert");
+    if (alert_uid) icalcomponent_set_uid(alarm, alert_uid);
+
+    /* trigger */
+    struct icaltriggertype trigger = {
+        icaltime_null_time(), icaldurationtype_null_duration()
+    };
+    json_t *jtrigger = json_object_get(alert, "trigger");
+    if (json_is_object(jtrigger)) {
+        const char *triggertype = json_string_value(json_object_get(jtrigger, "@type"));
+        if (!strcmpsafe(triggertype, "OffsetTrigger")) {
+            jmap_parser_push(parser, "trigger");
+
+            /* offset */
+            struct jmapical_duration offset = JMAPICAL_DURATION_INITIALIZER;
+            json_t *joffset = json_object_get(jtrigger, "offset");
+            if (json_is_string(joffset)) {
+                if (jmapical_duration_from_string(json_string_value(joffset), &offset) < 0) {
+                    jmap_parser_invalid(parser, "offset");
+                }
+            } else {
+                jmap_parser_invalid(parser, "offset");
+            }
+
+            /* relativeTo */
+            icalparameter_related rel = ICAL_RELATED_START;
+            json_t *jrelativeTo = json_object_get(jtrigger, "relativeTo");
+            if (json_is_string(jrelativeTo)) {
+                const char *val = json_string_value(jrelativeTo);
+                if (!strcmp(val, "start")) {
+                    rel = ICAL_RELATED_START;
+                } else if (!strcmp(val, "end")) {
+                    rel = ICAL_RELATED_END;
+                } else {
+                    jmap_parser_invalid(parser, "relativeTo");
+                }
+            } else if (JNOTNULL(jrelativeTo)) {
+                jmap_parser_invalid(parser, "relativeTo");
+            }
+
+            jmap_parser_pop(parser);
+
+            /* Add offset trigger */
+            trigger.duration = jmapical_duration_to_icalduration(&offset);
+            prop = icalproperty_new_trigger(trigger);
+            param = icalparameter_new_related(rel);
+            icalproperty_add_parameter(prop, param);
+            icalcomponent_add_property(alarm, prop);
+        }
+        else if (!strcmpsafe(triggertype, "AbsoluteTrigger")) {
+            jmap_parser_push(parser, "trigger");
+
+            json_t *jwhen = json_object_get(jtrigger, "when");
+            struct jmapical_datetime when = JMAPICAL_DATETIME_INITIALIZER;
+            if (json_is_string(jwhen) &&
+                    jmapical_utcdatetime_from_string(json_string_value(jwhen), &when) >= 0) {
+
+                /* Add absolute trigger */
+                trigger.time = jmapical_datetime_to_icaltime(&when, utc);
+                prop = icalproperty_new_trigger(trigger);
+                icalcomponent_add_property(alarm, prop);
+            }
+            else jmap_parser_invalid(parser, "when");
+
+            jmap_parser_pop(parser);
+        }
+        else {
+            /* XXX should preserve unknown triggers */
+        }
+    }
+    else jmap_parser_invalid(parser, "trigger");
+
+    /* acknowledged */
+    json_t *jacknowledged = json_object_get(alert, "acknowledged");
+    if (json_is_string(jacknowledged)) {
+        struct jmapical_datetime acktime = JMAPICAL_DATETIME_INITIALIZER;
+        if (jmapical_utcdatetime_from_string(json_string_value(jacknowledged), &acktime) >= 0) {
+            prop = icalproperty_new_acknowledged(jmapical_datetime_to_icaltime(&acktime, utc));
+            icalcomponent_add_property(alarm, prop);
+        } else {
+            jmap_parser_invalid(parser, "acknowledged");
+        }
+    } else if (JNOTNULL(jacknowledged)) {
+        jmap_parser_invalid(parser, "acknowledged");
+    }
+
+    /* action */
+    icalproperty_action action = ICAL_ACTION_DISPLAY;
+    json_t *jaction = json_object_get(alert, "action");
+    if (json_is_string(jaction)) {
+        const char *val = json_string_value(jaction);
+        if (!strcmp(val, "email")) {
+            action = ICAL_ACTION_EMAIL;
+        } else if (!strcmp(val, "display")) {
+            action = ICAL_ACTION_DISPLAY;
+        } else {
+            jmap_parser_invalid(parser, "action");
+        }
+    } else if (JNOTNULL(jaction)) {
+        jmap_parser_invalid(parser, "action");
+    }
+    prop = icalproperty_new_action(action);
+    icalcomponent_add_property(alarm, prop);
+
+    /* relatedTo */
+    json_t *jrelatedto = json_object_get(alert, "relatedTo");
+    if (json_is_object(jrelatedto)) {
+        relatedto_to_ical(alarm, parser, jrelatedto);
+    }
+    else if (JNOTNULL(jrelatedto)) {
+        jmap_parser_invalid(parser, "relatedTo");
+    }
+
+    if (action == ICAL_ACTION_EMAIL) {
+        /* ATTENDEE */
+        icalcomponent_add_property(alarm, icalproperty_new_attendee(email_recipient));
+
+        /* SUMMARY */
+        if (summary && *summary != '\0') {
+            icalcomponent_add_property(alarm, icalproperty_new_summary(summary));
+        }
+        else {
+            prop = icalproperty_new_summary("Reminder");
+            icalproperty_set_xparam(prop, JMAPICAL_XPARAM_ISDEFAULT, "TRUE", 0);
+            icalcomponent_add_property(alarm, prop);
+        }
+    }
+
+    /* DESCRIPTION is required for both email and display */
+    const char *desc = summary;
+    if (!desc || *desc == '\0') desc = description;
+    if (!desc || *desc == '\0') {
+        prop = icalproperty_new_description("Reminder");
+        icalproperty_set_xparam(prop, JMAPICAL_XPARAM_ISDEFAULT, "TRUE", 0);
+        icalcomponent_add_property(alarm, prop);
+    }
+    else {
+        icalcomponent_add_property(alarm, icalproperty_new_description(desc));
+    }
+
+    if (invalid_prop_count < json_array_size(parser->invalid)) {
+        icalcomponent_free(alarm);
+        alarm = NULL;
+    }
+
+    return alarm;
+}
+
 /* Create or update the VALARMs in the VEVENT component comp as defined by the
  * JMAP alerts. */
 static void
-alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
+alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts,
+               struct jmapical_jmapcontext *jmapctx)
 {
     icalcomponent *alarm, *next;
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
 
     /* Purge all VALARMs. */
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
@@ -3799,172 +3975,18 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
     json_t *alert;
     jmap_parser_push(parser, "alerts");
     json_object_foreach(alerts, id, alert) {
-        icalproperty *prop;
-        icalparameter *param;
-
         if (!is_valid_jmapid(id)) {
             jmap_parser_invalid(parser, id);
             continue;
         }
         jmap_parser_push(parser, id);
 
-        validate_type(parser, alert, "Alert");
+        alarm = jmapical_alert_to_ical(alert, parser, id,
+                icalcomponent_get_summary(comp),
+                icalcomponent_get_description(comp),
+                jmapctx->emailalert_defaultrecipient);
 
-        alarm = icalcomponent_new_valarm();
-        icalcomponent_set_uid(alarm, id);
-
-        /* trigger */
-        struct icaltriggertype trigger = {
-            icaltime_null_time(), icaldurationtype_null_duration()
-        };
-        json_t *jtrigger = json_object_get(alert, "trigger");
-        if (json_is_object(jtrigger)) {
-            const char *triggertype = json_string_value(json_object_get(jtrigger, "@type"));
-            if (!strcmpsafe(triggertype, "OffsetTrigger")) {
-                jmap_parser_push(parser, "trigger");
-
-                /* offset */
-                struct jmapical_duration offset = JMAPICAL_DURATION_INITIALIZER;
-                json_t *joffset = json_object_get(jtrigger, "offset");
-                if (json_is_string(joffset)) {
-                    if (jmapical_duration_from_string(json_string_value(joffset), &offset) < 0) {
-                        jmap_parser_invalid(parser, "offset");
-                    }
-                } else {
-                    jmap_parser_invalid(parser, "offset");
-                }
-
-                /* relativeTo */
-                icalparameter_related rel = ICAL_RELATED_START;
-                json_t *jrelativeTo = json_object_get(jtrigger, "relativeTo");
-                if (json_is_string(jrelativeTo)) {
-                    const char *val = json_string_value(jrelativeTo);
-                    if (!strcmp(val, "start")) {
-                        rel = ICAL_RELATED_START;
-                    } else if (!strcmp(val, "end")) {
-                        rel = ICAL_RELATED_END;
-                    } else {
-                        jmap_parser_invalid(parser, "relativeTo");
-                    }
-                } else if (JNOTNULL(jrelativeTo)) {
-                    jmap_parser_invalid(parser, "relativeTo");
-                }
-
-                jmap_parser_pop(parser);
-
-                /* Add offset trigger */
-                trigger.duration = jmapical_duration_to_icalduration(&offset);
-                prop = icalproperty_new_trigger(trigger);
-                param = icalparameter_new_related(rel);
-                icalproperty_add_parameter(prop, param);
-                icalcomponent_add_property(alarm, prop);
-            }
-            else if (!strcmpsafe(triggertype, "AbsoluteTrigger")) {
-                jmap_parser_push(parser, "trigger");
-
-                json_t *jwhen = json_object_get(jtrigger, "when");
-                struct jmapical_datetime when = JMAPICAL_DATETIME_INITIALIZER;
-                if (json_is_string(jwhen) &&
-                    jmapical_utcdatetime_from_string(json_string_value(jwhen), &when) >= 0) {
-
-                    /* Add absolute trigger */
-                    trigger.time = jmapical_datetime_to_icaltime(&when, utc);
-                    prop = icalproperty_new_trigger(trigger);
-                    icalcomponent_add_property(alarm, prop);
-                }
-                else jmap_parser_invalid(parser, "when");
-
-                jmap_parser_pop(parser);
-            }
-            else {
-                /* XXX should preserve unknown triggers */
-            }
-        }
-        else jmap_parser_invalid(parser, "trigger");
-
-        /* acknowledged */
-        json_t *jacknowledged = json_object_get(alert, "acknowledged");
-        if (json_is_string(jacknowledged)) {
-            struct jmapical_datetime acktime = JMAPICAL_DATETIME_INITIALIZER;
-            if (jmapical_utcdatetime_from_string(json_string_value(jacknowledged), &acktime) >= 0) {
-                prop = icalproperty_new_acknowledged(jmapical_datetime_to_icaltime(&acktime, utc));
-                icalcomponent_add_property(alarm, prop);
-            } else {
-                jmap_parser_invalid(parser, "acknowledged");
-            }
-        } else if (JNOTNULL(jacknowledged)) {
-            jmap_parser_invalid(parser, "acknowledged");
-        }
-
-        /* action */
-        icalproperty_action action = ICAL_ACTION_DISPLAY;
-        json_t *jaction = json_object_get(alert, "action");
-        if (json_is_string(jaction)) {
-            const char *val = json_string_value(jaction);
-            if (!strcmp(val, "email")) {
-                action = ICAL_ACTION_EMAIL;
-            } else if (!strcmp(val, "display")) {
-                action = ICAL_ACTION_DISPLAY;
-            } else {
-                jmap_parser_invalid(parser, "action");
-            }
-        } else if (JNOTNULL(jaction)) {
-            jmap_parser_invalid(parser, "action");
-        }
-        prop = icalproperty_new_action(action);
-        icalcomponent_add_property(alarm, prop);
-
-        /* relatedTo */
-        json_t *jrelatedto = json_object_get(alert, "relatedTo");
-        if (json_is_object(jrelatedto)) {
-            relatedto_to_ical(alarm, parser, jrelatedto);
-        }
-        else if (JNOTNULL(jrelatedto)) {
-            jmap_parser_invalid(parser, "relatedTo");
-        }
-
-        if (action == ICAL_ACTION_EMAIL) {
-            /* ATTENDEE */
-            const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-            char *mailboxname = caldav_mboxname(httpd_userid, NULL);
-            struct buf buf = BUF_INITIALIZER;
-            int r = annotatemore_lookupmask(mailboxname, annotname, httpd_userid, &buf);
-
-            char *recipient = NULL;
-
-            if (!r && buf_len(&buf)) {
-                strarray_t *values = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
-                const char *item = strarray_nth(values, 0);
-                if (!strncasecmp(item, "mailto:", 7)) item += 7;
-                recipient = strconcat("mailto:", item, NULL);
-                strarray_free(values);
-            }
-            else if (strchr(httpd_userid, '@')) {
-                recipient = strconcat("mailto:", httpd_userid, NULL);
-            }
-            else {
-                recipient = strconcat("mailto:", httpd_userid, "@", config_defdomain, NULL);
-            }
-
-            icalcomponent_add_property(alarm, icalproperty_new_attendee(recipient));
-            free(recipient);
-
-            buf_free(&buf);
-            free(mailboxname);
-
-            /* SUMMARY */
-            const char *summary = icalcomponent_get_summary(comp);
-            if (!summary) summary = "Your event alert";
-            icalcomponent_add_property(alarm, icalproperty_new_summary(summary));
-        }
-
-        /* DESCRIPTION is required for both email and display */
-        const char *desc = icalcomponent_get_summary(comp);
-        if (!desc || *desc == '\0') desc = icalcomponent_get_description(comp);
-        if (!desc || *desc == '\0') desc = "reminder";
-        icalcomponent_add_property(alarm, icalproperty_new_description(desc));
-
-        icalcomponent_add_component(comp, alarm);
+        if (alarm) icalcomponent_add_component(comp, alarm);
         jmap_parser_pop(parser);
     }
     jmap_parser_pop(parser);
@@ -5073,12 +5095,11 @@ static void calendarevent_to_ical(icalcomponent *comp,
     /* useDefaultAlerts */
     jprop = json_object_get(event, "useDefaultAlerts");
     if (json_is_boolean(jprop)) {
-        remove_icalxprop(comp, JMAPICAL_XPROP_USEDEFALERTS);
+        remove_icalxprop(comp, "X-APPLE-DEFAULT-ALARM");
         if (json_boolean_value(jprop)) {
-            icalvalue *icalval = icalvalue_new_boolean(1);
             prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, JMAPICAL_XPROP_USEDEFALERTS);
-            icalproperty_set_value(prop, icalval);
+            icalproperty_set_x_name(prop, "X-APPLE-DEFAULT-ALARM");
+            icalproperty_set_value(prop, icalvalue_new_boolean(1));
             icalcomponent_add_property(comp, prop);
         }
     } else if (JNOTNULL(jprop)) {
@@ -5088,7 +5109,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     /* alerts */
     jprop = json_object_get(event, "alerts");
     if (json_is_null(jprop) || json_object_size(jprop)) {
-        alerts_to_ical(comp, parser, jprop);
+        alerts_to_ical(comp, parser, jprop, jmapctx);
     } else if (jprop) {
         jmap_parser_invalid(parser, "alerts");
     }

@@ -593,17 +593,14 @@ static icaltimezone *get_floatingtz(const char *mailbox, const char *userid)
     return floatingtz;
 }
 
-static icalcomponent *vpatch_from_peruserdata(const struct buf *userdata)
+static icalcomponent *vpatch_from_peruserdata(struct dlist *dl)
 {
-    struct dlist *dl;
     const char *icalstr;
     icalcomponent *vpatch;
 
     /* Parse the value and fetch the patch */
-    dlist_parsemap(&dl, 1, 0, buf_base(userdata), buf_len(userdata));
     dlist_getatom(dl, "VPATCH", &icalstr);
     vpatch = icalparser_parse_string(icalstr);
-    dlist_free(&dl);
 
     return vpatch;
 }
@@ -613,6 +610,24 @@ struct has_alarms_rock {
     int *has_alarms;
 };
 
+static int has_usedefaultalarms(icalcomponent *comp)
+{
+    icalproperty *prop;
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
+        /* Check patch for default alerts properties */
+        const char *xname = icalproperty_get_x_name(prop);
+        if (!strcasecmp(xname, "X-APPLE-DEFAULT-ALARM")) {
+            const char *strval = icalproperty_get_value_as_string(prop);
+            if (!strcasecmpsafe(strval, "TRUE")) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 static int has_peruser_alarms_cb(const char *mailbox,
                                  uint32_t uid __attribute__((unused)),
                                  const char *entry __attribute__((unused)),
@@ -621,7 +636,8 @@ static int has_peruser_alarms_cb(const char *mailbox,
                                  void *rock)
 {
     struct has_alarms_rock *hrock = (struct has_alarms_rock *) rock;
-    icalcomponent *vpatch, *comp;
+    icalcomponent *vpatch = NULL, *comp;
+    struct dlist *dl = NULL;
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
         ((hrock->mbox_options & OPT_IMAP_SHAREDSEEN) ||
@@ -629,22 +645,36 @@ static int has_peruser_alarms_cb(const char *mailbox,
         /* No per-user-data, or sharee has unsubscribed from this calendar */
         return 0;
     }
-        
+
+    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    const char *strval = NULL;
+    if (dlist_getatom(dl, "USEDEFAULTALERTS", &strval)) {
+        if (!strcasecmp(strval, "YES")) {
+            *(hrock->has_alarms) = 1;
+            goto done;
+        }
+    }
+
     /* Extract VPATCH from per-user-cal-data annotation */
-    vpatch = vpatch_from_peruserdata(value);
+    vpatch = vpatch_from_peruserdata(dl);
 
     /* Check PATCHes for any VALARMs */
     for (comp = icalcomponent_get_first_component(vpatch, ICAL_XPATCH_COMPONENT);
-         comp;
+         comp && !*(hrock->has_alarms);
          comp = icalcomponent_get_next_component(vpatch, ICAL_XPATCH_COMPONENT)) {
         if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT)) {
             *(hrock->has_alarms) = 1;
             break;
         }
+        else if (has_usedefaultalarms(comp)) {
+            *(hrock->has_alarms) = 1;
+            break;
+        }
     }
 
-    icalcomponent_free(vpatch);
-
+done:
+    if (vpatch) icalcomponent_free(vpatch);
+    if (dl) dlist_free(&dl);
     return 0;
 }
 
@@ -666,6 +696,8 @@ static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid
         for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
             if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT))
                 return 1;
+            else if (has_usedefaultalarms(comp))
+                return 1;
         }
     }
 
@@ -680,15 +712,78 @@ static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid
     return has_alarms;
 }
 
+static icalcomponent *read_calendar_icalalarms(const char *mboxname,
+                                               const char *userid,
+                                               const char *annot)
+{
+    icalcomponent *ical = NULL;
+    struct buf buf = BUF_INITIALIZER;
+
+    annotatemore_lookupmask(mboxname, annot, userid, &buf);
+
+    if (buf_len(&buf)) {
+        struct dlist *dl = NULL;
+        if (dlist_parsemap(&dl, 1, 0, buf_base(&buf), buf_len(&buf)) == 0) {
+            const char *content = NULL;
+            if (dlist_getatom(dl, "CONTENT", &content)) {
+                buf_setcstr(&buf, content);
+            }
+        }
+        dlist_free(&dl);
+    }
+    if (buf_len(&buf)) {
+        ical = icalparser_parse_string(buf_cstring(&buf));
+        if (ical) {
+            if (icalcomponent_isa(ical) == ICAL_VALARM_COMPONENT) {
+                /* libical wraps multiple VALARMs in a XROOT component,
+                 * so also wrap a single VALARM for consistency */
+                icalcomponent *root = icalcomponent_new(ICAL_XROOT_COMPONENT);
+                icalcomponent_add_component(root, ical);
+                ical = root;
+            }
+        }
+    }
+
+    buf_free(&buf);
+    return ical;
+}
+
 static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
                              const char *userid, icaltimezone *floatingtz,
                              icalcomponent *ical, time_t lastrun,
                              time_t runtime, int dryrun)
 {
+    icalcomponent *myical = NULL;
+
+    /* Add default alarms */
+    if (icalcomponent_read_usedefaultalerts(ical) > 0) {
+        static const char *withtime_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-datetime";
+        static const char *withdate_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-date";
+
+        icalcomponent *withtime =
+            read_calendar_icalalarms(mboxname, userid, withtime_annot);;
+        icalcomponent *withdate =
+            read_calendar_icalalarms(mboxname, userid, withdate_annot);
+
+        if (withtime || withdate) {
+            myical = icalcomponent_clone(ical);
+            icalcomponent_add_defaultalerts(myical, withtime, withdate);
+            ical = myical;
+        }
+
+        if (withtime) icalcomponent_free(withtime);
+        if (withdate) icalcomponent_free(withdate);
+    }
+
+    /* Process alarms */
     struct get_alarm_rock rock =
         { userid, mboxname, imap_uid, floatingtz, lastrun, runtime, 0, dryrun };
     struct icalperiodtype range = icalperiodtype_null_period();
     icalcomponent_myforeach(ical, range, floatingtz, process_alarm_cb, &rock);
+
+    if (myical) icalcomponent_free(myical);
     return rock.nextcheck;
 }
 
@@ -757,11 +852,12 @@ HIDDEN int caldav_alarm_add_record(struct mailbox *mailbox,
 }
 
 EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
-                                       const struct index_record *record)
+                                       const struct index_record *record,
+                                       int force)
 {
     /* if there are alarms in the annotations,
      * the next alarm may have become earlier, so get calalarmd to check again */
-    if (has_alarms(NULL, mailbox, record->uid))
+    if (force || has_alarms(NULL, mailbox, record->uid))
         return update_alarmdb(mailbox_name(mailbox), record->uid, record->last_updated);
 
     return 0;
@@ -866,6 +962,8 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     struct process_alarms_rock *prock = (struct process_alarms_rock *) rock;
     icalcomponent *vpatch, *myical;
     icaltimezone *floatingtz = NULL;
+    struct dlist *dl = NULL;
+
     time_t check;
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
@@ -876,7 +974,8 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     }
 
     /* Extract VPATCH from per-user-cal-data annotation */
-    vpatch = vpatch_from_peruserdata(value);
+    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    vpatch = vpatch_from_peruserdata(dl);
 
     /* Apply VPATCH to a clone of the iCalendar resource */
     myical = icalcomponent_clone(prock->ical);
@@ -895,6 +994,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
 
     if (floatingtz) icaltimezone_free(floatingtz, 1);
     icalcomponent_free(myical);
+    dlist_free(&dl);
 
     return 0;
 }

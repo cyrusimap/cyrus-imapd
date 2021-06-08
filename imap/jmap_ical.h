@@ -51,6 +51,8 @@ extern "C" {
 #include <jansson.h>
 #include <libical/ical.h>
 
+#include "jmap_util.h"
+
 #define JMAPICAL_ERROR_UNKNOWN  -1
 #define JMAPICAL_ERROR_CALLBACK 1
 #define JMAPICAL_ERROR_MEMORY   2
@@ -60,8 +62,6 @@ extern "C" {
 
 /* Custom iCalendar properties */
 #define JMAPICAL_XPROP_LOCATION      "X-JMAP-LOCATION"
-/* FIXME libical doesn't parse USEDEFAULTALERTS, must use X-prefix */
-#define JMAPICAL_XPROP_USEDEFALERTS  "X-JMAP-USEDEFAULTALERTS"
 
 /* Custom iCalendar parameters */
 #define JMAPICAL_XPARAM_CID           "X-JMAP-CID"
@@ -82,6 +82,7 @@ extern "C" {
 #define JMAPICAL_XPARAM_SEQUENCE      "X-SEQUENCE" /*used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_COMMENT       "X-COMMENT" /*used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
+#define JMAPICAL_XPARAM_ISDEFAULT     "X-IS-DEFAULT" /* Prop value is default */
 
 struct jmapical_jmapcontext {
     void (*blobid_from_href)(struct buf *blobid,
@@ -92,6 +93,7 @@ struct jmapical_jmapcontext {
                              struct buf *managedid,
                              const char *blobid,
                              void *rock);
+    char *emailalert_defaultrecipient;
     void *rock;
 };
 
@@ -116,6 +118,19 @@ json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
 icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
 			       json_t *invalid,
                                struct jmapical_jmapcontext *jmapctx);
+
+
+/* Convert the iCalendar VALARM to a JSCalendar Alert.
+ * Return NULL on error. */
+json_t *jmapical_alert_from_ical(icalcomponent *valarm);
+
+/* Convert alert to iCalendar VALARM. Returns NULL on error */
+extern icalcomponent *jmapical_alert_to_ical(json_t *alert, struct jmap_parser *parser,
+                                             const char *alert_uid,
+                                             const char *description,
+                                             const char *email_summary,
+                                             const char *email_recipient);
+
 
 void icalcomponent_add_required_timezones(icalcomponent *ical);
 
