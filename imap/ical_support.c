@@ -2034,4 +2034,101 @@ EXPORTED void icalproperty_set_xparam(icalproperty *prop,
     icalproperty_add_parameter(prop, param);
 }
 
+EXPORTED int icalcomponent_read_usedefaultalerts(icalcomponent *comp)
+{
+    icalcomponent *ical = NULL;
+    icalcomponent_kind kind = ICAL_NO_COMPONENT;
+
+    if (icalcomponent_isa(comp) == ICAL_VCALENDAR_COMPONENT) {
+        ical = comp;
+        comp = icalcomponent_get_first_real_component(ical);
+        kind = icalcomponent_isa(comp);
+    }
+    do {
+        icalproperty *prop;
+        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
+            const char *propname = icalproperty_get_x_name(prop);
+            if (!strcasecmp(propname, "X-APPLE-DEFAULT-ALARM")) {
+                const char *val = icalproperty_get_value_as_string(prop);
+                return !strcasecmpsafe(val, "TRUE");
+            }
+        }
+        if (ical) comp = icalcomponent_get_next_component(ical, kind);
+    } while (ical && comp);
+
+    return -1;
+}
+
+EXPORTED void icalcomponent_add_defaultalerts(icalcomponent *ical,
+                                              icalcomponent *withtime,
+                                              icalcomponent *withdate)
+{
+    if (!withtime && !withdate)
+        return;
+
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    if (kind != ICAL_VEVENT_COMPONENT && kind != ICAL_VTODO_COMPONENT)
+        return;
+
+    /* Add default alarms */
+    for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        if (icalcomponent_read_usedefaultalerts(comp) > 0) {
+            /* Determine which default alarms to add */
+            int is_date;
+            if (kind == ICAL_VTODO_COMPONENT) {
+                if (icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))
+                    is_date = icalcomponent_get_dtstart(comp).is_date;
+                else if (icalcomponent_get_first_property(comp, ICAL_DUE_PROPERTY))
+                    is_date = icalcomponent_get_due(comp).is_date;
+                else
+                    is_date = 1;
+            }
+            else is_date = icalcomponent_get_dtstart(comp).is_date;
+            icalcomponent *alerts = is_date ?  withdate : withtime;
+            /* Remove VALARMs in component */
+            icalcomponent *curr, *next = NULL;
+            for (curr = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+                    curr; curr = next) {
+                next = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
+                icalcomponent_remove_component(comp, curr);
+                icalcomponent_free(curr);
+            }
+            /* Add default VALARMs */
+            for (curr = icalcomponent_get_first_component(alerts, ICAL_VALARM_COMPONENT);
+                 curr;
+                 curr = icalcomponent_get_next_component(alerts, ICAL_VALARM_COMPONENT)) {
+                icalcomponent *alarm = icalcomponent_clone(curr);
+                /* Replace default description with component summary */
+                icalproperty *prop =
+                    icalcomponent_get_first_property(alarm, ICAL_DESCRIPTION_PROPERTY);
+                int is_default = 0;
+                icalparameter *param;
+                for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
+                     param;
+                     param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
+                    if (!strcasecmpsafe(icalparameter_get_xname(param), "X-IS-DEFAULT")) {
+                        if (!strcasecmpsafe(icalparameter_get_xvalue(param), "TRUE")) {
+                            is_default = 1;
+                            break;
+                        }
+                    }
+                }
+                if (is_default) {
+                    const char *desc = icalcomponent_get_summary(comp);
+                    if (desc && *desc != '\0') {
+                        icalcomponent_remove_property(alarm, prop);
+                        icalproperty_free(prop);
+                        prop = icalproperty_new_description(desc);
+                        icalcomponent_add_property(alarm, prop);
+                    }
+                }
+                /* Add alarm */
+                icalcomponent_add_component(comp, alarm);
+            }
+        }
+    }
+}
+
 #endif /* HAVE_ICAL */

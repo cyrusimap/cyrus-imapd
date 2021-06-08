@@ -3550,7 +3550,7 @@ sub test_calendarevent_set_alerts_description
     $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:description[\s\S]+END:VALARM/g);
 
     $res = $jmap->Download('cassandane', $blobId3);
-    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:reminder[\s\S]+END:VALARM/g);
+    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION;X-IS-DEFAULT=TRUE:Reminder[\s\S]+END:VALARM/g);
 }
 
 sub test_calendarevent_set_participantid
@@ -8052,6 +8052,105 @@ sub test_calendarevent_get_utcstart
     $self->assert_str_equals('2019-12-09T06:30:00Z', $event->{utcEnd});
 }
 
+sub test_calendarevent_utcstart_customtz
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    # Set custom calendar timezone. DST starts on December 1 at 2am.
+    my $CalendarId = $CalDAV->NewCalendar({name => 'mycalendar'});
+    $self->assert_not_null($CalendarId);
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:calendar-timezone>
+BEGIN:VCALENDAR
+PRODID:-//Example Corp.//CalDAV Client//EN
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Test
+LAST-MODIFIED:19870101T000000Z
+BEGIN:STANDARD
+DTSTART:19670601T020000
+RRULE:FREQ=YEARLY;BYMONTHDAY=1;BYMONTH=6
+TZOFFSETFROM:-0700
+TZOFFSETTO:-0800
+TZNAME:TST
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19871201T020000
+RRULE:FREQ=YEARLY;BYMONTHDAY=1;BYMONTH=12
+TZOFFSETFROM:-0800
+TZOFFSETTO:-0700
+TZNAME:TST
+END:DAYLIGHT
+END:VTIMEZONE
+END:VCALENDAR
+</C:calendar-timezone>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/Default",
+                       $proppatchXml, 'Content-Type' => 'text/xml');
+
+    # Create floating time event.
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarId => 'Default',
+                    title => "event1",
+                    start => "2019-11-30T23:30:00",
+                    duration => "PT6H",
+                    timeZone => undef,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#1'],
+            properties => ['utcStart', 'utcEnd', 'timeZone'],
+        }, 'R2']
+    ]);
+    my $eventId1 = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId1);
+    my $event = $res->[1][1]{list}[0];
+    $self->assert_not_null($event);
+
+    # Floating event time falls back to custom calendar time zone.
+    $self->assert_str_equals('2019-12-01T07:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-01T12:30:00Z', $event->{utcEnd});
+
+    # Assert event updates.
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId1 => {
+                    utcStart => "2019-12-01T06:30:00Z",
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId1],
+            properties => ['start', 'utcStart', 'utcEnd', 'timeZone', 'duration'],
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId1});
+
+    $event = $res->[1][1]{list}[0];
+    $self->assert_str_equals('2019-11-30T22:30:00', $event->{start});
+    $self->assert_str_equals('2019-12-01T06:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-01T11:30:00Z', $event->{utcEnd});
+    $self->assert_null($event->{timeZone});
+    $self->assert_str_equals('PT6H', $event->{duration});
+}
+
 sub test_calendarevent_set_utcstart
     :min_version_3_1 :needs_component_jmap
 {
@@ -8663,6 +8762,809 @@ sub test_calendarevent_set_linkblobid
         }, 'R1']
     ]);
     $self->assert_str_equals($eventId, $res->[0][1]{destroyed}[0]);
+}
+
+sub test_calendar_get_defaultalerts
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    # Set alerts via CalDAV.
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-datetime>
+BEGIN:VALARM
+TRIGGER:-PT5M
+ACTION:DISPLAY
+DESCRIPTION:alarmTime1
+END:VALARM
+BEGIN:VALARM
+TRIGGER:PT0M
+ACTION:DISPLAY
+DESCRIPTION:alarmTime2
+END:VALARM
+</C:default-alarm-vevent-datetime>
+    </D:prop>
+  </D:set>
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-date>
+BEGIN:VALARM
+TRIGGER:PT0S
+ACTION:DISPLAY
+DESCRIPTION:alarmDate1
+END:VALARM
+</C:default-alarm-vevent-date>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/Default",
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => ['Default'],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R1']
+    ]);
+    $self->assert_deep_equals([{
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => '-PT5M',
+        },
+        action => 'display',
+    }, {
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => 'PT0S',
+        },
+        action => 'display',
+    }], $res->[0][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_deep_equals([{
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => 'PT0S',
+        },
+        action => 'display',
+    }], $res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+}
+
+sub test_calendar_set_defaultalerts
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    my $defaultAlertsWithTime = [{
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => '-PT1H',
+        },
+        action => 'email',
+    }, {
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => 'PT0S',
+        },
+        action => 'display',
+    }];
+
+    my $defaultAlertsWithoutTime = [{
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => 'PT0S',
+        },
+        action => 'display',
+    }];
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                1 => {
+                    name => 'test',
+                    color => 'blue',
+                    defaultAlertsWithTime => $defaultAlertsWithTime,
+                    defaultAlertsWithoutTime => $defaultAlertsWithoutTime,
+                }
+            }
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => ['#1'],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R2']
+    ]);
+    my $calendarId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($calendarId);
+    $self->assert_deep_equals($defaultAlertsWithTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_deep_equals($defaultAlertsWithoutTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarId => {
+                    defaultAlertsWithTime => undef,
+                    defaultAlertsWithoutTime => undef,
+                }
+            }
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => [$calendarId],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarId});
+    $self->assert_deep_equals([], $res->[1][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_deep_equals([], $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
+}
+
+sub test_calendarevent_set_defaultalerts
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Set default alerts on calendar and event";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => [{
+                        '@type' => 'Alert',
+                         trigger => {
+                            '@type' => 'OffsetTrigger',
+                             relativeTo => 'start',
+                             offset => '-PT5M',
+                         },
+                         action => 'display',
+                    }],
+                    defaultAlertsWithoutTime => [{
+                       '@type' => 'Alert',
+                       trigger => {
+                            '@type' => 'OffsetTrigger',
+                            relativeTo => 'start',
+                            offset => 'PT0S',
+                       },
+                       action => 'display',
+                    }],
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarId => 'Default',
+                    title => "event1",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::true,
+                },
+                2 => {
+                    uid => 'eventuid2local',
+                    calendarId => 'Default',
+                    title => "event2",
+                    start => "2020-01-19T00:00:00",
+                    showWithoutTime => JSON::true,
+                    duration => "P1D",
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+    my $event1Href = $res->[1][1]{created}{1}{'x-href'};
+    $self->assert_not_null($event1Href);
+    my $event2Href = $res->[1][1]{created}{2}{'x-href'};
+    $self->assert_not_null($event2Href);
+
+    my $CaldavResponse = $CalDAV->Request('GET', $event1Href);
+    my $icaldata = $CaldavResponse->{content};
+    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT5M/, $icaldata);
+
+    $CaldavResponse = $CalDAV->Request('GET', $event2Href);
+    $icaldata = $CaldavResponse->{content};
+    $self->assert_matches(qr/TRIGGER;RELATED=START:PT0S/, $icaldata);
+}
+
+sub test_calendarevent_set_defaultalerts_etag
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Set default alerts on calendar and event";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => [{
+                        '@type' => 'Alert',
+                         trigger => {
+                            '@type' => 'OffsetTrigger',
+                             relativeTo => 'start',
+                             offset => '-PT5M',
+                         },
+                         action => 'display',
+                    }],
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarId => 'Default',
+                    title => "event1",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::true,
+                },
+                2 => {
+                    uid => 'eventuid2local',
+                    calendarId => 'Default',
+                    title => "event1",
+                    start => "2020-01-21T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::false,
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+    my $event1Href = $res->[1][1]{created}{1}{'x-href'};
+    $self->assert_not_null($event1Href);
+    my $event2Href = $res->[1][1]{created}{2}{'x-href'};
+    $self->assert_not_null($event2Href);
+
+    xlog "Get ETags of events";
+    my %Headers;
+    if ($CalDAV->{user}) {
+        $Headers{'Authorization'} = $CalDAV->auth_header();
+    }
+    my $event1URI = $CalDAV->request_url($event1Href);
+    my $Response = $CalDAV->{ua}->request('HEAD', $event1URI, {
+            headers => \%Headers,
+    });
+    my $event1ETag = $Response->{headers}{etag};
+    $self->assert_not_null($event1ETag);
+    my $event2URI = $CalDAV->request_url($event2Href);
+    $Response = $CalDAV->{ua}->request('HEAD', $event2URI, {
+            headers => \%Headers,
+    });
+    my $event2ETag = $Response->{headers}{etag};
+    $self->assert_not_null($event2ETag);
+
+    xlog "Update default alerts";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => [{
+                        '@type' => 'Alert',
+                         trigger => {
+                            '@type' => 'OffsetTrigger',
+                             relativeTo => 'start',
+                             offset => '-PT10M',
+                         },
+                         action => 'display',
+                    }],
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Refetch ETags of events";
+    $Response = $CalDAV->{ua}->request('HEAD', $event1URI, {
+            headers => \%Headers,
+    });
+    $self->assert_not_null($Response->{headers}{etag});
+    $self->assert_str_not_equals($event1ETag, $Response->{headers}{etag});
+    $Response = $CalDAV->{ua}->request('HEAD', $event2URI, {
+            headers => \%Headers,
+    });
+    $self->assert_not_null($Response->{headers}{etag});
+    $self->assert_str_equals($event2ETag, $Response->{headers}{etag});
+}
+
+sub test_calendarevent_set_defaultalerts_etag_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Set default alerts on calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => [{
+                        '@type' => 'Alert',
+                         trigger => {
+                            '@type' => 'OffsetTrigger',
+                             relativeTo => 'start',
+                             offset => '-PT5M',
+                         },
+                         action => 'display',
+                    }],
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Create other user and share owner calendar";
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.cassandane.#calendars.Default", "other", "lrsiwntex") or die;
+    my $service = $self->{instance}->get_service("http");
+    my $otherJMAP = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    my $otherCalDAV = Net::CalDAVTalk->new(
+        user => "other",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "Create event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarId => 'Default',
+                    title => "eventCass",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::true,
+                    color => 'yellow',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+    my $cassHref = $res->[0][1]{created}{1}{'x-href'};
+    $self->assert_not_null($cassHref);
+
+    xlog "Get event as other user";
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:mail',
+    ];
+    $res = $otherJMAP->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            properties => ['x-href'],
+        }, 'R1'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    my $otherHref = $res->[0][1]{list}[0]{'x-href'};
+    $self->assert_not_null($otherHref);
+
+    xlog "Set per-user prop to force per-user data split";
+    $res = $otherJMAP->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    color => 'green',
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Get ETag of event as cassandane";
+    my %Headers;
+    if ($CalDAV->{user}) {
+        $Headers{'Authorization'} = $CalDAV->auth_header();
+    }
+    my $cassURI = $CalDAV->request_url($cassHref);
+    my $ua = $CalDAV->ua();
+    my $Response = $ua->request('HEAD', $cassURI, {
+        headers => \%Headers,
+    });
+    my $cassETag = $Response->{headers}{etag};
+    $self->assert_not_null($cassETag);
+
+    xlog "Get ETag of event as other";
+    %Headers = ();
+    if ($otherCalDAV->{user}) {
+        $Headers{'Authorization'} = $otherCalDAV->auth_header();
+    }
+    my $otherURI = $otherCalDAV->request_url($otherHref);
+    my $otherUa = $otherCalDAV->ua();
+    $Response = $otherUa->request('HEAD', $otherURI, {
+        headers => \%Headers,
+    });
+    my $otherETag = $Response->{headers}{etag};
+    $self->assert_not_null($otherETag);
+
+    xlog "Update default alerts for cassandane";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => [{
+                        '@type' => 'Alert',
+                        trigger => {
+                            '@type' => 'OffsetTrigger',
+                            relativeTo => 'start',
+                            offset => '-PT10M',
+                        },
+                        action => 'display',
+                    }],
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Refetch ETags of events";
+    %Headers = ();
+    if ($CalDAV->{user}) {
+        $Headers{'Authorization'} = $CalDAV->auth_header();
+    }
+    $Response = $CalDAV->{ua}->request('HEAD', $cassURI, {
+        headers => \%Headers,
+    });
+    $self->assert_not_null($Response->{headers}{etag});
+    $self->assert_str_not_equals($cassETag, $Response->{headers}{etag});
+
+    %Headers = ();
+    if ($otherCalDAV->{user}) {
+        $Headers{'Authorization'} = $otherCalDAV->auth_header();
+    }
+    $Response = $otherCalDAV->{ua}->request('HEAD', $otherURI, {
+        headers => \%Headers,
+    });
+    $self->assert_not_null($Response->{headers}{etag});
+    $self->assert_str_equals($otherETag, $Response->{headers}{etag});
+}
+
+sub test_calendarevent_set_defaultalerts_description
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Set default alerts on calendar and event";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => [{
+                        '@type' => 'Alert',
+                         trigger => {
+                            '@type' => 'OffsetTrigger',
+                             relativeTo => 'start',
+                             offset => '-PT5M',
+                         },
+                         action => 'display',
+                    }],
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarId => 'Default',
+                    title => "event1",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+    my $event1Href = $res->[1][1]{created}{1}{'x-href'};
+    $self->assert_not_null($event1Href);
+
+    my $CaldavResponse = $CalDAV->Request('GET', $event1Href);
+    my $icaldata = $CaldavResponse->{content};
+    $self->assert($icaldata =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:event1[\s\S]+END:VALARM/g);
+}
+
+sub test_calendar_defaultalerts_synctoken
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Set default alerts on calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => [{
+                        '@type' => 'Alert',
+                         trigger => {
+                            '@type' => 'OffsetTrigger',
+                             relativeTo => 'start',
+                             offset => '-PT5M',
+                         },
+                         action => 'display',
+                    }],
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Create events with and without default alerts";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarId => 'Default',
+                    title => "event1",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    alerts => {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                offset => "-PT10M",
+                            },
+                         },
+                    },
+                },
+                2 => {
+                    uid => 'eventuid2local',
+                    calendarId => 'Default',
+                    title => "event2",
+                    start => "2020-01-21T13:00:00",
+                    duration => "PT1H",
+                    timeZone => "Europe/Vienna",
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $event1Uid = $res->[0][1]{created}{1}{uid};
+    $self->assert_not_null($event1Uid);
+    my $event2Uid = $res->[0][1]{created}{2}{uid};
+    $self->assert_not_null($event2Uid);
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ];
+
+    xlog "Fetch sync token";
+    my $Cal = $CalDAV->GetCalendar('Default');
+    my $syncToken = $Cal->{syncToken};
+    $self->assert_not_null($syncToken);
+
+    xlog "Update default alerts on calendar";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => [{
+                        '@type' => 'Alert',
+                         trigger => {
+                            '@type' => 'OffsetTrigger',
+                             relativeTo => 'start',
+                             offset => '-PT15M',
+                         },
+                         action => 'display',
+                    }],
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Sync CalDAV changes";
+    my ($adds, $removes, $errors) = $CalDAV->SyncEvents('Default', syncToken => $syncToken);
+
+    $self->assert_num_equals(1, scalar @{$adds});
+    $self->assert_str_equals($adds->[0]{uid}, $event2Uid);
+    $self->assert_deep_equals($removes, []);
+    $self->assert_deep_equals($errors, []);
+}
+
+sub test_calendar_defaultalerts_synctoken_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Create other user and share calendar";
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.cassandane.#calendars.Default", "other", "lrsiwntex") or die;
+    my $service = $self->{instance}->get_service("http");
+    my $otherJMAP = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
+    xlog "Set default alerts on calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => [{
+                        '@type' => 'Alert',
+                         trigger => {
+                            '@type' => 'OffsetTrigger',
+                             relativeTo => 'start',
+                             offset => '-PT5M',
+                         },
+                         action => 'display',
+                    }],
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Create events without default alerts";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarId => 'Default',
+                    title => "event1",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    alerts => {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                offset => "-PT10M",
+                            },
+                         },
+                    },
+                },
+                2 => {
+                    uid => 'eventuid2local',
+                    calendarId => 'Default',
+                    title => "event2",
+                    start => "2020-01-21T13:00:00",
+                    duration => "PT1H",
+                    timeZone => "Europe/Vienna",
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $event1Uid = $res->[0][1]{created}{1}{uid};
+    $self->assert_not_null($event1Uid);
+    my $event2Uid = $res->[0][1]{created}{2}{uid};
+    $self->assert_not_null($event2Uid);
+    my $event2Id = $res->[0][1]{created}{2}{id};
+    $self->assert_not_null($event2Id);
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ];
+
+    xlog "Set useDefaultAlerts to force per-user data split";
+    $res = $otherJMAP->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $event2Id => {
+                    color => 'green',
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]{updated}{$event2Id});
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $event2Id => {
+                    color => 'blue',
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]{updated}{$event2Id});
+
+    xlog "Fetch sync token";
+    my $Cal = $CalDAV->GetCalendar('Default');
+    my $syncToken = $Cal->{syncToken};
+    $self->assert_not_null($syncToken);
+
+    xlog "Update default alerts on calendar";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => [{
+                        '@type' => 'Alert',
+                         trigger => {
+                            '@type' => 'OffsetTrigger',
+                             relativeTo => 'start',
+                             offset => '-PT15M',
+                         },
+                         action => 'display',
+                    }],
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Sync CalDAV changes";
+    my ($adds, $removes, $errors) = $CalDAV->SyncEvents('Default', syncToken => $syncToken);
+
+    $self->assert_num_equals(1, scalar @{$adds});
+    $self->assert_str_equals($adds->[0]{uid}, $event2Uid);
+    $self->assert_deep_equals($removes, []);
+    $self->assert_deep_equals($errors, []);
 }
 
 1;
