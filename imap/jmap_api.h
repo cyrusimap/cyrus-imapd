@@ -461,6 +461,7 @@ struct jmap_query {
     size_t result_position;
     size_t server_limit;
     size_t total;
+    int have_total; /* for calculateTotal: false partial */
     json_t *ids;
 };
 

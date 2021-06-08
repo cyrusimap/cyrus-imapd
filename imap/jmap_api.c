@@ -2380,6 +2380,7 @@ HIDDEN void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
 
     memset(query, 0, sizeof(struct jmap_query));
     query->ids = json_array();
+    query->have_total = 1; /* assume we know the total, we turn it off it not */
 
     json_t *unsupported_filter = json_array();
     json_t *unsupported_sort = json_array();
@@ -2508,7 +2509,8 @@ HIDDEN json_t *jmap_query_reply(struct jmap_query *query)
     json_object_set_new(res, "canCalculateChanges",
                         json_boolean(query->can_calculate_changes));
     json_object_set_new(res, "position", json_integer(query->result_position));
-    json_object_set_new(res, "total", json_integer(query->total));
+    if (query->have_total)
+        json_object_set_new(res, "total", json_integer(query->total));
     /* Special case total */
     if (query->position > 0 && query->total && query->total < SSIZE_MAX) {
         if (query->position > (ssize_t) query->total) {
