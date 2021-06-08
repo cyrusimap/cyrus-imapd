@@ -107,7 +107,7 @@ enum meta_filename {
 #ifdef WITH_DAV
   META_DAV,
 #endif
-  META_ARCHIVECACHE
+  META_ARCHIVECACHE  /* MUST be last for relocate.c */
 };
 
 #define MAILBOX_FNAME_LEN 256
@@ -458,6 +458,7 @@ typedef enum _MsgInternalFlags {
 #define RECONSTRUCT_REMOVE_ODDFILES (1<<7)
 #define RECONSTRUCT_IGNORE_ODDFILES (1<<8)
 #define RECONSTRUCT_PREFER_MBOXLIST (1<<9)
+#define RECONSTRUCT_REPAIR_MBOXLIST (1<<10)
 
 #define MAX_CACHED_HEADER_SIZE 32 /* Max size of a cached header name */
 
@@ -638,6 +639,9 @@ extern int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
                               const char *newname, const char *newuniqueid);
 extern int mailbox_delete_cleanup(struct mailbox *mailbox, const char *part, const char *name, const char *uniqueid);
 
+extern int mailbox_rename_nocopy(struct mailbox *oldmailbox,
+                                 const char *newname, int silent);
+
 extern int mailbox_rename_copy(struct mailbox *oldmailbox,
                                const char *newname, const char *newpart,
                                unsigned uidvalidity,
@@ -699,6 +703,7 @@ extern void mailbox_iter_done(struct mailbox_iter **iterp);
 struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int recalc);
 
 extern int mailbox_add_dav(struct mailbox *mailbox);
+extern int mailbox_delete_dav(struct mailbox *mailbox);
 extern int mailbox_add_email_alarms(struct mailbox *mailbox);
 
 /* Rename a CID.  Note - this is just one mailbox! */
@@ -718,5 +723,12 @@ extern void mailbox_set_wait_cb(mailbox_wait_cb_t *cb, void *rock);
 extern void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const char *flagstr);
 
 extern int mailbox_crceq(struct synccrcs a, struct synccrcs b);
+
+extern struct dlist *mailbox_acl_to_dlist(const char *aclstr);
+
+extern int mailbox_changequotaroot(struct mailbox *mailbox,
+                                   const char *root, int silent);
+
+extern int mailbox_parse_datafilename(const char *name, uint32_t *uidp);
 
 #endif /* INCLUDED_MAILBOX_H */

@@ -514,8 +514,12 @@ static int capabilities_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     /* Skip any special use folders (#jmap, #calendars, #notifications, etc.) */
-    if (mbentry->mbtype &&
-        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+    switch (mbtype_isa(mbentry->mbtype)) {
+    case MBTYPE_EMAIL:
+    case MBTYPE_CALENDAR:
+    case MBTYPE_ADDRESSBOOK:
+        break;
+    default:
         return 0;
     }
 
@@ -526,7 +530,7 @@ static int capabilities_cb(const mbentry_t *mbentry, void *vrock)
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     const strarray_t *boxes = mbname_boxes(mbname);
     if (!rock->has_mail) {
-        rock->has_mail = mbentry->mbtype == MBTYPE_EMAIL;
+        rock->has_mail = mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL;
     }
     if (!rock->has_contacts) {
         rock->has_contacts = strarray_size(boxes) >= 1 &&
@@ -944,8 +948,12 @@ static int findaccounts_cb(struct findall_data *data, void *vrock)
     const mbentry_t *mbentry = data->mbentry;
 
     /* Skip any special use folders (#jmap, #calendars, #notifications, etc.) */
-    if (mbentry->mbtype &&
-        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+    switch (mbtype_isa(mbentry->mbtype)) {
+    case MBTYPE_EMAIL:
+    case MBTYPE_CALENDAR:
+    case MBTYPE_ADDRESSBOOK:
+        break;
+    default:
         return 0;
     }
 
@@ -1089,6 +1097,17 @@ HIDDEN int jmap_openmbox(jmap_req_t *req, const char *name,
     return 0;
 }
 
+HIDDEN int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
+                                     struct mailbox **mboxp, int rw)
+{
+    const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, id);
+
+    if (mbentry)
+        return jmap_openmbox(req, mbentry->name, mboxp, rw);
+    else
+        return IMAP_MAILBOX_NONEXISTENT;
+}
+
 HIDDEN int jmap_isopenmbox(jmap_req_t *req, const char *name)
 {
 
@@ -1140,6 +1159,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct findblob_data *d = (struct findblob_data*) rock;
     jmap_req_t *req = d->req;
+    mbentry_t *mbentry = NULL;
     int r = 0;
 
     if (d->exact) {
@@ -1147,22 +1167,23 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
         if (rec->part) return 0;
     }
 
+    r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
+    if (r) {
+        syslog(LOG_ERR, "jmap_findblob: no mbentry for %s", rec->mailbox);
+        return r;
+    }
+
     /* Check ACL */
     if (d->is_shared_account) {
-        mbentry_t *mbentry = NULL;
-        r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
-        if (r) {
-            syslog(LOG_ERR, "jmap_findblob: no mbentry for %s", rec->mboxname);
-            return r;
-        }
         int rights = jmap_myrights_mbentry(req, mbentry);
-        mboxlist_entry_free(&mbentry);
         if ((rights & JACL_READITEMS) != JACL_READITEMS) {
+            mboxlist_entry_free(&mbentry);
             return 0;
         }
     }
 
-    r = jmap_openmbox(req, rec->mboxname, &d->mbox, 0);
+    r = jmap_openmbox(req, mbentry->name, &d->mbox, 0);
+    mboxlist_entry_free(&mbentry);
     if (r) return r;
 
     r = msgrecord_find(d->mbox, rec->uid, &d->mr);
@@ -1334,14 +1355,14 @@ HIDDEN int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
         }
         modseq_t client_modseq = atomodseq_t(s);
         modseq_t server_modseq = 0;
-        switch (mbtype) {
+        switch (mbtype_isa(mbtype)) {
          case MBTYPE_CALENDAR:
              server_modseq = req->counters.caldavmodseq;
              break;
          case MBTYPE_ADDRESSBOOK:
              server_modseq = req->counters.carddavmodseq;
              break;
-         case MBTYPE_SUBMISSION:
+         case MBTYPE_JMAPSUBMIT:
              server_modseq = req->counters.submissionmodseq;
              break;
          default:
@@ -1362,17 +1383,17 @@ HIDDEN modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
     modseq_t modseq;
 
     /* Determine current counter by mailbox type. */
-    switch (mbtype) {
+    switch (mbtype_isa(mbtype)) {
         case MBTYPE_CALENDAR:
             modseq = req->counters.caldavmodseq;
             break;
         case MBTYPE_ADDRESSBOOK:
             modseq = req->counters.carddavmodseq;
             break;
-        case MBTYPE_SUBMISSION:
+        case MBTYPE_JMAPSUBMIT:
             modseq = req->counters.submissionmodseq;
             break;
-        case 0:
+        case MBTYPE_EMAIL:
             modseq = req->counters.mailmodseq;
             break;
         default:
@@ -1470,7 +1491,7 @@ HIDDEN int jmap_mbtype(jmap_req_t *req, const char *mboxname)
     }
     else mbtype = mbstate->mbtype;
 
-    return mbtype;
+    return mbtype_isa(mbtype);
 }
 
 // gotta have them all
@@ -2735,7 +2756,7 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
 {
     char *aclstr = xstrdupnull(mbentry->acl);
     char *owner = mboxname_to_userid(mbentry->name);
-    int iscalendar = (mbentry->mbtype & MBTYPE_CALENDAR);
+    int iscalendar = mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR;
 
     json_t *sharewith = json_null();
 
@@ -2901,13 +2922,18 @@ static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
     const char *userid;
     char *nextid = NULL;
 
-    /* skip any special use folders */
-    if (mbentry->mbtype &&
-        !(mbentry->mbtype & (MBTYPE_CALENDAR | MBTYPE_ADDRESSBOOK))) {
+    /* Skip any special use folders (#jmap, #calendars, #notifications, etc.) */
+    switch (mbtype_isa(mbentry->mbtype)) {
+    case MBTYPE_EMAIL:
+    case MBTYPE_CALENDAR:
+    case MBTYPE_ADDRESSBOOK:
+        break;
+    default:
         return 0;
     }
+
     /* make sure we skip the upload folder itself */
-    else if (!strcmp(mbentry->name, srock->upload_mboxname)) {
+    if (!strcmp(mbentry->name, srock->upload_mboxname)) {
         return 0;
     }
 
@@ -3002,8 +3028,8 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite)
 {
     hash_table user_access = HASH_TABLE_INITIALIZER;
-    int isdav = (mbox->mbtype & MBTYPES_DAV);
-    int iscalendar = (mbox->mbtype & MBTYPE_CALENDAR);
+    int isdav = mbtypes_dav(mbox->mbtype);
+    int iscalendar = mbtype_isa(mbox->mbtype) == MBTYPE_CALENDAR;
     char *owner = mboxname_to_userid(mbox->name);
     char *acl = xstrdup(mbox->acl);
     struct acl_change *change;
@@ -3147,7 +3173,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         /* Find the DAV namespace for this mailbox */
         if (iscalendar)
             irock.tgt.namespace = &namespace_calendar;
-        else if (mbox->mbtype & MBTYPE_ADDRESSBOOK)
+        else if (mbtype_isa(mbox->mbtype) == MBTYPE_ADDRESSBOOK)
             irock.tgt.namespace = &namespace_addressbook;
         else
             irock.tgt.namespace = &namespace_drive;
@@ -3265,29 +3291,44 @@ HIDDEN int jmap_mboxlist_lookup(const char *name,
     return 0;
 }
 
-static int _mbentry_by_uniqueid_cb(const mbentry_t *mbentry, void *rock)
+static const mbentry_t *_mbentry_by_uniqueid(jmap_req_t *req,
+                                             const char *id,
+                                             int scope)
 {
-    struct hash_table *hash = rock;
-    hash_insert(mbentry->uniqueid, mboxlist_entry_copy(mbentry), hash);
-    return 0;
-}
+    mbentry_t *mbentry = NULL;
 
-EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id)
-{
     if (!req->mbentry_byid) {
         req->mbentry_byid = xzmalloc(sizeof(struct hash_table));
         construct_hash_table(req->mbentry_byid, 1024, 0);
-        mboxlist_usermboxtree(req->accountid, req->authstate,
-                              _mbentry_by_uniqueid_cb, req->mbentry_byid,
-                              MBOXTREE_INTERMEDIATES);
+    }
+    else mbentry = hash_lookup(id, req->mbentry_byid);
+
+    if (!mbentry) {
+        int r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
+        if (r || !mbentry || (mbentry->mbtype & MBTYPE_DELETED) ||
+            /* make sure the user can "see" the mailbox */
+            !(jmap_myrights_mbentry(req, mbentry) & JACL_LOOKUP) ||
+            /* keep the lookup scoped to accountid */
+            (scope && !mboxname_userownsmailbox(req->accountid, mbentry->name))) {
+            mboxlist_entry_free(&mbentry);
+            return NULL;
+        }
+
+        hash_insert(mbentry->uniqueid, mbentry, req->mbentry_byid);
     }
 
-    return (const mbentry_t *)hash_lookup(id, req->mbentry_byid);
+    return mbentry;
+}
+
+EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req,
+                                                   const char *id)
+{
+    return _mbentry_by_uniqueid(req, id, 1/*scope*/);
 }
 
 EXPORTED mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id)
 {
-    const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, id);
+    const mbentry_t *mbentry = _mbentry_by_uniqueid(req, id, 1/*scope*/);
     if (!mbentry) return NULL;
     return mboxlist_entry_copy(mbentry);
 }
@@ -3333,4 +3374,23 @@ HIDDEN void jmap_getblob_ctx_fini(jmap_getblob_context_t *ctx)
     buf_free(&ctx->blob);
     free(ctx->content_type);
     free(ctx->encoding);
+}
+
+EXPORTED mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav)
+{
+    mbentry_t *mbentry = NULL;
+
+    if (dav->mailbox_byname) {
+        if (jmap_mboxlist_lookup(dav->mailbox, &mbentry, NULL)) return NULL;
+    }
+    else {
+        /* XXX  DAV DB scopes the lookup to a single account.
+           XXX  And scoping the mailbox to req->accountid will break Foo/copy */
+        const mbentry_t *mbe =
+            _mbentry_by_uniqueid(req, dav->mailbox, 0/*scope*/);
+        if (!mbe) return NULL;
+        mbentry =  mboxlist_entry_copy(mbe);
+    }
+
+    return mbentry;
 }

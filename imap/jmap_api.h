@@ -47,6 +47,7 @@
 #include "acl.h"
 #include "auth.h"
 #include "conversations.h"
+#include "dav_db.h"
 #include "hash.h"
 #include "jmap_util.h"
 #include "json_support.h"
@@ -260,6 +261,8 @@ extern void jmap_accounts(json_t *accounts, json_t *primary_accounts);
 /* Request-scoped mailbox cache */
 extern int  jmap_openmbox(jmap_req_t *req, const char *name,
                           struct mailbox **mboxp, int rw);
+extern int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
+                                     struct mailbox **mboxp, int rw);
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
 
@@ -577,5 +580,6 @@ extern void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith);
 extern void jmap_mbentry_cache_free(jmap_req_t *req);
 extern const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id);
 extern mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id);
+extern mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav);
 
 #endif /* JMAP_API_H */

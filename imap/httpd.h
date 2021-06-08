@@ -495,7 +495,7 @@ struct namespace_t {
     const char *well_known;     /* Any /.well-known/ URI */
     int (*need_auth)(txn_t *);  /* Function run prior to unauthorized requests */
     unsigned auth_schemes;      /* Bitmask of allowed auth schemes, 0 for any */
-    int mboxtype;               /* What mbtype can be seen in this namespace? */
+    uint32_t mboxtype;          /* What mbtype can be seen in this namespace? */
     unsigned long allow;        /* Bitmask of allowed features/methods */
     void (*init)(struct buf *); /* Function run during service startup */
     int (*auth)(const char *);  /* Function run after authentication */

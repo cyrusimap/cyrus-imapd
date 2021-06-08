@@ -266,6 +266,32 @@ error:
 
 /* DLIST STUFF */
 
+EXPORTED void dlist_push(struct dlist *parent, struct dlist *child)
+{
+    assert(!child->next);
+
+    if (parent->head) {
+        child->next = parent->head;
+        parent->head = child;
+    }
+    else {
+        parent->head = parent->tail = child;
+    }
+}
+
+EXPORTED struct dlist *dlist_pop(struct dlist *parent)
+{
+    struct dlist *child;
+
+    assert(parent->head);
+
+    child = parent->head;
+    parent->head = parent->head->next;
+    child->next = NULL;
+
+    return child;
+}
+
 EXPORTED void dlist_stitch(struct dlist *parent, struct dlist *child)
 {
     assert(!child->next);
@@ -1672,4 +1698,10 @@ EXPORTED int dlist_getlist(struct dlist *dl, const char *name, struct dlist **va
 EXPORTED const char *dlist_lastkey(void)
 {
     return lastkey;
+}
+
+EXPORTED void dlist_rename(struct dlist *dl, const char *name)
+{
+    free(dl->name);
+    dl->name = xstrdup(name);
 }

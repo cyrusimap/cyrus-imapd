@@ -190,11 +190,22 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
 int annotatemore_lookupmask(const char *mboxname, const char *entry,
                             const char *userid, struct buf *value);
 /* lookup a single per-message annotation and return result */
-int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
+int annotatemore_msg_lookup(const struct mailbox *mailbox,
+                            uint32_t uid, const char *entry,
                             const char *userid, struct buf *value);
+int annotatemore_lookup_mbe(const mbentry_t *mbentry, const char *entry,
+                            const char *userid, struct buf *value);
+int annotatemore_lookup_mbox(const struct mailbox *mailbox, const char *entry,
+                             const char *userid, struct buf *value);
 /* same but check shared if per-user doesn't exist */
-int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, const char *entry,
+int annotatemore_msg_lookupmask(const struct mailbox *mailbox,
+                                uint32_t uid, const char *entry,
                                 const char *userid, struct buf *value);
+int annotatemore_lookupmask_mbe(const mbentry_t *mbentry, const char *entry,
+                                const char *userid, struct buf *value);
+int annotatemore_lookupmask_mbox(const struct mailbox *mailbox,
+                                 const char *entry,
+                                 const char *userid, struct buf *value);
 
 /* store annotations.  Requires an open transaction */
 int annotate_state_store(annotate_state_t *state, struct entryattlist *l);
@@ -274,11 +285,13 @@ void annotate_done(void);
  * annotations at all on the mailbox. These APIs are for performance
  * optimisations only; the other annotate APIs will manage their own
  * references internally. */
-int annotate_getdb(const char *mboxname, annotate_db_t **dbp);
+int annotate_getdb(const char *mboxid, annotate_db_t **dbp);
 void annotate_putdb(annotate_db_t **dbp);
 
 /* Maybe this isn't the right place - move later */
 int specialuse_validate(const char *mboxname, const char *userid,
                         const char *src, struct buf *dest, int allow_dups);
+
+int annotatemore_upgrade(void);
 
 #endif /* ANNOTATE_H */

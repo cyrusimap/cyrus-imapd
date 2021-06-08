@@ -216,7 +216,7 @@ struct annotate_db
 {
     annotate_db_t *next;
     int refcount;
-    char *mboxname;
+    char *mboxid;
     char *filename;
     struct db *db;
     struct txn *txn;
@@ -621,13 +621,13 @@ static int annotate_dbname_mailbox(struct mailbox *mailbox, char **fnamep)
 }
 
 
-static int annotate_dbname(const char *mboxname, char **fnamep)
+static int annotate_dbname(const char *mboxid, char **fnamep)
 {
     int r = 0;
     mbentry_t *mbentry = NULL;
 
-    if (mboxname) {
-        r = mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (mboxid) {
+        r = mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL);
         if (r) goto out;
     }
 
@@ -638,7 +638,7 @@ out:
     return r;
 }
 
-static int _annotate_getdb(const char *mboxname,
+static int _annotate_getdb(const char *mboxid,
                            unsigned int uid,
                            int dbflags,
                            annotate_db_t **dbp)
@@ -651,18 +651,18 @@ static int _annotate_getdb(const char *mboxname,
     *dbp = NULL;
 
     /*
-     * The incoming (mboxname,uid) tuple tells us which scope we
+     * The incoming (mboxid,uid) tuple tells us which scope we
      * need a database for.  Translate into the mboxname used to
      * key annotate_db_t's, which is slightly different: message
      * scope goes into a per-mailbox db, others in the global db.
      */
-    if (!strcmpsafe(mboxname, NULL) /*server scope*/ ||
+    if (!strcmpsafe(mboxid, NULL) /*server scope*/ ||
         !uid /* mailbox scope*/)
-        mboxname = NULL;
+        mboxid = NULL;
 
     /* try to find an existing db for the mbox */
     for (d = all_dbs_head ; d ; prev = d, d = d->next) {
-        if (!strcmpsafe(mboxname, d->mboxname)) {
+        if (!strcmpsafe(mboxid, d->mboxid)) {
             /* found it, bump the refcount */
             d->refcount++;
             *dbp = d;
@@ -681,7 +681,7 @@ static int _annotate_getdb(const char *mboxname,
     }
     /* not found, open/create a new one */
 
-    r = annotate_dbname(mboxname, &fname);
+    r = annotate_dbname(mboxid, &fname);
     if (r)
         goto error;
 #if DEBUG
@@ -700,7 +700,7 @@ static int _annotate_getdb(const char *mboxname,
     /* record all the above */
     d = xzmalloc(sizeof(*d));
     d->refcount = 1;
-    d->mboxname = xstrdupnull(mboxname);
+    d->mboxid = xstrdupnull(mboxid);
     d->filename = fname;
     d->db = db;
 
@@ -715,14 +715,14 @@ error:
     return r;
 }
 
-HIDDEN int annotate_getdb(const char *mboxname, annotate_db_t **dbp)
+HIDDEN int annotate_getdb(const char *mboxid, annotate_db_t **dbp)
 {
-    if (!mboxname || !*mboxname) {
-        syslog(LOG_ERR, "IOERROR: annotate_getdb called with no mboxname");
+    if (!mboxid || !*mboxid) {
+        syslog(LOG_ERR, "IOERROR: annotate_getdb called with no mboxid");
         return IMAP_INTERNAL;   /* we don't return the global db */
     }
     /* synthetic UID '1' forces per-mailbox mode */
-    return _annotate_getdb(mboxname, 1, CYRUSDB_CREATE, dbp);
+    return _annotate_getdb(mboxid, 1, CYRUSDB_CREATE, dbp);
 }
 
 static void annotate_closedb(annotate_db_t *d)
@@ -747,7 +747,7 @@ static void annotate_closedb(annotate_db_t *d)
                d->filename, cyrusdb_strerror(r));
 
     free(d->filename);
-    free(d->mboxname);
+    free(d->mboxid);
     memset(d, 0, sizeof(*d));   /* JIC */
     free(d);
 }
@@ -878,7 +878,10 @@ EXPORTED void annotate_done(void)
     annotate_initialized = 0;
 }
 
+#define OWNER_USERID_TOKEN  "[.OwNeR.]"
+
 static int make_key(const char *mboxname,
+                    const char *mboxid,
                     unsigned int uid,
                     const char *entry,
                     const char *userid,
@@ -887,7 +890,7 @@ static int make_key(const char *mboxname,
     int keylen;
 
     if (!uid) {
-        strlcpy(key, mboxname, keysize);
+        strlcpy(key, mboxid, keysize);
     }
     else if (uid == ANNOTATE_ANY_UID) {
         strlcpy(key, "*", keysize);
@@ -900,6 +903,11 @@ static int make_key(const char *mboxname,
     keylen += strlen(entry);
     /* if we don't have a userid, we're doing a foreach() */
     if (userid) {
+        if (userid[0] && mboxname &&
+            mboxname_userownsmailbox(userid, mboxname)) {
+            /* replace userid of owner with a fixed token */
+            userid = OWNER_USERID_TOKEN;
+        }
         keylen++;
         strlcpy(key+keylen, userid, keysize-keylen);
         keylen += strlen(userid) + 1;
@@ -910,7 +918,7 @@ static int make_key(const char *mboxname,
 
 static int split_key(const annotate_db_t *d,
                      const char *key, int keysize,
-                     const char **mboxnamep,
+                     const char **mboxidp,
                      unsigned int *uidp,
                      const char **entryp,
                      const char **useridp)
@@ -931,17 +939,17 @@ static int split_key(const annotate_db_t *d,
      * not handle embedded NULs.
      */
 
-    if (d->mboxname) {
-        *mboxnamep = d->mboxname;
+    if (d->mboxid) {
+        *mboxidp = d->mboxid;
         *uidp = 0;
         while (*p && p < end) *uidp = (10 * (*uidp)) + (*p++ - '0');
         if (p < end) p++;
         else return IMAP_ANNOTATION_BADENTRY;
     }
     else {
-        /* global db for mailnbox & server scope annotations */
+        /* global db for mailbox & server scope annotations */
         *uidp = 0;
-        *mboxnamep = p;
+        *mboxidp = p;
         while (*p && p < end) p++;
         if (p < end) p++;
         else return IMAP_ANNOTATION_BADENTRY;
@@ -960,18 +968,18 @@ static int split_key(const annotate_db_t *d,
 static const char *key_as_string(const annotate_db_t *d,
                                  const char *key, int keylen)
 {
-    const char *mboxname, *entry, *userid;
+    const char *mboxid, *entry, *userid;
     unsigned int uid;
     int r;
     static struct buf buf = BUF_INITIALIZER;
 
     buf_reset(&buf);
-    r = split_key(d, key, keylen, &mboxname, &uid, &entry, &userid);
+    r = split_key(d, key, keylen, &mboxid, &uid, &entry, &userid);
     if (r)
         buf_appendcstr(&buf, "invalid");
     else
-        buf_printf(&buf, "{ mboxname=\"%s\" uid=%u entry=\"%s\" userid=\"%s\" }",
-                   mboxname, uid, entry, userid);
+        buf_printf(&buf, "{ mboxid=\"%s\" uid=%u entry=\"%s\" userid=\"%s\" }",
+                   mboxid, uid, entry, userid);
     return buf_cstring(&buf);
 }
 #endif
@@ -1034,7 +1042,8 @@ static int split_attribs(const char *data, int datalen,
 }
 
 struct find_rock {
-    struct glob *mglob;
+    const char *mboxname;
+    const char *entry;
     struct glob *eglob;
     unsigned int uid;
     modseq_t since_modseq;
@@ -1049,11 +1058,11 @@ static int find_p(void *rock, const char *key, size_t keylen,
                 size_t datalen __attribute__((unused)))
 {
     struct find_rock *frock = (struct find_rock *) rock;
-    const char *mboxname, *entry, *userid;
+    const char *mboxid, *entry, *userid;
     unsigned int uid;
     int r;
 
-    r = split_key(frock->d, key, keylen, &mboxname,
+    r = split_key(frock->d, key, keylen, &mboxid,
                   &uid, &entry, &userid);
     if (r < 0)
         return 0;
@@ -1065,8 +1074,6 @@ static int find_p(void *rock, const char *key, size_t keylen,
         frock->uid != ANNOTATE_ANY_UID &&
         frock->uid != uid)
         return 0;
-    if (!GLOB_MATCH(frock->mglob, mboxname))
-        return 0;
     if (!GLOB_MATCH(frock->eglob, entry))
         return 0;
     return 1;
@@ -1076,7 +1083,7 @@ static int find_cb(void *rock, const char *key, size_t keylen,
                    const char *data, size_t datalen)
 {
     struct find_rock *frock = (struct find_rock *) rock;
-    const char *mboxname, *entry, *userid;
+    const char *mboxid, *entry, *userid;
     unsigned int uid;
     char newkey[MAX_MAILBOX_PATH+1];
     size_t newkeylen;
@@ -1086,16 +1093,17 @@ static int find_cb(void *rock, const char *key, size_t keylen,
 
     assert(keylen < MAX_MAILBOX_PATH);
 
-    r = split_key(frock->d, key, keylen, &mboxname,
+    r = split_key(frock->d, key, keylen, &mboxid,
                   &uid, &entry, &userid);
     if (r) {
         syslog(LOG_ERR, "find_cb: can't split bogus key %*.s", (int)keylen, key);
         return r;
     }
 
-    newkeylen = make_key(mboxname, uid, entry, userid, newkey, sizeof(newkey));
+    newkeylen = make_key(NULL, mboxid, uid, entry, userid, newkey, sizeof(newkey));
     if (keylen != newkeylen || strncmp(newkey, key, keylen)) {
-        syslog(LOG_ERR, "find_cb: bogus key %s %d %s %s (%d %d)", mboxname, uid, entry, userid, (int)keylen, (int)newkeylen);
+        syslog(LOG_ERR, "find_cb: bogus key %s %d %s %s (%d %d)",
+               mboxid, uid, entry, userid, (int)keylen, (int)newkeylen);
     }
 
     r = split_attribs(data, datalen, &value, &mdata);
@@ -1127,10 +1135,51 @@ static int find_cb(void *rock, const char *key, size_t keylen,
         return 0;
     }
 
-    if (!r) r = frock->proc(mboxname, uid, entry, userid, &value, &mdata,
-                            frock->rock);
+    if (!r) {
+        const char *mboxname = frock->mboxname;
+        char *owner = NULL;
+
+        if (!strcmp(userid, OWNER_USERID_TOKEN)) {
+            /* construct actual userid from mboxname */
+            userid = owner = mboxname_to_userid(mboxname);
+        }
+
+        r = frock->proc(mboxname, uid, entry, userid, &value, &mdata,
+                        frock->rock);
+        free(owner);
+    }
+
     buf_free(&value);
     return r;
+}
+
+static int _findall(struct findall_data *data, void *rock)
+{
+    struct find_rock *frock = (struct find_rock *) rock;
+    const char *mboxname = "", *mboxid = "";
+    char key[MAX_MAILBOX_PATH+1], *p;
+    size_t keylen;
+
+    if (!data || !data->is_exactmatch) return 0;
+
+    if (data->mbentry) {
+        mboxname = data->mbentry->name;
+        mboxid = data->mbentry->uniqueid;
+    }
+
+    /* Find fixed-string pattern prefix */
+    keylen = make_key(mboxname, mboxid, frock->uid,
+                      frock->entry, NULL, key, sizeof(key));
+
+    for (p = key; keylen; p++, keylen--) {
+        if (*p == '*' || *p == '%') break;
+    }
+    keylen = p - key;
+
+    frock->mboxname = mboxname;
+
+    return cyrusdb_foreach(frock->d->db, key, keylen,
+                           &find_p, &find_cb, frock, tid(frock->d));
 }
 
 EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
@@ -1141,43 +1190,51 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
                          void *rock,
                          int flags)
 {
-    char key[MAX_MAILBOX_PATH+1], *p;
-    size_t keylen;
     int r;
     struct find_rock frock;
+    mbentry_t *mbentry = NULL;
+    const char *mboxid = "";
 
     init_internal();
 
     assert(mboxname);
     assert(entry);
-    frock.mglob = glob_init(mboxname, '.');
+    frock.mboxname = mboxname;
+    frock.entry = entry;
     frock.eglob = glob_init(entry, '/');
+    frock.d = NULL;
     frock.uid = uid;
     frock.proc = proc;
     frock.rock = rock;
     frock.since_modseq = since_modseq;
     frock.flags = flags;
-    r = _annotate_getdb(mboxname, uid, 0, &frock.d);
+
+    if (*mboxname) {
+        r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
+        if (!r) mboxid = mbentry->uniqueid;
+    }
+
+    r = _annotate_getdb(mboxid, uid, 0, &frock.d);
     if (r) {
         if (r == CYRUSDB_NOTFOUND)
             r = 0;
         goto out;
     }
 
-    /* Find fixed-string pattern prefix */
-    keylen = make_key(mboxname, uid,
-                      entry, NULL, key, sizeof(key));
+    if (mbentry || !*mboxname) {
+        /* Single mailbox (or server entries) */
+        struct findall_data data = { .mbentry = mbentry, .is_exactmatch = 1 };
 
-    for (p = key; keylen; p++, keylen--) {
-        if (*p == '*' || *p == '%') break;
+        r = _findall(&data, &frock);
     }
-    keylen = p - key;
-
-    r = cyrusdb_foreach(frock.d->db, key, keylen, &find_p, &find_cb,
-                        &frock, tid(frock.d));
+    else {
+        /* Mailbox pattern */
+        r = mboxlist_findall(NULL, *mboxname ? mboxname : "*",
+                             1, NULL, NULL, &_findall, &frock);
+    }
 
 out:
-    glob_free(&frock.mglob);
+    mboxlist_entry_free(&mbentry);
     glob_free(&frock.eglob);
     annotate_putdb(&frock.d);
 
@@ -1379,7 +1436,7 @@ static int annotate_state_set_scope(annotate_state_t *state,
     state->mailbox = mailbox;
     state->uid = uid;
 
-    r = _annotate_getdb(mailbox ? mailbox->name : NULL, uid,
+    r = _annotate_getdb(mailbox ? mailbox->uniqueid : NULL, uid,
                         CYRUSDB_CREATE, &state->d);
 
 out:
@@ -2713,20 +2770,9 @@ out:
 
 /**************************  Annotation Storing  *****************************/
 
-EXPORTED int annotatemore_lookup(const char *mboxname, const char *entry,
-                                 const char *userid, struct buf *value)
-{
-    return annotatemore_msg_lookup(mboxname, /*uid*/0, entry, userid, value);
-}
-
-EXPORTED int annotatemore_lookupmask(const char *mboxname, const char *entry,
-                                     const char *userid, struct buf *value)
-{
-    return annotatemore_msg_lookupmask(mboxname, /*uid*/0, entry, userid, value);
-}
-
-EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
-                                     const char *userid, struct buf *value)
+static int _annotate_lookup(const char *mboxname, const char *mboxid,
+                            uint32_t uid, const char *entry,
+                            const char *userid, struct buf *value)
 {
     char key[MAX_MAILBOX_PATH+1];
     size_t keylen, datalen;
@@ -2734,14 +2780,30 @@ EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const c
     const char *data;
     annotate_db_t *d = NULL;
     struct annotate_metadata mdata;
+    mbentry_t *mbentry = NULL;
 
     init_internal();
 
-    r = _annotate_getdb(mboxname, uid, 0, &d);
-    if (r)
-        return (r == CYRUSDB_NOTFOUND ? 0 : r);
+    if (!mboxid) {
+        if (mboxname && *mboxname) {
+            r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
+            if (r || !mbentry->uniqueid ||(mbentry->mbtype & MBTYPE_DELETED)) {
+                buf_free(value);
+                if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+                goto done;
+            }
+        }
 
-    keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
+        mboxid = mbentry ? mbentry->uniqueid : "";
+    }
+
+    r = _annotate_getdb(uid ? mboxid : NULL, uid, 0, &d);
+    if (r) {
+        if (r == CYRUSDB_NOTFOUND) r = 0;
+        goto done;
+    }
+
+    keylen = make_key(mboxname, mboxid, uid, entry, userid, key, sizeof(key));
 
     do {
         r = cyrusdb_fetch(d->db, key, keylen, &data, &datalen, tid(d));
@@ -2761,12 +2823,15 @@ EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const c
     }
     if (r == CYRUSDB_NOTFOUND) r = 0;
 
+  done:
+    mboxlist_entry_free(&mbentry);
     annotate_putdb(&d);
     return r;
 }
 
-EXPORTED int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, const char *entry,
-                                         const char *userid, struct buf *value)
+EXPORTED int _annotate_lookupmask(const char *mboxname, const char *mboxid,
+                                  uint32_t uid, const char *entry,
+                                  const char *userid, struct buf *value)
 {
     int r = 0;
     value->len = 0; /* just in case! */
@@ -2775,14 +2840,77 @@ EXPORTED int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, con
 
     /* only if the user isn't the owner, we look for a masking value */
     if (!mboxname_userownsmailbox(userid, mboxname))
-        r = annotatemore_msg_lookup(mboxname, uid, entry, userid, value);
+        r = _annotate_lookup(mboxname, mboxid, uid, entry, userid, value);
     /* and if there isn't one, we fall through to the shared value */
     if (value->len == 0)
-        r = annotatemore_msg_lookup(mboxname, uid, entry, "", value);
+        r = _annotate_lookup(mboxname, mboxid, uid, entry, "", value);
     /* and because of Bron's use of NULL rather than "" at FastMail... */
     if (value->len == 0)
-        r = annotatemore_msg_lookup(mboxname, uid, entry, NULL, value);
+        r = _annotate_lookup(mboxname, mboxid, uid, entry, NULL, value);
     return r;
+}
+
+EXPORTED int annotatemore_lookup(const char *mboxname, const char *entry,
+                                 const char *userid, struct buf *value)
+{
+    return _annotate_lookup(mboxname, /*mboxid*/NULL,
+                            /*uid*/0, entry, userid, value);
+}
+
+EXPORTED int annotatemore_lookup_mbe(const mbentry_t *mbentry, const char *entry,
+                                     const char *userid, struct buf *value)
+{
+    return _annotate_lookup(mbentry->name, mbentry->uniqueid,
+                            /*uid*/0, entry, userid, value);
+}
+
+EXPORTED int annotatemore_lookup_mbox(const struct mailbox *mailbox,
+                                      const char *entry,
+                                      const char *userid, struct buf *value)
+{
+    return _annotate_lookup(mailbox->name, mailbox->uniqueid,
+                            /*uid*/0, entry, userid, value);
+}
+
+EXPORTED int annotatemore_lookupmask(const char *mboxname, const char *entry,
+                                     const char *userid, struct buf *value)
+{
+    return _annotate_lookupmask(mboxname, /*mboxid*/NULL,
+                                /*uid*/0, entry, userid, value);
+}
+
+EXPORTED int annotatemore_lookupmask_mbe(const mbentry_t *mbentry,
+                                         const char *entry,
+                                         const char *userid, struct buf *value)
+{
+    return _annotate_lookupmask(mbentry->name, mbentry->uniqueid,
+                                /*uid*/0, entry, userid, value);
+}
+
+EXPORTED int annotatemore_lookupmask_mbox(const struct mailbox *mailbox,
+                                          const char *entry,
+                                          const char *userid, struct buf *value)
+{
+    return _annotate_lookupmask(mailbox->name, mailbox->uniqueid,
+                                /*uid*/0, entry, userid, value);
+}
+
+EXPORTED int annotatemore_msg_lookup(const struct mailbox *mailbox,
+                                     uint32_t uid, const char *entry,
+                                     const char *userid, struct buf *value)
+{
+    return _annotate_lookup(mailbox ? mailbox->name : "",
+                            mailbox ? mailbox->uniqueid : NULL,
+                            uid, entry, userid, value);
+}
+
+EXPORTED int annotatemore_msg_lookupmask(const struct mailbox *mailbox,
+                                         uint32_t uid, const char *entry,
+                                         const char *userid, struct buf *value)
+{
+    return _annotate_lookupmask(mailbox ? mailbox->name : "",
+                                mailbox ? mailbox->uniqueid : NULL,
+                                uid, entry, userid, value);
 }
 
 static int read_old_value(annotate_db_t *d,
@@ -2867,16 +2995,17 @@ static int write_entry(struct mailbox *mailbox,
     annotate_db_t *d = NULL;
     struct buf oldval = BUF_INITIALIZER;
     const char *mboxname = mailbox ? mailbox->name : "";
+    const char *mboxid = mailbox ? mailbox->uniqueid : "";
     modseq_t modseq = mdata ? mdata->modseq : 0;
 
-    r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(mboxid, uid, CYRUSDB_CREATE, &d);
     if (r)
         return r;
 
     /* must be in a transaction to modify the db */
     annotate_begin(d);
 
-    keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
+    keylen = make_key(mboxname, mboxid, uid, entry, userid, key, sizeof(key));
 
     struct annotate_metadata oldmdata;
     r = read_old_value(d, key, keylen, &oldval, &oldmdata);
@@ -2965,16 +3094,25 @@ EXPORTED int annotatemore_rawwrite(const char *mboxname, const char *entry,
     int keylen, r;
     annotate_db_t *d = NULL;
     uint32_t uid = 0;
+    mbentry_t *mbentry = NULL;
+    const char *mboxid = "";
 
     init_internal();
 
-    r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(NULL, uid, CYRUSDB_CREATE, &d);
     if (r) goto done;
+
+    if (mboxname && *mboxname) {
+        r = mboxlist_lookup(mboxname, &mbentry, NULL);
+        if (r) goto done;
+
+        mboxid = mbentry->uniqueid;
+    }
 
     /* must be in a transaction to modify the db */
     annotate_begin(d);
 
-    keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
+    keylen = make_key(mboxname, mboxid, uid, entry, userid, key, sizeof(key));
 
     if (value->s == NULL) {
         do {
@@ -2996,6 +3134,7 @@ EXPORTED int annotatemore_rawwrite(const char *mboxname, const char *entry,
     r = annotate_commit(d);
 
 done:
+    mboxlist_entry_free(&mbentry);
     annotate_putdb(&d);
 
     return r;
@@ -3010,7 +3149,7 @@ EXPORTED int annotatemore_write(const char *mboxname, const char *entry,
 
     init_internal();
 
-    r = _annotate_getdb(mboxname, /*uid*/0, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(NULL, /*uid*/0, CYRUSDB_CREATE, &d);
     if (r) goto done;
 
     if (mboxname) {
@@ -3556,7 +3695,7 @@ static int find_desc_store(annotate_state_t *state,
     }
 
     /* check for DAV annotations */
-    if (state->mailbox && (state->mailbox->mbtype & MBTYPES_DAV) &&
+    if (state->mailbox && mbtypes_dav(state->mailbox->mbtype) &&
         !strncmp(name, DAV_ANNOT_NS, strlen(DAV_ANNOT_NS))) {
         *descp = db_entry;
         return 0;
@@ -3760,7 +3899,7 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
 }
 
 EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
-                            struct mailbox *newmailbox)
+                                     struct mailbox *newmailbox)
 {
     /* rename one mailbox */
     char *olduserid = mboxname_to_userid(oldmailbox->name);
@@ -3781,10 +3920,25 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
 
     annotate_begin(d);
 
-    /* copy here - delete will dispose of old records later */
-    r = _annotate_rewrite(oldmailbox, 0, olduserid,
-                          newmailbox, 0, newuserid,
-                         /*copy*/1);
+    if (newmailbox->uniqueid &&
+        strcmp(oldmailbox->uniqueid, newmailbox->uniqueid)) {
+        /* copy here - delete will dispose of old records later
+
+           XXX  This code appears to only be necessary to allow
+           the annotate:rename unit test to pass.
+           In fact, that test may be obsolete for mbpath-by-id.
+        */
+        r = _annotate_rewrite(oldmailbox, 0, olduserid,
+                              newmailbox, 0, newuserid,
+                              /*copy*/1);
+    }
+
+    /* delete displayname records only */
+    struct rename_rock rrock = { oldmailbox, .newmailbox = NULL, .copy = 0 };
+
+    r = annotatemore_findall(oldmailbox->name, /*olduid*/0,
+                             IMAP_ANNOT_NS "displayname", /*modseq*/0,
+                             &rename_cb, &rrock, /*flags*/0);
     if (r) goto done;
 
     r = annotate_commit(d);
@@ -3834,28 +3988,41 @@ EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)
     int r = 0;
     char *fname = NULL;
     annotate_db_t *d = NULL;
+    int is_rename = 0;
 
     init_internal();
 
     assert(mailbox);
 
-    /* remove any per-folder annotations from the global db */
-    r = _annotate_getdb(NULL, 0, /*don't create*/0, &d);
-    if (r == CYRUSDB_NOTFOUND) {
-        /* no global database, must not be anything to rename */
-        r = 0;
-        goto out;
+    if (!mboxname_isdeletedmailbox(mailbox->name, NULL)) {
+        mbentry_t *mbentry = NULL;
+
+        r = mboxlist_lookup_by_uniqueid(mailbox->uniqueid, &mbentry, NULL);
+        if (r) goto out;
+
+        is_rename = strcmp(mailbox->name, mbentry->name);
+        mboxlist_entry_free(&mbentry);
     }
-    if (r) goto out;
 
-    annotate_begin(d);
+    if (!is_rename) {
+        /* remove any per-folder annotations from the global db */
+        r = _annotate_getdb(NULL, 0, /*don't create*/0, &d);
+        if (r == CYRUSDB_NOTFOUND) {
+            /* no global database, must not be anything to rename */
+            r = 0;
+            goto out;
+        }
+        if (r) goto out;
 
-    r = _annotate_rewrite(mailbox,
-                          /*olduid*/0, /*olduserid*/NULL,
-                          /*newmailbox*/NULL,
-                          /*newuid*/0, /*newuserid*/NULL,
-                          /*copy*/0);
-    if (r) goto out;
+        annotate_begin(d);
+
+        r = _annotate_rewrite(mailbox,
+                              /*olduid*/0, /*olduserid*/NULL,
+                              /*newmailbox*/NULL,
+                              /*newuid*/0, /*newuserid*/NULL,
+                              /*copy*/0);
+        if (r && r != IMAP_MAILBOX_NONEXISTENT) goto out;
+    }
 
     /* remove the entire per-folder database */
     r = annotate_dbname_mailbox(mailbox, &fname);
@@ -3883,7 +4050,7 @@ EXPORTED int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 
     init_internal();
 
-    r = _annotate_getdb(newmailbox->name, newuid, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(newmailbox->uniqueid, newuid, CYRUSDB_CREATE, &d);
     if (r) return r;
 
     annotate_begin(d);
@@ -3922,7 +4089,7 @@ HIDDEN int annotate_msg_cleanup(struct mailbox *mailbox, unsigned int uid)
 
     assert(uid);
 
-    r = _annotate_getdb(mailbox->name, uid, 0, &d);
+    r = _annotate_getdb(mailbox->uniqueid, uid, 0, &d);
     if (r) return r;
 
     /* must be in a transaction to modify the db */
@@ -3933,7 +4100,8 @@ HIDDEN int annotate_msg_cleanup(struct mailbox *mailbox, unsigned int uid)
     assert(mailbox->annot_state != NULL);
     assert(mailbox->annot_state->d == d);
 
-    keylen = make_key(mailbox->name, uid, "", NULL, key, sizeof(key));
+    keylen = make_key(mailbox->name, mailbox->uniqueid,
+                      uid, "", NULL, key, sizeof(key));
 
     r = cyrusdb_foreach(d->db, key, keylen, NULL, &cleanup_cb, d, tid(d));
 
@@ -4260,4 +4428,122 @@ bad:
 #endif
 
     fclose(f);
+}
+
+static int _check_rec_cb(void *rock,
+                         const char *key, size_t keylen,
+                         const char *data __attribute__((unused)),
+                         size_t datalen __attribute__((unused)))
+{
+    int *do_upgrade = (int *) rock;
+    annotate_db_t db = { NULL, 0, NULL, NULL, NULL, NULL, 0 };
+    const char *mboxid, *entry, *userid;
+    unsigned uid;
+
+    split_key(&db, key, keylen, &mboxid, &uid, &entry, &userid);
+    *do_upgrade = (mboxlist_lookup_by_uniqueid(mboxid, NULL, NULL) != 0);
+
+    return CYRUSDB_DONE;
+}
+
+static int _upgrade_cb(void *rock,
+                       const char *key, size_t keylen,
+                       const char *data, size_t datalen)
+{
+    annotate_db_t *db = (annotate_db_t *) rock;
+    mbentry_t *mbentry = NULL;
+    const char *mboxname, *entry, *userid;
+    char newkey[MAX_MAILBOX_PATH+1];
+    unsigned uid;
+    int r;
+
+    split_key(db, key, keylen, &mboxname, &uid, &entry, &userid);
+
+    r = mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (r) return 0;
+
+    keylen = make_key(mboxname, mbentry->uniqueid, uid, entry, userid,
+                      newkey, sizeof(newkey));
+    mboxlist_entry_free(&mbentry);
+
+    do {
+        r = cyrusdb_store(db->db, newkey, keylen, data, datalen, tid(db));
+    } while (r == CYRUSDB_AGAIN);
+
+    return 0;
+}
+
+EXPORTED int annotatemore_upgrade(void)
+{
+    annotate_db_t *db;
+    int r, r2 = 0, do_upgrade = 0;
+    struct buf buf = BUF_INITIALIZER;
+    struct db *backup = NULL;
+    char *fname;
+
+    /* check if we need to upgrade */
+    annotatemore_open();
+    r = _annotate_getdb(NULL, 0, 0, &db);
+    if (r) goto done;
+
+    r = cyrusdb_foreach(db->db, "", 0, NULL, _check_rec_cb, &do_upgrade, NULL);
+    annotatemore_close();
+
+    if (r != CYRUSDB_DONE) return r;
+    else if (!do_upgrade) return 0;
+
+    /* create db file names */
+    annotate_dbname_mbentry(NULL, &fname);
+    buf_setcstr(&buf, fname);
+    buf_appendcstr(&buf, ".OLD");
+
+    /* rename db file to backup */
+    r = rename(fname, buf_cstring(&buf));
+    free(fname);
+    if (r) goto done;
+    
+    /* open backup db file */
+    r = cyrusdb_open(DB, buf_cstring(&buf), 0, &backup);
+
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", buf_cstring(&buf),
+               cyrusdb_strerror(r));
+        fatal("can't open annotations file", EX_TEMPFAIL);
+    }
+
+    /* open a new db file */
+    annotatemore_open();
+    r = _annotate_getdb(NULL, 0, CYRUSDB_CREATE, &db);
+    if (r) goto done;
+
+    /* perform upgrade from backup to new db */
+    annotate_begin(db);
+    r = cyrusdb_foreach(backup, "", 0, NULL, _upgrade_cb, db, NULL);
+
+    r2 = cyrusdb_close(backup);
+    if (r2) {
+        syslog(LOG_ERR, "DBERROR: error closing %s: %s", buf_cstring(&buf),
+               cyrusdb_strerror(r2));
+    }
+
+    /* complete txn on new db */
+    if (db->in_txn) {
+        if (r) {
+            annotate_abort(db);
+        } else {
+            r2 = annotate_commit(db);
+        }
+
+        if (r2) {
+            syslog(LOG_ERR, "DBERROR: error %s txn in annotations_upgrade: %s",
+                   r ? "aborting" : "committing", cyrusdb_strerror(r2));
+        }
+    }
+
+    annotatemore_close();
+
+  done:
+    buf_free(&buf);
+
+    return r;
 }

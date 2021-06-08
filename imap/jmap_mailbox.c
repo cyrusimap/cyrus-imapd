@@ -218,7 +218,7 @@ struct shared_mboxes *_shared_mboxes_new(jmap_req_t *req, int flags)
         free(sm);
         sm = NULL;
     }
-    strarray_sort(&sm->mboxes, cmpstringp_mbox);
+    strarray_sort(&sm->mboxes, cmpstringp_raw);
     return sm;
 }
 
@@ -244,7 +244,7 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
     int i = 0;
     for (i = 0; i < sm->mboxes.count; i++) {
         const char *sharedname = strarray_nth(&sm->mboxes, i);
-        int cmp = bsearch_compare_mbox(sharedname, name);
+        int cmp = strcmp(sharedname, name);
         if (!cmp)
             return _SHAREDMBOX_SHARED;
 
@@ -294,7 +294,7 @@ static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    annotatemore_lookup(mbentry->name, "/specialuse", req->accountid, &attrib);
+    annotatemore_lookup_mbe(mbentry, "/specialuse", req->accountid, &attrib);
 
     if (attrib.len) {
         strarray_t *uses = strarray_split(buf_cstring(&attrib), " ", STRARRAY_TRIM);
@@ -521,12 +521,14 @@ static int _findparent(const char *mboxname, mbentry_t **mbentryp)
 
 static int _mbox_get_readcounts(jmap_req_t *req,
                                 mbname_t *mbname,
+                                const mbentry_t *mbentry,
                                 hash_table *props,
                                 json_t *obj)
 {
     conv_status_t convstatus = CONV_STATUS_INIT;
     int r = conversation_getstatus(req->cstate,
-                 mbname_intname(mbname), &convstatus);
+                                   CONV_FOLDER_KEY_MBE(req->cstate, mbentry),
+                                   &convstatus);
     if (r) {
         syslog(LOG_ERR, "conversation_getstatus(%s): %s",
                 mbname_intname(mbname), error_message(r));
@@ -661,7 +663,7 @@ static json_t *_mbox_get(jmap_req_t *req,
     if (share_type == _SHAREDMBOX_SHARED && !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
         if (jmap_wantprop(props, "totalThreads") || jmap_wantprop(props, "unreadThreads") ||
             jmap_wantprop(props, "totalEmails") || jmap_wantprop(props, "unreadEmails")) {
-            r = _mbox_get_readcounts(req, mbname, props, obj);
+            r = _mbox_get_readcounts(req, mbname, mbentry, props, obj);
             if (r) goto done;
         }
         if (jmap_wantprop(props, "sortOrder")) {
@@ -757,11 +759,8 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     json_t *list = (json_t *) rock->get->list, *obj;
 
     /* Don't list special-purpose mailboxes. */
-    if ((mbentry->mbtype & MBTYPE_DELETED) ||
-        (mbentry->mbtype & MBTYPE_MOVING) ||
-        (mbentry->mbtype & MBTYPE_REMOTE) ||  /* XXX ?*/
-        (mbentry->mbtype & MBTYPE_RESERVE) || /* XXX ?*/
-        (mbentry->mbtype & MBTYPES_NONIMAP)) {
+    if (mbtypes_unavailable(mbentry->mbtype) ||
+        mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
         return 0;
     }
 
@@ -1293,7 +1292,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 {
     mboxquery_t *q = rock;
 
-    if (mbentry->mbtype & MBTYPES_NONIMAP)
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL)
         return 0;
 
     if ((mbentry->mbtype & MBTYPE_DELETED) && !q->include_tombstones)
@@ -2420,7 +2419,7 @@ static int _mbox_update_validate_serverset(jmap_req_t *req,
 
         mbname_t *mbname = mbname_from_intname(mbentry->name);
         json_t *tmp = json_object();
-        int r = _mbox_get_readcounts(req, mbname, NULL, tmp);
+        int r = _mbox_get_readcounts(req, mbname, mbentry, NULL, tmp);
         if (!r) {
             json_t *jval = json_object_get(args->jargs, "totalEmails");
             if (jval && !json_equal(jval, json_object_get(tmp, "totalEmails"))) {
@@ -2560,7 +2559,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         }
         if (!result->skipped) {
             struct buf val = BUF_INITIALIZER;
-            annotatemore_lookup(mbentry->name, "/specialuse", req->accountid, &val);
+            annotatemore_lookup_mbe(mbentry, "/specialuse", req->accountid, &val);
             if (buf_len(&val)) {
                 result->skipped = 1;
             }
@@ -2819,7 +2818,7 @@ static int in_otherfolder_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->version < 1) {
         syslog(LOG_ERR, "%s:%s: outdated guid record in mailbox %s",
-                __FILE__, __func__, rec->mboxname);
+                __FILE__, __func__, rec->mailbox);
         return IMAP_INTERNAL;
     }
 
@@ -2863,7 +2862,10 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
     }
 
     /* Find all messages that only exist in source mailbox */
-    int src_foldernum = conversation_folder_number(req->cstate, src_mbentry->name, 0);
+    int src_foldernum =
+        conversation_folder_number(req->cstate,
+                                   CONV_FOLDER_KEY_MBE(req->cstate, src_mbentry),
+                                   0);
     if (src_foldernum < 0) {
         // if the folder doesn't exist yet, it means there have never been any emails created in it!
         goto done;
@@ -2975,7 +2977,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
     /* Skip role updates in first iteration */
     if (mode == _MBOXSET_SKIP) {
         struct buf val = BUF_INITIALIZER;
-        annotatemore_lookup(mbentry->name, "/specialuse", req->accountid, &val);
+        annotatemore_lookup_mbe(mbentry, "/specialuse", req->accountid, &val);
         if (buf_len(&val)) {
             result->skipped = 1;
         }
@@ -3373,9 +3375,8 @@ struct mboxset_state {
 static int _mboxset_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
 {
     struct mboxset_state *state = rock;
-    // annoyingly, MBTYPE_EMAIL isn't a flag of its own, it's just the absence of other flags, so we can't
-    // match that one with '&'.
-    if (mbentry->mbtype == MBTYPE_EMAIL || (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
         hash_insert(mbentry->name, xstrdup(mbentry->uniqueid), state->id_by_imapname);
     }
     return 0;
@@ -4133,7 +4134,7 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
     jmap_req_t *req = data->req;
 
     /* Ignore anything but regular mailboxes */
-    if (mbentry->mbtype & ~(MBTYPE_DELETED | MBTYPE_INTERMEDIATE)) {
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
         return 0;
     }
 

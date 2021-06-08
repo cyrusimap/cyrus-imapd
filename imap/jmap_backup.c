@@ -269,7 +269,7 @@ static json_t *jmap_restore_reply(struct jmap_restore *restore)
 struct restore_rock {
     jmap_req_t *req;
     struct jmap_restore *jrestore;
-    int mbtype;
+    uint32_t mbtype;
     modseq_t deletedmodseq;
     char *(*resource_name_cb)(message_t *, void *);
     int (*restore_cb)(message_t *, message_t *, jmap_req_t *, void *, int);
@@ -348,7 +348,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     syslog(log_level, "restore_collection_cb: processing '%s'  (type = 0x%03x)",
            mbentry->name, mbentry->mbtype);
 
-    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) {
+    if (mbtype_isa(mbentry->mbtype) != rrock->mbtype) {
         syslog(log_level, "skipping '%s': not type 0x%03x",
                mbentry->name, rrock->mbtype);
 
@@ -634,12 +634,14 @@ static char *contact_resource_name(message_t *msg, void *rock)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
     struct contact_rock *crock = (struct contact_rock *) rock;
     struct carddav_data *cdata = NULL;
     char *resource = NULL;
 
     /* Get resource from CardDAV DB, if possible */
-    int r = carddav_lookup_imapuid(crock->carddavdb, mailbox->name,
+    int r = carddav_lookup_imapuid(crock->carddavdb, &mbentry,
                                    record->uid, &cdata, /*tombstones*/ 1);
     if (!r) {
         resource = xstrdup(cdata->dav.resource);
@@ -693,6 +695,8 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
             /* Add this card to the group vCard of recreated contacts */
             struct mailbox *mailbox = msg_mailbox(recreatemsg);
             const struct index_record *record = msg_record(recreatemsg);
+            const mbentry_t mbentry = { .name = mailbox->name,
+                                        .uniqueid = mailbox->uniqueid };
             struct contact_rock *crock = (struct contact_rock *) rock;
             struct vparse_card *vcard = record_to_vcard(mailbox, record);
 
@@ -712,7 +716,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
                     /* Look for existing group vCard with same date prefix */
                     struct group_rock grock = { buf_cstring(&crock->buf), 0 };
                     enum carddav_sort sort = CARD_SORT_FULLNAME | CARD_SORT_DESC;
-                    if (carddav_foreach_sort(crock->carddavdb, mailbox->name,
+                    if (carddav_foreach_sort(crock->carddavdb, &mbentry,
                                              &sort, 1, _group_name_cb, &grock)) {
                         buf_printf(&crock->buf, " (%u)", grock.num+1);
                     }
@@ -754,7 +758,7 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     int r;
 
-    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) return 0;
+    if (mbtype_isa(mbentry->mbtype) != rrock->mbtype) return 0;
 
     /* Open mailbox here since we need it later and it gets referenced counted */
     r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
@@ -847,12 +851,14 @@ static char *ical_resource_name(message_t *msg, void *rock)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
     struct calendar_rock *crock = (struct calendar_rock *) rock;
     struct caldav_data *cdata = NULL;
     char *resource = NULL;
 
     /* Get resource from CalDAV DB, if possible */
-    int r = caldav_lookup_imapuid(crock->caldavdb, mailbox->name,
+    int r = caldav_lookup_imapuid(crock->caldavdb, &mbentry,
                                   record->uid, &cdata, /*tombstones*/ 1);
     if (!r) {
         resource = xstrdup(cdata->dav.resource);
@@ -926,10 +932,12 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
     const struct index_record *record = msg_record(recreatemsg);
     const struct index_record *oldrecord =
         destroymsg ? msg_record(destroymsg) : NULL;
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
     struct caldav_data *cdata = NULL;
     int r;
 
-    r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+    r = caldav_lookup_imapuid(caldavdb, &mbentry,
                               oldrecord ? oldrecord->uid : record->uid,
                               &cdata, /*tombstones*/ 1);
     if (r) return r;
@@ -955,10 +963,13 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
 
         if (!r) {
             /* Rewrite updated resource */
+            const mbentry_t mbentry = { .name = mailbox->name,
+                                        .uniqueid = mailbox->uniqueid };
             struct transaction_t txn;
 
             memset(&txn, 0, sizeof(struct transaction_t));
             txn.req_hdrs = spool_new_hdrcache();
+            txn.req_tgt.mbentry = (mbentry_t *) &mbentry;
 
             r = caldav_store_resource(&txn, ical, mailbox,
                                       cdata->dav.resource, record->createdmodseq,
@@ -990,9 +1001,11 @@ static int destroy_ical(message_t *destroymsg, jmap_req_t *req,
     if (!is_replaced) {
         struct mailbox *mailbox = msg_mailbox(destroymsg);
         const struct index_record *record = msg_record(destroymsg);
+        const mbentry_t mbentry = { .name = mailbox->name,
+                                    .uniqueid = mailbox->uniqueid };
         struct caldav_data *cdata = NULL;
 
-        r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+        r = caldav_lookup_imapuid(caldavdb, &mbentry,
                                   record->uid, &cdata, /*tombstones*/ 0);
 
         if (!r && cdata->organizer) {
@@ -1193,7 +1206,7 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
     time_t timestamp = 0;
     int r = 0;
 
-    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) return 0;
+    if (mbtype_isa(mbentry->mbtype) != rrock->mbtype) return 0;
     if (!jmap_hasrights_mbentry(rrock->req, mbentry, JACL_ADDITEMS)) return 0;
 
     if (!strcmp(mbentry->name, crock->inboxname) ||
@@ -1430,7 +1443,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     syslog(log_level, "restore_message_list_cb: processing '%s'  (type = 0x%03x)",
            mbentry->name, mbentry->mbtype);
 
-    if (mbentry->mbtype != MBTYPE_EMAIL) {
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
         syslog(log_level, "skipping '%s': not type EMAIL", mbentry->name);
 
         return 0;

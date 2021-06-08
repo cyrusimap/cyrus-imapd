@@ -880,7 +880,7 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
     // no point copying from archive, spool is on data
     if (rec->internal_flags & FLAG_INTERNAL_ARCHIVED) return 0;
 
-    int r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
+    int r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
     if (r) return 0;
 
     if (!strcmp(rock->partition, mbentry->partition)) {

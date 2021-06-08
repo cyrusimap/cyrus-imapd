@@ -86,6 +86,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -93,8 +94,6 @@
 #ifdef WITH_DAV
 #include "caldav_alarm.h"
 #endif
-
-#define FNAME_SUBSSUFFIX "sub"
 
 #if 0
 static int user_deleteacl(char *name, int matchlen, int category, void* rock)
@@ -139,8 +138,6 @@ static int user_deleteacl(char *name, int matchlen, int category, void* rock)
 EXPORTED const char *user_sieve_path(const char *inuser)
 {
     static char sieve_path[2048];
-    size_t len, size = sizeof(sieve_path);
-    char hash, *domain;
     char *user = xstrdupnull(inuser);
     char *p;
 
@@ -153,25 +150,59 @@ EXPORTED const char *user_sieve_path(const char *inuser)
             *p = '.';
     }
 
-    len = strlcpy(sieve_path, config_getstring(IMAPOPT_SIEVEDIR), size);
+    mbname_t *mbname = mbname_from_userid(user);
+    const char *localpart = mbname_localpart(mbname);
+    int legacy = 0;
 
-    if (config_virtdomains && (domain = strchr(user, '@'))) {
-        char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-        *domain = '\0';  /* split user@domain */
-        len += snprintf(sieve_path + len, size - len, "%s%c/%s",
-                        FNAME_DOMAINDIR, d, domain+1);
-    }
+    if (localpart) {
+        /* user script */
+        char *inboxname = mboxname_user_mbox(user, NULL);
+        mbentry_t *mbentry = NULL;
 
-    if (user && *user) {
-        hash = (char) dir_hash_c(user, config_fulldirhash);
+        int r = mboxlist_lookup(inboxname, &mbentry, NULL);
+        free(inboxname);
 
-        snprintf(sieve_path + len, size - len, "/%c/%s", hash, user);
+        if (r) sieve_path[0] = '\0';
+        else if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+            legacy = 1;
+        }
+        else {
+            mboxname_id_hash(sieve_path, sizeof(sieve_path),
+                             config_getstring(IMAPOPT_SIEVEDIR),
+                             mbentry->uniqueid);
+        }
+        mboxlist_entry_free(&mbentry);
     }
     else {
-        strlcat(sieve_path, "/global", size);
+        /* global script */
+        legacy = 1;
     }
 
+    if (legacy) {
+        const char *domain = mbname_domain(mbname);
+        size_t len, size = sizeof(sieve_path);
+
+        len = strlcpy(sieve_path, config_getstring(IMAPOPT_SIEVEDIR), size);
+
+        if (config_virtdomains && domain) {
+            char d = (char) dir_hash_c(domain, config_fulldirhash);
+            len += snprintf(sieve_path + len, size - len, "%s%c/%s",
+                            FNAME_DOMAINDIR, d, domain);
+        }
+
+        if (localpart) {
+            const char *userid = config_virtdomains ? localpart : user;
+            char c = (char) dir_hash_c(userid, config_fulldirhash);
+            snprintf(sieve_path + len, size - len, "/%c/%s", c, userid);
+        }
+        else {
+            strlcat(sieve_path, "/global", size);
+        }
+    }
+
+    mbname_free(&mbname);
     free(user);
+
     return sieve_path;
 }
 
@@ -263,7 +294,7 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
 
     return 0;
 }
-
+#if 0
 struct rename_rock {
     const char *olduser;
     const char *newuser;
@@ -395,7 +426,7 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser)
 
     return 0;
 }
-
+#endif
 EXPORTED int user_renameacl(const struct namespace *namespace, const char *name,
                             const char *olduser, const char *newuser)
 {
@@ -499,9 +530,62 @@ EXPORTED char *user_hash_meta(const char *userid, const char *suffix)
     return result;
 }
 
-HIDDEN char *user_hash_subs(const char *userid)
+EXPORTED char *user_hash_subs(const char *userid)
 {
     return user_hash_meta(userid, FNAME_SUBSSUFFIX);
+}
+
+EXPORTED char *user_hash_xapian(const char *userid, const char *root)
+{
+    char *inboxname = mboxname_user_mbox(userid, NULL);
+    mbentry_t *mbentry = NULL;
+    mbname_t *mbname = NULL;
+    char *basedir = NULL;
+    int r;
+
+    r = mboxlist_lookup(inboxname, &mbentry, NULL);
+    if (r) goto out;
+
+    mbname = mbname_from_intname(mbentry->name);
+    if (!mbname_userid(mbname)) goto out;
+
+    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+        const char *domain = mbname_domain(mbname);
+        const char *localpart = mbname_localpart(mbname);
+        char c[2], d[2];
+
+        if (domain)
+            basedir = strconcat(root,
+                                FNAME_DOMAINDIR,
+                                dir_hash_b(domain, config_fulldirhash, d),
+                                "/", domain,
+                                "/", dir_hash_b(localpart, config_fulldirhash, c),
+                                FNAME_USERDIR,
+                                localpart,
+                                (char *)NULL);
+        else
+            basedir = strconcat(root,
+                                "/", dir_hash_b(localpart, config_fulldirhash, c),
+                                FNAME_USERDIR,
+                                localpart,
+                                (char *)NULL);
+    }
+    else {
+        char path[MAX_MAILBOX_PATH+1];
+        mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mbentry->uniqueid);
+
+        basedir = strconcat(root,
+                            FNAME_USERDIR,
+                            path,
+                            (char *)NULL);
+    }
+
+ out:
+    mboxlist_entry_free(&mbentry);
+    mbname_free(&mbname);
+    free(inboxname);
+
+    return basedir;
 }
 
 static const char *_namelock_name_from_userid(const char *userid)

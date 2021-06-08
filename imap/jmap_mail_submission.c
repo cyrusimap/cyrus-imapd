@@ -339,7 +339,7 @@ static int ensure_submission_collection(const char *accountid,
 
         int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
             | OPT_POP3_NEW_UIDL | OPT_IMAP_HAS_ALARMS;
-        r = mboxlist_createmailbox_opts(mbentry->name, MBTYPE_SUBMISSION,
+        r = mboxlist_createmailbox_opts(mbentry->name, MBTYPE_JMAPSUBMIT,
                                         NULL, 1 /* admin */, accountid,
                                         httpd_authstate,
                                         options, 0, 0, 0, 0, NULL, NULL);
@@ -1279,7 +1279,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     if (mbox) jmap_closembox(req, &mbox);
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
+    json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     jmap_ok(req, jmap_get_reply(&get));
@@ -1422,7 +1422,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     if (set.if_in_state) {
         /* TODO rewrite state function to use char* not json_t* */
         json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_SUBMISSION)) {
+        if (jmap_cmpstate(req, jstate, MBTYPE_JMAPSUBMIT)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             json_decref(jstate);
             goto done;
@@ -1431,7 +1431,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/0);
+        json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/0);
         set.old_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
@@ -1497,7 +1497,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     // TODO refactor jmap_getstate to return a string, once
     // all code has been migrated to the new JMAP parser.
-    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/1);
+    json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/1);
     set.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -1577,7 +1577,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         mboxlist_entry_free(&mbentry);
         r = 0;
-        changes.new_modseq = jmap_highestmodseq(req, MBTYPE_SUBMISSION);
+        changes.new_modseq = jmap_highestmodseq(req, MBTYPE_JMAPSUBMIT);
         jmap_ok(req, jmap_changes_reply(&changes));
         goto done;
     }
@@ -1640,7 +1640,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     // if we issued a query for changes since 6, max_changes 1 - we'd get back
     // has_more_changes: true, new_modseq 15, and we'd never see UID=4 as having changed.
     changes.new_modseq = changes.has_more_changes ?
-        highest_modseq : jmap_highestmodseq(req, MBTYPE_SUBMISSION);
+        highest_modseq : jmap_highestmodseq(req, MBTYPE_JMAPSUBMIT);
 
     jmap_ok(req, jmap_changes_reply(&changes));
 
@@ -2000,7 +2000,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         mboxlist_entry_free(&mbentry);
         r = 0;
         /* Build response */
-        json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
+        json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
         query.query_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
         query.result_position = 0;
@@ -2113,7 +2113,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     free(sortcrit);
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
+    json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
     query.query_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     query.result_position = query.position;

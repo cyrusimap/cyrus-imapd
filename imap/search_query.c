@@ -270,7 +270,6 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
                                                uint32_t uidvalidity)
 {
     search_folder_t *folder;
-    uint32_t have_mbtype = 0;
 
     // check if we want to process this mailbox
     if (query->checkfolder &&
@@ -278,18 +277,20 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
         return NULL;
     }
 
-    if (mboxname_isdeletedmailbox(mboxname, 0))
-        have_mbtype = MBTYPE_DELETED;
-
-    if (mboxname_iscalendarmailbox(mboxname, 0))
-        have_mbtype = MBTYPE_CALENDAR;
-
-    if (mboxname_isaddressbookmailbox(mboxname, 0))
-        have_mbtype = MBTYPE_ADDRESSBOOK;
-
-    /* not the type we want?  Abort now */
-    if (have_mbtype != query->want_mbtype)
+    if (mboxname_isdeletedmailbox(mboxname, 0) &&
+        !(query->want_mbtype & MBTYPE_DELETED)) {
         return NULL;
+    }
+
+    if (mboxname_iscalendarmailbox(mboxname, 0) &&
+        mbtype_isa(query->want_mbtype) != MBTYPE_CALENDAR) {
+        return NULL;
+    }
+
+    if (mboxname_isaddressbookmailbox(mboxname, 0) &&
+        mbtype_isa(query->want_mbtype) != MBTYPE_ADDRESSBOOK) {
+        return NULL;
+    }
 
     folder = query_get_folder(query, mboxname);
     if (uidvalidity) {
@@ -397,7 +398,7 @@ static int compare_folders(const void **v1, const void **v2)
     const search_folder_t *f1 = (const search_folder_t *)*v1;
     const search_folder_t *f2 = (const search_folder_t *)*v2;
 
-    return bsearch_compare_mbox(f1->mboxname, f2->mboxname);
+    return strcmp(f1->mboxname, f2->mboxname);
 }
 
 /*

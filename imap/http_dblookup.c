@@ -137,6 +137,7 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     char *mboxname = NULL;
     const char **mailboxhdrs;
     const char *mailbox = "Default";
+    mbentry_t *mbentry = NULL;
 
     mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
     if (mailboxhdrs) {
@@ -144,12 +145,16 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     }
 
     mboxname = mboxname_abook(userid, mailbox);
+    if (!mboxname) goto done;
+
+    mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (!mbentry) goto done;
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
     if (!db) goto done;
 
-    array = carddav_getemail2details(db, key, mboxname, NULL);
+    array = carddav_getemail2details(db, key, mbentry, NULL);
     if (!array) goto done;
 
     json = json_array();
@@ -169,6 +174,7 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
 done:
     free(mboxname);
     free(result);
+    mboxlist_entry_free(&mbentry);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
     return ret;
@@ -186,6 +192,7 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
     char *mboxname = NULL;
     const char **mailboxhdrs;
     const char *mailbox = "Default";
+    mbentry_t *mbentry = NULL;
     int ispinned = 0;
 
     mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
@@ -194,12 +201,16 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
     }
 
     mboxname = mboxname_abook(userid, mailbox);
+    if (!mboxname) goto done;
+
+    mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (!mbentry) goto done;
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
     if (!db) goto done;
 
-    array = carddav_getemail2details(db, key, mboxname, &ispinned);
+    array = carddav_getemail2details(db, key, mbentry, &ispinned);
     if (!array) goto done;
 
     uids = json_array();
@@ -221,6 +232,7 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
 done:
     free(mboxname);
     free(result);
+    mboxlist_entry_free(&mbentry);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
     return ret;
@@ -240,6 +252,7 @@ static int get_uid2groups(struct transaction_t *txn,
     const char *otheruser = "";
     const char **mailboxhdrs;
     const char *mailbox = "Default";
+    mbentry_t *mbentry = NULL;
 
     otheruserhdrs = spool_getheader(txn->req_hdrs, "OtherUser");
     if (otheruserhdrs) {
@@ -252,12 +265,16 @@ static int get_uid2groups(struct transaction_t *txn,
     }
 
     mboxname = mboxname_abook(userid, mailbox);
+    if (!mboxname) goto done;
+
+    mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (!mbentry) goto done;
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
     if (!db) goto done;
 
-    array = carddav_getuid2groups(db, key, mboxname, otheruser);
+    array = carddav_getuid2groups(db, key, mbentry, otheruser);
     if (!array) goto done;
 
     json = json_object();
@@ -277,6 +294,7 @@ static int get_uid2groups(struct transaction_t *txn,
 done:
     free(mboxname);
     free(result);
+    mboxlist_entry_free(&mbentry);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
     return ret;

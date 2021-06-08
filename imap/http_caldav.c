@@ -1461,7 +1461,7 @@ static int _scheduling_enabled(struct transaction_t *txn,
     struct buf buf = BUF_INITIALIZER;
     int is_enabled = 1;
 
-    annotatemore_lookup(mailbox->name, entry, "", &buf);
+    annotatemore_lookupmask_mbox(mailbox, entry, "", &buf);
     /* legacy */
     if (!strcasecmp(buf_cstring(&buf), "no"))
         is_enabled = 0;
@@ -1924,8 +1924,8 @@ static int export_calendar(struct transaction_t *txn)
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
-    r = annotatemore_lookupmask(mailbox->name, displayname_annot,
-                                httpd_userid, &name);
+    r = annotatemore_lookupmask_mbox(mailbox, displayname_annot,
+                                     httpd_userid, &name);
     /* fall back to last part of mailbox name */
     if (r || !name.len) buf_setcstr(&name, strrchr(mailbox->name, '.') + 1);
 
@@ -1999,10 +1999,10 @@ static int export_calendar(struct transaction_t *txn)
     construct_hash_table(&tzid_table, 10, 1);
 
     /* Get description and color of calendar */
-    r = annotatemore_lookupmask(mailbox->name, description_annot,
-                                httpd_userid, &desc);
-    r = annotatemore_lookupmask(mailbox->name, color_annot,
-                                httpd_userid, &color);
+    r = annotatemore_lookupmask_mbox(mailbox, description_annot,
+                                     httpd_userid, &desc);
+    r = annotatemore_lookupmask_mbox(mailbox, color_annot,
+                                     httpd_userid, &color);
 
     /* Begin (converted) iCalendar stream */
     sep = mime->begin_stream(buf, mailbox, ical_prodid, buf_cstring(&name),
@@ -2023,7 +2023,7 @@ static int export_calendar(struct transaction_t *txn)
         struct caldav_data *cdata;
         icalcomponent *ical = NULL;
 
-        r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+        r = caldav_lookup_imapuid(caldavdb, txn->req_tgt.mbentry,
                                   record->uid, &cdata, 0);
 
         if (syncmodseq) { 
@@ -2052,7 +2052,7 @@ static int export_calendar(struct transaction_t *txn)
                 struct caldav_data *cdata;
 
                 /* Fetch the CalDAV db record */
-                r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+                r = caldav_lookup_imapuid(caldavdb, txn->req_tgt.mbentry,
                                           record->uid, &cdata, 0);
 
                 if (!r && need_tz && cdata->comp_flags.tzbyref) {
@@ -2211,7 +2211,7 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
 
     /* Make sure its a calendar */
-    if (mbentry->mbtype != MBTYPE_CALENDAR) goto done;
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR) goto done;
 
     /* Make sure its readable */
     rights = httpd_myrights(httpd_authstate, mbentry);
@@ -2226,8 +2226,8 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
         goto done;
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookupmask(mbentry->name, displayname_annot,
-                                httpd_userid, &displayname);
+    r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
+                                    httpd_userid, &displayname);
     /* fall back to the last part of the mailbox name */
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
 
@@ -2272,16 +2272,16 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     }
 
     /* Is this calendar transparent? */
-    r = annotatemore_lookupmask(mbentry->name, schedtransp_annot,
-                                httpd_userid, &schedtransp);
+    r = annotatemore_lookupmask_mbe(mbentry, schedtransp_annot,
+                                    httpd_userid, &schedtransp);
     if (!r && !strcmp(buf_cstring(&schedtransp), "transparent")) {
         cal->flags |= CAL_IS_TRANSP;
     }
     buf_free(&schedtransp);
 
     /* Which component types are supported? */
-    r = annotatemore_lookupmask(mbentry->name, calcompset_annot,
-                                httpd_userid, &calcompset);
+    r = annotatemore_lookupmask_mbe(mbentry, calcompset_annot,
+                                    httpd_userid, &calcompset);
     if (!r && buf_len(&calcompset)) {
         cal->types = strtoul(buf_cstring(&calcompset), NULL, 10);
     }
@@ -2759,7 +2759,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
             /* Fetch the new DAV and index records */
             /* NOTE: previous contents of cdata was freed by store_resource */
-            caldav_lookup_resource(caldavdb, mailbox->name,
+            caldav_lookup_resource(caldavdb, txn->req_tgt.mbentry,
                                    txn->req_tgt.resource, &cdata, /*tombstones*/0);
 
             mailbox_find_index_record(mailbox, cdata->dav.imap_uid, record);
@@ -3015,7 +3015,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     caldavdb = caldav_open_mailbox(calendar);
 
     /* Find message UID for the cal resource */
-    caldav_lookup_resource(caldavdb, txn->req_tgt.mbentry->name,
+    caldav_lookup_resource(caldavdb, txn->req_tgt.mbentry,
                            txn->req_tgt.resource, &cdata, 0);
     if (!cdata->dav.rowid) ret = HTTP_NOT_FOUND;
     else if (!cdata->dav.imap_uid) ret = HTTP_CONFLICT;
@@ -4443,7 +4443,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif /* HAVE_RSCALE */
 
     /* Check for changed UID */
-    caldav_lookup_resource(db, mailbox->name, resource, &cdata, 0);
+    caldav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
     if (cdata->dav.imap_uid && strcmpsafe(cdata->ical_uid, uid)) {
         /* CALDAV:no-uid-conflict */
         txn->error.precond = CALDAV_UID_CONFLICT;
@@ -4451,8 +4451,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
     else {
         /* Check for duplicate iCalendar UID */
+        const char *mbox =
+            cdata->dav.mailbox_byname ? mailbox->name : mailbox->uniqueid;
         caldav_lookup_uid(db, uid, &cdata);
-        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
+        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mbox) ||
                                     strcmp(cdata->dav.resource, resource))) {
             /* CALDAV:unique-scheduling-object-resource */
             txn->error.precond = CALDAV_UNIQUE_OBJECT;
@@ -4460,13 +4462,24 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         }
     }
     if (ret) {
-        char *owner = mboxname_to_userid(cdata->dav.mailbox);
+        char *owner;
+        const char *mboxname;
+        mbentry_t *mbentry = NULL;
+
+        if (cdata->dav.mailbox_byname)
+            mboxname = cdata->dav.mailbox;
+        else {
+            mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
+            mboxname = mbentry->name;
+        }
+        owner = mboxname_to_userid(mboxname);
 
         buf_reset(&txn->buf);
         buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
                    namespace_calendar.prefix, USER_COLLECTION_PREFIX, owner,
-                   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
+                   strrchr(mboxname, '.') + 1, cdata->dav.resource);
         txn->error.resource = buf_cstring(&txn->buf);
+        mboxlist_entry_free(&mbentry);
         free(owner);
         ret = HTTP_FORBIDDEN;
         goto done;
@@ -5333,7 +5346,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
             icalcomponent_free(ical);
 
-            caldav_lookup_resource(fctx->davdb, fctx->mailbox->name,
+            caldav_lookup_resource(fctx->davdb, fctx->mbentry,
                                    cdata->dav.resource, &cdata, 0);
             fctx->record = NULL;
         }
@@ -5404,7 +5417,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
         xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
 
         if (fctx->req_tgt->collection &&
-            fctx->mbentry->mbtype == MBTYPE_CALENDAR) {
+            mbtype_isa(fctx->mbentry->mbtype) == MBTYPE_CALENDAR) {
             ensure_ns(fctx->ns, NS_CALDAV,
                       resp ? resp->parent : node->parent, XML_NS_CALDAV, "C");
             if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
@@ -6021,8 +6034,8 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    r = annotatemore_lookupmask(fctx->mbentry->name, prop_annot,
-                                httpd_userid, &attrib);
+    r = annotatemore_lookupmask_mbe(fctx->mbentry, prop_annot,
+                                    httpd_userid, &attrib);
     if (r) return HTTP_SERVER_ERROR;
 
     if (attrib.len) {
@@ -6525,8 +6538,8 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
         if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
 
         if (fctx->mailbox && !fctx->record) {
-            r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
-                                        httpd_userid, &attrib);
+            r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
+                                             httpd_userid, &attrib);
         }
 
         if (r) r = HTTP_SERVER_ERROR;
@@ -6539,8 +6552,8 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
             prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
 
             buf_free(&attrib);
-            r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
-                                        httpd_userid, &attrib);
+            r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
+                                             httpd_userid, &attrib);
 
             if (r) r = HTTP_SERVER_ERROR;
             else if (!attrib.len) r = HTTP_NOT_FOUND;
@@ -6710,9 +6723,9 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
                    (const char *) ns->href, name);
 
         if (fctx->mailbox && !fctx->record) {
-            r = annotatemore_lookupmask(fctx->mailbox->name,
-                                        buf_cstring(&fctx->buf),
-                                        httpd_userid, &attrib);
+            r = annotatemore_lookupmask_mbox(fctx->mailbox,
+                                             buf_cstring(&fctx->buf),
+                                             httpd_userid, &attrib);
         }
 
         if (!attrib.len && xmlStrcmp(ns->href, BAD_CAST XML_NS_CALDAV)) {
@@ -6721,9 +6734,9 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
             buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s", XML_NS_CALDAV, name);
 
             if (fctx->mailbox && !fctx->record) {
-                r = annotatemore_lookupmask(fctx->mailbox->name,
-                                            buf_cstring(&fctx->buf),
-                                            httpd_userid, &attrib);
+                r = annotatemore_lookupmask_mbox(fctx->mailbox,
+                                                 buf_cstring(&fctx->buf),
+                                                 httpd_userid, &attrib);
             }
         }
 
@@ -6884,8 +6897,8 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
         !fctx->req_tgt->collection || fctx->req_tgt->resource)
         return HTTP_NOT_FOUND;
 
-    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
-                                httpd_userid, &attrib);
+    r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
+                                     httpd_userid, &attrib);
 
     if (r) r = HTTP_SERVER_ERROR;
     else if (attrib.len) {
@@ -6896,8 +6909,8 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
         prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
 
         if (fctx->mailbox && !fctx->record) {
-            r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
-                                        httpd_userid, &attrib);
+            r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
+                                             httpd_userid, &attrib);
         }
 
         if (r) r = HTTP_SERVER_ERROR;
@@ -8102,8 +8115,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
         return HTTP_FORBIDDEN;
     }
 
-    if (!annotatemore_lookupmask(mailbox->name,
-                                 prop_annot, httpd_userid, &attrib)
+    if (!annotatemore_lookupmask_mbox(mailbox, prop_annot, httpd_userid, &attrib)
         && attrib.len) {
         unsigned long supp_comp = strtoul(buf_cstring(&attrib), NULL, 10);
 
@@ -8116,7 +8128,11 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
 
     /* Find message UID for the resource, if exists */
-    caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 0);
+    /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
+       XXX  because we may have been called as part of a COPY/MOVE */
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
+    caldav_lookup_resource(caldavdb, &mbentry, resource, &cdata, 0);
 
     /* does it already exist? */
     if (cdata->dav.imap_uid) {

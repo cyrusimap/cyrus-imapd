@@ -711,6 +711,7 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
     struct mailbox *mailbox = NULL;
     struct webdav_db *webdavdb = NULL;
     struct transaction_t txn;
+    mbentry_t mbentry;
     int r;
 
     /* XXX  Need to find location of user.
@@ -741,6 +742,12 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
+
+    /* Create minimal mbentry for request target from mailbox */
+    memset(&mbentry, 0, sizeof(mbentry_t));
+    mbentry.name = mailbox->name;
+    mbentry.uniqueid = mailbox->uniqueid;
+    txn.req_tgt.mbentry = &mbentry;
 
     /* Create header cache */
     if (!(txn.req_hdrs = spool_new_hdrcache())) {
@@ -878,7 +885,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
     webdavdb = webdav_open_userid(txn->req_tgt.userid);
 
     /* Find message UID for the resource */
-    webdav_lookup_resource(webdavdb, txn->req_tgt.mbentry->name,
+    webdav_lookup_resource(webdavdb, txn->req_tgt.mbentry,
                            resource, &wdata, 0);
     if (!wdata->dav.imap_uid) {
         ret = HTTP_NOT_FOUND;
@@ -925,7 +932,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
             r = annotate_state_writemask(astate, annot,
                                          txn->req_tgt.userid, &value);
 
-            if (shared->mbtype == MBTYPE_CALENDAR) {
+            if (mbtype_isa(shared->mbtype) == MBTYPE_CALENDAR) {
                 /* Sharee's copy of calendar SHOULD default to transparent */
                 annot =
                     DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
@@ -1042,7 +1049,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
     if (!doc) return HTTP_FORBIDDEN;
 
     /* Find message UID for the resource */
-    webdav_lookup_resource(db, mailbox->name, resource, &wdata, 0);
+    webdav_lookup_resource(db, txn->req_tgt.mbentry, resource, &wdata, 0);
 
     if (wdata->dav.imap_uid) {
         /* Fetch index record for the resource */

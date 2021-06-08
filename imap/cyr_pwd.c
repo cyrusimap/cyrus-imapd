@@ -1,6 +1,6 @@
-/* user.h -- User manipulation routines
+/* cyr_pwd.c -- current working directory within a spool dir
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2019 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,52 +40,80 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef INCLUDED_USER_H
-#define INCLUDED_USER_H
+#include <config.h>
 
-#include "auth.h"
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "global.h"
 #include "mboxname.h"
 
-#define FNAME_SUBSSUFFIX     "sub"
-#define FNAME_COUNTERSSUFFIX "counters"
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
-/* path to user's sieve directory */
-const char *user_sieve_path(const char *user);
+extern int optind;
+extern char *optarg;
 
-/* Delete meta-data (seen state, subscriptions, ACLs, quotaroots,
- * sieve scripts) for 'user'.
- *
- * wipe-user says to delete seen state also (remove the user from the murder)
- */
-int user_deletedata(const char *userid, int wipe_user);
+/* current namespace */
+static struct namespace cyr_pwd_namespace;
 
-/* Rename/copy user meta-data (seen state, subscriptions, sieve scripts)
- * from 'olduser' to 'newuser'.
- */
-int user_renamedata(const char *olduser, const char *newuser);
+static int usage(const char *error)
+{
+    fprintf(stderr, "usage: cyr_pwd [-C <alt_config>]\n");
+    fprintf(stderr, "\n");
+    if (error) {
+        fprintf(stderr, "\n");
+        fprintf(stderr, "ERROR: %s", error);
+    }
+    exit(-1);
+}
 
-/* Rename ACL for 'olduser' to 'newuser' on mailbox 'name'. */
-int user_renameacl(const struct namespace *namespace, const char *name,
-                   const char *olduser, const char *newuser);
+int main(int argc, char **argv)
+{
+    int r;
+    int opt;
+    char *alt_config = NULL;
 
-/* Copy a quotaroot from mailbox 'oldname' to 'newname' */
-int user_copyquotaroot(const char *oldname, const char *newname);
+    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+        switch(opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 
-/* Delete all quotaroots for 'user' */
-int user_deletequotaroots(const char *user);
+        default:
+            usage(NULL);
+        }
+    }
 
-/* find the subscriptions file for user */
-char *user_hash_subs(const char *user);
+    cyrus_init(alt_config, "cyr_pwd", 0, 0);
 
-/* find any sort of file for the user */
-char *user_hash_meta(const char *userid, const char *suffix);
+    r = mboxname_init_namespace(&cyr_pwd_namespace, 1);
+    if (r) {
+        fatal(error_message(r), -1);
+    }
 
-/* find xapian search dir for the user */
-char *user_hash_xapian(const char *userid, const char *root);
+    /* Translate mailboxname */
+    mbname_t *mbname = NULL;
+    const char *extname = NULL;
 
-/* default to exclusive lock! */
-struct mboxlock *user_namespacelock_full(const char *userid, int locktype);
-#define user_namespacelock(userid) user_namespacelock_full(userid, LOCK_EXCLUSIVE)
-int user_isnamespacelocked(const char *userid);
+    mbname = mbname_from_path(".");
 
-#endif
+    if (mbname) 
+        extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
+
+    if (extname)
+        printf("%s\n", extname);
+    else
+        fprintf(stderr, "ERROR: not in Cyrus UUID mailbox directory\n");
+
+    mbname_free(&mbname);
+
+    cyrus_done();
+
+    exit(0);
+}

@@ -176,14 +176,16 @@ static int fixmbox(const mbentry_t *mbentry,
     return 0;
 }
 
-static void process_mboxlist(void)
+static void process_mboxlist(int *upgraded)
 {
+    /* upgrade database to new mailboxes-by-id records */
+    mboxlist_upgrade(upgraded);
+
     /* build a list of mailboxes - we're using internal names here */
     mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_INTERMEDIATES);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
-    mboxlist_set_runiqueid(config_getswitch(IMAPOPT_REVERSEUNIQUEIDS));
 }
 
 static const char *dbfname(struct cyrusdb *db)
@@ -400,8 +402,11 @@ int main(int argc, char *argv[])
 
     strarray_fini(&files);
 
-    if(op == RECOVER && reserve_flag)
-        process_mboxlist();
+    if (op == RECOVER && reserve_flag) {
+        int upgraded = 0;
+        process_mboxlist(&upgraded);
+        if (upgraded) annotatemore_upgrade();
+    }
 
     free(dirname);
     free(backup1);

@@ -766,6 +766,104 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     return mbname;
 }
 
+EXPORTED mbname_t *mbname_from_extnameUTF8(const char *extname, const struct namespace *ns, const char *userid)
+{
+    mbname_t *mbname;
+    char *freeme = NULL;
+
+    if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
+        charset_t cs = charset_lookupname("utf-8");
+        if (cs == CHARSET_UNKNOWN_CHARSET) {
+            /* huh? */
+            syslog(LOG_INFO, "charset utf-8 is unknown");
+            return NULL;
+        }
+
+        /* Encode mailbox name in IMAP UTF-7 */
+        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
+        charset_free(&cs);
+
+        if (!freeme) {
+            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
+            return NULL;
+        }
+
+        extname = freeme;
+    }
+
+    mbname = mbname_from_extname(extname, ns, userid);
+    free(freeme);
+
+    return mbname;
+}
+
+EXPORTED mbname_t *mbname_from_path(const char *path)
+{
+    int absolute = 0;
+    mbname_t *mbname = NULL;
+    mbentry_t *mbentry = NULL;
+    const char *uid;
+
+    /* Is the mailbox argument absolute or relative to cwd? */
+    if (path[0] == '/') {
+        absolute = 1;
+        uid = strrchr(path, '/');
+    }
+    else {
+        /* Construct a mailbox relative to cwd */
+        char cwd[MAX_MAILBOX_PATH+1];
+
+        getcwd(cwd, MAX_MAILBOX_PATH);
+        uid = strrchr(cwd, '/');
+    }
+
+    if (uid) {
+        /* Lookup current mailbox by uniqueid */
+        int r = mboxlist_lookup_by_uniqueid(uid+1, &mbentry, NULL);
+
+        if (!r) {
+            /* Build current mailbox name */
+            mbname = mbname_from_intname(mbentry->name);
+
+            if (!absolute) {
+                /* Add submailbox(es) */
+                strarray_t *subs = subs = strarray_split(path, "/", 0);
+                int i;
+
+                for (i = 0; i < strarray_size(subs); i++) {
+                    const char *sub = strarray_nth(subs, i);
+
+                    if (!strcmp(sub, ".")) continue;
+                    else if (!strcmp(sub, "..")) {
+                        char *s = mbname_pop_boxes(mbname);
+
+                        if (s) free(s);
+                        else {
+                            /* At top of hierarchy */
+                            mbname_free(&mbname);
+                            break;
+                        }
+                    }
+                    else {
+                        mbname_push_boxes(mbname, strarray_nth(subs, i));
+                    }
+                }
+                strarray_free(subs);
+
+                /* If we end up at a magic user.foo.INBOX, revert to user.foo */
+                if (mbname_userid(mbname) != NULL &&
+                    strarray_size(mbname_boxes(mbname)) == 1 &&
+                    !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
+                    free(mbname_pop_boxes(mbname));
+                }
+            }
+        }
+    }
+    mboxlist_entry_free(&mbentry);
+
+    return mbname ? mbname : xzmalloc(sizeof(mbname_t));
+}
+
 EXPORTED void mbname_free(mbname_t **mbnamep)
 {
     mbname_t *mbname = *mbnamep;
@@ -1405,7 +1503,7 @@ EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
  */
 EXPORTED int mboxname_iscalendarmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_CALENDAR) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_CALENDAR) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1424,7 +1522,7 @@ EXPORTED int mboxname_iscalendarmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_ADDRESSBOOK) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_ADDRESSBOOK) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1443,7 +1541,7 @@ EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isdavdrivemailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_COLLECTION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_COLLECTION) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1462,7 +1560,7 @@ EXPORTED int mboxname_isdavdrivemailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isdavnotificationsmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_COLLECTION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_COLLECTION) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1481,7 +1579,7 @@ EXPORTED int mboxname_isdavnotificationsmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_JMAPNOTIFICATION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_JMAPNOTIFY) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1518,7 +1616,7 @@ EXPORTED int mboxname_isnotesmailbox(const char *name, int mbtype __attribute__(
  */
 EXPORTED int mboxname_issubmissionmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_SUBMISSION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_JMAPSUBMIT) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1537,7 +1635,7 @@ EXPORTED int mboxname_issubmissionmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_PUSHSUBSCRIPTION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_JMAPPUSHSUB) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1877,10 +1975,25 @@ EXPORTED void mboxname_hash(char *dest, size_t destlen,
     mbname_free(&mbname);
 }
 
+EXPORTED void mboxname_id_hash(char *dest, size_t destlen,
+                               const char *root,
+                               const char *id)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (root) buf_printf(&buf, "%s/uuid/%c/%c/%s", root, id[0], id[1], id);
+    else buf_printf(&buf, "uuid/%c/%c/%s", id[0], id[1], id);
+
+    /* for now, keep API even though we're doing a buffer inside here */
+    strncpy(dest, buf_cstring(&buf), destlen);
+
+    buf_free(&buf);
+}
+
 /* note: mboxname must be internal */
 EXPORTED char *mboxname_datapath(const char *partition,
                                  const char *mboxname,
-                                 const char *uniqueid __attribute__((unused)),
+                                 const char *uniqueid,
                                  unsigned long uid)
 {
     static char pathresult[MAX_MAILBOX_PATH+1];
@@ -1896,7 +2009,14 @@ EXPORTED char *mboxname_datapath(const char *partition,
         return pathresult;
     }
 
-    mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
+    if (uniqueid) {
+        /* Mailbox dir by uniqueid */
+        mboxname_id_hash(pathresult, MAX_MAILBOX_PATH, root, uniqueid);
+    }
+    else {
+        /* Legacy mailbox dir by mboxname */
+        mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
+    }
 
     if (uid) {
         int len = strlen(pathresult);
@@ -1913,7 +2033,7 @@ EXPORTED char *mboxname_datapath(const char *partition,
 /* note: mboxname must be internal */
 EXPORTED char *mboxname_archivepath(const char *partition,
                                     const char *mboxname,
-                                    const char *uniqueid __attribute__((unused)),
+                                    const char *uniqueid,
                                     unsigned long uid)
 {
     static char pathresult[MAX_MAILBOX_PATH+1];
@@ -1932,7 +2052,14 @@ EXPORTED char *mboxname_archivepath(const char *partition,
         return pathresult;
     }
 
-    mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
+    if (uniqueid) {
+        /* Mailbox dir by uniqueid */
+        mboxname_id_hash(pathresult, MAX_MAILBOX_PATH, root, uniqueid);
+    }
+    else {
+        /* Legacy mailbox dir by mboxname */
+        mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
+    }
 
     if (uid) {
         int len = strlen(pathresult);
@@ -1978,7 +2105,7 @@ char *mboxname_lockpath_suffix(const char *mboxname,
 
 EXPORTED char *mboxname_metapath(const char *partition,
                                  const char *mboxname,
-                                 const char *uniqueid __attribute__((unused)),
+                                 const char *uniqueid,
                                  int metafile,
                                  int isnew)
 {
@@ -2063,7 +2190,14 @@ EXPORTED char *mboxname_metapath(const char *partition,
         return metaresult;
     }
 
-    mboxname_hash(metaresult, MAX_MAILBOX_PATH, root, mboxname);
+    if (uniqueid) {
+        /* Mailbox dir by uniqueid */
+        mboxname_id_hash(metaresult, MAX_MAILBOX_PATH, root, uniqueid);
+    }
+    else {
+        /* Legacy mailbox dir by mboxname */
+        mboxname_hash(metaresult, MAX_MAILBOX_PATH, root, mboxname);
+    }
 
     if (filename) {
         int len = strlen(metaresult);
@@ -2156,8 +2290,32 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
     char *fname = NULL;
     char c[2], d[2];
 
-    if (mbname->domain) {
-        if (mbname->localpart) {
+    if (mbname->localpart) {
+        char *mboxname = mboxname_user_mbox(mbname_userid(mbname), NULL);
+        mbentry_t *mbentry = NULL;
+
+        int r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
+        free(mboxname);
+
+        if (!r && !(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
+            char path[MAX_MAILBOX_PATH+1];
+
+            mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mbentry->uniqueid);
+
+            if (suffix) {
+                fname = strconcat(config_dir,
+                                  FNAME_USERDIR,
+                                  path, "/", suffix, ".db",
+                                  (char *)NULL);
+            }
+            else {
+                fname = strconcat(config_dir,
+                                  FNAME_USERDIR,
+                                  path,
+                                  (char *)NULL);
+            }
+        }
+        else if (mbname->domain) {
             if (suffix) {
                 fname = strconcat(config_dir,
                                   FNAME_DOMAINDIR,
@@ -2181,46 +2339,45 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
         else {
             if (suffix) {
                 fname = strconcat(config_dir,
-                                  FNAME_DOMAINDIR,
-                                  dir_hash_b(mbname->domain, config_fulldirhash, d),
-                                  "/", mbname->domain,
-                                  "/", FNAME_SHAREDPREFIX, ".", suffix,
+                                  FNAME_USERDIR,
+                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
+                                  "/", mbname->localpart, ".", suffix,
                                   (char *)NULL);
             }
             else {
                 fname = strconcat(config_dir,
-                                  FNAME_DOMAINDIR,
-                                  dir_hash_b(mbname->domain, config_fulldirhash, d),
-                                  "/", mbname->domain,
+                                  FNAME_USERDIR,
+                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
                                   (char *)NULL);
             }
+        }
+        mboxlist_entry_free(&mbentry);
+    }
+    else if (mbname->domain) {
+        if (suffix) {
+            fname = strconcat(config_dir,
+                              FNAME_DOMAINDIR,
+                              dir_hash_b(mbname->domain, config_fulldirhash, d),
+                              "/", mbname->domain,
+                              "/", FNAME_SHAREDPREFIX, ".", suffix,
+                              (char *)NULL);
+        }
+        else {
+            fname = strconcat(config_dir,
+                              FNAME_DOMAINDIR,
+                              dir_hash_b(mbname->domain, config_fulldirhash, d),
+                              "/", mbname->domain,
+                              (char *)NULL);
         }
     }
     else {
-        if (mbname->localpart) {
-            if (suffix) {
-                fname = strconcat(config_dir,
-                                  FNAME_USERDIR,
-                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
-                                  "/", mbname->localpart, ".", suffix,
-                                  (char *)NULL);
-            }
-            else {
-                fname = strconcat(config_dir,
-                                  FNAME_USERDIR,
-                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
-                                  (char *)NULL);
-            }
+        if (suffix) {
+            fname = strconcat(config_dir,
+                              "/", FNAME_SHAREDPREFIX, ".", suffix,
+                              (char *)NULL);
         }
         else {
-            if (suffix) {
-                fname = strconcat(config_dir,
-                                  "/", FNAME_SHAREDPREFIX, ".", suffix,
-                                  (char *)NULL);
-            }
-            else {
-                fname = xstrdup(config_dir);
-            }
+            fname = xstrdup(config_dir);
         }
     }
 

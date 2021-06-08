@@ -230,10 +230,11 @@ struct sqldb_upgrade davdb_upgrade[] = {
   { 8, CMD_DBUPGRADEv8, NULL },
   { 9, CMD_DBUPGRADEv9, NULL },
   { 10, CMD_DBUPGRADEv10, NULL },
+  /* Don't upgrade to version 11.  We only jump to 11 on CREATE */
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 10
+#define DB_VERSION 11
 
 static sqldb_t *reconstruct_db;
 
@@ -312,7 +313,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
 
     signals_poll();
 
-    switch (mbentry->mbtype) {
+    switch (mbtype_isa(mbentry->mbtype)) {
 #ifdef WITH_DAV
     case MBTYPE_CALENDAR:
     case MBTYPE_COLLECTION:
@@ -321,7 +322,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
         break;
 #endif
 #ifdef WITH_JMAP
-    case MBTYPE_SUBMISSION:
+    case MBTYPE_JMAPSUBMIT:
         addproc = &mailbox_add_email_alarms;
         break;
 

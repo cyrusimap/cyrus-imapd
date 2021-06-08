@@ -1644,7 +1644,7 @@ out:
 
     if (record) {
 #ifdef USE_CALALARMD
-        if (mailbox->mbtype & MBTYPE_CALENDAR) {
+        if (mbtype_isa(mailbox->mbtype) == MBTYPE_CALENDAR) {
             // NOTE: this is because we don't pass the annotations through
             // with the record as we create it, so we can't update the alarm
             // database properly.  Instead, we don't set anything when we append
@@ -1979,8 +1979,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_setatom(kl, "MBOXNAME", mailbox->name);
-    if (mailbox->mbtype)
-        dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mailbox->mbtype));
+    if (mbtypes_sync(mailbox->mbtype))
+        dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mbtypes_sync(mailbox->mbtype)));
     if (ispartial) {
         /* send a zero to make older Cyrus happy */
         dlist_setnum32(kl, "SYNC_CRC", 0);
@@ -2871,7 +2871,7 @@ int sync_apply_mailbox(struct dlist *kin,
         }
     }
 
-    if (mailbox->mbtype != mbtype) {
+    if ((mbtypes_sync(mailbox->mbtype)) != mbtype) {
         syslog(LOG_ERR, "INVALID MAILBOX TYPE %s (%d, %d)", mailbox->name, mailbox->mbtype, mbtype);
         /* is this even possible? */
         r = IMAP_MAILBOX_BADTYPE;
@@ -3146,7 +3146,7 @@ static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
         dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
         dlist_setatom(kl, "MBOXNAME", mbentry->name);
-        dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mbentry->mbtype));
+        dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mbtypes_sync(mbentry->mbtype)));
         dlist_setnum32(kl, "SYNC_CRC", 0);
         // this stuff should be optional, but old sync_client will barf without it
         dlist_setnum32(kl, "LAST_UID", 0);
@@ -3997,7 +3997,7 @@ int sync_restore_mailbox(struct dlist *kin,
     /* XXX verify mailbox is suitable? */
 
     /* make sure mailbox types match */
-    if (mailbox->mbtype != mbtype) {
+    if (mbtypes_sync(mailbox->mbtype) != mbtype) {
         syslog(LOG_ERR, "restore mailbox %s: mbtype mismatch (%d, %d)",
                mailbox->name, mailbox->mbtype, mbtype);
         r = IMAP_MAILBOX_BADTYPE;
@@ -5722,7 +5722,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     modseq_t xconvmodseq = 0;
 
     if (!remote) return 0;
-    if (remote->mbtype != mailbox->mbtype) return 0;
+    if (remote->mbtype != mbtypes_sync(mailbox->mbtype)) return 0;
     if (remote->last_uid != mailbox->i.last_uid) return 0;
     if (remote->highestmodseq != mailbox->i.highestmodseq) return 0;
     if (remote->uidvalidity != mailbox->i.uidvalidity) return 0;
@@ -5948,7 +5948,7 @@ int sync_do_update_mailbox(struct sync_client_state *sync_cs,
         dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
         dlist_setatom(kl, "MBOXNAME", mbentry->name);
         dlist_setatom(kl, "MBOXTYPE",
-                      mboxlist_mbtype_to_string(mbentry->mbtype));
+                      mboxlist_mbtype_to_string(mbtypes_sync(mbentry->mbtype)));
         dlist_setnum64(kl, "HIGHESTMODSEQ", mbentry->foldermodseq);
         dlist_setnum64(kl, "CREATEDMODSEQ", mbentry->createdmodseq);
         dlist_setnum64(kl, "FOLDERMODSEQ", mbentry->foldermodseq);

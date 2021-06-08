@@ -5705,7 +5705,7 @@ static int xconvfetch_lookup(struct conversations_state *statep,
             continue;
 
         /* finally, something worth looking at */
-        strarray_add(folder_list, strarray_nth(statep->folder_names, folder->number));
+        strarray_add(folder_list, strarray_nth(statep->folders, folder->number));
     }
 
 out:
@@ -5750,9 +5750,18 @@ static int do_xconvfetch(struct dlist *cidlist,
     init.out = imapd_out;
 
     for (i = 0; i < folder_list.count; i++) {
-        const char *mboxname = folder_list.data[i];
+        const char *mboxname;
+        mbentry_t *mbentry = NULL;
+
+        if (state->folders_byname) mboxname = folder_list.data[i];
+        else {
+            mboxlist_lookup_by_uniqueid(folder_list.data[i], &mbentry, NULL);
+            if (!mbentry) continue;
+            mboxname = mbentry->name;
+        }
 
         r = index_open(mboxname, &init, &index_state);
+        mboxlist_entry_free(&mbentry);
         if (r == IMAP_MAILBOX_NONEXISTENT)
             continue;
         if (r)
@@ -6815,7 +6824,7 @@ static void cmd_expunge(char *tag, char *sequence)
 static void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
 {
     int r = 0;
-    int mbtype = 0;
+    int mbtype = MBTYPE_EMAIL;
     int options = 0;
     const char *partition = NULL;
     const char *server = NULL;
@@ -6841,9 +6850,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     dlist_getatom(extargs, "SERVER", &server);
     dlist_getatom(extargs, "MAILBOXID", &uniqueid);
     if (dlist_getatom(extargs, "TYPE", &type)) {
-        if (!strcasecmp(type, "CALENDAR")) mbtype |= MBTYPE_CALENDAR;
-        else if (!strcasecmp(type, "COLLECTION")) mbtype |= MBTYPE_COLLECTION;
-        else if (!strcasecmp(type, "ADDRESSBOOK")) mbtype |= MBTYPE_ADDRESSBOOK;
+        if (!strcasecmp(type, "CALENDAR")) mbtype = MBTYPE_CALENDAR;
+        else if (!strcasecmp(type, "COLLECTION")) mbtype = MBTYPE_COLLECTION;
+        else if (!strcasecmp(type, "ADDRESSBOOK")) mbtype = MBTYPE_ADDRESSBOOK;
         else {
             r = IMAP_MAILBOX_BADTYPE;
             goto err;
@@ -7745,6 +7754,13 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
              mboxname_isusermailbox(newmailboxname, 1) &&
              strcmp(oldmailboxname, newmailboxname) && /* different user */
              imapd_userisadmin) {
+        if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+            /* don't allow rename of a user using legacy (by name) dirs */
+            prot_printf(imapd_out, "%s NO %s\r\n",
+                        tag, error_message(IMAP_USER_LEGACY_DIRS));
+            goto done;
+        }
+
         rename_user = 1;
     }
 
@@ -7847,12 +7863,10 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         }
     }
 
-    /* If we're renaming a user, take care of changing quotaroot, ACL,
-       seen state, subscriptions and sieve scripts */
+    /* If we're renaming a user, take care of changing quotaroot and ACL */
     if (!r && rename_user) {
         user_copyquotaroot(oldmailboxname, newmailboxname);
         user_renameacl(&imapd_namespace, newmailboxname, olduser, newuser);
-        user_renamedata(olduser, newuser);
 
         /* XXX report status/progress of meta-data */
     }
@@ -7880,12 +7894,6 @@ submboxes:
         /* add submailboxes; we pretend we're an admin since we successfully
            renamed the parent - we're using internal names here */
         r = mboxlist_allmbox(oldmailboxname, renmbox, &rock, MBOXTREE_INTERMEDIATES);
-    }
-
-    /* take care of deleting old ACLs, subscriptions, seen state and quotas */
-    if (!r && rename_user) {
-        /* user_deletedata takes care of logging the unuser */
-        user_deletedata(olduser, 1);
     }
 
     /* take care of intermediaries */
@@ -9268,7 +9276,8 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
         global_conversations = state;
     }
 
-    r = conversation_getstatus(state, mbentry->name, &sd->xconv);
+    r = conversation_getstatus(state,
+                               CONV_FOLDER_KEY_MBE(state, mbentry), &sd->xconv);
     if (r) return r;
 
 nonconv:
@@ -11820,10 +11829,11 @@ static int xfer_delete(struct xfer_header *xfer)
         /* XXX - this code is awful... need a sane way to manage mbentries */
         newentry = mboxlist_entry_create();
         newentry->name = xstrdupnull(item->mbentry->name);
+        newentry->uniqueid = xstrdupnull(item->mbentry->uniqueid);
         newentry->acl = xstrdupnull(item->mbentry->acl);
         newentry->server = xstrdupnull(item->mbentry->server);
         newentry->partition = xstrdupnull(item->mbentry->partition);
-        newentry->mbtype = MBTYPE_DELETED;
+        newentry->mbtype |= MBTYPE_DELETED;
         r = mboxlist_update(newentry, 1);
         mboxlist_entry_free(&newentry);
 
@@ -13040,7 +13050,7 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
     if (!imapd_userisadmin) {
         int mbtype = mbentry ? mbentry->mbtype : 0;
 
-        if (mbtype == MBTYPE_NETNEWS) return 0;
+        if (mbtype_isa(mbtype) == MBTYPE_NETNEWS) return 0;
         if ((mbtype & MBTYPE_INTERMEDIATE) &&
             !(rock->listargs->sel & LIST_SEL_INTERMEDIATES)) return 0;
         if (!(rock->listargs->sel & LIST_SEL_DAV)) {
@@ -13217,7 +13227,7 @@ static int list_cb(struct findall_data *data, void *rockp)
     /* do we need to add "missing" intermediates? */
     if ((rock->listargs->sel & LIST_SEL_INTERMEDIATES) &&
         ((rock->listargs->sel & LIST_SEL_DAV) ||
-         !(data->mbentry->mbtype & MBTYPES_DAV)) &&
+         !mbtypes_dav(data->mbentry->mbtype)) &&
         !mboxname_contains_parent(data->extname, rock->last_name)) {
 
         add_intermediates(data->extname, rock);
@@ -13462,7 +13472,7 @@ static int list_entry_comparator(const void *p1, const void *p2) {
     const struct list_entry *e1 = (struct list_entry *)p1;
     const struct list_entry *e2 = (struct list_entry *)p2;
 
-    return bsearch_compare_mbox(e1->extname, e2->extname);
+    return strcmp(e1->extname, e2->extname);
 }
 
 static void free_list_entry(void *rock)

@@ -575,6 +575,7 @@ static int store_resource(struct transaction_t *txn,
     const char *version = NULL, *uid = NULL, *fullname = NULL;
     struct index_record *oldrecord = NULL, record;
     char *mimehdr;
+    int ret = 0;
 
     /* Validate the vCard data */
     if (!vcard ||
@@ -618,41 +619,48 @@ static int store_resource(struct transaction_t *txn,
     }
 
     /* Check for changed UID on existing resource */
-    carddav_lookup_resource(davdb, mailbox->name, resource, &cdata, 0);
+    /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
+       XXX  because we may have been called as part of a COPY/MOVE */
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
+    carddav_lookup_resource(davdb, &mbentry, resource, &cdata, 0);
     if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
-        char *owner = mboxname_to_userid(cdata->dav.mailbox);
-
         txn->error.precond = CARDDAV_UID_CONFLICT;
-        assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                   namespace_addressbook.prefix,
-                   USER_COLLECTION_PREFIX, owner,
-                   strrchr(cdata->dav.mailbox, '.')+1,
-                   cdata->dav.resource);
-        txn->error.resource = buf_cstring(&txn->buf);
-        free(owner);
-        return HTTP_FORBIDDEN;
+        ret = HTTP_FORBIDDEN;
     }
-
-    if (dupcheck) {
+    else if (dupcheck) {
         /* Check for different resource with same UID */
+        const char *mbox =
+            cdata->dav.mailbox_byname ? mailbox->name : mailbox->uniqueid;
         carddav_lookup_uid(davdb, uid, &cdata);
-        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
+        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mbox) ||
                                     strcmp(cdata->dav.resource, resource))) {
             /* CARDDAV:no-uid-conflict */
-            char *owner = mboxname_to_userid(cdata->dav.mailbox);
-
             txn->error.precond = CARDDAV_UID_CONFLICT;
-            assert(!buf_len(&txn->buf));
-            buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                       namespace_addressbook.prefix,
-                       USER_COLLECTION_PREFIX, owner,
-                       strrchr(cdata->dav.mailbox, '.')+1,
-                       cdata->dav.resource);
-            txn->error.resource = buf_cstring(&txn->buf);
-            free(owner);
-            return HTTP_FORBIDDEN;
+            ret = HTTP_FORBIDDEN;
         }
+    }
+    if (ret) {
+        char *owner;
+        const char *mboxname;
+        mbentry_t *mbentry = NULL;
+
+        if (cdata->dav.mailbox_byname)
+            mboxname = cdata->dav.mailbox;
+        else {
+            mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
+            mboxname = mbentry->name;
+        }
+        owner = mboxname_to_userid(mboxname);
+
+        assert(!buf_len(&txn->buf));
+        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                   namespace_addressbook.prefix, USER_COLLECTION_PREFIX, owner,
+                   strrchr(mboxname, '.') + 1, cdata->dav.resource);
+        txn->error.resource = buf_cstring(&txn->buf);
+        mboxlist_entry_free(&mbentry);
+        free(owner);
+        return ret;
     }
 
     struct buf *buf = vcard_as_buf(vcard);
@@ -778,8 +786,8 @@ static int export_addressbook(struct transaction_t *txn)
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
-    r = annotatemore_lookupmask(mailbox->name, displayname_annot,
-                                httpd_userid, &attrib);
+    r = annotatemore_lookupmask_mbox(mailbox, displayname_annot,
+                                     httpd_userid, &attrib);
     /* fall back to last part of mailbox name */
     if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox->name, '.') + 1);
 
@@ -887,7 +895,7 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     if (!defaultlen) defaultlen = strlen(DEFAULT_ADDRBOOK);
 
     /* Make sure its a addrendar */
-    if (mbentry->mbtype != MBTYPE_ADDRESSBOOK) goto done;
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) goto done;
 
     /* Make sure its readable */
     rights = httpd_myrights(httpd_authstate, mbentry);
@@ -897,8 +905,8 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     len = strlen(shortname);
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookupmask(mbentry->name, displayname_annot,
-                                httpd_userid, &displayname);
+    r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
+                                    httpd_userid, &displayname);
     /* fall back to the last part of the mailbox name */
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
 
@@ -1635,7 +1643,7 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
         goto done;
     }
 
-    r = carddav_lookup_resource(davdb, fctx->req_tgt->mbentry->name,
+    r = carddav_lookup_resource(davdb, fctx->req_tgt->mbentry,
                                 fctx->req_tgt->resource, &cdata, 0);
     if (r)
         goto done;

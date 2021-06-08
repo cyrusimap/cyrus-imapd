@@ -302,7 +302,7 @@ static int parse_duration(const char *s, int *secondsp)
  * On Success: Returns 1
  * On Failure: Returns 0
  */
-static int get_annotation_value(const char *mboxname,
+static int get_annotation_value(const mbentry_t *mbentry,
                                 const char *annot_entry,
                                 int *secondsp, bool iterate)
 {
@@ -311,7 +311,7 @@ static int get_annotation_value(const char *mboxname,
     /* mboxname needs to be copied since `mboxname_make_parent`
      * runs a strrchr() on it.
      */
-    char *buf = xstrdup(mboxname);
+    char *buf = xstrdup(mbentry->name);
 
     /*
      * Mailboxes inherit /vendo/cmu/cyrus-imapd/{expire, archive, delete},
@@ -319,7 +319,7 @@ static int get_annotation_value(const char *mboxname,
      */
     do {
         buf_free(&attrib);
-        ret = annotatemore_lookup(buf, annot_entry, "", &attrib);
+        ret = annotatemore_lookup_mbe(mbentry, annot_entry, "", &attrib);
         if (ret ||              /* error */
             attrib.s)           /* found an entry */
             break;
@@ -394,7 +394,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
 
     /* check /vendor/cmu/cyrus-imapd/archive */
     if (!arock->skip_annotate &&
-        get_annotation_value(mbentry->name, IMAP_ANNOT_NS "archive",
+        get_annotation_value(mbentry, IMAP_ANNOT_NS "archive",
                              &archive_seconds, false)) {
         arock->archive_mark = archive_seconds ?
             time(0) - archive_seconds : 0;
@@ -485,7 +485,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
      * we need to iterate all the way up to "" (server entry)
      */
     if (!erock->skip_annotate &&
-        get_annotation_value(mbentry->name, IMAP_ANNOT_NS "expire",
+        get_annotation_value(mbentry, IMAP_ANNOT_NS "expire",
                              &expire_seconds, true)) {
         /* add mailbox to table */
         erock->expire_mark = expire_seconds ?
@@ -559,7 +559,7 @@ static int delete(const mbentry_t *mbentry, void *rock)
 
     /* check /vendor/cmu/cyrus-imapd/delete */
     if (!drock->skip_annotate &&
-        get_annotation_value(mbentry->name, IMAP_ANNOT_NS "delete",
+        get_annotation_value(mbentry, IMAP_ANNOT_NS "delete",
                              &delete_seconds, false)) {
         drock->delete_mark = delete_seconds ?
             time(0) - delete_seconds: 0;

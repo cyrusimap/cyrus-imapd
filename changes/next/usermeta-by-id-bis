@@ -1,0 +1,17 @@
+Description:
+
+Mailboxes and user metadata directories names by UUID rather than by name.
+
+
+Config changes:
+
+'reverseuniqueids' is deprecated and unused (reverse UNIQUEID records are now standard)
+
+
+Upgrade instructions:
+
+1. Shutdown Cyrus.
+2. Backup mailboxes.db
+3. Install new Cyrus binaries.
+4. Startup Cyrus (ctl_cyrusdb -r will upgrade mailboxes.db)
+5. Use relocate_by_id to move users/mailboxes to UUID directories at your leisure.

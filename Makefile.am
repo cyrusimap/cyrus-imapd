@@ -132,6 +132,7 @@ lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
 check_PROGRAMS =
 libexec_PROGRAMS =
 sbin_PROGRAMS =
+sbin_SCRIPTS =
 noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
@@ -181,6 +182,8 @@ sbin_PROGRAMS += \
 	imap/ctl_mboxlist \
 	imap/cvt_cyrusdb \
 	imap/cyr_df \
+	imap/cyr_ls \
+	imap/cyr_pwd \
 	imap/cyrdump \
 	imap/cyr_dbtool \
 	imap/cyr_deny \
@@ -198,7 +201,11 @@ sbin_PROGRAMS += \
 	imap/mbtool \
 	imap/quota \
 	imap/reconstruct \
+	imap/relocate_by_id \
 	imap/cvt_xlist_specialuse
+
+sbin_SCRIPTS += \
+	imap/cyr_cd.sh
 
 noinst_PROGRAMS += \
 	imap/message_test \
@@ -900,6 +907,12 @@ imap_cyr_deny_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_df_SOURCES = imap/cli_fatal.c imap/cyr_df.c imap/mutex_fake.c
 imap_cyr_df_LDADD = $(LD_UTILITY_ADD)
 
+imap_cyr_ls_SOURCES = imap/cli_fatal.c imap/cyr_ls.c imap/mutex_fake.c
+imap_cyr_ls_LDADD = $(LD_UTILITY_ADD)
+
+imap_cyr_pwd_SOURCES = imap/cli_fatal.c imap/cyr_pwd.c imap/mutex_fake.c
+imap_cyr_pwd_LDADD = $(LD_UTILITY_ADD)
+
 imap_cyr_expire_SOURCES = imap/cli_fatal.c imap/cyr_expire.c imap/mutex_fake.c
 imap_cyr_expire_LDADD = $(LD_UTILITY_ADD)
 
@@ -1377,6 +1390,9 @@ imap_quota_LDADD = $(LD_UTILITY_ADD)
 
 imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
 imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
+
+imap_relocate_by_id_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/relocate_by_id.c
+imap_relocate_by_id_LDADD = $(LD_UTILITY_ADD)
 
 imap_dav_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/dav_reconstruct.c
 imap_dav_reconstruct_LDADD = $(LD_UTILITY_ADD)

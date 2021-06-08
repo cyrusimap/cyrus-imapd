@@ -331,11 +331,11 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
                                                     state->userid);
     }
 
-    if (state->mailbox->mbtype & MBTYPES_NONIMAP) {
+    if (mbtype_isa(state->mailbox->mbtype) != MBTYPE_EMAIL) {
         if (state->want_dav) {
             /* User logged in using imapmagicplus token "dav" */
         }
-        else if (state->mailbox->mbtype == state->want_mbtype) {
+        else if (mbtype_isa(state->mailbox->mbtype) == state->want_mbtype) {
             /* Caller explicitly asks for this NONIMAP type */
         }
         else {
@@ -1105,7 +1105,7 @@ EXPORTED void index_fetchresponses(struct index_state *state,
     /* Keep an open reference on the per-mailbox db to avoid
      * doing too many slow database opens during the fetch */
     if ((fetchargs->fetchitems & FETCH_ANNOTATION))
-        annotate_getdb(state->mboxname, &annot_db);
+        annotate_getdb(state->mailbox->uniqueid, &annot_db);
 
     start = 1;
     end = state->exists;
@@ -1581,7 +1581,7 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
     int r = 0;
 
     if (warmup_flags & WARMUP_INDEX) {
-        fname = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, META_INDEX, 0);
+        fname = mbentry_metapath(mbentry, META_INDEX, 0);
         r = warmup_file(fname, 0, 0);
         if (r) goto out;
     }
@@ -1593,7 +1593,7 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
         }
     }
     if (warmup_flags & WARMUP_ANNOTATIONS) {
-        fname = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, META_ANNOTATIONS, 0);
+        fname = mbentry_metapath(mbentry, META_ANNOTATIONS, 0);
         r = warmup_file(fname, 0, 0);
         if (r) goto out;
     }
@@ -1608,7 +1608,7 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
         }
     }
     while ((uid = seqset_getnext(uids))) {
-        fname = mboxname_datapath(mbentry->partition, mbentry->name, mbentry->uniqueid, uid);
+        fname = mbentry_datapath(mbentry, uid);
         r = warmup_file(fname, 0, 0);
         if (r) goto out;
     }
@@ -2145,7 +2145,9 @@ static int search_predict_total(struct index_state *state,
     uint32_t exists;
 
     if (conversations) {
-        conversation_getstatus(cstate, index_mboxname(state), &convstatus);
+        conversation_getstatus(cstate,
+                               CONV_FOLDER_KEY_MBOX(cstate, state->mailbox),
+                               &convstatus);
         /* always grab xconvmodseq, so we report a growing
          * highestmodseq to all callers */
         if (xconvmodseqp) *xconvmodseqp = convstatus.threadmodseq;
@@ -3976,7 +3978,7 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     /* make sure we have appropriate rights */
-    r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
+    r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
     if (r) goto done;
     myrights = cyrus_acl_myrights(fmb_rock->state->authstate, mbentry->acl);
     if ((myrights & needrights) != needrights)
@@ -3986,7 +3988,7 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     if (rec->version == 0) {
         uint32_t system_flags, internal_flags;
 
-        r = mailbox_open_irl(rec->mboxname, &mailbox);
+        r = mailbox_open_irl(mbentry->name, &mailbox);
         if (r) goto done;
 
         r = msgrecord_find(mailbox, rec->uid, &msgrecord);
@@ -4002,7 +4004,7 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     if (fmb_rock->wantname) {
-        extname = mboxname_to_external(rec->mboxname,
+        extname = mboxname_to_external(mbentry->name,
                                        fmb_rock->fetchargs->namespace,
                                        fmb_rock->fetchargs->userid);
     }
@@ -4282,7 +4284,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
         if (annot && !strncmp(annot, "/shared/", 8)) {
             struct buf previewbuf = BUF_INITIALIZER;
-            annotatemore_msg_lookup(mailbox->name, record.uid, annot+7,
+            annotatemore_msg_lookup(mailbox, record.uid, annot+7,
                                     /*userid*/"", &previewbuf);
             if (buf_len(&previewbuf) > 256)
                 buf_truncate(&previewbuf, 256); // XXX - utf8 chars
@@ -6234,7 +6236,7 @@ MsgData **index_msgdata_load(struct index_state *state,
             case SORT_ANNOTATION: {
                 struct buf value = BUF_INITIALIZER;
 
-                annotatemore_msg_lookup(state->mboxname,
+                annotatemore_msg_lookup(state->mailbox,
                                         record.uid,
                                         sortcrit[j].args.annot.entry,
                                         sortcrit[j].args.annot.userid,

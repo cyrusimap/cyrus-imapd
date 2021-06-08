@@ -49,6 +49,8 @@
 #include "mailbox.h"
 #include "util.h"
 
+#define DB_MBOXID_VERSION 11     /* first version with records by mboxid */
+
 struct dav_data {
     unsigned rowid;
     time_t creationdate;
@@ -62,6 +64,7 @@ struct dav_data {
     const char *lock_ownerid;
     time_t lock_expire;
     int alive;
+    int mailbox_byname;         /* NOT stored in record - derived from db ver */
 };
 
 /* get a database handle corresponding to mailbox */
