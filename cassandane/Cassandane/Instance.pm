@@ -1959,9 +1959,10 @@ sub folder_to_directory
 
     $folder =~ s/^inbox\./user.cassandane./i;
     $folder =~ s/^inbox$/user.cassandane/i;
-    $folder =~ s/\./\//g;
 
-    my $dir = $self->{basedir} . "/data/$folder";
+    my $data = eval { $self->run_mbpath($folder) };
+    return unless $data;
+    my $dir = $data->{data};
     return undef unless -d $dir;
     return $dir;
 }
@@ -1972,22 +1973,23 @@ sub folder_to_deleted_directories
 
     $folder =~ s/^inbox\./user.cassandane./i;
     $folder =~ s/^inbox$/user.cassandane/i;
-    $folder =~ s/\./\//g;
 
-    my @dirs;
-    my $deldir = $self->{basedir} . "/data/DELETED/$folder";
-    if ( -d $deldir )
-    {
-        opendir DELDIR, $deldir
-            or die "Cannot open directory $deldir: $!";
-        while (my $e = readdir DELDIR)
-        {
-            push(@dirs, "$deldir/$e")
-                if ($e =~ m/^[0-9A-F]{8}$/);
-        }
-        closedir DELDIR;
+    # ideally we'd have a command-line way to do this, but imap works too
+    my $srv = $self->get_service('imap');
+    my $adminstore = $srv->create_store(username => 'admin');
+    my $adminclient = $adminstore->get_client();
+    my @folders = $adminclient->list('', "DELETED.$folder.%");
+
+    my @res;
+    for my $item (@folders) {
+      my $mailbox = $item->[2];
+      my $data = eval { $self->run_mbpath($mailbox) };
+      my $dir = $data->{data};
+      next unless -d $dir;
+      push @res, $dir;
     }
-    return @dirs;
+
+    return @res;
 }
 
 sub notifyd
@@ -2163,6 +2165,11 @@ sub get_sieve_script_dir
 {
     my ($self, $cyrusname) = @_;
 
+    if ($cyrusname) {
+        my $data = eval { $self->run_mbpath('-u', $cyrusname) };
+        return $data->{user}{sieve} if $data;
+    }
+
     $cyrusname //= '';
 
     my $sieved = "$self->{basedir}/conf/sieve";
@@ -2191,6 +2198,11 @@ sub get_sieve_script_dir
 sub get_conf_user_file
 {
     my ($self, $cyrusname, $ext) = @_;
+
+    if ($cyrusname) {
+        my $data = eval { $self->run_mbpath('-u', $cyrusname) };
+        return $data->{user}{$ext} if $data;
+    }
 
     my ($user, $domain) = split '@', $cyrusname;
 
