@@ -1057,6 +1057,9 @@ sub test_audit_unindexed
     xlog $self, "Create message UID 2 but *don't* index it.";
     $self->make_message() || die;
 
+    my $data = $self->{instance}->run_mbpath(-u => 'cassandane');
+    my $xapdir = $data->{xapian}{t1};
+
     xlog $self, "Read current cyrus.indexed.db.";
     my $result = $self->{instance}->run_command(
         {
@@ -1064,11 +1067,11 @@ sub test_audit_unindexed
             redirects => { stdout => $outfile },
         },
         'cyr_dbtool',
-        "$basedir/search/c/user/cassandane/xapian/cyrus.indexed.db",
+        "$xapdir/xapian/cyrus.indexed.db",
         'twoskip',
         'show'
     );
-    my @entries = _readfile();
+    my @entries = grep { not m/\*V\*/ } _readfile();
     $self->assert_num_equals(1, scalar @entries);
 
     xlog $self, "Add UID 2 to sequence set in cyrus.indexed.db";
@@ -1083,7 +1086,7 @@ sub test_audit_unindexed
             },
         },
         'cyr_dbtool',
-        "$basedir/search/c/user/cassandane/xapian/cyrus.indexed.db",
+        "$xapdir/xapian/cyrus.indexed.db",
         'twoskip',
         'set',
         $key,
