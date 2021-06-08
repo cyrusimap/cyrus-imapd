@@ -114,38 +114,40 @@ sub test_archive_messages
                             flags => []);
     $self->check_messages(\%msg);
 
-    my $basedir = $self->{instance}->{basedir};
+    my $data = $self->{instance}->run_mbpath("-u", 'cassandane');
+    my $datadir = $data->{data};
+    my $archivedir = $data->{archive};
 
-    $self->assert(-f "$basedir/data/user/cassandane/1.");
-    $self->assert(-f "$basedir/data/user/cassandane/2.");
-    $self->assert(-f "$basedir/data/user/cassandane/3.");
+    $self->assert(-f "$datadir/1.");
+    $self->assert(-f "$datadir/2.");
+    $self->assert(-f "$datadir/3.");
 
-    $self->assert(!-f "$basedir/archive/user/cassandane/1.");
-    $self->assert(!-f "$basedir/archive/user/cassandane/2.");
-    $self->assert(!-f "$basedir/archive/user/cassandane/3.");
+    $self->assert(!-f "$archivedir/1.");
+    $self->assert(!-f "$archivedir/2.");
+    $self->assert(!-f "$archivedir/3.");
 
     xlog $self, "Run cyr_expire but no messages should move";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
 
-    $self->assert(-f "$basedir/data/user/cassandane/1.");
-    $self->assert(-f "$basedir/data/user/cassandane/2.");
-    $self->assert(-f "$basedir/data/user/cassandane/3.");
+    $self->assert(-f "$datadir/1.");
+    $self->assert(-f "$datadir/2.");
+    $self->assert(-f "$datadir/3.");
 
-    $self->assert(!-f "$basedir/archive/user/cassandane/1.");
-    $self->assert(!-f "$basedir/archive/user/cassandane/2.");
-    $self->assert(!-f "$basedir/archive/user/cassandane/3.");
+    $self->assert(!-f "$archivedir/1.");
+    $self->assert(!-f "$archivedir/2.");
+    $self->assert(!-f "$archivedir/3.");
 
 
     xlog $self, "Run cyr_expire to archive now";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
 
-    $self->assert(!-f "$basedir/data/user/cassandane/1.");
-    $self->assert(!-f "$basedir/data/user/cassandane/2.");
-    $self->assert(!-f "$basedir/data/user/cassandane/3.");
+    $self->assert(!-f "$datadir/1.");
+    $self->assert(!-f "$datadir/2.");
+    $self->assert(!-f "$datadir/3.");
 
-    $self->assert(-f "$basedir/archive/user/cassandane/1.");
-    $self->assert(-f "$basedir/archive/user/cassandane/2.");
-    $self->assert(-f "$basedir/archive/user/cassandane/3.");
+    $self->assert(-f "$archivedir/1.");
+    $self->assert(-f "$archivedir/2.");
+    $self->assert(-f "$archivedir/3.");
 }
 
 sub test_archivenow_messages
@@ -174,38 +176,40 @@ sub test_archivenow_messages
                             flags => []);
     $self->check_messages(\%msg);
 
-    my $basedir = $self->{instance}->{basedir};
+    my $data = $self->{instance}->run_mbpath("-u", 'cassandane');
+    my $datadir = $data->{data};
+    my $archivedir = $data->{archive};
 
     # already archived
-    $self->assert(!-f "$basedir/data/user/cassandane/1.");
-    $self->assert(!-f "$basedir/data/user/cassandane/2.");
-    $self->assert(!-f "$basedir/data/user/cassandane/3.");
+    $self->assert(!-f "$datadir/1.");
+    $self->assert(!-f "$datadir/2.");
+    $self->assert(!-f "$datadir/3.");
 
-    $self->assert(-f "$basedir/archive/user/cassandane/1.");
-    $self->assert(-f "$basedir/archive/user/cassandane/2.");
-    $self->assert(-f "$basedir/archive/user/cassandane/3.");
+    $self->assert(-f "$archivedir/1.");
+    $self->assert(-f "$archivedir/2.");
+    $self->assert(-f "$archivedir/3.");
 
     xlog $self, "Run cyr_expire with old and messages stay archived";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
 
-    $self->assert(!-f "$basedir/data/user/cassandane/1.");
-    $self->assert(!-f "$basedir/data/user/cassandane/2.");
-    $self->assert(!-f "$basedir/data/user/cassandane/3.");
+    $self->assert(!-f "$datadir/1.");
+    $self->assert(!-f "$datadir/2.");
+    $self->assert(!-f "$datadir/3.");
 
-    $self->assert(-f "$basedir/archive/user/cassandane/1.");
-    $self->assert(-f "$basedir/archive/user/cassandane/2.");
-    $self->assert(-f "$basedir/archive/user/cassandane/3.");
+    $self->assert(-f "$archivedir/1.");
+    $self->assert(-f "$archivedir/2.");
+    $self->assert(-f "$archivedir/3.");
 
     xlog $self, "Run cyr_expire to archive now and messages stay archived";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
 
-    $self->assert(!-f "$basedir/data/user/cassandane/1.");
-    $self->assert(!-f "$basedir/data/user/cassandane/2.");
-    $self->assert(!-f "$basedir/data/user/cassandane/3.");
+    $self->assert(!-f "$datadir/1.");
+    $self->assert(!-f "$datadir/2.");
+    $self->assert(!-f "$datadir/3.");
 
-    $self->assert(-f "$basedir/archive/user/cassandane/1.");
-    $self->assert(-f "$basedir/archive/user/cassandane/2.");
-    $self->assert(-f "$basedir/archive/user/cassandane/3.");
+    $self->assert(-f "$archivedir/1.");
+    $self->assert(-f "$archivedir/2.");
+    $self->assert(-f "$archivedir/3.");
 }
 
 1;
@@ -238,26 +242,28 @@ sub test_archive_messages_archive_annotation
                             flags => []);
     $self->check_messages(\%msg);
 
-    my $basedir = $self->{instance}->{basedir};
+    my $data = $self->{instance}->run_mbpath("-u", 'cassandane');
+    my $datadir = $data->{data};
+    my $archivedir = $data->{archive};
 
-    $self->assert(-f "$basedir/data/user/cassandane/1.");
-    $self->assert(-f "$basedir/data/user/cassandane/2.");
-    $self->assert(-f "$basedir/data/user/cassandane/3.");
+    $self->assert(-f "$datadir/1.");
+    $self->assert(-f "$datadir/2.");
+    $self->assert(-f "$datadir/3.");
 
-    $self->assert(!-f "$basedir/archive/user/cassandane/1.");
-    $self->assert(!-f "$basedir/archive/user/cassandane/2.");
-    $self->assert(!-f "$basedir/archive/user/cassandane/3.");
+    $self->assert(!-f "$archivedir/1.");
+    $self->assert(!-f "$archivedir/2.");
+    $self->assert(!-f "$archivedir/3.");
 
     xlog $self, "Run cyr_expire but no messages should move";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
 
-    $self->assert(-f "$basedir/data/user/cassandane/1.");
-    $self->assert(-f "$basedir/data/user/cassandane/2.");
-    $self->assert(-f "$basedir/data/user/cassandane/3.");
+    $self->assert(-f "$datadir/1.");
+    $self->assert(-f "$datadir/2.");
+    $self->assert(-f "$datadir/3.");
 
-    $self->assert(!-f "$basedir/archive/user/cassandane/1.");
-    $self->assert(!-f "$basedir/archive/user/cassandane/2.");
-    $self->assert(!-f "$basedir/archive/user/cassandane/3.");
+    $self->assert(!-f "$archivedir/1.");
+    $self->assert(!-f "$archivedir/2.");
+    $self->assert(!-f "$archivedir/3.");
 
     $admintalk->setmetadata('user.cassandane',
                             "/shared/vendor/cmu/cyrus-imapd/archive",
@@ -266,23 +272,23 @@ sub test_archive_messages_archive_annotation
     xlog $self, "Run cyr_expire asking to archive now, but it shouldn't";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
 
-    $self->assert(-f "$basedir/data/user/cassandane/1.");
-    $self->assert(-f "$basedir/data/user/cassandane/2.");
-    $self->assert(-f "$basedir/data/user/cassandane/3.");
+    $self->assert(-f "$datadir/1.");
+    $self->assert(-f "$datadir/2.");
+    $self->assert(-f "$datadir/3.");
 
-    $self->assert(!-f "$basedir/archive/user/cassandane/1.");
-    $self->assert(!-f "$basedir/archive/user/cassandane/2.");
-    $self->assert(!-f "$basedir/archive/user/cassandane/3.");
+    $self->assert(!-f "$archivedir/1.");
+    $self->assert(!-f "$archivedir/2.");
+    $self->assert(!-f "$archivedir/3.");
 
 
     xlog $self, "Run cyr_expire asking to archive now, with skip annotation";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' , '-a');
 
-    $self->assert(!-f "$basedir/data/user/cassandane/1.");
-    $self->assert(!-f "$basedir/data/user/cassandane/2.");
-    $self->assert(!-f "$basedir/data/user/cassandane/3.");
+    $self->assert(!-f "$datadir/1.");
+    $self->assert(!-f "$datadir/2.");
+    $self->assert(!-f "$datadir/3.");
 
-    $self->assert(-f "$basedir/archive/user/cassandane/1.");
-    $self->assert(-f "$basedir/archive/user/cassandane/2.");
-    $self->assert(-f "$basedir/archive/user/cassandane/3.");
+    $self->assert(-f "$archivedir/1.");
+    $self->assert(-f "$archivedir/2.");
+    $self->assert(-f "$archivedir/3.");
 }
