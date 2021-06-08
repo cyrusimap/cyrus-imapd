@@ -1985,7 +1985,7 @@ sub test_fastmailsharing
 }
 
 sub test_davsharing
-    :min_version_3_0 :needs_component_httpd
+    :min_version_3_0 :needs_component_httpd :NoVirtDomains
 {
     my ($self) = @_;
 
@@ -2029,7 +2029,7 @@ EOF
 <D:invite-reply xmlns:D="DAV:">
   <D:invite-accepted />
   <D:create-in>
-    <D:href>/dav/calendars/users/cassandane/</D:href>
+    <D:href>/dav/calendars/user/cassandane/</D:href>
   </D:create-in>
   <D:comment>Thanks for the share!</D:comment>
 </D:invite-reply>
@@ -2097,7 +2097,7 @@ EOF
 }
 
 sub test_alarm_peruser
-    :MagicPlus :min_version_3_0 :needs_component_httpd :NoAltNameSpace
+    :MagicPlus :min_version_3_0 :needs_component_httpd :NoAltNameSpace :NoVirtDomains
 {
     my ($self) = @_;
 
@@ -2141,7 +2141,7 @@ EOF
 <D:invite-reply xmlns:D="DAV:">
   <D:invite-accepted />
   <D:create-in>
-    <D:href>/dav/calendars/users/cassandane/</D:href>
+    <D:href>/dav/calendars/user/cassandane/</D:href>
   </D:create-in>
   <D:comment>Thanks for the share!</D:comment>
 </D:invite-reply>

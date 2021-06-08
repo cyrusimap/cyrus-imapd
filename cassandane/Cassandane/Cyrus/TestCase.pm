@@ -236,6 +236,9 @@ magic(DelayedExpunge => sub {
 magic(VirtDomains => sub {
     shift->config_set(virtdomains => 'userid');
 });
+magic(NoVirtDomains => sub {
+    shift->config_set(virtdomains => 'off');
+});
 magic(AltNamespace => sub {
     shift->config_set(altnamespace => 'yes');
 });
