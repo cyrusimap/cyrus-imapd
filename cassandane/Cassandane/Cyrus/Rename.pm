@@ -598,7 +598,6 @@ sub test_rename_paths
     :MetaPartition :NoAltNameSpace
 {
     my ($self) = @_;
-    my $basedir = $self->{instance}->{basedir};
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.rename-src.sub") || die;
@@ -610,30 +609,31 @@ sub test_rename_paths
     $self->{store}->write_end();
 
     # check source files exist
-    -d "$basedir/data/user/cassandane/rename-src/sub" || die;
-    -d "$basedir/meta/user/cassandane/rename-src/sub" || die;
-    -f "$basedir/meta/user/cassandane/rename-src/sub/cyrus.header" || die;
-    -f "$basedir/meta/user/cassandane/rename-src/sub/cyrus.index" || die;
-    -f "$basedir/data/user/cassandane/rename-src/sub/cyrus.cache" || die;
-    -f "$basedir/data/user/cassandane/rename-src/sub/1." || die;
+    my $srcdata = $self->{instance}->run_mbpath('user.cassandane.rename-src.sub');
+    -d "$srcdata->{data}" || die;
+    -d "$srcdata->{meta}" || die;
+    -f "$srcdata->{meta}/cyrus.header" || die;
+    -f "$srcdata->{meta}/cyrus.index" || die;
+    -f "$srcdata->{data}/cyrus.cache" || die;
+    -f "$srcdata->{data}/1." || die;
 
     # and target don't
-    -d "$basedir/data/user/cassandane/rename-dst" && die;
-    -d "$basedir/meta/user/cassandane/rename-dst" && die;
+    $self->assert_null(eval { $self->{instance}->run_mbpath('user.cassandane.rename-dst.sub') });
 
     $imaptalk->rename("INBOX.rename-src.sub", "INBOX.rename-dst.sub");
 
     # check dest files exist
-    -d "$basedir/data/user/cassandane/rename-dst/sub" || die;
-    -d "$basedir/meta/user/cassandane/rename-dst/sub" || die;
-    -f "$basedir/meta/user/cassandane/rename-dst/sub/cyrus.header" || die;
-    -f "$basedir/meta/user/cassandane/rename-dst/sub/cyrus.index" || die;
-    -f "$basedir/data/user/cassandane/rename-dst/sub/cyrus.cache" || die;
-    -f "$basedir/data/user/cassandane/rename-dst/sub/1." || die;
+    my $dstdata = $self->{instance}->run_mbpath('user.cassandane.rename-dst.sub');
+    -d "$dstdata->{data}" || die;
+    -d "$dstdata->{meta}" || die;
+    -f "$dstdata->{meta}/cyrus.header" || die;
+    -f "$dstdata->{meta}/cyrus.index" || die;
+    -f "$dstdata->{data}/cyrus.cache" || die;
+    -f "$dstdata->{data}/1." || die;
 
-    # and src don't
-    -d "$basedir/data/user/cassandane/rename-src/sub" && die;
-    -d "$basedir/meta/user/cassandane/rename-src/sub" && die;
+    # and src don't any more (unless UUID when the paths are the same!)
+    $srcdata->{data} ne $dstdata->{data} && -d "$srcdata->{data}" && die;
+    $srcdata->{meta} ne $dstdata->{meta} && -d "$srcdata->{meta}" && die;
 }
 
 sub test_rename_deepuser_unixhs
