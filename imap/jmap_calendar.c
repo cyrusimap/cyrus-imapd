@@ -3122,12 +3122,6 @@ static int setcalendarevents_create(jmap_req_t *req,
         }
     }
 
-    if (icalendar_max_size != INT_MAX && ical &&
-        strlen(icalcomponent_as_ical_string(ical)) > (size_t) icalendar_max_size) {
-        r = IMAP_MESSAGE_TOO_LARGE;
-        goto done;
-    }
-
     // check that participantId is either not present or is a valid participant
     validate_participant_id(event, &schedule_addresses, invalid);
 
@@ -3140,12 +3134,16 @@ static int setcalendarevents_create(jmap_req_t *req,
 
     /* Convert JSEvent to iCalendar */
     ical = jmapical_toical(event, NULL, invalid);
-
     if (json_array_size(invalid)) {
         r = 0;
         goto done;
     } else if (!ical) {
         r = IMAP_INTERNAL;
+        goto done;
+    }
+    else if (icalendar_max_size != INT_MAX &&
+        strlen(icalcomponent_as_ical_string(ical)) > (size_t) icalendar_max_size) {
+        r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
     }
 
@@ -3798,13 +3796,12 @@ static int setcalendarevents_update(jmap_req_t *req,
         r = 0;
         goto done;
     }
-    else if (r) goto done;
-
-    if (icalendar_max_size != INT_MAX && ical &&
+    else if (icalendar_max_size != INT_MAX && ical &&
         strlen(icalcomponent_as_ical_string(ical)) > (size_t) icalendar_max_size) {
         r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
     }
+    else if (r) goto done;
 
     if (calendarId) {
         /* Check, if we need to move the event. */
