@@ -162,8 +162,8 @@ sub list_annotations
     elsif ($scope eq 'message')
     {
         my $mb = $mailbox;
-        $mb =~ s/\./\//g;
-        $mailbox_db = "$basedir/data/$mb/cyrus.annotations";
+        my $datadir = $self->{instance}->folder_to_directory($mailbox);
+        $mailbox_db = "$datadir/cyrus.annotations";
     }
     else
     {
@@ -2940,7 +2940,8 @@ sub test_cvt_cyrusdb
     $self->assert(( -f $global_flat ));
 
     xlog $self, "Convert the mailbox annotation db to flat";
-    my $mailbox_db = "$basedir/data/user/cassandane/cyrus.annotations";
+    my $datapath = $self->{instance}->folder_to_directory('user.cassandane');
+    my $mailbox_db = "$datapath/cyrus.annotations";
     my $mailbox_flat = "$basedir/xcassann.txt";
 
     $self->assert(( ! -f $mailbox_flat ));

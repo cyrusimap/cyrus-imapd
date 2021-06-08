@@ -385,12 +385,10 @@ sub test_reconstruct_splitconv
 #
 sub _munge_annot_crc
 {
-    my ($instance, $path, $value) = @_;
+    my ($instance, $file, $value) = @_;
 
     # this needs a bit of magic to know where to write... so
     # we do some hard-coded cyrus.index handling
-    my $basedir = $instance->{basedir};
-    my $file = "$basedir/$path";
     my $fh = IO::File->new($file, "+<");
     die "NO SUCH FILE $file" unless $fh;
     my $index = Cyrus::IndexFile->new($fh);
@@ -452,8 +450,10 @@ sub test_replication_reply_200
 
     # corrupt the sync_annot_crc at both ends and check that we can fix it without syncback
     xlog $self, "Damaging annotations CRCs";
-    _munge_annot_crc($self->{instance}, "/data/user/cassandane/cyrus.index", 1);
-    _munge_annot_crc($self->{replica}, "/data/user/cassandane/cyrus.index", 2);
+    my $mpath = $self->{instance}->folder_to_directory('user.cassandane');
+    my $rpath = $self->{replica}->folder_to_directory('user.cassandane');
+    _munge_annot_crc($self->{instance}, "$mpath/cyrus.index", 1);
+    _munge_annot_crc($self->{replica}, "$rpath/cyrus.index", 2);
 
     $self->run_replication(nosyncback => 1);
     $self->check_replication('cassandane');

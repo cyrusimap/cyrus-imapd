@@ -529,12 +529,17 @@ sub test_cyr_expire_delete
     $store->_select();
     $self->check_messages(\%msg_inbox);
 
-    my $basedir = $self->{instance}->{basedir};
-    $self->assert(-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
+    my ($datapath) = $self->{instance}->folder_to_deleted_directories("user.cassandane.$subfoldername");
+    $self->assert_not_null($datapath);
 
     xlog $self, "Run cyr_expire -D now.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
-    $self->assert(!-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
+
+    # the folder should not exist now!
+    $self->assert(!-d $datapath);
+
+    # and not exist from mbpath either...
+    $self->assert_null($self->{instance}->folder_to_deleted_directories("user.cassandane.$subfoldername"));
 }
 
 sub test_allowdeleted
@@ -637,16 +642,16 @@ sub test_cyr_expire_delete_with_annotation
     $store->_select();
     $self->check_messages(\%msg_inbox);
 
-    my $basedir = $self->{instance}->{basedir};
-    $self->assert(-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
+    my ($path) = $self->{instance}->folder_to_deleted_directories("user.cassandane.$subfoldername");
+    $self->assert(-d "$path");
 
     xlog $self, "Run cyr_expire -D now, it shouldn't delete.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
-    $self->assert(-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
+    $self->assert(-d "$path");
 
     xlog $self, "Run cyr_expire -D now, with -a, skipping annotation.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
-    $self->assert(!-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
+    $self->assert(!-d "$path");
 }
 
 # https://github.com/cyrusimap/cyrus-imapd/issues/2413
@@ -690,7 +695,8 @@ sub test_cyr_expire_dont_resurrect_convdb
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
 
     # expect user has a conversations database
-    $self->assert(-f "$basedir/conf/user/c/cassandane.conversations");
+    my $convdbfile = $self->{instance}->get_conf_user_file("cassandane", "conversations");
+    $self->assert(-f $convdbfile);
 
     # log cassandane user out before it gets thrown out anyway
     undef $talk;
@@ -701,7 +707,7 @@ sub test_cyr_expire_dont_resurrect_convdb
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     # expect user does not have a conversations database
-    $self->assert(!-f "$basedir/conf/user/c/cassandane.conversations");
+    $self->assert(!-f $convdbfile);
     $self->check_folder_not_ondisk($inbox);
     $self->check_folder_ondisk($inbox, deleted => 1);
 
@@ -710,14 +716,14 @@ sub test_cyr_expire_dont_resurrect_convdb
     $self->check_folder_ondisk($inbox, deleted => 1);
 
     # expect user does not have a conversations database
-    $self->assert(!-f "$basedir/conf/user/c/cassandane.conversations");
+    $self->assert(!-f $convdbfile);
 
     xlog $self, "Run cyr_expire -D now.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
     $self->check_folder_not_ondisk($inbox, deleted => 1);
 
     # expect user does not have a conversations database
-    $self->assert(!-f "$basedir/conf/user/c/cassandane.conversations");
+    $self->assert(!-f $convdbfile);
 }
 
 sub test_no_delete_with_children
