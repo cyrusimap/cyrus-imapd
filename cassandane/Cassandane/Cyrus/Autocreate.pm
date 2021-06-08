@@ -135,9 +135,10 @@ sub test_autocreate_sieve_script_generation
     my $store = $svc->create_store(username => 'foo');
     my $talk = $store->get_client();
 
-    $self->assert(-f "$basedir/conf/sieve/f/foo/foo_sieve.script.script");
-    $self->assert(-f "$basedir/conf/sieve/f/foo/defaultbc");
-    $self->assert(-f "$basedir/conf/sieve/f/foo/foo_sieve.script.bc");
+    my $sievedir = $self->{instance}->get_sieve_script_dir('foo');
+    $self->assert(-f "$sievedir/foo_sieve.script.script");
+    $self->assert(-f "$sievedir/defaultbc");
+    $self->assert(-f "$sievedir/foo_sieve.script.bc");
 }
 
 sub test_autocreate_acl
