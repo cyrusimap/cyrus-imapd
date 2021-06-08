@@ -262,6 +262,26 @@ static json_t *get_schedule_address_set(const char *userid,
     return val;
 }
 
+static json_t *getcalendar_defaultalerts(const char *userid,
+                                         const char *mboxname,
+                                         const char *annot)
+{
+    icalcomponent *ical = caldav_read_calendar_icalalarms(mboxname, userid, annot);
+    if (!ical) return json_array();
+
+    json_t *alerts = json_array();
+    icalcomponent *valarm;
+    for (valarm = icalcomponent_get_first_component(ical, ICAL_VALARM_COMPONENT);
+         valarm;
+         valarm = icalcomponent_get_next_component(ical, ICAL_VALARM_COMPONENT)) {
+        json_t *alert = jmapical_alert_from_ical(valarm);
+        if (alert) json_array_append_new(alerts, alert);
+    }
+
+    icalcomponent_free(ical);
+    return alerts;
+}
+
 static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct getcalendars_rock *rock = vrock;
@@ -438,15 +458,17 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     if (jmap_wantprop(rock->get->props, "defaultAlertsWithTime")) {
-        /* XXX  Do we use CALDAV:default-alarm-vevent-datetime
-           or some new annotation? */
-        json_object_set_new(obj, "defaultAlertsWithTime", json_array());
+        static const char *annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-datetime";
+        json_object_set_new(obj, "defaultAlertsWithTime",
+                getcalendar_defaultalerts(httpd_userid, mbentry->name, annot));
     }
 
     if (jmap_wantprop(rock->get->props, "defaultAlertsWithoutTime")) {
-        /* XXX  Do we use CALDAV:default-alarm-vevent-date
-           or some new annotation? */
-        json_object_set_new(obj, "defaultAlertsWithoutTime", json_array());
+        static const char *annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-date";
+        json_object_set_new(obj, "defaultAlertsWithoutTime",
+                getcalendar_defaultalerts(httpd_userid, mbentry->name, annot));
     }
 
     if (jmap_wantprop(rock->get->props, "timeZone")) {
@@ -875,6 +897,34 @@ static int jmap_calendar_changes(struct jmap_req *req)
     return 0;
 }
 
+static char *_emailalert_defaultrecipient(const char *userid)
+{
+    const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+    char *mailboxname = caldav_mboxname(userid, NULL);
+    struct buf buf = BUF_INITIALIZER;
+    int r = annotatemore_lookupmask(mailboxname, annotname, userid, &buf);
+
+    char *recipient = NULL;
+
+    if (!r && buf_len(&buf)) {
+        strarray_t *values = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
+        const char *item = strarray_nth(values, 0);
+        if (!strncasecmp(item, "mailto:", 7)) item += 7;
+        recipient = strconcat("mailto:", item, NULL);
+        strarray_free(values);
+    }
+    else if (strchr(userid, '@')) {
+        recipient = strconcat("mailto:", userid, NULL);
+    }
+    else {
+        recipient = strconcat("mailto:", userid, "@", config_defdomain, NULL);
+    }
+
+    buf_free(&buf);
+    free(mailboxname);
+    return recipient;
+}
+
 /* jmap calendar APIs */
 
 enum { TRANSP_TRANSPARENT = 0, TRANSP_OPAQUE_ATTENDING, TRANSP_OPAQUE };
@@ -894,21 +944,252 @@ struct setcalendar_props {
         int overwrite_acl;
     } share;
     long comp_types;
+    ptrarray_t *defaultalerts_withtime;    // list of VALARM icalcomponent*
+    ptrarray_t *defaultalerts_withouttime; // list of VALARM icalcomponent*
 };
 
-static int validate_includeInAvailability(const char *avail, json_t *invalid)
+static void setcalendar_props_fini(struct setcalendar_props *props)
 {
-    if (!strcmp(avail, "all")) return TRANSP_OPAQUE;
-    if (!strcmp(avail, "none")) return TRANSP_TRANSPARENT;
-    if (!strcmp(avail, "attending")) return TRANSP_OPAQUE_ATTENDING;
-
-    json_array_append_new(invalid, json_string("includeInAvailability"));
-    return -1;
+    if (props->defaultalerts_withtime) {
+        icalcomponent *valarm;
+        while ((valarm = ptrarray_pop(props->defaultalerts_withtime))) {
+            icalcomponent_free(valarm);
+        }
+        ptrarray_free(props->defaultalerts_withtime);
+    }
+    if (props->defaultalerts_withouttime) {
+        icalcomponent *valarm;
+        while ((valarm = ptrarray_pop(props->defaultalerts_withouttime))) {
+            icalcomponent_free(valarm);
+        }
+        ptrarray_free(props->defaultalerts_withouttime);
+    }
 }
 
-/* Update the calendar properties in the calendar mailbox named mboxname.
+static void setcalendar_readprops(jmap_req_t *req,
+                                  struct jmap_parser *parser,
+                                  struct setcalendar_props *props,
+                                  json_t *arg,
+                                  int is_create)
+{
+    memset(props, 0, sizeof(struct setcalendar_props));
+
+    if (is_create) {
+        props->isVisible = 1;
+        props->isSubscribed = 1;
+        props->transp = -1;
+        props->share.overwrite_acl = 1;
+        props->comp_types = config_types_to_caldav_types();
+    }
+    else {
+        props->sortOrder = -1;
+        props->isVisible = -1;
+        props->isSubscribed = -1;
+        props->share.overwrite_acl = 1;
+        props->transp = -1;
+        props->comp_types = -1;
+    }
+
+    /* name */
+    json_t *jprop = json_object_get(arg, "name");
+    if (json_is_string(jprop)) {
+        props->name = json_string_value(jprop);
+        if (strnlen(props->name, 256) == 256) {
+            jmap_parser_invalid(parser, "name");
+        }
+    }
+    else if (is_create || JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "name");
+    }
+
+    /* color */
+    jprop = json_object_get(arg, "color");
+    if (json_is_string(jprop)) {
+        props->color = json_string_value(jprop);
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "color");
+    }
+
+    /* sortOrder */
+    jprop = json_object_get(arg, "sortOrder");
+    if (json_is_integer(jprop)) {
+        props->sortOrder = json_integer_value(jprop);
+        if (props->sortOrder < 0) {
+            jmap_parser_invalid(parser, "sortOrder");
+        }
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "sortOrder");
+    }
+
+    /* isVisible */
+    jprop = json_object_get(arg, "isVisible");
+    if (json_is_boolean(jprop)) {
+        props->isVisible = json_boolean_value(jprop);
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "isVisible");
+    }
+
+    /* isSubscribed */
+    jprop = json_object_get(arg, "isSubscribed");
+    if (json_is_boolean(jprop)) {
+        props->isSubscribed = json_boolean_value(jprop);
+        if (!strcmp(req->accountid, req->userid)) {
+            if (!props->isSubscribed) {
+                /* unsubscribing own calendars isn't supported */
+                jmap_parser_invalid(parser, "isSubscribed");
+            }
+            else props->isSubscribed = -1; // ignore
+        }
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "isSubscribed");
+    }
+
+    /* description */
+    jprop = json_object_get(arg, "description");
+    if (json_is_string(jprop)) {
+        props->desc = json_string_value(jprop);
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "description");
+    }
+
+    /* shareWith */
+    if (!is_create) {
+        json_t *shareWith = NULL;
+        /* Is shareWith overwritten or patched? */
+        jmap_parse_sharewith_patch(arg, &shareWith);
+        if (shareWith) {
+            props->share.overwrite_acl = 0;
+            json_object_set_new(arg, "shareWith", shareWith);
+        }
+    }
+    jprop = json_object_get(arg, "shareWith");
+    if (json_is_object(jprop) || json_is_null(jprop)) {
+        props->share.With = jprop;
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "shareWith");
+    }
+
+    /* scheduleAddressSet */
+    jprop = json_object_get(arg, "scheduleAddressSet");
+    if (json_is_array(jprop) || json_is_null(jprop)) {
+        props->scheduleAddressSet = jprop;
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "scheduleAddressSet");
+    }
+
+    /* includeInAvailablity */
+    jprop = json_object_get(arg, "includeInAvailablity");
+    if (json_is_string(jprop)) {
+        const char *avail = json_string_value(jprop);
+        props->transp = -1;
+        if (!strcmp(avail, "all")) {
+            props->transp = TRANSP_OPAQUE;
+        }
+        else if (!strcmp(avail, "none")) {
+            props->transp = TRANSP_TRANSPARENT;
+        }
+        else if (!strcmp(avail, "attending")) {
+            props->transp = TRANSP_OPAQUE_ATTENDING;
+        }
+        if (props->transp == -1) {
+            jmap_parser_invalid(parser, "includeInAvailablity");
+        }
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "includeInAvailablity");
+    }
+
+    /* timeZone */
+    jprop = json_object_get(arg, "timeZone");
+    if (json_is_string(jprop)) {
+        props->tzid = json_string_value(jprop);
+        /* Verify we have tzid record in the database */
+        if (icaltimezone_get_cyrus_timezone_from_tzid(props->tzid) == NULL) {
+            jmap_parser_invalid(parser, "timeZone");
+        }
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "timeZone");
+    }
+
+    /* myRights */
+    jprop = json_object_get(arg, "myRights");
+    if (JNOTNULL(jprop)) {
+        /* The myRights property is server-set and MUST NOT be set. */
+        jmap_parser_invalid(parser, "myRights");
+    }
+
+    char *emailalert_recipient = _emailalert_defaultrecipient(httpd_userid);
+
+    /* defaultAlertsWithTime */
+    jprop = json_object_get(arg, "defaultAlertsWithTime");
+    if (json_is_array(jprop)) {
+        size_t i;
+        json_t *jalert;
+        json_array_foreach(jprop, i, jalert) {
+            jmap_parser_push_index(parser, "defaultAlertsWithTime", i, NULL);
+            char *id = xstrdup(makeuuid());
+            icalcomponent *valarm =
+                jmapical_alert_to_ical(jalert, parser, id, NULL, NULL,
+                                       emailalert_recipient);
+            if (valarm) {
+                if (!props->defaultalerts_withtime) {
+                    props->defaultalerts_withtime = ptrarray_new();
+                }
+                ptrarray_append(props->defaultalerts_withtime, valarm);
+            }
+            free(id);
+            jmap_parser_pop(parser);
+        }
+    }
+    else if (json_is_null(jprop)) {
+        props->defaultalerts_withtime = ptrarray_new();
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "defaultAlertsWithTime");
+    }
+
+    /* defaultAlertsWithoutTime */
+    jprop = json_object_get(arg, "defaultAlertsWithoutTime");
+    if (json_is_array(jprop)) {
+        size_t i;
+        json_t *jalert;
+        json_array_foreach(jprop, i, jalert) {
+            jmap_parser_push_index(parser, "defaultAlertsWithoutTime", i, NULL);
+            char *id = xstrdup(makeuuid());
+            icalcomponent *valarm =
+                jmapical_alert_to_ical(jalert, parser, id, NULL, NULL,
+                                       emailalert_recipient);
+            if (valarm) {
+                if (!props->defaultalerts_withouttime) {
+                    props->defaultalerts_withouttime = ptrarray_new();
+                }
+                ptrarray_append(props->defaultalerts_withouttime, valarm);
+            }
+            free(id);
+            jmap_parser_pop(parser);
+        }
+    }
+    else if (json_is_null(jprop)) {
+        props->defaultalerts_withouttime = ptrarray_new();
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "defaultAlertsWithoutTime");
+    }
+
+    free(emailalert_recipient);
+}
+
+/* Write  the calendar properties in the calendar mailbox named mboxname.
  * NULL values and negative integers are ignored. Return 0 on success. */
-static int setcalendars_update(jmap_req_t *req,
+static int setcalendar_writeprops(jmap_req_t *req,
                                const char *mboxname,
                                struct setcalendar_props *props,
                                int ignore_acl)
@@ -1093,6 +1374,55 @@ static int setcalendars_update(jmap_req_t *req,
         buf_reset(&val);
     }
 
+    /* defaultAlertsWithTime */
+    if (!r && (props->defaultalerts_withtime || props->defaultalerts_withouttime)) {
+        if (props->defaultalerts_withtime) {
+            /* Wrap alarms with XROOT component */
+            icalcomponent *ical = icalcomponent_new(ICAL_XROOT_COMPONENT);
+            int i;
+            for (i = 0; i < ptrarray_size(props->defaultalerts_withtime); i++) {
+                icalcomponent *valarm = ptrarray_nth(props->defaultalerts_withtime, i);
+                icalcomponent_add_component(ical, valarm);
+            }
+            /* XROOT component takes ownership of alarms */
+            ptrarray_fini(props->defaultalerts_withtime);
+            /* Write alarms */
+            r = caldav_write_defaultalarms(mbox, req->userid,
+                    CALDAV_DEFAULTALARMS_ANNOT_WITHTIME, ical);
+            if (r) {
+                syslog(LOG_ERR, "failed to write annotation %s: %s",
+                        CALDAV_DEFAULTALARMS_ANNOT_WITHTIME, error_message(r));
+            }
+            icalcomponent_free(ical);
+        }
+        if (!r && props->defaultalerts_withouttime) {
+            /* Wrap alarms with XROOT component */
+            icalcomponent *ical = icalcomponent_new(ICAL_XROOT_COMPONENT);
+            int i;
+            for (i = 0; i < ptrarray_size(props->defaultalerts_withouttime); i++) {
+                icalcomponent *valarm = ptrarray_nth(props->defaultalerts_withouttime, i);
+                icalcomponent_add_component(ical, valarm);
+            }
+            /* XROOT component takes ownership of alarms */
+            ptrarray_fini(props->defaultalerts_withouttime);
+            /* Write alarms */
+            r = caldav_write_defaultalarms(mbox, req->userid,
+                    CALDAV_DEFAULTALARMS_ANNOT_WITHDATE, ical);
+            if (r) {
+                syslog(LOG_ERR, "failed to write annotation %s: %s",
+                        CALDAV_DEFAULTALARMS_ANNOT_WITHDATE, error_message(r));
+            }
+            icalcomponent_free(ical);
+        }
+        if (!r) {
+            r = caldav_bump_defaultalarms(mbox);
+            if (r) {
+                syslog(LOG_ERR, "failed to bump default alarms for %s: %s",
+                        mailbox_name(mbox), error_message(r));
+            }
+        }
+    }
+
     buf_free(&val);
     if (r) {
         mailbox_abort(mbox);
@@ -1171,16 +1501,201 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
     return r;
 }
 
+static void setcalendars_create(struct jmap_req *req,
+                                const char *creation_id,
+                                json_t *arg,
+                                json_t **record,
+                                json_t **err)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct setcalendar_props props;
+    mbentry_t *mbparent = NULL;
+    char *parentname = caldav_mboxname(req->accountid, NULL);
+    char *uid = xstrdup(makeuuid());
+    char *mboxname = caldav_mboxname(req->accountid, uid);
+    int r = 0;
+
+    /* Parse and validate properties. */
+    setcalendar_readprops(req, &parser, &props, arg, /*is_create*/1);
+    if (props.share.With) {
+        if (!jmap_hasrights(req, parentname, ACL_ADMIN)) {
+            jmap_parser_invalid(&parser, "shareWith");
+        }
+    }
+    if (json_array_size(parser.invalid)) {
+        *err = json_pack("{s:s, s:O}",
+                "type", "invalidProperties",
+                "properties", parser.invalid);
+        goto done;
+    }
+
+    /* Make sure we are allowed to create the calendar */
+    mboxlist_lookup(parentname, &mbparent, NULL);
+    if (!jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD)) {
+        *err = json_pack("{s:s}", "type", "accountReadOnly");
+        goto done;
+    }
+    char *newacl = xstrdup("");
+    char *acl = xstrdup(mbparent->acl);
+    mboxlist_entry_free(&mbparent);
+
+    /* keep just the owner and admin parts of the new ACL!  Everything
+     * else will be added from share.With.  All this crap should be
+     * modularised some more rather than open-coded, but here we go */
+    char *userid;
+    char *nextid = NULL;
+    for (userid = acl; userid; userid = nextid) {
+        char *rightstr;
+        int access;
+
+        rightstr = strchr(userid, '\t');
+        if (!rightstr) break;
+        *rightstr++ = '\0';
+
+        nextid = strchr(rightstr, '\t');
+        if (!nextid) break;
+        *nextid++ = '\0';
+
+        if (!strcmp(userid, req->accountid) || is_system_user(userid)) {
+            /* owner or system */
+            cyrus_acl_strtomask(rightstr, &access);
+            r = cyrus_acl_set(&newacl, userid,
+                    ACL_MODE_SET, access, NULL, NULL);
+            if (r) {
+                free(acl);
+                free(newacl);
+                syslog(LOG_ERR, "IOERROR: failed to set_acl for calendar create (%s, %s) %s",
+                        userid, req->accountid, error_message(r));
+                goto done;
+            }
+        }
+    }
+    free(acl);
+
+    /* Create the calendar */
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    mbentry.name = mboxname;
+    mbentry.acl = newacl;
+    mbentry.mbtype = MBTYPE_CALENDAR;
+    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+            0/*isadmin*/, httpd_userid, httpd_authstate,
+            0/*flags*/, NULL/*mailboxptr*/);
+    free(newacl);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                mboxname, error_message(r));
+        if (r == IMAP_PERMISSION_DENIED) {
+            *err = json_pack("{s:s}", "type", "accountReadOnly");
+            goto done;
+        }
+        goto done;
+    }
+    r = setcalendar_writeprops(req, mboxname, &props, /*ignore_acl*/1);
+    if (r) {
+        free(uid);
+        int rr = mboxlist_deletemailbox(mboxname, 1, "", NULL, NULL, 0);
+        if (rr) {
+            syslog(LOG_ERR, "could not delete mailbox %s: %s",
+                    mboxname, error_message(rr));
+        }
+        free(mboxname);
+        goto done;
+    }
+
+    /* Report calendar as created. */
+    *record = json_pack("{s:s}", "id", uid);
+    if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+        json_t *addrset = get_schedule_address_set(req->userid, mboxname);
+        if (addrset) json_object_set_new(*record, "scheduleAddressSet", addrset);
+    }
+    jmap_add_id(req, creation_id, uid);
+
+done:
+    if (r && *err == NULL) {
+        switch (r) {
+            case IMAP_PERMISSION_DENIED:
+                *err = json_pack("{s:s}", "type", "accountReadOnly");
+                break;
+            default:
+                *err = jmap_server_error(r);
+        }
+    }
+    mboxlist_entry_free(&mbparent);
+    setcalendar_props_fini(&props);
+    jmap_parser_fini(&parser);
+    free(parentname);
+    free(mboxname);
+    free(uid);
+}
+
+static void setcalendars_update(jmap_req_t *req,
+                                const char *uid,
+                                json_t *arg,
+                                json_t **record,
+                                json_t **err)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    char *mboxname = caldav_mboxname(req->accountid, uid);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+
+    /* Parse and validate properties. */
+    struct setcalendar_props props;
+    setcalendar_readprops(req, &parser, &props, arg, /*is_create*/0);
+    if (props.share.With) {
+        if (!jmap_hasrights(req, mboxname, ACL_ADMIN)) {
+            jmap_parser_invalid(&parser, "shareWith");
+        }
+    }
+    if (json_array_size(parser.invalid)) {
+        *err = json_pack("{s:s, s:O}",
+                "type", "invalidProperties",
+                "properties", parser.invalid);
+        goto done;
+    }
+
+    /* Make sure we don't mess up special calendars */
+    if (jmap_calendar_isspecial(mbname)) {
+        *err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+
+    /* Update the calendar */
+    int r = setcalendar_writeprops(req, mboxname, &props, /*ignore_acl*/0);
+    if (r) {
+        switch (r) {
+            case IMAP_MAILBOX_NONEXISTENT:
+            case IMAP_NOTFOUND:
+                *err = json_pack("{s:s}", "type", "notFound");
+                break;
+            case IMAP_PERMISSION_DENIED:
+                *err = json_pack("{s:s}", "type", "accountReadOnly");
+                break;
+            default:
+                *err = jmap_server_error(r);
+        }
+        goto done;
+    }
+
+    /* Report calendar as updated. */
+    *record = json_null();
+
+done:
+    setcalendar_props_fini(&props);
+    jmap_parser_fini(&parser);
+    mbname_free(&mbname);
+    free(mboxname);
+}
+
 static int jmap_calendar_set(struct jmap_req *req)
 {
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
     json_t *err = NULL;
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req, &parser, calendar_props, NULL, NULL, &set, &err);
+    jmap_set_parse(req, &argparser, calendar_props, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1219,323 +1734,40 @@ static int jmap_calendar_set(struct jmap_req *req)
 
     /* create */
     const char *key;
-    json_t *arg, *record;
+    json_t *arg;
     json_object_foreach(set.create, key, arg) {
-        /* Validate calendar id. */
         if (!strlen(key)) {
             json_t *err= json_pack("{s:s}", "type", "invalidArguments");
             json_object_set_new(set.not_created, key, err);
             continue;
         }
-
-        /* Parse and validate properties. */
-        json_t *invalid = json_array(), *shareWith = NULL;
-        const char *name = NULL;
-        const char *desc = NULL;
-        const char *color = NULL;
-        const char *avail = NULL;
-        const char *tzid = NULL;
-        int32_t sortOrder = 0;
-        int isVisible = 1;
-        int isSubscribed = 1;
-        int pe; /* parse error */
-        int transp = -1;
-        json_t  *myrights = NULL;
-        json_t *scheduleAddressSet = NULL;
-
-        /* Mandatory properties. */
-        pe = jmap_readprop(arg, "name", 1,  invalid, "s", &name);
-        if (pe > 0 && strnlen(name, 256) == 256) {
-            json_array_append_new(invalid, json_string("name"));
+        json_t *record = NULL, *err = NULL;
+        setcalendars_create(req, key, arg, &record, &err);
+        if (!err) {
+            json_object_set_new(set.created, key, record);
         }
-
-        jmap_readprop(arg, "color", 0,  invalid, "s", &color);
-
-        pe = jmap_readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
-        if (pe > 0 && sortOrder < 0) {
-            json_array_append_new(invalid, json_string("sortOrder"));
-        }
-        jmap_readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
-        pe = jmap_readprop(arg, "isSubscribed", 0,  invalid, "b", &isSubscribed);
-        if (pe > 0 && !strcmp(req->accountid, req->userid)) {
-            if (!isSubscribed) {
-                /* XXX unsubscribing own calendars isn't supported */
-                json_array_append_new(invalid, json_string("isSubscribed"));
-            }
-            else {
-                isSubscribed = -1; // ignore
-            }
-        }
-
-        /* Optional properties. */
-        jmap_readprop(arg, "description", 0,  invalid, "s", &desc);
-        jmap_readprop(arg, "shareWith", 0,  invalid, "o", &shareWith);
-
-        jmap_readprop(arg, "scheduleAddressSet", 0,  invalid, "o", &scheduleAddressSet);
-
-        pe = jmap_readprop(arg, "includeInAvailablity", 0, invalid, "s", &avail);
-        if (pe > 0) transp = validate_includeInAvailability(avail, invalid);
-
-        pe = jmap_readprop(arg, "timeZone", 0, invalid, "s", &tzid);
-        if (pe > 0) {
-            /* Verify we have tzid record in the database */
-            if (zoneinfo_lookup(tzid, NULL) != 0) {
-                json_array_append_new(invalid, json_string("timeZone"));
-            }
-        }
-
-        /* The myRights property is server-set and MUST NOT be set. */
-        pe = jmap_readprop(arg, "myRights", 0,  invalid, "o", &myrights);
-        if (pe > 0) {
-            json_array_append_new(invalid, json_string("myRights"));
-        }
-        
-        /* Report any property errors and bail out. */
-        if (json_array_size(invalid)) {
-            json_t *err = json_pack("{s:s, s:o}",
-                                    "type", "invalidProperties",
-                                    "properties", invalid);
-            json_object_set_new(set.not_created, key, err);
-            continue;
-        }
-        json_decref(invalid);
-
-        /* Make sure we are allowed to create the calendar */
-        char *parentname = caldav_mboxname(req->accountid, NULL);
-        mbentry_t *mbparent = NULL;
-        mboxlist_lookup(parentname, &mbparent, NULL);
-        free(parentname);
-        if (!jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD)) {
-            json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-            json_object_set_new(set.not_created, key, err);
-            mboxlist_entry_free(&mbparent);
-            continue;
-        }
-        char *newacl = xstrdup("");
-        char *acl = xstrdup(mbparent->acl);
-        mboxlist_entry_free(&mbparent);
-
-        /* keep just the owner and admin parts of the new ACL!  Everything
-         * else will be added from share.With.  All this crap should be
-         * modularised some more rather than open-coded, but here we go */
-        char *userid;
-        char *nextid = NULL;
-        for (userid = acl; userid; userid = nextid) {
-            char *rightstr;
-            int access;
-
-            rightstr = strchr(userid, '\t');
-            if (!rightstr) break;
-            *rightstr++ = '\0';
-
-            nextid = strchr(rightstr, '\t');
-            if (!nextid) break;
-            *nextid++ = '\0';
-
-            if (!strcmp(userid, req->accountid) || is_system_user(userid)) {
-                /* owner or system */
-                cyrus_acl_strtomask(rightstr, &access);
-                r = cyrus_acl_set(&newacl, userid,
-                                  ACL_MODE_SET, access, NULL, NULL);
-                if (r) {
-                    syslog(LOG_ERR, "IOERROR: failed to set_acl for calendar create (%s, %s) %s",
-                                    userid, req->accountid, error_message(r));
-                    free(acl);
-                    free(newacl);
-                    goto done;
-                }
-            }
-        }
-        free(acl);
-
-        /* Create the calendar */
-        char *uid = xstrdup(makeuuid());
-        char *mboxname = caldav_mboxname(req->accountid, uid);
-        mbentry_t mbentry = MBENTRY_INITIALIZER;
-        mbentry.name = mboxname;
-        mbentry.acl = newacl;
-        mbentry.mbtype = MBTYPE_CALENDAR;
-        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                                   0/*isadmin*/, httpd_userid, httpd_authstate,
-                                   0/*flags*/, NULL/*mailboxptr*/);
-        free(newacl);
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                   mboxname, error_message(r));
-            if (r == IMAP_PERMISSION_DENIED) {
-                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-                json_object_set_new(set.not_created, key, err);
-            }
-            free(uid);
-            free(mboxname);
-            goto done;
-        }
-        struct setcalendar_props props = {
-            name, desc, color, tzid, sortOrder,
-            isVisible, isSubscribed, transp, scheduleAddressSet,
-            { shareWith, /*overwrite_acl*/ 1}, config_types_to_caldav_types()
-        };
-        r = setcalendars_update(req, mboxname, &props, /*ignore_acl*/1);
-        if (r) {
-            free(uid);
-            int rr = mboxlist_deletemailbox(mboxname, 1, "", NULL, NULL, 0);
-            if (rr) {
-                syslog(LOG_ERR, "could not delete mailbox %s: %s",
-                       mboxname, error_message(rr));
-            }
-            free(mboxname);
-            goto done;
-        }
-
-        /* Report calendar as created. */
-        record = json_pack("{s:s}", "id", uid);
-
-        /* Add additional properties */
-        if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
-            json_t *addrset = get_schedule_address_set(req->userid, mboxname);
-            if (addrset) json_object_set_new(record, "scheduleAddressSet", addrset);
-        }
-
-        json_object_set_new(set.created, key, record);
-        jmap_add_id(req, key, uid);
-        free(uid);
-        free(mboxname);
+        else json_object_set_new(set.not_created, key, err);
     }
 
     /* update */
     const char *uid;
     json_object_foreach(set.update, uid, arg) {
-
-        /* Validate uid */
-        if (!uid) {
-            continue;
-        }
         if (uid && uid[0] == '#') {
             const char *newuid = jmap_lookup_id(req, uid + 1);
             if (!newuid) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(set.not_updated, uid, err);
+                json_object_set_new(set.not_updated, uid,
+                        json_pack("{s:s}", "type", "notFound"));
                 continue;
             }
             uid = newuid;
         }
-
-        /* Parse and validate properties. */
-        json_t *invalid = json_array(), *shareWith = NULL;
-
-        char *mboxname = caldav_mboxname(req->accountid, uid);
-        const char *name = NULL;
-        const char *desc = NULL;
-        const char *color = NULL;
-        const char *avail = NULL;
-        const char *tzid = NULL;
-        int32_t sortOrder = -1;
-        int isVisible = -1;
-        int isSubscribed = -1;
-        int overwrite_acl = 1;
-        int transp = -1;
-        json_t  *myrights = NULL;
-        json_t *scheduleAddressSet = NULL;
-        int pe = 0; /* parse error */
-        pe = jmap_readprop(arg, "name", 0,  invalid, "s", &name);
-        if (pe > 0 && strnlen(name, 256) == 256) {
-            json_array_append_new(invalid, json_string("name"));
+        json_t *record = NULL, *err = NULL;
+        setcalendars_update(req, uid, arg, &record, &err);
+        if (!err) {
+            json_object_set_new(set.updated, uid, record);
         }
-        jmap_readprop(arg, "description", 0,  invalid, "s", &desc);
-        jmap_readprop(arg, "color", 0,  invalid, "s", &color);
-        pe = jmap_readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
-        if (pe > 0 && sortOrder < 0) {
-            json_array_append_new(invalid, json_string("sortOrder"));
-        }
-        jmap_readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
-        pe = jmap_readprop(arg, "isSubscribed", 0,  invalid, "b", &isSubscribed);
-        if (pe > 0 && !strcmp(req->accountid, req->userid)) {
-            if (!isSubscribed) {
-                /* XXX unsubscribing own calendars isn't supported */
-                json_array_append_new(invalid, json_string("isSubscribed"));
-            }
-            else {
-                isSubscribed = -1; // ignore
-            }
-        }
-
-        pe = jmap_readprop(arg, "includeInAvailablity", 0, invalid, "s", &avail);
-        if (pe > 0) transp = validate_includeInAvailability(avail, invalid);
-
-        pe = jmap_readprop(arg, "timeZone", 0, invalid, "s", &tzid);
-        if (pe > 0) {
-            /* Verify we have tzid record in the database */
-            if (icaltimezone_get_cyrus_timezone_from_tzid(tzid) == NULL) {
-                json_array_append_new(invalid, json_string("timeZone"));
-            }
-        }
-
-        /* Is shareWith overwritten or patched? */
-        jmap_parse_sharewith_patch(arg, &shareWith);
-        if (shareWith) {
-            overwrite_acl = 0;
-            json_object_set_new(arg, "shareWith", shareWith);
-        }
-        pe = jmap_readprop(arg, "shareWith", 0,  invalid, "o", &shareWith);
-        if (pe > 0 && !jmap_hasrights(req, mboxname, JACL_ADMIN)) {
-            json_array_append_new(invalid, json_string("shareWith"));
-        }
-
-        jmap_readprop(arg, "scheduleAddressSet", 0,  invalid, "o", &scheduleAddressSet);
-
-        /* The myRights property is server-set and MUST NOT be set. */
-        pe = jmap_readprop(arg, "myRights", 0,  invalid, "o", &myrights);
-        if (pe > 0) {
-            json_array_append_new(invalid, json_string("myRights"));
-        }
-
-        /* Report any property errors and bail out. */
-        if (json_array_size(invalid)) {
-            json_t *err = json_pack("{s:s, s:o}",
-                                    "type", "invalidProperties",
-                                    "properties", invalid);
-            json_object_set_new(set.not_updated, uid, err);
-            free(mboxname);
-            continue;
-        }
-        json_decref(invalid);
-
-        /* Make sure we don't mess up special calendars */
-        mbname_t *mbname = mbname_from_intname(mboxname);
-        if (!mbname || jmap_calendar_isspecial(mbname)) {
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_updated, uid, err);
-            mbname_free(&mbname);
-            free(mboxname);
-            continue;
-        }
-        mbname_free(&mbname);
-
-        /* Update the calendar */
-        struct setcalendar_props props = {
-            name, desc, color, tzid, sortOrder,
-            isVisible, isSubscribed, transp, scheduleAddressSet,
-            { shareWith, overwrite_acl}, /*comp_types*/ -1
-        };
-        r = setcalendars_update(req, mboxname, &props, /*ignore_acl*/0);
-        free(mboxname);
-        if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_updated, uid, err);
-            r = 0;
-            continue;
-        }
-        else if (r == IMAP_PERMISSION_DENIED) {
-            json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-            json_object_set_new(set.not_updated, uid, err);
-            r = 0;
-            continue;
-        }
-
-        /* Report calendar as updated. */
-        json_object_set_new(set.updated, uid, json_null());
+        else json_object_set_new(set.not_updated, uid, err);
     }
-
 
     /* destroy */
     size_t index;
@@ -1602,7 +1834,7 @@ static int jmap_calendar_set(struct jmap_req *req)
 
 done:
     mboxname_release(&namespacelock);
-    jmap_parser_fini(&parser);
+    jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
     return r;
 }
@@ -2403,6 +2635,8 @@ HIDDEN void jmap_calendarcontext_init(struct jmapical_jmapcontext *ctx, jmap_req
                 " WebDAV managed attachments in imapd.conf?", __func__);
     }
 
+    /* Initialize context for email alerts */
+    ctx->emailalert_defaultrecipient = _emailalert_defaultrecipient(req->userid);
 }
 
 
@@ -2412,6 +2646,7 @@ HIDDEN void jmap_calendarcontext_fini(struct jmapical_jmapcontext *ctx)
     buf_free(&rock->davbaseurl);
     if (rock->davattachments) jmap_closembox(rock->req, &rock->davattachments);
     free(rock);
+    free(ctx->emailalert_defaultrecipient);
 }
 
 static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
