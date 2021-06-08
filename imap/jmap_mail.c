@@ -3942,9 +3942,14 @@ static void emailquery_buildresult(struct emailquery *q,
     }
 
     q->super.result_position = pos;
-    if (q->super.calculate_total) {
+    if (q->super.calculate_total)
         assert(qc->have_total);
+
+    if (qc->have_total) {
         q->super.total = len;
+    }
+    else {
+        q->super.have_total = 0;
     }
 }
 
