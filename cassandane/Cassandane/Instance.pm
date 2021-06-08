@@ -1982,6 +1982,7 @@ sub folder_to_deleted_directories
 
     my @res;
     for my $item (@folders) {
+      next if grep { lc $_ eq '\\noselect' } @{$item->[0]};
       my $mailbox = $item->[2];
       my $data = eval { $self->run_mbpath($mailbox) };
       my $dir = $data->{data};
