@@ -3526,9 +3526,8 @@ sub test_contact_get_invalid_utf8
         }, 'R1']
     ]);
 
-    my $basedir = $self->{instance}->{basedir};
-    copy('data/vcard/invalid-utf8.eml',
-         $basedir.'/data/user/cassandane/#addressbooks/Default/1.') or die;
+    my $datadir = $self->{instance}->folder_to_directory("user.cassandane.#addressbooks.Default");
+    copy('data/vcard/invalid-utf8.eml', "$datadir/1.") or die;
     $self->{instance}->run_command({ cyrus => 1 },
         'reconstruct', 'user.cassandane.#addressbooks.Default');
 

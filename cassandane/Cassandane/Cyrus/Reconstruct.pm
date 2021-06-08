@@ -95,8 +95,8 @@ sub test_reconstruct_zerouid
 
     # this needs a bit of magic to know where to write... so
     # we do some hard-coded cyrus.index handling
-    my $basedir = $self->{instance}->{basedir};
-    my $file = "$basedir/data/user/cassandane/cyrus.index";
+    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
+    my $file = "$dir/cyrus.index";
     my $fh = IO::File->new($file, "+<");
     die "NO SUCH FILE $file" unless $fh;
     my $index = Cyrus::IndexFile->new($fh);
@@ -144,8 +144,8 @@ sub test_reconstruct_truncated
 
     # this needs a bit of magic to know where to write... so
     # we do some hard-coded cyrus.index handling
-    my $basedir = $self->{instance}->{basedir};
-    my $file = "$basedir/data/user/cassandane/cyrus.index";
+    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
+    my $file = "$dir/cyrus.index";
     my $fh = IO::File->new($file, "+<");
     die "NO SUCH FILE $file" unless $fh;
     my $index = Cyrus::IndexFile->new($fh);
@@ -201,8 +201,8 @@ sub test_reconstruct_removedfile
 
     # this needs a bit of magic to know where to write... so
     # we do some hard-coded cyrus.index handling
-    my $basedir = $self->{instance}->{basedir};
-    unlink("$basedir/data/user/cassandane/6.");
+    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
+    unlink("$dir/6.");
 
     # this time, the reconstruct will fix up the broken record and re-insert later
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
@@ -246,8 +246,8 @@ sub test_reconstruct_snoozed
 
     # this needs a bit of magic to know where to write... so
     # we do some hard-coded cyrus.index handling
-    my $basedir = $self->{instance}->{basedir};
-    my $file = "$basedir/data/user/cassandane/cyrus.index";
+    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
+    my $file = "$dir/cyrus.index";
     my $fh = IO::File->new($file, "+<");
     die "NO SUCH FILE $file" unless $fh;
     my $index = Cyrus::IndexFile->new($fh);

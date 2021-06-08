@@ -2477,8 +2477,8 @@ sub test_reconstruct
     $admintalk = undef;
 
     xlog $self, "Moving the cyrus.index file out of the way";
-    my $mbdir = $self->{instance}->{basedir} . '/data/user/cassandane';
-    my $cyrus_index = "$mbdir/cyrus.index";
+    my $datadir = $self->{instance}->folder_to_directory('user.cassandane');
+    my $cyrus_index = "$datadir/cyrus.index";
     $self->assert(( -f $cyrus_index ));
     rename($cyrus_index, $cyrus_index . '.NOT')
         or die "Cannot rename $cyrus_index: $!";
@@ -2604,8 +2604,8 @@ sub test_reconstruct_orphans
     $admintalk = undef;
 
     xlog $self, "Moving the cyrus.index file out of the way";
-    my $mbdir = $self->{instance}->{basedir} . '/data/user/cassandane';
-    my $cyrus_index = "$mbdir/cyrus.index";
+    my $datadir = $self->{instance}->folder_to_directory('user.cassandane');
+    my $cyrus_index = "$datadir/cyrus.index";
     $self->assert(( -f $cyrus_index ));
     rename($cyrus_index, $cyrus_index . '.NOT')
         or die "Cannot rename $cyrus_index: $!";
@@ -2614,7 +2614,7 @@ sub test_reconstruct_orphans
     foreach $uid (2, 7)
     {
         xlog $self, "Deleting uid $uid";
-        unlink("$mbdir/$uid.");
+        unlink("$datadir/$uid.");
 
         my $msg = delete $exp{$uid};
         my $data1 = $msg->get_annotation($mentry1, $mattrib);

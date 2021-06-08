@@ -9709,9 +9709,11 @@ EOF
     $self->assert_not_null($msg);
 
     my $basedir = $self->{instance}->{basedir};
+    my $jpath = $self->{instance}->folder_to_directory('user.cassandane.#jmap');
+    my $dpath = $self->{instance}->folder_to_directory('user.cassandane.drafts');
 
-    my @jstat = stat("$basedir/data/user/cassandane/\#jmap/1.");
-    my @dstat = stat("$basedir/data/user/cassandane/drafts/1.");
+    my @jstat = stat("$jpath/1.");
+    my @dstat = stat("$dpath/1.");
 
     xlog $self, "sizes match";
     $self->assert_num_equals($jstat[7], $dstat[7]);
