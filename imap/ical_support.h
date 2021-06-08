@@ -79,6 +79,14 @@ extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
 extern void icalproperty_set_xparam(icalproperty *prop,
                                     const char *name, const char *val, int purge);
 
+/* Returns if default alerts are explicitly enabled (1) or disabled (0).
+   Returns -1 otherwise. */
+extern int icalcomponent_read_usedefaultalerts(icalcomponent *comp);
+
+extern void icalcomponent_add_defaultalerts(icalcomponent *ical,
+                                            icalcomponent *alarms_withtime,
+                                            icalcomponent *alarms_withdate);
+
 /* If range is a NULL period, callback() is executed for ALL occurrences,
    otherwise callback() is only executed for occurrences that overlap the range.
    callback() returns true (1) while it wants more occurrences, 0 to finish.

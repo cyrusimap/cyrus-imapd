@@ -282,7 +282,6 @@ struct propfind_ctx {
     xmlBufferPtr xmlbuf;                /* Buffer for dumping XML nodes */
 };
 
-
 /* Context for patching (writing) properties */
 struct proppatch_ctx {
     struct transaction_t *txn;          /* request transaction */
@@ -294,8 +293,10 @@ struct proppatch_ctx {
     struct txn *tid;                    /* Transaction ID for annot writes */
     int *ret;                           /* Return code to pass up to caller */
     struct buf buf;                     /* Working buffer */
+    ptrarray_t postprocs;               /* Post-processors after patching */
 };
-
+/* Post processor function after properties are patched */
+typedef void (*pctx_postproc_t)(struct proppatch_ctx *);
 
 /* Structure for property status */
 struct propstat {

@@ -260,6 +260,7 @@ static void _num_to_comp_flags(struct comp_flags *flags, unsigned num)
     flags->tzbyref   = (num >> 4) & 1;
     flags->mattach   = (num >> 5) & 1;
     flags->shared    = (num >> 6) & 1;
+    flags->defaultalerts = (num >> 7) & 1;
 }
 
 static unsigned _comp_flags_to_num(struct comp_flags *flags)
@@ -269,7 +270,8 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
        + ((flags->status    & 3) << 2)
        + ((flags->tzbyref   & 1) << 4)
        + ((flags->mattach   & 1) << 5)
-       + ((flags->shared    & 1) << 6);
+       + ((flags->shared    & 1) << 6)
+       + ((flags->defaultalerts & 1) << 7);
 }
 
 #define CMD_READFIELDS                                                  \
@@ -302,6 +304,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     cdata->dav.alive = sqlite3_column_int(stmt, 16);
     cdata->dav.modseq = sqlite3_column_int64(stmt, 17);
     cdata->dav.createdmodseq = sqlite3_column_int64(stmt, 18);
+
     if (!(rrock->flags & RROCK_FLAG_TOMBSTONES) && !cdata->dav.alive)
         return 0;
 
@@ -802,6 +805,16 @@ EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *c
     cdata->dtend = icaltime_as_ical_string(span.end);
     cdata->comp_flags.recurring = recurring;
     cdata->comp_flags.mattach = mattach;
+
+    /* Get default alerts property in main component or override */
+    cdata->comp_flags.defaultalerts = 0;
+    for (comp = icalcomponent_get_first_real_component(ical);
+         comp && !cdata->comp_flags.defaultalerts;
+         comp = icalcomponent_get_next_component(ical, kind)) {
+
+        cdata->comp_flags.defaultalerts =
+            icalcomponent_read_usedefaultalerts(comp) > 0;
+    }
     
     return caldav_write(caldavdb, cdata);
 }
