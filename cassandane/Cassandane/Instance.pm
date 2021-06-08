@@ -2200,22 +2200,8 @@ sub get_conf_user_file
 {
     my ($self, $cyrusname, $ext) = @_;
 
-    if ($cyrusname) {
-        my $data = eval { $self->run_mbpath('-u', $cyrusname) };
-        return $data->{user}{$ext} if $data;
-    }
-
-    my ($user, $domain) = split '@', $cyrusname;
-
-    my $base = "$self->{basedir}/conf";
-    if ($domain) {
-        my $dhash = substr($domain, 0, 1);
-        $base .= "/domain/$dhash/$domain";
-    }
-
-    my $uhash = substr($user, 0, 1);
-
-    return "$base/user/$uhash/$user.$ext";
+    my $data = eval { $self->run_mbpath('-u', $cyrusname) };
+    return $data->{user}{$ext} if $data;
 }
 
 sub install_sieve_script
@@ -2294,18 +2280,74 @@ sub get_servername
 
 sub run_mbpath
 {
-    my ($self, @opts) = @_;
-    my $filename = $self->get_basedir() . "/cyr_info.out";
+    my ($self, @args) = @_;
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    my $basedir = $self->get_basedir();
+    if ($maj < 3 || $maj == 3 && $min <= 4) {
+        my $folder = pop @args;
+        my $domain = '';
+        if ($folder =~ s/\@([^@]+)$//) {
+            $domain = $1;
+        }
+
+        # support -u $user, including users with dots
+        if (@args and $args[0] eq '-u') {
+            $folder =~ s/\./\^/g;
+            $folder = "user.$folder";
+        }
+
+        # translate to path
+        $folder =~ s/\./\//g;
+        my $user = '';
+        if ($folder =~ m{user/([^/]+)}) {
+            $user = $1;
+        }
+
+        my $dhash = substr($domain, 0, 1);
+        my $uhash = substr($user, 0, 1);
+
+        # XXX - hashing smarts?
+        my $upath = '';
+        $upath .= "domain/$dhash/$domain/" if $domain;
+        $upath .= "user/$uhash/$user";
+        my $spath = '';
+        # fricking sieve, always different
+        $spath .= "domain/$dhash/$domain/" if $domain;
+        $spath .= "$uhash/$user";
+        my $xpath = '';
+        # et tu xapian
+        $xpath .= "domain/$dhash/$domain/" if $domain;
+        $xpath .= "$uhash/user/$user";
+
+        my $res = {
+            data => "$basedir/data/$folder",
+            archive => "$basedir/archive/$folder",
+            meta => "$basedir/meta/$folder",
+            # skip mbname, we're not using it
+            user => {
+                (map { $_ => "$basedir/conf/$upath.$_" } qw(conversations counters dav seen sub xapianactive)),
+                sieve => "$basedir/conf/sieve/$spath",
+            },
+            xapian => {
+                t1 => "$basedir/search/$xpath",
+                t2 => "$basedir/search2/$xpath",
+            },
+        };
+        return $res;
+    }
+
+    my $filename = "$basedir/cyr_info.out";
     $self->run_command({
         cyrus => 1,
         redirects => {
             stdout => $filename,
         },
-    }, 'mbpath', '-j', @opts);
+    }, 'mbpath', '-j', @args);
     open(FH, "<$filename") || return;
     local $/ = undef;
     my $str = <FH>;
     close(FH);
+
     return decode_json($str);
 }
 
