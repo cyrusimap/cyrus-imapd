@@ -2306,18 +2306,21 @@ sub run_mbpath
         my $dhash = substr($domain, 0, 1);
         my $uhash = substr($user, 0, 1);
 
+        my $dotuser = $user;
+        $dotuser =~ s/\^/\./g;
+
         # XXX - hashing smarts?
         my $upath = '';
         $upath .= "domain/$dhash/$domain/" if $domain;
-        $upath .= "user/$uhash/$user";
+        $upath .= "user/$uhash/$dotuser";
         my $spath = '';
         # fricking sieve, always different
         $spath .= "domain/$dhash/$domain/" if $domain;
-        $spath .= "$uhash/$user";
+        $spath .= "$uhash/$dotuser";
         my $xpath = '';
         # et tu xapian
         $xpath .= "domain/$dhash/$domain/" if $domain;
-        $xpath .= "$uhash/user/$user";
+        $xpath .= "$uhash/user/$dotuser";
 
         my $res = {
             data => "$basedir/data/$folder",
