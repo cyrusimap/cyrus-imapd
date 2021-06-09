@@ -3995,12 +3995,6 @@ static void emailquery_fingerprint(struct buf *fingerprint,
         buf_putc(fingerprint, '>');
     }
 
-    if (q->super.calculate_total) {
-        buf_putc(fingerprint, '<');
-        buf_appendcstr(fingerprint, "calculate_total");
-        buf_putc(fingerprint, '>');
-    }
-
     if (q->want_partids) {
         buf_putc(fingerprint, '<');
         buf_appendcstr(fingerprint, "want_partids");
