@@ -4,9 +4,9 @@
 
 .. _imap-reference-manpages-systemcommands-relocate_by_id:
 
-==========
+==================
 **relocate_by_id**
-==========
+==================
 
 Relocate mailbox trees by their mailbox ids
 
