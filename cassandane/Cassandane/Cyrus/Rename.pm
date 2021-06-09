@@ -618,12 +618,13 @@ sub test_rename_paths
     -f "$srcdata->{data}/1." || die;
 
     # and target don't
-    $self->assert_null(eval { $self->{instance}->run_mbpath('user.cassandane.rename-dst.sub') });
+    my $dstdata = eval { $self->{instance}->run_mbpath('user.cassandane.rename-dst.sub') };
+    $self->assert(not $dstdata or (not -d $dstdata->{data} and not -d $dstdata->{meta}));
 
     $imaptalk->rename("INBOX.rename-src.sub", "INBOX.rename-dst.sub");
 
     # check dest files exist
-    my $dstdata = $self->{instance}->run_mbpath('user.cassandane.rename-dst.sub');
+    $dstdata = $self->{instance}->run_mbpath('user.cassandane.rename-dst.sub');
     -d "$dstdata->{data}" || die;
     -d "$dstdata->{meta}" || die;
     -f "$dstdata->{meta}/cyrus.header" || die;
