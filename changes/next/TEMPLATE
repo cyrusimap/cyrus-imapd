@@ -1,7 +1,6 @@
 Submitting a PR?  Create a file in this directory with the same name as your
 branch, and add the following details (you can use this file as a template).
 
-
 Description:
 
 A one line-ish description of the feature, for the release notes.
@@ -22,3 +21,8 @@ this feature?  What will they need to do when enabling this feature?
 This might be things like "upgrade mailboxes to at least version x", or
 "reconstruct with this flag", or "rebuild conversations db", or "rebuild
 search indexes", or "add an xyz job to cyrus.conf", ... etc.
+
+
+GitHub issue:
+
+If theres a github issue number for this, put it here.
