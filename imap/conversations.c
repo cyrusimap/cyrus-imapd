@@ -285,22 +285,52 @@ EXPORTED int conversations_num_folders(struct conversations_state *state)
     return strarray_size(state->folders);
 }
 
-EXPORTED const char* conversations_folder_name(struct conversations_state *state,
-                                               int foldernum)
+EXPORTED const char *conversations_folder_mboxname(const struct conversations_state *state,
+                                                   int foldernum)
 {
-    const char *folder = strarray_safenth(state->folders, foldernum);
-    if (state->folders_byname) {
-        return folder;
-    }
-    else {
-        static char fname[MAX_MAILBOX_NAME+1];
-        mbentry_t *mbentry = NULL;
+    const char *val = strarray_nth(state->folders, foldernum);
+    if (state->folders_byname)
+        return val;
 
-        mboxlist_lookup_by_uniqueid(folder, &mbentry, NULL);
-        strlcpy(fname, mbentry ? mbentry->name : "", sizeof(fname));
+    // make it writeable even though const, because we're fiddling cache
+    struct conversations_state *backdoor = (struct conversations_state *)state;
+    if (!backdoor->altnames) backdoor->altnames = strarray_new();
+    const char *res = strarray_nth(backdoor->altnames, foldernum);
+    if (!res) {
+        if (!val) return NULL;
+        // cache lookup
+        mbentry_t *mbentry = NULL;
+        int r = mboxlist_lookup_by_uniqueid(val, &mbentry, NULL);
+        if (r || !mbentry) return NULL;
+        strarray_set(backdoor->altnames, foldernum, mbentry->name);
         mboxlist_entry_free(&mbentry);
-        return fname;
+        res = strarray_nth(backdoor->altnames, foldernum);
     }
+    return res;
+}
+
+EXPORTED const char *conversations_folder_uniqueid(const struct conversations_state *state,
+                                                   int foldernum)
+{
+    const char *val = strarray_nth(state->folders, foldernum);
+    if (!state->folders_byname)
+        return val;
+
+    // make it writeable even though const, because we're fiddling cache
+    struct conversations_state *backdoor = (struct conversations_state *)state;
+    if (!backdoor->altnames) backdoor->altnames = strarray_new();
+    const char *res = strarray_nth(backdoor->altnames, foldernum);
+    if (!res) {
+        if (!val) return NULL;
+        // cache lookup
+        mbentry_t *mbentry = NULL;
+        int r = mboxlist_lookup(val, &mbentry, NULL);
+        if (r || !mbentry) return NULL;
+        strarray_set(backdoor->altnames, foldernum, mbentry->name);
+        mboxlist_entry_free(&mbentry);
+        res = strarray_nth(backdoor->altnames, foldernum);
+    }
+    return res;
 }
 
 EXPORTED size_t conversations_estimate_emailcount(struct conversations_state *state)
@@ -490,6 +520,8 @@ static void _conv_remove(struct conversations_state *state)
                 strarray_free(cur->s.counted_flags);
             if (cur->s.folders)
                 strarray_free(cur->s.folders);
+            if (cur->s.altnames)
+                strarray_free(cur->s.altnames);
             if (cur->local_namespacelock)
                 mboxname_release(&cur->local_namespacelock);
             free(cur);
@@ -1935,6 +1967,7 @@ static int _guid_one(struct guid_foreach_rock *frock,
     uint32_t res;
 
     /* Set G record values */
+    rec.cstate = frock->state;
     rec.guidrep = key+1;
     rec.cid = cid;
     rec.system_flags = system_flags;
@@ -1950,12 +1983,10 @@ static int _guid_one(struct guid_foreach_rock *frock,
     p = strchr(item, ':');
     if (!p) return IMAP_INTERNAL;
 
-    /* mboxname */
+    /* folder number */
     int r = parseuint32(item, &err, &res);
     if (r || err != p) return IMAP_INTERNAL;
     rec.foldernum = res;
-    rec.mailbox = strarray_safenth(frock->state->folders, res);
-    if (!rec.mailbox) return IMAP_INTERNAL;
 
     /* uid */
     r = parseuint32(p + 1, &err, &res);
