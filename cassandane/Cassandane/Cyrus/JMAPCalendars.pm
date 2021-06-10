@@ -9567,4 +9567,64 @@ sub test_calendar_defaultalerts_synctoken_shared
     $self->assert_deep_equals($errors, []);
 }
 
+sub test_calendar_set_destroy_events
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Create calendar and event";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                1 => {
+                    name => 'test',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                2 => {
+                    uid => 'eventuid1local',
+                    calendarId => '#1',
+                    title => "event1",
+                    start => "2020-03-30T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                },
+            },
+        }, 'R2'],
+    ]);
+    my $calendarId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($calendarId);
+    my $eventId = $res->[1][1]{created}{2}{id};
+    $self->assert_not_null($eventId);
+
+    xlog "Destroy calendar (with and without onDestroyEvents)";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            destroy => [$calendarId],
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['id'],
+        }, 'R2'],
+        ['Calendar/set', {
+            destroy => [$calendarId],
+            onDestroyRemoveEvents => JSON::true,
+        }, 'R3'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['id'],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('calendarHasEvents',
+        $res->[0][1]{notDestroyed}{$calendarId}{type});
+    $self->assert_str_equals($eventId, $res->[1][1]{list}[0]{id});
+    $self->assert_deep_equals([$calendarId], $res->[2][1]{destroyed});
+    $self->assert_deep_equals([$eventId], $res->[3][1]{notFound});
+}
+
 1;
