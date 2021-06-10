@@ -10215,13 +10215,14 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
     ptrarray_t *mboxrecs = rock->mboxrecs;
     mbentry_t *mbentry = NULL;
 
-    mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
+    int r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
+    if (r) return r;
 
     /* don't process emails that have this email attached! */
-    if (rec->part) return 0;
+    if (rec->part) goto done;
 
     if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)) {
-        return 0;
+        goto done;
     }
 
     /* Check if there's already a mboxrec for this mailbox. */
@@ -10235,18 +10236,12 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
         }
     }
     if (mboxrec == NULL) {
-        mbentry_t *mbentry = NULL;
-        int r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
-        if (r) return r;
-
         // we only want regular mailboxes!
         if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
-            mboxlist_entry_free(&mbentry);
-            return 0;
+            goto done;
         }
         if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)) {
-            mboxlist_entry_free(&mbentry);
-            return 0;
+            goto done;
         }
 
         mboxrec = xzmalloc(sizeof(struct email_mboxrec));
@@ -10254,7 +10249,6 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
         mboxrec->mbox_id = xstrdup(mbentry->uniqueid);
         ptrarray_append(mboxrecs, mboxrec);
     }
-    mboxlist_entry_free(&mbentry);
 
     struct email_uidrec *uidrec = xzmalloc(sizeof(struct email_uidrec));
     uidrec->mboxrec = mboxrec;
@@ -10265,6 +10259,8 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
          == FLAG_INTERNAL_SNOOZED);
     ptrarray_append(&mboxrec->uidrecs, uidrec);
 
+done:
+    mboxlist_entry_free(&mbentry);
     return 0;
 }
 
