@@ -1604,15 +1604,16 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
     r = mboxlist_findparent(mboxname, &parent);
     if (r) goto done;
 
+    xfree(mbentry->partition);
     r = mboxlist_create_partition(mboxname, parent->partition,
                                   &mbentry->partition);
     if (r) goto done;
     mbentry->mbtype &= ~MBTYPE_INTERMEDIATE;
-    free(mbentry->acl);
+    xfree(mbentry->acl);
     mbentry->acl = xstrdupnull(parent->acl);
 
     r = mailbox_create(mboxname, mbentry->mbtype,
-                       mbentry->partition, parent->acl,
+                       mbentry->partition, mbentry->acl,
                        mbentry->uniqueid, 0 /* options */,
                        mbentry->uidvalidity,
                        mbentry->createdmodseq,
@@ -1621,6 +1622,13 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
 
     r = mailbox_add_conversations(mailbox, /*silent*/1);
     if (r) goto done;
+
+    // make sure all the fields are up-to-date
+    xfree(mbentry->uniqueid);
+    mbentry->uniqueid = xstrdupnull(mailbox->uniqueid);
+    mbentry->uidvalidity = mailbox->i.uidvalidity;
+    mbentry->createdmodseq = mailbox->i.createdmodseq;
+    mbentry->foldermodseq = mailbox->i.highestmodseq;
 
     r = mboxlist_update_entry(mboxname, mbentry, &tid);
     if (r) goto done;
