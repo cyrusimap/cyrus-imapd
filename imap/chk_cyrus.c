@@ -96,7 +96,7 @@ static int chkmbox(struct findall_data *data, void *rock __attribute__((unused))
 
     fprintf(stderr, "checking: %s\n", name);
 
-    mailbox_reconstruct(name, 0); /* no changes allowed */
+    mailbox_reconstruct(name, 0, NULL); /* no changes allowed */
 
     mboxlist_entry_free(&mbentry);
 

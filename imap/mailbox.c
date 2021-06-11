@@ -6585,34 +6585,6 @@ done:
     return r;
 }
 
-static int mailbox_reconstruct_uniqueid(struct mailbox *mailbox, int flags)
-{
-    int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
-    mbentry_t *mbentry = NULL;
-
-    int r = mboxlist_lookup(mailbox->name, &mbentry, 0);
-    if (r) return r;
-
-    if (strcmpsafe(mbentry->uniqueid, mailbox->uniqueid)) {
-        printf("%s: update uniqueid from header %s => %s\n", mailbox->name,
-               mbentry->uniqueid, mailbox->uniqueid);
-        if (make_changes) {
-            if ((flags & RECONSTRUCT_PREFER_MBOXLIST) && mbentry->uniqueid) {
-                mailbox_set_uniqueid(mailbox, mbentry->uniqueid);
-            }
-            else {
-                free(mbentry->uniqueid);
-                mbentry->uniqueid = xstrdup(mailbox->uniqueid);
-                r = mboxlist_update(mbentry, 0);
-            }
-        }
-    }
-
-    mboxlist_entry_free(&mbentry);
-
-    return r;
-}
-
 static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
 {
     int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
@@ -6625,21 +6597,8 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
     if (strcmp(mailbox->acl, acl)) {
         printf("%s: update acl from header %s => %s\n", mailbox->name,
                mailbox->acl, acl);
-        if (make_changes) {
-            mbentry_t *mbentry = NULL;
-            r = mboxlist_lookup(mailbox->name, &mbentry, NULL);
-            if (!r) {
-                if ((flags & RECONSTRUCT_PREFER_MBOXLIST) && mbentry->acl) {
-                    mailbox_set_acl(mailbox, mbentry->acl);
-                }
-                else {
-                    free(mbentry->acl);
-                    mbentry->acl = xstrdup(acl);
-                    r = mboxlist_update(mbentry, 0);
-                }
-            }
-            mboxlist_entry_free(&mbentry);
-        }
+        if (make_changes)
+            mailbox_set_acl(mailbox, acl);
     }
 
     free(acl);
@@ -7299,7 +7258,7 @@ out:
 /*
  * Reconstruct the single mailbox named 'name'
  */
-EXPORTED int mailbox_reconstruct(const char *name, int flags)
+EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **mboxptr)
 {
     /* settings */
     int make_changes = (flags & RECONSTRUCT_MAKE_CHANGES);
@@ -7331,9 +7290,6 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 
     /* NOTE: we have to do this first, because it reads the header */
     r = mailbox_reconstruct_acl(mailbox, flags);
-    if (r) goto close;
-
-    r = mailbox_reconstruct_uniqueid(mailbox, flags);
     if (r) goto close;
 
     /* open and lock the annotation state */
@@ -7574,11 +7530,17 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
                            MBOXMODSEQ_ISFOLDER);
     }
 
-    if (make_changes) {
-        r = mailbox_commit(mailbox);
+    if (mboxptr) {
+        *mboxptr = mailbox;
+        mailbox = NULL;
     }
     else {
-        r = mailbox_abort(mailbox);
+        if (make_changes) {
+            r = mailbox_commit(mailbox);
+        }
+        else {
+            r = mailbox_abort(mailbox);
+        }
     }
 
 close:

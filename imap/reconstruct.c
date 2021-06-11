@@ -104,8 +104,6 @@
 extern int optind;
 extern char *optarg;
 
-hash_table unqid_table;
-
 /* current namespace */
 static struct namespace recon_namespace;
 
@@ -144,8 +142,6 @@ int main(int argc, char **argv)
 
     progname = basename(argv[0]);
 
-    construct_hash_table(&unqid_table, 2047, 1);
-
     while ((opt = getopt(argc, argv, "C:kp:rmfsxdgGqRUMIoOnV:u")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
@@ -170,10 +166,6 @@ int main(int argc, char **argv)
 
         case 'n':
             reconstruct_flags &= ~RECONSTRUCT_MAKE_CHANGES;
-            break;
-
-        case 'd':
-            reconstruct_flags |= RECONSTRUCT_REPAIR_MBOXLIST;
             break;
 
         case 'g':
@@ -380,8 +372,6 @@ int main(int argc, char **argv)
     if (rrock.discovered) strarray_free(rrock.discovered);
     free_hash_table(&rrock.visited, NULL);
 
-    free_hash_table(&unqid_table, free);
-
     buf_free(&buf);
 
     partlist_local_done();
@@ -443,40 +433,35 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     if (!data) return 0;
     struct reconstruct_rock *rrock = (struct reconstruct_rock *) rock;
     int r;
-    char *other;
     struct mailbox *mailbox = NULL;
     char outpath[MAX_MAILBOX_PATH];
     const char *name = NULL;
+    int make_changes = reconstruct_flags & RECONSTRUCT_MAKE_CHANGES;
+    int prefer_mbentry = reconstruct_flags & RECONSTRUCT_PREFER_MBOXLIST;
+
+    /* ignore partial matches */
+    if (!data->is_exactmatch) return 0;
 
     /* ignore intermediates */
     if ((data->mbentry->mbtype & MBTYPE_INTERMEDIATE))
         return 0;
 
-    /* ignore partial matches */
-    if (!data->is_exactmatch) return 0;
-
     signals_poll();
 
     name = mbname_intname(data->mbname);
-
-    if (reconstruct_flags & RECONSTRUCT_REPAIR_MBOXLIST) {
-        /* Skip tombstones */
-        if (!(data->mbentry->mbtype & MBTYPE_DELETED)) {
-            mbentry_t *mbentry = NULL;
-            r = mboxlist_lookup_by_uniqueid(data->mbentry->uniqueid, &mbentry, NULL);
-            if (r == IMAP_MAILBOX_NONEXISTENT) {
-                mboxlist_update((struct mboxlist_entry *) data->mbentry, 1);
-            }
-            mboxlist_entry_free(&mbentry);
-        }
-        return 0;
-    }
 
     /* don't repeat */
     if (hash_lookup(name, &rrock->visited)) return 0;
 
     if (!setversion) {
-        r = mailbox_reconstruct(name, reconstruct_flags);
+        r = mailbox_open_iwl(name, &mailbox);
+        if (r) {
+            com_err(name, r, "Failed to open after reconstruct");
+            return 0;
+        }
+    }
+    else {
+        r = mailbox_reconstruct(name, reconstruct_flags, &mailbox);
         if (r) {
             com_err(name, r, "%s",
                     (r == IMAP_IOERROR) ? error_message(errno) : "Failed to reconstruct mailbox");
@@ -484,33 +469,138 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         }
     }
 
-    r = mailbox_open_iwl(name, &mailbox);
+    mbentry_t *mbentry_byid = NULL;
+    mbentry_t *mbentry_byname = NULL;
+
+    r = mboxlist_lookup(name, &mbentry_byname, NULL);
+    // this better succeed!
     if (r) {
-        com_err(name, r, "Failed to open after reconstruct");
-        return 0;
+        printf("Failed to re-read %s!\n", name);
+        exit(1);
     }
 
-    other = hash_lookup(mailbox->uniqueid, &unqid_table);
-    if (other) {
-        mbentry_t *oldmbentry = NULL;
-        /* check that the old one still exists! */
-        r = mboxlist_lookup(other, &oldmbentry, NULL);
-        if (!r && !strcmpsafe(oldmbentry->uniqueid, mailbox->uniqueid)) {
-            /* uniqueid change required! */
-            if (updateuniqueids) {
-                mailbox_make_uniqueid(mailbox);
-                syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
-                        other, mailbox->name, oldmbentry->uniqueid, mailbox->uniqueid);
-            }
-            else {
-                syslog (LOG_ERR, "uniqueid clash with %s for %s (%s)",
-                        other, mailbox->name, mailbox->uniqueid);
-            }
+    int mbentry_dirty = 0;
+
+    // fix any uniqueid related mixups first!
+    if (strcmpsafe(mailbox->uniqueid, mbentry_byname->uniqueid)) {
+        printf("Wrong uniqueid in mbentry, fixing %s (%s -> %s)\n",
+               name, mbentry_byname->uniqueid, mailbox->uniqueid);
+        xfree(mbentry_byname->uniqueid);
+        mbentry_byname->uniqueid = xstrdupnull(mailbox->uniqueid);
+        mbentry_dirty = 1;
+    }
+
+    // fetch by uniqueid and compare
+    r = mboxlist_lookup_by_uniqueid(mbentry_byname->uniqueid, &mbentry_byid, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        printf("Missing mboxlist entry for uniqueid - will rewrite %s (%s)\n",
+               name, mbentry_byname->uniqueid);
+        mbentry_dirty = 1;
+    }
+    else if (r) {
+        printf("Error reading mailboxesdb for %s\n", name);
+        exit(1);
+    }
+    else if (strcasecmp(mbentry_byid->name, name)) {
+        printf("Wrong uniqueid! %s (should be %s)\n", mbentry_byid->name, name);
+        if (updateuniqueids) {
+            mailbox_make_uniqueid(mailbox);
+            xfree(mbentry_byname->uniqueid);
+            mbentry_byname->uniqueid = xstrdupnull(mailbox->uniqueid);
+            mbentry_dirty = 1;
+            syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
+                    mbentry_byid->name, mailbox->name, mbentry_byid->uniqueid, mailbox->uniqueid);
         }
-        mboxlist_entry_free(&oldmbentry);
+        else {
+            syslog (LOG_ERR, "uniqueid clash with %s for %s (%s)",
+                    mbentry_byid->name, mailbox->name, mailbox->uniqueid);
+            exit(1);
+        }
+    }
+    else {
+        // see if anything is actually different
+        if (mbentry_byname->uidvalidity != mbentry_byid->uidvalidity) {
+            printf("mismatched uidvalidity byid %s (%u %u)\n",
+                   name, mbentry_byname->uidvalidity, mbentry_byid->uidvalidity);
+            mbentry_dirty = 1;
+        }
+        if (mbentry_byname->mbtype != mbentry_byid->mbtype) {
+            printf("mismatched mbtype byid %s (%u %u)\n",
+                   name, mbentry_byname->mbtype, mbentry_byid->mbtype);
+            mbentry_dirty = 1;
+        }
+        if (strcmpsafe(mbentry_byname->partition, mbentry_byid->partition)) {
+            printf("mismatched partition byid %s (%s %s)\n",
+                   name, mbentry_byname->partition, mbentry_byid->partition);
+            mbentry_dirty = 1;
+        }
+        if (strcmpsafe(mbentry_byname->server, mbentry_byid->server)) {
+            printf("mismatched server byid %s (%s %s)\n",
+                   name, mbentry_byname->server, mbentry_byid->server);
+            mbentry_dirty = 1;
+        }
+        if (strcmpsafe(mbentry_byname->acl, mbentry_byid->acl)) {
+            printf("mismatched acl byid %s (%s %s)\n",
+                   name, mbentry_byname->acl, mbentry_byid->acl);
+            mbentry_dirty = 1;
+        }
+    }
+    mboxlist_entry_free(&mbentry_byid);
+
+    if (mailbox->i.uidvalidity != mbentry_byname->uidvalidity) {
+        if (!mailbox->i.uidvalidity || (prefer_mbentry && mbentry_byname->uidvalidity)) {
+            printf("Wrong uidvalidity in mailbox, fixing %s (%u -> %u)\n",
+                   name, mailbox->i.uidvalidity, mbentry_byname->uidvalidity);
+            mailbox->i.uidvalidity = mbentry_byname->uidvalidity;
+            mailbox_index_dirty(mailbox);
+        }
+        else {
+            printf("Wrong uidvalidity in mbentry, fixing %s (%u -> %u)\n",
+                   name, mbentry_byname->uidvalidity, mailbox->i.uidvalidity);
+            mbentry_byname->uidvalidity = mailbox->i.uidvalidity;
+            mbentry_dirty = 1;
+        }
     }
 
-    hash_insert(mailbox->uniqueid, xstrdup(mailbox->name), &unqid_table);
+    // how can this even happen?  Dunno, but here for completeness
+    if (strcmpsafe(mailbox->part, mbentry_byname->partition)) {
+        if (prefer_mbentry) {
+            printf("Wrong partition in mailbox %s (%s %s)\n",
+                   name, mbentry_byname->partition, mailbox->part);
+            xfree(mailbox->part);
+            mailbox->part = xstrdupnull(mbentry_byname->partition);
+            mailbox->header_dirty = 1;
+        }
+        else {
+            printf("Wrong partition in mbentry %s (%s %s)\n",
+                   name, mailbox->part, mbentry_byname->partition);
+            xfree(mbentry_byname->partition);
+            mbentry_byname->partition = xstrdupnull(mailbox->part);
+            mbentry_dirty = 1;
+        }
+    }
+
+    if (strcmpsafe(mailbox->acl, mbentry_byname->acl)) {
+        if (prefer_mbentry) {
+            printf("Wrong acl in mbentry %s (%s %s)\n",
+                   name, mailbox->acl, mbentry_byname->acl);
+            // this sets the header to dirty
+            mailbox_set_acl(mailbox, mbentry_byname->acl);
+        }
+        else {
+            printf("Wrong acl in mbentry %s (%s %s)\n",
+                   name, mbentry_byname->acl, mailbox->acl);
+            xfree(mbentry_byname->acl);
+            mbentry_byname->acl = xstrdupnull(mailbox->acl);
+            mbentry_dirty = 1;
+        }
+    }
+
+    if (mbentry_dirty && make_changes) {
+        r = mboxlist_update(mbentry_byname, 1);
+        if (r) syslog(LOG_ERR, "IOERROR: failed to update mbentry for %s (%s)", name, error_message(r));
+    }
+    mboxlist_entry_free(&mbentry_byname);
 
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &recon_namespace, NULL);
@@ -529,6 +619,12 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         else {
             printf("Converted %s version %d to %d\n", extname, oldversion, setversion);
         }
+    }
+    if (make_changes) {
+        mailbox_commit(mailbox);
+    }
+    else {
+        mailbox_abort(mailbox);
     }
     mailbox_close(&mailbox);
     free(extname);
