@@ -1115,7 +1115,7 @@ EXPORTED int mboxlist_delete(const char *name)
     return mboxlist_update_entry(name, NULL, NULL);
 }
 
-EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
+EXPORTED int mboxlist_update(const mbentry_t *mbentry, int localonly)
 {
     int r = 0, r2 = 0;
     struct txn *tid = NULL;

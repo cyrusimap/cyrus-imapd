@@ -168,7 +168,7 @@ int mboxlist_insertremote(mbentry_t *mbentry, struct txn **rettid);
 int mboxlist_deleteremote(const char *name, struct txn **in_tid);
 
 /* Update a mailbox's entry */
-int mboxlist_update(mbentry_t *mbentry, int localonly);
+int mboxlist_update(const mbentry_t *mbentry, int localonly);
 
 /* check user's ability to create mailbox */
 int mboxlist_createmailboxcheck(const char *name, int mbtype,
