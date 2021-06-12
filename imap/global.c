@@ -369,6 +369,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
                                   config_getstring(IMAPOPT_AUTH_MECH));
         libcyrus_config_setstring(CYRUSOPT_DELETERIGHT,
                                   config_getstring(IMAPOPT_DELETERIGHT));
+        libcyrus_config_setswitch(CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
+                                  config_getswitch(IMAPOPT_ACL_ADMIN_IMPLIES_WRITE));
         libcyrus_config_setstring(CYRUSOPT_SQL_DATABASE,
                                   config_getstring(IMAPOPT_SQL_DATABASE));
         libcyrus_config_setstring(CYRUSOPT_SQL_ENGINE,

@@ -103,6 +103,10 @@ are listed with ``<none>''.
 
 # OPTIONS
 
+{ "acl_admin_implies_write", 0, SWITCH, "3.5.2" }
+/* If enabled, any user with the admin ACL on a mailbox implicitly
+   gets the ability to write to that mailbox as well. */
+
 { "addressbookprefix", "#addressbooks", STRING, "2.5.0" }
 /* The prefix for the addressbook mailboxes hierarchies.  The hierarchy
    delimiter will be automatically appended.  The public addressbook
