@@ -58,6 +58,7 @@
 #include "xmalloc.h"
 #include "strarray.h"
 #include "libconfig.h"
+#include "lib/libcyr_cfg.h"
 
 /*
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
