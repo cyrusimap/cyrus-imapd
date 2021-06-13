@@ -3941,7 +3941,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     int slen, r;
     const char *clientin = NULL, *realm = NULL, *user, **authzid;
     unsigned int clientinlen = 0;
-    struct auth_scheme_t *scheme;
+    struct auth_scheme_t *scheme = NULL;
     static char base64[BASE64_BUF_SIZE+1];
     const void *canon_user = NULL;
 
