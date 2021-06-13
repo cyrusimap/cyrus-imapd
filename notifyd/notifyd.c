@@ -106,7 +106,7 @@ static int do_notify(void)
     strarray_t options = STRARRAY_INITIALIZER;
     long nopt;
     char *reply;
-    char *fname;
+    char *fname = NULL;
     notifymethod_t *nmethod;
     unsigned bufsiz;
     socklen_t optlen;
