@@ -440,7 +440,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             WRITEV_ADD_TO_IOVEC(iov, niov,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&inbuf), buf_len(&inbuf));
-            writev(logfd, iov, niov);
+            if (writev(logfd, iov, niov) < 0) {
+                syslog(LOG_NOTICE, "IONOTICE: failed to write telemetry for %s", httpd_userid);
+            }
             buf_reset(&txn->buf);
         }
 
@@ -464,7 +466,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             WRITEV_ADD_TO_IOVEC(iov, niov,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&outbuf), buf_len(&outbuf));
-            writev(logfd, iov, niov);
+            if (writev(logfd, iov, niov) < 0) {
+                syslog(LOG_NOTICE, "IONOTICE: failed to write telemetry for %s", httpd_userid);
+            }
             buf_reset(&txn->buf);
         }
 
