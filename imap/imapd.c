@@ -6576,7 +6576,7 @@ static void cmd_thread(char *tag, int usinguid)
  */
 static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove)
 {
-    int r, myrights;
+    int r, myrights = 0;
     char *copyuid = NULL;
     mbentry_t *mbentry = NULL;
 
@@ -8753,7 +8753,7 @@ static void cmd_getquotaroot(const char *tag, const char *name)
 {
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
-    int myrights;
+    int myrights = 0;
     int r, doclose = 0;
 
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
