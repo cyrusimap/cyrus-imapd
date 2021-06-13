@@ -453,10 +453,10 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     /* don't repeat */
     if (hash_lookup(name, &rrock->visited)) return 0;
 
-    if (!setversion) {
+    if (setversion) {
         r = mailbox_open_iwl(name, &mailbox);
         if (r) {
-            com_err(name, r, "Failed to open after reconstruct");
+            com_err(name, r, "Failed to open mailbox to set version");
             return 0;
         }
     }
