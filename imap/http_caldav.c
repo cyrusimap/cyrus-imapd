@@ -1590,7 +1590,7 @@ static int manage_attachments(struct transaction_t *txn,
     struct webdav_db *webdavdb = NULL;
     struct hash_table mattach_table = HASH_TABLE_INITIALIZER;
     icalcomponent *comp = NULL;
-    icalcomponent_kind kind;
+    icalcomponent_kind kind = ICAL_NO_COMPONENT;
     icalproperty *prop;
     icalparameter *param;
     const char *mid;
