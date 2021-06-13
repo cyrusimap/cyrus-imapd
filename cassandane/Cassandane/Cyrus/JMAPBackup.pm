@@ -132,7 +132,7 @@ sub test_restore_contacts
     $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
     $self->assert_num_equals(1, $res->[0][1]{numDestroysUndone});
 
-    sleep 2;
+    sleep 4;
     xlog "destroy contact A, update contact B, create contact D";
     $res = $jmap->CallMethods([['Contact/set', {
                     destroy => [$contactA],
@@ -159,7 +159,7 @@ sub test_restore_contacts
 
     xlog "restore contacts prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
-                    undoPeriod => "PT2S",
+                    undoPeriod => "PT3S",
                     undoAll => JSON::false
                 }, "R5"]]);
     $self->assert_not_null($res);
@@ -230,7 +230,7 @@ sub test_restore_contacts
 
     xlog "try to re-restore contacts prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
-                    undoPeriod => "PT2S",
+                    undoPeriod => "PT3S",
                     performDryRun => JSON::true,
                     undoAll => JSON::false
                 }, "R7"]]);
@@ -249,7 +249,7 @@ sub test_restore_contacts_all
 
     my $jmap = $self->{jmap};
 
-    sleep 2;
+    sleep 4;
     xlog "create contacts";
     my $res = $jmap->CallMethods([['Contact/set', {create => {
                         "a" => {firstName => "a", lastName => "a"},
@@ -285,7 +285,7 @@ sub test_restore_contacts_all
 
     my @expect = sort { $a->{firstName} cmp $b->{firstName} } @{$res->[0][1]{list}};
 
-    sleep 1;
+    sleep 4;
     xlog "destroy contact C, update contacts B and D, create contact E";
     $res = $jmap->CallMethods([['Contact/set', {
                     destroy => [$contactC],
@@ -305,7 +305,7 @@ sub test_restore_contacts_all
 
     xlog "restore contacts prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
-                    undoPeriod => "PT1S",
+                    undoPeriod => "PT3S",
                     undoAll => JSON::true
                 }, "R5"]]);
     $self->assert_not_null($res);
@@ -367,7 +367,7 @@ sub test_restore_contacts_all
 
     xlog "restore contacts to before initial creation";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
-                    undoPeriod => "PT3S",
+                    undoPeriod => "PT7S",
                     undoAll => JSON::true
                 }, "R7"]]);
     $self->assert_not_null($res);
@@ -430,7 +430,6 @@ sub test_restore_contacts_all_dryrun
 
     my $jmap = $self->{jmap};
 
-    sleep 2;
     xlog "create contacts";
     my $res = $jmap->CallMethods([['Contact/set', {create => {
                         "a" => {firstName => "a", lastName => "a"},
@@ -466,7 +465,7 @@ sub test_restore_contacts_all_dryrun
 
     my @expect = sort { $a->{firstName} cmp $b->{firstName} } @{$res->[0][1]{list}};
 
-    sleep 1;
+    sleep 4;
     xlog "destroy contact C, update contacts B and D, create contact E";
     $res = $jmap->CallMethods([['Contact/set', {
                     destroy => [$contactC],
@@ -487,7 +486,7 @@ sub test_restore_contacts_all_dryrun
     xlog "restore contacts prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
                     performDryRun => JSON::true,
-                    undoPeriod => "PT1S",
+                    undoPeriod => "PT3S",
                     undoAll => JSON::true
                 }, "R5"]]);
     $self->assert_not_null($res);
@@ -631,7 +630,7 @@ sub test_restore_calendars_all
     $self->assert_not_null($id);
     $self->assert(exists $res->[0][1]{created}{'2'});
 
-    sleep 2;
+    sleep 4;
     xlog "update an event title and delete a calendar";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -657,7 +656,7 @@ sub test_restore_calendars_all
     xlog "restore calendars prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreCalendars', {
-            undoPeriod => "PT2S",
+            undoPeriod => "PT3S",
             undoAll => JSON::true
          }, "R4"],
         ['CalendarEvent/get', {
@@ -818,7 +817,7 @@ sub test_restore_calendars_all_dryrun
     $self->assert_not_null($id);
     $self->assert(exists $res->[0][1]{created}{'2'});
 
-    sleep 2;
+    sleep 4;
     xlog "update an event title and delete a calendar";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -845,7 +844,7 @@ sub test_restore_calendars_all_dryrun
     $res = $jmap->CallMethods([
         ['Backup/restoreCalendars', {
             performDryRun => JSON::true,
-            undoPeriod => "PT2S",
+            undoPeriod => "PT3S",
             undoAll => JSON::true
          }, "R4"],
         ['CalendarEvent/get', {
@@ -1599,7 +1598,7 @@ sub test_restore_mail_full
     ]);
     $self->assert(exists $res->[0][1]{updated}{$emailId2});
 
-    sleep 2;
+    sleep 4;
     xlog "destroy email2, all drafts, 'foo' and 'bar' mailboxes";
     $res = $jmap->CallMethods([
         ['Email/set', {
@@ -1649,7 +1648,7 @@ sub test_restore_mail_full
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
             performDryRun => JSON::true,
-            undoPeriod => "PT2S"
+            undoPeriod => "PT3S"
          }, "R5.9.4"],
         ['Email/get', {
             ids => ["$emailId1", "$emailId2", "$emailId3", "$emailId4", "$emailId5", "$emailId6",
@@ -1677,7 +1676,7 @@ sub test_restore_mail_full
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
             restoreNonDrafts => JSON::false,
-            undoPeriod => "PT2S"
+            undoPeriod => "PT3S"
          }, "R6"],
         ['Email/get', {
             ids => ["$emailId1", "$emailId2", "$emailId3", "$emailId4", "$emailId5", "$emailId6",
@@ -1686,7 +1685,7 @@ sub test_restore_mail_full
          }, "R6.2"],
         ['Backup/restoreMail', {
             restoreDrafts => JSON::false,
-            undoPeriod => "PT2S"
+            undoPeriod => "PT3S"
          }, "R6.5"],
         ['Mailbox/get', {
          }, "R7"],
@@ -1784,7 +1783,7 @@ sub test_restore_mail_full
     xlog "re-restore mailbox back to same point in time";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
-            undoPeriod => "PT2S"
+            undoPeriod => "PT3S"
          }, "R9"],
         ['Email/get', {
             ids => ["$emailId1", "$emailId2", "$emailId3", "$emailId4", "$emailId5", "$emailId6",
@@ -1842,7 +1841,7 @@ sub test_restore_notes
     $self->assert_str_equals('Note/set', $res->[0][0]);
     $self->assert_str_equals('R1.5', $res->[0][2]);
 
-    sleep 2;
+    sleep 4;
     xlog "destroy note A, update note B, create note D";
     $res = $jmap->CallMethods([['Note/set', {
                     destroy => [$noteA],
@@ -1869,7 +1868,7 @@ sub test_restore_notes
 
     xlog "restore notes prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreNotes', {
-                    undoPeriod => "PT2S",
+                    undoPeriod => "PT3S",
                     undoAll => JSON::false
                 }, "R5"]]);
     $self->assert_not_null($res);
@@ -1930,7 +1929,7 @@ sub test_restore_notes_all
          }, "R0"]
     ]);
 
-    sleep 2;
+    sleep 4;
     xlog "create notes";
     $res = $jmap->CallMethods([['Note/set', {create => {
                         "a" => {title => "a"},
@@ -1966,7 +1965,7 @@ sub test_restore_notes_all
 
     my @expect = sort { $a->{title} cmp $b->{title} } @{$res->[0][1]{list}};
 
-    sleep 1;
+    sleep 4;
     xlog "destroy note C, update notes B and D, create note E";
     $res = $jmap->CallMethods([['Note/set', {
                     destroy => [$noteC],
@@ -1986,7 +1985,7 @@ sub test_restore_notes_all
 
     xlog "restore notes prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreNotes', {
-                    undoPeriod => "PT1S",
+                    undoPeriod => "PT3S",
                     undoAll => JSON::true
                 }, "R5"]]);
     $self->assert_not_null($res);
@@ -2031,7 +2030,7 @@ sub test_restore_notes_all
 
     xlog "restore notes to before initial creation";
     $res = $jmap->CallMethods([['Backup/restoreNotes', {
-                    undoPeriod => "PT3S",
+                    undoPeriod => "PT7S",
                     undoAll => JSON::true
                 }, "R7"]]);
     $self->assert_not_null($res);
@@ -2083,7 +2082,6 @@ sub test_restore_notes_all_dryrun
          }, "R0"]
     ]);
 
-    sleep 2;
     xlog "create notes";
     $res = $jmap->CallMethods([['Note/set', {create => {
                         "a" => {title => "a"},
@@ -2119,7 +2117,7 @@ sub test_restore_notes_all_dryrun
 
     my @expect = sort { $a->{title} cmp $b->{title} } @{$res->[0][1]{list}};
 
-    sleep 1;
+    sleep 4;
     xlog "destroy note C, update notes B and D, create note E";
     $res = $jmap->CallMethods([['Note/set', {
                     destroy => [$noteC],
@@ -2140,7 +2138,7 @@ sub test_restore_notes_all_dryrun
     xlog "restore notes prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreNotes', {
                     performDryRun => JSON::true,
-                    undoPeriod => "PT1S",
+                    undoPeriod => "PT3S",
                     undoAll => JSON::true
                 }, "R5"]]);
     $self->assert_not_null($res);
