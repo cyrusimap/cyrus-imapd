@@ -951,7 +951,11 @@ static void spawn_waitdaemon(struct service *s, int wdi)
         /* wait for parent to finish setting our pgid */
         syslog(LOG_DEBUG, "waiting for parent to set our pgid...");
         close(pgid_pipe[1]);
-        read(pgid_pipe[0], &ignored, sizeof ignored);
+        int len = read(pgid_pipe[0], &ignored, sizeof ignored);
+        if (len < 0) {
+            syslog(LOG_ERR, "can't read parent pgid: %m");
+            exit(1);
+        }
         close(pgid_pipe[0]);
 
         /* set up environment */
@@ -1135,7 +1139,11 @@ static void spawn_service(struct service *s, int si, int wdi)
         if (wdi != SERVICE_NONE) {
             syslog(LOG_DEBUG, "waiting for parent to set our pgid...");
             close(wdpgid_pipe[1]);
-            read(wdpgid_pipe[0], &ignored, sizeof ignored);
+            int len = read(wdpgid_pipe[0], &ignored, sizeof ignored);
+            if (len < 0) {
+                syslog(LOG_ERR, "can't read parent pgid: %m");
+                exit(1);
+            }
             close(wdpgid_pipe[0]);
         }
 
@@ -2654,7 +2662,9 @@ static void do_prom_report(struct timeval now)
 
     /* write it out */
     retry_write(fd, buf_cstring(&report), buf_len(&report));
-    ftruncate(fd, buf_len(&report));
+    if (ftruncate(fd, buf_len(&report))) {
+        syslog(LOG_ERR, "IOERROR: failed to truncate prom file %s: %m", prom_report_fname);
+    }
     lock_unlock(fd, prom_report_fname);
     close(fd);
 
