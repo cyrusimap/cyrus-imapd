@@ -2138,7 +2138,9 @@ static void do_prom_report(struct timeval now)
 
     /* write it out */
     retry_write(fd, buf_cstring(&report), buf_len(&report));
-    ftruncate(fd, buf_len(&report));
+    if (ftruncate(fd, buf_len(&report))) {
+        syslog(LOG_ERR, "IOERROR: failed to truncate prom file %s: %m", prom_report_fname);
+    }
     lock_unlock(fd, prom_report_fname);
     close(fd);
 
