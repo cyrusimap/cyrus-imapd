@@ -3028,17 +3028,17 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
             s2 = --len ? s[2] : 0;
             /* byte 3: low 4 bits (2), high 2 bits (3) */
             d[2] = base_64[((s1 & 0xf) << 2) | ((s2 & 0xc0) >> 6)];
+            if (len) {
+                --len;
+                /* byte 4: low 6 bits (3) */
+                d[3] = base_64[s2 & 0x3f];
+            } else {
+                /* byte 4: pad */
+                d[3] = '=';
+            }
         } else {
             /* byte 3: pad */
             d[2] = '=';
-        }
-        if (len) {
-            --len;
-            /* byte 4: low 6 bits (3) */
-            d[3] = base_64[s2 & 0x3f];
-        } else {
-            /* byte 4: pad */
-            d[3] = '=';
         }
     }
 
