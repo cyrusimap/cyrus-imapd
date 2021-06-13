@@ -825,7 +825,7 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     int r = 0, sent_body = 0;
     xmlChar *uri;
     unsigned code;
-    long http_err;
+    long http_err = 0;
     const char **hdr;
     hdrcache_t resp_hdrs = NULL;
     struct body_t resp_body;
@@ -839,7 +839,6 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     memset(&be_txn, 0, sizeof(struct transaction_t));
     be_txn.flags.ver = VER_1_1;
     be_txn.conn = &be_conn;
-    
 
     /*
      * Send client request to backend:
