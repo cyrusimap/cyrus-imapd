@@ -813,7 +813,9 @@ EXPORTED mbname_t *mbname_from_path(const char *path)
         /* Construct a mailbox relative to cwd */
         char cwd[MAX_MAILBOX_PATH+1];
 
-        getcwd(cwd, MAX_MAILBOX_PATH);
+        if (!getcwd(cwd, MAX_MAILBOX_PATH)) {
+            syslog(LOG_ERR, "IOERROR: failed to getcwd in mbname_from_path %s: %m", path);
+        }
         uid = strrchr(cwd, '/');
     }
 
