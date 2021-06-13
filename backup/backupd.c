@@ -1037,7 +1037,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     struct dlist *di;
     strarray_t userids = STRARRAY_INITIALIZER;
     mbname_t *shared_mbname = NULL;
-    int i, r;
+    int i, r = 0;
 
     if (!dlist_getatom(dl, "PARTITION", &partition)) return IMAP_PROTOCOL_ERROR;
     if (!dlist_getlist(dl, "MBOXNAME", &ml)) return IMAP_PROTOCOL_ERROR;
