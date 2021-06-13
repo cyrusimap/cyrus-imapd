@@ -912,8 +912,9 @@ static int jmap_upload(struct transaction_t *txn)
             goto wrotebody;
         }
         // otherwise we gotta clean up and make it an attachment
-        ftruncate(fileno(f), 0L);
-        fseek(f, 0L, SEEK_SET);
+        if (ftruncate(fileno(f), 0L) < 0 || fseek(f, 0L, SEEK_SET) < 0) {
+            syslog(LOG_ERR, "IOERROR: failed to reset file in JMAP upload");
+        }
     }
 
     /* Create RFC 5322 header for resource */
