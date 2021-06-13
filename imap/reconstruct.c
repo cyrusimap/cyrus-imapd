@@ -501,7 +501,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         printf("Error reading mailboxesdb for %s\n", name);
         exit(1);
     }
-    else if (strcasecmp(mbentry_byid->name, name)) {
+    else if (strcmpsafe(mbentry_byid->name, name)) {
         printf("Wrong uniqueid! %s (should be %s)\n", mbentry_byid->name, name);
         if (updateuniqueids) {
             mailbox_make_uniqueid(mailbox);
