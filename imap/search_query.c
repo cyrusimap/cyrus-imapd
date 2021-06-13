@@ -911,6 +911,8 @@ static int subquery_run_global(search_query_t *query, const char *mboxname)
         search_expr_append(e, exprs[0]);
         search_expr_append(e, exprs[1]);
         break;
+    default:
+        abort();
     }
 
     r = subquery_run_one_folder(query, mboxname, e);
