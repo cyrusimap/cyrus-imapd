@@ -2553,4 +2553,59 @@ sub run_dbcommand
     return @array;
 }
 
+sub read_mailboxes_db
+{
+    my ($self) = @_;
+
+    # run ctl_mboxlist -d to dump mailboxes.db to a file
+    my $outfile = $self->get_basedir() . "/$$-ctl_mboxlist.out";
+    $self->run_command({
+        cyrus => 1,
+        redirects => {
+            stdout => $outfile,
+        },
+    }, 'ctl_mboxlist', '-d');
+
+    my $records = {};
+
+    open my $fh, '<', $outfile or die "$outfile: $!";
+    foreach my $line (<$fh>) {
+        if ($line =~ m {
+                ^
+                ([^\t]*)                # mailbox
+                \t                      # one tab
+                (\d+)                   # mbtype
+                \x20                    # one space
+                ([^\x20]+)              # (server!)partition
+                \x20                    # one space
+                (.*)                    # acl
+                $
+            }x)
+        {
+            my ($server, $partition);
+
+            if (index($3, '!') != -1) {
+                ($server, $partition) = split /!/, $3;
+            }
+            else {
+                $partition = $3;
+            }
+
+            $records->{$1} = {
+                mbtype => $2,
+                server => $server,
+                partition => $partition,
+                acl => { split /\t/, $4 },
+            };
+        }
+        else {
+            xlog "failed to parse ctl_mboxlist -d output: <$line>";
+            die "failed to parse ctl_mboxlist -d output";
+        }
+    }
+    close $fh;
+
+    return $records;
+}
+
 1;
