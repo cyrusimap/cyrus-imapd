@@ -1775,11 +1775,13 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         case B_FILEINTO_ORIG:
         {
             const char *folder = cmd.u.f.folder;
+            const char *mailboxid = cmd.u.f.mailboxid;
             const char *specialuse = cmd.u.f.specialuse;
             struct buf *headers = NULL;
 
             if (requires & BFE_VARIABLES) {
                 folder = parse_string(folder, variables);
+                mailboxid = parse_string(mailboxid, variables);
                 specialuse = parse_string(specialuse, variables);
             }
 
@@ -1794,7 +1796,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             if (i->edited_headers) i->getheadersection(m, &headers);
 
             res = do_fileinto(i, sc, actions, folder, specialuse,
-                              !cmd.u.f.copy, cmd.u.f.create, cmd.u.f.mailboxid,
+                              !cmd.u.f.copy, cmd.u.f.create, mailboxid,
                               actionflags, headers);
 
             if (res == SIEVE_RUN_ERROR)
