@@ -52,7 +52,9 @@ $Data::Dumper::Sortkeys = 1;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ imapmurder => 1, adminstore => 1 }, @_);
+    return $class->SUPER::new({
+        imapmurder => 1, adminstore => 1, deliver => 1,
+    }, @_);
 }
 
 sub set_up
@@ -407,5 +409,277 @@ sub test_xfer_nonexistent_unixhs
         'no', $admintalk->get_last_completion_response()
     );
 }
+
+sub test_xfer_user_altns_unixhs
+    :AllowMoves :AltNamespace :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    # XXX need a function to fill an account with stuff!
+
+    # send cassandane a bunch of messages on the original backend
+    my %msgs;
+    my $n_msgs = 30;
+    foreach my $n (1..$n_msgs) {
+        $msgs{$n} = $self->{gen}->generate(subject => "Message $n");
+        $msgs{$n}->set_attribute(uid => $n);
+        $self->{instance}->deliver($msgs{$n}, user => 'cassandane');
+    }
+
+    # fizzbuzz some details
+    my $imaptalk = $self->{backend1_store}->get_client();
+    $imaptalk->select('INBOX');
+    foreach my $n (1..$n_msgs) {
+        my @flags;
+
+        if ($n % 3 == 0) {
+            # fizz
+            $imaptalk->store("$n", '+flags', '(\\Flagged)');
+            $self->assert_str_equals(
+                'ok', $imaptalk->get_last_completion_response()
+            );
+            push @flags, '\\Flagged';
+        }
+        if ($n % 5 == 0) {
+            # buzz
+            $imaptalk->store("$n", '+flags', '(\\Deleted)');
+            $self->assert_str_equals(
+                'ok', $imaptalk->get_last_completion_response()
+            );
+            push @flags, '\\Deleted';
+        }
+
+        $msgs{$n}->set_attribute('flags', \@flags) if scalar @flags;
+    }
+
+    # make sure they're all there before we proceed
+    $self->{store}->set_fetch_attributes('uid', 'flags');
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    my $admintalk = $self->{backend1_adminstore}->get_client();
+    my $backend2_servername = $self->{backend2}->get_servername();
+
+    # what's the frontend mailboxes.db say before we move?
+    my $mailboxes_db = $self->{frontend}->read_mailboxes_db();
+    xlog "XXX: " . Dumper $mailboxes_db;
+
+    # what's imap LIST/XLIST say before we move?
+    my $data = $imaptalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    $data = $imaptalk->xlist("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    my $frontendtalk = $self->{frontend_store}->get_client();
+    $data = $frontendtalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    $data = $frontendtalk->xlist("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    # now xfer the cassandane user to backend2
+    my $ret = $admintalk->_imap_cmd('xfer', 0, {},
+                                    'user/cassandane', $backend2_servername);
+    xlog "XXX xfer returned: " . Dumper $ret;
+    # XXX 3.2+ with 3.0 target fails here: syntax error in parameters
+    $self->assert_str_equals('ok', $ret);
+    # XXX 3.2+ with 2.5 target fails here: mailbox has an invalid format
+    $self->assert_str_equals(
+        'ok', $admintalk->get_last_completion_response()
+    );
+
+    # messages should be on the other store now
+    $self->{backend2_store}->set_fetch_attributes('uid', 'flags');
+    $self->check_messages(\%msgs, store => $self->{backend2_store},
+                          check_guid => 0, keyed_on => 'uid');
+
+    # frontend should now say the user is on the other store
+    # XXX is there a better way to discover this?
+    $mailboxes_db = $self->{frontend}->read_mailboxes_db();
+    xlog "XXX: " . Dumper $mailboxes_db;
+    # XXX 3.0 with 2.5 frontend fails here: server field is blank
+    $self->assert_str_equals($backend2_servername,
+                             $mailboxes_db->{'user.cassandane'}->{server});
+
+    # what's imap LIST/XLIST say after the move?
+    undef $imaptalk;
+    $self->{store}->disconnect();
+    $imaptalk = $self->{store}->get_client();
+    xlog "checking LIST/XLIST on old backend";
+    $data = $imaptalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {});
+    $data = $imaptalk->xlist("", "*");
+    $self->assert_str_equals("ok", $data);
+
+    my $backend2talk = $self->{backend2_store}->get_client();
+    xlog "checking LIST/XLIST on new backend";
+    $data = $backend2talk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    $data = $backend2talk->xlist("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    $frontendtalk = $self->{frontend_store}->get_client();
+    xlog "checking LIST/XLIST on frontend";
+    $data = $frontendtalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    $data = $frontendtalk->xlist("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+}
+
+sub test_xfer_user_noaltns_nounixhs
+    :AllowMoves :NoAltNamespace
+{
+    my ($self) = @_;
+
+    # XXX need a function to fill an account with stuff!
+
+    # send cassandane a bunch of messages on the original backend
+    my %msgs;
+    my $n_msgs = 30;
+    foreach my $n (1..$n_msgs) {
+        $msgs{$n} = $self->{gen}->generate(subject => "Message $n");
+        $msgs{$n}->set_attribute(uid => $n);
+        $self->{instance}->deliver($msgs{$n}, user => 'cassandane');
+    }
+
+    # fizzbuzz some details
+    my $imaptalk = $self->{backend1_store}->get_client();
+    $imaptalk->select('INBOX');
+    foreach my $n (1..$n_msgs) {
+        my @flags;
+
+        if ($n % 3 == 0) {
+            # fizz
+            $imaptalk->store("$n", '+flags', '(\\Flagged)');
+            $self->assert_str_equals(
+                'ok', $imaptalk->get_last_completion_response()
+            );
+            push @flags, '\\Flagged';
+        }
+        if ($n % 5 == 0) {
+            # buzz
+            $imaptalk->store("$n", '+flags', '(\\Deleted)');
+            $self->assert_str_equals(
+                'ok', $imaptalk->get_last_completion_response()
+            );
+            push @flags, '\\Deleted';
+        }
+
+        $msgs{$n}->set_attribute('flags', \@flags) if scalar @flags;
+    }
+
+    # make sure they're all there before we proceed
+    $self->{store}->set_fetch_attributes('uid', 'flags');
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    my $admintalk = $self->{backend1_adminstore}->get_client();
+    my $backend2_servername = $self->{backend2}->get_servername();
+
+    # what's the frontend mailboxes.db say before we move?
+    my $mailboxes_db = $self->{frontend}->read_mailboxes_db();
+    xlog "XXX: " . Dumper $mailboxes_db;
+
+    # what's imap LIST/XLIST say before we move?
+    my $data = $imaptalk->list("", "*");
+    $self->assert_mailbox_structure($data, '.', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    $data = $imaptalk->xlist("", "*");
+    $self->assert_mailbox_structure($data, '.', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    my $frontendtalk = $self->{frontend_store}->get_client();
+    $data = $frontendtalk->list("", "*");
+    $self->assert_mailbox_structure($data, '.', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    $data = $frontendtalk->xlist("", "*");
+    $self->assert_mailbox_structure($data, '.', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    # now xfer the cassandane user to backend2
+    my $ret = $admintalk->_imap_cmd('xfer', 0, {},
+                                    'user.cassandane', $backend2_servername);
+    xlog "XXX xfer returned: " . Dumper $ret;
+    # XXX 3.2+ with 3.0 target fails here: syntax error in parameters
+    $self->assert_str_equals('ok', $ret);
+    # XXX 3.2+ with 2.5 target fails here: mailbox has an invalid format
+    $self->assert_str_equals(
+        'ok', $admintalk->get_last_completion_response()
+    );
+
+    # messages should be on the other store now
+    $self->{backend2_store}->set_fetch_attributes('uid', 'flags');
+    $self->check_messages(\%msgs, store => $self->{backend2_store},
+                          check_guid => 0, keyed_on => 'uid');
+
+    # frontend should now say the user is on the other store
+    # XXX is there a better way to discover this?
+    $mailboxes_db = $self->{frontend}->read_mailboxes_db();
+    xlog "XXX: " . Dumper $mailboxes_db;
+    # XXX 3.0 with 2.5 frontend fails here: server field is blank
+    $self->assert_str_equals($backend2_servername,
+                             $mailboxes_db->{'user.cassandane'}->{server});
+
+    # what's imap LIST/XLIST say after the move?
+    undef $imaptalk;
+    $self->{store}->disconnect();
+    $imaptalk = $self->{store}->get_client();
+    xlog "checking LIST/XLIST on old backend";
+    $data = $imaptalk->list("", "*");
+    $self->assert_mailbox_structure($data, '.', {});
+    $data = $imaptalk->xlist("", "*");
+    $self->assert_str_equals("ok", $data);
+
+    my $backend2talk = $self->{backend2_store}->get_client();
+    xlog "checking LIST/XLIST on new backend";
+    $data = $backend2talk->list("", "*");
+    $self->assert_mailbox_structure($data, '.', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    $data = $backend2talk->xlist("", "*");
+    $self->assert_mailbox_structure($data, '.', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    $frontendtalk = $self->{frontend_store}->get_client();
+    xlog "checking LIST/XLIST on frontend";
+    $data = $frontendtalk->list("", "*");
+    $self->assert_mailbox_structure($data, '.', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    $data = $frontendtalk->xlist("", "*");
+    $self->assert_mailbox_structure($data, '.', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+}
+
+# XXX test_xfer_partition
+# XXX test_xfer_mailbox
+# XXX test_xfer_mboxpattern
 
 1;
