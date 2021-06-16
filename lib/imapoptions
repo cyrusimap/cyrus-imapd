@@ -1551,6 +1551,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    that fills the entire 128 available slots.  Default is NULL, which is
    no flags.  Example: $Label1 $Label2 $Label3 NotSpam Spam */
 
+{ "mailbox_legacy_dirs", 0, SWITCH, "3.5.2" }
+/* if enabled, new mailboxes without parents will be created with legacy paths.
+   sub mailboxes of users will still inherit the parent legacy setting */
+
 { "mailbox_maxmessages_addressbook", 0, INT, "3.3.0" }
 /* Limit the number of messages that may exist in a single mailbox of
    "addressbook" type. Default (0) means no limit.  This limit applies

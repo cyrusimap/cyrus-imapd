@@ -1604,6 +1604,8 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
     r = mboxlist_findparent(mboxname, &parent);
     if (r) goto done;
 
+    mbentry->mbtype |= (parent->mbtype & MBTYPE_LEGACY_DIRS);
+
     xfree(mbentry->partition);
     r = mboxlist_create_partition(mboxname, parent->partition,
                                   &mbentry->partition);
@@ -1699,6 +1701,8 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         mbtype |= (parent->mbtype & MBTYPE_LEGACY_DIRS);
     }
     else if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
+    else if (config_getswitch(IMAPOPT_MAILBOX_LEGACY_DIRS))
+        mbtype |= MBTYPE_LEGACY_DIRS;
 
     if (!dbonly && !isremote) {
         /* Filesystem Operations */
