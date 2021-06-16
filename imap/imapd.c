@@ -14613,7 +14613,7 @@ static void cmd_xapplepushservice(const char *tag,
         char *intname =
             mboxname_from_external(name, &imapd_namespace, imapd_userid);
         r = mlookup(tag, name, intname, &mbentry);
-        if (!r && mbentry->mbtype == 0) {
+        if (!r && mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
             strarray_push(&notif_mailboxes, name);
             if (applepushserviceargs->aps_version >= 2) {
                 prot_puts(imapd_out, "* XAPPLEPUSHSERVICE \"mailbox\" ");

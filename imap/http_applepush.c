@@ -153,12 +153,12 @@ static int meth_get_applepush(struct transaction_t *txn,
         goto done;
     }
 
-    aps_topic = config_getstring(mbtype == MBTYPE_CALENDAR ?
+    aps_topic = config_getstring(mbtype_isa(mbtype) == MBTYPE_CALENDAR ?
                                  IMAPOPT_APS_TOPIC_CALDAV :
                                  IMAPOPT_APS_TOPIC_CARDDAV);
     if (!aps_topic) {
         syslog(LOG_ERR, "aps_topic_%s not configured, can't subscribe",
-               mbtype == MBTYPE_CALENDAR ? "caldav" : "carddav");
+               mbtype_isa(mbtype) == MBTYPE_CALENDAR ? "caldav" : "carddav");
         goto done;
     }
 
