@@ -153,6 +153,8 @@ sub test_subfolder_login
 
     $imapclient->create('INBOX.sub');
     $self->{store}->set_folder('INBOX.sub');
+    # different mailbox, so reset generator's expected uid sequence
+    $self->{gen}->set_next_uid(1);
 
     my %subexp;
     $subexp{B} = $self->make_message('Message B');
@@ -182,10 +184,8 @@ sub test_subfolder_login
     $self->assert_equals($subclient->code(), 200);
     my $sublines = $subclient->read_until_dot();
     my %subactual;
-    # note: "uid 2" is totally bogus here, because the "generator" doesn't
-    # notice the folder change and hence the new UID space...
     $subactual{'Message B'} = Cassandane::Message->new(lines => $sublines,
-                                                       attrs => { uid => 2 });
+                                                       attrs => { uid => 1 });
     $self->check_messages(\%subexp, actual => \%subactual);
 }
 
