@@ -1535,7 +1535,7 @@ _emailsearch_folders_value_new(jmap_req_t *req,
     json_array_foreach(jmboxids, i, jmboxid) {
         const char *mboxid = json_string_value(jmboxid);
         const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
-        if (mbentry && mbentry->mbtype == MBTYPE_EMAIL &&
+        if (mbentry && mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL &&
                 jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
             int foldernum = conversation_folder_number(req->cstate,
                     CONV_FOLDER_KEY_MBE(req->cstate, mbentry), 0);
