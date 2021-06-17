@@ -560,7 +560,18 @@ EXPORTED icalcomponent *icalcomponent_new_stream(struct mailbox *mailbox,
 
 EXPORTED icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
 {
-    return icalparser_parse_string(buf_cstring(buf));
+    const char *rawical = buf_cstring(buf);
+    char *freeme = NULL;
+
+    if (!strstr(rawical, "END:VCALENDAR")) {
+        rawical = freeme = strconcat(rawical, "END:VCALENDAR", NULL);
+    }
+
+    icalcomponent *ical = icalparser_parse_string(rawical);
+
+    free(freeme);
+
+    return ical;
 }
 
 EXPORTED struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
