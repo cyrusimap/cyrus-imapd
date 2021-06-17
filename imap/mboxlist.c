@@ -2613,7 +2613,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
          * codepaths: INBOX -> INBOX.foo, user rename, regular rename
          * and of course this one, partition move */
         newpartition = xstrdup(partition);
-        r = mailbox_copy_files(oldmailbox, newpartition, newname, oldmailbox->uniqueid);
+        r = mailbox_copy_files(oldmailbox, newpartition, newname, oldmailbox->mbtype & MBTYPE_LEGACY_DIRS ? NULL : oldmailbox->uniqueid);
         if (r) goto done;
         newmbentry = mboxlist_entry_create();
         newmbentry->mbtype = oldmailbox->mbtype;
