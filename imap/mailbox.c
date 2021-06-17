@@ -1050,6 +1050,12 @@ static int mailbox_open_advanced(const char *name,
         goto done;
     }
 
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        mboxlist_entry_free(&mbentry);
+        r = IMAP_MAILBOX_NONEXISTENT;
+        goto done;
+    }
+
     if (!mbentry->partition) {
         mboxlist_entry_free(&mbentry);
         r = IMAP_MAILBOX_NONEXISTENT;
