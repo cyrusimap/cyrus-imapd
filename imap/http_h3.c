@@ -51,7 +51,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 
-#ifdef HAVE_NGHTTP3
+#ifdef WITH_HTTP3
 
 #include <nghttp3/nghttp3.h>
 
@@ -74,7 +74,7 @@ HIDDEN void http3_input(struct http_connection *conn)
     quic_input(conn);
 }
  
-#else /* !HAVE_NGHTTP3 */
+#else /* !WITH_HTTP3 */
 
 HIDDEN int http3_init(struct http_connection *conn __attribute__((unused)),
                       struct buf *serverinfo __attribute__((unused)))
@@ -87,4 +87,4 @@ HIDDEN void http3_input(struct http_connection *conn __attribute__((unused)))
     fatal("http3_input() called, but no Nghttp3", EX_SOFTWARE);
 }
 
-#endif /* HAVE_NGHTTP3 */
+#endif /* WITH_HTTP3 */

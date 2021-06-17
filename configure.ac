@@ -1327,20 +1327,20 @@ if test "$with_ssl" != "no"; then
     fi
 
     AC_CHECK_LIB(ssl, SSL_CTX_set_alpn_select_cb,
-       AC_DEFINE(HAVE_TLS_ALPN,[], [Do we have support for TLS ALPN extension?]))
+       AC_DEFINE(HAVE_TLS_ALPN,[], [Do we have support for TLS ALPN extension?])
 
-    # Until OpenSSL gains mainline support for QUIC, check for a patched version.
-    save_CFLAGS="$CFLAGS"
-    save_LIBS="$LIBS"
-    CFLAGS="$SSL_CFLAGS $CFLAGS"
-    LIBS="$SSL_LIBS $LIBS"
+       # Until OpenSSL gains mainline support for QUIC, check for a patched version.
+       save_CFLAGS="$CFLAGS"
+       save_LIBS="$LIBS"
+       CFLAGS="$SSL_CFLAGS $CFLAGS"
+       LIBS="$SSL_LIBS $LIBS"
 
-    AC_CHECK_LIB(ssl, SSL_is_quic,
-       AC_DEFINE(HAVE_QUIC_TLS,[], [Do we have support for QUIC TLS?])
-       with_ssl="yes (+quic)")
+       AC_CHECK_LIB(ssl, SSL_is_quic,
+          with_ssl="yes (+quic)")
 
-    CFLAGS="$save_CFLAGS"
-    LIBS="$save_LIBS"
+       CFLAGS="$save_CFLAGS"
+       LIBS="$save_LIBS"
+    )
 fi
 AM_CONDITIONAL([HAVE_SSL], [test "$with_ssl" != "no"])
 AC_SUBST(SSL_CPPFLAGS)
@@ -1687,14 +1687,19 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
 
 
         AC_ARG_WITH(nghttp3, [AS_HELP_STRING([--without-nghttp3], [disable HTTP/3 support (check)])],,[with_nghttp3="check"])
-        if test "x$with_nghttp3" = "xyes" -o "x$with_nghttp3" = "xcheck"; then
+        AC_ARG_WITH(ngtcp2, [AS_HELP_STRING([--without-ngtcp2], [disable QUIC support (check)])],,[with_ngtcp2="check"])
+        if test "x$with_nghttp3" != "xno" -a "x$with_ngtcp" != "xno"; then
                 PKG_CHECK_MODULES([NGHTTP3], [libnghttp3 libngtcp2 libngtcp2_crypto_openssl], [
-                        AC_DEFINE(HAVE_NGHTTP3,[],
-                                [Build HTTP/3 support into httpd?])
-                        AC_DEFINE(HAVE_NGTCP2,[],
-                                [Build QUIC support into httpd?])
                         with_nghttp3=yes
                         with_ngtcp2=yes
+
+                        if test "$with_ssl" == "yes (+quic)"; then
+                            AC_DEFINE(HAVE_QUIC,[],
+                                    [Build QUIC support into httpd?])
+                            AC_DEFINE(WITH_HTTP3,[],
+                                    [Build HTTP/3 support into httpd?])
+                        fi
+
                 ], [
                         if test "x$with_nghttp3" = "xyes"; then
                                 AC_MSG_ERROR([HTTP/3 explicitly requested, but libnghttp3 or libngtcp2 was not found])

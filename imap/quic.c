@@ -51,7 +51,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 
-#if defined(HAVE_NGTCP2) && defined(HAVE_QUIC_TLS) && defined(HAVE_TLS_ALPN)
+#ifdef HAVE_QUIC
 
 #include <ngtcp2/ngtcp2.h>
 #include <ngtcp2/ngtcp2_crypto.h>
@@ -531,7 +531,7 @@ HIDDEN void quic_input(struct http_connection *conn)
     }
 }
 
-#else /* !HAVE_NGTCP2 */
+#else /* !HAVE_QUIC */
 
 HIDDEN int quic_init(struct http_connection *conn __attribute__((unused)),
                      const struct tls_alpn_t alpn_map[] __attribute__((unused)),
@@ -545,4 +545,4 @@ HIDDEN void quic_input(struct http_connection *conn __attribute__((unused)))
     fatal("quic_input() called, but no Ngtcp2", EX_SOFTWARE);
 }
 
-#endif /* HAVE_NGTCP2 */
+#endif /* HAVE_QUIC */
