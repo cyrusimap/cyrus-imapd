@@ -229,14 +229,10 @@ static int list_cb(struct findall_data *data, void *rock)
     const char *path;
 
     if (lrock->opts->meta) {
-        path = mboxname_metapath(data->mbentry->partition,
-                                 data->mbentry->name,
-                                 data->mbentry->uniqueid, 0, 0);
+        path = mbentry_metapath(data->mbentry, 0, 0);
     }
     else {
-        path = mboxname_datapath(data->mbentry->partition,
-                                 data->mbentry->name,
-                                 data->mbentry->uniqueid, 0);
+        path = mbentry_datapath(data->mbentry, 0);
     }
 
     printf("%s", !(lrock->count++ % lrock->opts->columns) ? "\n" : "    ");
