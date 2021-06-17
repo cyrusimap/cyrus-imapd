@@ -1558,6 +1558,7 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         }
 
         mbentry_t *newmbentry = mboxlist_entry_create();
+        newmbentry->name = xstrdupnull(mboxname);
         newmbentry->uniqueid = xstrdupnull(makeuuid());
         newmbentry->partition = xstrdupnull(partition);
         newmbentry->createdmodseq = modseq;
@@ -1569,13 +1570,11 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
                "mboxlist: creating intermediate with children: %s (%s)",
                mboxname, newmbentry->uniqueid);
         r = mboxlist_update_entry(mboxname, newmbentry, NULL);
-        if (!r && !(newmbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
+        if (!r) {
             /* create [meta]data directories for mbpath-by-id */
-            const char *path = mboxname_datapath(newmbentry->partition, mboxname,
-                                                 newmbentry->uniqueid, 1);
+            const char *path = mbentry_datapath(newmbentry, 1);
             if (path) cyrus_mkdir(path, 0755);
-            path = mboxname_metapath(newmbentry->partition, mboxname,
-                                     newmbentry->uniqueid, META_HEADER, 0);
+            path = mbentry_metapath(newmbentry, META_HEADER, 0);
             if (path) cyrus_mkdir(path, 0755);
         }
         mboxlist_entry_free(&newmbentry);
