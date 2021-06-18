@@ -54,6 +54,7 @@
 #include "ical_support.h"
 #include "message.h"
 #include "strhash.h"
+#include "stristr.h"
 #include "util.h"
 
 #ifdef HAVE_ICAL
@@ -563,7 +564,7 @@ EXPORTED icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
     const char *rawical = buf_cstring(buf);
     char *freeme = NULL;
 
-    if (!strstr(rawical, "END:VCALENDAR")) {
+    if (!stristr(rawical, "END:VCALENDAR")) {
         rawical = freeme = strconcat(rawical, "END:VCALENDAR", NULL);
     }
 
