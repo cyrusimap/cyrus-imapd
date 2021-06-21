@@ -2818,7 +2818,7 @@ static int in_otherfolder_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->version < 1) {
         syslog(LOG_ERR, "%s:%s: outdated guid record in mailbox %s",
-                __FILE__, __func__, rec->mailbox);
+                __FILE__, __func__, conv_guidrec_mboxname(rec));
         return IMAP_INTERNAL;
     }
 
