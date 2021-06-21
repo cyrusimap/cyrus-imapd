@@ -1908,6 +1908,30 @@ sub test_intermediate_rename
     $self->check_replication('cassandane');
 }
 
+sub test_intermediate_upgrade
+    :AllowMoves :Replication :SyncLog :DelayedDelete :min_version_3_3
+{
+    my ($self) = @_;
+
+    my $mtalk = $self->{master_store}->get_client();
+
+    $mtalk->create('INBOX.a.b');
+
+    # replicate and check initial state
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+
+    # reconnect
+    $mtalk = $self->{master_store}->get_client();
+
+    $mtalk->create('INBOX.a');
+
+    $self->run_replication(rolling => 1, inputfile => $synclogfname) if -f $synclogfname;
+
+    $self->check_replication('cassandane');
+}
+
 sub test_clean_remote_shutdown_while_rolling
     :CSyncReplication :SyncLog :min_version_3_5
 {
