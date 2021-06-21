@@ -59,18 +59,20 @@
 
 #include <openssl/rand.h>
 
-static int send_fd = -1;
-static struct sockaddr_storage local_addr;
-static socklen_t local_addrlen = sizeof(local_addr);
-static SSL_CTX *tls_ctx = NULL;
-
 struct quic_context {
     ngtcp2_conn *qconn;
+
+    int sock;                            /* Output socket */
+    struct sockaddr_storage local_addr;
+    socklen_t local_addrlen;
+    SSL_CTX *tls_ctx;
 
     SSL *tls;
 
     struct buf crypto_data[3];
     uint8_t last_tls_alert;
+
+    void *app_ctx;
 };
 
 static int set_encryption_secrets(SSL *ssl, OSSL_ENCRYPTION_LEVEL ossl_level,
@@ -160,9 +162,13 @@ static const SSL_QUIC_METHOD quic_method = {
     send_alert,
 };
 
-HIDDEN int quic_init(struct http_connection *conn __attribute__((unused)),
+HIDDEN int quic_init(struct quic_context **ctx,
                      const struct tls_alpn_t alpn_map[], struct buf *serverinfo)
 {
+    SSL_CTX *tls_ctx;
+
+    *ctx = NULL;
+
     buf_printf(serverinfo, " Ngtcp2/%s", NGTCP2_VERSION);
 
     if (!(alpn_map && alpn_map[0].id)) return HTTP_UNAVAILABLE;
@@ -187,8 +193,13 @@ HIDDEN int quic_init(struct http_connection *conn __attribute__((unused)),
         return HTTP_SERVER_ERROR;
     }
 
-    send_fd = atoi(getenv("CYRUS_QUIC_FD"));
-    getsockname(send_fd, (struct sockaddr *) &local_addr, &local_addrlen);
+    *ctx = xzmalloc(sizeof(struct quic_context));
+
+    (*ctx)->tls_ctx = tls_ctx;
+    (*ctx)->sock = atoi(getenv("CYRUS_QUIC_FD"));
+    (*ctx)->local_addrlen =  sizeof(struct sockaddr_storage);
+    getsockname((*ctx)->sock,
+                (struct sockaddr *) &(*ctx)->local_addr, &(*ctx)->local_addrlen);
 
     return 0;
 }
@@ -226,11 +237,11 @@ static int acked_crypto_offset_cb(ngtcp2_conn *conn __attribute__((unused)),
 
     syslog(LOG_DEBUG, "acked_crypto_offset(%d, %lu, %lu, %lu)",
            level, offset, datalen, buf_len(&ctx->crypto_data[level]));
-
+#if 0
     if (offset + datalen >= buf_len(&ctx->crypto_data[level])) {
         buf_free(&ctx->crypto_data[level]);
     }
-
+#endif
     return 0;
 }
 
@@ -309,24 +320,6 @@ static void log_printf(void *user_data __attribute__((unused)),
     buf_free(&buf);
 }
 
-static void close_connection(struct http_connection *conn)
-{
-    struct quic_context *ctx = (struct quic_context *) conn->sess_ctx;
-
-    syslog(LOG_DEBUG, "close_connection");
-
-    ngtcp2_conn_del(ctx->qconn);
-
-    int i;
-    for (i = 0; i < 3; i++) {
-        buf_free(&ctx->crypto_data[i]);
-    }
-
-    free(ctx);
-
-    conn->sess_ctx = NULL;
-}
-
 static ngtcp2_callbacks callbacks = {
     NULL, // client_initial
     ngtcp2_crypto_recv_client_initial_cb,
@@ -365,40 +358,37 @@ static ngtcp2_callbacks callbacks = {
     NULL, // lost_datagram
 };
 
-HIDDEN void quic_input(struct http_connection *conn)
+HIDDEN int quic_input(struct quic_context *ctx, struct protstream *pin)
 {
-    struct quic_context *ctx = conn->sess_ctx;
     struct sockaddr_storage remote_addr;
     socklen_t remote_addrlen;
     uint8_t data[USHRT_MAX];
     ssize_t datalen, nread = 0, nwrite, sent;
     int n, r;
 
-    prot_read(conn->pin, (char *) &remote_addrlen, sizeof(remote_addrlen));
-    prot_read(conn->pin, (char *) &remote_addr, remote_addrlen);
-    prot_read(conn->pin, (char *) &datalen, sizeof(datalen));
+    prot_read(pin, (char *) &remote_addrlen, sizeof(remote_addrlen));
+    prot_read(pin, (char *) &remote_addr, remote_addrlen);
+    prot_read(pin, (char *) &datalen, sizeof(datalen));
     for (; datalen; datalen -= n, nread += n) {
-        n = prot_read(conn->pin, (char *) data + nread, datalen);
+        n = prot_read(pin, (char *) data + nread, datalen);
     }
 
     syslog(LOG_DEBUG, "quic_input: read %zd of %zd bytes", nread, datalen);
 
     if (nread == 0) {
-        if (prot_IS_EOF(conn->pin)) {
+        if (prot_IS_EOF(pin)) {
             /* Client closed connection */
             syslog(LOG_DEBUG, "client closed connection");
         }
-        else if (prot_error(conn->pin)) {
+        else if (prot_error(pin)) {
             /* Client timeout or I/O error */
-            conn->close_str = prot_error(conn->pin);
         }
 
-        conn->close = 1;
-        return;
+        return 1;
     }
 
     ngtcp2_path path = {
-        { local_addrlen, (struct sockaddr *) &local_addr },
+        { ctx->local_addrlen, (struct sockaddr *) &ctx->local_addr },
         { remote_addrlen, (struct sockaddr *) &remote_addr },
         NULL
     };
@@ -420,10 +410,10 @@ HIDDEN void quic_input(struct http_connection *conn)
         syslog(LOG_ERR,
                "Error decoding version and CID from QUIC packet header: %s",
                ngtcp2_strerror(r));
-        return;
+        return 0;
     }
 
-    if (!ctx) {
+    if (!ctx->qconn) {
         ngtcp2_cid scid;
         ngtcp2_pkt_hd hd;
 
@@ -438,7 +428,7 @@ HIDDEN void quic_input(struct http_connection *conn)
             syslog(LOG_ERR,
                    "QUIC packet not acceptable as initial: %s",
                    ngtcp2_strerror(r));
-            return;
+            return 0;
         }
 
         switch (hd.type) {
@@ -459,7 +449,7 @@ HIDDEN void quic_input(struct http_connection *conn)
 //                                                       token, sizeof(token));
 
                 do {
-                    sent = sendto(send_fd, data, nwrite, 0,
+                    sent = sendto(ctx->sock, data, nwrite, 0,
                                   (struct sockaddr *) &remote_addr,
                                   remote_addrlen);
                 } while (sent < 0 && errno == EINTR);
@@ -470,7 +460,7 @@ HIDDEN void quic_input(struct http_connection *conn)
                 if (sent != nwrite) {
                 }
 
-                return;
+                return 0;
             }
 #endif
             break;
@@ -479,8 +469,6 @@ HIDDEN void quic_input(struct http_connection *conn)
             syslog(LOG_DEBUG, "0rtt packet");
             break;
         }
-
-        ctx = xzmalloc(sizeof(struct quic_context));
 
         ngtcp2_settings settings;
         ngtcp2_settings_default(&settings);
@@ -512,16 +500,12 @@ HIDDEN void quic_input(struct http_connection *conn)
 
         syslog(LOG_DEBUG, "ngtcp2_conn_server_new: %s",  ngtcp2_strerror(r));
 
-        SSL *tls = SSL_new(tls_ctx);
+        SSL *tls = ctx->tls = SSL_new(ctx->tls_ctx);
         SSL_set_app_data(tls, ctx);
         SSL_set_accept_state(tls);
         SSL_set_quic_early_data_enabled(tls, 0);
 
         ngtcp2_conn_set_tls_native_handle(ctx->qconn, tls);
-
-        ctx->tls = tls;
-        conn->sess_ctx = ctx;
-        ptrarray_add(&conn->reset_callbacks, &close_connection);
     }
 
     ngtcp2_pkt_info pi = { NGTCP2_ECN_NOT_ECT };
@@ -532,7 +516,7 @@ HIDDEN void quic_input(struct http_connection *conn)
     while ((nwrite = ngtcp2_conn_write_pkt(ctx->qconn, &path, &pi,
                                            data, sizeof(data), timestamp())) > 0) {
         do {
-            sent = sendto(send_fd, data, nwrite, 0,
+            sent = sendto(ctx->sock, data, nwrite, 0,
                           path.remote.addr, path.remote.addrlen);
         } while (sent < 0 && errno == EINTR);
 
@@ -541,20 +525,72 @@ HIDDEN void quic_input(struct http_connection *conn)
         if (sent != nwrite) {
         }
     }
+
+    return 0;
+}
+
+HIDDEN void quic_close(struct quic_context *ctx)
+{
+    syslog(LOG_DEBUG, "quic_close()");
+
+    if (ctx->tls) {
+        tls_reset_servertls(&ctx->tls);
+        ctx->tls = NULL;
+    }
+
+    if (ctx->qconn) {
+        ngtcp2_conn_del(ctx->qconn);
+        ctx->qconn = NULL;
+    }
+
+    int i;
+    for (i = 0; i < 3; i++) {
+        buf_reset(&ctx->crypto_data[i]);
+    }
+}
+
+HIDDEN void quic_shutdown(struct quic_context *ctx)
+{
+    syslog(LOG_DEBUG, "quic_shutdown()");
+
+    tls_shutdown_serverengine();
+
+    if (ctx->qconn) {
+        ngtcp2_conn_del(ctx->qconn);
+    }
+
+    int i;
+    for (i = 0; i < 3; i++) {
+        buf_free(&ctx->crypto_data[i]);
+    }
+
+    free(ctx);
 }
 
 #else /* !HAVE_QUIC */
 
-HIDDEN int quic_init(struct http_connection *conn __attribute__((unused)),
+HIDDEN int quic_init(struct quic_context *ctx __attribute__((unused)),
                      const struct tls_alpn_t alpn_map[] __attribute__((unused)),
                      struct buf *serverinfo __attribute__((unused)))
 {
     return HTTP_NOT_IMPLEMENTED;
 }
 
-HIDDEN void quic_input(struct http_connection *conn __attribute__((unused)))
+HIDDEN int quic_input(struct quic_context *ctx __attribute__((unused)),
+                      struct protstream *pin  __attribute__((unused)))
 {
     fatal("quic_input() called, but no Ngtcp2", EX_SOFTWARE);
+}
+
+HIDDEN void quic_close(struct quic_context *ctx __attribute__((unused)))
+{
+    fatal("quic_close() called, but no Ngtcp2", EX_SOFTWARE);
+}
+
+
+HIDDEN void quic_shutdown(struct quic_context *ctx __attribute__((unused)))
+{
+    fatal("quic_shutdown() called, but no Ngtcp2", EX_SOFTWARE);
 }
 
 #endif /* HAVE_QUIC */

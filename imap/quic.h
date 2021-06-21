@@ -49,9 +49,15 @@
 #include "tls.h"
 #include "util.h"
 
-extern int quic_init(struct http_connection *conn,
+struct quic_context;
+
+extern int quic_init(struct quic_context **ctx,
                      const struct tls_alpn_t alpn_map[], struct buf *serverinfo);
 
-extern void quic_input(struct http_connection *conn);
+extern int quic_input(struct quic_context *ctx, struct protstream *pin);
+
+extern void quic_close(struct quic_context *ctx);
+
+extern void quic_shutdown(struct quic_context *ctx);
 
 #endif /* QUIC_H */

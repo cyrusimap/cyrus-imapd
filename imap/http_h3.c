@@ -62,16 +62,41 @@ static const struct tls_alpn_t http3_alpn_map[] = {
     { NULL,    NULL, NULL }
 };
 
+static void _close_connection(struct http_connection *conn)
+{
+    quic_close(conn->sess_ctx);
+}
+
+static void _shutdown(struct http_connection *conn)
+{
+    quic_shutdown(conn->sess_ctx);
+}
+
 HIDDEN int http3_init(struct http_connection *conn, struct buf *serverinfo)
 {
+    struct quic_context *ctx = NULL;
+
     buf_printf(serverinfo, " Nghttp3/%s", NGHTTP3_VERSION);
 
-    return quic_init(conn, http3_alpn_map, serverinfo);
+    int r = quic_init(&ctx, http3_alpn_map, serverinfo);
+
+    if (!r) {
+        conn ->sess_ctx = ctx;
+        ptrarray_add(&conn->reset_callbacks, &_close_connection);
+        ptrarray_add(&conn->shutdown_callbacks, &_shutdown);
+    }
+
+    return r;
 }
 
 HIDDEN void http3_input(struct http_connection *conn)
 {
-    quic_input(conn);
+    int r = quic_input(conn->sess_ctx, conn->pin);
+
+    if (r) {
+        conn->close = 1;
+        conn->close_str = prot_error(conn->pin);
+    }
 }
  
 #else /* !WITH_HTTP3 */

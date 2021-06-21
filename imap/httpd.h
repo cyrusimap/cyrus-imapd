@@ -360,11 +360,11 @@ struct http_connection {
 
     ptrarray_t reset_callbacks;         /* Array of functions to reset
                                            auxiliary connection contexts
-                                           (e.g. TLS, HTTP/2, WebSockets) */
+                                           (e.g. TLS, HTTP/2+, WebSockets) */
 
     ptrarray_t shutdown_callbacks;      /* Array of functions to cleanup
                                            auxiliary connection contexts
-                                           (e.g. TLS, HTTP/2, WebSockets) */
+                                           (e.g. TLS, HTTP/2+, WebSockets) */
 };
 
 typedef void (*conn_reset_t)(struct http_connection *conn);
