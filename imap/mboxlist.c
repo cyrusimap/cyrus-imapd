@@ -1664,19 +1664,23 @@ done:
  *
  */
 
-static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
-                                const char *partition,
-                                int isadmin, const char *userid,
-                                const struct auth_state *auth_state,
-                                int options, unsigned uidvalidity,
-                                modseq_t createdmodseq,
-                                modseq_t highestmodseq,
-                                modseq_t foldermodseq,
-                                const char *copyacl, const char *uniqueid,
-                                int localonly, int forceuser, int dbonly,
-                                int keep_intermediaries,
-                                struct mailbox **mboxptr)
+static int mboxlist_createmailbox_full(const mbentry_t *mbentry,
+                                       int isadmin, const char *userid,
+                                       const struct auth_state *auth_state,
+                                       int options, modseq_t highestmodseq,
+                                       int localonly, int forceuser, int dbonly,
+                                       int keep_intermediaries,
+                                       struct mailbox **mboxptr)
 {
+    const char *mboxname = mbentry->name;
+    const char *partition = mbentry->partition;
+    const char *uniqueid = mbentry->uniqueid;
+    const char *copyacl = mbentry->acl;
+    uint32_t mbtype = mbentry->mbtype;
+    uint32_t uidvalidity = mbentry->uidvalidity;
+    modseq_t createdmodseq = mbentry->createdmodseq;
+    modseq_t foldermodseq = mbentry->foldermodseq;
+
     int r;
     char *newpartition = NULL;
     char *acl = NULL;
@@ -1728,6 +1732,8 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = foldermodseq ? foldermodseq : newmailbox->i.highestmodseq;
+        newmbentry->root_uid =
+            xstrdupnull(parent ? parent->root_uid : newmbentry->uniqueid);
     }
     r = mboxlist_update_entry(mboxname, newmbentry, NULL);
 
@@ -1854,11 +1860,26 @@ EXPORTED int mboxlist_createmailbox_opts(const char *name, int mbtype,
         }
     }
 
-    r = mboxlist_createmailbox_full(name, mbtype, partition,
-                                    isadmin, userid, auth_state,
-                                    options, uidvalidity, createdmodseq, 0, 0, NULL,
-                                    uniqueid, localonly,
-                                    forceuser, dbonly, 0, &mailbox);
+    const mbentry_t mbentry = {
+        (char *) name,
+        NULL, // ext_name
+        0,    // mtime
+        uidvalidity,
+        createdmodseq,
+        0,    // foldermodseq
+        mbtype,
+        (char *) partition,
+        NULL, // server
+        NULL, // acl
+        (char *) uniqueid,
+        NULL, // root_uid
+        NULL, // legacy_specialuse
+        PTRARRAY_INITIALIZER
+    };
+
+    r = mboxlist_createmailbox_full(&mbentry,
+                                    isadmin, userid, auth_state, options, 0,
+                                    localonly, forceuser, dbonly, 0, &mailbox);
 
     if (notify && !r) {
         /* send a MailboxCreate event notification */
@@ -1889,12 +1910,25 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
                         int local_only, int keep_intermediaries,
                         struct mailbox **mboxptr)
 {
-    return mboxlist_createmailbox_full(name, mbtype, partition,
-                                       1, userid, auth_state,
-                                       options, uidvalidity,
-                                       createdmodseq, highestmodseq,
-                                       foldermodseq, acl, uniqueid,
-                                       local_only, 1, 0,
+    const mbentry_t mbentry = {
+        (char *) name,
+        NULL, // ext_name
+        0,    // mtime
+        uidvalidity,
+        createdmodseq,
+        foldermodseq,
+        mbtype,
+        (char *) partition,
+        NULL, // server
+        (char *) acl,
+        (char *) uniqueid,
+        NULL, // root_uid
+        NULL, // legacy_specialuse
+        PTRARRAY_INITIALIZER
+    };
+
+    return mboxlist_createmailbox_full(&mbentry, 1, userid, auth_state,
+                                       options, highestmodseq, local_only, 1, 0,
                                        keep_intermediaries, mboxptr);
 }
 
