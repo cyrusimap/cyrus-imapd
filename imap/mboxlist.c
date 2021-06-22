@@ -242,6 +242,9 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
     if (mbentry->uniqueid)
         dlist_setatom(dl, "I", mbentry->uniqueid);
 
+    if (mbentry->root_uid)
+        dlist_setatom(dl, "R", mbentry->root_uid);
+
     if (mbentry->partition)
         dlist_setatom(dl, "P", mbentry->partition);
 
@@ -538,6 +541,9 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             }
             else if (!strcmp(key, "P")) {
                 rock->mbentry->partition = xstrdupnull(d->data);
+            }
+            else if (!strcmp(key, "R")) {
+                rock->mbentry->root_uid = xstrdupnull(d->data);
             }
             else if (!strcmp(key, "S")) {
                 rock->mbentry->server = xstrdupnull(d->data);
