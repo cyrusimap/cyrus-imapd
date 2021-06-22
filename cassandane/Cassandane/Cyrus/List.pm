@@ -2037,4 +2037,244 @@ sub test_otherusers_pattern_unixhs
     });
 }
 
+sub test_lookup_only_shared
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('shared');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    $admintalk->setacl('shared',
+        'cassandane' => 'l');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "*");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'Shared Folders/shared' => [qw( \\HasNoChildren )],
+    });
+
+    # implicit "anyone:r" on shared mailboxes means that the
+    # cassandane user can also select this, despite only having
+    # "l" of their own
+    $imaptalk->select('Shared Folders/shared');
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+}
+
+sub test_lookup_only_shared_racl
+    :UnixHierarchySep :AltNamespace :ReverseACLs
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('shared');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    $admintalk->setacl('shared',
+        'cassandane' => 'l');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "*");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'Shared Folders/shared' => [qw( \\HasNoChildren )],
+    });
+
+    # implicit "anyone:r" on shared mailboxes means that the
+    # cassandane user can also select this, despite only having
+    # "l" of their own
+    $imaptalk->select('Shared Folders/shared');
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+}
+
+sub test_lookup_only_otheruser
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->{instance}->create_user("other");
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user/other/foo');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    $admintalk->setacl('user/other/foo',
+        'cassandane' => 'l');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "*");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'Other Users/other/foo' => [qw( \\HasNoChildren )],
+    });
+
+    # only "l" permission, should be able to list, but not select!
+    $imaptalk->select('Other Users/other/foo');
+    $self->assert_str_equals('no',
+        $imaptalk->get_last_completion_response());
+}
+
+sub test_lookup_only_otheruser_racl
+    :UnixHierarchySep :AltNamespace :ReverseACLs
+{
+    my ($self) = @_;
+
+    $self->{instance}->create_user("other");
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user/other/foo');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    $admintalk->setacl('user/other/foo',
+        'cassandane' => 'l');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "*");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'Other Users/other/foo' => [qw( \\HasNoChildren )],
+    });
+
+    # only "l" permission, should be able to list, but not select!
+    $imaptalk->select('Other Users/other/foo');
+    $self->assert_str_equals('no',
+        $imaptalk->get_last_completion_response());
+}
+
+sub test_lookup_only_otheruser_noaltns
+    :UnixHierarchySep :NoAltNamespace
+{
+    my ($self) = @_;
+
+    $self->{instance}->create_user("other");
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user/other/foo');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    $admintalk->setacl('user/other/foo',
+        'cassandane' => 'l');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "*");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'user/other/foo' => [qw( \\HasNoChildren )],
+    });
+
+    # only "l" permission, should be able to list, but not select!
+    $imaptalk->select('user/other/foo');
+    $self->assert_str_equals('no',
+        $imaptalk->get_last_completion_response());
+}
+
+sub test_lookup_only_otheruser_noaltns_racl
+    :UnixHierarchySep :NoAltNamespace :ReverseACLs
+{
+    my ($self) = @_;
+
+    $self->{instance}->create_user("other");
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user/other/foo');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    $admintalk->setacl('user/other/foo',
+        'cassandane' => 'l');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "*");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'user/other/foo' => [qw( \\HasNoChildren )],
+    });
+
+    # only "l" permission, should be able to list, but not select!
+    $imaptalk->select('user/other/foo');
+    $self->assert_str_equals('no',
+        $imaptalk->get_last_completion_response());
+}
+
+sub test_lookup_only_own
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->{instance}->create_user("other");
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user/cassandane/foo');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    $admintalk->setacl('user/cassandane/foo',
+        'cassandane' => 'l');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "*");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'foo' => [qw( \\HasNoChildren )],
+    });
+
+    # only "l" permission, should be able to list, but not select!
+    $imaptalk->select('foo');
+    $self->assert_str_equals('no',
+        $imaptalk->get_last_completion_response());
+}
+
+sub test_lookup_only_own_racl
+    :UnixHierarchySep :AltNamespace :ReverseACLs
+{
+    my ($self) = @_;
+
+    $self->{instance}->create_user("other");
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user/cassandane/foo');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    $admintalk->setacl('user/cassandane/foo',
+        'cassandane' => 'l');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "*");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'foo' => [qw( \\HasNoChildren )],
+    });
+
+    # only "l" permission, should be able to list, but not select!
+    $imaptalk->select('foo');
+    $self->assert_str_equals('no',
+        $imaptalk->get_last_completion_response());
+}
+
 1;
