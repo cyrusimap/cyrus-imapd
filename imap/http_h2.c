@@ -585,6 +585,28 @@ static void _end_session(struct http_connection *conn)
     _end_session_ex(conn, 0);
 }
 
+
+static void http2_output(struct http_connection *conn)
+{
+    struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
+
+    if (nghttp2_session_want_write(ctx->session)) {
+        /* Send queued frame(s) */
+        int r = nghttp2_session_send(ctx->session);
+        if (r) {
+            syslog(LOG_ERR, "nghttp2_session_send: %s", nghttp2_strerror(r));
+            conn->close = 1;
+        }
+    }
+    else if (!nghttp2_session_want_read(ctx->session)) {
+        /* We're done */
+        syslog(LOG_DEBUG, "closing connection");
+        conn->close = 1;
+        return;
+    }
+}
+
+
 HIDDEN int http2_start_session(struct transaction_t *txn,
                                struct http_connection *conn)
 {
@@ -670,7 +692,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
     prot_setlog(conn->pin, PROT_NO_FD);
     prot_setlog(conn->pout, PROT_NO_FD);
 
-    tcp_disable_nagle(1); /* output fd */
+    tcp_disable_nagle(conn->pout->fd);
 
     r = nghttp2_submit_settings(ctx->session, NGHTTP2_FLAG_NONE, iv, niv);
     if (r) {
@@ -678,28 +700,10 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         return HTTP_SERVER_ERROR;
     }
 
+    /* Write frame(s) */
+    http2_output(conn);
+
     return 0;
-}
-
-
-static void http2_output(struct http_connection *conn)
-{
-    struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
-
-    if (nghttp2_session_want_write(ctx->session)) {
-        /* Send queued frame(s) */
-        int r = nghttp2_session_send(ctx->session);
-        if (r) {
-            syslog(LOG_ERR, "nghttp2_session_send: %s", nghttp2_strerror(r));
-            conn->close = 1;
-        }
-    }
-    else if (!nghttp2_session_want_read(ctx->session)) {
-        /* We're done */
-        syslog(LOG_DEBUG, "closing connection");
-        conn->close = 1;
-        return;
-    }
 }
 
 
