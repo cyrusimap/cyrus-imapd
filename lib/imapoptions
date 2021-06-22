@@ -1067,6 +1067,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backwards compatibility, if no unit is specified, minutes
    is assumed. */
 
+{ "http_h2_altsvc", NULL, STRING, "UNRELEASED" }
+/* If set, HTTP/2 (over TLS) will be advertised as being available on the specifed
+   [host]:port. */
+
 { "icalendar_max_size", 0, INT, "UNRELEASED" }
 /* Maximum allowed iCalendar size.
    If non-zero, CalDAV and JMAP will reject storage of resources whose

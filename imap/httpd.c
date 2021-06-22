@@ -111,6 +111,7 @@
 #include <libxml/uri.h>
 
 static unsigned accept_encodings = 0;
+static char *httpd_altsvc = NULL;
 
 #ifdef HAVE_ZLIB
 #include <zlib.h>
@@ -695,6 +696,8 @@ static void httpd_reset(struct http_connection *conn)
         sasl_dispose(&httpd_saslconn);
         httpd_saslconn = NULL;
     }
+    free(httpd_altsvc);
+    httpd_altsvc = NULL;
 
     saslprops_reset(&saslprops);
 
@@ -961,6 +964,24 @@ int service_main(int argc __attribute__((unused)),
             syslog(LOG_ERR, "unable to install signal handler for %d: %m", SIGALRM);
             httpd_keepalive = 0;
         }
+    }
+
+    /* Construct Alt-Svc header value */
+    if (!https && http2_enabled()) {
+        struct buf buf = BUF_INITIALIZER;
+        const char *sep = "";
+        const char *altsvc;
+
+        if ((altsvc = config_getstring(IMAPOPT_HTTP_H2_ALTSVC))) {
+            buf_printf(&buf, "h2=\"%s\"", altsvc);
+            sep = ", ";
+        }
+        if (httpd_localip) {
+            const char *port = strchr(httpd_localip, ';');
+            buf_printf(&buf, "%sh2c=\":%s\"", sep, port ? port+1 : "80");
+        }
+
+        httpd_altsvc = buf_release(&buf);
     }
 
     index_text_extractor_init(httpd_in);
@@ -2636,6 +2657,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         now = time(0);
         httpdate_gen(datestr, sizeof(datestr), now);
         simple_hdr(txn, "Date", "%s", datestr);
+
+        if (httpd_altsvc && (txn->flags.ver < VER_2)) {
+            simple_hdr(txn, "Alt-Svc", httpd_altsvc);
+        }
 
         /* Fall through and specify connection options and/or links */
         GCC_FALLTHROUGH
