@@ -50,6 +50,8 @@
 
 extern int http3_init(struct http_connection *conn, struct buf *serverinfo);
 
+extern void http3_altsvc(struct buf *altsvc);
+
 extern void http3_input(struct http_connection *conn);
 
 #endif /* HTTP_H3_H */

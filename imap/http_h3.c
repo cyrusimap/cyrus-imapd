@@ -89,6 +89,18 @@ HIDDEN int http3_init(struct http_connection *conn, struct buf *serverinfo)
     return r;
 }
 
+HIDDEN void http3_altsvc(struct buf *altsvc)
+{
+    const char *config_altsvc = config_getstring(IMAPOPT_HTTP_H3_ALTSVC);
+
+    if (config_altsvc) {
+        const char *sep = buf_len(altsvc) ? ", " : "";
+
+        buf_printf(altsvc, "%sh3=\"%s\", h3-32=\"%s\", h3-29=\"%s\"",
+                   sep, config_altsvc, config_altsvc, config_altsvc);
+    }
+}
+
 HIDDEN void http3_input(struct http_connection *conn)
 {
     int r = quic_input(conn->sess_ctx, conn->pin);
@@ -105,6 +117,10 @@ HIDDEN int http3_init(struct http_connection *conn __attribute__((unused)),
                       struct buf *serverinfo __attribute__((unused)))
 {
     return HTTP_NOT_IMPLEMENTED;
+}
+
+HIDDEN void http3_altsvc(struct buf *altsvc __attribute__((unused)))
+{
 }
 
 HIDDEN void http3_input(struct http_connection *conn __attribute__((unused)))

@@ -1075,6 +1075,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If set, HTTP/2 (over TLS) will be advertised as being available on the
    specified [host]:port. */
 
+{ "http_h3_altsvc", NULL, STRING, "UNRELEASED" }
+/* If set, HTTP/3 will be advertised as being available on the specifed
+   [host]:port. */
+
 { "http_jwt_key_dir", NULL, STRING, "3.6.0" }
 /* The absolute path to a directory containing one or more key files
    to authenticate JSON Web Tokens (RFC 7519) for HTTP connections.

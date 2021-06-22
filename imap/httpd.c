@@ -1044,9 +1044,12 @@ int service_main(int argc __attribute__((unused)),
     proc_register(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
     /* Construct Alt-Svc header value */
-    struct buf buf = BUF_INITIALIZER;
-    http2_altsvc(&buf);
-    httpd_altsvc = buf_releasenull(&buf);
+    if (!http3) {
+        struct buf buf = BUF_INITIALIZER;
+        http3_altsvc(&buf);
+        http2_altsvc(&buf);
+        httpd_altsvc = buf_releasenull(&buf);
+    }
 
     /* Set inactivity timer */
     httpd_timeout = config_getduration(IMAPOPT_HTTPTIMEOUT, 'm');
