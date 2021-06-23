@@ -1161,6 +1161,11 @@ EXPORTED uint32_t mailbox_mbtype(const struct mailbox *mailbox)
     return mailbox->mbtype;
 }
 
+EXPORTED modseq_t mailbox_foldermodseq(const struct mailbox *mailbox)
+{
+    return mailbox->foldermodseq;
+}
+
 EXPORTED void mailbox_index_dirty(struct mailbox *mailbox)
 {
     assert(mailbox_index_islocked(mailbox, 1));

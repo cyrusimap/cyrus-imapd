@@ -2028,8 +2028,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     if (mailbox->i.createdmodseq)
         dlist_setnum64(kl, "CREATEDMODSEQ", mailbox->i.createdmodseq);
 
-    if (mailbox->foldermodseq)
-        dlist_setnum64(kl, "FOLDERMODSEQ", mailbox->foldermodseq);
+    if (mailbox_foldermodseq(mailbox))
+        dlist_setnum64(kl, "FOLDERMODSEQ", mailbox_foldermodseq(mailbox));
 
     /* always send mailbox annotations */
     r = read_annotations(mailbox, NULL, &annots, 0, 0);
@@ -4306,7 +4306,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                              mailbox->i.recentuid, mailbox->i.recenttime,
                              mailbox->i.pop3_last_login,
                              mailbox->i.pop3_show_after, NULL, xconvmodseq,
-                             raclmodseq, mailbox->foldermodseq, ispartial);
+                             raclmodseq, mailbox_foldermodseq(mailbox), ispartial);
 
 
         part_list = sync_reserve_partlist(reserve_list, topart ? topart : mailbox_partition(mailbox));
@@ -5734,7 +5734,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->pop3_last_login != mailbox->i.pop3_last_login) return 0;
     if (remote->pop3_show_after != mailbox->i.pop3_show_after) return 0;
     if (remote->options != options) return 0;
-    if (remote->foldermodseq && remote->foldermodseq != mailbox->foldermodseq) return 0;
+    if (remote->foldermodseq && remote->foldermodseq != mailbox_foldermodseq(mailbox)) return 0;
     if (strcmp(remote->acl, mailbox_acl(mailbox))) return 0;
 
     if (config_getswitch(IMAPOPT_REVERSEACLS)) {
@@ -5876,7 +5876,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     }
 
     /* bump the foldermodseq if it's higher on the replica */
-    if (remote && remote->foldermodseq > mailbox->foldermodseq) {
+    if (remote && remote->foldermodseq > mailbox_foldermodseq(mailbox)) {
         mboxlist_sync_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), remote->foldermodseq);
         mailbox->foldermodseq = remote->foldermodseq;
     }

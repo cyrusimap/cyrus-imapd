@@ -569,6 +569,7 @@ extern const char *mailbox_uniqueid(const struct mailbox *mailbox);
 extern const char *mailbox_partition(const struct mailbox *mailbox);
 extern const char *mailbox_acl(const struct mailbox *mailbox);
 extern uint32_t mailbox_mbtype(const struct mailbox *mailbox);
+extern modseq_t mailbox_foldermodseq(const struct mailbox *mailbox);
 
 struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox);
 struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox);

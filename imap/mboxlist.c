@@ -2310,7 +2310,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         }
         /* This mailbox is gone completely, so mark its modseq */
         if (!r && !isremote && mboxname_isdeletedmailbox(name, NULL)) {
-            mboxname_setmodseq(name, mailbox->foldermodseq, mbentry->mbtype,
+            mboxname_setmodseq(name, mailbox_foldermodseq(mailbox), mbentry->mbtype,
                                MBOXMODSEQ_ISFOLDER|MBOXMODSEQ_ISDELETE);
         }
         if (r && !force) goto done;
@@ -2621,8 +2621,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
-        newmbentry->foldermodseq = silent ? oldmailbox->foldermodseq
-                                          : mboxname_nextmodseq(newname, oldmailbox->foldermodseq,
+        newmbentry->foldermodseq = silent ? mailbox_foldermodseq(oldmailbox)
+                                          : mboxname_nextmodseq(newname, mailbox_foldermodseq(oldmailbox),
                                                                 mailbox_mbtype(oldmailbox), modseqflags);
 
         r = mboxlist_update_entry(newname, newmbentry, &tid);
