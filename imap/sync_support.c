@@ -1975,7 +1975,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     int r = 0;
     int ispartial = local ? local->ispartial : 0;
 
-    if (!topart) topart = mailbox->part;
+    if (!topart) topart = mailbox_partition(mailbox);
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_setatom(kl, "MBOXNAME", mailbox_name(mailbox));
@@ -2878,7 +2878,7 @@ int sync_apply_mailbox(struct dlist *kin,
         goto done;
     }
 
-    part_list = sync_reserve_partlist(reserve_list, mailbox->part);
+    part_list = sync_reserve_partlist(reserve_list, mailbox_partition(mailbox));
 
     /* hold the annotate state open */
     r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
@@ -4007,7 +4007,7 @@ int sync_restore_mailbox(struct dlist *kin,
         goto bail;
     }
 
-    part_list = sync_reserve_partlist(reserve_list, mailbox->part);
+    part_list = sync_reserve_partlist(reserve_list, mailbox_partition(mailbox));
 
     /* hold the annotate state open */
     r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
@@ -4300,7 +4300,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
         sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox_name(mailbox),
                              mailbox_mbtype(mailbox),
-                             mailbox->part, mailbox->acl, mailbox->i.options,
+                             mailbox_partition(mailbox), mailbox->acl, mailbox->i.options,
                              mailbox->i.uidvalidity, touid,
                              tomodseq, mailbox->i.synccrcs,
                              mailbox->i.recentuid, mailbox->i.recenttime,
@@ -4309,7 +4309,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                              raclmodseq, mailbox->foldermodseq, ispartial);
 
 
-        part_list = sync_reserve_partlist(reserve_list, topart ? topart : mailbox->part);
+        part_list = sync_reserve_partlist(reserve_list, topart ? topart : mailbox_partition(mailbox));
         sync_find_reserve_messages(mailbox, fromuid, touid, part_list);
         mailbox_close(&mailbox);
     }
@@ -5037,7 +5037,7 @@ static int fetch_file(struct sync_client_state *sync_cs,
 
     kl = dlist_newkvlist(NULL, cmd);
     dlist_setatom(kl, "MBOXNAME", mailbox_name(mailbox));
-    dlist_setatom(kl, "PARTITION", mailbox->part);
+    dlist_setatom(kl, "PARTITION", mailbox_partition(mailbox));
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_setguid(kl, "GUID", &rp->guid);
     dlist_setnum32(kl, "UID", uid);
@@ -5583,7 +5583,7 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     }
     if (r) goto done;
 
-    part_list = sync_reserve_partlist(reserve_list, mailbox->part);
+    part_list = sync_reserve_partlist(reserve_list, mailbox_partition(mailbox));
 
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
      * remote will copy ours when we sync */
@@ -5826,7 +5826,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     else if (r)
         goto done;
 
-    if (!topart) topart = mailbox->part;
+    if (!topart) topart = mailbox_partition(mailbox);
 
     /* hold the annotate state open */
     r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
@@ -5837,7 +5837,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
 
     /* definitely bad if these don't match! */
     if (strcmp(mailbox->uniqueid, local->uniqueid) ||
-        strcmp(mailbox->part, local->part)) {
+        strcmp(mailbox_partition(mailbox), local->part)) {
         r = IMAP_MAILBOX_MOVED;
         goto done;
     }
@@ -5885,7 +5885,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     if (is_unchanged(mailbox, remote))
         goto done;
 
-    if (!topart) topart = mailbox->part;
+    if (!topart) topart = mailbox_partition(mailbox);
     part_list = sync_reserve_partlist(reserve_list, topart);
     r = sync_prepare_dlists(mailbox, local, remote, topart, part_list, kl,
                             kupload, 1, /*XXX flags & SYNC_FLAG_FULLANNOTS*/1, !(flags & SYNC_FLAG_ISREPEAT));

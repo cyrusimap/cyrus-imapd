@@ -11543,7 +11543,7 @@ static int sync_mailbox(struct xfer_header *xfer,
     modseq_t xconvmodseq = 0;
     modseq_t raclmodseq = 0;
 
-    if (!topart) topart = mailbox->part;
+    if (!topart) topart = mailbox_partition(mailbox);
     reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
     part_list = sync_reserve_partlist(reserve_guids, topart);
 
@@ -11573,7 +11573,7 @@ static int sync_mailbox(struct xfer_header *xfer,
     sync_folder_list_add(master_folders,
                          mailbox->uniqueid, mailbox_name(mailbox),
                          mailbox_mbtype(mailbox),
-                         mailbox->part,
+                         mailbox_partition(mailbox),
                          mailbox->acl,
                          mailbox->i.options,
                          mailbox->i.uidvalidity,

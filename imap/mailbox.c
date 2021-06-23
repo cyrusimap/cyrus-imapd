@@ -293,7 +293,7 @@ EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     const char *src;
 
-    src = mboxname_metapath(mailbox->part, mailbox_name(mailbox),
+    src = mboxname_metapath(mailbox_partition(mailbox), mailbox_name(mailbox),
                             legacy_dirs ? NULL : mailbox->uniqueid,
                             metafile, 0);
     if (!src) return NULL;
@@ -308,7 +308,7 @@ EXPORTED const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     const char *src;
 
-    src = mboxname_metapath(mailbox->part, mailbox_name(mailbox),
+    src = mboxname_metapath(mailbox_partition(mailbox), mailbox_name(mailbox),
                             legacy_dirs ? NULL : mailbox->uniqueid,
                             metafile, 1);
     if (!src) return NULL;
@@ -331,7 +331,7 @@ EXPORTED int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
 static const char *mailbox_spool_fname(struct mailbox *mailbox, uint32_t uid)
 {
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
-    return mboxname_datapath(mailbox->part, mailbox_name(mailbox),
+    return mboxname_datapath(mailbox_partition(mailbox), mailbox_name(mailbox),
                              legacy_dirs ? NULL : mailbox->uniqueid,
                              uid);
 }
@@ -339,7 +339,7 @@ static const char *mailbox_spool_fname(struct mailbox *mailbox, uint32_t uid)
 static const char *mailbox_archive_fname(struct mailbox *mailbox, uint32_t uid)
 {
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
-    return mboxname_archivepath(mailbox->part, mailbox_name(mailbox),
+    return mboxname_archivepath(mailbox_partition(mailbox), mailbox_name(mailbox),
                                 legacy_dirs ? NULL : mailbox->uniqueid,
                                 uid);
 }
@@ -364,7 +364,7 @@ EXPORTED const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid)
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     const char *src;
 
-    src = mboxname_datapath(mailbox->part, mailbox_name(mailbox),
+    src = mboxname_datapath(mailbox_partition(mailbox), mailbox_name(mailbox),
                             legacy_dirs ? NULL : mailbox->uniqueid,
                             uid);
     if (!src) return NULL;
@@ -1289,7 +1289,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
         if (!r) {
             /* finish cleaning up */
             if (mailbox->i.options & OPT_MAILBOX_DELETED)
-                mailbox_delete_cleanup(mailbox, mailbox->part, mailbox_name(mailbox),
+                mailbox_delete_cleanup(mailbox, mailbox_partition(mailbox), mailbox_name(mailbox),
                                        (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) ?
                                        NULL : mailbox->uniqueid);
             else if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK)
@@ -6264,7 +6264,7 @@ fail:
     /* first unlock so we don't need to write anything new down */
     mailbox_unlock_index(newmailbox, NULL);
     /* then remove all the files */
-    mailbox_delete_cleanup(NULL, newmailbox->part, mailbox_name(newmailbox),
+    mailbox_delete_cleanup(NULL, mailbox_partition(newmailbox), mailbox_name(newmailbox),
                            (mailbox_mbtype(newmailbox) & MBTYPE_LEGACY_DIRS) ?
                            NULL : newmailbox->uniqueid);
     /* and finally, abort */

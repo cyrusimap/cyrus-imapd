@@ -955,7 +955,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
         if (cstate) {
-            struct findstage_cb_rock rock = { mailbox->part, stagefile };
+            struct findstage_cb_rock rock = { mailbox_partition(mailbox), stagefile };
 
             r = conversations_guid_foreach(cstate,
                                            message_guid_encode(&(*body)->guid),

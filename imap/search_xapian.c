@@ -1200,11 +1200,11 @@ static int upgrade(const char *userid)
 
     /* need to hold an read-only lock on the activefile file
      * to ensure no databases are deleted out from under us */
-    r = activefile_open(mailbox_name(inbox), inbox->part, &activefile, AF_LOCK_READ, &active);
+    r = activefile_open(mailbox_name(inbox), mailbox_partition(inbox), &activefile, AF_LOCK_READ, &active);
     if (r) goto out;
 
     /* only try to open directories with databases in them */
-    activedirs = activefile_resolve(mailbox_name(inbox), inbox->part, active,
+    activedirs = activefile_resolve(mailbox_name(inbox), mailbox_partition(inbox), active,
             /*dostat*/1, &activetiers);
 
     int i;
@@ -1358,11 +1358,11 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
 
     /* need to hold a read-only lock on the activefile file
      * to ensure no databases are deleted out from under us */
-    r = activefile_open(mailbox_name(mailbox), mailbox->part, &lock->activefile, AF_LOCK_READ, &active);
+    r = activefile_open(mailbox_name(mailbox), mailbox_partition(mailbox), &lock->activefile, AF_LOCK_READ, &active);
     if (r) goto out;
 
     /* only try to open directories with databases in them */
-    lock->activedirs = activefile_resolve(mailbox_name(mailbox), mailbox->part, active,
+    lock->activedirs = activefile_resolve(mailbox_name(mailbox), mailbox_partition(mailbox), active,
             /*dostat*/1, &lock->activetiers);
 
     /* open the databases */
@@ -2692,7 +2692,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      *  to avoid it happening at least."
      */
     const char *deftier = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
-    r = activefile_open(mailbox_name(mailbox), mailbox->part, &tr->activefile, AF_LOCK_WRITE, &active);
+    r = activefile_open(mailbox_name(mailbox), mailbox_partition(mailbox), &tr->activefile, AF_LOCK_WRITE, &active);
     if (r) {
         syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox_name(mailbox));
         goto out;
@@ -2709,7 +2709,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         mappedfile_close(&tr->activefile);
         strarray_free(active);
         active = NULL;
-        r = activefile_open(mailbox_name(mailbox), mailbox->part, &tr->activefile, AF_LOCK_WRITE, &active);
+        r = activefile_open(mailbox_name(mailbox), mailbox_partition(mailbox), &tr->activefile, AF_LOCK_WRITE, &active);
         if (r) {
             syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox_name(mailbox));
             goto out;
@@ -2724,7 +2724,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     /* doesn't matter if the first one doesn't exist yet, we'll create it. Only stat the others if we're going
      * to be opening them */
     int dostat = tr->mode == XAPIAN_DBW_XAPINDEXED ? 2 : 0;
-    tr->activedirs = activefile_resolve(mailbox_name(mailbox), mailbox->part, active, dostat, &tr->activetiers);
+    tr->activedirs = activefile_resolve(mailbox_name(mailbox), mailbox_partition(mailbox), active, dostat, &tr->activetiers);
     // this should never be able to fail here, because the first item will always exist!
     assert(tr->activedirs && tr->activedirs->count);
 
