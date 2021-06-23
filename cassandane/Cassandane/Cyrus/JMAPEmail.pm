@@ -161,7 +161,7 @@ sub defaultprops_for_email_get
 }
 
 sub test_email_get
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -263,7 +263,7 @@ sub test_email_get
 }
 
 sub test_email_get_mimeencode
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -331,7 +331,7 @@ sub test_email_get_mimeencode
 }
 
 sub test_email_get_multimailboxes
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -372,7 +372,8 @@ sub test_email_get_multimailboxes
 }
 
 sub test_email_get_multimailboxes_expunged
-    :min_version_3_1 :needs_component_jmap :DelayedExpunge
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :DelayedExpunge
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -438,7 +439,7 @@ sub test_email_get_multimailboxes_expunged
 }
 
 sub test_email_get_body_both
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -488,7 +489,7 @@ sub test_email_get_body_both
 }
 
 sub test_email_get_body_plain
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -522,7 +523,7 @@ sub test_email_get_body_plain
 }
 
 sub test_email_get_body_html
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -556,7 +557,7 @@ sub test_email_get_body_html
 }
 
 sub test_email_get_attachment_name
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -739,7 +740,7 @@ sub test_email_get_attachment_name
 }
 
 sub test_email_get_body_notext
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -768,7 +769,7 @@ sub test_email_get_body_notext
 
 
 sub test_email_get_preview
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -799,7 +800,7 @@ sub test_email_get_preview
 }
 
 sub test_email_get_imagesize
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     # This is a FastMail-extension
 
@@ -879,7 +880,7 @@ sub test_email_get_imagesize
 }
 
 sub test_email_get_isdeleted
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     # This is a FastMail-extension
 
@@ -926,7 +927,7 @@ sub test_email_get_isdeleted
 }
 
 sub test_email_get_trustedsender
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     # This is a FastMail-extension
 
@@ -1006,7 +1007,7 @@ sub test_email_get_trustedsender
 }
 
 sub test_email_get_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1074,7 +1075,7 @@ sub test_email_get_shared
 }
 
 sub test_email_move_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1145,7 +1146,7 @@ sub test_email_move_shared
 #
 # IOERROR: append_addseen failed to open DB for foo@example.com
 sub test_email_move_shared_fromsharedseen
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1219,7 +1220,7 @@ sub test_email_move_shared_fromsharedseen
 }
 
 sub test_email_set_draft
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1293,7 +1294,7 @@ sub test_email_set_draft
 }
 
 sub test_email_set_issue2293
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1370,7 +1371,7 @@ sub test_email_set_issue2293
 }
 
 sub test_email_set_bodystructure
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1483,7 +1484,7 @@ sub test_email_set_bodystructure
 }
 
 sub test_email_set_issue2500
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1523,7 +1524,7 @@ sub test_email_set_issue2500
 }
 
 sub test_email_set_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1584,7 +1585,7 @@ sub test_email_set_shared
 }
 
 sub test_email_set_userkeywords
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1656,7 +1657,7 @@ sub test_email_set_userkeywords
 }
 
 sub test_email_set_keywords_bogus_values
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1730,7 +1731,7 @@ sub test_email_set_keywords_bogus_values
 }
 
 sub test_misc_upload_zero
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1779,7 +1780,7 @@ sub test_misc_upload_zero
 }
 
 sub test_misc_upload
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1832,7 +1833,7 @@ sub test_misc_upload
 }
 
 sub test_misc_upload_multiaccount
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1855,7 +1856,7 @@ sub test_misc_upload_multiaccount
 }
 
 sub test_misc_upload_bin
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1904,7 +1905,7 @@ sub test_misc_upload_bin
 }
 
 sub test_misc_download
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1955,7 +1956,7 @@ sub test_misc_download
 }
 
 sub test_misc_download_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2007,7 +2008,7 @@ sub test_misc_download_shared
 }
 
 sub test_base64_forward
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2131,7 +2132,7 @@ sub download
 }
 
 sub test_blob_copy
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2193,7 +2194,7 @@ sub test_blob_copy
 }
 
 sub test_email_set_attachments
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2348,7 +2349,7 @@ sub test_email_set_attachments
 }
 
 sub test_email_set_flagged
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2386,7 +2387,7 @@ sub test_email_set_flagged
 }
 
 sub test_email_set_mailboxids
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2440,7 +2441,7 @@ sub test_email_set_mailboxids
 }
 
 sub test_email_get_keywords
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2517,7 +2518,7 @@ sub test_email_get_keywords
 }
 
 sub test_email_get_keywords_case_insensitive
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2551,7 +2552,7 @@ sub test_email_get_keywords_case_insensitive
 }
 
 sub test_email_set_keywords
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2688,7 +2689,7 @@ sub test_email_set_keywords
 
 sub test_email_import_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
-    :JMAPExtensions
+    :needs_component_sieve :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2780,7 +2781,7 @@ sub test_email_import_snooze
 
 sub test_email_set_create_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
-    :JMAPExtensions
+    :needs_component_sieve :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2894,7 +2895,7 @@ sub test_email_set_create_snooze
 
 sub test_email_set_update_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
-    :JMAPExtensions
+    :needs_component_sieve :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3125,7 +3126,7 @@ sub test_email_set_update_snooze
 
 sub test_replication_email_set_update_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
-    :JMAPExtensions
+    :needs_component_sieve :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3288,7 +3289,7 @@ sub test_replication_email_set_update_snooze
 
 sub test_email_query_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
-    :JMAPExtensions
+    :needs_component_sieve :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3429,7 +3430,8 @@ sub test_email_query_snooze
 }
 
 sub test_email_seen_shared
-    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3498,7 +3500,8 @@ sub test_email_seen_shared
 }
 
 sub test_email_seen_shared_twofolder
-    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3573,7 +3576,8 @@ sub test_email_seen_shared_twofolder
 }
 
 sub test_email_seen_shared_twofolder_hidden
-    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3647,7 +3651,8 @@ sub test_email_seen_shared_twofolder_hidden
 }
 
 sub test_email_flagged_shared_twofolder_hidden
-    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3719,7 +3724,7 @@ sub test_email_flagged_shared_twofolder_hidden
 }
 
 sub test_email_set_move
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3780,7 +3785,8 @@ sub test_email_set_move
 }
 
 sub test_email_set_move_keywords
-    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :NoAltNameSpace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3840,7 +3846,7 @@ sub test_email_set_move_keywords
 }
 
 sub test_email_set_update
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3895,7 +3901,7 @@ sub test_email_set_update
 }
 
 sub test_email_set_seen
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3934,7 +3940,7 @@ sub test_email_set_seen
 }
 
 sub test_email_set_destroy
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4010,7 +4016,7 @@ sub test_email_set_destroy
 }
 
 sub test_email_query
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4356,7 +4362,7 @@ sub test_email_query
 }
 
 sub test_email_query_bcc
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4434,7 +4440,8 @@ sub test_email_query_bcc
 }
 
 sub test_email_query_multiple_to_cross_domain
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4487,7 +4494,7 @@ sub test_email_query_multiple_to_cross_domain
 
 
 sub test_email_query_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4841,7 +4848,7 @@ sub test_email_query_shared
 }
 
 sub test_email_query_keywords
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4939,7 +4946,7 @@ sub test_email_query_keywords
 }
 
 sub test_email_query_userkeywords
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5008,7 +5015,7 @@ sub test_email_query_userkeywords
 }
 
 sub test_email_query_threadkeywords
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my %exp;
@@ -5164,7 +5171,7 @@ sub test_email_query_threadkeywords
 }
 
 sub test_email_query_empty
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5184,7 +5191,7 @@ sub test_email_query_empty
 }
 
 sub test_email_query_collapse
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my %exp;
@@ -5236,7 +5243,7 @@ sub test_email_query_collapse
 }
 
 sub test_email_query_inmailbox_null
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5255,7 +5262,7 @@ sub test_email_query_inmailbox_null
 
 sub test_email_query_cached_legacy
     :min_version_3_1 :max_version_3_4 :needs_component_jmap
-    :JMAPSearchDBLegacy :JMAPExtensions
+    :needs_component_sieve :JMAPSearchDBLegacy :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5336,7 +5343,8 @@ sub test_email_query_cached_legacy
 }
 
 sub test_email_query_cached
-    :min_version_3_5 :needs_component_jmap :JMAPQueryCacheMaxAge1s :JMAPExtensions
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPQueryCacheMaxAge1s :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5407,7 +5415,8 @@ sub test_email_query_cached
 }
 
 sub test_email_query_cached_evict_slow
-    :min_version_3_5 :needs_component_jmap :JMAPQueryCacheMaxAge1s :JMAPExtensions
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPQueryCacheMaxAge1s :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5459,7 +5468,8 @@ sub test_email_query_cached_evict_slow
 }
 
 sub test_email_query_issue2905
-    :min_version_3_1 :needs_component_jmap :JMAPQueryCacheMaxAge1s
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPQueryCacheMaxAge1s
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5569,7 +5579,8 @@ sub test_email_query_issue2905
 }
 
 sub test_email_query_inmailboxid_conjunction
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5715,7 +5726,8 @@ sub test_email_query_inmailboxid_conjunction
 }
 
 sub test_email_query_toaddress
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5849,7 +5861,8 @@ sub test_email_query_toaddress
 }
 
 sub test_email_query_inmailboxotherthan
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5963,7 +5976,7 @@ sub test_email_query_inmailboxotherthan
 
 
 sub test_email_query_moved
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6110,7 +6123,7 @@ sub test_email_query_moved
 }
 
 sub test_email_query_from
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6163,7 +6176,8 @@ sub test_email_query_from
 }
 
 sub test_email_query_addedDates
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6309,7 +6323,7 @@ sub test_email_query_addedDates
 
 
 sub test_misc_collapsethreads_issue2024
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my %exp;
@@ -6527,21 +6541,24 @@ sub email_query_window_internal
 }
 
 sub test_email_query_window
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     $self->email_query_window_internal();
 }
 
 sub test_email_query_window_cached
-    :min_version_3_1 :needs_component_jmap :JMAPQueryCacheMaxAge1s :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPQueryCacheMaxAge1s :JMAPExtensions
 {
     my ($self) = @_;
     $self->email_query_window_internal();
 }
 
 sub test_email_query_window_guidsearch
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -6557,7 +6574,7 @@ sub test_email_query_window_guidsearch
 }
 
 sub test_email_query_long
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my %exp;
@@ -6603,7 +6620,7 @@ sub test_email_query_long
 }
 
 sub test_email_query_acl
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6662,7 +6679,7 @@ sub test_email_query_acl
 }
 
 sub test_email_query_unknown_mailbox
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my %exp;
@@ -6686,7 +6703,7 @@ sub test_email_query_unknown_mailbox
 
 
 sub test_searchsnippet_get
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6795,7 +6812,7 @@ sub test_searchsnippet_get
 }
 
 sub test_searchsnippet_get_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6858,7 +6875,7 @@ sub test_searchsnippet_get_shared
 }
 
 sub test_email_query_snippets
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my %exp;
@@ -6943,7 +6960,8 @@ sub test_email_query_snippets
 }
 
 sub test_email_query_attachments
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7055,7 +7073,8 @@ sub test_email_query_attachments
 }
 
 sub test_email_query_attachmentname
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7123,7 +7142,8 @@ sub test_email_query_attachmentname
 }
 
 sub test_email_query_attachmenttype_legacy
-    :min_version_3_1 :max_version_3_4 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :max_version_3_4
+    :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7244,7 +7264,8 @@ sub test_email_query_attachmenttype_legacy
 }
 
 sub test_email_query_attachmenttype
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7418,7 +7439,8 @@ EOF
 }
 
 sub test_email_query_attachmenttype_wildcards
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7540,7 +7562,7 @@ sub test_email_query_attachmenttype_wildcards
 
 
 sub test_thread_get
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my %exp;
@@ -7647,7 +7669,7 @@ sub test_thread_get
 }
 
 sub test_thread_get_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7717,7 +7739,7 @@ sub test_thread_get_shared
 }
 
 sub test_identity_get
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7748,7 +7770,7 @@ sub test_identity_get
 }
 
 sub test_misc_emptyids
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -7775,7 +7797,7 @@ sub test_misc_emptyids
 }
 
 sub test_email_querychanges_basic
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7826,7 +7848,7 @@ sub test_email_querychanges_basic
 }
 
 sub test_email_querychanges_basic_collapse
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7879,7 +7901,7 @@ sub test_email_querychanges_basic_collapse
 }
 
 sub test_email_querychanges_basic_mb
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7932,7 +7954,7 @@ sub test_email_querychanges_basic_mb
 }
 
 sub test_email_querychanges_basic_mb_collapse
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8054,7 +8076,7 @@ sub test_email_querychanges_basic_mb_collapse
 }
 
 sub test_email_querychanges_skipdeleted
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8116,7 +8138,7 @@ sub test_email_querychanges_skipdeleted
 }
 
 sub test_email_querychanges_deletedcopy
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8179,7 +8201,7 @@ sub test_email_querychanges_deletedcopy
 }
 
 sub test_email_changes
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8349,7 +8371,7 @@ sub test_email_changes
 }
 
 sub test_email_querychanges
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8387,7 +8409,7 @@ sub test_email_querychanges
 }
 
 sub test_email_querychanges_toomany
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8429,7 +8451,7 @@ sub test_email_querychanges_toomany
 }
 
 sub test_email_querychanges_zerosince
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8467,7 +8489,7 @@ sub test_email_querychanges_zerosince
 
 
 sub test_email_querychanges_thread
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8545,7 +8567,7 @@ sub test_email_querychanges_thread
 }
 
 sub test_email_querychanges_sortflagged
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8682,7 +8704,7 @@ sub test_email_querychanges_sortflagged
 }
 
 sub test_email_querychanges_sortflagged_topmessage
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8820,7 +8842,7 @@ sub test_email_querychanges_sortflagged_topmessage
 }
 
 sub test_email_querychanges_sortflagged_otherfolder
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8969,7 +8991,7 @@ sub test_email_querychanges_sortflagged_otherfolder
 }
 
 sub test_email_querychanges_order
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9028,7 +9050,7 @@ sub test_email_querychanges_order
 }
 
 sub test_email_querychanges_implementation
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9175,7 +9197,7 @@ sub test_email_querychanges_implementation
 }
 
 sub test_email_changes_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9269,7 +9291,7 @@ sub test_email_changes_shared
 }
 
 sub test_misc_upload_download822
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9295,7 +9317,7 @@ EOF
 }
 
 sub test_email_get_bogus_encoding
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9341,7 +9363,7 @@ EOF
 }
 
 sub test_email_get_encoding_utf8
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9388,7 +9410,7 @@ EOF
 
 sub test_email_get_8bit_headers
     :min_version_3_1 :needs_component_jmap :needs_dependency_chardet
-    :NoMunge8Bit :RFC2047_UTF8
+    :needs_component_sieve :NoMunge8Bit :RFC2047_UTF8
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9448,7 +9470,7 @@ sub test_email_get_8bit_headers
 }
 
 sub test_attach_base64_email
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9546,7 +9568,7 @@ sub test_attach_base64_email
 
 
 sub test_misc_upload_sametype
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9563,7 +9585,7 @@ sub test_misc_upload_sametype
 }
 
 sub test_misc_brokenrfc822_badendline
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9611,7 +9633,7 @@ EOF
 }
 
 sub test_email_import_zerobyte
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9658,7 +9680,7 @@ EOF
 }
 
 sub test_email_import_singlecopy
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9725,7 +9747,7 @@ EOF
 
 
 sub test_email_import_setdate
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9785,7 +9807,7 @@ EOF
 }
 
 sub test_email_import_mailboxid_by_role
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9838,7 +9860,7 @@ EOF
 }
 
 sub test_email_import_issue2918
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9867,7 +9889,7 @@ sub test_email_import_issue2918
 }
 
 sub test_thread_get_onemsg
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my %exp;
@@ -9936,7 +9958,7 @@ EOF
 }
 
 sub test_thread_changes
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my %exp;
@@ -10166,7 +10188,7 @@ sub test_thread_changes
 }
 
 sub test_thread_latearrival_drafts
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my %exp;
@@ -10307,7 +10329,7 @@ sub test_thread_latearrival_drafts
 }
 
 sub test_email_import
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10406,7 +10428,7 @@ sub test_email_import
 }
 
 sub test_email_import_error
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10442,7 +10464,7 @@ sub test_email_import_error
 
 
 sub test_email_import_shared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10488,7 +10510,7 @@ EOF
 }
 
 sub test_email_import_has_attachment
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10555,7 +10577,7 @@ EOF
 }
 
 sub test_misc_refobjects_simple
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10590,7 +10612,7 @@ sub test_misc_refobjects_simple
 }
 
 sub test_email_import_no_keywords
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10627,7 +10649,7 @@ EOF
 }
 
 sub test_misc_refobjects_extended
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10668,7 +10690,7 @@ sub test_misc_refobjects_extended
 }
 
 sub test_email_set_patch
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10746,7 +10768,7 @@ sub test_email_set_patch
 }
 
 sub test_misc_set_oldstate
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10800,7 +10822,7 @@ sub test_misc_set_oldstate
 }
 
 sub test_email_set_text_crlf
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10832,7 +10854,7 @@ sub test_email_set_text_crlf
 }
 
 sub test_email_set_text_split
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10862,7 +10884,7 @@ sub test_email_set_text_split
 }
 
 sub test_email_get_attachedemails
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10919,7 +10941,7 @@ sub test_email_get_attachedemails
 }
 
 sub test_email_get_maxbodyvaluebytes_utf8
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10968,7 +10990,7 @@ sub test_email_get_maxbodyvaluebytes_utf8
 }
 
 sub test_email_get_header_all
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11000,7 +11022,7 @@ sub test_email_get_header_all
 }
 
 sub test_email_set_nullheader
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11035,7 +11057,7 @@ sub test_email_set_nullheader
 }
 
 sub test_email_set_headers
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11182,7 +11204,7 @@ sub test_email_set_headers
 }
 
 sub test_email_download
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11228,7 +11250,7 @@ sub test_email_download
 }
 
 sub test_email_embedded_download
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11279,7 +11301,7 @@ sub test_email_embedded_download
 }
 
 sub test_blob_download
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11298,7 +11320,7 @@ sub test_blob_download
 }
 
 sub test_email_set_filename
-    :min_version_3_4 :needs_component_jmap
+    :min_version_3_4 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11386,7 +11408,7 @@ sub test_email_set_filename
 }
 
 sub test_email_get_size
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11409,7 +11431,7 @@ sub test_email_get_size
 }
 
 sub test_email_get_references
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11438,7 +11460,7 @@ sub test_email_get_references
 }
 
 sub test_email_set_groupaddr
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11641,7 +11663,7 @@ sub test_email_set_groupaddr
 }
 
 sub test_email_parse
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11714,7 +11736,7 @@ sub test_email_parse
 }
 
 sub test_email_parse_digest
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11756,7 +11778,7 @@ sub test_email_parse_digest
 }
 
 sub test_email_parse_blob822
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11798,7 +11820,7 @@ EOF
 }
 
 sub test_email_parse_base64
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11864,7 +11886,7 @@ EOF
 }
 
 sub test_email_parse_blob822_lenient
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11898,7 +11920,7 @@ EOF
 }
 
 sub test_email_parse_contenttype_default
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11978,7 +12000,7 @@ EOF
 }
 
 sub test_email_parse_charset
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12048,7 +12070,7 @@ sub test_email_parse_charset
 }
 
 sub test_email_parse_encoding
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12139,7 +12161,7 @@ EOF
 }
 
 sub test_email_parse_notparsable
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12161,7 +12183,7 @@ sub test_email_parse_notparsable
 }
 
 sub test_email_get_bodystructure
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12381,7 +12403,8 @@ sub test_email_get_bodystructure
 }
 
 sub test_email_get_calendarevents
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12486,7 +12509,8 @@ sub test_email_get_calendarevents
 }
 
 sub test_email_get_calendarevents_utc
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12573,7 +12597,8 @@ sub test_email_get_calendarevents_utc
 }
 
 sub test_email_get_calendarevents_icsfile
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12652,7 +12677,7 @@ sub test_email_get_calendarevents_icsfile
 }
 
 sub test_email_set_blobencoding
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12726,7 +12751,7 @@ EOF
 }
 
 sub test_email_get_fixbrokenmessageids
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
 
     # See issue https://github.com/cyrusimap/cyrus-imapd/issues/2601
@@ -12764,7 +12789,7 @@ sub test_email_get_fixbrokenmessageids
 
 
 sub test_email_body_alternative_without_html
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12812,7 +12837,7 @@ sub test_email_body_alternative_without_html
 }
 
 sub test_email_copy
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12951,7 +12976,8 @@ sub test_email_copy
 }
 
 sub test_email_copy_hasattachment
-    :min_version_3_1 :needs_component_jmap :JMAPNoHasAttachment
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPNoHasAttachment
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13077,7 +13103,7 @@ sub test_email_copy_hasattachment
 }
 
 sub test_email_copy_mailboxid_by_role
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13146,7 +13172,7 @@ sub test_email_copy_mailboxid_by_role
 }
 
 sub test_email_set_destroy_bulk
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13180,7 +13206,8 @@ sub test_email_set_destroy_bulk
 }
 
 sub test_email_set_update_bulk
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13301,7 +13328,8 @@ sub test_email_set_update_bulk
 }
 
 sub test_email_set_update_after_attach
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13397,7 +13425,7 @@ sub test_email_set_update_after_attach
 }
 
 sub test_email_set_update_too_many_mailboxes
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13441,7 +13469,8 @@ sub test_email_set_update_too_many_mailboxes
 }
 
 sub test_email_set_update_too_many_mailboxes_lowlimit
-    :min_version_3_3 :needs_component_jmap :LowEmailLimits
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :LowEmailLimits
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13490,7 +13519,7 @@ sub test_email_set_update_too_many_mailboxes_lowlimit
 }
 
 sub test_email_set_update_too_many_keywords
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13527,7 +13556,7 @@ sub test_email_set_update_too_many_keywords
 }
 
 sub test_email_get_headers_multipart
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13579,7 +13608,7 @@ sub test_email_get_headers_multipart
 }
 
 sub test_email_get_brokenheader_split_codepoint
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13622,7 +13651,7 @@ EOF
 }
 
 sub test_email_get_detect_utf32
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13723,7 +13752,8 @@ EOF
 }
 
 sub test_email_get_detect_iso_8859_1
-    :min_version_3_1 :needs_component_jmap :needs_dependency_chardet
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :needs_dependency_chardet
 {
     my ($self) = @_;
 
@@ -13768,7 +13798,7 @@ EOF
 }
 
 sub test_email_set_intermediary_create
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -13811,7 +13841,7 @@ sub test_email_set_intermediary_create
 }
 
 sub test_email_set_intermediary_move
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -13869,7 +13899,7 @@ sub test_email_set_intermediary_move
 }
 
 sub test_email_copy_intermediary
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13952,7 +13982,7 @@ sub test_email_copy_intermediary
 }
 
 sub test_email_set_setflags_mboxevent
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
 
     my ($self) = @_;
@@ -14109,7 +14139,7 @@ sub test_email_set_setflags_mboxevent
 }
 
 sub test_implementation_email_query
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -14233,7 +14263,8 @@ sub _set_quotalimits
 }
 
 sub test_email_set_getquota
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -14302,7 +14333,7 @@ sub test_email_set_getquota
 }
 
 sub test_email_set_mailbox_alias
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -14373,7 +14404,7 @@ sub test_email_set_mailbox_alias
 }
 
 sub test_email_set_update_mailbox_creationid
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -14456,7 +14487,7 @@ sub test_email_set_update_mailbox_creationid
 }
 
 sub test_email_import_encoded_contenttype
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     # Very old macOS Mail.app versions encode the complete
     # Content-Type header value, when they really should
@@ -14511,7 +14542,7 @@ EOF
 }
 
 sub test_email_set_multipartdigest
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -14569,7 +14600,8 @@ sub test_email_set_multipartdigest
 }
 
 sub test_email_set_encode_plain_text_attachment
-    :min_version_3_1 :needs_component_jmap :needs_dependency_chardet
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :needs_dependency_chardet
 {
     my ($self) = @_;
 
@@ -14622,7 +14654,8 @@ sub test_email_set_encode_plain_text_attachment
 }
 
 sub test_blob_get
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -14664,7 +14697,7 @@ sub test_blob_get
 }
 
 sub test_email_set_mimeversion
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -14709,7 +14742,7 @@ sub test_email_set_mimeversion
 }
 
 sub test_issue_2664
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -14764,7 +14797,7 @@ sub test_issue_2664
 }
 
 sub test_email_get_cid
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -14825,7 +14858,7 @@ sub test_email_get_cid
 
 sub test_searchsnippet_get_attachment
     :min_version_3_3 :needs_component_jmap :needs_search_xapian
-    :SearchAttachmentExtractor :JMAPExtensions
+    :needs_component_sieve :SearchAttachmentExtractor :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -14967,7 +15000,7 @@ sub test_searchsnippet_get_attachment
 }
 
 sub test_email_set_date
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15009,7 +15042,7 @@ sub test_email_set_date
 
 sub test_email_query_language_stats
     :min_version_3_1 :needs_component_jmap :needs_dependency_cld2
-    :SearchLanguage :JMAPExtensions
+    :needs_component_sieve :SearchLanguage :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15078,7 +15111,7 @@ sub test_email_query_language_stats
     }, $res->[0][1]{languageStats});
 }
 sub test_email_set_received_at
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15118,7 +15151,7 @@ sub test_email_set_received_at
 }
 
 sub test_email_set_email_duplicates_mailbox_counts
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15175,7 +15208,8 @@ sub test_email_set_email_duplicates_mailbox_counts
 }
 
 sub test_searchsnippet_get_regression
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15225,7 +15259,8 @@ sub test_searchsnippet_get_regression
 }
 
 sub test_search_sharedpart
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15317,7 +15352,7 @@ sub test_search_sharedpart
 }
 
 sub test_email_query_not_match
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15465,7 +15500,8 @@ sub test_email_query_not_match
 }
 
 sub test_email_query_fromcontactgroupid
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15714,7 +15750,8 @@ sub test_email_query_fromcontactgroupid
 }
 
 sub test_email_querychanges_fromcontactgroupid
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15833,7 +15870,7 @@ sub test_email_querychanges_fromcontactgroupid
 }
 
 sub test_email_get_header_last_value
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15869,7 +15906,7 @@ sub test_email_get_header_last_value
 
 sub test_email_matchmime
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
-    :JMAPExtensions
+    :needs_component_sieve :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15935,7 +15972,7 @@ EOF
 }
 
 sub test_email_zero_length_text
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -15995,7 +16032,7 @@ EOF
 }
 
 sub test_email_set_language_header
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16038,7 +16075,7 @@ sub test_email_set_language_header
 }
 
 sub test_email_query_text_nomail
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16051,7 +16088,7 @@ sub test_email_query_text_nomail
 }
 
 sub test_email_set_move_multiuid_patch
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16130,7 +16167,7 @@ EOF
 }
 
 sub test_email_set_move_multiuid_set
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16211,7 +16248,7 @@ EOF
 
 sub test_email_query_position_legacy
     :min_version_3_1 :max_version_3_4 :needs_component_jmap
-    :JMAPSearchDBLegacy :JMAPExtensions
+    :needs_component_sieve :JMAPSearchDBLegacy :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16325,8 +16362,8 @@ sub test_email_query_position_legacy
 }
 
 sub test_email_query_position
-    :min_version_3_5 :needs_component_jmap :JMAPQueryCacheMaxAge1s
-    :JMAPExtensions
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPQueryCacheMaxAge1s :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16440,8 +16477,8 @@ sub test_email_query_position
 }
 
 sub test_email_query_negative_position_legacy
-    :min_version_3_1 :max_version_3_4 :needs_component_jmap
-    :JMAPSearchDBLegacy :JMAPExtensions
+    :min_version_3_1 :max_version_3_4 :needs_component_sieve
+    :needs_component_jmap :JMAPSearchDBLegacy :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16554,8 +16591,8 @@ sub test_email_query_negative_position_legacy
 }
 
 sub test_email_query_negative_position
-    :min_version_3_5 :needs_component_jmap :JMAPQueryCacheMaxAge1s
-    :JMAPExtensions
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPQueryCacheMaxAge1s :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16668,7 +16705,8 @@ sub test_email_query_negative_position
 }
 
 sub test_email_query_guidsearch
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16723,7 +16761,8 @@ sub test_email_query_guidsearch
 }
 
 sub test_email_query_guidsearch_scanmode
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions :SearchSetForceScanMode
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions :SearchSetForceScanMode
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16778,7 +16817,8 @@ sub test_email_query_guidsearch_scanmode
 }
 
 sub test_email_query_guidsearch_sort
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16969,7 +17009,8 @@ sub test_email_query_guidsearch_sort
 }
 
 sub test_email_query_guidsearch_inmailbox
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -17239,7 +17280,8 @@ sub test_email_query_guidsearch_inmailbox
 }
 
 sub test_email_query_guidsearch_keywords
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -17382,7 +17424,8 @@ sub test_email_query_guidsearch_keywords
 }
 
 sub test_email_set_guidsearch_updated_internaldate
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -17515,7 +17558,8 @@ sub test_email_set_guidsearch_updated_internaldate
 }
 
 sub test_email_query_guidsearch_mixedfilter
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -17674,7 +17718,8 @@ sub test_email_query_guidsearch_mixedfilter
 }
 
 sub test_email_query_guidsearch_only_email_mailboxes
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -17760,7 +17805,8 @@ sub test_email_query_guidsearch_only_email_mailboxes
 }
 
 sub test_email_query_guidsearch_inmailboxotherthan
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -17870,7 +17916,7 @@ sub test_email_query_guidsearch_inmailboxotherthan
 }
 
 sub test_email_draft_subject_keeps_thrid
-    :min_version_3_3 :needs_component_jmap
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -17965,7 +18011,7 @@ sub test_email_draft_subject_keeps_thrid
 }
 
 sub test_email_draft_reply_new_subject_new_thrid
-    :min_version_3_3 :needs_component_jmap
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -18063,7 +18109,8 @@ sub test_email_draft_reply_new_subject_new_thrid
 }
 
 sub test_email_query_guidsearch_collapsethreads
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -18189,7 +18236,7 @@ sub test_email_query_guidsearch_collapsethreads
 }
 
 sub test_email_get_bodyvalues_markdown
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -18244,7 +18291,8 @@ sub test_email_get_bodyvalues_markdown
 }
 
 sub test_email_query_sort_break_tie
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -18321,7 +18369,8 @@ sub test_email_query_sort_break_tie
 }
 
 sub test_email_query_notinmailboxid_attached
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -18532,7 +18581,7 @@ sub test_email_query_notinmailboxid_attached
 }
 
 sub test_email_copy_has_expunged
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -18615,7 +18664,7 @@ sub test_email_copy_has_expunged
 
 sub test_email_query_language
     :min_version_3_3 :needs_component_jmap :JMAPExtensions
-    :SearchLanguage :needs_dependency_cld2
+    :needs_component_sieve :SearchLanguage :needs_dependency_cld2
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -18827,7 +18876,7 @@ no utf8;
 
 sub test_email_query_language_french_contractions
     :min_version_3_3 :needs_component_jmap :JMAPExtensions
-    :SearchLanguage :needs_dependency_cld2
+    :needs_component_sieve :SearchLanguage :needs_dependency_cld2
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -18909,7 +18958,8 @@ no utf8;
 }
 
 sub test_email_query_findallinthread
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19093,7 +19143,8 @@ sub test_email_query_findallinthread
 }
 
 sub test_email_parse_replyto
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19162,7 +19213,8 @@ EOF
 }
 
 sub test_email_query_deliveredto
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19266,7 +19318,8 @@ EOF
 }
 
 sub test_email_query_guidsearch_inbox
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19416,7 +19469,7 @@ EOF
 }
 
 sub test_email_get_iso2022jp_body
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19448,7 +19501,8 @@ no utf8;
 }
 
 sub test_email_blob_set_singlecommand
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19541,7 +19595,8 @@ EOF
 }
 
 sub test_email_query_fromanycontact_ignore_localpartonly
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions :needs_component_sieve
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :needs_component_sieve
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19619,7 +19674,8 @@ EOF
 }
 
 sub test_email_query_dash_sieve
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions :needs_component_sieve
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :needs_component_sieve
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19671,7 +19727,8 @@ EOF
 }
 
 sub test_email_query_dash
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19717,7 +19774,8 @@ sub test_email_query_dash
 }
 
 sub test_email_bimi_blob
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19765,7 +19823,8 @@ sub test_email_bimi_blob
 }
 
 sub test_email_bimi_blob_as_contact_avatar
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19833,7 +19892,8 @@ sub test_email_bimi_blob_as_contact_avatar
 }
 
 sub test_email_attach_contact_by_blobid
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -19912,7 +19972,8 @@ sub test_email_attach_contact_by_blobid
 }
 
 sub test_email_query_guidsearch_threadkeywords
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20057,7 +20118,8 @@ sub test_email_query_guidsearch_threadkeywords
 }
 
 sub test_email_query_highpriority
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20134,7 +20196,8 @@ sub test_email_query_highpriority
 }
 
 sub test_email_query_listid
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20240,7 +20303,8 @@ sub test_email_query_listid
 }
 
 sub test_email_query_emailaddress
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20396,7 +20460,7 @@ EOF
 }
 
 sub test_email_import_issue3122
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20425,7 +20489,8 @@ sub test_email_import_issue3122
 }
 
 sub test_email_query_unicodefdfx
-    :min_version_3_3 :needs_component_jmap :SearchLanguage
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :SearchLanguage
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20483,7 +20548,7 @@ sub test_email_query_unicodefdfx
 }
 
 sub test_email_parse_embedded_toplevel
-    :min_version_3_3 :needs_component_jmap
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20557,7 +20622,8 @@ sub test_email_parse_embedded_toplevel
 }
 
 sub test_searchsnippet_get_attachments
-    :min_version_3_5 :needs_component_jmap :SearchAttachmentExtractor :JMAPExtensions
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :SearchAttachmentExtractor :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20738,7 +20804,8 @@ EOF
 }
 
 sub test_email_query_header
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20822,7 +20889,8 @@ no utf8;
 }
 
 sub test_email_query_header_cost
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20861,7 +20929,8 @@ sub test_email_query_header_cost
 }
 
 sub test_email_query_header_sieve
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions :AltNamespace
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions :AltNamespace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20910,7 +20979,8 @@ EOF
 }
 
 sub test_email_query_mailbox_andor
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -20992,7 +21062,8 @@ sub test_email_query_mailbox_andor
 }
 
 sub test_email_querychanges_mailbox_or
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -21065,8 +21136,8 @@ sub test_email_querychanges_mailbox_or
 }
 
 sub test_email_query_dnfcomplexity
-    :min_version_3_4 :needs_component_jmap :JMAPExtensions
-    :SearchNormalizationMax20000 :SearchMaxTime1Sec
+    :min_version_3_4 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions :SearchNormalizationMax20000 :SearchMaxTime1Sec
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -21173,7 +21244,8 @@ EOF
 }
 
 sub test_email_query_toplevel_calendar
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -21248,7 +21320,8 @@ EOF
 }
 
 sub test_email_query_toplevel_calendar_sieve
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions :needs_component_sieve
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+    :needs_component_sieve
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -21305,7 +21378,8 @@ EOF
 }
 
 sub test_email_query_fix_multiple_recipients
-    :min_version_3_4 :needs_component_jmap :JMAPExtensions
+    :min_version_3_4 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -21346,7 +21420,8 @@ EOF
 }
 
 sub test_email_set_update_no_id
-    :min_version_3_4 :needs_component_jmap :JMAPExtensions
+    :min_version_3_4 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -21391,7 +21466,8 @@ sub test_email_set_update_no_id
 }
 
 sub test_email_query_guidsearch_mixedfilter2
-    :min_version_3_4 :needs_component_jmap :JMAPExtensions
+    :min_version_3_4 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -21566,7 +21642,8 @@ sub test_email_query_guidsearch_mixedfilter2
 }
 
 sub test_email_set_update_mailboxids_nonempty
-    :min_version_3_4 :needs_component_jmap :JMAPExtensions
+    :min_version_3_4 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -21682,7 +21759,8 @@ sub test_email_set_update_mailboxids_nonempty
 }
 
 sub test_searchsnippet_search_maxsize
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions :SearchMaxSize4k
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions :SearchMaxSize4k
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
