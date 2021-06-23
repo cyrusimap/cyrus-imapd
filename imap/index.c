@@ -323,7 +323,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
         state->want_expunged = init->want_expunged;
 
         state->myrights = cyrus_acl_myrights(init->authstate,
-                                             state->mailbox->acl);
+                                             mailbox_acl(state->mailbox));
         if (state->examining)
             state->myrights &= ~ACL_READ_WRITE;
 

@@ -576,7 +576,7 @@ int deliver_mailbox(FILE *f,
             if (imap4flags->authstate != authstate) {
                 /* Flags get set as owner of Sieve script */
                 int owner_rights =
-                    cyrus_acl_myrights(imap4flags->authstate, mailbox->acl);
+                    cyrus_acl_myrights(imap4flags->authstate, mailbox_acl(mailbox));
 
                 as.myrights |= (owner_rights & ~ACL_POST);
             }

@@ -2020,7 +2020,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     }
     dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
     dlist_setatom(kl, "PARTITION", topart);
-    dlist_setatom(kl, "ACL", mailbox->acl);
+    dlist_setatom(kl, "ACL", mailbox_acl(mailbox));
     dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
     if (mailbox->quotaroot)
         dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
@@ -4300,7 +4300,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
         sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox_name(mailbox),
                              mailbox_mbtype(mailbox),
-                             mailbox_partition(mailbox), mailbox->acl, mailbox->i.options,
+                             mailbox_partition(mailbox), mailbox_acl(mailbox), mailbox->i.options,
                              mailbox->i.uidvalidity, touid,
                              tomodseq, mailbox->i.synccrcs,
                              mailbox->i.recentuid, mailbox->i.recenttime,
@@ -5635,7 +5635,7 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     if (foldermodseq) {
         // by writing the same ACL with the updated foldermodseq, this will bounce it
         // if needed
-        r = mboxlist_sync_setacls(mailbox_name(mailbox), mailbox->acl, foldermodseq);
+        r = mboxlist_sync_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), foldermodseq);
         if (r) goto done;
     }
 
@@ -5735,7 +5735,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->pop3_show_after != mailbox->i.pop3_show_after) return 0;
     if (remote->options != options) return 0;
     if (remote->foldermodseq && remote->foldermodseq != mailbox->foldermodseq) return 0;
-    if (strcmp(remote->acl, mailbox->acl)) return 0;
+    if (strcmp(remote->acl, mailbox_acl(mailbox))) return 0;
 
     if (config_getswitch(IMAPOPT_REVERSEACLS)) {
         modseq_t raclmodseq = mboxname_readraclmodseq(mailbox_name(mailbox));
@@ -5877,7 +5877,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
 
     /* bump the foldermodseq if it's higher on the replica */
     if (remote && remote->foldermodseq > mailbox->foldermodseq) {
-        mboxlist_sync_setacls(mailbox_name(mailbox), mailbox->acl, remote->foldermodseq);
+        mboxlist_sync_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), remote->foldermodseq);
         mailbox->foldermodseq = remote->foldermodseq;
     }
 

@@ -3033,7 +3033,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     int isdav = mbtypes_dav(mailbox_mbtype(mbox));
     int iscalendar = mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_CALENDAR;
     char *owner = mboxname_to_userid(mailbox_name(mbox));
-    char *acl = xstrdup(mbox->acl);
+    char *acl = xstrdupnull(mailbox_acl(mbox));
     struct acl_change *change;
     const char *userid;
     json_t *rights;

@@ -4144,7 +4144,7 @@ static int personalize_resource(struct transaction_t *txn,
     owner = mbname_userid(mbname);
     is_owner = !strcmpsafe(owner, userid);
 
-    rights = cyrus_acl_myrights(authstate, mailbox->acl);
+    rights = cyrus_acl_myrights(authstate, mailbox_acl(mailbox));
     auth_freestate(authstate);
 
     if (rights & DACL_WRITECONT) {
@@ -6388,7 +6388,7 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
 
     /* Make sure this is on a collection and the user has admin rights */
     if (pctx->txn->req_tgt.resource ||
-        !(cyrus_acl_myrights(httpd_authstate, pctx->mailbox->acl) & DACL_ADMIN)) {
+        !(cyrus_acl_myrights(httpd_authstate, mailbox_acl(pctx->mailbox)) & DACL_ADMIN)) {
         xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
                      &propstat[PROPSTAT_FORBID],
                      prop->name, prop->ns, NULL, 0);

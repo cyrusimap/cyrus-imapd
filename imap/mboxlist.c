@@ -2617,7 +2617,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry = mboxlist_entry_create();
         newmbentry->mbtype = mailbox_mbtype(oldmailbox);
         newmbentry->partition = xstrdupnull(newpartition);
-        newmbentry->acl = xstrdupnull(oldmailbox->acl);
+        newmbentry->acl = xstrdupnull(mailbox_acl(oldmailbox));
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
@@ -2687,7 +2687,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->name = xstrdupnull(mailbox_name(newmailbox));
         newmbentry->mbtype = mailbox_mbtype(newmailbox);
         newmbentry->partition = xstrdupnull(mailbox_partition(newmailbox));
-        newmbentry->acl = xstrdupnull(newmailbox->acl);
+        newmbentry->acl = xstrdupnull(mailbox_acl(newmailbox));
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
@@ -2704,7 +2704,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->name = xstrdupnull(newname);
         newmbentry->mbtype = mailbox_mbtype(oldmailbox);
         newmbentry->partition = xstrdupnull(mailbox_partition(oldmailbox));
-        newmbentry->acl = xstrdupnull(oldmailbox->acl);
+        newmbentry->acl = xstrdupnull(mailbox_acl(oldmailbox));
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;

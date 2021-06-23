@@ -1883,7 +1883,7 @@ int openinbox(void)
                         error_message(r));
             goto fail;
         }
-        popd_myrights = cyrus_acl_myrights(popd_authstate, popd_mailbox->acl);
+        popd_myrights = cyrus_acl_myrights(popd_authstate, mailbox_acl(popd_mailbox));
         if (config_popuseacl && !(popd_myrights & ACL_READ)) {
             r = (popd_myrights & ACL_LOOKUP) ?
                  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;

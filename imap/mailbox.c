@@ -1576,7 +1576,7 @@ done:
 /* set a new ACL - only dirty if changed */
 EXPORTED int mailbox_set_acl(struct mailbox *mailbox, const char *acl)
 {
-    if (!strcmpsafe(mailbox->acl, acl))
+    if (!strcmpsafe(mailbox_acl(mailbox), acl))
         return 0; /* no change */
     free(mailbox->acl);
     mailbox->acl = xstrdup(acl);
@@ -6149,7 +6149,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     /* Create new mailbox */
     r = mailbox_create(newname, mailbox_mbtype(oldmailbox), newpartition,
-                       oldmailbox->acl, (userid ? NULL : oldmailbox->uniqueid),
+                       mailbox_acl(oldmailbox), (userid ? NULL : oldmailbox->uniqueid),
                        oldmailbox->i.options, uidvalidity,
                        oldmailbox->i.createdmodseq,
                        highestmodseq, &newmailbox);
@@ -6635,9 +6635,9 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
     r = mailbox_read_header(mailbox, &acl);
     if (r) return r;
 
-    if (strcmp(mailbox->acl, acl)) {
+    if (strcmp(mailbox_acl(mailbox), acl)) {
         printf("%s: update acl from header %s => %s\n", mailbox_name(mailbox),
-               mailbox->acl, acl);
+               mailbox_acl(mailbox), acl);
         if (make_changes)
             mailbox_set_acl(mailbox, acl);
     }

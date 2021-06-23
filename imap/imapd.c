@@ -8814,7 +8814,7 @@ static void cmd_getquotaroot(const char *tag, const char *name)
         r = mailbox_open_irl(intname, &mailbox);
         if (!r) {
             doclose = 1;
-            myrights = cyrus_acl_myrights(imapd_authstate, mailbox->acl);
+            myrights = cyrus_acl_myrights(imapd_authstate, mailbox_acl(mailbox));
         }
     }
 
@@ -11574,7 +11574,7 @@ static int sync_mailbox(struct xfer_header *xfer,
                          mailbox->uniqueid, mailbox_name(mailbox),
                          mailbox_mbtype(mailbox),
                          mailbox_partition(mailbox),
-                         mailbox->acl,
+                         mailbox_acl(mailbox),
                          mailbox->i.options,
                          mailbox->i.uidvalidity,
                          mailbox->i.last_uid,

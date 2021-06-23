@@ -846,7 +846,7 @@ static int _create_upload_collection(const char *accountid,
             }
             else if (is_shared) {
                 /* add rights for the sharee */
-                char *newacl = xstrdup((*mailbox)->acl);
+                char *newacl = xstrdupnull(mailbox_acl(*mailbox));
 
                 cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
                               JACL_READITEMS | JACL_WRITE, NULL, NULL);

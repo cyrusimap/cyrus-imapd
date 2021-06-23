@@ -392,7 +392,7 @@ static int handle_request(const char *who, const char *name,
     }
 
     if (mboxname_isusermailbox(intname, 0)) {
-        int myrights = cyrus_acl_myrights(mystate, mailbox->acl);
+        int myrights = cyrus_acl_myrights(mystate, mailbox_acl(mailbox));
         if (!(myrights & ACL_USER0)) {
             auth_freestate(mystate);
             mailbox_close(&mailbox);

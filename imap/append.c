@@ -121,7 +121,7 @@ EXPORTED int append_check(const char *name,
     r = mailbox_open_irl(name, &mailbox);
     if (r) return r;
 
-    myrights = cyrus_acl_myrights(auth_state, mailbox->acl);
+    myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 
     if ((myrights & aclcheck) != aclcheck) {
         r = (myrights & ACL_LOOKUP) ?
@@ -192,7 +192,7 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 
     memset(as, 0, sizeof(*as));
 
-    as->myrights = cyrus_acl_myrights(auth_state, mailbox->acl);
+    as->myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 
     if ((as->myrights & aclcheck) != aclcheck) {
         r = (as->myrights & ACL_LOOKUP) ?

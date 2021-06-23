@@ -1590,7 +1590,7 @@ static int _annotate_may_fetch(annotate_state_t *state,
         if (state->mbentry && state->mbentry->server)
             return 0;
 
-        if (state->mailbox) acl = state->mailbox->acl;
+        if (state->mailbox) acl = mailbox_acl(state->mailbox);
         else if (state->mbentry) acl = state->mbentry->acl;
         /* RFC 5464 is a trifle vague about access control for mailbox
          * annotations but this seems to be compliant */
@@ -1599,7 +1599,7 @@ static int _annotate_may_fetch(annotate_state_t *state,
     }
     else if (state->which == ANNOTATION_SCOPE_MESSAGE) {
         assert(state->mailbox);
-        acl = state->mailbox->acl;
+        acl = mailbox_acl(state->mailbox);
         /* RFC 5257: reading from a private annotation needs 'r'.
          * Reading from a shared annotation needs 'r' */
         needed = ACL_READ;
@@ -3369,7 +3369,7 @@ static int _annotate_may_store(annotate_state_t *state,
         if (state->mbentry && state->mbentry->server)
             return 0;
 
-        acl = state->mailbox->acl;
+        acl = mailbox_acl(state->mailbox);
         /* RFC 5464 is a trifle vague about access control for mailbox
          * annotations but this seems to be compliant */
         needed = ACL_LOOKUP;
@@ -3379,7 +3379,7 @@ static int _annotate_may_store(annotate_state_t *state,
     }
     else if (state->which == ANNOTATION_SCOPE_MESSAGE) {
         assert(state->mailbox);
-        acl = state->mailbox->acl;
+        acl = mailbox_acl(state->mailbox);
         /* RFC 5257: writing to a private annotation needs 'r'.
          * Writing to a shared annotation needs 'n' */
         needed = (is_shared ? ACL_ANNOTATEMSG : ACL_READ);

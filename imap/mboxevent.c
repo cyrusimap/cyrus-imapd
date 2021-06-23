@@ -1642,7 +1642,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     FILL_STRING_PARAM(event, EVENT_MBTYPE,
         xstrdup(mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
 
-    FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox->acl));
+    FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
 
     /* mailbox related events also require mailboxID */
     if (event->type & MAILBOX_EVENTS) {

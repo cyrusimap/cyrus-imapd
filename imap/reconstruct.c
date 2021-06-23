@@ -580,18 +580,18 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         }
     }
 
-    if (strcmpsafe(mailbox->acl, mbentry_byname->acl)) {
+    if (strcmpsafe(mailbox_acl(mailbox), mbentry_byname->acl)) {
         if (prefer_mbentry) {
             printf("Wrong acl in mbentry %s (%s %s)\n",
-                   name, mailbox->acl, mbentry_byname->acl);
+                   name, mailbox_acl(mailbox), mbentry_byname->acl);
             // this sets the header to dirty
             mailbox_set_acl(mailbox, mbentry_byname->acl);
         }
         else {
             printf("Wrong acl in mbentry %s (%s %s)\n",
-                   name, mbentry_byname->acl, mailbox->acl);
+                   name, mbentry_byname->acl, mailbox_acl(mailbox));
             xfree(mbentry_byname->acl);
-            mbentry_byname->acl = xstrdupnull(mailbox->acl);
+            mbentry_byname->acl = xstrdupnull(mailbox_acl(mailbox));
             mbentry_dirty = 1;
         }
     }
