@@ -11572,7 +11572,7 @@ static int sync_mailbox(struct xfer_header *xfer,
     master_folders = sync_folder_list_create();
     sync_folder_list_add(master_folders,
                          mailbox->uniqueid, mailbox_name(mailbox),
-                         mailbox->mbtype,
+                         mailbox_mbtype(mailbox),
                          mailbox->part,
                          mailbox->acl,
                          mailbox->i.options,

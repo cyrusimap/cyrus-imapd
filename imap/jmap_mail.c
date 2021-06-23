@@ -1268,7 +1268,7 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     r = jmap_openmbox_by_guidrec(check->req, rec, &mbox, 0);
     if (r) return r;
 
-    if (mbtype_isa(mbox->mbtype) == MBTYPE_EMAIL) {
+    if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_EMAIL) {
         r = msgrecord_find(mbox, rec->uid, &mr);
         if (!r) {
             uint32_t internal_flags;
@@ -7437,7 +7437,7 @@ static int _warmup_mboxcache_cb(const conv_guidrec_t *rec, void* vrock)
     struct mailbox *mbox = NULL;
     int r = jmap_openmbox_by_guidrec(rock->req, rec, &mbox, /*rw*/0);
     if (!r) {
-        if (mbtype_isa(mbox->mbtype) == MBTYPE_EMAIL) {
+        if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_EMAIL) {
             ptrarray_append(&rock->mboxes, mbox);
         }
         else jmap_closembox(rock->req, &mbox);
@@ -12823,7 +12823,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
 
     /* Overwrite message record */
     int r = jmap_openmbox_by_guidrec(rock->req, rec, &mbox, /*rw*/1);
-    if (r || mbtype_isa(mbox->mbtype) != MBTYPE_EMAIL) {
+    if (r || mbtype_isa(mailbox_mbtype(mbox)) != MBTYPE_EMAIL) {
         goto done;
     }
     if (!r) r = msgrecord_find(mbox, rec->uid, &mr);

@@ -1054,7 +1054,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
 #ifdef WITH_DAV
     /* add caldav items */
-    if (mbtypes_dav(mailbox->mbtype) &&
+    if (mbtypes_dav(mailbox_mbtype(mailbox)) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
         const char *resource = NULL;
@@ -1077,7 +1077,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         }
 
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
-            unsigned mbtype = mbtype_isa(mailbox->mbtype);
+            unsigned mbtype = mbtype_isa(mailbox_mbtype(mailbox));
             const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
                                         .uniqueid = mailbox->uniqueid };
 
@@ -1253,7 +1253,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     r = msgrecord_get_mailbox(msgrec, &mailbox);
     if (r) return;
 
-    if (mbtypes_dav(mailbox->mbtype) &&
+    if (mbtypes_dav(mailbox_mbtype(mailbox)) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
         const char *resource = NULL;
@@ -1278,7 +1278,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         }
 
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
-            unsigned mbtype = mbtype_isa(mailbox->mbtype);
+            unsigned mbtype = mbtype_isa(mailbox_mbtype(mailbox));
             const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
                                         .uniqueid = mailbox->uniqueid };
 
@@ -1640,7 +1640,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     free(extname);
 
     FILL_STRING_PARAM(event, EVENT_MBTYPE,
-        xstrdup(mboxlist_mbtype_to_string(mailbox->mbtype)));
+        xstrdup(mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
 
     FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox->acl));
 

@@ -3030,8 +3030,8 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite)
 {
     hash_table user_access = HASH_TABLE_INITIALIZER;
-    int isdav = mbtypes_dav(mbox->mbtype);
-    int iscalendar = mbtype_isa(mbox->mbtype) == MBTYPE_CALENDAR;
+    int isdav = mbtypes_dav(mailbox_mbtype(mbox));
+    int iscalendar = mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_CALENDAR;
     char *owner = mboxname_to_userid(mailbox_name(mbox));
     char *acl = xstrdup(mbox->acl);
     struct acl_change *change;
@@ -3175,7 +3175,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         /* Find the DAV namespace for this mailbox */
         if (iscalendar)
             irock.tgt.namespace = &namespace_calendar;
-        else if (mbtype_isa(mbox->mbtype) == MBTYPE_ADDRESSBOOK)
+        else if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_ADDRESSBOOK)
             irock.tgt.namespace = &namespace_addressbook;
         else
             irock.tgt.namespace = &namespace_drive;

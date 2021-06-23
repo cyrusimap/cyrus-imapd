@@ -290,7 +290,7 @@ static void remove_listitem(struct mailboxlist *remitem)
 EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
-    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
+    uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     const char *src;
 
     src = mboxname_metapath(mailbox->part, mailbox_name(mailbox),
@@ -305,7 +305,7 @@ EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
 EXPORTED const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
-    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
+    uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     const char *src;
 
     src = mboxname_metapath(mailbox->part, mailbox_name(mailbox),
@@ -330,7 +330,7 @@ EXPORTED int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
 
 static const char *mailbox_spool_fname(struct mailbox *mailbox, uint32_t uid)
 {
-    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
+    uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     return mboxname_datapath(mailbox->part, mailbox_name(mailbox),
                              legacy_dirs ? NULL : mailbox->uniqueid,
                              uid);
@@ -338,7 +338,7 @@ static const char *mailbox_spool_fname(struct mailbox *mailbox, uint32_t uid)
 
 static const char *mailbox_archive_fname(struct mailbox *mailbox, uint32_t uid)
 {
-    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
+    uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     return mboxname_archivepath(mailbox->part, mailbox_name(mailbox),
                                 legacy_dirs ? NULL : mailbox->uniqueid,
                                 uid);
@@ -361,7 +361,7 @@ EXPORTED const char *mailbox_record_fname(struct mailbox *mailbox,
 EXPORTED const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid)
 {
     static char localbuf[MAX_MAILBOX_PATH];
-    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
+    uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     const char *src;
 
     src = mboxname_datapath(mailbox->part, mailbox_name(mailbox),
@@ -1180,7 +1180,7 @@ EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
     if (!mailbox->modseq_dirty) {
         mailbox->i.highestmodseq = mboxname_setmodseq(mailbox_name(mailbox),
                                    mailbox->i.highestmodseq,
-                                   mailbox->mbtype, /*flags*/0);
+                                   mailbox_mbtype(mailbox), /*flags*/0);
         mailbox->last_updated = time(0);
         mailbox->modseq_dirty = 1;
         mailbox_index_dirty(mailbox);
@@ -1290,7 +1290,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
             /* finish cleaning up */
             if (mailbox->i.options & OPT_MAILBOX_DELETED)
                 mailbox_delete_cleanup(mailbox, mailbox->part, mailbox_name(mailbox),
-                                       (mailbox->mbtype & MBTYPE_LEGACY_DIRS) ?
+                                       (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) ?
                                        NULL : mailbox->uniqueid);
             else if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK)
 
@@ -2341,7 +2341,7 @@ EXPORTED int mailbox_has_conversations(struct mailbox *mailbox)
         return 0;
 
     /* we never store data about submission mailboxes */
-    if (mboxname_issubmissionmailbox(mailbox_name(mailbox), mailbox->mbtype))
+    if (mboxname_issubmissionmailbox(mailbox_name(mailbox), mailbox_mbtype(mailbox)))
         return 0;
 
     path = conversations_getmboxpath(mailbox_name(mailbox));
@@ -2664,7 +2664,7 @@ static char *mailbox_header_data_cstring(struct mailbox *mailbox)
     struct buf buf = BUF_INITIALIZER;
     struct dlist *dl = dlist_newkvlist(NULL, mailbox_name(mailbox));
 
-    dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mailbox->mbtype));
+    dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mailbox_mbtype(mailbox)));
 
     dlist_setatom(dl, "N", mailbox_name(mailbox));
 
@@ -2965,7 +2965,7 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
 
     mboxname_setmodseq(mailbox_name(mailbox),
                        mailbox->i.highestmodseq,
-                       mailbox->mbtype, /*flags*/0);
+                       mailbox_mbtype(mailbox), /*flags*/0);
 
     assert(mailbox_index_islocked(mailbox, 1));
 
@@ -3787,7 +3787,7 @@ static int mailbox_update_dav(struct mailbox *mailbox,
     if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL))
         return 0;
 
-    switch (mbtype_isa(mailbox->mbtype)) {
+    switch (mbtype_isa(mailbox_mbtype(mailbox))) {
     case MBTYPE_ADDRESSBOOK:
         return mailbox_update_carddav(mailbox, old, new);
     case MBTYPE_CALENDAR:
@@ -3877,7 +3877,7 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
     }
 
     /* remove associated alarms if canceled or final */
-    else if (mbtype_isa(mailbox->mbtype) == MBTYPE_JMAPSUBMIT &&
+    else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_JMAPSUBMIT &&
              (new->system_flags & (FLAG_FLAGGED | FLAG_ANSWERED))) {
         r = caldav_alarm_delete_record(mailbox_name(mailbox), new->uid);
     }
@@ -4199,7 +4199,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
     /* Check mailbox type size limits */
     if (mailbox->i.exists && !record->ignorelimits) {
-        if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
+        if (mailbox_mbtype(mailbox) & MBTYPE_ADDRESSBOOK) {
             int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_ADDRESSBOOK);
             if (limit > 0 && limit <= (int)mailbox->i.exists) {
                 xsyslog(LOG_ERR, "IOERROR: client hit per-addressbook exists limit",
@@ -4208,7 +4208,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                 return IMAP_NO_OVERQUOTA;
             }
         }
-        else if (mailbox->mbtype & MBTYPE_CALENDAR) {
+        else if (mailbox_mbtype(mailbox) & MBTYPE_CALENDAR) {
             int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_CALENDAR);
             if (limit > 0 && limit <= (int)mailbox->i.exists) {
                 xsyslog(LOG_ERR, "IOERROR: client hit per-calendar exists limit",
@@ -4217,7 +4217,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                 return IMAP_NO_OVERQUOTA;
             }
         }
-        else if (!mailbox->mbtype) { // default == email
+        else if (!mailbox_mbtype(mailbox)) { // default == email
             int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_EMAIL);
             if (limit > 0 && limit <= (int)mailbox->i.exists) {
                 xsyslog(LOG_ERR, "IOERROR: client hit per-mailbox exists limit",
@@ -4941,7 +4941,7 @@ done:
 
         r = mailbox_repack_commit(&repack);
         if (!r) {
-            mboxname_setmodseq(mailbox_name(mailbox), deletedmodseq, mailbox->mbtype,
+            mboxname_setmodseq(mailbox_name(mailbox), deletedmodseq, mailbox_mbtype(mailbox),
                                MBOXMODSEQ_ISDELETE);
         }
     }       
@@ -5003,7 +5003,7 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
         return 1;
 
     /* Calendar and Addressbook are small files and need to be hot */
-    switch (mbtype_isa(mailbox->mbtype)) {
+    switch (mbtype_isa(mailbox_mbtype(mailbox))) {
     case MBTYPE_ADDRESSBOOK:
         return 0;
     case MBTYPE_CALENDAR:
@@ -5645,7 +5645,7 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
     const message_t *msg;
     int r = 0;
 
-    if (!mbtypes_dav(mailbox->mbtype))
+    if (!mbtypes_dav(mailbox_mbtype(mailbox)))
         return 0;
 
     if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL))
@@ -5859,7 +5859,7 @@ static int mailbox_delete_webdav(struct mailbox *mailbox)
 
 EXPORTED int mailbox_delete_dav(struct mailbox *mailbox)
 {
-    switch (mbtype_isa(mailbox->mbtype)) {
+    switch (mbtype_isa(mailbox_mbtype(mailbox))) {
     case MBTYPE_ADDRESSBOOK:
         return mailbox_delete_carddav(mailbox);
     case MBTYPE_CALENDAR:
@@ -6148,7 +6148,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     modseq_t highestmodseq = silent ? oldmailbox->i.highestmodseq : 0;
 
     /* Create new mailbox */
-    r = mailbox_create(newname, oldmailbox->mbtype, newpartition,
+    r = mailbox_create(newname, mailbox_mbtype(oldmailbox), newpartition,
                        oldmailbox->acl, (userid ? NULL : oldmailbox->uniqueid),
                        oldmailbox->i.options, uidvalidity,
                        oldmailbox->i.createdmodseq,
@@ -6170,7 +6170,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     newquotaroot = xstrdupnull(newmailbox->quotaroot);
 
     r = mailbox_copy_files(oldmailbox, newpartition,
-                           newname, newmailbox->mbtype & MBTYPE_LEGACY_DIRS ?
+                           newname, mailbox_mbtype(newmailbox) & MBTYPE_LEGACY_DIRS ?
                            NULL : newmailbox->uniqueid);
     if (r) goto fail;
 
@@ -6265,7 +6265,7 @@ fail:
     mailbox_unlock_index(newmailbox, NULL);
     /* then remove all the files */
     mailbox_delete_cleanup(NULL, newmailbox->part, mailbox_name(newmailbox),
-                           (newmailbox->mbtype & MBTYPE_LEGACY_DIRS) ?
+                           (mailbox_mbtype(newmailbox) & MBTYPE_LEGACY_DIRS) ?
                            NULL : newmailbox->uniqueid);
     /* and finally, abort */
     mailbox_abort(newmailbox);
@@ -6919,7 +6919,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         mailbox_index_dirty(mailbox);
         mailbox->i.highestmodseq = mboxname_setmodseq(mailbox_name(mailbox),
                                                       record->modseq,
-                                                      mailbox->mbtype, /*flags*/0);
+                                                      mailbox_mbtype(mailbox), /*flags*/0);
     }
 
     if (record->uid > mailbox->i.last_uid) {
@@ -7561,13 +7561,13 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
     if (!mailbox->i.highestmodseq) {
         if (make_changes) {
             mailbox_index_dirty(mailbox);
-            mailbox->i.highestmodseq = mboxname_nextmodseq(mailbox_name(mailbox), 0, mailbox->mbtype,
+            mailbox->i.highestmodseq = mboxname_nextmodseq(mailbox_name(mailbox), 0, mailbox_mbtype(mailbox),
                                                            MBOXMODSEQ_ISFOLDER);
         }
         syslog(LOG_ERR, "%s:  zero highestmodseq", mailbox_name(mailbox));
     }
     else {
-        mboxname_setmodseq(mailbox_name(mailbox), mailbox->i.highestmodseq, mailbox->mbtype,
+        mboxname_setmodseq(mailbox_name(mailbox), mailbox->i.highestmodseq, mailbox_mbtype(mailbox),
                            MBOXMODSEQ_ISFOLDER);
     }
 
