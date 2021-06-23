@@ -2430,7 +2430,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
             r = IMAP_CONVERSATION_GUIDLIMIT;
         if (r) {
             syslog(LOG_ERR, "IOERROR: conversations GUID limit for %s/%u/%s (%llu %llu %llu)",
-                   mailbox->name, record->uid,
+                   mailbox_name(mailbox), record->uid,
                    message_guid_encode(&record->guid),
                    (long long unsigned)ecounts.post.numrecords,
                    (long long unsigned)ecounts.post.exists,

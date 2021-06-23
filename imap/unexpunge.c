@@ -188,7 +188,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
     unsigned uidnum = 0;
     char oldfname[MAX_MAILBOX_PATH];
     const char *fname;
-    char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
     int r = 0;
 
     *numrestored = 0;

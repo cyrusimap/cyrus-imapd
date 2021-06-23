@@ -1094,7 +1094,7 @@ HIDDEN int caldav_is_personalized(struct mailbox *mailbox,
 
             if (mailbox->i.options & OPT_IMAP_SHAREDSEEN) {
                 /* No longer using per-user-data - use owner data */
-                mbname = mbname_from_intname(mailbox->name);
+                mbname = mbname_from_intname(mailbox_name(mailbox));
                 userid = mbname_userid(mbname);
             }
 
@@ -1107,7 +1107,7 @@ HIDDEN int caldav_is_personalized(struct mailbox *mailbox,
         buf_free(userdata);
     }
     else if (!(mailbox->i.options & OPT_IMAP_SHAREDSEEN) &&
-             !mboxname_userownsmailbox(userid, mailbox->name)) {
+             !mboxname_userownsmailbox(userid, mailbox_name(mailbox))) {
         buf_init_ro_cstr(userdata, STRIP_OWNER_CAL_DATA);
         return 1;
     }
@@ -1334,7 +1334,7 @@ static int caldav_check_precond(struct transaction_t *txn,
         /* Must not delete default scheduling calendar */
         char *defaultname = caldav_scheddefault(httpd_userid);
         char *defaultmboxname = caldav_mboxname(httpd_userid, defaultname);
-        if (!strcmp(mailbox->name, defaultmboxname)) {
+        if (!strcmp(mailbox_name(mailbox), defaultmboxname)) {
             precond = HTTP_FORBIDDEN;
             txn->error.precond = CALDAV_DEFAULT_NEEDED;
         }
@@ -1573,7 +1573,7 @@ static int open_attachments(const char *userid, struct mailbox **attachments,
         *webdavdb = webdav_open_mailbox(*attachments);
         if (!*webdavdb) {
             syslog(LOG_ERR,
-                   "webdav_open_mailbox(%s) failed", (*attachments)->name);
+                   "webdav_open_mailbox(%s) failed", mailbox_name(*attachments));
             ret = HTTP_SERVER_ERROR;
         }
     }
@@ -1927,7 +1927,7 @@ static int export_calendar(struct transaction_t *txn)
     r = annotatemore_lookupmask_mbox(mailbox, displayname_annot,
                                      httpd_userid, &name);
     /* fall back to last part of mailbox name */
-    if (r || !name.len) buf_setcstr(&name, strrchr(mailbox->name, '.') + 1);
+    if (r || !name.len) buf_setcstr(&name, strrchr(mailbox_name(mailbox), '.') + 1);
 
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "%s.%s", buf_cstring(&name), mime->file_ext);
@@ -2742,7 +2742,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
             if (r) {
                 syslog(LOG_ERR, "relock index(%s) failed: %s",
-                       mailbox->name, error_message(r));
+                       mailbox_name(mailbox), error_message(r));
                 return HTTP_SERVER_ERROR;
             }
 
@@ -2829,7 +2829,7 @@ static int caldav_mkcol(struct mailbox *mailbox)
     int r;
 
     /* Check if client specified CALDAV:supported-calendar-component-set */
-    r = annotatemore_lookupmask(mailbox->name, comp_annot,
+    r = annotatemore_lookupmask(mailbox_name(mailbox), comp_annot,
                                 httpd_userid, &attrib);
     if (r) return HTTP_SERVER_ERROR;
 
@@ -2895,7 +2895,7 @@ static void decrement_refcount(const char *managed_id,
 
         if (r) {
             syslog(LOG_ERR, "expunging record (%s) failed: %s",
-                   attachments->name, error_message(r));
+                   mailbox_name(attachments), error_message(r));
         }
     }
     else {
@@ -4140,7 +4140,7 @@ static int personalize_resource(struct transaction_t *txn,
     *store_me = ical;
 
     /* Check ownership and ACL for current user */
-    mbname = mbname_from_intname(mailbox->name);
+    mbname = mbname_from_intname(mailbox_name(mailbox));
     owner = mbname_userid(mbname);
     is_owner = !strcmpsafe(owner, userid);
 
@@ -4183,7 +4183,7 @@ static int personalize_resource(struct transaction_t *txn,
 
         /* Create UID for owner VPATCH */
         assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
+        buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox_name(mailbox)),
                    strhash(resource), strhash(owner));
 
         *userdata =
@@ -4230,7 +4230,7 @@ static int personalize_resource(struct transaction_t *txn,
 
         /* Create UID for sharee VPATCH */
         assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
+        buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox_name(mailbox)),
                    strhash(resource), strhash(userid));
 
         *userdata =
@@ -4452,7 +4452,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     else {
         /* Check for duplicate iCalendar UID */
         const char *mbox =
-            cdata->dav.mailbox_byname ? mailbox->name : mailbox->uniqueid;
+            cdata->dav.mailbox_byname ? mailbox_name(mailbox) : mailbox->uniqueid;
         caldav_lookup_uid(db, uid, &cdata);
         if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mbox) ||
                                     strcmp(cdata->dav.resource, resource))) {
@@ -5304,7 +5304,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
             r = mailbox_lock_index(fctx->mailbox, LOCK_EXCLUSIVE);
             if (r) {
                 syslog(LOG_ERR, "relock index(%s) failed: %s",
-                       fctx->mailbox->name, error_message(r));
+                       mailbox_name(fctx->mailbox), error_message(r));
                 goto done;
             }
         }
@@ -5327,7 +5327,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
             if (!ical) {
                 syslog(LOG_NOTICE,
                        "Unable to parse iCal %s:%u prior to stripping TZ",
-                       fctx->mailbox->name, fctx->record->uid);
+                       mailbox_name(fctx->mailbox), fctx->record->uid);
                 strarray_fini(&schedule_addresses);
                 goto done;
             }
@@ -6087,7 +6087,7 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
        This is mainly for our list_calendars() JavaScript client. */
     if (attr) {
         if (!xmlStrcmp(attr, BAD_CAST "yes") &&
-            mboxname_userownsmailbox(httpd_userid, pctx->mailbox->name)) {
+            mboxname_userownsmailbox(httpd_userid, mailbox_name(pctx->mailbox))) {
             force = 1;
         }
         xmlFree(attr);
@@ -6371,7 +6371,7 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
         char *mboxname = caldav_mboxname(pctx->txn->req_tgt.userid, NULL);
         int r = 0;
 
-        if (!mailbox || strcmp(mboxname, mailbox->name)) {
+        if (!mailbox || strcmp(mboxname, mailbox_name(mailbox))) {
             r = mailbox_open_iwl(mboxname, &calhomeset);
             if (!r) pctx->mailbox = calhomeset;
         }
@@ -8130,7 +8130,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     /* Find message UID for the resource, if exists */
     /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
        XXX  because we may have been called as part of a COPY/MOVE */
-    const mbentry_t mbentry = { .name = mailbox->name,
+    const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
                                 .uniqueid = mailbox->uniqueid };
     caldav_lookup_resource(caldavdb, &mbentry, resource, &cdata, 0);
 
@@ -8152,7 +8152,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
             xsyslog(LOG_ERR,
                     "Couldn't find index record corresponding to CalDAV DB record",
                     "mailbox=<%s> record=<%u> error=<%s>",
-                    mailbox->name, cdata->dav.imap_uid, error_message(r));
+                    mailbox_name(mailbox), cdata->dav.imap_uid, error_message(r));
         }
     }
 

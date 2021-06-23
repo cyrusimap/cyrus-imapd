@@ -279,14 +279,14 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
     init_internal();
 
-    if (!enable_subfolder && !mboxname_isusermailbox(mailbox->name, 1)) {
+    if (!enable_subfolder && !mboxname_isusermailbox(mailbox_name(mailbox), 1)) {
         enabled = 0;
         goto done;
     }
 
     /* test if the mailbox has a special-use attribute in the exclude list */
     if (strarray_size(excluded_specialuse) > 0) {
-        userid = mboxname_to_userid(mailbox->name);
+        userid = mboxname_to_userid(mailbox_name(mailbox));
 
         r = annotatemore_lookup_mbox(mailbox, "/specialuse", userid, &attrib);
         if (r) goto done; /* XXX - return -1?  Failure? */
@@ -1078,7 +1078,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
             unsigned mbtype = mbtype_isa(mailbox->mbtype);
-            const mbentry_t mbentry = { .name = mailbox->name,
+            const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
                                         .uniqueid = mailbox->uniqueid };
 
             if (mbtype_isa(mbtype) == MBTYPE_ADDRESSBOOK) {
@@ -1279,7 +1279,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
             unsigned mbtype = mbtype_isa(mailbox->mbtype);
-            const mbentry_t mbentry = { .name = mailbox->name,
+            const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
                                         .uniqueid = mailbox->uniqueid };
 
             if (mbtype_isa(mbtype) == MBTYPE_ADDRESSBOOK) {
@@ -1623,7 +1623,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     imapurl.server = config_servername;
     imapurl.uidvalidity = mailbox->i.uidvalidity;
 
-    char *extname = mboxname_to_external(mailbox->name, &namespace, NULL);
+    char *extname = mboxname_to_external(mailbox_name(mailbox), &namespace, NULL);
     imapurl.mailbox = extname;
 
     if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND) && event->uidset) {
@@ -1691,7 +1691,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         struct mboxname_counters counters;
         struct buf value = BUF_INITIALIZER;
 
-        int r = mboxname_read_counters(mailbox->name, &counters);
+        int r = mboxname_read_counters(mailbox_name(mailbox), &counters);
         if (!r) buf_printf(&value, "%u %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %u",
                            counters.version, counters.highestmodseq,
                            counters.mailmodseq, counters.caldavmodseq,
@@ -1708,7 +1708,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     if (mboxevent_expected_param(event->type, EVENT_JMAP_STATES)) {
         struct mboxname_counters counters;
 
-        int r = mboxname_read_counters(mailbox->name, &counters);
+        int r = mboxname_read_counters(mailbox_name(mailbox), &counters);
         if (!r) {
             json_t *states = json_object();
             struct jmap_state_t *state;
@@ -1740,7 +1740,7 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     imapurl.uidvalidity = mailbox->i.uidvalidity;
 
     /* translate internal mailbox name to external */
-    char *extname = mboxname_to_external(mailbox->name, &namespace, NULL);
+    char *extname = mboxname_to_external(mailbox_name(mailbox), &namespace, NULL);
     imapurl.mailbox = extname;
 
     imapurl_toURL(url, &imapurl);

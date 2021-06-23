@@ -535,12 +535,12 @@ int fixquota_fixroot(struct mailbox *mailbox,
 {
     int r;
 
-    fprintf(stderr, "%s: quota root %s --> %s\n", mailbox->name,
+    fprintf(stderr, "%s: quota root %s --> %s\n", mailbox_name(mailbox),
            mailbox->quotaroot ? mailbox->quotaroot : "(none)",
            root ? root : "(none)");
 
     r = mailbox_set_quotaroot(mailbox, root);
-    if (r) errmsg(r, "failed writing header for mailbox '%s'", mailbox->name);
+    if (r) errmsg(r, "failed writing header for mailbox '%s'", mailbox_name(mailbox));
 
     return r;
 }

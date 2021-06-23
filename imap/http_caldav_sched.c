@@ -1969,7 +1969,7 @@ static void sched_deliver_local(const char *sender, const char *recipient,
     }
     else {
         syslog(LOG_ERR, "caldav_store_resource(%s) failed: %s (%s)",
-               mailbox->name, error_message(r), txn.error.resource);
+               mailbox_name(mailbox), error_message(r), txn.error.resource);
         sched_data->status =
             sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
         goto done;

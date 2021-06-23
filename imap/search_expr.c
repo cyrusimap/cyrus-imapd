@@ -1843,7 +1843,7 @@ static void search_folder_internalise(struct index_state *state,
                                       void **internalisedp)
 {
     if (state)
-        *internalisedp = (void *)(unsigned long)(!strcmp(state->mailbox->name, v->s));
+        *internalisedp = (void *)(unsigned long)(!strcmp(mailbox_name(state->mailbox), v->s));
 }
 
 static int search_folder_match(message_t *m __attribute__((unused)),
@@ -2188,9 +2188,9 @@ static void conv_rock_new(struct mailbox *mailbox,
 {
     struct conv_rock *rock = xzmalloc(sizeof(*rock));
 
-    rock->cstate = conversations_get_mbox(mailbox->name);
+    rock->cstate = conversations_get_mbox(mailbox_name(mailbox));
     if (!rock->cstate) {
-        if (conversations_open_mbox(mailbox->name, 1/*shared*/, &rock->cstate))
+        if (conversations_open_mbox(mailbox_name(mailbox), 1/*shared*/, &rock->cstate))
             rock->num = -1;         /* invalid */
         else
             rock->cstate_is_ours = 1;

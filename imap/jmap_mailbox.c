@@ -2789,7 +2789,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 mailbox_index_dirty(mbox);
                 mailbox_modseq_dirty(mbox);
                 mbox->i.options = newopts;
-                mboxlist_update_foldermodseq(mbox->name, mbox->i.highestmodseq);
+                mboxlist_update_foldermodseq(mailbox_name(mbox), mbox->i.highestmodseq);
             }
         }
         jmap_closembox(req, &mbox);
@@ -2904,10 +2904,10 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
                               EVENT_MESSAGE_COPY);
         if (!r) {
             r = append_copy(src_mbox, &as, &move_msgrecs, nolink,
-                    mboxname_same_userid(src_mbox->name, dst_mbox->name));
+                    mboxname_same_userid(mailbox_name(src_mbox), mailbox_name(dst_mbox)));
             if (!r) {
                 r = append_commit(&as);
-                if (!r) sync_log_append(dst_mbox->name);
+                if (!r) sync_log_append(mailbox_name(dst_mbox));
             }
             else append_abort(&as);
         }

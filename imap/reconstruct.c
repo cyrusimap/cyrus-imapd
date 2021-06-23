@@ -509,11 +509,11 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             mbentry_byname->uniqueid = xstrdupnull(mailbox->uniqueid);
             mbentry_dirty = 1;
             syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
-                    mbentry_byid->name, mailbox->name, mbentry_byid->uniqueid, mailbox->uniqueid);
+                    mbentry_byid->name, mailbox_name(mailbox), mbentry_byid->uniqueid, mailbox->uniqueid);
         }
         else {
             syslog (LOG_ERR, "uniqueid clash with %s for %s (%s)",
-                    mbentry_byid->name, mailbox->name, mailbox->uniqueid);
+                    mbentry_byid->name, mailbox_name(mailbox), mailbox->uniqueid);
             exit(1);
         }
     }

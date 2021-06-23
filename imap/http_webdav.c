@@ -661,7 +661,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     /* Find message UID for the resource */
     /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
        XXX  because we may have been called as part of a COPY/MOVE */
-    const mbentry_t mbentry = { .name = mailbox->name,
+    const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
                                 .uniqueid = mailbox->uniqueid };
     webdav_lookup_resource(db, &mbentry, resource, &wdata, 0);
 
@@ -675,7 +675,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
             xsyslog(LOG_ERR,
                     "Couldn't find index record corresponding to WebDAV DB record",
                     "mailbox=<%s> record=<%u> error=<%s>",
-                    mailbox->name, wdata->dav.imap_uid, error_message(r));
+                    mailbox_name(mailbox), wdata->dav.imap_uid, error_message(r));
         }
     }
 

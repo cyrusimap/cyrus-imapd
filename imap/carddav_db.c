@@ -118,7 +118,7 @@ EXPORTED struct carddav_db *carddav_open_userid(const char *userid)
 EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox)
 {
     struct carddav_db *carddavdb = NULL;
-    char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
 
     init_internal();
 
@@ -1153,8 +1153,8 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     init_internal();
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+    if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         return -1;
     }
 
@@ -1174,7 +1174,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     const char *uid = vparse_stringval(vcard, "uid");
     const char *fullname = vparse_stringval(vcard, "fn");
     if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
-    char *mbuserid = mboxname_to_userid(mailbox->name);
+    char *mbuserid = mboxname_to_userid(mailbox_name(mailbox));
 
     time_to_rfc5322(now, datestr, sizeof(datestr));
 
@@ -1218,7 +1218,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
                                ignorequota ? NULL : qdiffs, 0, 0,
                                EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
@@ -1272,13 +1272,13 @@ EXPORTED int carddav_remove(struct mailbox *mailbox,
         mboxevent_extract_record(mboxevent, mailbox, &oldrecord);
         mboxevent_extract_mailbox(mboxevent, mailbox);
         mboxevent_set_numunseen(mboxevent, mailbox, -1);
-        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name, 0);
+        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox_name(mailbox), 0);
         mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
     }
     if (r) {
         syslog(LOG_ERR, "expunging record (%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
     }
     return r;
 }

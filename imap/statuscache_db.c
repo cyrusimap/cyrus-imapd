@@ -475,7 +475,7 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
         status_fill_seen(userid, sdata, numrecent, numunseen);
     }
 
-    statuscache_invalidate(mailbox->name, sdata);
+    statuscache_invalidate(mailbox_name(mailbox), sdata);
 
     return 0;
 }
@@ -569,7 +569,7 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
     /* Check status cache if possible */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
         /* Do actual lookup of cache item. */
-        int r = statuscache_lookup(mailbox->name, userid, statusitems, sdata);
+        int r = statuscache_lookup(mailbox_name(mailbox), userid, statusitems, sdata);
 
         /* Seen/recent status uses "push" invalidation events from
          * seen_db.c.   This avoids needing to open cyrus.header to get
@@ -579,12 +579,12 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
 
         if (!r) {
             syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
-                   mailbox->name, userid, statusitems);
+                   mailbox_name(mailbox), userid, statusitems);
             return 0;
         }
 
         syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
-               mailbox->name, userid, statusitems);
+               mailbox_name(mailbox), userid, statusitems);
     }
 
     return status_load_mailbox(mailbox, userid, statusitems, sdata);

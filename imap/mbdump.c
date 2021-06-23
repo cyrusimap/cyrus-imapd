@@ -494,11 +494,11 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     mbdir = opendir(dirpath);
     if (!mbdir && errno == EACCES) {
         syslog(LOG_ERR,
-               "could not dump mailbox %s (permission denied)", mailbox->name);
+               "could not dump mailbox %s (permission denied)", mailbox_name(mailbox));
         return IMAP_PERMISSION_DENIED;
     } else if (!mbdir) {
         syslog(LOG_ERR,
-               "could not dump mailbox %s (unknown error)", mailbox->name);
+               "could not dump mailbox %s (unknown error)", mailbox_name(mailbox));
         return IMAP_SYS_ERROR;
     }
 
@@ -511,7 +511,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     /* The first member is either a number (if it is a quota root), or NIL
      * (if it isn't) */
     {
-        quota_init(&q, mailbox->name);
+        quota_init(&q, mailbox_name(mailbox));
         r = quota_read(&q, NULL, 0);
 
         if (!r) {
@@ -555,7 +555,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
         if (df->metaname == META_INDEX && oldversion < MAILBOX_MINOR_VERSION) {
             expunged_seq = seqset_init(mailbox->i.last_uid, SEQ_SPARSE);
             syslog(LOG_NOTICE, "%s downgrading index to version %d for XFER",
-                   mailbox->name, oldversion);
+                   mailbox_name(mailbox), oldversion);
 
             r = dump_index(mailbox, oldversion, expunged_seq,
                            first, !tag, pin, pout);
@@ -609,13 +609,13 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
         struct dump_annotation_rock actx;
         actx.tag = tag;
         actx.pout = pout;
-        annotatemore_findall(mailbox->name, 0, "*", /*modseq*/0,
+        annotatemore_findall(mailbox_name(mailbox), 0, "*", /*modseq*/0,
                              dump_annotations, (void *) &actx, /*flags*/0);
     }
 
     /* Dump user files if this is an inbox */
-    if (mboxname_isusermailbox(mailbox->name, 1)) {
-        userid = mboxname_to_userid(mailbox->name);
+    if (mboxname_isusermailbox(mailbox_name(mailbox), 1)) {
+        userid = mboxname_to_userid(mailbox_name(mailbox));
         int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
         char *fname = NULL, *ftag = NULL;
 

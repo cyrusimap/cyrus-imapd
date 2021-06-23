@@ -1449,10 +1449,10 @@ static int annotate_state_need_mbentry(annotate_state_t *state)
     int r = 0;
 
     if (!state->mbentry && state->mailbox) {
-        r = mboxlist_lookup(state->mailbox->name, &state->ourmbentry, NULL);
+        r = mboxlist_lookup(mailbox_name(state->mailbox), &state->ourmbentry, NULL);
         if (r) {
             syslog(LOG_ERR, "Failed to lookup mbentry for %s: %s",
-                    state->mailbox->name, error_message(r));
+                    mailbox_name(state->mailbox), error_message(r));
             goto out;
         }
         state->mbentry = state->ourmbentry;
@@ -1500,7 +1500,7 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
     assert(value);
 
     if (state->mailbox)
-        mboxname = state->mailbox->name;
+        mboxname = mailbox_name(state->mailbox);
     else if (state->mbentry)
         mboxname = state->mbentry->name;
     else
@@ -1947,7 +1947,7 @@ static int rw_cb(const char *mailbox __attribute__((unused)),
 static void annotation_get_fromdb(annotate_state_t *state,
                                   struct annotate_entry_list *entry)
 {
-    const char *mboxname = (state->mailbox ? state->mailbox->name : "");
+    const char *mboxname = (state->mailbox ? mailbox_name(state->mailbox) : "");
     state->found = 0;
 
     annotatemore_findall(mboxname, state->uid, entry->name, 0, &rw_cb, state, 0);
@@ -2868,7 +2868,7 @@ EXPORTED int annotatemore_lookup_mbox(const struct mailbox *mailbox,
                                       const char *entry,
                                       const char *userid, struct buf *value)
 {
-    return _annotate_lookup(mailbox->name, mailbox->uniqueid,
+    return _annotate_lookup(mailbox_name(mailbox), mailbox->uniqueid,
                             /*uid*/0, entry, userid, value);
 }
 
@@ -2891,7 +2891,7 @@ EXPORTED int annotatemore_lookupmask_mbox(const struct mailbox *mailbox,
                                           const char *entry,
                                           const char *userid, struct buf *value)
 {
-    return _annotate_lookupmask(mailbox->name, mailbox->uniqueid,
+    return _annotate_lookupmask(mailbox_name(mailbox), mailbox->uniqueid,
                                 /*uid*/0, entry, userid, value);
 }
 
@@ -2899,7 +2899,7 @@ EXPORTED int annotatemore_msg_lookup(const struct mailbox *mailbox,
                                      uint32_t uid, const char *entry,
                                      const char *userid, struct buf *value)
 {
-    return _annotate_lookup(mailbox ? mailbox->name : "",
+    return _annotate_lookup(mailbox ? mailbox_name(mailbox) : "",
                             mailbox ? mailbox->uniqueid : NULL,
                             uid, entry, userid, value);
 }
@@ -2908,7 +2908,7 @@ EXPORTED int annotatemore_msg_lookupmask(const struct mailbox *mailbox,
                                          uint32_t uid, const char *entry,
                                          const char *userid, struct buf *value)
 {
-    return _annotate_lookupmask(mailbox ? mailbox->name : "",
+    return _annotate_lookupmask(mailbox ? mailbox_name(mailbox) : "",
                                 mailbox ? mailbox->uniqueid : NULL,
                                 uid, entry, userid, value);
 }
@@ -2994,7 +2994,7 @@ static int write_entry(struct mailbox *mailbox,
     int keylen, r;
     annotate_db_t *d = NULL;
     struct buf oldval = BUF_INITIALIZER;
-    const char *mboxname = mailbox ? mailbox->name : "";
+    const char *mboxname = mailbox ? mailbox_name(mailbox) : "";
     const char *mboxid = mailbox ? mailbox->uniqueid : "";
     modseq_t modseq = mdata ? mdata->modseq : 0;
 
@@ -3215,7 +3215,7 @@ EXPORTED int annotate_state_writemask(annotate_state_t *state,
                                       const struct buf *value)
 {
     /* if the user is the owner, then write to the shared namespace */
-    if (mboxname_userownsmailbox(userid, state->mailbox->name))
+    if (mboxname_userownsmailbox(userid, mailbox_name(state->mailbox)))
         return annotate_state_write(state, entry, "", value);
     else
         return annotate_state_write(state, entry, userid, value);
@@ -3471,7 +3471,7 @@ static int annotation_set_mailboxopt(annotate_state_t *state,
         mailbox_index_dirty(mailbox);
         mailbox_modseq_dirty(mailbox);
         mailbox->i.options = newopts;
-        mboxlist_update_foldermodseq(mailbox->name, mailbox->i.highestmodseq);
+        mboxlist_update_foldermodseq(mailbox_name(mailbox), mailbox->i.highestmodseq);
     }
 
     return 0;
@@ -3502,7 +3502,7 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
         mailbox_index_dirty(mailbox);
         mailbox_modseq_dirty(mailbox);
         mailbox->i.pop3_show_after = date;
-        mboxlist_update_foldermodseq(mailbox->name, mailbox->i.highestmodseq);
+        mboxlist_update_foldermodseq(mailbox_name(mailbox), mailbox->i.highestmodseq);
     }
 
     return 0;
@@ -3516,7 +3516,7 @@ static int annotation_set_fuzzyalways(annotate_state_t *state,
 
     assert(mailbox);
 
-    if (!mboxname_isusermailbox(mailbox->name, /*isinbox*/1)) {
+    if (!mboxname_isusermailbox(mailbox_name(mailbox), /*isinbox*/1)) {
         return IMAP_PERMISSION_DENIED;
     }
     if (buf_len(&entry->shared) &&
@@ -3654,7 +3654,7 @@ static int annotation_set_specialuse(annotate_state_t *state,
         goto done;
     }
 
-    r = specialuse_validate(state->mailbox->name, state->userid,
+    r = specialuse_validate(mailbox_name(state->mailbox), state->userid,
                             buf_cstring(&entry->priv), &res, 0);
     if (r) goto done;
 
@@ -3902,8 +3902,8 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
                                      struct mailbox *newmailbox)
 {
     /* rename one mailbox */
-    char *olduserid = mboxname_to_userid(oldmailbox->name);
-    char *newuserid = mboxname_to_userid(newmailbox->name);
+    char *olduserid = mboxname_to_userid(mailbox_name(oldmailbox));
+    char *newuserid = mboxname_to_userid(mailbox_name(newmailbox));
     annotate_db_t *d = NULL;
     int r = 0;
 
@@ -3936,7 +3936,7 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
     /* delete displayname records only */
     struct rename_rock rrock = { oldmailbox, .newmailbox = NULL, .copy = 0 };
 
-    r = annotatemore_findall(oldmailbox->name, /*olduid*/0,
+    r = annotatemore_findall(mailbox_name(oldmailbox), /*olduid*/0,
                              IMAP_ANNOT_NS "displayname", /*modseq*/0,
                              &rename_cb, &rrock, /*flags*/0);
     if (r) goto done;
@@ -3979,7 +3979,7 @@ static int _annotate_rewrite(struct mailbox *oldmailbox,
     rrock.newuid = newuid;
     rrock.copy = copy;
 
-    return annotatemore_findall(oldmailbox->name, olduid, "*", /*modseq*/0,
+    return annotatemore_findall(mailbox_name(oldmailbox), olduid, "*", /*modseq*/0,
                                 &rename_cb, &rrock, /*flags*/0);
 }
 
@@ -3994,13 +3994,13 @@ EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)
 
     assert(mailbox);
 
-    if (!mboxname_isdeletedmailbox(mailbox->name, NULL)) {
+    if (!mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL)) {
         mbentry_t *mbentry = NULL;
 
         r = mboxlist_lookup_by_uniqueid(mailbox->uniqueid, &mbentry, NULL);
         if (r) goto out;
 
-        is_rename = strcmp(mailbox->name, mbentry->name);
+        is_rename = strcmp(mailbox_name(mailbox), mbentry->name);
         mboxlist_entry_free(&mbentry);
     }
 
@@ -4100,7 +4100,7 @@ HIDDEN int annotate_msg_cleanup(struct mailbox *mailbox, unsigned int uid)
     assert(mailbox->annot_state != NULL);
     assert(mailbox->annot_state->d == d);
 
-    keylen = make_key(mailbox->name, mailbox->uniqueid,
+    keylen = make_key(mailbox_name(mailbox), mailbox->uniqueid,
                       uid, "", NULL, key, sizeof(key));
 
     r = cyrusdb_foreach(d->db, key, keylen, NULL, &cleanup_cb, d, tid(d));

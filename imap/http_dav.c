@@ -859,7 +859,7 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
         r = mailbox_find_index_record(mailbox, ddata->imap_uid, record);
         if (r) {
             syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
-                   mailbox->name, ddata->imap_uid, error_message(r));
+                   mailbox_name(mailbox), ddata->imap_uid, error_message(r));
             return r;
         }
 
@@ -978,7 +978,7 @@ static int eval_if(const char *hdr, struct meth_params *params,
                 if (!params->parse_path(uri->path, &tag_tgt, &err)) {
                     if (tag_tgt.mbentry && !tag_tgt.mbentry->server) {
                         if (tgt_mailbox &&
-                            !strcmp(tgt_mailbox->name, tag_tgt.mbentry->name)) {
+                            !strcmp(mailbox_name(tgt_mailbox), tag_tgt.mbentry->name)) {
                             /* Use target mailbox */
                             mailbox = tgt_mailbox;
                         }
@@ -1028,7 +1028,7 @@ static int eval_if(const char *hdr, struct meth_params *params,
                                                    "failed to fetch record for"
                                                    " '%s':%u in tagged"
                                                    " If header: %s",
-                                                   mailbox->name,
+                                                   mailbox_name(mailbox),
                                                    ddata->imap_uid,
                                                    error_message(r));
                                         }
@@ -1639,7 +1639,7 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond,
             (fctx->mode == PROPFIND_ALL || fctx->mode == PROPFIND_NAME)) {
             struct allprop_rock arock = { fctx, propstat };
 
-            annotatemore_findall(fctx->mailbox->name, 0, "*", /*modseq*/0,
+            annotatemore_findall(mailbox_name(fctx->mailbox), 0, "*", /*modseq*/0,
                                  allprop_cb, &arock, /*flags*/0);
         }
 
@@ -1810,7 +1810,7 @@ int proppatch_principalname(xmlNodePtr prop, unsigned set,
         char *mboxname = caldav_mboxname(pctx->txn->req_tgt.userid, NULL);
         int r = 0;
 
-        if (!mailbox || strcmp(mboxname, mailbox->name)) {
+        if (!mailbox || strcmp(mboxname, mailbox_name(mailbox))) {
             r = mailbox_open_iwl(mboxname, &calhomeset);
             if (!r) pctx->mailbox = calhomeset;
         }
@@ -2706,7 +2706,7 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
     if (fctx->userisadmin) {
         rights |= DACL_ADMIN;
     }
-    else if (mboxname_userownsmailbox(httpd_userid, fctx->mailbox->name)) {
+    else if (mboxname_userownsmailbox(httpd_userid, mailbox_name(fctx->mailbox))) {
         rights |= config_implicitrights;
         /* we always allow admin by the owner in DAV */
         rights |= DACL_ADMIN;
@@ -2764,7 +2764,7 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
     if (!fctx->mailbox) return HTTP_NOT_FOUND;
 
     /* owner has implicit admin rights */
-    if (!mboxname_userownsmailbox(httpd_userid, fctx->mailbox->name)) {
+    if (!mboxname_userownsmailbox(httpd_userid, mailbox_name(fctx->mailbox))) {
         int rights = httpd_myrights(fctx->authstate, fctx->mbentry);
         if (!(rights & DACL_ADMIN))
             return HTTP_UNAUTHORIZED;
@@ -2817,7 +2817,7 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
         node = xmlNewChild(ace, NULL, BAD_CAST "principal", NULL);
         if (!strcmp(userid, fctx->userid))
             xmlNewChild(node, NULL, BAD_CAST "self", NULL);
-        else if (mboxname_userownsmailbox(userid, fctx->mailbox->name)) {
+        else if (mboxname_userownsmailbox(userid, mailbox_name(fctx->mailbox))) {
             xmlNewChild(node, NULL, BAD_CAST "owner", NULL);
             /* we always allow admin by the owner in DAV */
             rights |= DACL_ADMIN;
@@ -5471,7 +5471,7 @@ int meth_lock(struct transaction_t *txn, void *params)
         /* New resource */
         ddata->creationdate = now;
         ddata->mailbox =
-            ddata->mailbox_byname ? mailbox->name : mailbox->uniqueid;
+            ddata->mailbox_byname ? mailbox_name(mailbox) : mailbox->uniqueid;
         ddata->resource = txn->req_tgt.resource;
         ddata->imap_uid = 0;
         ddata->lock_expire = 0;
@@ -7379,7 +7379,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             fctx->mbentry = tgt.mbentry;
 
             /* Check if we already have this mailbox open */
-            if (!mailbox || strcmp(mailbox->name, tgt.mbentry->name)) {
+            if (!mailbox || strcmp(mailbox_name(mailbox), tgt.mbentry->name)) {
                 if (mailbox) mailbox_close(&mailbox);
 
                 /* Open mailbox for reading */
@@ -8471,8 +8471,8 @@ int dav_store_resource(struct transaction_t *txn,
     struct appendstate as;
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+    if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         txn->error.desc = "append_newstage() failed";
         return HTTP_SERVER_ERROR;
     }
@@ -8563,7 +8563,7 @@ int dav_store_resource(struct transaction_t *txn,
     if ((r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate,
                           0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         if (r == IMAP_QUOTA_EXCEEDED) {
             /* DAV:quota-not-exceeded */
             txn->error.precond = DAV_OVER_QUOTA;
@@ -8596,7 +8596,7 @@ int dav_store_resource(struct transaction_t *txn,
         /* Append the message to the mailbox */
         if ((r = append_fromstage(&as, &body, stage, now, createdmodseq, flaglist, 0, &annots))) {
             syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-                   mailbox->name, error_message(r));
+                   mailbox_name(mailbox), error_message(r));
             ret = HTTP_SERVER_ERROR;
             txn->error.desc = "append_fromstage() failed";
         }
@@ -8612,7 +8612,7 @@ int dav_store_resource(struct transaction_t *txn,
             /* Commit the append to the mailbox */
             if ((r = append_commit(&as))) {
                 syslog(LOG_ERR, "append_commit(%s) failed: %s",
-                       mailbox->name, error_message(r));
+                       mailbox_name(mailbox), error_message(r));
                 ret = HTTP_SERVER_ERROR;
                 txn->error.desc = "append_commit() failed";
             }
@@ -8633,7 +8633,7 @@ int dav_store_resource(struct transaction_t *txn,
                     }
                     if (r) {
                         syslog(LOG_ERR, "expunging record (%s) failed: %s",
-                               mailbox->name, error_message(r));
+                               mailbox_name(mailbox), error_message(r));
                         txn->error.desc = error_message(r);
                         ret = HTTP_SERVER_ERROR;
                     }

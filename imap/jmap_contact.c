@@ -346,7 +346,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     struct vparse_card *vcard = record_to_vcard(crock->mailbox, &record);
     if (!vcard || !vcard->objects) {
         syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
-                cdata->dav.imap_uid, crock->mailbox->name);
+                cdata->dav.imap_uid, mailbox_name(crock->mailbox));
         vparse_free_card(vcard);
         r = IMAP_INTERNAL;
         goto done;
@@ -1081,7 +1081,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
             continue;
         }
 
-        if (!mailbox || strcmp(mailbox->name, mbentry->name)) {
+        if (!mailbox || strcmp(mailbox_name(mailbox), mbentry->name)) {
             jmap_closembox(req, &mailbox);
             r = jmap_openmbox(req, mbentry->name, &mailbox, 1);
         }
@@ -1113,7 +1113,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         struct vparse_card *vcard = record_to_vcard(mailbox, &record);
         if (!vcard || !vcard->objects) {
             syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
-                   cdata->dav.imap_uid, mailbox->name);
+                   cdata->dav.imap_uid, mailbox_name(mailbox));
             r = 0;
             json_t *err = json_pack("{s:s}", "type", "parseError");
             json_object_set_new(set.not_updated, uid, err);
@@ -1148,7 +1148,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                     json_t *jcurrent = jmap_group_from_vcard(card);
                     if (!jcurrent) {
                         syslog(LOG_ERR, "can't read vcard %u:%s for update",
-                                cdata->dav.imap_uid, mailbox->name);
+                                cdata->dav.imap_uid, mailbox_name(mailbox));
                         r = 0;
                         json_t *err = json_pack("{s:s s:s}",
                                 "type", "serverError", "description", "invalid current card");
@@ -1192,7 +1192,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
             flags = mailbox_extract_flags(mailbox, &record, req->userid);
             annots = mailbox_extract_annots(mailbox, &record);
 
-            r = _json_to_card(req, cdata, mailbox->name, card, arg, flags,
+            r = _json_to_card(req, cdata, mailbox_name(mailbox), card, arg, flags,
                     &annots, &blobs, &errors);
             if (r == HTTP_NO_CONTENT) {
                 r = 0;
@@ -1345,7 +1345,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
             continue;
         }
 
-        if (!mailbox || strcmp(mailbox->name, mbentry->name)) {
+        if (!mailbox || strcmp(mailbox_name(mailbox), mbentry->name)) {
             jmap_closembox(req, &mailbox);
             r = jmap_openmbox(req, mbentry->name, &mailbox, 1);
         }
@@ -1361,7 +1361,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
             xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
                              "kind=<%s> mailbox=<%s> olduid=<%u>",
                              kind == CARDDAV_KIND_GROUP ? "group" : "contact",
-                             mailbox->name, olduid);
+                             mailbox_name(mailbox), olduid);
             goto done;
         }
 
@@ -2043,7 +2043,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
         goto gotvalue;
     }
 
-    if (!crock->mailbox || strcmp(crock->mailbox->name, mbentry->name)) {
+    if (!crock->mailbox || strcmp(mailbox_name(crock->mailbox), mbentry->name)) {
         mailbox_close(&crock->mailbox);
         r = mailbox_open_irl(mbentry->name, &crock->mailbox);
     }
@@ -2056,7 +2056,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     struct vparse_card *vcard = record_to_vcard(crock->mailbox, &record);
     if (!vcard || !vcard->objects) {
         syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
-                cdata->dav.imap_uid, crock->mailbox->name);
+                cdata->dav.imap_uid, mailbox_name(crock->mailbox));
         vparse_free_card(vcard);
         r = IMAP_INTERNAL;
         goto done;
@@ -2908,7 +2908,7 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
     }
 
     /* Open mailbox. */
-    if (!crock->mailbox || strcmp(crock->mailbox->name, mbentry->name)) {
+    if (!crock->mailbox || strcmp(mailbox_name(crock->mailbox), mbentry->name)) {
         mailbox_close(&crock->mailbox);
         r = mailbox_open_irl(mbentry->name, &crock->mailbox);
     }
@@ -2923,7 +2923,7 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
     struct vparse_card *vcard = record_to_vcard(crock->mailbox, &record);
     if (!vcard || !vcard->objects) {
         syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
-                cdata->dav.imap_uid, crock->mailbox->name);
+                cdata->dav.imap_uid, mailbox_name(crock->mailbox));
         vparse_free_card(vcard);
         r = IMAP_INTERNAL;
         goto done;
@@ -4234,7 +4234,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     vparse_add_entry(card, NULL, "UID", uid);
 
     /* we need to create and append a record */
-    if (!*mailbox || strcmp((*mailbox)->name, mboxname)) {
+    if (!*mailbox || strcmp(mailbox_name(*mailbox), mboxname)) {
         jmap_closembox(req, mailbox);
         r = jmap_openmbox(req, mboxname, mailbox, 1);
         if (r == IMAP_MAILBOX_NONEXISTENT) {

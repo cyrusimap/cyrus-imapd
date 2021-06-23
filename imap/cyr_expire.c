@@ -348,7 +348,7 @@ static int expunge_userflags(struct mailbox *mailbox, struct expire_rock *erock)
         if (!mailbox->flagname[i])
             continue;
         verbosep("Expunging userflag %u (%s) from %s\n",
-                        i, mailbox->flagname[i], mailbox->name);
+                        i, mailbox->flagname[i], mailbox_name(mailbox));
         r = mailbox_remove_user_flag(mailbox, i);
         if (r) return r;
         erock->userflags_expunged++;
