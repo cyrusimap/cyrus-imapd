@@ -124,6 +124,16 @@
 static mailbox_wait_cb_t *mailbox_wait_cb = NULL;
 static void *mailbox_wait_cb_rock = NULL;
 
+struct mailbox_iter {
+    struct mailbox *mailbox;
+    message_t *msg;
+    modseq_t changedsince;
+    uint32_t recno;
+    uint32_t num_records;
+    unsigned skipflags;
+};
+
+
 struct mailboxlist {
     struct mailboxlist *next;
     struct mailbox m;

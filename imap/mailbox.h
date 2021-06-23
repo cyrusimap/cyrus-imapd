@@ -312,14 +312,7 @@ struct mailbox {
 /* pre-declare message_t to avoid circular dependency problems */
 typedef struct message message_t;
 
-struct mailbox_iter {
-    struct mailbox *mailbox;
-    message_t *msg;
-    modseq_t changedsince;
-    uint32_t recno;
-    uint32_t num_records;
-    unsigned skipflags;
-};
+struct mailbox_iter;
 
 /* Offsets of index/expunge header fields
  *
