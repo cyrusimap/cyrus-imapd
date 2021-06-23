@@ -2659,7 +2659,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         simple_hdr(txn, "Date", "%s", datestr);
 
         if (httpd_altsvc && (txn->flags.ver < VER_2)) {
-            simple_hdr(txn, "Alt-Svc", httpd_altsvc);
+            simple_hdr(txn, "Alt-Svc", "%s", httpd_altsvc);
         }
 
         /* Fall through and specify connection options and/or links */
