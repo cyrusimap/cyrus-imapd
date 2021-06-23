@@ -226,7 +226,8 @@ sub _fmjmap_err
 }
 
 sub test_ajaxui_jmapcontacts_contactgroup_set
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -344,7 +345,8 @@ sub _set_quotalimits
 }
 
 sub test_issue_LP52545479
-    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+    :min_version_3_1 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -427,7 +429,7 @@ sub test_issue_LP52545479
 }
 
 sub test_mailbox_query
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -498,7 +500,8 @@ sub test_mailbox_query
 }
 
 sub test_rename_deepuser_standardfolders
-    :AllowMoves :Replication :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :AllowMoves :Replication :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -597,7 +600,8 @@ sub test_rename_deepuser_standardfolders
 }
 
 sub test_rename_deepfolder_intermediates
-    :AllowMoves :Replication :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :AllowMoves :Replication :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -724,7 +728,8 @@ sub test_rename_deepfolder_intermediates
 }
 
 sub test_mailbox_rename_to_inbox_sub
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -805,7 +810,8 @@ sub test_mailbox_rename_to_inbox_sub
 }
 
 sub test_mailbox_rename_sub_inbox_both
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -846,7 +852,8 @@ sub test_mailbox_rename_sub_inbox_both
 }
 
 sub test_mailbox_rename_inside_deep
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -882,7 +889,8 @@ sub test_mailbox_rename_inside_deep
 }
 
 sub test_mailbox_rename_to_clash_parent_only
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -924,7 +932,8 @@ sub test_mailbox_rename_to_clash_parent_only
 }
 
 sub test_mailbox_rename_to_clash_name_only_deep
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -967,7 +976,8 @@ sub test_mailbox_rename_to_clash_name_only_deep
 }
 
 sub test_mailbox_rename_to_clash_name_only
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -1011,7 +1021,8 @@ sub test_mailbox_rename_to_clash_name_only
 }
 
 sub test_mailbox_rename_to_clash_both
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -1057,7 +1068,8 @@ sub test_mailbox_rename_to_clash_both
 }
 
 sub test_mailbox_case_difference
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -1097,7 +1109,8 @@ sub test_mailbox_case_difference
 }
 
 sub test_rename_deepuser_standardfolders_rightnow
-    :AllowMoves :Replication :min_version_3_3 :needs_component_jmap :JMAPExtensions :RightNow
+    :AllowMoves :Replication :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions :RightNow
 {
     my ($self) = @_;
 
@@ -1191,7 +1204,8 @@ sub test_rename_deepuser_standardfolders_rightnow
 }
 
 sub test_rename_deepfolder_intermediates_rightnow
-    :AllowMoves :Replication :min_version_3_3 :needs_component_jmap :JMAPExtensions :RightNow
+    :AllowMoves :Replication :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions :RightNow
 {
     my ($self) = @_;
 
@@ -1313,7 +1327,7 @@ sub test_rename_deepfolder_intermediates_rightnow
 }
 
 sub test_imap_list_notes
-    :min_version_3_0
+    :min_version_3_0 :needs_component_sieve
 {
     my ($self) = @_;
 
