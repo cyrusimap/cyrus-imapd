@@ -1136,6 +1136,31 @@ EXPORTED int mailbox_open_exclusive(const char *name, struct mailbox **mailboxpt
                                  mailboxptr);
 }
 
+EXPORTED const char *mailbox_name(const struct mailbox *mailbox)
+{
+    return mailbox->name;
+}
+
+EXPORTED const char *mailbox_uniqueid(const struct mailbox *mailbox)
+{
+    return mailbox->uniqueid;
+}
+
+EXPORTED const char *mailbox_partition(const struct mailbox *mailbox)
+{
+    return mailbox->part;
+}
+
+EXPORTED const char *mailbox_acl(const struct mailbox *mailbox)
+{
+    return mailbox->acl;
+}
+
+EXPORTED uint32_t mailbox_mbtype(const struct mailbox *mailbox)
+{
+    return mailbox->mbtype;
+}
+
 EXPORTED void mailbox_index_dirty(struct mailbox *mailbox)
 {
     assert(mailbox_index_islocked(mailbox, 1));

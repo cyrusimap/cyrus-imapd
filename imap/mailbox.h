@@ -563,6 +563,13 @@ extern int mailbox_open_exclusive(const char *name,
 extern void mailbox_close(struct mailbox **mailboxptr);
 extern int mailbox_delete(struct mailbox **mailboxptr);
 
+/* reading details */
+extern const char *mailbox_name(const struct mailbox *mailbox);
+extern const char *mailbox_uniqueid(const struct mailbox *mailbox);
+extern const char *mailbox_partition(const struct mailbox *mailbox);
+extern const char *mailbox_acl(const struct mailbox *mailbox);
+extern uint32_t mailbox_mbtype(const struct mailbox *mailbox);
+
 struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox);
 struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox);
 
