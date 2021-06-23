@@ -58,10 +58,13 @@
 #include "assert.h"
 #include "map.h"
 #include "sievedir.h"
-#include "sieve/bc_parse.h"
-#include "sieve/sieve_interface.h"
 #include "util.h"
 #include "xstrlcpy.h"
+
+#ifdef USE_SIEVE
+#include "sieve/bc_parse.h"
+#include "sieve/sieve_interface.h"
+#endif
 
 EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
                               int (*func)(const char *sievedir,
