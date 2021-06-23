@@ -576,13 +576,7 @@ void sync_reserve_list_free(struct sync_reserve_list **lp)
 
 struct sync_folder_list *sync_folder_list_create(void)
 {
-    struct sync_folder_list *l = xzmalloc(sizeof (struct sync_folder_list));
-
-    l->head   = NULL;
-    l->tail   = NULL;
-    l->count  = 0;
-
-    return(l);
+    return xzmalloc(sizeof (struct sync_folder_list));
 }
 
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
@@ -680,14 +674,7 @@ void sync_folder_list_free(struct sync_folder_list **lp)
 
 struct sync_rename_list *sync_rename_list_create(void)
 {
-    struct sync_rename_list *l = xzmalloc(sizeof(struct sync_rename_list));
-
-    l->head  = NULL;
-    l->tail  = NULL;
-    l->count = 0;
-    l->done  = 0;
-
-    return(l);
+    return xzmalloc(sizeof(struct sync_rename_list));
 }
 
 struct sync_rename *sync_rename_list_add(struct sync_rename_list *l,
@@ -754,14 +741,7 @@ void sync_rename_list_free(struct sync_rename_list **lp)
 
 struct sync_quota_list *sync_quota_list_create(void)
 {
-    struct sync_quota_list *l = xzmalloc(sizeof(struct sync_quota_list));
-
-    l->head  = NULL;
-    l->tail  = NULL;
-    l->count = 0;
-    l->done  = 0;
-
-    return(l);
+    return xzmalloc(sizeof(struct sync_quota_list));
 }
 
 struct sync_quota *sync_quota_list_add(struct sync_quota_list *l,
@@ -863,13 +843,7 @@ void sync_decode_quota_limits(/*const*/ struct dlist *kl, quota_t limits[QUOTA_N
 
 struct sync_sieve_list *sync_sieve_list_create(void)
 {
-    struct sync_sieve_list *l = xzmalloc(sizeof (struct sync_sieve_list));
-
-    l->head   = NULL;
-    l->tail   = NULL;
-    l->count  = 0;
-
-    return l;
+    return xzmalloc(sizeof (struct sync_sieve_list));
 }
 
 static struct sync_sieve *sync_sieve_list_add(
@@ -1105,12 +1079,7 @@ int sync_sieve_delete(const char *userid, const char *script)
 
 struct sync_name_list *sync_name_list_create(void)
 {
-    struct sync_name_list *l = xzmalloc(sizeof (struct sync_name_list));
-    l->head = NULL;
-    l->tail = NULL;
-    l->count = 0;
-    l->marked = 0;
-    return l;
+    return xzmalloc(sizeof (struct sync_name_list));
 }
 
 struct sync_name *sync_name_list_add(struct sync_name_list *l,
@@ -1166,11 +1135,7 @@ void sync_name_list_free(struct sync_name_list **lp)
 
 struct sync_seen_list *sync_seen_list_create(void)
 {
-    struct sync_seen_list *l = xzmalloc(sizeof (struct sync_seen_list));
-    l->head = NULL;
-    l->tail = NULL;
-    l->count = 0;
-    return l;
+    return xzmalloc(sizeof (struct sync_seen_list));
 }
 
 struct sync_seen *sync_seen_list_add(struct sync_seen_list *l,
@@ -1230,12 +1195,7 @@ void sync_seen_list_free(struct sync_seen_list **lp)
 
 struct sync_annot_list *sync_annot_list_create(void)
 {
-    struct sync_annot_list *l = xzmalloc(sizeof (struct sync_annot_list));
-
-    l->head   = NULL;
-    l->tail   = NULL;
-    l->count  = 0;
-    return(l);
+    return xzmalloc(sizeof (struct sync_annot_list));
 }
 
 static int diff_annotation(const struct sync_annot *a,
@@ -1336,13 +1296,7 @@ void sync_annot_list_free(struct sync_annot_list **lp)
 
 struct sync_action_list *sync_action_list_create(void)
 {
-    struct sync_action_list *l = xzmalloc(sizeof (struct sync_action_list));
-
-    l->head   = NULL;
-    l->tail   = NULL;
-    l->count  = 0;
-
-    return(l);
+    return xzmalloc(sizeof (struct sync_action_list));
 }
 
 void sync_action_list_add(struct sync_action_list *l,
