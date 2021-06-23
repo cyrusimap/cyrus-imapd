@@ -278,8 +278,8 @@ sub do_test_list_order
             $admintalk->get_last_completion_response(),
             "setacl folder $folder for $identifier successfully");
 
-                if ($folder =~ m/^shared/) {
-                    # subvert default permissions on shared namespace for
+        if ($folder =~ m/^shared/) {
+            # subvert default permissions on shared namespace for
             # purpose of testing ordering
             $admintalk->setacl($folder, "anyone", "p");
             $self->assert_str_equals('ok',
