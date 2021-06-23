@@ -56,11 +56,14 @@
 #include "http_jmap.h"
 #include "json_support.h"
 #include "map.h"
-#include "sieve/sieve_interface.h"
-#include "sieve/bc_parse.h"
 #include "sync_support.h"
 #include "user.h"
 #include "util.h"
+
+#ifdef USE_SIEVE
+#include "sieve/sieve_interface.h"
+#include "sieve/bc_parse.h"
+#endif
 
 static int jmap_vacation_get(jmap_req_t *req);
 static int jmap_vacation_set(jmap_req_t *req);
