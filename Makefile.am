@@ -1084,6 +1084,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/setproctitle.c \
         imap/sievedir.c \
 	imap/sievedir.h \
+	imap/smtpclient.c \
+	imap/smtpclient.h \
 	imap/spool.c \
 	imap/spool.h \
 	imap/statuscache.h \
@@ -1156,12 +1158,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/webdav_db.h
 
 endif # HTTPD
-
-if JMAP
-imap_libcyrus_imap_la_SOURCES += \
-	imap/smtpclient.c \
-	imap/smtpclient.h
-endif
 
 if USE_XAPIAN
 imap_libcyrus_imap_la_SOURCES += \
