@@ -1079,7 +1079,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
             unsigned mbtype = mbtype_isa(mailbox_mbtype(mailbox));
             const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                        .uniqueid = mailbox->uniqueid };
+                                        .uniqueid = (char *)mailbox_uniqueid(mailbox) };
 
             if (mbtype_isa(mbtype) == MBTYPE_ADDRESSBOOK) {
                 struct carddav_db *carddavdb = NULL;
@@ -1280,7 +1280,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
             unsigned mbtype = mbtype_isa(mailbox_mbtype(mailbox));
             const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                        .uniqueid = mailbox->uniqueid };
+                                        .uniqueid = (char *)mailbox_uniqueid(mailbox) };
 
             if (mbtype_isa(mbtype) == MBTYPE_ADDRESSBOOK) {
                 struct carddav_db *carddavdb = NULL;
@@ -1646,7 +1646,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
     /* mailbox related events also require mailboxID */
     if (event->type & MAILBOX_EVENTS) {
-        FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mailbox->uniqueid));
+        FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mailbox_uniqueid(mailbox)));
     }
 
     if (mboxevent_expected_param(event->type, EVENT_UIDNEXT)) {

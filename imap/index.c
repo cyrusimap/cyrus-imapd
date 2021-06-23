@@ -547,7 +547,7 @@ static int index_writeseen(struct index_state *state)
     r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) return r;
 
-    r = seen_lockread(seendb, mailbox->uniqueid, &oldsd);
+    r = seen_lockread(seendb, mailbox_uniqueid(mailbox), &oldsd);
     if (r) {
         oldsd.lastread = 0;
         oldsd.lastuid = 0;
@@ -572,7 +572,7 @@ static int index_writeseen(struct index_state *state)
     if (!seen_compare(&sd, &oldsd)) {
         sd.lastread = time(NULL);
         sd.lastchange = mailbox->i.last_appenddate;
-        r = seen_write(seendb, mailbox->uniqueid, &sd);
+        r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
     }
 
     seen_close(&seendb);
@@ -600,7 +600,7 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
         int r;
 
         r = seen_open(userid, SEEN_CREATE, &seendb);
-        if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+        if (!r) r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
         seen_close(&seendb);
 
         /* handle no seen DB gracefully */
@@ -837,7 +837,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
 
     /* RFC 8474 */
     prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n",
-                state->mailbox->uniqueid);
+                mailbox_uniqueid(state->mailbox));
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
@@ -1105,7 +1105,7 @@ EXPORTED void index_fetchresponses(struct index_state *state,
     /* Keep an open reference on the per-mailbox db to avoid
      * doing too many slow database opens during the fetch */
     if ((fetchargs->fetchitems & FETCH_ANNOTATION))
-        annotate_getdb(state->mailbox->uniqueid, &annot_db);
+        annotate_getdb(mailbox_uniqueid(state->mailbox), &annot_db);
 
     start = 1;
     end = state->exists;
@@ -6248,7 +6248,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 break;
             }
             case SORT_SAVEDATE:
-                if (!strcmpnull(mailbox->uniqueid, sortcrit[j].args.mailbox.id)) {
+                if (!strcmpnull(mailbox_uniqueid(mailbox), sortcrit[j].args.mailbox.id)) {
                     cur->savedate = record.savedate;
                 }
                 else {
@@ -6259,7 +6259,7 @@ MsgData **index_msgdata_load(struct index_state *state,
             case SORT_SNOOZEDUNTIL:
 #ifdef WITH_JMAP
                 if ((record.internal_flags & FLAG_INTERNAL_SNOOZED) &&
-                    !strcmpnull(mailbox->uniqueid, sortcrit[j].args.mailbox.id)) {
+                    !strcmpnull(mailbox_uniqueid(mailbox), sortcrit[j].args.mailbox.id)) {
                     /* SAVEDATE == snoozed#until */
                     cur->savedate = record.savedate;
 

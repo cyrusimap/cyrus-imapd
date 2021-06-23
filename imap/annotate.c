@@ -1436,7 +1436,7 @@ static int annotate_state_set_scope(annotate_state_t *state,
     state->mailbox = mailbox;
     state->uid = uid;
 
-    r = _annotate_getdb(mailbox ? mailbox->uniqueid : NULL, uid,
+    r = _annotate_getdb(mailbox ? mailbox_uniqueid(mailbox) : NULL, uid,
                         CYRUSDB_CREATE, &state->d);
 
 out:
@@ -1921,8 +1921,8 @@ static void annotation_get_uniqueid(annotate_state_t *state,
 
     assert(state->mailbox);
 
-    if (state->mailbox->uniqueid)
-        buf_appendcstr(&value, state->mailbox->uniqueid);
+    if (mailbox_uniqueid(state->mailbox))
+        buf_appendcstr(&value, mailbox_uniqueid(state->mailbox));
 
     output_entryatt(state, entry->name, "", &value);
     buf_free(&value);
@@ -2868,7 +2868,7 @@ EXPORTED int annotatemore_lookup_mbox(const struct mailbox *mailbox,
                                       const char *entry,
                                       const char *userid, struct buf *value)
 {
-    return _annotate_lookup(mailbox_name(mailbox), mailbox->uniqueid,
+    return _annotate_lookup(mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                             /*uid*/0, entry, userid, value);
 }
 
@@ -2891,7 +2891,7 @@ EXPORTED int annotatemore_lookupmask_mbox(const struct mailbox *mailbox,
                                           const char *entry,
                                           const char *userid, struct buf *value)
 {
-    return _annotate_lookupmask(mailbox_name(mailbox), mailbox->uniqueid,
+    return _annotate_lookupmask(mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                                 /*uid*/0, entry, userid, value);
 }
 
@@ -2900,7 +2900,7 @@ EXPORTED int annotatemore_msg_lookup(const struct mailbox *mailbox,
                                      const char *userid, struct buf *value)
 {
     return _annotate_lookup(mailbox ? mailbox_name(mailbox) : "",
-                            mailbox ? mailbox->uniqueid : NULL,
+                            mailbox ? mailbox_uniqueid(mailbox) : NULL,
                             uid, entry, userid, value);
 }
 
@@ -2909,7 +2909,7 @@ EXPORTED int annotatemore_msg_lookupmask(const struct mailbox *mailbox,
                                          const char *userid, struct buf *value)
 {
     return _annotate_lookupmask(mailbox ? mailbox_name(mailbox) : "",
-                                mailbox ? mailbox->uniqueid : NULL,
+                                mailbox ? mailbox_uniqueid(mailbox) : NULL,
                                 uid, entry, userid, value);
 }
 
@@ -2995,7 +2995,7 @@ static int write_entry(struct mailbox *mailbox,
     annotate_db_t *d = NULL;
     struct buf oldval = BUF_INITIALIZER;
     const char *mboxname = mailbox ? mailbox_name(mailbox) : "";
-    const char *mboxid = mailbox ? mailbox->uniqueid : "";
+    const char *mboxid = mailbox ? mailbox_uniqueid(mailbox) : "";
     modseq_t modseq = mdata ? mdata->modseq : 0;
 
     r = _annotate_getdb(mboxid, uid, CYRUSDB_CREATE, &d);
@@ -3920,8 +3920,8 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
 
     annotate_begin(d);
 
-    if (newmailbox->uniqueid &&
-        strcmp(oldmailbox->uniqueid, newmailbox->uniqueid)) {
+    if (mailbox_uniqueid(newmailbox) &&
+        strcmp(mailbox_uniqueid(oldmailbox), mailbox_uniqueid(newmailbox))) {
         /* copy here - delete will dispose of old records later
 
            XXX  This code appears to only be necessary to allow
@@ -3997,7 +3997,7 @@ EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)
     if (!mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL)) {
         mbentry_t *mbentry = NULL;
 
-        r = mboxlist_lookup_by_uniqueid(mailbox->uniqueid, &mbentry, NULL);
+        r = mboxlist_lookup_by_uniqueid(mailbox_uniqueid(mailbox), &mbentry, NULL);
         if (r) goto out;
 
         is_rename = strcmp(mailbox_name(mailbox), mbentry->name);
@@ -4050,7 +4050,7 @@ EXPORTED int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 
     init_internal();
 
-    r = _annotate_getdb(newmailbox->uniqueid, newuid, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(mailbox_uniqueid(newmailbox), newuid, CYRUSDB_CREATE, &d);
     if (r) return r;
 
     annotate_begin(d);
@@ -4089,7 +4089,7 @@ HIDDEN int annotate_msg_cleanup(struct mailbox *mailbox, unsigned int uid)
 
     assert(uid);
 
-    r = _annotate_getdb(mailbox->uniqueid, uid, 0, &d);
+    r = _annotate_getdb(mailbox_uniqueid(mailbox), uid, 0, &d);
     if (r) return r;
 
     /* must be in a transaction to modify the db */
@@ -4100,7 +4100,7 @@ HIDDEN int annotate_msg_cleanup(struct mailbox *mailbox, unsigned int uid)
     assert(mailbox->annot_state != NULL);
     assert(mailbox->annot_state->d == d);
 
-    keylen = make_key(mailbox_name(mailbox), mailbox->uniqueid,
+    keylen = make_key(mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                       uid, "", NULL, key, sizeof(key));
 
     r = cyrusdb_foreach(d->db, key, keylen, NULL, &cleanup_cb, d, tid(d));

@@ -2116,7 +2116,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
     r = read_indexed(mbname_userid(mbname),
             bb->lock.activedirs, bb->lock.activetiers,
-            mailbox->uniqueid, bb->indexed, /*do_cache*/0, /*verbose*/0);
+            mailbox_uniqueid(mailbox), bb->indexed, /*do_cache*/0, /*verbose*/0);
     mbname_free(&mbname);
     if (r) goto out;
 
@@ -2317,7 +2317,7 @@ static int flush(search_text_receiver_t *rx)
     if (tr->indexed) {
         r = write_indexed(strarray_nth(tr->activedirs, 0),
                 mailbox_name(tr->super.mailbox), tr->super.mailbox->i.uidvalidity,
-                tr->super.mailbox->uniqueid, tr->indexed, tr->super.verbose);
+                mailbox_uniqueid(tr->super.mailbox), tr->indexed, tr->super.verbose);
         if (r) goto out;
     }
 
@@ -2744,7 +2744,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     if ((flags & (SEARCH_UPDATE_INCREMENTAL|SEARCH_UPDATE_AUDIT))) {
         mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
         r = read_indexed(mbname_userid(mbname), tr->activedirs, tr->activetiers,
-                mailbox->uniqueid, tr->oldindexed, /*do_cache*/1, tr->super.verbose);
+                mailbox_uniqueid(mailbox), tr->oldindexed, /*do_cache*/1, tr->super.verbose);
         mbname_free(&mbname);
         if (r) goto out;
     }
@@ -2781,7 +2781,7 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
     /* Is this a part in the message we are just indexing? */
     if (doctype == XAPIAN_WRAP_DOCTYPE_PART && rec->uid == tr->super.uid &&
          !strcmp(rec->mailbox, (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
-                 tr->super.mailbox->uniqueid : mailbox_name(tr->super.mailbox))) {
+                 mailbox_uniqueid(tr->super.mailbox) : mailbox_name(tr->super.mailbox))) {
         return 0;
     }
 

@@ -1626,7 +1626,7 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
 
     // make sure all the fields are up-to-date
     xfree(mbentry->uniqueid);
-    mbentry->uniqueid = xstrdupnull(mailbox->uniqueid);
+    mbentry->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
     mbentry->uidvalidity = mailbox->i.uidvalidity;
     mbentry->createdmodseq = mailbox->i.createdmodseq;
     mbentry->foldermodseq = mailbox->i.highestmodseq;
@@ -1718,7 +1718,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     newmbentry->mbtype = mbtype;
     newmbentry->partition = xstrdupnull(newpartition);
     if (newmailbox) {
-        newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
+        newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(newmailbox));
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = foldermodseq ? foldermodseq : newmailbox->i.highestmodseq;
@@ -2276,7 +2276,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         newmbentry->name = xstrdupnull(name);
         newmbentry->mbtype |= haschildren ? MBTYPE_INTERMEDIATE : MBTYPE_DELETED;
         if (mailbox) {
-            newmbentry->uniqueid = xstrdupnull(mailbox->uniqueid);
+            newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
             newmbentry->uidvalidity = mailbox->i.uidvalidity;
             newmbentry->createdmodseq = mailbox->i.createdmodseq;
             newmbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
@@ -2612,14 +2612,14 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
          * codepaths: INBOX -> INBOX.foo, user rename, regular rename
          * and of course this one, partition move */
         newpartition = xstrdup(partition);
-        r = mailbox_copy_files(oldmailbox, newpartition, newname, oldmailbox->mbtype & MBTYPE_LEGACY_DIRS ? NULL : oldmailbox->uniqueid);
+        r = mailbox_copy_files(oldmailbox, newpartition, newname, oldmailbox->mbtype & MBTYPE_LEGACY_DIRS ? NULL : mailbox_uniqueid(oldmailbox));
         if (r) goto done;
         newmbentry = mboxlist_entry_create();
         newmbentry->mbtype = mailbox_mbtype(oldmailbox);
         newmbentry->partition = xstrdupnull(newpartition);
         newmbentry->acl = xstrdupnull(mailbox_acl(oldmailbox));
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
-        newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
+        newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(oldmailbox));
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
         newmbentry->foldermodseq = silent ? mailbox_foldermodseq(oldmailbox)
                                           : mboxname_nextmodseq(newname, mailbox_foldermodseq(oldmailbox),
@@ -2689,7 +2689,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->partition = xstrdupnull(mailbox_partition(newmailbox));
         newmbentry->acl = xstrdupnull(mailbox_acl(newmailbox));
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
-        newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
+        newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(newmailbox));
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = newmailbox->i.highestmodseq;
     }
@@ -2706,7 +2706,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->partition = xstrdupnull(mailbox_partition(oldmailbox));
         newmbentry->acl = xstrdupnull(mailbox_acl(oldmailbox));
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
-        newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
+        newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(oldmailbox));
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
         newmbentry->foldermodseq = oldmailbox->i.highestmodseq;
     }
@@ -2853,7 +2853,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         if (partitionmove && newpartition)
             mailbox_delete_cleanup(NULL, newpartition, newname,
                                    (mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS) ?
-                                   NULL : oldmailbox->uniqueid);
+                                   NULL : mailbox_uniqueid(oldmailbox));
         mailbox_close(&oldmailbox);
     } else {
         /* log the rename before we close either mailbox, so that
@@ -2891,12 +2891,12 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         else if (partitionmove) {
             char *oldpartition = xstrdupnull(mailbox_partition(oldmailbox));
             char *olduniqueid = (mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS) ?
-                NULL : xstrdup(oldmailbox->uniqueid);
+                NULL : xstrdup(mailbox_uniqueid(oldmailbox));
             if (config_auditlog)
                 syslog(LOG_NOTICE, "auditlog: partitionmove sessionid=<%s> "
                        "mailbox=<%s> uniqueid=<%s> oldpart=<%s> newpart=<%s>",
                        session_id(),
-                       mailbox_name(oldmailbox), oldmailbox->uniqueid,
+                       mailbox_name(oldmailbox), mailbox_uniqueid(oldmailbox),
                        oldpartition, partition);
             /* this will sync-log the name anyway */
             mailbox_close(&oldmailbox);

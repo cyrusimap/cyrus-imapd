@@ -294,7 +294,7 @@ EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
     const char *src;
 
     src = mboxname_metapath(mailbox_partition(mailbox), mailbox_name(mailbox),
-                            legacy_dirs ? NULL : mailbox->uniqueid,
+                            legacy_dirs ? NULL : mailbox_uniqueid(mailbox),
                             metafile, 0);
     if (!src) return NULL;
 
@@ -309,7 +309,7 @@ EXPORTED const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile
     const char *src;
 
     src = mboxname_metapath(mailbox_partition(mailbox), mailbox_name(mailbox),
-                            legacy_dirs ? NULL : mailbox->uniqueid,
+                            legacy_dirs ? NULL : mailbox_uniqueid(mailbox),
                             metafile, 1);
     if (!src) return NULL;
 
@@ -332,7 +332,7 @@ static const char *mailbox_spool_fname(struct mailbox *mailbox, uint32_t uid)
 {
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     return mboxname_datapath(mailbox_partition(mailbox), mailbox_name(mailbox),
-                             legacy_dirs ? NULL : mailbox->uniqueid,
+                             legacy_dirs ? NULL : mailbox_uniqueid(mailbox),
                              uid);
 }
 
@@ -340,7 +340,7 @@ static const char *mailbox_archive_fname(struct mailbox *mailbox, uint32_t uid)
 {
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     return mboxname_archivepath(mailbox_partition(mailbox), mailbox_name(mailbox),
-                                legacy_dirs ? NULL : mailbox->uniqueid,
+                                legacy_dirs ? NULL : mailbox_uniqueid(mailbox),
                                 uid);
 }
 
@@ -365,7 +365,7 @@ EXPORTED const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid)
     const char *src;
 
     src = mboxname_datapath(mailbox_partition(mailbox), mailbox_name(mailbox),
-                            legacy_dirs ? NULL : mailbox->uniqueid,
+                            legacy_dirs ? NULL : mailbox_uniqueid(mailbox),
                             uid);
     if (!src) return NULL;
 
@@ -844,7 +844,7 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
     return updatenotifier;
 }
 
-static void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid)
+EXPORTED void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid)
 {
     free(mailbox->uniqueid);
     mailbox->uniqueid = xstrdup(uniqueid);
@@ -1296,7 +1296,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
             if (mailbox->i.options & OPT_MAILBOX_DELETED)
                 mailbox_delete_cleanup(mailbox, mailbox_partition(mailbox), mailbox_name(mailbox),
                                        (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) ?
-                                       NULL : mailbox->uniqueid);
+                                       NULL : mailbox_uniqueid(mailbox));
             else if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK)
 
                 mailbox_index_repack(mailbox, mailbox->i.minor_version);
@@ -2176,7 +2176,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
             syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
                    "sysflags=<%s> guid=<%s> messageid=%s size=<%u>",
-                   session_id(), mailbox_name(mailbox), mailbox->uniqueid, record->uid,
+                   session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid), change->msgid,
                    record->size);
@@ -2185,7 +2185,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
             syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
                    "sysflags=<%s> guid=<%s> size=<%u>",
-                   session_id(), mailbox_name(mailbox), mailbox->uniqueid, record->uid,
+                   session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid),
                    record->size);
@@ -2194,7 +2194,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
                    "sysflags=<%s> guid=<%s>",
-                   session_id(), mailbox_name(mailbox), mailbox->uniqueid, record->uid,
+                   session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid));
     }
@@ -2673,7 +2673,7 @@ static char *mailbox_header_data_cstring(struct mailbox *mailbox)
 
     dlist_setatom(dl, "N", mailbox_name(mailbox));
 
-    dlist_setatom(dl, "I", mailbox->uniqueid);
+    dlist_setatom(dl, "I", mailbox_uniqueid(mailbox));
 
     if (mailbox->quotaroot)
         dlist_setatom(dl, "Q", mailbox->quotaroot);
@@ -2996,7 +2996,7 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
         syslog(LOG_NOTICE, "auditlog: modseq sessionid=<%s> "
                "mailbox=<%s> uniqueid=<%s> highestmodseq=<" MODSEQ_FMT
                "> deletedmodseq=<" MODSEQ_FMT ">",
-            session_id(), mailbox_name(mailbox), mailbox->uniqueid,
+            session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
             mailbox->i.highestmodseq, mailbox->i.deletedmodseq);
 
     if (mailbox->modseq_dirty) {
@@ -3502,7 +3502,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 
     /* find existing record for this resource */
     const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = mailbox->uniqueid };
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
 
     carddav_lookup_resource(carddavdb, &mbentry, resource, &cdata, /*tombstones*/1);
 
@@ -3612,7 +3612,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
     /* Find existing record for this resource */
     const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = mailbox->uniqueid };
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
 
     caldav_lookup_resource(caldavdb, &mbentry, resource, &cdata, /*tombstones*/1);
 
@@ -3727,7 +3727,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 
     /* Find existing record for this resource */
     const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = mailbox->uniqueid };
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
 
     webdav_lookup_resource(webdavdb, &mbentry, resource, &wdata, /*tombstones*/1);
 
@@ -4168,7 +4168,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
         syslog(LOG_NOTICE, "auditlog: touched sessionid=<%s> "
                "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> "
                "modseq=<" MODSEQ_FMT "> oldflags=<%s> sysflags=<%s>",
-               session_id(), mailbox_name(mailbox), mailbox->uniqueid,
+               session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                record->uid, message_guid_encode(&record->guid),
                conversation_id_encode(record->cid), record->modseq,
                oldflags, sysflags);
@@ -4323,7 +4323,7 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
         if (config_auditlog) {
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
-                   session_id(), mailbox_name(mailbox), mailbox->uniqueid,
+                   session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                    uid, flagstr);
         }
     }
@@ -4333,7 +4333,7 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
             if (config_auditlog) {
                 syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
                        "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
-                       session_id(), mailbox_name(mailbox), mailbox->uniqueid,
+                       session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                        uid, flagstr);
             }
         }
@@ -4538,7 +4538,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
         if (repack->userid) {
             struct seen *seendb = NULL;
             r = seen_open(repack->userid, SEEN_SILENT, &seendb);
-            if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+            if (!r) r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
             seen_close(&seendb);
         }
 
@@ -4696,14 +4696,14 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
         struct seendata sd = SEENDATA_INITIALIZER;
         struct seen *seendb = NULL;
         int r = seen_open(repack->userid, SEEN_CREATE, &seendb);
-        if (!r) r = seen_lockread(seendb, repack->mailbox->uniqueid, &sd);
+        if (!r) r = seen_lockread(seendb, mailbox_uniqueid(repack->mailbox), &sd);
         if (!r) {
             sd.lastuid = repack->newmailbox.i.last_uid;
             sd.seenuids = seqset_cstring(repack->seqset);
             if (!sd.seenuids) sd.seenuids = xstrdup("");
             sd.lastread = time(NULL);
             sd.lastchange = repack->newmailbox.i.last_appenddate;
-            r = seen_write(seendb, repack->mailbox->uniqueid, &sd);
+            r = seen_write(seendb, mailbox_uniqueid(repack->mailbox), &sd);
             /* XXX - syslog on errors? */
         }
         seen_close(&seendb);
@@ -5171,7 +5171,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             flags_to_str(&copyrecord, flagstr);
             syslog(LOG_NOTICE, "auditlog: %s sessionid=<%s> mailbox=<%s> "
                    "uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> sysflags=<%s>",
-                   action, session_id(), mailbox_name(mailbox), mailbox->uniqueid,
+                   action, session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                    copyrecord.uid, message_guid_encode(&copyrecord.guid),
                    conversation_id_encode(copyrecord.cid), flagstr);
         }
@@ -5478,13 +5478,13 @@ EXPORTED int mailbox_create(const char *name,
        the uniqueid in the record is required to open
        user metadata files (conversations, counters) */
     if (mboxname_isusermailbox(mailbox_name(mailbox), 1) &&
-        mboxlist_lookup_by_uniqueid(mailbox->uniqueid, NULL, NULL) != 0) {
+        mboxlist_lookup_by_uniqueid(mailbox_uniqueid(mailbox), NULL, NULL) != 0) {
         mbentry_t mbentry;
 
         memset(&mbentry, 0, sizeof(mbentry_t));
         mbentry.mbtype = mbtype | MBTYPE_INTERMEDIATE;
         mbentry.name = (char *)mailbox_name(mailbox);
-        mbentry.uniqueid = mailbox->uniqueid;
+        mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
         r = mboxlist_update(&mbentry, 1 /* localonly */);
         if (r) {
             syslog(LOG_ERR, "IOERROR: creating initial mbentry %s %s",
@@ -5572,7 +5572,7 @@ EXPORTED int mailbox_create(const char *name,
         syslog(LOG_NOTICE, "auditlog: create sessionid=<%s> "
                            "mailbox=<%s> uniqueid=<%s> uidvalidity=<%u>",
                            session_id(), mailbox_name(mailbox),
-                           mailbox->uniqueid, mailbox->i.uidvalidity);
+                           mailbox_uniqueid(mailbox), mailbox->i.uidvalidity);
 
 done:
     if (!r && mailboxptr)
@@ -5791,7 +5791,7 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
         syslog(LOG_NOTICE, "auditlog: delete sessionid=<%s> "
                            "mailbox=<%s> uniqueid=<%s>",
                            session_id(),
-                           mailbox_name(mailbox), mailbox->uniqueid);
+                           mailbox_name(mailbox), mailbox_uniqueid(mailbox));
 
     proc_killmbox(mailbox_name(mailbox));
 
@@ -5818,7 +5818,7 @@ static int mailbox_delete_caldav(struct mailbox *mailbox)
     caldavdb = caldav_open_mailbox(mailbox);
     if (caldavdb) {
         const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                    .uniqueid = mailbox->uniqueid };
+                                    .uniqueid = (char *)mailbox_uniqueid(mailbox) };
         int r = caldav_delmbox(caldavdb, &mbentry);
         caldav_close(caldavdb);
         if (r) return r;
@@ -5837,7 +5837,7 @@ static int mailbox_delete_carddav(struct mailbox *mailbox)
     carddavdb = carddav_open_mailbox(mailbox);
     if (carddavdb) {
         const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                    .uniqueid = mailbox->uniqueid };
+                                    .uniqueid = (char *)mailbox_uniqueid(mailbox) };
         int r = carddav_delmbox(carddavdb, &mbentry);
         carddav_close(carddavdb);
         if (r) return r;
@@ -5853,7 +5853,7 @@ static int mailbox_delete_webdav(struct mailbox *mailbox)
     webdavdb = webdav_open_mailbox(mailbox);
     if (webdavdb) {
         const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                    .uniqueid = mailbox->uniqueid };
+                                    .uniqueid = (char *)mailbox_uniqueid(mailbox) };
         int r = webdav_delmbox(webdavdb, &mbentry);
         webdav_close(webdavdb);
         if (r) return r;
@@ -6154,7 +6154,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     /* Create new mailbox */
     r = mailbox_create(newname, mailbox_mbtype(oldmailbox), newpartition,
-                       mailbox_acl(oldmailbox), (userid ? NULL : oldmailbox->uniqueid),
+                       mailbox_acl(oldmailbox), (userid ? NULL : mailbox_uniqueid(oldmailbox)),
                        oldmailbox->i.options, uidvalidity,
                        oldmailbox->i.createdmodseq,
                        highestmodseq, &newmailbox);
@@ -6176,7 +6176,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     r = mailbox_copy_files(oldmailbox, newpartition,
                            newname, mailbox_mbtype(newmailbox) & MBTYPE_LEGACY_DIRS ?
-                           NULL : newmailbox->uniqueid);
+                           NULL : mailbox_uniqueid(newmailbox));
     if (r) goto fail;
 
     /* Re-open index file  */
@@ -6185,15 +6185,13 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     /* cyrus.header has been copied with old uniqueid.
        make a copy of new uniqueid so we can reset it */
-    newuniqueid = xstrdup(newmailbox->uniqueid);
+    newuniqueid = xstrdup(mailbox_uniqueid(newmailbox));
 
     /* Re-lock index */
     r = mailbox_lock_index_internal(newmailbox, LOCK_EXCLUSIVE);
 
     /* Reset new uniqueid */
-    free(newmailbox->uniqueid);
-    newmailbox->uniqueid = newuniqueid;
-    newmailbox->header_dirty = 1;
+    mailbox_set_uniqueid(newmailbox, newuniqueid);
 
     /* INBOX rename - change uniqueid */
     if (userid) {
@@ -6257,7 +6255,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
         syslog(LOG_NOTICE, "auditlog: rename sessionid=<%s> "
                            "oldmailbox=<%s> newmailbox=<%s> uniqueid=<%s>",
                            session_id(),
-                           mailbox_name(oldmailbox), newname, newmailbox->uniqueid);
+                           mailbox_name(oldmailbox), newname, mailbox_uniqueid(newmailbox));
 
     if (newmailboxptr) *newmailboxptr = newmailbox;
     else mailbox_close(&newmailbox);
@@ -6271,7 +6269,7 @@ fail:
     /* then remove all the files */
     mailbox_delete_cleanup(NULL, mailbox_partition(newmailbox), mailbox_name(newmailbox),
                            (mailbox_mbtype(newmailbox) & MBTYPE_LEGACY_DIRS) ?
-                           NULL : newmailbox->uniqueid);
+                           NULL : mailbox_uniqueid(newmailbox));
     /* and finally, abort */
     mailbox_abort(newmailbox);
     mailbox_close(&newmailbox);

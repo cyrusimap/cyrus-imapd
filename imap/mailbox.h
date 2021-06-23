@@ -593,6 +593,7 @@ extern int mailbox_read_basecid(struct mailbox *mailbox,
                                 const struct index_record *record);
 
 
+extern void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid);
 extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl);
 extern int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot);
 extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,

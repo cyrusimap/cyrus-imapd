@@ -1977,7 +1977,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 
     if (!topart) topart = mailbox_partition(mailbox);
 
-    dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
+    dlist_setatom(kl, "UNIQUEID", mailbox_uniqueid(mailbox));
     dlist_setatom(kl, "MBOXNAME", mailbox_name(mailbox));
     if (mbtypes_sync(mailbox_mbtype(mailbox)))
         dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mbtypes_sync(mailbox_mbtype(mailbox))));
@@ -2887,18 +2887,16 @@ int sync_apply_mailbox(struct dlist *kin,
     /* and make it hold a transaction open */
     annotate_state_begin(astate);
 
-    if (strcmp(mailbox->uniqueid, uniqueid)) {
+    if (strcmp(mailbox_uniqueid(mailbox), uniqueid)) {
         if (opt_force) {
             syslog(LOG_NOTICE, "forcesync: fixing uniqueid %s (%s => %s)",
-                   mboxname, mailbox->uniqueid, uniqueid);
-            free(mailbox->uniqueid);
-            mailbox->uniqueid = xstrdup(uniqueid);
-            mailbox->header_dirty = 1;
+                   mboxname, mailbox_uniqueid(mailbox), uniqueid);
+            mailbox_set_uniqueid(mailbox, uniqueid);
         }
         else {
             xsyslog(LOG_ERR, "SYNCNOTICE: mailbox uniqueid changed - retry",
                              "mailbox=<%s> origuniqueid=<%s> newuniqueid=<%s>",
-                             mboxname, mailbox->uniqueid, uniqueid);
+                             mboxname, mailbox_uniqueid(mailbox), uniqueid);
             r = IMAP_MAILBOX_MOVED;
             goto done;
         }
@@ -3832,7 +3830,7 @@ int sync_apply_expunge(struct dlist *kin,
     if (r) goto done;
 
     /* don't want to expunge the wrong mailbox! */
-    if (strcmp(mailbox->uniqueid, uniqueid)) {
+    if (strcmp(mailbox_uniqueid(mailbox), uniqueid)) {
         r = IMAP_MAILBOX_MOVED;
         goto done;
     }
@@ -4279,7 +4277,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
         /* mailbox is open from here, no exiting without closing it! */
 
-        rfolder = sync_folder_lookup(replica_folders, mailbox->uniqueid);
+        rfolder = sync_folder_lookup(replica_folders, mailbox_uniqueid(mailbox));
         uint32_t fromuid = rfolder ? rfolder->last_uid : 0;
         uint32_t touid = mailbox->i.last_uid;
         modseq_t tomodseq = mailbox->i.highestmodseq;
@@ -4298,7 +4296,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
             }
         }
 
-        sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox_name(mailbox),
+        sync_folder_list_add(master_folders, mailbox_uniqueid(mailbox), mailbox_name(mailbox),
                              mailbox_mbtype(mailbox),
                              mailbox_partition(mailbox), mailbox_acl(mailbox), mailbox->i.options,
                              mailbox->i.uidvalidity, touid,
@@ -5038,7 +5036,7 @@ static int fetch_file(struct sync_client_state *sync_cs,
     kl = dlist_newkvlist(NULL, cmd);
     dlist_setatom(kl, "MBOXNAME", mailbox_name(mailbox));
     dlist_setatom(kl, "PARTITION", mailbox_partition(mailbox));
-    dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
+    dlist_setatom(kl, "UNIQUEID", mailbox_uniqueid(mailbox));
     dlist_setguid(kl, "GUID", &rp->guid);
     dlist_setnum32(kl, "UID", uid);
     sync_send_lookup(kl, sync_cs->backend->out);
@@ -5664,7 +5662,7 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     /* blatant reuse 'r' us */
     kexpunge = dlist_newkvlist(NULL, "EXPUNGE");
     dlist_setatom(kexpunge, "MBOXNAME", mailbox_name(mailbox));
-    dlist_setatom(kexpunge, "UNIQUEID", mailbox->uniqueid); /* just for safety */
+    dlist_setatom(kexpunge, "UNIQUEID", mailbox_uniqueid(mailbox)); /* just for safety */
     kuids = dlist_newlist(kexpunge, "UID");
     for (ka = kaction->head; ka; ka = ka->next) {
         if (!strcmp(ka->name, "EXPUNGE")) {
@@ -5836,7 +5834,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     annotate_state_begin(astate);
 
     /* definitely bad if these don't match! */
-    if (strcmp(mailbox->uniqueid, local->uniqueid) ||
+    if (strcmp(mailbox_uniqueid(mailbox), local->uniqueid) ||
         strcmp(mailbox_partition(mailbox), local->part)) {
         r = IMAP_MAILBOX_MOVED;
         goto done;

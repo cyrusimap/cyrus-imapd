@@ -505,7 +505,7 @@ static int jmap_blob_get(jmap_req_t *req)
                     jmailboxIds = json_object();
                     json_object_set_new(jblob, "mailboxIds", jmailboxIds);
                 }
-                json_object_set_new(jmailboxIds, mbox->uniqueid, json_true());
+                json_object_set_new(jmailboxIds, mailbox_uniqueid(mbox), json_true());
             }
             if (jmap_wantprop(get.props, "emailIds")) {
                 json_t *jemailIds = json_object_get(jblob, "emailIds");

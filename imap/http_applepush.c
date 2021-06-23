@@ -287,7 +287,7 @@ int propfind_pushkey(const xmlChar *name, xmlNsPtr ns,
     /* key is userid and mailbox uniqueid */
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, "%s/%s",
-               fctx->req_tgt->userid, fctx->mailbox->uniqueid);
+               fctx->req_tgt->userid, mailbox_uniqueid(fctx->mailbox));
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
 

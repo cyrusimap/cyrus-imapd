@@ -482,11 +482,11 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     int mbentry_dirty = 0;
 
     // fix any uniqueid related mixups first!
-    if (strcmpsafe(mailbox->uniqueid, mbentry_byname->uniqueid)) {
+    if (strcmpsafe(mailbox_uniqueid(mailbox), mbentry_byname->uniqueid)) {
         printf("Wrong uniqueid in mbentry, fixing %s (%s -> %s)\n",
-               name, mbentry_byname->uniqueid, mailbox->uniqueid);
+               name, mbentry_byname->uniqueid, mailbox_uniqueid(mailbox));
         xfree(mbentry_byname->uniqueid);
-        mbentry_byname->uniqueid = xstrdupnull(mailbox->uniqueid);
+        mbentry_byname->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
         mbentry_dirty = 1;
     }
 
@@ -506,14 +506,14 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         if (updateuniqueids) {
             mailbox_make_uniqueid(mailbox);
             xfree(mbentry_byname->uniqueid);
-            mbentry_byname->uniqueid = xstrdupnull(mailbox->uniqueid);
+            mbentry_byname->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
             mbentry_dirty = 1;
             syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
-                    mbentry_byid->name, mailbox_name(mailbox), mbentry_byid->uniqueid, mailbox->uniqueid);
+                    mbentry_byid->name, mailbox_name(mailbox), mbentry_byid->uniqueid, mailbox_uniqueid(mailbox));
         }
         else {
             syslog (LOG_ERR, "uniqueid clash with %s for %s (%s)",
-                    mbentry_byid->name, mailbox_name(mailbox), mailbox->uniqueid);
+                    mbentry_byid->name, mailbox_name(mailbox), mailbox_uniqueid(mailbox));
             exit(1);
         }
     }

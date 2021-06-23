@@ -767,10 +767,10 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
         if (r) goto done;
         time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
 
-        json_t *mboxdata = json_object_get(mboxs, mbox->uniqueid);
+        json_t *mboxdata = json_object_get(mboxs, mailbox_uniqueid(mbox));
         if (!mboxdata) {
             mboxdata = json_object();
-            json_object_set_new(mboxs, mbox->uniqueid, mboxdata);
+            json_object_set_new(mboxs, mailbox_uniqueid(mbox), mboxdata);
         }
 
         if (exists) {
@@ -5820,13 +5820,13 @@ static int _email_keywords_add_msgrecord(struct email_keywords *keywords,
 
     if (read_seendb) {
         /* Read $seen keyword from seen.db for shared accounts */
-        struct seqset *seenseq = hash_lookup(mbox->uniqueid, keywords->seenseq_by_mbox_id);
+        struct seqset *seenseq = hash_lookup(mailbox_uniqueid(mbox), keywords->seenseq_by_mbox_id);
         if (!seenseq) {
             struct seendata sd = SEENDATA_INITIALIZER;
-            int r = seen_read(keywords->seendb, mbox->uniqueid, &sd);
+            int r = seen_read(keywords->seendb, mailbox_uniqueid(mbox), &sd);
             if (!r) {
                 seenseq = seqset_parse(sd.seenuids, NULL, sd.lastuid);
-                hash_insert(mbox->uniqueid, seenseq, keywords->seenseq_by_mbox_id);
+                hash_insert(mailbox_uniqueid(mbox), seenseq, keywords->seenseq_by_mbox_id);
                 seen_freedata(&sd);
             }
             else {
@@ -8050,7 +8050,7 @@ static int _copy_msgrecord(struct auth_state *authstate,
                            msgrecord_t *mrw)
 {
 
-    if (!strcmp(src->uniqueid, dst->uniqueid))
+    if (!strcmp(mailbox_uniqueid(src), mailbox_uniqueid(dst)))
         return 0;
 
     ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
@@ -8368,7 +8368,7 @@ static void _email_append(jmap_req_t *req,
         append_removestage(stage);
         stage = NULL;
     }
-    json_object_del(mailboxes, mbox->uniqueid);
+    json_object_del(mailboxes, mailbox_uniqueid(mbox));
 
     /* Copy the message to all remaining mailboxes */
     json_object_foreach(mailboxes, id, val) {
@@ -10796,7 +10796,7 @@ static struct email_updateplan *_email_bulkupdate_addplan(struct email_bulkupdat
 {
     struct email_updateplan *plan = xzmalloc(sizeof(struct email_updateplan));
     plan->mbox = mbox;
-    plan->mbox_id = xstrdup(mbox->uniqueid);
+    plan->mbox_id = xstrdup(mailbox_uniqueid(mbox));
     plan->mboxname = xstrdup(mailbox_name(mbox));
     plan->mboxrec = mboxrec;
     plan->use_seendb = !mailbox_internal_seen(plan->mbox, bulk->req->userid);
@@ -11251,7 +11251,7 @@ static int _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarr
         struct email_updateplan *plan = hash_iter_val(iter);
         if (plan->use_seendb) {
             /* Read seen sequence set */
-            int r = seen_read(bulk->seendb, plan->mbox->uniqueid, &plan->old_seendata);
+            int r = seen_read(bulk->seendb, mailbox_uniqueid(plan->mbox), &plan->old_seendata);
             if (!r) {
                 plan->old_seenseq = seqset_parse(plan->old_seendata.seenuids, NULL, 0);
                 if (!hash_lookup(plan->mbox_id, &seenseq_by_mbox_id))
@@ -11746,10 +11746,10 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
                 if (!r) jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
             }
             if (mbox) {
-                if (!hash_lookup(mbox->uniqueid, &bulk->plans_by_mbox_id)) {
+                if (!hash_lookup(mailbox_uniqueid(mbox), &bulk->plans_by_mbox_id)) {
                     struct email_mboxrec *mboxrec = xzmalloc(sizeof(struct email_mboxrec));
                     mboxrec->mboxname = xstrdup(mailbox_name(mbox));
-                    mboxrec->mbox_id = xstrdup(mbox->uniqueid);
+                    mboxrec->mbox_id = xstrdup(mailbox_uniqueid(mbox));
                     ptrarray_append(bulk->new_mboxrecs, mboxrec);
                     _email_bulkupdate_addplan(bulk, mbox, mboxrec);
                 }
@@ -12033,7 +12033,7 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
                 sd.lastread = time(NULL);
                 sd.lastchange = plan->mbox->i.last_appenddate;
                 sd.lastuid = last_uid;
-                int r = seen_write(bulk->seendb, plan->mbox->uniqueid, &sd);
+                int r = seen_write(bulk->seendb, mailbox_uniqueid(plan->mbox), &sd);
                 if (r) {
                     for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
                         struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
@@ -12844,7 +12844,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
             delseen = seqset_init(0, SEQ_SPARSE);
             addseen = seqset_init(0, SEQ_SPARSE);
             struct seendata sd = SEENDATA_INITIALIZER;
-            int r = seen_read(rock->seendb, mbox->uniqueid, &sd);
+            int r = seen_read(rock->seendb, mailbox_uniqueid(mbox), &sd);
             if (!r) {
                 seenseq = seqset_parse(sd.seenuids, NULL, sd.lastuid);
                 seen_freedata(&sd);
@@ -12895,7 +12895,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
             sd.lastread = time(NULL);
             sd.lastchange = mbox->i.last_appenddate;
             sd.lastuid = mbox->i.last_uid;
-            r = seen_write(rock->seendb, mbox->uniqueid, &sd);
+            r = seen_write(rock->seendb, mailbox_uniqueid(mbox), &sd);
             seen_freedata(&sd);
         }
 

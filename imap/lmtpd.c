@@ -537,7 +537,7 @@ int deliver_mailbox(FILE *f,
     }
 
     /* check for duplicate message */
-    uuid = xstrdup(as.mailbox->uniqueid);
+    uuid = xstrdup(mailbox_uniqueid(as.mailbox));
     dkey.id = id;
     dkey.to = uuid;
     dkey.date = date;

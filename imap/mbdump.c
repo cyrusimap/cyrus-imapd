@@ -768,7 +768,7 @@ static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
     if (r) goto done;
 
     /* read in the seen data from the seendb */
-    r = seen_read(seendb, mailbox->uniqueid, &sd);
+    r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) goto done;
 
     seq = seqset_parse(sd.seenuids, NULL, sd.lastuid);

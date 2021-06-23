@@ -527,7 +527,7 @@ EXPORTED icalcomponent *icalcomponent_new_stream(struct mailbox *mailbox,
     icalproperty *prop;
 
     buf_printf(&buf, "%x-%s-%u", strhash(config_servername),
-               mailbox->uniqueid, mailbox->i.uidvalidity);
+               mailbox_uniqueid(mailbox), mailbox->i.uidvalidity);
 
     ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
                                icalproperty_new_version("2.0"),

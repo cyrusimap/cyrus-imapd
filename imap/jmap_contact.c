@@ -333,7 +333,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
         if (obj) goto gotvalue;
     }
 
-    if (!crock->mailbox || strcmp(crock->mailbox->uniqueid, cdata->dav.mailbox)) {
+    if (!crock->mailbox || strcmp(mailbox_uniqueid(crock->mailbox), cdata->dav.mailbox)) {
         mailbox_close(&crock->mailbox);
         r = mailbox_open_irl(mbentry->name, &crock->mailbox);
     }
@@ -1232,7 +1232,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                 mailbox_find_index_record(this_mailbox,
                                           this_mailbox->i.last_uid, &record);
 
-                jmap_encode_rawdata_blobid('V', this_mailbox->uniqueid, record.uid,
+                jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox), record.uid,
                                            NULL, NULL, NULL, &buf);
                 json_object_set_new(item, "blobId",
                                     json_string(buf_cstring(&buf)));
@@ -1241,7 +1241,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                                     json_integer(record.size - record.header_size));
 
                 while ((blob = ptrarray_pop(&blobs))) {
-                    jmap_encode_rawdata_blobid('V', this_mailbox->uniqueid, record.uid,
+                    jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox), record.uid,
                                                NULL, blob->prop, &blob->guid, &buf);
                     json_object_set_new(item, blob->key,
                                         json_pack("{s:s s:i s:s? s:n}",
@@ -1850,7 +1850,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     if (photo &&
         (size = vcard_prop_decode_value(photo, NULL, &type, &guid))) {
         struct buf blobid = BUF_INITIALIZER;
-        if (jmap_encode_rawdata_blobid('V', mailbox->uniqueid, record->uid,
+        if (jmap_encode_rawdata_blobid('V', mailbox_uniqueid(mailbox), record->uid,
                                        NULL, "PHOTO", &guid, &blobid)) {
             file = json_pack("{s:s s:i s:s s:n}",
                              "blobId", buf_cstring(&blobid), "size", size,
@@ -2081,7 +2081,7 @@ gotvalue:
         const char *uniqueid = NULL;
 
         /* Get uniqueid of calendar mailbox */
-        if (!crock->mailbox || strcmp(crock->mailbox->uniqueid, cdata->dav.mailbox)) {
+        if (!crock->mailbox || strcmp(mailbox_uniqueid(crock->mailbox), cdata->dav.mailbox)) {
             if (!crock->mbentry || strcmp(crock->mbentry->uniqueid, cdata->dav.mailbox)) {
                 mboxlist_entry_free(&crock->mbentry);
                 crock->mbentry = jmap_mbentry_from_dav(crock->req, &cdata->dav);
@@ -2092,7 +2092,7 @@ gotvalue:
             }
         }
         else {
-            uniqueid = crock->mailbox->uniqueid;
+            uniqueid = mailbox_uniqueid(crock->mailbox);
         }
 
         if (uniqueid &&
@@ -4296,7 +4296,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     struct index_record record;
     mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
 
-    jmap_encode_rawdata_blobid('V', (*mailbox)->uniqueid, record.uid,
+    jmap_encode_rawdata_blobid('V', mailbox_uniqueid(*mailbox), record.uid,
                                NULL, NULL, NULL, &buf);
     json_object_set_new(item, "blobId", json_string(buf_cstring(&buf)));
 
@@ -4304,7 +4304,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
                         json_integer(record.size - record.header_size));
 
     while ((blob = ptrarray_pop(&blobs))) {
-        jmap_encode_rawdata_blobid('V', (*mailbox)->uniqueid, record.uid,
+        jmap_encode_rawdata_blobid('V', mailbox_uniqueid(*mailbox), record.uid,
                                    NULL, blob->prop, &blob->guid, &buf);
         json_object_set_new(item, blob->key,
                             json_pack("{s:s s:i s:s? s:n}",

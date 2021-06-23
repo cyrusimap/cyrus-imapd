@@ -404,7 +404,7 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
 
     // mbentry items are also available from an open mailbox
     sdata->uidvalidity = mailbox->i.uidvalidity;
-    sdata->mailboxid = mailbox->uniqueid;
+    sdata->mailboxid = mailbox_uniqueid(mailbox);
 
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_MBENTRYITEMS;
 }
@@ -445,7 +445,7 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
             struct seendata sd = SEENDATA_INITIALIZER;
 
             int r = seen_open(userid, SEEN_CREATE, &seendb);
-            if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+            if (!r) r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
             seen_close(&seendb);
             if (r) return r;
 

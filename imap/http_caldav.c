@@ -4452,7 +4452,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     else {
         /* Check for duplicate iCalendar UID */
         const char *mbox =
-            cdata->dav.mailbox_byname ? mailbox_name(mailbox) : mailbox->uniqueid;
+            cdata->dav.mailbox_byname ? mailbox_name(mailbox) : mailbox_uniqueid(mailbox);
         caldav_lookup_uid(db, uid, &cdata);
         if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mbox) ||
                                     strcmp(cdata->dav.resource, resource))) {
@@ -8131,7 +8131,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
        XXX  because we may have been called as part of a COPY/MOVE */
     const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = mailbox->uniqueid };
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
     caldav_lookup_resource(caldavdb, &mbentry, resource, &cdata, 0);
 
     /* does it already exist? */

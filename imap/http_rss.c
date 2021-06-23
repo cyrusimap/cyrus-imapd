@@ -905,7 +905,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* <id> - required */
     buf_printf_markup(buf, level, "<id>%s%s</id>",
-                      GUID_URL_SCHEME, mailbox->uniqueid);
+                      GUID_URL_SCHEME, mailbox_uniqueid(mailbox));
 
     /* <updated> - required */
     time_to_rfc3339(lastmod, datestr, sizeof(datestr));

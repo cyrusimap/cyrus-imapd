@@ -635,7 +635,7 @@ static char *contact_resource_name(message_t *msg, void *rock)
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
     const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = mailbox->uniqueid };
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
     struct contact_rock *crock = (struct contact_rock *) rock;
     struct carddav_data *cdata = NULL;
     char *resource = NULL;
@@ -696,7 +696,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
             struct mailbox *mailbox = msg_mailbox(recreatemsg);
             const struct index_record *record = msg_record(recreatemsg);
             const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                        .uniqueid = mailbox->uniqueid };
+                                        .uniqueid = (char *)mailbox_uniqueid(mailbox) };
             struct contact_rock *crock = (struct contact_rock *) rock;
             struct vparse_card *vcard = record_to_vcard(mailbox, record);
 
@@ -852,7 +852,7 @@ static char *ical_resource_name(message_t *msg, void *rock)
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
     const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = mailbox->uniqueid };
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
     struct calendar_rock *crock = (struct calendar_rock *) rock;
     struct caldav_data *cdata = NULL;
     char *resource = NULL;
@@ -933,7 +933,7 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
     const struct index_record *oldrecord =
         destroymsg ? msg_record(destroymsg) : NULL;
     const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = mailbox->uniqueid };
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
     struct caldav_data *cdata = NULL;
     int r;
 
@@ -964,7 +964,7 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
         if (!r) {
             /* Rewrite updated resource */
             const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                        .uniqueid = mailbox->uniqueid };
+                                        .uniqueid = (char *)mailbox_uniqueid(mailbox) };
             struct transaction_t txn;
 
             memset(&txn, 0, sizeof(struct transaction_t));
@@ -1002,7 +1002,7 @@ static int destroy_ical(message_t *destroymsg, jmap_req_t *req,
         struct mailbox *mailbox = msg_mailbox(destroymsg);
         const struct index_record *record = msg_record(destroymsg);
         const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                    .uniqueid = mailbox->uniqueid };
+                                    .uniqueid = (char *)mailbox_uniqueid(mailbox) };
         struct caldav_data *cdata = NULL;
 
         r = caldav_lookup_imapuid(caldavdb, &mbentry,

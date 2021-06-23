@@ -7211,7 +7211,7 @@ localcreate:
     }
 
     /* Close newly created mailbox before writing annotations */
-    mailboxid = xstrdup(mailbox->uniqueid);
+    mailboxid = xstrdup(mailbox_uniqueid(mailbox));
     mailbox_close(&mailbox);
 
     if (specialuse.len) {
@@ -11326,7 +11326,7 @@ static int xfer_backport_seen_item(struct xfer_item *item,
     sd.seenuids = seqset_cstring(outlist);
     if (!sd.seenuids) sd.seenuids = xstrdup("");
 
-    r = seen_write(seendb, mailbox->uniqueid, &sd);
+    r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
 
     seen_freedata(&sd);
     seqset_free(outlist);
@@ -11571,7 +11571,7 @@ static int sync_mailbox(struct xfer_header *xfer,
 
     master_folders = sync_folder_list_create();
     sync_folder_list_add(master_folders,
-                         mailbox->uniqueid, mailbox_name(mailbox),
+                         mailbox_uniqueid(mailbox), mailbox_name(mailbox),
                          mailbox_mbtype(mailbox),
                          mailbox_partition(mailbox),
                          mailbox_acl(mailbox),

@@ -746,7 +746,7 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
     /* Create minimal mbentry for request target from mailbox */
     memset(&mbentry, 0, sizeof(mbentry_t));
     mbentry.name = (char *)mailbox_name(mailbox);
-    mbentry.uniqueid = mailbox->uniqueid;
+    mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
     txn.req_tgt.mbentry = &mbentry;
 
     /* Create header cache */

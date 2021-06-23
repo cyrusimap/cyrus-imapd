@@ -411,7 +411,7 @@ static int handle_request(const char *who, const char *name,
         struct seen *seendb = NULL;
         struct seendata sd = SEENDATA_INITIALIZER;
         r = seen_open(who, 0, &seendb);
-        if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+        if (!r) r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
         seen_close(&seendb);
 
         if (r) {

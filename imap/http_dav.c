@@ -5471,7 +5471,7 @@ int meth_lock(struct transaction_t *txn, void *params)
         /* New resource */
         ddata->creationdate = now;
         ddata->mailbox =
-            ddata->mailbox_byname ? mailbox_name(mailbox) : mailbox->uniqueid;
+            ddata->mailbox_byname ? mailbox_name(mailbox) : mailbox_uniqueid(mailbox);
         ddata->resource = txn->req_tgt.resource;
         ddata->imap_uid = 0;
         ddata->lock_expire = 0;

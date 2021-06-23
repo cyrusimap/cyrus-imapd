@@ -662,7 +662,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
        XXX  because we may have been called as part of a COPY/MOVE */
     const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = mailbox->uniqueid };
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
     webdav_lookup_resource(db, &mbentry, resource, &wdata, 0);
 
     if (wdata->dav.imap_uid) {

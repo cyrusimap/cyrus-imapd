@@ -59,7 +59,7 @@
 #define FNAME_CONVERSATIONS_SUFFIX "conversations"
 
 #define CONV_FOLDER_KEY_MBOX(state, mailbox) \
-    (state->folders_byname ? mailbox_name(mailbox) : mailbox->uniqueid)
+    (state->folders_byname ? mailbox_name(mailbox) : mailbox_uniqueid(mailbox))
 
 #define CONV_FOLDER_KEY_MBE(state, mbentry) \
     (!mbentry ? NULL : (state->folders_byname ? mbentry->name : mbentry->uniqueid))
@@ -255,7 +255,7 @@ extern void conversation_normalise_subject(struct buf *);
 /* G record */
 #define conversations_guid_mbox_cmp(guidrec, m) \
     strcmp(guidrec->mailbox,                       \
-           guidrec->version > CONV_GUIDREC_BYNAME_VERSION ? m->uniqueid : mailbox_name(m))
+           guidrec->version > CONV_GUIDREC_BYNAME_VERSION ? mailbox_uniqueid(m) : mailbox_name(m))
 extern int conversations_guid_exists(struct conversations_state *state,
                                      const char *guidrep);
 extern int conversations_guid_foreach(struct conversations_state *state,

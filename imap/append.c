@@ -1649,11 +1649,11 @@ static int append_addseen(struct mailbox *mailbox,
         goto done;
     }
 
-    r = seen_lockread(seendb, mailbox->uniqueid, &sd);
+    r = seen_lockread(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: seen_lockread failed",
                          "userid=<%s> uniqueid=<%s>",
-                         userid, mailbox->uniqueid);
+                         userid, mailbox_uniqueid(mailbox));
         goto done;
     }
 
@@ -1668,11 +1668,11 @@ static int append_addseen(struct mailbox *mailbox,
 
     /* and write it out */
     sd.lastchange = time(NULL);
-    r = seen_write(seendb, mailbox->uniqueid, &sd);
+    r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: seen_write failed",
                          "userid=<%s> uniqueid=<%s>",
-                         userid, mailbox->uniqueid);
+                         userid, mailbox_uniqueid(mailbox));
     }
     seen_freedata(&sd);
 
