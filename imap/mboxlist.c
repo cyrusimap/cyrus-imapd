@@ -1861,22 +1861,14 @@ EXPORTED int mboxlist_createmailbox_opts(const char *name, int mbtype,
         }
     }
 
-    const mbentry_t mbentry = {
-        (char *) name,
-        NULL, // ext_name
-        0,    // mtime
-        uidvalidity,
-        createdmodseq,
-        0,    // foldermodseq
-        mbtype,
-        (char *) partition,
-        NULL, // server
-        NULL, // acl
-        (char *) uniqueid,
-        NULL, // root_mailboxid
-        NULL, // legacy_specialuse
-        PTRARRAY_INITIALIZER
-    };
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+
+    mbentry.name = (char *) name;
+    mbentry.uidvalidity = uidvalidity;
+    mbentry.createdmodseq = createdmodseq;
+    mbentry.mbtype = mbtype;
+    mbentry.partition = (char *) partition;
+    mbentry.uniqueid = (char *) uniqueid;
 
     r = mboxlist_createmailbox_full(&mbentry,
                                     isadmin, userid, auth_state, options, 0,
@@ -1911,22 +1903,16 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
                         int local_only, int keep_intermediaries,
                         struct mailbox **mboxptr)
 {
-    const mbentry_t mbentry = {
-        (char *) name,
-        NULL, // ext_name
-        0,    // mtime
-        uidvalidity,
-        createdmodseq,
-        foldermodseq,
-        mbtype,
-        (char *) partition,
-        NULL, // server
-        (char *) acl,
-        (char *) uniqueid,
-        NULL, // root_mailboxid
-        NULL, // legacy_specialuse
-        PTRARRAY_INITIALIZER
-    };
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+
+    mbentry.name = (char *) name;
+    mbentry.uidvalidity = uidvalidity;
+    mbentry.createdmodseq = createdmodseq;
+    mbentry.foldermodseq = foldermodseq;
+    mbentry.mbtype = mbtype;
+    mbentry.partition = (char *) partition;
+    mbentry.acl = (char *) acl;
+    mbentry.uniqueid = (char *) uniqueid;
 
     return mboxlist_createmailbox_full(&mbentry, 1, userid, auth_state,
                                        options, highestmodseq, local_only, 1, 0,
