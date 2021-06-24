@@ -286,9 +286,10 @@ static int lookup_submission_collection(const char *accountid,
             goto done;
         }
 
-        if (*mbentry) free((*mbentry)->name);
-        else *mbentry = mboxlist_entry_create();
+        mboxlist_entry_free(mbentry);
+        *mbentry = mboxlist_entry_create();
         (*mbentry)->name = xstrdup(submissionname);
+        (*mbentry)->mbtype = MBTYPE_JMAPSUBMIT;
     }
     else if (!r) {
         int rights = httpd_myrights(httpd_authstate, *mbentry);
@@ -339,10 +340,9 @@ static int ensure_submission_collection(const char *accountid,
 
         int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
             | OPT_POP3_NEW_UIDL | OPT_IMAP_HAS_ALARMS;
-        r = mboxlist_createmailbox_opts(mbentry->name, MBTYPE_JMAPSUBMIT,
-                                        NULL, 1 /* admin */, accountid,
-                                        httpd_authstate,
-                                        options, 0, 0, 0, 0, NULL, NULL);
+        r = mboxlist_createmailbox_full(mbentry, options, 0/*highestmodseq*/,
+                                        1/*isadmin*/, accountid, httpd_authstate,
+                                        0/*flags*/, NULL/*mailboxptr*/);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                    mbentry->name, error_message(r));

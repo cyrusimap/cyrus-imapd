@@ -7143,21 +7143,19 @@ localcreate:
 
 
     // now create the requested mailbox
-    r = mboxlist_createmailbox_opts(
-            mbname_intname(mbname),                             // const char *name
-            mbtype,                                             // int mbtype
-            partition,                                          // const char *partition
-            imapd_userisadmin || imapd_userisproxyadmin,        // int isadmin
-            imapd_userid,                                       // const char *userid
-            imapd_authstate,                                    // struct auth_state *auth_state
-            options,                                            // options
-            localonly,                                          // int localonly
-            localonly,                                          // int forceuser
-            0,                                                  // int dbonly
-            1,                                                  // int notify
-            uniqueid,                                           // const char *uniqueid
-            &mailbox                                            // struct mailbox **mailboxptr
-        );
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    mbentry.name = (char *) mbname_intname(mbname);
+    mbentry.partition = (char *) partition;
+    mbentry.uniqueid = (char *) uniqueid;
+    mbentry.mbtype = mbtype;
+
+    unsigned flags = MBOXLIST_CREATE_NOTIFY;
+    if (localonly) options |= MBOXLIST_CREATE_LOCALONLY | MBOXLIST_CREATE_FORCEUSER;
+
+    r = mboxlist_createmailbox_full(&mbentry, options, 0/*highestmodseq*/,
+                                    imapd_userisadmin || imapd_userisproxyadmin,
+                                    imapd_userid, imapd_authstate,
+                                    flags, &mailbox);
 
 #ifdef USE_AUTOCREATE
     // Clausing autocreate for the INBOX

@@ -2332,21 +2332,19 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     r = 0;
 
     /* Create mailbox */
+    mbentry_t newmbentry = MBENTRY_INITIALIZER;
+    newmbentry.name = mboxname;
+    newmbentry.mbtype = MBTYPE_EMAIL;
+
     uint32_t options = 0;
     if (args->is_seenshared > 0) options |= OPT_IMAP_SHAREDSEEN;
     if (args->specialuse && !strcmp("\\Snoozed", args->specialuse))
         options |= OPT_IMAP_HAS_ALARMS;
 
-    r = mboxlist_createsync(mboxname, 0 /* MBTYPE */,
-            NULL /* partition */,
-            req->userid, req->authstate,
-            options, 0 /* uidvalidity */,
-            0 /* createdmodseq */,
-            0 /* highestmodseq */,
-            0 /* foldermodseq */, NULL /* acl */,
-            NULL /* uniqueid */, 0 /* local_only */,
-            1, /* keep_intermediaries */
-            args->shareWith ? &mailbox : NULL);
+    r = mboxlist_createmailbox_full(&newmbentry, options, 0/*highestmodseq*/,
+                                    0/*isadmin*/, req->userid, req->authstate,
+                                    MBOXLIST_CREATE_KEEP_INTERMEDIARIES,
+                                    args->shareWith ? &mailbox : NULL);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                 mboxname, error_message(r));

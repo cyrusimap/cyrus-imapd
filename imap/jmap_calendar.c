@@ -1203,13 +1203,13 @@ static int jmap_calendar_set(struct jmap_req *req)
         /* Create the calendar */
         char *uid = xstrdup(makeuuid());
         char *mboxname = caldav_mboxname(req->accountid, uid);
-        r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
-                                NULL /* partition */,
-                                httpd_userid, httpd_authstate,
-                                /*options*/0, /*uidvalidity*/0,
-                                0, 0, 0, newacl, /*uniqueid*/NULL,
-                                /*localonly*/0, /*keep_intermediaries*/0,
-                                /*mailboxptr*/NULL);
+        mbentry_t mbentry = MBENTRY_INITIALIZER;
+        mbentry.name = mboxname;
+        mbentry.acl = newacl;
+        mbentry.mbtype = MBTYPE_CALENDAR;
+        r = mboxlist_createmailbox_full(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                        0/*isadmin*/, httpd_userid, httpd_authstate,
+                                        0/*flags*/, NULL/*mailboxptr*/);
         free(newacl);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
