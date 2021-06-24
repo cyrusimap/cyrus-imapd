@@ -242,8 +242,8 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
     if (mbentry->uniqueid)
         dlist_setatom(dl, "I", mbentry->uniqueid);
 
-    if (mbentry->root_uid)
-        dlist_setatom(dl, "R", mbentry->root_uid);
+    if (mbentry->root_mailboxid)
+        dlist_setatom(dl, "R", mbentry->root_mailboxid);
 
     if (mbentry->partition)
         dlist_setatom(dl, "P", mbentry->partition);
@@ -543,7 +543,7 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
                 rock->mbentry->partition = xstrdupnull(d->data);
             }
             else if (!strcmp(key, "R")) {
-                rock->mbentry->root_uid = xstrdupnull(d->data);
+                rock->mbentry->root_mailboxid = xstrdupnull(d->data);
             }
             else if (!strcmp(key, "S")) {
                 rock->mbentry->server = xstrdupnull(d->data);
@@ -572,6 +572,7 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
  *  M: _m_time
  *  N: _n_ame
  *  P: _p_artition
+ *  R: _r_oot_mailboxid
  *  S: _s_erver
  *  T: _t_ype
  *  V: uid_v_alidity
@@ -1723,6 +1724,8 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = foldermodseq ? foldermodseq : newmailbox->i.highestmodseq;
+        newmbentry->root_mailboxid =
+            xstrdupnull(parent ? parent->root_mailboxid : newmbentry->uniqueid);
     }
     r = mboxlist_update_entry(mboxname, newmbentry, NULL);
 
