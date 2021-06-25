@@ -209,5 +209,4 @@ Time to upload the release tarball and signature file!
 Tell the world
 ==============
 
-1. Update the topic in the #cyrus IRC channel.
-2. Send an announcement to the info-cyrus and cyrus-announce lists.
+1. Send an announcement to the info-cyrus and cyrus-announce lists.
