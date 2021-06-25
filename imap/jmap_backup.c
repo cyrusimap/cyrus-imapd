@@ -1109,12 +1109,13 @@ static int recreate_calendar(const mbentry_t *mbentry,
         /* Create the calendar */
         char *newmboxname = caldav_mboxname(req->accountid, makeuuid());
         struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+        mbentry_t newmbentry = MBENTRY_INITIALIZER;
+        newmbentry.name = newmboxname;
+        newmbentry.mbtype = MBTYPE_CALENDAR;
 
-        r = mboxlist_createmailbox(newmboxname, MBTYPE_CALENDAR,
-                                   /*partition*/NULL, /*isadmin*/0,
-                                   req->accountid, req->authstate,
-                                   /*localonly*/0, /*forceuser*/0,
-                                   /*dbonly*/0, /*notify*/0, newmailbox);
+        r = mboxlist_createmailbox(&newmbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   0/*isadmin*/, req->accountid, req->authstate,
+                                   0/*flags*/, newmailbox);
         mboxname_release(&namespacelock);
 
         if (r) {
@@ -1752,6 +1753,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
         }
         else {
             struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+            mbentry_t newmbentry = MBENTRY_INITIALIZER;
             mbentry_t *parent = NULL;
 
             /* Find the nearest ancestor of the deleted mailbox
@@ -1784,17 +1786,16 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                     for (i = oldest; !r && i < youngest; i++) {
                         /* Create the ancestors */
                         mbname_push_boxes(ancestor, strarray_nth(boxes, i));
-                        r = mboxlist_createmailbox(mbname_intname(ancestor),
-                                                   MBTYPE_EMAIL,
-                                                   /*partition*/NULL,
-                                                   /*isadmin*/0,
+                        newmbentry.name = (char *) mbname_intname(ancestor);
+                        newmbentry.mbtype = MBTYPE_EMAIL;
+                        r = mboxlist_createmailbox(&newmbentry,
+                                                   0/*options*/,
+                                                   0/*highestmodseq*/,
+                                                   0/*isadmin*/,
                                                    req->accountid,
                                                    req->authstate,
-                                                   /*localonly*/0,
-                                                   /*forceuser*/0,
-                                                   /*dbonly*/0,
-                                                   /*notify*/0,
-                                                   /*mailboxptr*/NULL);
+                                                   0/*flags*/,
+                                                   NULL/*mailboxptr*/);
                         if (r) {
                             syslog(LOG_ERR,
                                    "IOERROR: failed to create mailbox %s: %s",
@@ -1810,11 +1811,15 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 
             if (!r) {
                 /* Create the mailbox */
-                r = mboxlist_createmailbox(newmboxname, MBTYPE_EMAIL,
-                                           /*partition*/NULL, /*isadmin*/0,
-                                           req->accountid, req->authstate,
-                                           /*localonly*/0, /*forceuser*/0,
-                                           /*dbonly*/0, /*notify*/0,
+                newmbentry.name = (char *) newmboxname;
+                newmbentry.mbtype = MBTYPE_EMAIL;
+                r = mboxlist_createmailbox(&newmbentry,
+                                           0/*options*/,
+                                           0/*highestmodseq*/,
+                                           0/*isadmin*/,
+                                           req->accountid,
+                                           req->authstate,
+                                           0/*flags*/,
                                            &newmailbox);
             }
             mboxname_release(&namespacelock);

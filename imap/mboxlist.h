@@ -198,27 +198,18 @@ int mboxlist_createmailboxcheck(const char *name, int mbtype,
 /* create mailbox */
 /* if given a mailbox pointer, return the still-locked mailbox
  * for further manipulation */
-int mboxlist_createmailbox(const char *name, int mbtype,
-                           const char *partition,
-                           int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           int localonly, int forceuser, int dbonly,
-                           int notify, struct mailbox **mailboxptr);
-
-int mboxlist_createmailbox_full(const mbentry_t *mbentry,
+int mboxlist_createmailbox(const mbentry_t *mbentry,
                            unsigned mboxopts, modseq_t highestmodseq,
                            unsigned isadmin, const char *userid,
                            const struct auth_state *auth_state,
                            unsigned flags, struct mailbox **mboxptr);
 
 /* create mailbox with wrapping namespacelock */
-int mboxlist_createmailboxlock(const char *name, int mbtype,
-                           const char *partition,
-                           int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           int localonly, int forceuser, int dbonly,
-                           int notify, struct mailbox **mailboxptr);
-
+int mboxlist_createmailboxlock(const mbentry_t *mbentry,
+                               unsigned mboxopts, modseq_t highestmodseq,
+                               unsigned isadmin, const char *userid,
+                               const struct auth_state *auth_state,
+                               unsigned flags, struct mailbox **mboxptr);
 
 #define MBOXLIST_DELETE_CHECKACL            (1<<0)
 /* setting local_only disables any communication with the mupdate server

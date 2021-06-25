@@ -2341,10 +2341,10 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     if (args->specialuse && !strcmp("\\Snoozed", args->specialuse))
         options |= OPT_IMAP_HAS_ALARMS;
 
-    r = mboxlist_createmailbox_full(&newmbentry, options, 0/*highestmodseq*/,
-                                    0/*isadmin*/, req->userid, req->authstate,
-                                    MBOXLIST_CREATE_KEEP_INTERMEDIARIES,
-                                    args->shareWith ? &mailbox : NULL);
+    r = mboxlist_createmailbox(&newmbentry, options, 0/*highestmodseq*/,
+                               0/*isadmin*/, req->userid, req->authstate,
+                               MBOXLIST_CREATE_KEEP_INTERMEDIARIES,
+                               args->shareWith ? &mailbox : NULL);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                 mboxname, error_message(r));

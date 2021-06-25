@@ -2845,10 +2845,10 @@ int sync_apply_mailbox(struct dlist *kin,
                 unsigned flags = MBOXLIST_CREATE_SYNC;
                 if (sstate->local_only) flags |= MBOXLIST_CREATE_LOCALONLY;
 
-                r = mboxlist_createmailbox_full(&mbentry, options, highestmodseq,
-                                                1/*isadmin*/,
-                                                sstate->userid, sstate->authstate,
-                                                flags, &mailbox);
+                r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
+                                           1/*isadmin*/,
+                                           sstate->userid, sstate->authstate,
+                                           flags, &mailbox);
             }
             /* set a highestmodseq of 0 so ALL changes are future
              * changes and get applied */
@@ -4001,10 +4001,10 @@ int sync_restore_mailbox(struct dlist *kin,
             unsigned flags = MBOXLIST_CREATE_SYNC;
             if (sstate->local_only) flags |= MBOXLIST_CREATE_LOCALONLY;
 
-            r = mboxlist_createmailbox_full(&mbentry, options, highestmodseq,
-                                            1/*isadmin*/,
-                                            sstate->userid, sstate->authstate,
-                                            flags, &mailbox);
+            r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
+                                       1/*isadmin*/,
+                                       sstate->userid, sstate->authstate,
+                                       flags, &mailbox);
             syslog(LOG_DEBUG, "%s: mboxlist_createmailbox %s: %s",
                 __func__, mboxname, error_message(r));
             is_new_mailbox = 1;

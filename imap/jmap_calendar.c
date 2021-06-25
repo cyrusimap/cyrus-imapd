@@ -1207,9 +1207,9 @@ static int jmap_calendar_set(struct jmap_req *req)
         mbentry.name = mboxname;
         mbentry.acl = newacl;
         mbentry.mbtype = MBTYPE_CALENDAR;
-        r = mboxlist_createmailbox_full(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                                        0/*isadmin*/, httpd_userid, httpd_authstate,
-                                        0/*flags*/, NULL/*mailboxptr*/);
+        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   0/*isadmin*/, httpd_userid, httpd_authstate,
+                                   0/*flags*/, NULL/*mailboxptr*/);
         free(newacl);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",

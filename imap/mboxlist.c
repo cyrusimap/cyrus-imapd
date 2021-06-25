@@ -1665,11 +1665,11 @@ done:
  *
  */
 
-EXPORTED int mboxlist_createmailbox_full(const mbentry_t *mbentry,
-                                       unsigned options, modseq_t highestmodseq,
-                                       unsigned isadmin, const char *userid,
-                                       const struct auth_state *auth_state,
-                                       unsigned flags, struct mailbox **mboxptr)
+EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
+                                    unsigned options, modseq_t highestmodseq,
+                                    unsigned isadmin, const char *userid,
+                                    const struct auth_state *auth_state,
+                                    unsigned flags, struct mailbox **mboxptr)
 {
     const char *mboxname = mbentry->name;
     const char *uniqueid = mbentry->uniqueid;
@@ -1812,45 +1812,20 @@ EXPORTED int mboxlist_createmailbox_full(const mbentry_t *mbentry,
     return r;
 }
 
-EXPORTED int mboxlist_createmailboxlock(const char *name, int mbtype,
-                           const char *partition,
-                           int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           int localonly, int forceuser, int dbonly,
-                           int notify, struct mailbox **mailboxptr)
+EXPORTED int mboxlist_createmailboxlock(const mbentry_t *mbentry,
+                                        unsigned options, modseq_t highestmodseq,
+                                        unsigned isadmin, const char *userid,
+                                        const struct auth_state *auth_state,
+                                        unsigned flags, struct mailbox **mboxptr)
 {
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
 
-    int r = mboxlist_createmailbox(name, mbtype, partition, isadmin,
-                                   userid, auth_state, localonly,
-                                   forceuser, dbonly, notify,
-                                   mailboxptr);
+    int r = mboxlist_createmailbox(mbentry, options, highestmodseq,
+                                   isadmin, userid, auth_state,
+                                   flags, mboxptr);
 
     mboxname_release(&namespacelock);
     return r;
-}
-
-EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
-                           const char *partition,
-                           int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           int localonly, int forceuser, int dbonly,
-                           int notify, struct mailbox **mailboxptr)
-{
-    mbentry_t mbentry = MBENTRY_INITIALIZER;
-    mbentry.name = (char *) name;
-    mbentry.mbtype = mbtype;
-    mbentry.partition = (char *) partition;
-
-    unsigned flags = 0;
-    if (localonly) flags |= MBOXLIST_CREATE_LOCALONLY;
-    if (forceuser) flags |= MBOXLIST_CREATE_FORCEUSER;
-    if (dbonly)    flags |= MBOXLIST_CREATE_DBONLY;
-    if (notify)    flags |= MBOXLIST_CREATE_NOTIFY;
-
-    return mboxlist_createmailbox_full(&mbentry, 0, 0,
-                                       isadmin, userid, auth_state,
-                                       flags, mailboxptr);
 }
 
 /* insert an entry for the proxy */

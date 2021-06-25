@@ -773,10 +773,12 @@ static int _create_mailbox(const char *userid, const char *mailboxname,
     }
 
     /* Create locally */
-    r = mboxlist_createmailbox(mailboxname, type,
-                               NULL, 0,
-                               userid, httpd_authstate,
-                               0, 0, 0, 0, displayname ? &mailbox : NULL);
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    mbentry.name = (char *) mailboxname;
+    mbentry.mbtype = type;
+    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                               0/*isadmin*/, userid, httpd_authstate,
+                               0/*flags*/, displayname ? &mailbox : NULL);
     if (!r && displayname) {
         annotate_state_t *astate = NULL;
 

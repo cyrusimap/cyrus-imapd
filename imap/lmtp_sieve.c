@@ -2146,8 +2146,13 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     r = mboxlist_lookup(internalname, 0, 0);
     if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
 
-    r = mboxlist_createmailbox(internalname, 0, NULL,
-                               0, userid, auth_state, 0, 0, 0, 1, NULL);
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    mbentry.name = (char *) internalname;
+    mbentry.mbtype = MBTYPE_EMAIL;
+
+    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                               0/*isadmin*/, userid, auth_state,
+                               MBOXLIST_CREATE_NOTIFY, NULL/*mailboxptr*/);
     if (r) {
         syslog(LOG_ERR, "autosievefolder: User %s, folder %s creation failed. %s",
                userid, internalname, error_message(r));
