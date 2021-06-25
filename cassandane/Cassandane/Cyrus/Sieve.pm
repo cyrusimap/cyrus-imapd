@@ -2670,6 +2670,85 @@ EOF
     $self->check_messages($exp{$missfolder}, check_guid => 0);
 }
 
+sub test_fileinto_mailboxid_variable
+    :min_version_3_5
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing the \"mailboxid\" action";
+
+    my $talk = $self->{store}->get_client();
+
+    my $hitfolder = "INBOX.newfolder";
+    my $missfolder = "INBOX.testfolder";
+
+    xlog $self, "Install the sieve script";
+    my $scriptname = 'flatPack';
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "mailboxid"];
+fileinto :mailboxid "does-not-exist" "$missfolder";
+
+EOF
+    );
+
+    $talk->create($hitfolder);
+    $talk->create($missfolder);
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    xlog $self, "Deliver a message";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg1");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg1"} = $msg;
+    }
+
+    my $res = $talk->status($hitfolder, ['mailboxid']);
+    my $id = $res->{mailboxid}[0];
+
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "mailboxid", "variables"];
+set "id" "$id";
+fileinto :mailboxid "\${id}" "$missfolder";
+EOF
+    );
+
+    xlog $self, "Deliver a message now that the folder exists";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg2");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg2"} = $msg;
+    }
+
+    xlog $self, "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
+    }
+
+    xlog $self, "Delete the target folder";
+    $talk->delete($hitfolder);
+
+    xlog $self, "Deliver a message now that the folder doesn't exist";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg3");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg3"} = $msg;
+    }
+
+    xlog $self, "Check that the message made it to miss folder";
+    $self->{store}->set_folder($missfolder);
+    $self->check_messages($exp{$missfolder}, check_guid => 0);
+}
+
 sub test_encoded_char_variable_in_mboxname
     :needs_component_sieve :min_version_3_1 :SieveUTF8Fileinto
 {
