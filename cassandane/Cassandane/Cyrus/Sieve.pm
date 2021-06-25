@@ -2632,9 +2632,8 @@ EOF
     my $id = $res->{mailboxid}[0];
 
     $self->{instance}->install_sieve_script(<<EOF
-require ["fileinto", "mailboxid", "variables"];
-set "id" "$id";
-fileinto :mailboxid "\${id}" "$missfolder";
+require ["fileinto", "mailboxid"];
+fileinto :mailboxid "$id" "$missfolder";
 EOF
     );
 
