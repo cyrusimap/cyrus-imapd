@@ -421,7 +421,7 @@ More information is almost always logged to **syslog**. Make sure you start sysl
 
 .. rubric:: My question isn't answered here
 
-Join us in the :ref:`#cyrus IRC channel on Freenode <feedback-irc>` or on the
-:ref:`mailing lists <feedback-mailing-lists>` if you need help or just want to chat about Cyrus, IMAP, etc.
+Join us on the :ref:`mailing lists <feedback-mailing-lists>` if you need help
+or just want to chat about Cyrus, IMAP, etc.
 
 .. _FastMail : https://www.fastmail.com

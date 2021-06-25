@@ -411,7 +411,7 @@ Other Considerations
 .. Important::
     This section is currently under development.  If you believe you
     are impacted by these considerations, please check back with each
-    release, follow the mailing list and check in on IRC.
+    release and follow the mailing list.
 
 The infrastructure provided by ``sync_log`` has now been leveraged by
 the Rolling Indexing capability introduced in v3.0.  See
