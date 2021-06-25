@@ -1,5 +1,5 @@
-<sup>master: </sup>[![Build Status:master](https://api.travis-ci.org/cyrusimap/cyrus-imapd.svg?branch=master)](https://travis-ci.org/cyrusimap/cyrus-imapd)
-<sup> stable(3.0): </sup>[![Build Status:3.x](https://api.travis-ci.org/cyrusimap/cyrus-imapd.svg?branch=cyrus-imapd-3.0)](https://travis-ci.org/cyrusimap/cyrus-imapd)
+<sup>master: </sup>[![Build Status:master](https://api.travis-ci.com/cyrusimap/cyrus-imapd.svg?branch=master)](https://travis-ci.com/cyrusimap/cyrus-imapd)
+<sup> stable(3.4): </sup>[![Build Status:3.4](https://api.travis-ci.com/cyrusimap/cyrus-imapd.svg?branch=cyrus-imapd-3.4)](https://travis-ci.com/cyrusimap/cyrus-imapd)
 
 -----
 
