@@ -10,5 +10,4 @@ We value feedback on our software as well as our documentation. Please find ways
 
    feedback-bugs
    feedback-mailing-lists
-   feedback-irc
    feedback-meetings

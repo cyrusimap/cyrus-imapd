@@ -420,4 +420,5 @@ More information is almost always logged to **syslog**. Make sure you start sysl
 My question isn't answered here
 ###############################
 
-Join us in the :ref:`#cyrus IRC channel on Freenode <feedback>` or on the mailing lists if you need help or just want to chat about Cyrus, IMAP, donuts, etc.   
+Join us on the mailing lists if you need help or just want to chat about Cyrus,
+IMAP, donuts, etc.   
