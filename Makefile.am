@@ -127,12 +127,12 @@ MAINTAINERCLEANFILES = \
 
 SUBDIRS = .
 DIST_SUBDIRS = . perl/annotator perl/imap perl/sieve/managesieve
+dist_sbin_SCRIPTS =
 dist_sysconf_DATA =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
 check_PROGRAMS =
 libexec_PROGRAMS =
 sbin_PROGRAMS =
-sbin_SCRIPTS =
 noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
@@ -204,7 +204,7 @@ sbin_PROGRAMS += \
 	imap/relocate_by_id \
 	imap/cvt_xlist_specialuse
 
-sbin_SCRIPTS += \
+dist_sbin_SCRIPTS += \
 	imap/cyr_cd.sh
 
 noinst_PROGRAMS += \
