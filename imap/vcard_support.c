@@ -42,6 +42,7 @@
  */
 
 #include <config.h>
+#include <libxml/tree.h>
 
 #include "vcard_support.h"
 #include "syslog.h"
@@ -198,7 +199,7 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
                 for (sig = image_signatures; sig->mediatype; sig++) {
                     int i;
                     for (i = 0; sig->magic[i].len && i < 2; i++) {
-                        if (size <= sig->magic[i].len ||
+                        if (size - sig->magic[i].offset <= sig->magic[i].len ||
                             memcmp(decbuf + sig->magic[i].offset,
                                    sig->magic[i].data, sig->magic[i].len)) {
                             break;
@@ -207,6 +208,19 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
                     if (i == 2 || !sig->magic[i].len) {
                         *content_type = xstrdup(sig->mediatype);
                         break;
+                    }
+                }
+
+                if (!*content_type) {
+                    xmlDocPtr doc = xmlReadMemory(decbuf, size, NULL, NULL,
+                                                  XML_PARSE_NOERROR |
+                                                  XML_PARSE_NOWARNING);
+                    if (doc) {
+                        xmlNodePtr root = xmlDocGetRootElement(doc);
+                        if (!xmlStrcmp(root->name, BAD_CAST "svg")) {
+                            *content_type = xstrdup("image/svg+xml");
+                        }
+                        xmlFreeDoc(doc);
                     }
                 }
             }
