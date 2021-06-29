@@ -126,6 +126,21 @@ EXPORTED struct vparse_card *record_to_vcard(struct mailbox *mailbox,
     return vcard;
 }
 
+static const struct image_signature {
+    const uint8_t magic[8];
+    size_t magiclen;
+    const char *mediatype;
+} image_signatures[] = {
+    { { 0x42, 0x4D },                                     2, "image/bmp"  },
+    { { 0x47, 0x49, 0x46, 0x38, 0x37, 0x61 },             6, "image/gif"  },
+    { { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 },             6, "image/gif"  },
+    { { 0xFF, 0xD8, 0xFF, 0xE0 },                         4, "image/jpeg" },
+    { { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, 8, "image/png"  },
+    { { 0x49, 0x49, 0x2A, 0x00 },                         4, "image/tiff" },
+    { { 0x4D, 0x4D, 0x00, 0x2A },                         4, "image/tiff" },
+    { { 0x0 },                                            0, NULL         }
+};
+
 /* Decode a base64-encoded binary vCard property and calculate a GUID.
 
    XXX  This currently assumes vCard v3.
@@ -156,7 +171,18 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
         if (content_type) {
             struct vparse_param *type = vparse_get_param(prop, "type");
 
-            if (!type) *content_type = NULL;
+            if (!type) {
+                *content_type = NULL;
+
+                const struct image_signature *sig;
+                for (sig = image_signatures; sig->mediatype; sig++) {
+                    if (size > sig->magiclen &&
+                        !memcmp(decbuf, sig->magic, sig->magiclen)) {
+                        *content_type = xstrdup(sig->mediatype);
+                        break;
+                    }
+                }
+            }
             else {
                 struct buf buf = BUF_INITIALIZER;
 
