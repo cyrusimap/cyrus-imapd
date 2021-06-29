@@ -10547,6 +10547,7 @@ This is a mixed message.
 
 --123456789
 Content-Type: application/data
+Content-Disposition: attachment
 
 data
 
@@ -22218,6 +22219,80 @@ EOF
         $res->[1][1]{list}[0]{previousCalendarEvent}{uid});
     $self->assert_str_equals('40d6fe3c-6a51-489e-823e-3ea22f427a3e',
         $res->[1][1]{list}[0]{calendarEvents}{2}[0]{uid});
+}
+
+sub test_email_get_hasattachment
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    $imap->create("matches") or die;
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+      "hasAttachment" : true
+  }
+.
+  )
+{
+  fileinto "matches";
+}
+EOF
+    );
+
+    my $rawMessage = <<'EOF';
+From: from@local
+To: to@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed;boundary=e523eb44-40ae-463e-9261-2f935700196d
+
+Content-Type: text/plain;charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+Test
+
+--e523eb44-40ae-463e-9261-2f935700196d
+Content-Type: image/jpeg; name=test.jpg;
+Content-Disposition: inline; filename=test.jpg
+Content-Transfer-Encoding: base64
+
+ZGF0YQ==
+
+--e523eb44-40ae-463e-9261-2f935700196d
+Content-Type: text/plain;charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+Sent from my supercalifragilisticexpialidocious device
+
+--e523eb44-40ae-463e-9261-2f935700196d--
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $rawMessage);
+    $self->{instance}->deliver($msg);
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['hasAttachment'],
+        }, 'R2'],
+    ]);
+
+    $self->assert_num_equals(1, $imap->message_count('matches'));
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{hasAttachment});
 }
 
 1;
