@@ -257,6 +257,7 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
     /* Read and buffer the body */
     switch (body->framing) {
     case FRAMING_HTTP2:
+    case FRAMING_HTTP3:
         /* Data has already been read */
         break;
 

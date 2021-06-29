@@ -1556,7 +1556,8 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     else {
         switch (txn->flags.ver) {
         case VER_2:
-            /* HTTP/2 - check for :authority pseudo header */
+        case VER_3:
+            /* HTTP/2+ - check for :authority pseudo header */
             if (spool_getheader(txn->req_hdrs, ":authority")) break;
 
             /* Fall through and create an :authority pseudo header */
@@ -1583,7 +1584,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     }
 
     /* Check message framing */
-    if ((ret = http_parse_framing(txn->flags.ver == VER_2, txn->req_hdrs,
+    if ((ret = http_parse_framing(txn->flags.ver >= VER_2, txn->req_hdrs,
                                   &txn->req_body, &txn->error.desc))) return ret;
 
     /* Check for Expectations */
@@ -2436,8 +2437,8 @@ static int parse_connection(struct transaction_t *txn)
 
     if (!conn) return 0;
 
-    if (txn->flags.ver == VER_2) {
-        txn->error.desc = "Connection not allowed in HTTP/2";
+    if (txn->flags.ver >= VER_2) {
+        txn->error.desc = "Connection not allowed in HTTP/2+";
         return HTTP_BAD_REQUEST;
     }
 
@@ -2611,6 +2612,7 @@ EXPORTED const char *http_statusline(unsigned ver, long code)
     static struct buf statline = BUF_INITIALIZER;
 
     if (ver == VER_2) buf_setcstr(&statline, HTTP2_VERSION);
+    else if (ver == VER_3) buf_setcstr(&statline, HTTP3_VERSION);
     else {
         buf_setmap(&statline, HTTP_VERSION, HTTP_VERSION_LEN-1);
         buf_putc(&statline, ver + '0');
@@ -4786,7 +4788,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
     int ret;
 
     /* Bootstrap WebSockets over HTTP/2, if requested */
-    if ((txn->flags.ver != VER_2) || !ws_enabled || !cparams) {
+    if ((txn->flags.ver < VER_2) || !ws_enabled || !cparams) {
         return HTTP_NOT_IMPLEMENTED;
     }
 
@@ -5008,8 +5010,8 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
                 txn->req_tgt.allow |= http_namespaces[i]->allow;
         }
 
-        if (ws_enabled && (txn->flags.ver == VER_2)) {
-            /* CONNECT allowed for bootstrapping WebSocket over HTTP/2 */
+        if (ws_enabled && (txn->flags.ver >= VER_2)) {
+            /* CONNECT allowed for bootstrapping WebSocket over HTTP/2+ */
             txn->req_tgt.allow |= ALLOW_CONNECT;
         }
     }
@@ -5020,7 +5022,7 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
             if (r) return r;
         }
         else if (!strcmp(txn->req_uri->path, "/") &&
-                 ws_enabled && (txn->flags.ver == VER_2)) {
+                 ws_enabled && (txn->flags.ver >= VER_2)) {
             /* WS 'echo' endpoint */
             txn->req_tgt.allow |= ALLOW_CONNECT;
         }

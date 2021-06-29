@@ -67,6 +67,7 @@ struct body_t {
 enum {
     FRAMING_UNKNOWN = 0,
     FRAMING_HTTP2,
+    FRAMING_HTTP3,
     FRAMING_LENGTH,
     FRAMING_CHUNKED,
     FRAMING_CLOSE

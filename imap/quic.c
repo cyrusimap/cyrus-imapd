@@ -72,7 +72,7 @@ struct quic_context {
     struct buf crypto_data[3];
     uint8_t last_tls_alert;
 
-    void *app_ctx;
+    struct quic_app_context *app_ctx;
 };
 
 static int set_encryption_secrets(SSL *ssl, OSSL_ENCRYPTION_LEVEL ossl_level,
@@ -103,6 +103,7 @@ static int set_encryption_secrets(SSL *ssl, OSSL_ENCRYPTION_LEVEL ossl_level,
 
         if (level == NGTCP2_CRYPTO_LEVEL_APPLICATION) {
             /* Initialize HTTP/3 connection */
+            ctx->app_ctx->open_conn(ctx->app_ctx->conn);
         }
     }
 
@@ -162,16 +163,13 @@ static const SSL_QUIC_METHOD quic_method = {
     send_alert,
 };
 
-HIDDEN int quic_init(struct quic_context **ctx,
-                     const struct tls_alpn_t alpn_map[], struct buf *serverinfo)
+HIDDEN int quic_init(struct quic_context **ctx, struct quic_app_context *app)
 {
     SSL_CTX *tls_ctx;
 
     *ctx = NULL;
 
-    buf_printf(serverinfo, " Ngtcp2/%s", NGTCP2_VERSION);
-
-    if (!(alpn_map && alpn_map[0].id)) return HTTP_UNAVAILABLE;
+    if (!(app && app->alpn_map[0].id)) return HTTP_UNAVAILABLE;
 
     /* Setup QUIC TLS context (SSL_CTX already initialized by tls_init() */
     if (tls_init_serverengine("quic", 5, 1, &tls_ctx) == -1) {
@@ -184,7 +182,7 @@ HIDDEN int quic_init(struct quic_context **ctx,
     options &= ~(SSL_OP_NO_TLSv1_3 | SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS);
 
     SSL_CTX_set_options(tls_ctx, options);
-    SSL_CTX_set_alpn_select_cb(tls_ctx, tls_alpn_select, (void *) alpn_map);
+    SSL_CTX_set_alpn_select_cb(tls_ctx, tls_alpn_select, (void *) app->alpn_map);
 
     if (!(SSL_CTX_set_min_proto_version(tls_ctx, TLS1_3_VERSION)
           && SSL_CTX_set_max_proto_version(tls_ctx, TLS1_3_VERSION)
@@ -195,6 +193,7 @@ HIDDEN int quic_init(struct quic_context **ctx,
 
     *ctx = xzmalloc(sizeof(struct quic_context));
 
+    (*ctx)->app_ctx = app;
     (*ctx)->tls_ctx = tls_ctx;
     (*ctx)->sock = atoi(getenv("CYRUS_QUIC_FD"));
     (*ctx)->local_addrlen =  sizeof(struct sockaddr_storage);
@@ -245,15 +244,23 @@ static int acked_crypto_offset_cb(ngtcp2_conn *conn __attribute__((unused)),
     return 0;
 }
 
-static int recv_stream_data_cb(ngtcp2_conn *conn __attribute__((unused)),
+static int recv_stream_data_cb(ngtcp2_conn *conn,
                                uint32_t flags, int64_t stream_id, uint64_t offset,
-                               const uint8_t *data __attribute__((unused)),
-                               size_t datalen,
-                               void *user_data __attribute__((unused)),
+                               const uint8_t *data, size_t datalen,
+                               void *user_data,
                                void *stream_user_data __attribute__((unused)))
 {
+    struct quic_context *ctx = user_data;
+    int fin = flags & NGTCP2_STREAM_DATA_FLAG_FIN;
+
     syslog(LOG_DEBUG, "recv_stream_data(0x%x, %ld, %lu, %zu)",
            flags, stream_id, offset, datalen);
+
+    ssize_t consumed = ctx->app_ctx->read_stream(ctx->app_ctx->conn,
+                                                 stream_id, data, datalen, fin);
+
+    ngtcp2_conn_extend_max_stream_offset(conn, stream_id, consumed);
+    ngtcp2_conn_extend_max_offset(conn, consumed);
 
     return 0;
 }
@@ -363,7 +370,7 @@ HIDDEN int quic_input(struct quic_context *ctx, struct protstream *pin)
     struct sockaddr_storage remote_addr;
     socklen_t remote_addrlen;
     uint8_t data[USHRT_MAX];
-    ssize_t datalen, nread = 0, nwrite, sent;
+    ssize_t datalen, nread = 0;
     int n, r;
 
     prot_read(pin, (char *) &remote_addrlen, sizeof(remote_addrlen));
@@ -513,20 +520,42 @@ HIDDEN int quic_input(struct quic_context *ctx, struct protstream *pin)
 
     syslog(LOG_DEBUG, "ngtcp2_conn_read_pkt: %s", ngtcp2_strerror(r));
 
-    while ((nwrite = ngtcp2_conn_write_pkt(ctx->qconn, &path, &pi,
-                                           data, sizeof(data), timestamp())) > 0) {
+    return 0;
+}
+
+HIDDEN ssize_t quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
+                           const struct iovec *iov, int iovcnt, ssize_t *datalen)
+{
+    uint8_t data[USHRT_MAX];
+    ssize_t nwrite, sent;
+    uint32_t flags = NGTCP2_WRITE_STREAM_FLAG_MORE |
+        (fin ? NGTCP2_WRITE_STREAM_FLAG_FIN : 0);
+    ngtcp2_path_storage ps;
+
+    syslog(LOG_DEBUG, "write stream (%ld, %d, %d)", stream_id, iovcnt, fin);
+
+    ngtcp2_path_storage_zero(&ps);
+
+    while ((nwrite = ngtcp2_conn_writev_stream(ctx->qconn, &ps.path, NULL,
+                                               data, sizeof(data), datalen,
+                                               flags, stream_id,
+                                               (ngtcp2_vec *) iov, iovcnt,
+                                               timestamp())) > 0) {
         do {
             sent = sendto(ctx->sock, data, nwrite, 0,
-                          path.remote.addr, path.remote.addrlen);
+                          ps.path.remote.addr, ps.path.remote.addrlen);
         } while (sent < 0 && errno == EINTR);
 
-        syslog(LOG_DEBUG, "write pkt: sent %zd of %zd bytes\n", sent, nwrite);
+        syslog(LOG_DEBUG, "write stream (%ld, %ld): sent %zd of %zd bytes\n",
+               stream_id, *datalen, sent, nwrite);
 
         if (sent != nwrite) {
         }
     }
 
-    return 0;
+    syslog(LOG_DEBUG, "write stream (%ld, %ld)", stream_id, nwrite);
+
+    return nwrite;
 }
 
 HIDDEN void quic_close(struct quic_context *ctx)
@@ -567,11 +596,34 @@ HIDDEN void quic_shutdown(struct quic_context *ctx)
     free(ctx);
 }
 
+HIDDEN int quic_open_stream(void *conn, unsigned bidi,
+                            int64_t *stream_id, void *stream_user_data)
+{
+    struct quic_context *ctx = conn;
+    int r;
+
+    if (bidi) {
+        r = ngtcp2_conn_open_bidi_stream(ctx->qconn, stream_id, stream_user_data);
+    }
+    else {
+        r = ngtcp2_conn_open_uni_stream(ctx->qconn, stream_id, stream_user_data);
+    }
+
+    syslog(LOG_DEBUG, "quic_open_stream(%u): %ld, %s",
+           bidi, *stream_id, ngtcp2_strerror(r));
+
+    return r;
+}
+
+HIDDEN const char *quic_version(void)
+{
+    return "Ngtcp2/ " NGTCP2_VERSION;
+}
+
 #else /* !HAVE_QUIC */
 
-HIDDEN int quic_init(struct quic_context *ctx __attribute__((unused)),
-                     const struct tls_alpn_t alpn_map[] __attribute__((unused)),
-                     struct buf *serverinfo __attribute__((unused)))
+HIDDEN int quic_init(struct quic_context **ctx __attribute__((unused)),
+                     struct quic_app_context *app __attribute__((unused)))
 {
     return HTTP_NOT_IMPLEMENTED;
 }

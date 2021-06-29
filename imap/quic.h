@@ -51,13 +51,29 @@
 
 struct quic_context;
 
-extern int quic_init(struct quic_context **ctx,
-                     const struct tls_alpn_t alpn_map[], struct buf *serverinfo);
+struct quic_app_context {
+    void *conn;
+    int (*open_conn)(void *conn);
+    void (*close_conn)(void *conn);
+    ssize_t (*read_stream)(void *conn, int64_t stream_id,
+                           const uint8_t *src, size_t srclen, int fin);
+    struct tls_alpn_t alpn_map[];
+};
+
+extern int quic_init(struct quic_context **ctx, struct quic_app_context *app);
 
 extern int quic_input(struct quic_context *ctx, struct protstream *pin);
+
+extern ssize_t quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
+                           const struct iovec *iov, int iovcnt, ssize_t *datalen);
 
 extern void quic_close(struct quic_context *ctx);
 
 extern void quic_shutdown(struct quic_context *ctx);
+
+extern int quic_open_stream(void *conn, unsigned bidi,
+                            int64_t *stream_id, void *stream_user_data);
+
+extern const char *quic_version(void);
 
 #endif /* QUIC_H */
