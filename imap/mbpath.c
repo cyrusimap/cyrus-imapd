@@ -156,13 +156,33 @@ static void print_json(const mbname_t *mbname, const mbentry_t *mbentry)
     if (userid) {
         // user paths
         json_t *juser = json_object();
-        json_object_set_new(juser, "conversations", json_string(user_hash_meta(userid, "conversations")));
-        json_object_set_new(juser, "counters", json_string(user_hash_meta(userid, "counters")));
-        json_object_set_new(juser, "dav", json_string(user_hash_meta(userid, "dav")));
+        char *val; // jansson has no API to transfer string ownership
+
+        val = user_hash_meta(userid, "conversations");
+        json_object_set_new(juser, "conversations", json_string(val));
+        free(val);
+
+        val = user_hash_meta(userid, "counters");
+        json_object_set_new(juser, "counters", json_string(val));
+        free(val);
+
+        val = user_hash_meta(userid, "dav");
+        json_object_set_new(juser, "dav", json_string(val));
+        free(val);
+
         json_object_set_new(juser, "sieve", json_string(user_sieve_path(userid)));
-        json_object_set_new(juser, "seen", json_string(user_hash_meta(userid, "seen")));
-        json_object_set_new(juser, "sub", json_string(user_hash_meta(userid, "sub")));
-        json_object_set_new(juser, "xapianactive", json_string(user_hash_meta(userid, "xapianactive")));
+
+        val = user_hash_meta(userid, "seen");
+        json_object_set_new(juser, "seen", json_string(val));
+        free(val);
+
+        val = user_hash_meta(userid, "sub");
+        json_object_set_new(juser, "sub", json_string(val));
+        free(val);
+
+        val = user_hash_meta(userid, "xapianactive");
+        json_object_set_new(juser, "xapianactive", json_string(val));
+        free(val);
 
         json_object_set_new(jres, "user", juser);
 
