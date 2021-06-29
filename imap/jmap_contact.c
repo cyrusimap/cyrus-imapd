@@ -1852,9 +1852,10 @@ static json_t *jmap_contact_from_vcard(const char *userid,
         struct buf blobid = BUF_INITIALIZER;
         if (jmap_encode_rawdata_blobid('V', mailbox->uniqueid, record->uid,
                                        NULL, "PHOTO", &guid, &blobid)) {
-            file = json_pack("{s:s s:i s:s? s:n}",
+            file = json_pack("{s:s s:i s:s s:n}",
                              "blobId", buf_cstring(&blobid), "size", size,
-                             "type", type, "name");
+                             "type", type ? type : "application/octet-stream",
+                             "name");
         }
         buf_free(&blobid);
     }
