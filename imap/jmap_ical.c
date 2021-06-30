@@ -3438,8 +3438,6 @@ participants_to_ical(icalcomponent *comp,
         }
     }
 
-    /* OK, there's both replyTo and participants set. */
-
     /* Parse replyTo */
     jmap_parser_push(parser, "replyTo");
     json_object_foreach(replyTo, key, jval) {
