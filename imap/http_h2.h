@@ -50,7 +50,6 @@
 #include <nghttp2/nghttp2.h>
 #endif
 
-#include "md5.h"
 #include "util.h"
 
 #define HTTP2_CLEARTEXT_ID  "h2c"
@@ -65,17 +64,6 @@ extern int http2_start_session(struct transaction_t *txn,
                                struct http_connection *conn);
 
 extern void http2_input(struct http_connection *conn);
-
-extern void http2_begin_headers(struct transaction_t *txn);
-
-extern void http2_add_header(struct transaction_t *txn,
-                             const char *name, struct buf *value);
-
-extern int http2_end_headers(struct transaction_t *txn, long code);
-
-extern int http2_data_chunk(struct transaction_t *txn,
-                            const char *data, unsigned datalen,
-                            int last_chunk, MD5_CTX *md5ctx);
 
 extern int32_t http2_get_streamid(void *http2_strm);
 

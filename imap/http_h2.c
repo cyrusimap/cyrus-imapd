@@ -607,6 +607,14 @@ static void http2_output(struct http_connection *conn)
 }
 
 
+static void begin_resp_headers(struct transaction_t *txn, long code);
+static void add_resp_header(struct transaction_t *txn,
+                            const char *name, struct buf *value);
+static int end_resp_headers(struct transaction_t *txn, long code);
+static int resp_body_chunk(struct transaction_t *txn,
+                           const char *data, unsigned datalen,
+                           int last_chunk, MD5_CTX *md5ctx);
+
 HIDDEN int http2_start_session(struct transaction_t *txn,
                                struct http_connection *conn)
 {
@@ -687,6 +695,11 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         txn->flags.ver = VER_2;
         ptrarray_add(&txn->done_callbacks, &_end_stream);
     }
+
+    conn->begin_resp_headers = &begin_resp_headers;
+    conn->add_resp_header = &add_resp_header;
+    conn->end_resp_headers = &end_resp_headers;
+    conn->resp_body_chunk = &resp_body_chunk;
 
     /* Don't do telemetry logging in prot layer */
     prot_setlog(conn->pin, PROT_NO_FD);
@@ -774,7 +787,7 @@ HIDDEN void http2_input(struct http_connection *conn)
 }
 
 
-HIDDEN void http2_begin_headers(struct transaction_t *txn)
+static void begin_resp_headers(struct transaction_t *txn, long code)
 {
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
@@ -788,11 +801,13 @@ HIDDEN void http2_begin_headers(struct transaction_t *txn)
         buf_printf(logbuf, ">" TIME_T_FMT ">", time(NULL));  /* timestamp */
         write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
     }
+
+    if (code) simple_hdr(txn, ":status", "%.3s", error_message(code));
 }
 
 
-HIDDEN void http2_add_header(struct transaction_t *txn,
-                             const char *name, struct buf *value)
+static void add_resp_header(struct transaction_t *txn,
+                            const char *name, struct buf *value)
 {
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
@@ -834,7 +849,7 @@ HIDDEN void http2_add_header(struct transaction_t *txn,
 }
 
 
-HIDDEN int http2_end_headers(struct transaction_t *txn, long code)
+static int end_resp_headers(struct transaction_t *txn, long code)
 {
     struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
@@ -903,9 +918,9 @@ HIDDEN int http2_end_headers(struct transaction_t *txn, long code)
 }
 
 
-HIDDEN int http2_data_chunk(struct transaction_t *txn,
-                            const char *data, unsigned datalen,
-                            int last_chunk, MD5_CTX *md5ctx)
+static int resp_body_chunk(struct transaction_t *txn,
+                           const char *data, unsigned datalen,
+                           int last_chunk, MD5_CTX *md5ctx)
 {
     static unsigned char md5[MD5_DIGEST_LENGTH];
     struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
@@ -917,7 +932,9 @@ HIDDEN int http2_data_chunk(struct transaction_t *txn,
     syslog(LOG_DEBUG, "http2_data_chunk(datalen=%u, last=%d)",
            datalen, last_chunk);
 
-    if (datalen && (txn->conn->logfd != -1)) {
+    if (!datalen && !last_chunk) return 0;
+
+    if (txn->conn->logfd != -1) {
         /* telemetry log */
         struct buf *logbuf = &txn->conn->logbuf;
         struct iovec iov[2];
@@ -969,12 +986,12 @@ HIDDEN int http2_data_chunk(struct transaction_t *txn,
         http2_output(txn->conn);
 
         if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
-            http2_begin_headers(txn);
+            begin_resp_headers(txn, 0);
             if (txn->flags.trailer & TRAILER_CMD5) content_md5_hdr(txn, md5);
             if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
                 simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
             }
-            http2_end_headers(txn, 0);
+            end_resp_headers(txn, 0);
         }
     }
 
@@ -1014,33 +1031,6 @@ HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused))
 HIDDEN void http2_input(struct http_connection *conn __attribute__((unused)))
 {
     fatal("http2_input() called, but no Nghttp2", EX_SOFTWARE);
-}
-
-HIDDEN void http2_begin_headers(struct transaction_t *txn __attribute__((unused)))
-{
-    fatal("http2_begin_headers() called, but no Nghttp2", EX_SOFTWARE);
-}
-
-HIDDEN void http2_add_header(struct transaction_t *txn __attribute__((unused)),
-                             const char *name __attribute__((unused)),
-                             struct buf *value __attribute__((unused)))
-{
-    fatal("http2_add_header() called, but no Nghttp2", EX_SOFTWARE);
-}
-
-HIDDEN int http2_end_headers(struct transaction_t *txn __attribute__((unused)),
-                             long code __attribute__((unused)))
-{
-    fatal("http2_end_headers() called, but no Nghttp2", EX_SOFTWARE);
-}
-
-HIDDEN int http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
-                            const char *data __attribute__((unused)),
-                            unsigned datalen __attribute__((unused)),
-                            int last_chunk __attribute__((unused)),
-                            MD5_CTX *md5ctx __attribute__((unused)))
-{
-    fatal("http2_data_chunk() called, but no Nghttp2", EX_SOFTWARE);
 }
 
 HIDDEN int32_t http2_get_streamid(void *http2_strm __attribute__((unused)))

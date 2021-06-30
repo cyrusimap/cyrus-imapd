@@ -53,6 +53,7 @@
 #include "hash.h"
 #include "http_client.h"
 #include "mailbox.h"
+#include "md5.h"
 #include "prometheus.h"
 #include "spool.h"
 
@@ -346,6 +347,13 @@ struct http_connection {
 
     xmlParserCtxtPtr xml;               /* XML parser content */
 
+    /* Version-specific functions for generating a response */
+    void (*begin_resp_headers)(txn_t *txn, long code);
+    void (*add_resp_header)(txn_t *txn, const char *name, struct buf *value);
+    int (*end_resp_headers)(txn_t *txn, long code);
+    int (*resp_body_chunk)(txn_t *txn, const char *data, unsigned datalen,
+                           int last_chunk, MD5_CTX *md5ctx);
+
     ptrarray_t reset_callbacks;         /* Array of functions to reset
                                            auxiliary connection contexts
                                            (e.g. TLS, HTTP/2, WebSockets) */
@@ -571,8 +579,6 @@ extern void parse_query_params(struct transaction_t *txn, const char *query);
 extern time_t calc_compile_time(const char *time, const char *date);
 extern const char *http_statusline(unsigned ver, long code);
 extern char *httpdate_gen(char *buf, size_t len, time_t t);
-extern void begin_resp_headers(struct transaction_t *txn, long code);
-extern int end_resp_headers(struct transaction_t *txn, long code);
 extern void simple_hdr(struct transaction_t *txn,
                        const char *name, const char *value, ...)
                       __attribute__((format(printf, 3, 4)));

@@ -600,6 +600,80 @@ struct namespace_t *http_namespaces[] = {
 };
 
 
+static void http1_begin_resp_headers(struct transaction_t *txn, long code)
+{
+    if (code) {
+        prot_printf(txn->conn->pout, "%s\r\n",
+                    http_statusline(txn->flags.ver, code));
+    }
+}
+
+static void http1_add_resp_header(struct transaction_t *txn,
+                                  const char *name, struct buf *value)
+{
+    prot_printf(txn->conn->pout, "%c%s: ", toupper(name[0]), name+1);
+    prot_putbuf(txn->conn->pout, value);
+    prot_puts(txn->conn->pout, "\r\n");
+
+    buf_free(value);
+}
+
+static int http1_end_resp_headers(struct transaction_t *txn,
+                                  long code __attribute__((unused)))
+{
+    /* CRLF terminating the header block */
+    prot_puts(txn->conn->pout, "\r\n");
+
+    return 0;
+}
+
+static int http1_resp_body_chunk(struct transaction_t *txn,
+                                 const char *data, unsigned datalen,
+                                 int last_chunk, MD5_CTX *md5ctx)
+{
+    static unsigned char md5[MD5_DIGEST_LENGTH];
+
+    if (txn->flags.te && txn->flags.ver == VER_1_1) {
+        /* HTTP/1.1 chunk */
+        if (datalen) {
+            syslog(LOG_DEBUG, "write_body: chunk(%d)", datalen);
+            prot_printf(txn->conn->pout, "%x\r\n", datalen);
+            prot_write(txn->conn->pout, data, datalen);
+            prot_puts(txn->conn->pout, "\r\n");
+
+            if (txn->flags.trailer & TRAILER_CMD5) MD5Update(md5ctx, data, datalen);
+        }
+        if (last_chunk) {
+            /* Terminate the HTTP/1.1 body with a zero-length chunk */
+            syslog(LOG_DEBUG, "write_body: last chunk");
+            prot_puts(txn->conn->pout, "0\r\n");
+
+            /* Trailer */
+            if (txn->flags.trailer & TRAILER_CMD5) {
+                syslog(LOG_DEBUG, "write_body: trailer Content-MD5");
+                MD5Final(md5, md5ctx);
+                content_md5_hdr(txn, md5);
+            }
+            if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
+                syslog(LOG_DEBUG, "write_body: trailer CTag");
+                simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
+            }
+
+            if (txn->flags.trailer != TRAILER_PROXY) {
+                syslog(LOG_DEBUG, "write_body: CRLF");
+                prot_puts(txn->conn->pout, "\r\n");
+            }
+        }
+    }
+    else {
+        /* Full body or HTTP/1.0 close-delimited body */
+        prot_write(txn->conn->pout, data, datalen);
+    }
+
+    return 0;
+}
+
+
 static void httpd_reset(struct http_connection *conn)
 {
     int i;
@@ -869,6 +943,10 @@ int service_main(int argc __attribute__((unused)),
     http_conn.pin = httpd_in;
     http_conn.pout = httpd_out;
     http_conn.logfd = -1;
+    http_conn.begin_resp_headers = &http1_begin_resp_headers;
+    http_conn.add_resp_header = &http1_add_resp_header;
+    http_conn.end_resp_headers = &http1_end_resp_headers;
+    http_conn.resp_body_chunk = &http1_resp_body_chunk;
 
     /* Create XML parser context */
     if (!(http_conn.xml = xmlNewParserCtxt())) {
@@ -2451,16 +2529,7 @@ EXPORTED void simple_hdr(struct transaction_t *txn,
 
     syslog(LOG_DEBUG, "simple_hdr(%s: %s)", name, buf_cstring(&buf));
 
-    if (txn->flags.ver == VER_2) {
-        http2_add_header(txn, name, &buf);
-    }
-    else {
-        prot_printf(txn->conn->pout, "%c%s: ", toupper(name[0]), name+1);
-        prot_puts(txn->conn->pout, buf_cstring(&buf));
-        prot_puts(txn->conn->pout, "\r\n");
-
-        buf_free(&buf);
-    }
+    txn->conn->add_resp_header(txn, name, &buf);
 }
 
 #define WWW_Authenticate(name, param)                           \
@@ -2580,32 +2649,6 @@ EXPORTED void content_md5_hdr(struct transaction_t *txn,
     simple_hdr(txn, "Content-MD5", "%s", base64);
 }
 
-EXPORTED void begin_resp_headers(struct transaction_t *txn, long code)
-{
-    if (txn->flags.ver == VER_2) {
-        http2_begin_headers(txn);
-        if (code) simple_hdr(txn, ":status", "%.3s", error_message(code));
-    }
-    else if (code) prot_printf(txn->conn->pout, "%s\r\n",
-                               http_statusline(txn->flags.ver, code));
-}
-
-EXPORTED int end_resp_headers(struct transaction_t *txn, long code)
-{
-    int r = 0;
-
-    if (txn->flags.ver == VER_2) {
-        r = http2_end_headers(txn, code);
-    }
-    else {
-        /* CRLF terminating the header block */
-        prot_puts(txn->conn->pout, "\r\n");
-    }
-
-    return r;
-}
-
-
 /* Write end-to-end header (ignoring hop-by-hop) from cache to protstream. */
 static void write_cachehdr(const char *name, const char *contents,
                            const char *raw __attribute__((unused)), void *rock)
@@ -2648,7 +2691,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* Status-Line */
-    begin_resp_headers(txn, code);
+    txn->conn->begin_resp_headers(txn, code);
 
 
     switch (code) {
@@ -2704,7 +2747,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     case HTTP_CONTINUE:
     case HTTP_PROCESSING:
         /* Provisional response - nothing else needed */
-        end_resp_headers(txn, code);
+        txn->conn->end_resp_headers(txn, code);
 
         /* Force the response to the client immediately */
         prot_flush(httpd_out);
@@ -3053,7 +3096,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* End of headers */
-    end_resp_headers(txn, code);
+    txn->conn->end_resp_headers(txn, code);
 
 
   log:
@@ -3521,48 +3564,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     }
 
     /* Output data */
-    if (txn->flags.ver == VER_2) {
-        /* HTTP/2 chunk */
-        if (outlen || txn->flags.te) {
-            http2_data_chunk(txn, buf + offset, outlen, last_chunk, &ctx);
-        }
-    }
-    else if (txn->flags.te && txn->flags.ver == VER_1_1) {
-        /* HTTP/1.1 chunk */
-        if (outlen) {
-            syslog(LOG_DEBUG, "write_body: chunk(%d)", outlen);
-            prot_printf(httpd_out, "%x\r\n", outlen);
-            prot_write(httpd_out, buf, outlen);
-            prot_puts(httpd_out, "\r\n");
-
-            if (txn->flags.trailer & TRAILER_CMD5) MD5Update(&ctx, buf, outlen);
-        }
-        if (last_chunk) {
-            /* Terminate the HTTP/1.1 body with a zero-length chunk */
-            syslog(LOG_DEBUG, "write_body: last chunk");
-            prot_puts(httpd_out, "0\r\n");
-
-            /* Trailer */
-            if (txn->flags.trailer & TRAILER_CMD5) {
-                syslog(LOG_DEBUG, "write_body: trailer Content-MD5");
-                MD5Final(md5, &ctx);
-                content_md5_hdr(txn, md5);
-            }
-            if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
-                syslog(LOG_DEBUG, "write_body: trailer CTag");
-                simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
-            }
-
-            if (txn->flags.trailer != TRAILER_PROXY) {
-                syslog(LOG_DEBUG, "write_body: CRLF");
-                prot_puts(httpd_out, "\r\n");
-            }
-        }
-    }
-    else {
-        /* Full body or HTTP/1.0 close-delimited body */
-        prot_write(httpd_out, buf + offset, outlen);
-    }
+    txn->conn->resp_body_chunk(txn, buf + offset, outlen, last_chunk, &ctx);
 }
 
 

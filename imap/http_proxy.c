@@ -629,7 +629,7 @@ static void send_response(struct transaction_t *txn, long code,
      * - Add our own hop-by-hop headers
      * - Use all cached end-to-end headers
      */
-    begin_resp_headers(txn, code);
+    txn->conn->begin_resp_headers(txn, code);
     write_forwarding_hdrs(txn, hdrs, HTTP_VERSION, NULL);
 
     if (txn->flags.conn && txn->flags.ver != VER_2) {
@@ -679,13 +679,13 @@ static void send_response(struct transaction_t *txn, long code,
             else simple_hdr(txn, "Content-Length", "%s", hdr[0]);
         }
 
-        end_resp_headers(txn, code);
+        txn->conn->end_resp_headers(txn, code);
     }
     else {
         /* Body is buffered, so send using "identity" TE */
         if (txn->flags.ver != VER_2)
             simple_hdr(txn, "Content-Length", "%lu", len);
-        end_resp_headers(txn, code);
+        txn->conn->end_resp_headers(txn, code);
         write_body(0, txn, buf_base(body), len);
     }
 }
@@ -783,9 +783,9 @@ static int pipe_resp_body(struct protstream *pin, struct transaction_t *txn,
                         if (trailers) spool_free_hdrcache(trailers);
                         return (r != HTTP_SERVER_ERROR ? HTTP_BAD_GATEWAY: r);
                     }
-                    begin_resp_headers(txn, 0);
+                    txn->conn->begin_resp_headers(txn, 0);
                     spool_enum_hdrcache(trailers, &write_cachehdr, txn);
-                    end_resp_headers(txn, 0);
+                    txn->conn->end_resp_headers(txn, 0);
                     spool_free_hdrcache(trailers);
                 }
             }
@@ -906,9 +906,9 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
                 prot_flush(be->out);
             }
             else {
-                begin_resp_headers(txn, http_err);
+                txn->conn->begin_resp_headers(txn, http_err);
                 spool_enum_hdrcache(resp_hdrs, &write_cachehdr, txn);
-                end_resp_headers(txn, http_err);
+                txn->conn->end_resp_headers(txn, http_err);
             }
         }
     } while (code < 200);

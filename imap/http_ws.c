@@ -218,8 +218,8 @@ static ssize_t h2_send_cb(wslay_event_context_ptr ev,
     struct transaction_t *txn = (struct transaction_t *) user_data;
     int last_chunk = (txn->flags.conn & CONN_CLOSE) && !(flags & WSLAY_MSG_MORE);
 
-    int r = http2_data_chunk(txn, (const char *) data, len,
-                             last_chunk, NULL /* md5ctx */);
+    int r = txn->conn->resp_body_chunk(txn, (const char *) data, len,
+                                       last_chunk, NULL /* md5ctx */);
 
     xsyslog(LOG_DEBUG, "WS send", "len=<%zu>, r=<%d>", len, r);
 
