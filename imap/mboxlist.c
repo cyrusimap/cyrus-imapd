@@ -922,8 +922,8 @@ static int user_can_read(const strarray_t *aclbits, const char *user)
     int i;
     if (!aclbits) return 0;
     for (i = 0; i+1 < strarray_size(aclbits); i+=2) {
-        // skip ACLs without read bit
-        if (!strchr(strarray_nth(aclbits, i+1), 'r')) continue;
+        // skip ACLs with neither read nor lookup bit
+        if (!strpbrk(strarray_nth(aclbits, i+1), "lr")) continue;
         if (!strcmp(strarray_nth(aclbits, i), user)) return 1;
     }
     return 0;
@@ -967,7 +967,7 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
     if (oldusers) {
         for (i = 0; i+1 < strarray_size(oldusers); i+=2) {
             const char *acluser = strarray_nth(oldusers, i);
-            if (!strchr(strarray_nth(oldusers, i+1), 'r')) continue;
+            if (!strpbrk(strarray_nth(oldusers, i+1), "lr")) continue;
             if (!strcmpsafe(userid, acluser)) continue;
             if (strarray_find(admins, acluser, 0) >= 0) continue;
             if (user_can_read(newusers, acluser)) continue;
@@ -981,7 +981,7 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
     if (newusers) {
         for (i = 0; i+1 < strarray_size(newusers); i+=2) {
             const char *acluser = strarray_nth(newusers, i);
-            if (!strchr(strarray_nth(newusers, i+1), 'r')) continue;
+            if (!strpbrk(strarray_nth(newusers, i+1), "lr")) continue;
             if (!strcmpsafe(userid, acluser)) continue;
             if (strarray_find(admins, acluser, 0) >= 0) continue;
             if (user_can_read(oldusers, acluser)) continue;
