@@ -348,7 +348,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_reset(&attrib);
         static const char *description_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">description";
-        r = annotatemore_lookupmask(mbentry->name, description_annot,
+        r = annotatemore_lookupmask_mbe(mbentry, description_annot,
                                     httpd_userid, &attrib);
         json_object_set_new(obj, "description", buf_len(&attrib) ?
                             json_string(buf_cstring(&attrib)) : json_null());
@@ -430,7 +430,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_reset(&attrib);
         static const char *transp_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
-        r = annotatemore_lookupmask(mbentry->name, transp_annot,
+        r = annotatemore_lookupmask_mbe(mbentry, transp_annot,
                                     httpd_userid, &attrib);
         if (!strcmpsafe(buf_cstring(&attrib), "transparent")) {
             json_object_set_new(obj, "includeInAvailability",
@@ -465,7 +465,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_reset(&attrib);
         static const char *tzid_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
-        r = annotatemore_lookupmask(mbentry->name, tzid_annot,
+        r = annotatemore_lookupmask_mbe(mbentry, tzid_annot,
                                     httpd_userid, &attrib);
         if (buf_len(&attrib)) {
             json_object_set_new(obj, "timeZone",
@@ -474,7 +474,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         else {
             static const char *tz_annot =
                 DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
-            r = annotatemore_lookupmask(mbentry->name, tz_annot,
+            r = annotatemore_lookupmask_mbe(mbentry, tz_annot,
                                     httpd_userid, &attrib);
             if (buf_len(&attrib)) {
                 icalcomponent *ical, *vtz;
