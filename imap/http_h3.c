@@ -65,7 +65,24 @@ struct http3_stream {
     int64_t id;                         /* Stream ID */
     size_t num_resp_hdrs;               /* Number of response headers */
     nghttp3_nv resp_hdrs[HTTP3_MAX_HEADERS]; /* Array of response headers */
+
+    ptrarray_t body_chunks;             /* Array of body chunks (buffers) */
+    int next_chunk;                     /* Next chunk to send */
+    unsigned blocked : 1;               /* Stream is blocked (no body chunks) */
+
+    unsigned char md5[MD5_DIGEST_LENGTH];  /* MD5 of response body (trailer) */
 };
+
+static int acked_stream_data_cb(nghttp3_conn *conn __attribute__((unused)),
+                                int64_t stream_id,
+                                size_t datalen,
+                                void *conn_user_data __attribute__((unused)),
+                                void *stream_user_data __attribute__((unused)))
+{
+    syslog(LOG_DEBUG, "acked_stream_data(id=%ld): %lu", stream_id, datalen);
+
+    return 0;
+}
 
 static int stream_close_cb(nghttp3_conn *conn, int64_t stream_id,
                            uint64_t app_error_code,
@@ -78,7 +95,17 @@ static int stream_close_cb(nghttp3_conn *conn, int64_t stream_id,
 
     if (txn) {
         /* Memory cleanup */
+        struct http3_stream *strm = txn->strm_ctx;
+        int i;
+
         nghttp3_conn_set_stream_user_data(conn, stream_id, NULL);
+
+        for (i = 0; i < ptrarray_size(&strm->body_chunks); i++) {
+            struct buf *buf = ptrarray_nth(&strm->body_chunks, i);
+            buf_destroy(buf);
+        }
+        ptrarray_fini(&strm->body_chunks);
+
         transaction_free(txn);
         free(txn);
     }
@@ -242,7 +269,7 @@ static int end_stream_cb(nghttp3_conn *conn __attribute__((unused)),
 }
 
 static nghttp3_callbacks callbacks = {
-    NULL, // acked_stream_data
+    acked_stream_data_cb,
     stream_close_cb,
     recv_data_cb,
     NULL, // deferred_consume
@@ -484,12 +511,65 @@ static void add_resp_header(struct transaction_t *txn,
     }
 }
 
+static nghttp3_ssize read_data(nghttp3_conn *conn __attribute__((unused)),
+                               int64_t stream_id,
+                               nghttp3_vec *vec, size_t veccnt, uint32_t *pflags,
+                               void *user_data __attribute__((unused)),
+                               void *stream_user_data)
+{
+    struct transaction_t *txn = stream_user_data;
+    struct http3_stream *strm = (struct http3_stream *) txn->strm_ctx;
+    int num_chunks = ptrarray_size(&strm->body_chunks);
+    size_t n = 0;
+
+    *pflags = NGHTTP3_DATA_FLAG_NONE;
+
+    for (; n < veccnt && strm->next_chunk < num_chunks; strm->next_chunk++) {
+        struct buf *buf = ptrarray_nth(&strm->body_chunks, strm->next_chunk);
+
+        vec[n].base = (uint8_t *) buf_base(buf);
+        vec[n++].len = buf_len(buf);
+    }
+
+    if (!n) {
+        strm->blocked = 1;
+        return NGHTTP3_ERR_WOULDBLOCK;
+    }
+    else if (txn->flags.te & TE_CHUNKED) {
+        if (!vec[n-1].len) {
+            *pflags |= NGHTTP3_DATA_FLAG_EOF;
+
+            if (txn->flags.trailer & ~TRAILER_PROXY) {
+                *pflags |= NGHTTP3_DATA_FLAG_NO_END_STREAM;
+
+                begin_resp_headers(txn, 0);
+                if (txn->flags.trailer & TRAILER_CMD5) {
+                    content_md5_hdr(txn, strm->md5);
+                }
+                if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
+                    simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
+                }
+                end_resp_headers(txn, 0);
+            }
+        }
+    }
+    else {
+        *pflags |= NGHTTP3_DATA_FLAG_EOF;
+    }
+
+    syslog(LOG_DEBUG,
+           "read_data: id=%ld, n=%ld, flags=0x%X", stream_id, n, *pflags);
+
+    return n; 
+}
+
+
 
 static int end_resp_headers(struct transaction_t *txn, long code)
 {
     nghttp3_conn *h3_conn = txn->conn->sess_ctx;
     struct http3_stream *strm = (struct http3_stream *) txn->strm_ctx;
-    nghttp3_data_reader *dr = NULL;
+    nghttp3_data_reader dr = { read_data }, *drp = &dr;
     int r = 0;
 
     syslog(LOG_DEBUG,
@@ -523,23 +603,23 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     case HTTP_NO_CONTENT:
     case HTTP_NOT_MODIFIED:
         /* MUST NOT include a body */
-        dr = NULL;
+        drp = NULL;
         break;
 
     default:
         if (txn->meth == METH_HEAD) {
             /* MUST NOT include a body */
-            dr = NULL;
+            drp = NULL;
         }
         else if (!(txn->resp_body.len || (txn->flags.te & TE_CHUNKED))) {
             /* Empty body */
-            dr = NULL;
+            drp = NULL;
         }
         break;
     }
 
     r = nghttp3_conn_submit_response(h3_conn, strm->id,
-                                     strm->resp_hdrs, strm->num_resp_hdrs, dr);
+                                     strm->resp_hdrs, strm->num_resp_hdrs, drp);
 
     syslog(LOG_DEBUG, "%s(id=%ld): %s",
            "nghttp3_conn_submit_response", strm->id, nghttp3_strerror(r));
@@ -555,19 +635,16 @@ static int end_resp_headers(struct transaction_t *txn, long code)
 
 static int resp_body_chunk(struct transaction_t *txn,
                            const char *data, unsigned datalen,
-                           int last_chunk, MD5_CTX *md5ctx __attribute__((unused)))
+                           int last_chunk, MD5_CTX *md5ctx)
 {
-//    static unsigned char md5[MD5_DIGEST_LENGTH];
-//    struct http3_context *ctx = (struct http3_context *) txn->conn->sess_ctx;
-//    struct http3_stream *strm = (struct http3_stream *) txn->strm_ctx;
-//    uint8_t flags = NGHTTP3_DATA_FLAG_EOF;
-//    nghttp3_data_provider prd;
-//    int r;
+    struct http3_stream *strm = (struct http3_stream *) txn->strm_ctx;
 
     syslog(LOG_DEBUG, "http3_data_chunk(datalen=%u, last=%d)",
            datalen, last_chunk);
 
-    if (datalen && (txn->conn->logfd != -1)) {
+    if (!datalen && !last_chunk) return 0;
+
+    if (txn->conn->logfd != -1) {
         /* telemetry log */
         struct buf *logbuf = &txn->conn->logbuf;
         struct iovec iov[2];
@@ -580,54 +657,28 @@ static int resp_body_chunk(struct transaction_t *txn,
         WRITEV_ADD_TO_IOVEC(iov, niov, data, datalen);
         writev(txn->conn->logfd, iov, niov);
     }
-#if 0
-    /* NOTE: The protstream that we use as the data source MUST remain
-       available until the data source read callback has retrieved all data.
-       Also note that we need to make a copy of the data because data frames
-       may not be sent prior to the original pointer becoming invalid.
-    */
-    struct protstream *s = prot_readmap(xmemdup(data, datalen), datalen);
-    s->buf = s->ptr;
-    s->buf_size = datalen;
-
-    prd.source.ptr = s;
-    prd.read_callback = data_source_read_cb;
 
     if (txn->flags.te) {
         if (!last_chunk) {
-            flags = NGHTTP3_FLAG_NONE;
             if (datalen && (txn->flags.trailer & TRAILER_CMD5)) {
                 MD5Update(md5ctx, data, datalen);
             }
         }
-        else if (txn->flags.trailer) {
-            flags = NGHTTP3_FLAG_NONE;
-            if (txn->flags.trailer & TRAILER_CMD5) MD5Final(md5, md5ctx);
+        else if (txn->flags.trailer & TRAILER_CMD5) {
+            MD5Final(strm->md5, md5ctx);
         }
     }
 
-    syslog(LOG_DEBUG, "nghttp3_submit_data(id=%d, datalen=%d, flags=%#x)",
-           strm->id, datalen, flags);
 
-    r = nghttp3_submit_data(ctx->session, flags, strm->id, &prd);
-    if (r) {
-        syslog(LOG_ERR, "nghttp3_submit_data: %s", nghttp3_strerror(r));
-        return HTTP_SERVER_ERROR;
-    }
-    else {
-        /* Write frame(s) */
-        http3_output(txn->conn);
+    struct buf *buf = buf_new();
+    buf_setmap(buf, data, datalen);
+    ptrarray_append(&strm->body_chunks, buf);
 
-        if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
-            http3_begin_headers(txn);
-            if (txn->flags.trailer & TRAILER_CMD5) content_md5_hdr(txn, md5);
-            if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
-                simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
-            }
-            http3_end_headers(txn, 0);
-        }
+    if (strm->blocked) {
+        strm->blocked = 0;
+        nghttp3_conn_resume_stream(QUIC_CTX(txn->conn), strm->id);
     }
-#endif
+
     return 0;
 }
 
