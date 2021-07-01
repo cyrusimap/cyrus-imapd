@@ -562,15 +562,13 @@ EXPORTED icalcomponent *icalcomponent_new_stream(struct mailbox *mailbox,
 EXPORTED icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
 {
     const char *rawical = buf_cstring(buf);
-    char *freeme = NULL;
-
-    if (!stristr(rawical, "END:VCALENDAR")) {
-        rawical = freeme = strconcat(rawical, "END:VCALENDAR", NULL);
-    }
-
     icalcomponent *ical = icalparser_parse_string(rawical);
 
-    free(freeme);
+    if (!ical && !stristr(rawical, "END:VCALENDAR")) {
+        char *fixed = strconcat(rawical, "END:VCALENDAR", NULL);
+        ical = icalparser_parse_string(fixed);
+        free(fixed);
+    }
 
     return ical;
 }
