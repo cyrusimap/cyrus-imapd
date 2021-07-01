@@ -630,6 +630,14 @@ EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
         bop = SEARCH_OP_OR;
         break;
 
+    case SEOP_TRUE:
+        bop = SEARCH_OP_TRUE;
+        break;
+
+    case SEOP_FALSE:
+        bop = SEARCH_OP_FALSE;
+        break;
+
     case SEOP_MATCH:
     case SEOP_FUZZYMATCH:
         if (e->attr && search_can_match(e->op, e->attr->part)) {
@@ -645,8 +653,7 @@ EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
         return;
     }
 
-    if (e->children) {
-        assert(bop != -1);
+    if (bop != -1) {
         bx->begin_boolean(bx, bop);
         for (child = e->children ; child ; child = child->next)
             search_build_query(bx, child);
