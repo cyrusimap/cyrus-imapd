@@ -430,6 +430,8 @@ int config_httpprettytelemetry;
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
 
+static int http2_enabled = 0;
+
 int ignorequota = 0;
 int apns_enabled = 0;
 
@@ -870,7 +872,7 @@ int service_init(int argc __attribute__((unused)),
         }
     }
 
-    http2_init(&http_conn, &serverinfo);
+    http2_enabled = http2_init(&http_conn, &serverinfo);
     ws_init(&http_conn, &serverinfo);
 
 #ifdef HAVE_ZLIB
@@ -1221,7 +1223,7 @@ EXPORTED void fatal(const char* s, int code)
 
 static unsigned h2_is_available(void *http_conn)
 {
-    return (http2_enabled() && http2_start_session(NULL, http_conn) == 0);
+    return (http2_enabled && http2_start_session(NULL, http_conn) == 0);
 }
 
 static const struct tls_alpn_t http_alpn_map[] = {
@@ -1587,7 +1589,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
             config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
             txn->flags.upgrade |= UPGRADE_TLS;
         }
-        if (http2_enabled()) txn->flags.upgrade |= UPGRADE_HTTP2;
+        if (http2_enabled) txn->flags.upgrade |= UPGRADE_HTTP2;
     }
 
     if (txn->flags.upgrade) txn->flags.conn |= CONN_UPGRADE;
@@ -2348,7 +2350,7 @@ static int parse_connection(struct transaction_t *txn)
                             txn->flags.conn |= CONN_UPGRADE;
                             txn->flags.upgrade |= UPGRADE_TLS;
                         }
-                        else if (http2_enabled() &&
+                        else if (http2_enabled &&
                                  !strncasecmp(upgrade[0], HTTP2_CLEARTEXT_ID,
                                               strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to HTTP/2 */

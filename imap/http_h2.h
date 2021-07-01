@@ -54,9 +54,7 @@
 
 #define HTTP2_CLEARTEXT_ID  "h2c"
 
-extern void http2_init(struct http_connection *conn, struct buf *serverinfo);
-
-extern int http2_enabled();
+extern int http2_init(struct http_connection *conn, struct buf *serverinfo);
 
 extern void http2_altsvc(struct buf *altsvc);
 

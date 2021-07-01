@@ -521,7 +521,7 @@ static void _shutdown(struct http_connection *conn)
     nghttp2_session_callbacks_del(http2_callbacks);
 }
 
-HIDDEN void http2_init(struct http_connection *conn, struct buf *serverinfo)
+HIDDEN int http2_init(struct http_connection *conn, struct buf *serverinfo)
 {
     int r;
 
@@ -531,7 +531,7 @@ HIDDEN void http2_init(struct http_connection *conn, struct buf *serverinfo)
     if ((r = nghttp2_session_callbacks_new(&http2_callbacks))) {
         syslog(LOG_WARNING,
                "nghttp2_session_callbacks_new: %s", nghttp2_strerror(r));
-        return;
+        return 0;
     }
 
     nghttp2_session_callbacks_set_send_callback(http2_callbacks,
@@ -559,18 +559,14 @@ HIDDEN void http2_init(struct http_connection *conn, struct buf *serverinfo)
     }
 
     ptrarray_add(&conn->shutdown_callbacks, &_shutdown);
-}
 
-
-HIDDEN int http2_enabled()
-{
-    return (http2_callbacks != NULL);
+    return 1;
 }
 
 
 HIDDEN void http2_altsvc(struct buf *altsvc)
 {
-    if (!https && http2_enabled()) {
+    if (!https && http2_callbacks) {
         const char *sep = buf_len(altsvc) ? ", " : "";
         const char *config_altsvc = config_getstring(IMAPOPT_HTTP_H2_ALTSVC);
 
@@ -588,7 +584,7 @@ HIDDEN void http2_altsvc(struct buf *altsvc)
 
 HIDDEN int http2_preface(struct http_connection *conn)
 {
-    if (http2_enabled()) {
+    if (http2_callbacks) {
         /* Check initial client input for HTTP/2 preface */
         int c;
 
@@ -1023,12 +1019,8 @@ static int resp_body_chunk(struct transaction_t *txn,
 
 #else /* !HAVE_NGHTTP2 */
 
-HIDDEN void http2_init(struct http_connection *conn __attribute__((unused)),
+HIDDEN int http2_init(struct http_connection *conn __attribute__((unused)),
                        struct buf *serverinfo __attribute__((unused)))
-{
-}
-
-HIDDEN int http2_enabled()
 {
     return 0;
 }
