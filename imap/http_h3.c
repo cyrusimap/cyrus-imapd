@@ -417,8 +417,8 @@ static void http3_output(struct http_connection *conn)
             iovcnt = nghttp3_conn_writev_stream(h3_conn, &stream_id, &fin,
                                                 (nghttp3_vec *) iov,
                                                 sizeof(iov) / sizeof(iov[0]));
-            syslog(LOG_DEBUG,
-                   "nghttp3_conn_writev_stream: %ld, %ld", stream_id, iovcnt);
+            syslog(LOG_DEBUG, "nghttp3_conn_writev_stream: %ld, %ld, %d",
+                   stream_id, iovcnt, fin);
         }
 
         nwrite = quic_output(QUIC_CTX(conn), stream_id, fin, iov, iovcnt, &datalen);
