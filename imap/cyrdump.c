@@ -192,7 +192,7 @@ static int dump_me(struct findall_data *data, void *rock)
     printf("IMAP-Dump-Version: 0\n");
     printf("\n");
 
-    printf("<imapdump uniqueid=\"%s\">\n", state->mailbox->uniqueid);
+    printf("<imapdump uniqueid=\"%s\">\n", mailbox_uniqueid(state->mailbox));
     memset(&url, 0, sizeof(struct imapurl));
     url.server = config_servername;
     url.mailbox = name;

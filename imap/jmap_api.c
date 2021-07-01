@@ -419,7 +419,7 @@ HIDDEN void jmap_finireq(jmap_req_t *req)
     for (i = 0; i < req->mboxes->count; i++) {
         struct _mboxcache_rec *rec = ptrarray_nth(req->mboxes, i);
         syslog(LOG_ERR, "jmap: force-closing mailbox %s (refcount=%d)",
-                        rec->mbox->name, rec->refcount);
+                        mailbox_name(rec->mbox), rec->refcount);
         mailbox_close(&rec->mbox);
         free(rec);
     }
@@ -1065,7 +1065,7 @@ HIDDEN int jmap_openmbox(jmap_req_t *req, const char *name,
 
     for (i = 0; i < req->mboxes->count; i++) {
         rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
-        if (!strcmp(name, rec->mbox->name)) {
+        if (!strcmp(name, mailbox_name(rec->mbox))) {
             if (rw && !rec->rw) {
                 /* Lock promotions are not supported */
                 syslog(LOG_ERR, "jmapmbox: failed to grab write-lock"
@@ -1116,7 +1116,7 @@ HIDDEN int jmap_isopenmbox(jmap_req_t *req, const char *name)
 
     for (i = 0; i < req->mboxes->count; i++) {
         rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
-        if (!strcmp(name, rec->mbox->name))
+        if (!strcmp(name, mailbox_name(rec->mbox)))
             return 1;
     }
 
@@ -1142,7 +1142,7 @@ HIDDEN void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp)
             return;
         }
     }
-    syslog(LOG_INFO, "jmap: ignoring non-cached mailbox %s", (*mboxp)->name);
+    syslog(LOG_INFO, "jmap: ignoring non-cached mailbox %s", mailbox_name(*mboxp));
 }
 
 struct findblob_data {
@@ -2994,7 +2994,7 @@ static int set_upload_rights(const char *accountid)
     if (r) return r;
 
     hash_table user_access = HASH_TABLE_INITIALIZER;
-    struct shared_rock srock = { &user_access, accountid, mbox->name };
+    struct shared_rock srock = { &user_access, accountid, mailbox_name(mbox) };
 
     /* build the sum of the shared rights for each each user */
     construct_hash_table(&user_access, 64, 0);
@@ -3006,17 +3006,17 @@ static int set_upload_rights(const char *accountid)
     free_hash_table(&user_access, NULL);
 
     /* ok, change the mailboxes database */
-    r = mboxlist_sync_setacls(mbox->name, newacl, mailbox_modseq_dirty(mbox));
+    r = mboxlist_sync_setacls(mailbox_name(mbox), newacl, mailbox_modseq_dirty(mbox));
     if (r) {
         syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
-               mbox->name, error_message(r));
+               mailbox_name(mbox), error_message(r));
     }
     else {
         /* ok, change the backup in cyrus.header */
         r = mailbox_set_acl(mbox, newacl);
         if (r) {
             syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
-                   mbox->name, error_message(r));
+                   mailbox_name(mbox), error_message(r));
         }
     }
 
@@ -3030,10 +3030,10 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite)
 {
     hash_table user_access = HASH_TABLE_INITIALIZER;
-    int isdav = mbtypes_dav(mbox->mbtype);
-    int iscalendar = mbtype_isa(mbox->mbtype) == MBTYPE_CALENDAR;
-    char *owner = mboxname_to_userid(mbox->name);
-    char *acl = xstrdup(mbox->acl);
+    int isdav = mbtypes_dav(mailbox_mbtype(mbox));
+    int iscalendar = mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_CALENDAR;
+    char *owner = mboxname_to_userid(mailbox_name(mbox));
+    char *acl = xstrdupnull(mailbox_acl(mbox));
     struct acl_change *change;
     const char *userid;
     json_t *rights;
@@ -3089,7 +3089,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                               ACL_MODE_SET, access, NULL, NULL);
             if (r) {
                 syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
-                       mbox->name, userid, error_message(r));
+                       mailbox_name(mbox), userid, error_message(r));
                 goto done;
             }
         }
@@ -3143,17 +3143,17 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     hash_enumerate_sorted(&user_access, add_useracls, &newacl, cmpstringp_raw);
 
     /* ok, change the mailboxes database */
-    r = mboxlist_sync_setacls(mbox->name, newacl, mailbox_modseq_dirty(mbox));
+    r = mboxlist_sync_setacls(mailbox_name(mbox), newacl, mailbox_modseq_dirty(mbox));
     if (r) {
         syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
-               mbox->name, error_message(r));
+               mailbox_name(mbox), error_message(r));
     }
     else {
         /* ok, change the backup in cyrus.header */
         r = mailbox_set_acl(mbox, newacl);
         if (r) {
             syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
-                   mbox->name, error_message(r));
+                   mailbox_name(mbox), error_message(r));
         }
     }
 
@@ -3175,7 +3175,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         /* Find the DAV namespace for this mailbox */
         if (iscalendar)
             irock.tgt.namespace = &namespace_calendar;
-        else if (mbtype_isa(mbox->mbtype) == MBTYPE_ADDRESSBOOK)
+        else if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_ADDRESSBOOK)
             irock.tgt.namespace = &namespace_addressbook;
         else
             irock.tgt.namespace = &namespace_drive;
@@ -3185,7 +3185,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         irock.live_props = pparams->propfind.lprops;
 
         /* Create DAV URL for this collection */
-        mbname = mbname_from_intname(mbox->name);
+        mbname = mbname_from_intname(mailbox_name(mbox));
         if (!mbname_domain(mbname)) mbname_set_domain(mbname, httpd_extradomain);
 
         make_collection_url(&irock.resource, irock.tgt.namespace->prefix,
@@ -3197,7 +3197,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
 
         if (!r) {
             /* Process each user */
-            irock.mboxname = mbox->name;
+            irock.mboxname = mailbox_name(mbox);
             hash_enumerate(&user_access, send_dav_invite, &irock);
         }
 

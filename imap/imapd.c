@@ -7211,7 +7211,7 @@ localcreate:
     }
 
     /* Close newly created mailbox before writing annotations */
-    mailboxid = xstrdup(mailbox->uniqueid);
+    mailboxid = xstrdup(mailbox_uniqueid(mailbox));
     mailbox_close(&mailbox);
 
     if (specialuse.len) {
@@ -8814,7 +8814,7 @@ static void cmd_getquotaroot(const char *tag, const char *name)
         r = mailbox_open_irl(intname, &mailbox);
         if (!r) {
             doclose = 1;
-            myrights = cyrus_acl_myrights(imapd_authstate, mailbox->acl);
+            myrights = cyrus_acl_myrights(imapd_authstate, mailbox_acl(mailbox));
         }
     }
 
@@ -11326,7 +11326,7 @@ static int xfer_backport_seen_item(struct xfer_item *item,
     sd.seenuids = seqset_cstring(outlist);
     if (!sd.seenuids) sd.seenuids = xstrdup("");
 
-    r = seen_write(seendb, mailbox->uniqueid, &sd);
+    r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
 
     seen_freedata(&sd);
     seqset_free(outlist);
@@ -11543,7 +11543,7 @@ static int sync_mailbox(struct xfer_header *xfer,
     modseq_t xconvmodseq = 0;
     modseq_t raclmodseq = 0;
 
-    if (!topart) topart = mailbox->part;
+    if (!topart) topart = mailbox_partition(mailbox);
     reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
     part_list = sync_reserve_partlist(reserve_guids, topart);
 
@@ -11551,7 +11551,7 @@ static int sync_mailbox(struct xfer_header *xfer,
     r = read_annotations(mailbox, NULL, &annots, /*since_modseq*/0, /*flags*/0);
     if (r) {
         syslog(LOG_ERR, "sync_mailbox(): read annotations failed: %s '%s'",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto cleanup;
     }
 
@@ -11560,21 +11560,21 @@ static int sync_mailbox(struct xfer_header *xfer,
         r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
         if (r) {
             syslog(LOG_ERR, "sync_mailbox(): mailbox get xconvmodseq failed: %s '%s'",
-                mailbox->name, error_message(r));
+                mailbox_name(mailbox), error_message(r));
             goto cleanup;
         }
     }
     /* raclmodseq */
     if (config_getswitch(IMAPOPT_REVERSEACLS)) {
-        raclmodseq = mboxname_readraclmodseq(mailbox->name);
+        raclmodseq = mboxname_readraclmodseq(mailbox_name(mailbox));
     }
 
     master_folders = sync_folder_list_create();
     sync_folder_list_add(master_folders,
-                         mailbox->uniqueid, mailbox->name,
-                         mailbox->mbtype,
-                         mailbox->part,
-                         mailbox->acl,
+                         mailbox_uniqueid(mailbox), mailbox_name(mailbox),
+                         mailbox_mbtype(mailbox),
+                         mailbox_partition(mailbox),
+                         mailbox_acl(mailbox),
                          mailbox->i.options,
                          mailbox->i.uidvalidity,
                          mailbox->i.last_uid,
@@ -11587,7 +11587,7 @@ static int sync_mailbox(struct xfer_header *xfer,
                          annots,
                          xconvmodseq,
                          raclmodseq,
-                         mailbox->foldermodseq,
+                         mailbox_foldermodseq(mailbox),
                          /* ispartial */0);
     annots = NULL; /* list took ownership */
 
@@ -11698,7 +11698,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
             syslog(LOG_ERR,
                    "Failed to get annotate state for mailbox %s"
                    " for xfer_final_sync() %s",
-                   mailbox->name, error_message(r));
+                   mailbox_name(mailbox), error_message(r));
             mailbox_close(&mailbox);
             goto done;
         }
@@ -11735,7 +11735,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
                 if (mailbox->quotaroot)
                     sync_name_list_add(master_quotaroots, mailbox->quotaroot);
 
-                r = sync_do_annotation(&xfer->sync_cs, mailbox->name);
+                r = sync_do_annotation(&xfer->sync_cs, mailbox_name(mailbox));
                 if (r) {
                     syslog(LOG_ERR, "Could not move mailbox: %s,"
                            " sync_do_annotation() failed %s",

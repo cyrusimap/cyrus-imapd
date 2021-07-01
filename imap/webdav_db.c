@@ -137,7 +137,7 @@ EXPORTED struct webdav_db *webdav_open_userid(const char *userid)
 EXPORTED struct webdav_db *webdav_open_mailbox(struct mailbox *mailbox)
 {
     struct webdav_db *webdavdb = NULL;
-    char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
 
     init_internal();
 

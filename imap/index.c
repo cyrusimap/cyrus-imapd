@@ -311,7 +311,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     struct index_state *state = xzmalloc(sizeof(struct index_state));
 
     state->mailbox = mailbox;
-    state->mboxname = xstrdup(mailbox->name);
+    state->mboxname = xstrdup(mailbox_name(mailbox));
 
     if (init) {
         state->authstate = init->authstate;
@@ -323,7 +323,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
         state->want_expunged = init->want_expunged;
 
         state->myrights = cyrus_acl_myrights(init->authstate,
-                                             state->mailbox->acl);
+                                             mailbox_acl(state->mailbox));
         if (state->examining)
             state->myrights &= ~ACL_READ_WRITE;
 
@@ -331,11 +331,11 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
                                                     state->userid);
     }
 
-    if (mbtype_isa(state->mailbox->mbtype) != MBTYPE_EMAIL) {
+    if (mbtype_isa(mailbox_mbtype(state->mailbox)) != MBTYPE_EMAIL) {
         if (state->want_dav) {
             /* User logged in using imapmagicplus token "dav" */
         }
-        else if (mbtype_isa(state->mailbox->mbtype) == state->want_mbtype) {
+        else if (mbtype_isa(mailbox_mbtype(state->mailbox)) == state->want_mbtype) {
             /* Caller explicitly asks for this NONIMAP type */
         }
         else {
@@ -460,7 +460,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     seqset_free(seq);
 
     mboxevent_extract_mailbox(mboxevent, state->mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, state->userid, state->mailbox->name, 1);
+    mboxevent_set_access(mboxevent, NULL, NULL, state->userid, mailbox_name(state->mailbox), 1);
     mboxevent_set_numunseen(mboxevent, state->mailbox, state->numunseen);
 
     /* unlock before responding */
@@ -547,7 +547,7 @@ static int index_writeseen(struct index_state *state)
     r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) return r;
 
-    r = seen_lockread(seendb, mailbox->uniqueid, &oldsd);
+    r = seen_lockread(seendb, mailbox_uniqueid(mailbox), &oldsd);
     if (r) {
         oldsd.lastread = 0;
         oldsd.lastuid = 0;
@@ -572,7 +572,7 @@ static int index_writeseen(struct index_state *state)
     if (!seen_compare(&sd, &oldsd)) {
         sd.lastread = time(NULL);
         sd.lastchange = mailbox->i.last_appenddate;
-        r = seen_write(seendb, mailbox->uniqueid, &sd);
+        r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
     }
 
     seen_close(&seendb);
@@ -600,7 +600,7 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
         int r;
 
         r = seen_open(userid, SEEN_CREATE, &seendb);
-        if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+        if (!r) r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
         seen_close(&seendb);
 
         /* handle no seen DB gracefully */
@@ -837,7 +837,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
 
     /* RFC 8474 */
     prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n",
-                state->mailbox->uniqueid);
+                mailbox_uniqueid(state->mailbox));
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
@@ -988,7 +988,7 @@ struct seqset *index_vanished(struct index_state *state,
         syslog(LOG_NOTICE, "inefficient qresync ("
                MODSEQ_FMT " > " MODSEQ_FMT ") %s",
                mailbox->i.deletedmodseq, params->modseq,
-               mailbox->name);
+               mailbox_name(mailbox));
 
         /* use the sequence to uid mapping provided by the client to
          * skip over any initial matches - see RFC 5162 section 3.1 */
@@ -1105,7 +1105,7 @@ EXPORTED void index_fetchresponses(struct index_state *state,
     /* Keep an open reference on the per-mailbox db to avoid
      * doing too many slow database opens during the fetch */
     if ((fetchargs->fetchitems & FETCH_ANNOTATION))
-        annotate_getdb(state->mailbox->uniqueid, &annot_db);
+        annotate_getdb(mailbox_uniqueid(state->mailbox), &annot_db);
 
     start = 1;
     end = state->exists;
@@ -1202,7 +1202,7 @@ EXPORTED int index_fetch(struct index_state *state,
         }
 
         mboxevent_extract_mailbox(mboxevent, state->mailbox);
-        mboxevent_set_access(mboxevent, NULL, NULL, state->userid, state->mailbox->name, 1);
+        mboxevent_set_access(mboxevent, NULL, NULL, state->userid, mailbox_name(state->mailbox), 1);
         mboxevent_set_numunseen(mboxevent, state->mailbox,
                                 state->numunseen);
     }
@@ -1435,10 +1435,10 @@ doneloop:
      * and FlagsSet events */
     mboxevent_extract_mailbox(flagsset, mailbox);
     mboxevent_set_numunseen(flagsset, mailbox, state->numunseen);
-    mboxevent_set_access(flagsset, NULL, NULL, state->userid, state->mailbox->name, 1);
+    mboxevent_set_access(flagsset, NULL, NULL, state->userid, mailbox_name(state->mailbox), 1);
 
     mboxevent_extract_mailbox(flagsclear, mailbox);
-    mboxevent_set_access(flagsclear, NULL, NULL, state->userid, state->mailbox->name, 1);
+    mboxevent_set_access(flagsclear, NULL, NULL, state->userid, mailbox_name(state->mailbox), 1);
     mboxevent_set_numunseen(flagsclear, mailbox, state->numunseen);
 
     mboxevent_notify(&mboxevents);
@@ -2585,7 +2585,7 @@ static int emit_snippet(struct mailbox *mailbox, uint32_t uid,
 
     if (!partname) return 0;
 
-    char *extname = mboxname_to_external(mailbox->name, sr->namespace, sr->userid);
+    char *extname = mboxname_to_external(mailbox_name(mailbox), sr->namespace, sr->userid);
 
     prot_printf(sr->out, "* SNIPPET ");
     prot_printstring(sr->out, extname);
@@ -6041,10 +6041,10 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
 
     /* Log erroneous or partially indexed message */
     if (r || (str.indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) {
-        struct mailbox *mbox = msg_mailbox(msg);
+        struct mailbox *mailbox = msg_mailbox(msg);
         uint32_t uid = 0;
         message_get_uid(msg, &uid);
-        const char *mboxname = mbox ? mbox->name : "";
+        const char *mboxname = mailbox ? mailbox_name(mailbox) : "";
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: failed to index msg",
                     "mailbox=<%s> uid=<%d> r=<%s>",
@@ -6248,7 +6248,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 break;
             }
             case SORT_SAVEDATE:
-                if (!strcmpnull(mailbox->uniqueid, sortcrit[j].args.mailbox.id)) {
+                if (!strcmpnull(mailbox_uniqueid(mailbox), sortcrit[j].args.mailbox.id)) {
                     cur->savedate = record.savedate;
                 }
                 else {
@@ -6259,14 +6259,14 @@ MsgData **index_msgdata_load(struct index_state *state,
             case SORT_SNOOZEDUNTIL:
 #ifdef WITH_JMAP
                 if ((record.internal_flags & FLAG_INTERNAL_SNOOZED) &&
-                    !strcmpnull(mailbox->uniqueid, sortcrit[j].args.mailbox.id)) {
+                    !strcmpnull(mailbox_uniqueid(mailbox), sortcrit[j].args.mailbox.id)) {
                     /* SAVEDATE == snoozed#until */
                     cur->savedate = record.savedate;
 
                     if (!cur->savedate) {
                         /* Try fetching snoozed#until directly */
                         json_t *snoozed =
-                            jmap_fetch_snoozed(mailbox->name, record.uid);
+                            jmap_fetch_snoozed(mailbox_name(mailbox), record.uid);
 
                         if (snoozed) {
                             time_from_iso8601(
@@ -8244,9 +8244,9 @@ EXPORTED int insert_into_mailbox_allowed(struct mailbox *mailbox)
     /* prohibit inserting into \Snoozed mailbox */
     if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
         struct buf attrib = BUF_INITIALIZER;
-        char *userid = mboxname_to_userid(mailbox->name);
+        char *userid = mboxname_to_userid(mailbox_name(mailbox));
 
-        r = annotatemore_lookup(mailbox->name, "/specialuse", userid, &attrib);
+        r = annotatemore_lookup(mailbox_name(mailbox), "/specialuse", userid, &attrib);
         free(userid);
 
         if (!r && buf_len(&attrib)) {

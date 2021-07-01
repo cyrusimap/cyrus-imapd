@@ -621,8 +621,8 @@ static int store_resource(struct transaction_t *txn,
     /* Check for changed UID on existing resource */
     /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
        XXX  because we may have been called as part of a COPY/MOVE */
-    const mbentry_t mbentry = { .name = mailbox->name,
-                                .uniqueid = mailbox->uniqueid };
+    const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
     carddav_lookup_resource(davdb, &mbentry, resource, &cdata, 0);
     if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
         txn->error.precond = CARDDAV_UID_CONFLICT;
@@ -631,7 +631,7 @@ static int store_resource(struct transaction_t *txn,
     else if (dupcheck) {
         /* Check for different resource with same UID */
         const char *mbox =
-            cdata->dav.mailbox_byname ? mailbox->name : mailbox->uniqueid;
+            cdata->dav.mailbox_byname ? mailbox_name(mailbox) : mailbox_uniqueid(mailbox);
         carddav_lookup_uid(davdb, uid, &cdata);
         if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mbox) ||
                                     strcmp(cdata->dav.resource, resource))) {
@@ -680,7 +680,7 @@ static int store_resource(struct transaction_t *txn,
             xsyslog(LOG_ERR,
                     "Couldn't find index record corresponding to CardDAV DB record",
                     "mailbox=<%s> record=<%u> error=<%s>",
-                    mailbox->name, cdata->dav.imap_uid, error_message(r));
+                    mailbox_name(mailbox), cdata->dav.imap_uid, error_message(r));
         }
     }
 
@@ -789,7 +789,7 @@ static int export_addressbook(struct transaction_t *txn)
     r = annotatemore_lookupmask_mbox(mailbox, displayname_annot,
                                      httpd_userid, &attrib);
     /* fall back to last part of mailbox name */
-    if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox->name, '.') + 1);
+    if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox_name(mailbox), '.') + 1);
 
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "%s.%s", buf_cstring(&attrib), mime->file_ext);

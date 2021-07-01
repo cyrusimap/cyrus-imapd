@@ -162,7 +162,7 @@ EXPORTED struct caldav_db *caldav_open_userid(const char *userid)
 EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox)
 {
     struct caldav_db *caldavdb = NULL;
-    char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
 
     init_internal();
 

@@ -312,14 +312,7 @@ struct mailbox {
 /* pre-declare message_t to avoid circular dependency problems */
 typedef struct message message_t;
 
-struct mailbox_iter {
-    struct mailbox *mailbox;
-    message_t *msg;
-    modseq_t changedsince;
-    uint32_t recno;
-    uint32_t num_records;
-    unsigned skipflags;
-};
+struct mailbox_iter;
 
 /* Offsets of index/expunge header fields
  *
@@ -570,6 +563,14 @@ extern int mailbox_open_exclusive(const char *name,
 extern void mailbox_close(struct mailbox **mailboxptr);
 extern int mailbox_delete(struct mailbox **mailboxptr);
 
+/* reading details */
+extern const char *mailbox_name(const struct mailbox *mailbox);
+extern const char *mailbox_uniqueid(const struct mailbox *mailbox);
+extern const char *mailbox_partition(const struct mailbox *mailbox);
+extern const char *mailbox_acl(const struct mailbox *mailbox);
+extern uint32_t mailbox_mbtype(const struct mailbox *mailbox);
+extern modseq_t mailbox_foldermodseq(const struct mailbox *mailbox);
+
 struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox);
 struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox);
 
@@ -592,6 +593,7 @@ extern int mailbox_read_basecid(struct mailbox *mailbox,
                                 const struct index_record *record);
 
 
+extern void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid);
 extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl);
 extern int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot);
 extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,

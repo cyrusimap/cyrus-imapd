@@ -767,10 +767,10 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
         if (r) goto done;
         time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
 
-        json_t *mboxdata = json_object_get(mboxs, mbox->uniqueid);
+        json_t *mboxdata = json_object_get(mboxs, mailbox_uniqueid(mbox));
         if (!mboxdata) {
             mboxdata = json_object();
-            json_object_set_new(mboxs, mbox->uniqueid, mboxdata);
+            json_object_set_new(mboxs, mailbox_uniqueid(mbox), mboxdata);
         }
 
         if (exists) {
@@ -1268,7 +1268,7 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     r = jmap_openmbox_by_guidrec(check->req, rec, &mbox, 0);
     if (r) return r;
 
-    if (mbtype_isa(mbox->mbtype) == MBTYPE_EMAIL) {
+    if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_EMAIL) {
         r = msgrecord_find(mbox, rec->uid, &mr);
         if (!r) {
             uint32_t internal_flags;
@@ -3364,7 +3364,7 @@ static int guidsearch_run_xapian(jmap_req_t *req, struct emailsearch *search,
     bx = search_begin_search(mbox, 0);
     if (!bx) {
         syslog(LOG_ERR, "jmap: %s: can't begin search for %s",
-                __func__,  mbox->name);
+                __func__,  mailbox_name(mbox));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -5820,13 +5820,13 @@ static int _email_keywords_add_msgrecord(struct email_keywords *keywords,
 
     if (read_seendb) {
         /* Read $seen keyword from seen.db for shared accounts */
-        struct seqset *seenseq = hash_lookup(mbox->uniqueid, keywords->seenseq_by_mbox_id);
+        struct seqset *seenseq = hash_lookup(mailbox_uniqueid(mbox), keywords->seenseq_by_mbox_id);
         if (!seenseq) {
             struct seendata sd = SEENDATA_INITIALIZER;
-            int r = seen_read(keywords->seendb, mbox->uniqueid, &sd);
+            int r = seen_read(keywords->seendb, mailbox_uniqueid(mbox), &sd);
             if (!r) {
                 seenseq = seqset_parse(sd.seenuids, NULL, sd.lastuid);
-                hash_insert(mbox->uniqueid, seenseq, keywords->seenseq_by_mbox_id);
+                hash_insert(mailbox_uniqueid(mbox), seenseq, keywords->seenseq_by_mbox_id);
                 seen_freedata(&sd);
             }
             else {
@@ -7437,7 +7437,7 @@ static int _warmup_mboxcache_cb(const conv_guidrec_t *rec, void* vrock)
     struct mailbox *mbox = NULL;
     int r = jmap_openmbox_by_guidrec(rock->req, rec, &mbox, /*rw*/0);
     if (!r) {
-        if (mbtype_isa(mbox->mbtype) == MBTYPE_EMAIL) {
+        if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_EMAIL) {
             ptrarray_append(&rock->mboxes, mbox);
         }
         else jmap_closembox(rock->req, &mbox);
@@ -8024,7 +8024,7 @@ static int _copy_msgrecords(struct auth_state *authstate,
     if (r) goto done;
 
     r = append_copy(src, &as, msgrecs, nolink,
-                    mboxname_same_userid(src->name, dst->name));
+                    mboxname_same_userid(mailbox_name(src), mailbox_name(dst)));
     if (r) {
         append_abort(&as);
         goto done;
@@ -8034,9 +8034,9 @@ static int _copy_msgrecords(struct auth_state *authstate,
     if (r) goto done;
 
     /* we log the first name to get GUID-copy magic */
-    sync_log_mailbox_double(src->name, dst->name);
+    sync_log_mailbox_double(mailbox_name(src), mailbox_name(dst));
     /* also want to log an append here, to make sure squatter notices */
-    sync_log_append(dst->name);
+    sync_log_append(mailbox_name(dst));
 
 done:
     return r;
@@ -8050,7 +8050,7 @@ static int _copy_msgrecord(struct auth_state *authstate,
                            msgrecord_t *mrw)
 {
 
-    if (!strcmp(src->uniqueid, dst->uniqueid))
+    if (!strcmp(mailbox_uniqueid(src), mailbox_uniqueid(dst)))
         return 0;
 
     ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
@@ -8120,7 +8120,7 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
     if (didsome) {
         mboxevent_extract_mailbox(mboxevent, mbox);
         mboxevent_set_numunseen(mboxevent, mbox, -1);
-        mboxevent_set_access(mboxevent, NULL, NULL, req->userid, mbox->name, 0);
+        mboxevent_set_access(mboxevent, NULL, NULL, req->userid, mailbox_name(mbox), 0);
         mboxevent_notify(&mboxevent);
     }
     mboxevent_free(&mboxevent);
@@ -8238,16 +8238,16 @@ static void _email_append(jmap_req_t *req,
     if (r) goto done;
 
     if (sourcefile) {
-        if (!(f = append_newstage_full(mbox->name, internaldate, 0, &stage, sourcefile))) {
-            syslog(LOG_ERR, "append_newstage(%s) failed", mbox->name);
+        if (!(f = append_newstage_full(mailbox_name(mbox), internaldate, 0, &stage, sourcefile))) {
+            syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mbox));
             r = HTTP_SERVER_ERROR;
             goto done;
         }
     }
     else {
         /* Write the message to the filesystem */
-        if (!(f = append_newstage(mbox->name, internaldate, 0, &stage))) {
-            syslog(LOG_ERR, "append_newstage(%s) failed", mbox->name);
+        if (!(f = append_newstage(mailbox_name(mbox), internaldate, 0, &stage))) {
+            syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mbox));
             r = HTTP_SERVER_ERROR;
             goto done;
         }
@@ -8368,7 +8368,7 @@ static void _email_append(jmap_req_t *req,
         append_removestage(stage);
         stage = NULL;
     }
-    json_object_del(mailboxes, mbox->uniqueid);
+    json_object_del(mailboxes, mailbox_uniqueid(mbox));
 
     /* Copy the message to all remaining mailboxes */
     json_object_foreach(mailboxes, id, val) {
@@ -10796,8 +10796,8 @@ static struct email_updateplan *_email_bulkupdate_addplan(struct email_bulkupdat
 {
     struct email_updateplan *plan = xzmalloc(sizeof(struct email_updateplan));
     plan->mbox = mbox;
-    plan->mbox_id = xstrdup(mbox->uniqueid);
-    plan->mboxname = xstrdup(mbox->name);
+    plan->mbox_id = xstrdup(mailbox_uniqueid(mbox));
+    plan->mboxname = xstrdup(mailbox_name(mbox));
     plan->mboxrec = mboxrec;
     plan->use_seendb = !mailbox_internal_seen(plan->mbox, bulk->req->userid);
     hash_insert(plan->mbox_id, plan, &bulk->plans_by_mbox_id);
@@ -11251,7 +11251,7 @@ static int _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarr
         struct email_updateplan *plan = hash_iter_val(iter);
         if (plan->use_seendb) {
             /* Read seen sequence set */
-            int r = seen_read(bulk->seendb, plan->mbox->uniqueid, &plan->old_seendata);
+            int r = seen_read(bulk->seendb, mailbox_uniqueid(plan->mbox), &plan->old_seendata);
             if (!r) {
                 plan->old_seenseq = seqset_parse(plan->old_seendata.seenuids, NULL, 0);
                 if (!hash_lookup(plan->mbox_id, &seenseq_by_mbox_id))
@@ -11746,10 +11746,10 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
                 if (!r) jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
             }
             if (mbox) {
-                if (!hash_lookup(mbox->uniqueid, &bulk->plans_by_mbox_id)) {
+                if (!hash_lookup(mailbox_uniqueid(mbox), &bulk->plans_by_mbox_id)) {
                     struct email_mboxrec *mboxrec = xzmalloc(sizeof(struct email_mboxrec));
-                    mboxrec->mboxname = xstrdup(mbox->name);
-                    mboxrec->mbox_id = xstrdup(mbox->uniqueid);
+                    mboxrec->mboxname = xstrdup(mailbox_name(mbox));
+                    mboxrec->mbox_id = xstrdup(mailbox_uniqueid(mbox));
                     ptrarray_append(bulk->new_mboxrecs, mboxrec);
                     _email_bulkupdate_addplan(bulk, mbox, mboxrec);
                 }
@@ -12033,7 +12033,7 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
                 sd.lastread = time(NULL);
                 sd.lastchange = plan->mbox->i.last_appenddate;
                 sd.lastuid = last_uid;
-                int r = seen_write(bulk->seendb, plan->mbox->uniqueid, &sd);
+                int r = seen_write(bulk->seendb, mailbox_uniqueid(plan->mbox), &sd);
                 if (r) {
                     for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
                         struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
@@ -12053,14 +12053,14 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
             mboxevent_extract_mailbox(flagsset, plan->mbox);
             mboxevent_set_numunseen(flagsset, plan->mbox, -1);
             mboxevent_set_access(flagsset, NULL, NULL, bulk->req->userid,
-                                 plan->mbox->name, 0);
+                                 mailbox_name(plan->mbox), 0);
             mboxevent_notify(&flagsset);
         }
         if (notify_flagsclear) {
             mboxevent_extract_mailbox(flagsclear, plan->mbox);
             mboxevent_set_numunseen(flagsclear, plan->mbox, -1);
             mboxevent_set_access(flagsclear, NULL, NULL, bulk->req->userid,
-                                 plan->mbox->name, 0);
+                                 mailbox_name(plan->mbox), 0);
             mboxevent_notify(&flagsclear);
         }
         mboxevent_free(&flagsset);
@@ -12823,7 +12823,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
 
     /* Overwrite message record */
     int r = jmap_openmbox_by_guidrec(rock->req, rec, &mbox, /*rw*/1);
-    if (r || mbtype_isa(mbox->mbtype) != MBTYPE_EMAIL) {
+    if (r || mbtype_isa(mailbox_mbtype(mbox)) != MBTYPE_EMAIL) {
         goto done;
     }
     if (!r) r = msgrecord_find(mbox, rec->uid, &mr);
@@ -12844,7 +12844,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
             delseen = seqset_init(0, SEQ_SPARSE);
             addseen = seqset_init(0, SEQ_SPARSE);
             struct seendata sd = SEENDATA_INITIALIZER;
-            int r = seen_read(rock->seendb, mbox->uniqueid, &sd);
+            int r = seen_read(rock->seendb, mailbox_uniqueid(mbox), &sd);
             if (!r) {
                 seenseq = seqset_parse(sd.seenuids, NULL, sd.lastuid);
                 seen_freedata(&sd);
@@ -12895,7 +12895,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
             sd.lastread = time(NULL);
             sd.lastchange = mbox->i.last_appenddate;
             sd.lastuid = mbox->i.last_uid;
-            r = seen_write(rock->seendb, mbox->uniqueid, &sd);
+            r = seen_write(rock->seendb, mailbox_uniqueid(mbox), &sd);
             seen_freedata(&sd);
         }
 
@@ -12910,13 +12910,13 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
     if (notify_flagsset) {
         mboxevent_extract_mailbox(flagsset, mbox);
         mboxevent_set_numunseen(flagsset, mbox, -1);
-        mboxevent_set_access(flagsset, NULL, NULL, req->userid, mbox->name, 0);
+        mboxevent_set_access(flagsset, NULL, NULL, req->userid, mailbox_name(mbox), 0);
         mboxevent_notify(&flagsset);
     }
     if (notify_flagsclear) {
         mboxevent_extract_mailbox(flagsclear, mbox);
         mboxevent_set_numunseen(flagsclear, mbox, -1);
-        mboxevent_set_access(flagsclear, NULL, NULL, req->userid, mbox->name, 0);
+        mboxevent_set_access(flagsclear, NULL, NULL, req->userid, mailbox_name(mbox), 0);
         mboxevent_notify(&flagsclear);
     }
 

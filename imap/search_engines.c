@@ -232,7 +232,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         const struct index_record *record = msg_record(msg);
         if ((flags & SEARCH_UPDATE_BATCH) && batch.count >= batch_size) {
             syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
-                   batch.count, mailbox->name);
+                   batch.count, mailbox_name(mailbox));
             incomplete_batch = 1;
             break;
         }

@@ -242,9 +242,9 @@ static int jmap_copyblob(jmap_req_t *req,
 
     /* Create staging file */
     time_t internaldate = time(NULL);
-    if (!(to_fp = append_newstage(to_mbox->name, internaldate, 0, &stage))) {
+    if (!(to_fp = append_newstage(mailbox_name(to_mbox), internaldate, 0, &stage))) {
         syslog(LOG_ERR, "jmap_copyblob(%s): append_newstage(%s) failed",
-                blobid, mbox->name);
+                blobid, mailbox_name(mbox));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -489,7 +489,7 @@ static int jmap_blob_get(jmap_req_t *req)
             msgrecord_unref(&mr);
             if (r) {
                 syslog(LOG_ERR, "jmap_blob_get: can't read msgrecord %s:%d: %s",
-                        mbox->name, getblob->uid, error_message(r));
+                        mailbox_name(mbox), getblob->uid, error_message(r));
                 continue;
             }
 
@@ -505,7 +505,7 @@ static int jmap_blob_get(jmap_req_t *req)
                     jmailboxIds = json_object();
                     json_object_set_new(jblob, "mailboxIds", jmailboxIds);
                 }
-                json_object_set_new(jmailboxIds, mbox->uniqueid, json_true());
+                json_object_set_new(jmailboxIds, mailbox_uniqueid(mbox), json_true());
             }
             if (jmap_wantprop(get.props, "emailIds")) {
                 json_t *jemailIds = json_object_get(jblob, "emailIds");

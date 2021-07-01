@@ -387,8 +387,8 @@ static int store_submission(struct mailbox *mailbox,
     }
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, internaldate, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+    if (!(f = append_newstage(mailbox_name(mailbox), internaldate, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -442,7 +442,7 @@ static int store_submission(struct mailbox *mailbox,
                           0, /*quota*/NULL, 0, 0, /*event*/0);
     if (r) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
@@ -452,14 +452,14 @@ static int store_submission(struct mailbox *mailbox,
     if (r) {
         append_abort(&as);
         syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
     r = append_commit(&as);
     if (r) {
         syslog(LOG_ERR, "append_commit(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
@@ -716,7 +716,7 @@ static void _emailsubmission_create(jmap_req_t *req,
         goto done;
     }
 
-    buf_refresh_mmap(&buf, 1, fd_msg, fname, sbuf.st_size, mbox->name);
+    buf_refresh_mmap(&buf, 1, fd_msg, fname, sbuf.st_size, mailbox_name(mbox));
     if (!buf_len(&buf)) {
         syslog(LOG_ERR, "_email_submissioncreate: can't mmap %s: %m", fname);
         r = IMAP_IOERROR;

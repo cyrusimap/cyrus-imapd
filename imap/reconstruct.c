@@ -482,11 +482,11 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     int mbentry_dirty = 0;
 
     // fix any uniqueid related mixups first!
-    if (strcmpsafe(mailbox->uniqueid, mbentry_byname->uniqueid)) {
+    if (strcmpsafe(mailbox_uniqueid(mailbox), mbentry_byname->uniqueid)) {
         printf("Wrong uniqueid in mbentry, fixing %s (%s -> %s)\n",
-               name, mbentry_byname->uniqueid, mailbox->uniqueid);
+               name, mbentry_byname->uniqueid, mailbox_uniqueid(mailbox));
         xfree(mbentry_byname->uniqueid);
-        mbentry_byname->uniqueid = xstrdupnull(mailbox->uniqueid);
+        mbentry_byname->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
         mbentry_dirty = 1;
     }
 
@@ -506,14 +506,14 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         if (updateuniqueids) {
             mailbox_make_uniqueid(mailbox);
             xfree(mbentry_byname->uniqueid);
-            mbentry_byname->uniqueid = xstrdupnull(mailbox->uniqueid);
+            mbentry_byname->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
             mbentry_dirty = 1;
             syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
-                    mbentry_byid->name, mailbox->name, mbentry_byid->uniqueid, mailbox->uniqueid);
+                    mbentry_byid->name, mailbox_name(mailbox), mbentry_byid->uniqueid, mailbox_uniqueid(mailbox));
         }
         else {
             syslog (LOG_ERR, "uniqueid clash with %s for %s (%s)",
-                    mbentry_byid->name, mailbox->name, mailbox->uniqueid);
+                    mbentry_byid->name, mailbox_name(mailbox), mailbox_uniqueid(mailbox));
             exit(1);
         }
     }
@@ -563,35 +563,35 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     }
 
     // how can this even happen?  Dunno, but here for completeness
-    if (strcmpsafe(mailbox->part, mbentry_byname->partition)) {
+    if (strcmpsafe(mailbox_partition(mailbox), mbentry_byname->partition)) {
         if (prefer_mbentry) {
             printf("Wrong partition in mailbox %s (%s %s)\n",
-                   name, mbentry_byname->partition, mailbox->part);
+                   name, mbentry_byname->partition, mailbox_partition(mailbox));
             xfree(mailbox->part);
             mailbox->part = xstrdupnull(mbentry_byname->partition);
             mailbox->header_dirty = 1;
         }
         else {
             printf("Wrong partition in mbentry %s (%s %s)\n",
-                   name, mailbox->part, mbentry_byname->partition);
+                   name, mailbox_partition(mailbox), mbentry_byname->partition);
             xfree(mbentry_byname->partition);
-            mbentry_byname->partition = xstrdupnull(mailbox->part);
+            mbentry_byname->partition = xstrdupnull(mailbox_partition(mailbox));
             mbentry_dirty = 1;
         }
     }
 
-    if (strcmpsafe(mailbox->acl, mbentry_byname->acl)) {
+    if (strcmpsafe(mailbox_acl(mailbox), mbentry_byname->acl)) {
         if (prefer_mbentry) {
             printf("Wrong acl in mbentry %s (%s %s)\n",
-                   name, mailbox->acl, mbentry_byname->acl);
+                   name, mailbox_acl(mailbox), mbentry_byname->acl);
             // this sets the header to dirty
             mailbox_set_acl(mailbox, mbentry_byname->acl);
         }
         else {
             printf("Wrong acl in mbentry %s (%s %s)\n",
-                   name, mbentry_byname->acl, mailbox->acl);
+                   name, mbentry_byname->acl, mailbox_acl(mailbox));
             xfree(mbentry_byname->acl);
-            mbentry_byname->acl = xstrdupnull(mailbox->acl);
+            mbentry_byname->acl = xstrdupnull(mailbox_acl(mailbox));
             mbentry_dirty = 1;
         }
     }

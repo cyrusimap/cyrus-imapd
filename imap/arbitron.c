@@ -258,7 +258,7 @@ static int do_mailbox(struct findall_data *data, void *rock __attribute__((unuse
     d->readers = NULL;
     d->subscribers = NULL;
 
-    hash_insert(mailbox->uniqueid, d, &mailbox_table);
+    hash_insert(mailbox_uniqueid(mailbox), d, &mailbox_table);
     hash_insert(name, d, &mboxname_table);
 
     mailbox_close(&mailbox);

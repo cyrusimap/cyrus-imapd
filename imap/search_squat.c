@@ -449,7 +449,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     /* Flatten out the final bit vector into a sequence */
     for (uid = 1 ; uid <= bb->mailbox->i.last_uid; uid++) {
         if (bv_isset(&bb->stack[0].msg_vector, uid)) {
-            r = proc(bb->mailbox->name,
+            r = proc(mailbox_name(bb->mailbox),
                      bb->mailbox->i.uidvalidity, uid, NULL, rock);
             if (r) goto out;
         }
@@ -634,7 +634,7 @@ static int do_append(SquatReceiverData *d, const struct buf *text)
     if (s != SQUAT_OK) {
         syslog(LOG_ERR, "squat: error writing index data "
                         "for mailbox %s uid %u: %s",
-                        d->mailbox->name, d->uid,
+                        mailbox_name(d->mailbox), d->uid,
                         squat_strerror(s));
         return IMAP_IOERROR;
     }
@@ -666,7 +666,7 @@ static int append_text(search_text_receiver_t *rx,
         if (s != SQUAT_OK) {
             syslog(LOG_ERR, "squat: error opening document %s "
                             "for mailbox %s: %s",
-                            d->doc_name, d->mailbox->name,
+                            d->doc_name, mailbox_name(d->mailbox),
                             squat_strerror(s));
             return IMAP_IOERROR;
         }
@@ -695,7 +695,7 @@ static void end_part(search_text_receiver_t *rx,
         if (s != SQUAT_OK) {
             syslog(LOG_ERR, "squat: error closing document %s "
                             "for mailbox %s uid %u: %s",
-                            d->doc_name, d->mailbox->name,
+                            d->doc_name, mailbox_name(d->mailbox),
                             d->uid, squat_strerror(s));
             return;
         }
@@ -834,7 +834,7 @@ static int begin_mailbox(search_text_receiver_t *rx,
         if (!d->valid) {
             syslog(LOG_ERR, "squat: corrupt old index for mailbox %s, "
                             "forcing full update",
-                            mailbox->name);
+                            mailbox_name(mailbox));
             incremental = 0;
         }
 
@@ -843,7 +843,7 @@ static int begin_mailbox(search_text_receiver_t *rx,
             /* Squat file refers to old mailbox: force full rebuild */
             syslog(LOG_ERR, "squat: mailbox %s uidvalidity changed "
                             "from %u to %u, forcing full update",
-                            mailbox->name,
+                            mailbox_name(mailbox),
                             mailbox->i.uidvalidity,
                             d->uidvalidity);
             incremental = 0;
@@ -934,7 +934,7 @@ static int end_mailbox(search_text_receiver_t *rx,
     if (s != SQUAT_OK) {
         syslog(LOG_ERR,
                "squat: failed to close index for mailbox %s (error %d)",
-               d->mailbox->name, s);
+               mailbox_name(d->mailbox), s);
         r = IMAP_IOERROR;
         goto out;
     }
@@ -965,7 +965,7 @@ static int end_mailbox(search_text_receiver_t *rx,
 
     if (d->verbose) {
         stop_stats(&d->mailbox_stats);
-        print_stats(d->mailbox->name, &d->mailbox_stats);
+        print_stats(mailbox_name(d->mailbox), &d->mailbox_stats);
     }
     d->mailbox_count++;
     r = 0;

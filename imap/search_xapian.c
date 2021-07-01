@@ -1200,11 +1200,11 @@ static int upgrade(const char *userid)
 
     /* need to hold an read-only lock on the activefile file
      * to ensure no databases are deleted out from under us */
-    r = activefile_open(inbox->name, inbox->part, &activefile, AF_LOCK_READ, &active);
+    r = activefile_open(mailbox_name(inbox), mailbox_partition(inbox), &activefile, AF_LOCK_READ, &active);
     if (r) goto out;
 
     /* only try to open directories with databases in them */
-    activedirs = activefile_resolve(inbox->name, inbox->part, active,
+    activedirs = activefile_resolve(mailbox_name(inbox), mailbox_partition(inbox), active,
             /*dostat*/1, &activetiers);
 
     int i;
@@ -1343,7 +1343,7 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
     assert(lock->activetiers == NULL);
 
     /* Do nothing if there is no userid */
-    userid = mboxname_to_userid(mailbox->name);
+    userid = mboxname_to_userid(mailbox_name(mailbox));
     if (!userid) goto out;
 
     namelock_fname = xapiandb_namelock_fname_from_userid(userid);
@@ -1358,11 +1358,11 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
 
     /* need to hold a read-only lock on the activefile file
      * to ensure no databases are deleted out from under us */
-    r = activefile_open(mailbox->name, mailbox->part, &lock->activefile, AF_LOCK_READ, &active);
+    r = activefile_open(mailbox_name(mailbox), mailbox_partition(mailbox), &lock->activefile, AF_LOCK_READ, &active);
     if (r) goto out;
 
     /* only try to open directories with databases in them */
-    lock->activedirs = activefile_resolve(mailbox->name, mailbox->part, active,
+    lock->activedirs = activefile_resolve(mailbox_name(mailbox), mailbox_partition(mailbox), active,
             /*dostat*/1, &lock->activetiers);
 
     /* open the databases */
@@ -1818,7 +1818,7 @@ static int xapian_run_cb(void *data, size_t nmemb, void *rock)
     struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
     if (!cstate) {
         syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-               bb->mailbox->name);
+               mailbox_name(bb->mailbox));
         return IMAP_NOTFOUND;
     }
 
@@ -1950,7 +1950,7 @@ static int run_query(xapian_builder_t *bb)
     struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
     if (!cstate) {
         syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                bb->mailbox->name);
+                mailbox_name(bb->mailbox));
         r = IMAP_NOTFOUND;
         goto out;
     }
@@ -2113,10 +2113,10 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
      * for unindexed messages */
     // TODO also handle for guidsearch
     bb->indexed = seqset_init(0, SEQ_MERGE);
-    mbname_t *mbname = mbname_from_intname(mailbox->name);
+    mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
     r = read_indexed(mbname_userid(mbname),
             bb->lock.activedirs, bb->lock.activetiers,
-            mailbox->uniqueid, bb->indexed, /*do_cache*/0, /*verbose*/0);
+            mailbox_uniqueid(mailbox), bb->indexed, /*do_cache*/0, /*verbose*/0);
     mbname_free(&mbname);
     if (r) goto out;
 
@@ -2316,8 +2316,8 @@ static int flush(search_text_receiver_t *rx)
      * there are unindexed messages should we fail to index */
     if (tr->indexed) {
         r = write_indexed(strarray_nth(tr->activedirs, 0),
-                tr->super.mailbox->name, tr->super.mailbox->i.uidvalidity,
-                tr->super.mailbox->uniqueid, tr->indexed, tr->super.verbose);
+                mailbox_name(tr->super.mailbox), tr->super.mailbox->i.uidvalidity,
+                mailbox_uniqueid(tr->super.mailbox), tr->indexed, tr->super.verbose);
         if (r) goto out;
     }
 
@@ -2348,7 +2348,7 @@ static int audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
         if (!seqset_ismember(tr->oldindexed, uid)) {
             if (tr->super.verbose)
                 syslog(LOG_INFO, "search_xapian: ignoring %s:%d during audit",
-                        tr->super.mailbox->name, uid);
+                        mailbox_name(tr->super.mailbox), uid);
             continue;
         }
 
@@ -2427,7 +2427,7 @@ static int append_text(search_text_receiver_t *rx,
         if (tr->part_total + len > config_search_maxsize) {
             syslog(LOG_ERR, "Xapian: truncating text from "
                     "message mailbox %s uid %u part %s",
-                    tr->mailbox->name, tr->uid,
+                    mailbox_name(tr->mailbox), tr->uid,
                     search_part_as_string(tr->part));
             len = config_search_maxsize - tr->part_total;
         }
@@ -2524,7 +2524,7 @@ static int is_indexed_part(xapian_update_receiver_t *tr, const struct message_gu
     struct conversations_state *cstate = mailbox_get_cstate(tr->super.mailbox);
     if (!cstate) {
         xsyslog(LOG_INFO, "can't open conversations", "mailbox=<%s>",
-                tr->super.mailbox->name);
+                mailbox_name(tr->super.mailbox));
         return 0;
     }
 
@@ -2640,7 +2640,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
                                 int flags)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-    char *fname = activefile_fname(mailbox->name);
+    char *fname = activefile_fname(mailbox_name(mailbox));
     strarray_t *active = NULL;
     int r = IMAP_IOERROR;
     char *namelock_fname = NULL;
@@ -2656,7 +2656,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     }
 
     /* Do nothing if there is no userid */
-    userid = mboxname_to_userid(mailbox->name);
+    userid = mboxname_to_userid(mailbox_name(mailbox));
     if (!userid) goto out;
 
     /* Get a shared namelock */
@@ -2692,9 +2692,9 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      *  to avoid it happening at least."
      */
     const char *deftier = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
-    r = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE, &active);
+    r = activefile_open(mailbox_name(mailbox), mailbox_partition(mailbox), &tr->activefile, AF_LOCK_WRITE, &active);
     if (r) {
-        syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox->name);
+        syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox_name(mailbox));
         goto out;
     }
 
@@ -2703,15 +2703,15 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     // make sure we're indexing to the default tier
     while (!_starts_with_tier(active, deftier)) {
         char *newstart = activefile_nextname(active, config_getstring(IMAPOPT_DEFAULTSEARCHTIER));
-        syslog(LOG_NOTICE, "create new search tier %s for %s", newstart, mailbox->name);
+        syslog(LOG_NOTICE, "create new search tier %s for %s", newstart, mailbox_name(mailbox));
         strarray_unshiftm(active, newstart);
         r = activefile_write(tr->activefile, active);
         mappedfile_close(&tr->activefile);
         strarray_free(active);
         active = NULL;
-        r = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE, &active);
+        r = activefile_open(mailbox_name(mailbox), mailbox_partition(mailbox), &tr->activefile, AF_LOCK_WRITE, &active);
         if (r) {
-            syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox->name);
+            syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox_name(mailbox));
             goto out;
         }
     }
@@ -2724,7 +2724,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     /* doesn't matter if the first one doesn't exist yet, we'll create it. Only stat the others if we're going
      * to be opening them */
     int dostat = tr->mode == XAPIAN_DBW_XAPINDEXED ? 2 : 0;
-    tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, dostat, &tr->activetiers);
+    tr->activedirs = activefile_resolve(mailbox_name(mailbox), mailbox_partition(mailbox), active, dostat, &tr->activetiers);
     // this should never be able to fail here, because the first item will always exist!
     assert(tr->activedirs && tr->activedirs->count);
 
@@ -2742,19 +2742,19 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     tr->oldindexed = seqset_init(0, SEQ_MERGE);
 
     if ((flags & (SEARCH_UPDATE_INCREMENTAL|SEARCH_UPDATE_AUDIT))) {
-        mbname_t *mbname = mbname_from_intname(mailbox->name);
+        mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
         r = read_indexed(mbname_userid(mbname), tr->activedirs, tr->activetiers,
-                mailbox->uniqueid, tr->oldindexed, /*do_cache*/1, tr->super.verbose);
+                mailbox_uniqueid(mailbox), tr->oldindexed, /*do_cache*/1, tr->super.verbose);
         mbname_free(&mbname);
         if (r) goto out;
     }
 
     /* purge any stale cache for this mailbox index sequences */
-    struct seqset *seq = hash_del(mailbox->name, &tr->cached_seqs);
+    struct seqset *seq = hash_del(mailbox_name(mailbox), &tr->cached_seqs);
     if (seq) seqset_free(seq);
 
     tr->super.mailbox = mailbox;
-    tr->super.mbname = mbname_from_intname(mailbox->name);
+    tr->super.mbname = mbname_from_intname(mailbox_name(mailbox));
 
 out:
     free(fname);
@@ -2781,7 +2781,7 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
     /* Is this a part in the message we are just indexing? */
     if (doctype == XAPIAN_WRAP_DOCTYPE_PART && rec->uid == tr->super.uid &&
          !strcmp(rec->mailbox, (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
-                 tr->super.mailbox->uniqueid : tr->super.mailbox->name)) {
+                 mailbox_uniqueid(tr->super.mailbox) : mailbox_name(tr->super.mailbox))) {
         return 0;
     }
 
@@ -2859,7 +2859,7 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
         struct conversations_state *cstate = mailbox_get_cstate(tr->super.mailbox);
         if (!cstate) {
             syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                    tr->super.mailbox->name);
+                    mailbox_name(tr->super.mailbox));
             return 0;
         }
 
@@ -2869,7 +2869,7 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
         if (r == CYRUSDB_DONE) ret = SEARCH_INDEXLEVEL_BASIC;
         else if (r) {
             syslog(LOG_ERR, "is_indexed %s:%d: unexpected return code: %d (%s)",
-                   tr->super.mailbox->name, uid, r, cyrusdb_strerror(r));
+                   mailbox_name(tr->super.mailbox), uid, r, cyrusdb_strerror(r));
         }
         free(guidrep);
     }
@@ -3000,7 +3000,7 @@ static int begin_mailbox_snippets(search_text_receiver_t *rx,
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
 
     tr->super.mailbox = mailbox;
-    tr->super.mbname = mbname_from_intname(mailbox->name);
+    tr->super.mbname = mbname_from_intname(mailbox_name(mailbox));
 
     int r = xapiandb_lock_open(mailbox, &tr->lock);
     if (r) goto out;

@@ -3825,7 +3825,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         record->cid = generate_conversation_id(record);
 
         syslog(LOG_NOTICE, "splitting conversation for %s %u base:%016llx was:%016llx now:%016llx",
-               mailbox->name, record->uid, record->basecid, was, record->cid);
+               mailbox_name(mailbox), record->uid, record->basecid, was, record->cid);
 
         if (!record->basecid) record->basecid = was;
 
@@ -3835,7 +3835,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         if (!conv) conv = conversation_new();
 
         /* and update the pointer for next time */
-        if (strcmpsafe(state->annotmboxname, mailbox->name)) {
+        if (strcmpsafe(state->annotmboxname, mailbox_name(mailbox))) {
             r = getconvmailbox(state->annotmboxname, &local_mailbox);
             if (r) goto out;
             mailbox = local_mailbox;
@@ -4693,7 +4693,7 @@ static int message_parse_cbodystructure(message_t *m)
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: error parsing body structure",
                          "mailbox=<%s> record_uid=<%u>, cacheitem=<%.*s>",
-                         m->mailbox->name, m->record.uid,
+                         mailbox_name(m->mailbox), m->record.uid,
                          (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
                          cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
     }
@@ -4709,7 +4709,7 @@ static int message_parse_cbodystructure(message_t *m)
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: error parsing section structure",
                          "mailbox=<%s> record_uid=<%u> cacheitem=<%.*s>",
-                         m->mailbox->name, m->record.uid,
+                         mailbox_name(m->mailbox), m->record.uid,
                          (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
                          cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
     }
@@ -4742,7 +4742,7 @@ static int message_map_file(message_t *m, const char *fname)
     }
     buf_free(&m->map);
     buf_refresh_mmap(&m->map, /*onceonly*/1, fd, fname, sbuf.st_size,
-                  m->mailbox ? m->mailbox->name : NULL);
+                  m->mailbox ? mailbox_name(m->mailbox) : NULL);
     close(fd);
 
     return 0;

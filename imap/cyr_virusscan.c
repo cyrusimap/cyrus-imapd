@@ -495,7 +495,7 @@ void create_digest(struct infected_mbox *i_mbox, struct mailbox *mailbox,
     struct address addr;
     struct buf from = BUF_INITIALIZER;
 
-    i_msg->mboxname = xstrdup(mailbox->name);
+    i_msg->mboxname = xstrdup(mailbox_name(mailbox));
     i_msg->virname = xstrdup(virname);
     i_msg->uid = record->uid;
 
@@ -544,7 +544,7 @@ unsigned virus_check(struct mailbox *mailbox,
         /* print header if this is the first infection seen for this user */
         if (verbose || !srock->user_infected) print_header();
 
-        char *extname = mboxname_to_external(mailbox->name,
+        char *extname = mboxname_to_external(mailbox_name(mailbox),
                                              srock->namespace,
                                              NULL);
 

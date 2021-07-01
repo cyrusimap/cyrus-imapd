@@ -238,7 +238,7 @@ static int do_reid(const mbname_t *mbname)
     if (r) return r;
 
     free(mbentry->uniqueid);
-    mbentry->uniqueid = xstrdup(mailbox->uniqueid);
+    mbentry->uniqueid = xstrdup(mailbox_uniqueid(mailbox));
 
     mboxlist_update(mbentry, 0);
 

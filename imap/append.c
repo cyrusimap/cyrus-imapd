@@ -121,7 +121,7 @@ EXPORTED int append_check(const char *name,
     r = mailbox_open_irl(name, &mailbox);
     if (r) return r;
 
-    myrights = cyrus_acl_myrights(auth_state, mailbox->acl);
+    myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 
     if ((myrights & aclcheck) != aclcheck) {
         r = (myrights & ACL_LOOKUP) ?
@@ -192,7 +192,7 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 
     memset(as, 0, sizeof(*as));
 
-    as->myrights = cyrus_acl_myrights(auth_state, mailbox->acl);
+    as->myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 
     if ((as->myrights & aclcheck) != aclcheck) {
         r = (as->myrights & ACL_LOOKUP) ?
@@ -266,7 +266,7 @@ EXPORTED int append_commit(struct appendstate *as)
         as->mailbox->i.last_appenddate = time(0);
 
         /* log the append so rolling squatter can index this mailbox */
-        sync_log_append(as->mailbox->name);
+        sync_log_append(mailbox_name(as->mailbox));
 
         /* set seen state */
         if (as->userid[0])
@@ -279,7 +279,7 @@ EXPORTED int append_commit(struct appendstate *as)
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: committing mailbox append",
                          "mailbox=<%s> error=<%s>",
-                         as->mailbox->name, error_message(r));
+                         mailbox_name(as->mailbox), error_message(r));
         append_abort(as);
         return r;
     }
@@ -946,7 +946,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     }
 
     /* xxx check errors */
-    mboxlist_findstage(mailbox->name, stagefile, sizeof(stagefile));
+    mboxlist_findstage(mailbox_name(mailbox), stagefile, sizeof(stagefile));
     strlcat(stagefile, stage->fname, sizeof(stagefile));
 
     if (!nolink) {
@@ -955,7 +955,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
         if (cstate) {
-            struct findstage_cb_rock rock = { mailbox->part, stagefile };
+            struct findstage_cb_rock rock = { mailbox_partition(mailbox), stagefile };
 
             r = conversations_guid_foreach(cstate,
                                            message_guid_encode(&(*body)->guid),
@@ -985,7 +985,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             char stagedir[MAX_MAILBOX_PATH+1];
 
             /* xxx check errors */
-            mboxlist_findstage(mailbox->name, stagedir, sizeof(stagedir));
+            mboxlist_findstage(mailbox_name(mailbox), stagedir, sizeof(stagedir));
             if (mkdir(stagedir, 0755) != 0) {
                 syslog(LOG_ERR, "couldn't create stage directory: %s: %m",
                        stagedir);
@@ -1174,7 +1174,7 @@ out:
      * present in body structure ? */
     mboxevent_extract_msgrecord(mboxevent, msgrec);
     mboxevent_extract_mailbox(mboxevent, mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
 
     msgrecord_unref(&msgrec);
@@ -1294,7 +1294,7 @@ out:
      * present in body structure */
     mboxevent_extract_msgrecord(mboxevent, msgrec);
     mboxevent_extract_mailbox(mboxevent, mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
     msgrecord_unref(&msgrec);
 
@@ -1503,8 +1503,8 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
                                          "flag=<%s> src_mailbox=<%s> dest_mailbox=<%s>"
                                          " uid=<%u> error=<%s>",
                                          mailbox->flagname[userflag],
-                                         mailbox->name,
-                                         as->mailbox->name,
+                                         mailbox_name(mailbox),
+                                         mailbox_name(as->mailbox),
                                          src_uid,
                                          error_message(r));
                     else
@@ -1516,7 +1516,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
             if (r) {
                 xsyslog(LOG_ERR, "IOERROR: unable to copy user flags",
                                  "source=<%s> dest=<%s> uid=<%u> error=<%s>",
-                                 mailbox->name, as->mailbox->name,
+                                 mailbox_name(mailbox), mailbox_name(as->mailbox),
                                  src_uid, error_message(r));
             }
         }
@@ -1605,7 +1605,7 @@ out:
     }
 
     mboxevent_extract_mailbox(mboxevent, as->mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
     mboxevent_set_numunseen(mboxevent, as->mailbox, -1);
 
     return 0;
@@ -1649,11 +1649,11 @@ static int append_addseen(struct mailbox *mailbox,
         goto done;
     }
 
-    r = seen_lockread(seendb, mailbox->uniqueid, &sd);
+    r = seen_lockread(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: seen_lockread failed",
                          "userid=<%s> uniqueid=<%s>",
-                         userid, mailbox->uniqueid);
+                         userid, mailbox_uniqueid(mailbox));
         goto done;
     }
 
@@ -1668,11 +1668,11 @@ static int append_addseen(struct mailbox *mailbox,
 
     /* and write it out */
     sd.lastchange = time(NULL);
-    r = seen_write(seendb, mailbox->uniqueid, &sd);
+    r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: seen_write failed",
                          "userid=<%s> uniqueid=<%s>",
-                         userid, mailbox->uniqueid);
+                         userid, mailbox_uniqueid(mailbox));
     }
     seen_freedata(&sd);
 

@@ -735,7 +735,7 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
     webdavdb = webdav_open_mailbox(mailbox);
     if (!webdavdb) {
         syslog(LOG_ERR, "dav_send_notification: unable to open WebDAV DB (%s)",
-               mailbox->name);
+               mailbox_name(mailbox));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -745,8 +745,8 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
 
     /* Create minimal mbentry for request target from mailbox */
     memset(&mbentry, 0, sizeof(mbentry_t));
-    mbentry.name = mailbox->name;
-    mbentry.uniqueid = mailbox->uniqueid;
+    mbentry.name = (char *)mailbox_name(mailbox);
+    mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
     txn.req_tgt.mbentry = &mbentry;
 
     /* Create header cache */
@@ -763,7 +763,7 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
     if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR,
                "dav_send_notification: notify_put(%s, %s) failed: %s",
-               mailbox->name, resource, error_message(r));
+               mailbox_name(mailbox), resource, error_message(r));
     }
 
   done:
@@ -932,7 +932,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
             r = annotate_state_writemask(astate, annot,
                                          txn->req_tgt.userid, &value);
 
-            if (mbtype_isa(shared->mbtype) == MBTYPE_CALENDAR) {
+            if (mbtype_isa(mailbox_mbtype(shared)) == MBTYPE_CALENDAR) {
                 /* Sharee's copy of calendar SHOULD default to transparent */
                 annot =
                     DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
@@ -1525,7 +1525,7 @@ HIDDEN int propfind_sharedurl(const xmlChar *name, xmlNsPtr ns,
 
     fctx->flags.cs_sharing = (rock != 0);
 
-    mbname = mbname_from_intname(fctx->mailbox->name);
+    mbname = mbname_from_intname(mailbox_name(fctx->mailbox));
 
     if (!strcmpsafe(mbname_userid(mbname), fctx->req_tgt->userid)) {
         mbname_free(&mbname);

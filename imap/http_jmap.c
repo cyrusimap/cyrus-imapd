@@ -846,7 +846,7 @@ static int _create_upload_collection(const char *accountid,
             }
             else if (is_shared) {
                 /* add rights for the sharee */
-                char *newacl = xstrdup((*mailbox)->acl);
+                char *newacl = xstrdupnull(mailbox_acl(*mailbox));
 
                 cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
                               JACL_READITEMS | JACL_WRITE, NULL, NULL);
@@ -987,8 +987,8 @@ static int jmap_upload(struct transaction_t *txn)
     }
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+    if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         txn->error.desc = "append_newstage() failed";
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -1097,7 +1097,7 @@ wrotebody:
                           0, /*quota*/NULL, 0, 0, /*event*/0);
     if (r) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         ret = HTTP_SERVER_ERROR;
         txn->error.desc = "append_setup() failed";
         goto done;
@@ -1111,7 +1111,7 @@ wrotebody:
     if (r) {
         append_abort(&as);
         syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         ret = HTTP_SERVER_ERROR;
         txn->error.desc = "append_fromstage() failed";
         goto done;
@@ -1120,7 +1120,7 @@ wrotebody:
     r = append_commit(&as);
     if (r) {
         syslog(LOG_ERR, "append_commit(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         ret = HTTP_SERVER_ERROR;
         txn->error.desc = "append_commit() failed";
         goto done;

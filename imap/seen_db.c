@@ -348,7 +348,7 @@ HIDDEN int seen_create_mailbox(const char *userid, struct mailbox *mailbox)
 {
     if (SEEN_DEBUG) {
         syslog(LOG_DEBUG, "seen_db: seen_create_mailbox(%s, %s)",
-               userid, mailbox->uniqueid);
+               userid, mailbox_uniqueid(mailbox));
     }
 
     /* noop */
@@ -359,7 +359,7 @@ EXPORTED int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
 {
     int r;
     struct seen *seendb = NULL;
-    const char *uniqueid = mailbox->uniqueid;
+    const char *uniqueid = mailbox_uniqueid(mailbox);
 
     if (SEEN_DEBUG) {
         syslog(LOG_DEBUG, "seen_db: seen_delete_mailbox(%s, %s)",
@@ -436,10 +436,10 @@ HIDDEN int seen_copy(const char *userid, struct mailbox *oldmailbox,
 {
     if (SEEN_DEBUG) {
         syslog(LOG_DEBUG, "seen_db: seen_copy %s (%s => %s)",
-               userid ? userid : "", oldmailbox->uniqueid, newmailbox->uniqueid);
+               userid ? userid : "", mailbox_uniqueid(oldmailbox), mailbox_uniqueid(newmailbox));
     }
 
-    if (userid && strcmp(oldmailbox->uniqueid, newmailbox->uniqueid)) {
+    if (userid && strcmp(mailbox_uniqueid(oldmailbox), mailbox_uniqueid(newmailbox))) {
         int r;
         struct seen *seendb = NULL;
         struct seendata sd = SEENDATA_INITIALIZER;
@@ -447,8 +447,8 @@ HIDDEN int seen_copy(const char *userid, struct mailbox *oldmailbox,
         r = seen_open(userid, SEEN_SILENT, &seendb);
 
         /* just be silent if it's missing */
-        if (!r) r = seen_lockread(seendb, oldmailbox->uniqueid, &sd);
-        if (!r) r = seen_write(seendb, newmailbox->uniqueid, &sd);
+        if (!r) r = seen_lockread(seendb, mailbox_uniqueid(oldmailbox), &sd);
+        if (!r) r = seen_write(seendb, mailbox_uniqueid(newmailbox), &sd);
 
         seen_close(&seendb);
         seen_freedata(&sd);

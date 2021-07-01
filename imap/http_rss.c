@@ -267,7 +267,7 @@ static int meth_get(struct transaction_t *txn,
 
             if (!section) {
                 /* Return entire message formatted as text/html */
-                display_message(txn, mailbox->name, &record, body, &msg_buf);
+                display_message(txn, mailbox_name(mailbox), &record, body, &msg_buf);
             }
             else if (!strcmp(section, "0")) {
                 /* Return entire message as text/plain */
@@ -884,7 +884,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 #endif
 
     /* Translate mailbox name to external form */
-    strlcpy(mboxname, mailbox->name, sizeof(mboxname));
+    strlcpy(mboxname, mailbox_name(mailbox), sizeof(mboxname));
 
     /* Construct base URL */
     http_proto_host(txn->req_hdrs, &proto, &host);
@@ -905,7 +905,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* <id> - required */
     buf_printf_markup(buf, level, "<id>%s%s</id>",
-                      GUID_URL_SCHEME, mailbox->uniqueid);
+                      GUID_URL_SCHEME, mailbox_uniqueid(mailbox));
 
     /* <updated> - required */
     time_to_rfc3339(lastmod, datestr, sizeof(datestr));
