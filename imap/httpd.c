@@ -1009,6 +1009,11 @@ int service_main(int argc __attribute__((unused)),
 
     proc_register(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
+    /* Construct Alt-Svc header value */
+    struct buf buf = BUF_INITIALIZER;
+    http2_altsvc(&buf);
+    httpd_altsvc = buf_releasenull(&buf);
+
     /* Set inactivity timer */
     httpd_timeout = config_getduration(IMAPOPT_HTTPTIMEOUT, 'm');
     if (httpd_timeout < 0) httpd_timeout = 0;
@@ -1042,24 +1047,6 @@ int service_main(int argc __attribute__((unused)),
             syslog(LOG_ERR, "unable to install signal handler for %d: %m", SIGALRM);
             httpd_keepalive = 0;
         }
-    }
-
-    /* Construct Alt-Svc header value */
-    if (!https && http2_enabled()) {
-        struct buf buf = BUF_INITIALIZER;
-        const char *sep = "";
-        const char *altsvc;
-
-        if ((altsvc = config_getstring(IMAPOPT_HTTP_H2_ALTSVC))) {
-            buf_printf(&buf, "h2=\"%s\"", altsvc);
-            sep = ", ";
-        }
-        if (httpd_localip) {
-            const char *port = strchr(httpd_localip, ';');
-            buf_printf(&buf, "%sh2c=\":%s\"", sep, port ? port+1 : "80");
-        }
-
-        httpd_altsvc = buf_release(&buf);
     }
 
     index_text_extractor_init(httpd_in);

@@ -563,6 +563,24 @@ HIDDEN int http2_enabled()
 }
 
 
+HIDDEN void http2_altsvc(struct buf *altsvc)
+{
+    if (!https && http2_enabled()) {
+        const char *sep = buf_len(altsvc) ? ", " : "";
+        const char *config_altsvc = config_getstring(IMAPOPT_HTTP_H2_ALTSVC);
+
+        if (config_altsvc) {
+            buf_printf(altsvc, "h2=\"%s\"", config_altsvc);
+            sep = ", ";
+        }
+        if (httpd_localip) {
+            const char *port = strchr(httpd_localip, ';');
+            buf_printf(altsvc, "%sh2c=\":%s\"", sep, port ? port+1 : "80");
+        }
+    }
+}
+
+
 HIDDEN int http2_preface(struct http_connection *conn)
 {
     if (http2_enabled()) {
@@ -1015,6 +1033,10 @@ HIDDEN void http2_init(struct http_connection *conn __attribute__((unused)),
 HIDDEN int http2_enabled()
 {
     return 0;
+}
+
+HIDDEN void http2_altsvc(struct buf *altsvc __attribute__((unused)))
+{
 }
 
 HIDDEN int http2_preface(struct http_connection *conn __attribute__((unused)))

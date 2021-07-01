@@ -58,6 +58,8 @@ extern void http2_init(struct http_connection *conn, struct buf *serverinfo);
 
 extern int http2_enabled();
 
+extern void http2_altsvc(struct buf *altsvc);
+
 extern int http2_preface(struct http_connection *conn);
 
 extern int http2_start_session(struct transaction_t *txn,
