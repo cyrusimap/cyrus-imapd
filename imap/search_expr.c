@@ -58,6 +58,7 @@
 #include "annotate.h"
 #include "global.h"
 #include "lsort.h"
+#include "seen.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
 
@@ -2354,6 +2355,68 @@ static int search_language_match(message_t *m __attribute__((unused)),
 
 /* ====================================================================== */
 
+static void search_seen_internalise(struct index_state *state,
+                                    const union search_value *v,
+                                    void **internalisedp)
+{
+    if (*internalisedp) {
+        seqset_free((struct seqset *)*internalisedp);
+        *internalisedp = NULL;
+    }
+    if (v) {
+        if (!mailbox_internal_seen(state->mailbox, v->s)) {
+            // read sequence of seen uids from seendb,
+            // fall back to owner systemflags on error
+            struct seqset *seen = NULL;
+            struct seen *seendb = NULL;
+            int r = seen_open(v->s, SEEN_SILENT, &seendb);
+            if (!r) {
+                struct seendata sd = SEENDATA_INITIALIZER;
+                r = seen_read(seendb, state->mailbox->uniqueid, &sd);
+                if (!r) {
+                    seen = seqset_parse(sd.seenuids, NULL, sd.lastuid);
+                    seen_freedata(&sd);
+                    *internalisedp = seen;
+                }
+                else {
+                    xsyslog(LOG_WARNING, "can not read seen data",
+                            "userid=<%s> mboxid=<%s> err=<%s>",
+                            v->s, state->mailbox->uniqueid, error_message(r));
+                }
+            }
+            else {
+                xsyslog(LOG_WARNING, "can not open seendb",
+                        "userid=<%s> err=<%s>", v->s, error_message(r));
+            }
+            seen_close(&seendb);
+        }
+    }
+}
+
+static int search_seen_match(message_t *m,
+                             const union search_value *v __attribute__((unused)),
+                             void *internalised,
+                             void *data1 __attribute__((unused)))
+{
+    if (internalised) {
+        struct seqset *seen = internalised;
+        uint32_t uid;
+        if (!message_get_uid(m, &uid)) {
+            return seqset_ismember(seen, uid);
+        }
+        else return 0;
+    }
+    else {
+        uint32_t flags;
+        if (!message_get_systemflags(m, &flags)) {
+            return flags & FLAG_SEEN;
+        }
+        else return 0;
+    }
+}
+
+/* ====================================================================== */
+
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 static int search_attr_initialized = 0;
@@ -2952,6 +3015,20 @@ EXPORTED void search_attr_init(void)
             search_string_duplicate,
             search_string_free,
             (void *)message_get_priority
+        },{
+            "seen",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            search_seen_internalise,
+            /*cmp*/NULL,
+            search_seen_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)0
         }
     };
 

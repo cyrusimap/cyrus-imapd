@@ -1414,13 +1414,16 @@ static void _email_search_type(search_expr_t *parent, const char *s, strarray_t 
     strarray_fini(&types);
 }
 
-static void _email_search_keyword(search_expr_t *parent, const char *keyword, strarray_t *perf_filters)
+static void _email_search_keyword(search_expr_t *parent,
+                                  const char *keyword,
+                                  const char *userid,
+                                  strarray_t *perf_filters)
 {
     search_expr_t *e;
     if (!strcasecmp(keyword, "$Seen")) {
         e = search_expr_new(parent, SEOP_MATCH);
-        e->attr = search_attr_find("indexflags");
-        e->value.u = MESSAGE_SEEN;
+        e->attr = search_attr_find("seen");
+        e->value.s = xstrdup(userid);
     }
     else if (!strcasecmp(keyword, "$Draft")) {
         e = search_expr_new(parent, SEOP_MATCH);
@@ -2047,11 +2050,11 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         }
 
         if (JNOTNULL((val = json_object_get(filter, "hasKeyword")))) {
-            _email_search_keyword(this, json_string_value(val), perf_filters);
+            _email_search_keyword(this, json_string_value(val), req->userid, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "notKeyword")))) {
             e = search_expr_new(this, SEOP_NOT);
-            _email_search_keyword(e, json_string_value(val), perf_filters);
+            _email_search_keyword(e, json_string_value(val), req->userid, perf_filters);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "maxSize")))) {
