@@ -5422,11 +5422,6 @@ static int setcalendarevents_update(jmap_req_t *req,
         jmap_parser_invalid(&parser, "isDraft");
     }
 
-    /* Read UTC times fallback timezone from source mailbox */
-    int tz_is_malloced = 0;
-    icaltimezone *floatingtz =
-        calendarevent_get_floatingtz(mbentry, req->userid, &tz_is_malloced);
-
     /* Apply patch */
     struct jmapical_jmapcontext jmapctx;
     jmap_calendarcontext_init(&jmapctx, req);
@@ -5436,6 +5431,10 @@ static int setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     json_object_del(old_event, "updated");
+    int floatingtz_is_malloced = 0;
+    icaltimezone *floatingtz =
+        calendarevent_get_floatingtz(mbentry, req->userid,
+                &floatingtz_is_malloced);
     r = setcalendarevents_apply_patch(&jmapctx,
             old_event, event_patch,
             oldical, eid->recurid,
@@ -5443,6 +5442,8 @@ static int setcalendarevents_update(jmap_req_t *req,
             may_updateprivate_only,
             &ical, floatingtz, update, err);
     jmap_calendarcontext_fini(&jmapctx);
+    if (floatingtz_is_malloced)
+        icaltimezone_free(floatingtz, 1);
 
     if (json_array_size(parser.invalid)) {
         r = 0;
@@ -7148,7 +7149,6 @@ static void _calendarevent_copy(jmap_req_t *req,
 
     /* Create event */
     json_t *invalid = json_array();
-    *new_event = json_pack("{}");
     *new_event = json_object();
     r = setcalendarevents_create(req, req->accountid, notifmbox, dst_event,
                                  dst_db, invalid, /*send_schedule*/0, *new_event);
