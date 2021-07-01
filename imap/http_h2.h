@@ -67,6 +67,4 @@ extern int http2_start_session(struct transaction_t *txn,
 
 extern void http2_input(struct http_connection *conn);
 
-extern int32_t http2_get_streamid(void *http2_strm);
-
 #endif /* HTTP_H2_H */

@@ -194,6 +194,12 @@ static int begin_headers_cb(nghttp2_session *session,
         zstd_init(txn);
     }
 
+    /* Create header cache */
+    if (!(txn->req_hdrs = spool_new_hdrcache())) {
+        syslog(LOG_ERR, "Unable to create header cache");
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+
 
     struct http2_stream *strm = xzmalloc(sizeof(struct http2_stream));
 
@@ -201,11 +207,10 @@ static int begin_headers_cb(nghttp2_session *session,
     txn->strm_ctx = strm;
     ptrarray_add(&txn->done_callbacks, &_end_stream);
 
-    /* Create header cache */
-    if (!(txn->req_hdrs = spool_new_hdrcache())) {
-        syslog(LOG_ERR, "Unable to create header cache");
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
+    /* Tell syslog our stream-id */
+    buf_printf(&txn->buf, "%d", strm->id);
+    spool_replace_header(xstrdup(":stream-id"),
+                         buf_release(&txn->buf), txn->req_hdrs);
 
     nghttp2_session_set_stream_user_data(session, frame->hd.stream_id, txn);
 
@@ -1016,13 +1021,6 @@ static int resp_body_chunk(struct transaction_t *txn,
     return 0;
 }
 
-HIDDEN int32_t http2_get_streamid(void *http2_strm)
-{
-    struct http2_stream *strm = (struct http2_stream *) http2_strm;
-
-    return strm ? strm->id : 0;
-}
-
 #else /* !HAVE_NGHTTP2 */
 
 HIDDEN void http2_init(struct http_connection *conn __attribute__((unused)),
@@ -1053,11 +1051,6 @@ HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused))
 HIDDEN void http2_input(struct http_connection *conn __attribute__((unused)))
 {
     fatal("http2_input() called, but no Nghttp2", EX_SOFTWARE);
-}
-
-HIDDEN int32_t http2_get_streamid(void *http2_strm __attribute__((unused)))
-{
-    return 0;
 }
 
 #endif /* HAVE_NGHTTP2 */

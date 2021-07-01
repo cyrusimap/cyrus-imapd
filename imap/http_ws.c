@@ -496,11 +496,6 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
     /* Log the uncompressed client request */
     buf_truncate(&ctx->log, ctx->log_tail);
-    buf_appendcstr(&ctx->log, " (");
-    if (txn->strm_ctx) {
-        buf_printf(&ctx->log, "stream-id=%d; ",
-                   http2_get_streamid(txn->strm_ctx));
-    }
     buf_printf(&ctx->log, "opcode=%s; rsv=0x%x; length=%ld",
                wslay_opcode_as_str(arg->opcode), arg->rsv, arg->msg_length);
     if (pmce_str) {
@@ -880,8 +875,11 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     }
 
     /* Add request-line */
-    buf_printf(&ctx->log, "; \"WebSocket/%s via %s\"",
+    buf_printf(&ctx->log, "; \"WebSocket/%s via %s\" (",
                protocol ? protocol : "echo" , txn->req_line.ver);
+    if ((hdr = spool_getheader(txn->req_hdrs, ":stream-id"))) {
+        buf_printf(&ctx->log, "stream-id=%s; ", hdr[0]);
+    }
     ctx->log_tail = buf_len(&ctx->log);
 
     /* Tell client that WebSocket negotiation has succeeded */

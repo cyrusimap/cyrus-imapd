@@ -3252,9 +3252,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
     /* Add any auxiliary response data */
     sep = " (";
-    if (txn->strm_ctx) {
-        buf_printf(logbuf, "%sstream-id=%d", sep,
-                   http2_get_streamid(txn->strm_ctx));
+    if ((hdr = spool_getheader(txn->req_hdrs, ":stream-id"))) {
+        buf_printf(logbuf, "%sstream-id=%s", sep, hdr[0]);
         sep = "; ";
     }
     if (code == HTTP_SWITCH_PROT || code == HTTP_UPGRADE) {
