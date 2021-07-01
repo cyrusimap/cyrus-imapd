@@ -3794,11 +3794,14 @@ int sync_get_message(struct dlist *kin, struct sync_state *sstate)
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     fname = mboxname_datapath(partition, mboxname, uniqueid, uid);
-    if (stat(fname, &sbuf) == -1) {
+    if (stat(fname, &sbuf) == -1) // try archive partition
         fname = mboxname_archivepath(partition, mboxname, uniqueid, uid);
-        if (stat(fname, &sbuf) == -1)
-            return IMAP_MAILBOX_NONEXISTENT;
-    }
+    if (stat(fname, &sbuf) == -1) // try legacy data path
+        fname = mboxname_datapath(partition, mboxname, NULL, uid);
+    if (stat(fname, &sbuf) == -1) // try legacy archive partition
+        fname = mboxname_archivepath(partition, mboxname, NULL, uid);
+    if (stat(fname, &sbuf) == -1) // give up
+        return IMAP_MAILBOX_NONEXISTENT;
 
     kl = dlist_setfile(NULL, "MESSAGE", partition, &tmp_guid, sbuf.st_size, fname);
     sync_send_response(kl, sstate->pout);

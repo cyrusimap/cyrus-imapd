@@ -7754,12 +7754,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
              mboxname_isusermailbox(newmailboxname, 1) &&
              strcmp(oldmailboxname, newmailboxname) && /* different user */
              imapd_userisadmin) {
-        if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
-            /* don't allow rename of a user using legacy (by name) dirs */
-            prot_printf(imapd_out, "%s NO %s\r\n",
-                        tag, error_message(IMAP_USER_LEGACY_DIRS));
-            goto done;
-        }
 
         rename_user = 1;
     }

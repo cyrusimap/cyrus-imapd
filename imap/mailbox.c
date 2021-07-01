@@ -1050,6 +1050,12 @@ static int mailbox_open_advanced(const char *name,
         goto done;
     }
 
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        mboxlist_entry_free(&mbentry);
+        r = IMAP_MAILBOX_NONEXISTENT;
+        goto done;
+    }
+
     if (!mbentry->partition) {
         mboxlist_entry_free(&mbentry);
         r = IMAP_MAILBOX_NONEXISTENT;
@@ -6359,7 +6365,7 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
     int r;
     int i;
 
-    strarray_add(&paths, mailbox_datapath(mailbox, 0));
+    strarray_add(&paths, mailbox_spool_fname(mailbox, 0));
 
 #if defined ENABLE_OBJECTSTORE
     if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
@@ -6373,7 +6379,7 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
     }
     else
 #endif
-        strarray_add(&paths, mboxname_archivepath(mailbox->part, mailbox->name, mailbox->uniqueid, 0));
+        strarray_add(&paths, mailbox_archive_fname(mailbox, 0));
 
     for (i = 0; i < paths.count; i++) {
         const char *dirpath = strarray_nth(&paths, i);
@@ -6954,8 +6960,6 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     struct index_record record;
     struct stat sbuf;
     int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
-    const char *uniqueid =
-        !(mailbox->mbtype & MBTYPE_LEGACY_DIRS) ? mailbox->uniqueid : NULL;
 
     memset(&record, 0, sizeof(struct index_record));
 
@@ -6966,9 +6970,9 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
 #endif
 
     if (isarchive && !object_storage_enabled)
-        fname = mboxname_archivepath(mailbox->part, mailbox->name, uniqueid, uid);
+        fname = mailbox_archive_fname(mailbox, uid);
     else
-        fname = mboxname_datapath(mailbox->part, mailbox->name, uniqueid, uid);
+        fname = mailbox_spool_fname(mailbox, uid);
 
 #if defined ENABLE_OBJECTSTORE
     if (object_storage_enabled)
@@ -6993,7 +6997,10 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     if (!uid) {
         /* filthy hack - copy the path to '1.' and replace 1 with 0 */
         char *hack;
-        fname = mboxname_datapath(mailbox->part, mailbox->name, uniqueid, 1);
+        if (isarchive && !object_storage_enabled)
+            fname = mailbox_archive_fname(mailbox, 1);
+        else
+            fname = mailbox_spool_fname(mailbox, 1);
         hack = (char *)fname;
         hack[strlen(fname)-2] = '0';
     }
@@ -7370,8 +7377,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
         while (files.pos < files.nused && files.found[files.pos].uid == record.uid) {
             if (have_file) {
                 /* we can just unlink this one, already processed one copy */
-                const char *fname = mboxname_archivepath(mailbox->part, mailbox->name,
-                                                         mailbox->uniqueid, record.uid);
+                const char *fname = mailbox_archive_fname(mailbox, record.uid);
                 printf("Removing duplicate archive file %s\n", fname);
                 unlink(fname);
             }

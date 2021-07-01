@@ -885,9 +885,7 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
 
     if (!strcmp(rock->partition, mbentry->partition)) {
         struct stat sbuf;
-        const char *msgpath = mboxname_datapath(mbentry->partition,
-                                                mbentry->name,
-                                                mbentry->uniqueid, rec->uid);
+        const char *msgpath = mbentry_datapath(mbentry, rec->uid);
         if (msgpath && !stat(msgpath, &sbuf)) {
             /* link the first stage part to the existing message file */
             r = cyrus_copyfile(msgpath, rock->stagefile, 0/*flags*/);
