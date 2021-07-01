@@ -2573,17 +2573,6 @@ struct emailquery_match {
     smallarrayu64_t partnums;
 };
 
-struct emailquery_result {
-    int is_mutable;
-    int is_guidsearch;
-    int is_imapfoldersearch;
-    size_t total_ceiling;
-
-    int(*next)(struct emailquery_match *matches, void *rock);
-    const char *(*partid)(uint64_t partnum, void *rock);
-    void(*free)(void *rock);
-    void *rock;
-};
 
 #define JMAP_EMAILQUERY_RESULT_INITIALIZER { 0 }
 
@@ -2597,6 +2586,33 @@ struct emailquery {
     // response fields
     json_t *partids;
     json_t *thread_emailids;
+};
+
+struct emailquery_cache;
+struct emailquery_result {
+    int is_mutable;
+    int is_guidsearch;
+    int is_imapfoldersearch;
+    size_t total_ceiling;
+
+    void(*filln)(struct emailquery *q, struct emailquery_cache *qc, size_t n);
+    const char *(*partid)(uint64_t partnum, void *rock);
+    void(*free)(void *rock);
+    void *rock;
+};
+
+struct emailquery_cache {
+    struct emailquery_result qr;
+    struct emailquery_match *uncollapsed_matches;
+    size_t uncollapsed_len;
+    struct emailquery_match *collapsed_matches;
+    size_t collapsed_len;
+    struct hashset *seen_threads;
+    size_t *nextinthread;
+    hashu64_table firstinthread;
+    int have_total;
+    char *fingerprint;
+    time_t last_accessed;
 };
 
 static void jmap_emailquery_init(struct emailquery *q)
@@ -3461,19 +3477,24 @@ struct emailquery_guidsearch_result_rock {
     size_t pos;
 };
 
-static int emailquery_guidsearch_result_next(struct emailquery_match *dst, void *rock)
+static void emailquery_guidsearch_result_filln(struct emailquery *q, struct emailquery_cache *qc, size_t n)
 {
-    struct emailquery_guidsearch_result_rock *rrock = rock;
+    struct emailquery_guidsearch_result_rock *rrock = qc->qr.rock;
 
-    if (rrock->pos < rrock->gsqtotal) {
+    size_t *want = q->collapse_threads ? &qc->collapsed_len : &qc->uncollapsed_len;
+    while (rrock->pos < rrock->gsqtotal) {
+        // do we have enough already?
+        if (*want >= n) return;
+
         struct guidsearch_match *gsqmatch = &rrock->gsqmatches[rrock->pos++];
-        message_guid_decode(&dst->guid, gsqmatch->guidrep);
-        dst->cid = gsqmatch->cid;
-        smallarrayu64_init(&dst->partnums);
-        return 1;
+        struct emailquery_match *match = &qc->uncollapsed_matches[qc->uncollapsed_len++];
+        message_guid_decode(&match->guid, gsqmatch->guidrep);
+        match->cid = gsqmatch->cid;
+        smallarrayu64_init(&match->partnums);
+        if (q->collapse_threads && hashset_add(qc->seen_threads, &match->cid))
+            qc->collapsed_matches[qc->collapsed_len++] = *match;
     }
-
-    return 0;
+    qc->have_total = 1;
 }
 
 static void emailquery_guidsearch_result_free(void *rock)
@@ -3520,7 +3541,7 @@ static int emailquery_guidsearch(jmap_req_t *req,
 
     qr->rock = rrock;
     qr->total_ceiling = gsq.total;
-    qr->next = emailquery_guidsearch_result_next;
+    qr->filln = emailquery_guidsearch_result_filln;
     qr->free = emailquery_guidsearch_result_free;
     qr->partid = NULL;
 
@@ -3545,13 +3566,17 @@ struct emailquery_uidsearch_result_rock {
     uint64_t partnum_seq;
 };
 
-static int emailquery_uidsearch_result_next(struct emailquery_match *dst, void *rock)
+static void emailquery_uidsearch_result_filln(struct emailquery *q, struct emailquery_cache *qc, size_t n)
 {
-    struct emailquery_uidsearch_result_rock *rrock = rock;
+    struct emailquery_uidsearch_result_rock *rrock = qc->qr.rock;
     ptrarray_t *msgdata = &rrock->query->merged_msgdata;
 
-    for (; rrock->pos < (size_t)msgdata->count; rrock->pos++) {
-        MsgData *md = ptrarray_nth(msgdata, rrock->pos);
+    size_t *want = q->collapse_threads ? &qc->collapsed_len : &qc->uncollapsed_len;
+    while (rrock->pos < (size_t)msgdata->count) {
+        // do we have enough already?
+        if (*want >= n) return;
+
+        MsgData *md = ptrarray_nth(msgdata, rrock->pos++);
 
         /* Skip expunged or hidden messages */
         if (md->system_flags & FLAG_DELETED ||
@@ -3569,9 +3594,10 @@ static int emailquery_uidsearch_result_next(struct emailquery_match *dst, void *
             continue;
 
         /* Add message to result */
-        dst->guid = md->guid;
-        dst->cid = md->cid;
-        smallarrayu64_init(&dst->partnums);
+        struct emailquery_match *match = &qc->uncollapsed_matches[qc->uncollapsed_len++];
+        match->guid = md->guid;
+        match->cid = md->cid;
+        smallarrayu64_init(&match->partnums);
 
         /* Set partIds */
         if (rrock->want_partids && md->folder && md->folder->partnums.count) {
@@ -3584,11 +3610,11 @@ static int emailquery_uidsearch_result_next(struct emailquery_match *dst, void *
                     /* Found it. Now add all partnums for this uid. */
                     ssize_t p;
                     for (p = m; p >= 0 && pnums[p].uid == md->uid; --p) {
-                        smallarrayu64_append(&dst->partnums, pnums[p].partnum);
+                        smallarrayu64_append(&match->partnums, pnums[p].partnum);
                     }
                     for (p = m + 1; p < md->folder->partnums.count &&
                             pnums[p].uid == md->uid; ++p) {
-                        smallarrayu64_append(&dst->partnums, pnums[p].partnum);
+                        smallarrayu64_append(&match->partnums, pnums[p].partnum);
                     }
                     break;
                 }
@@ -3601,10 +3627,12 @@ static int emailquery_uidsearch_result_next(struct emailquery_match *dst, void *
             }
         }
 
-        return 1;
+        // calculate the collapsed version too
+        if (q->collapse_threads && hashset_add(qc->seen_threads, &match->cid))
+            qc->collapsed_matches[qc->collapsed_len++] = *match;
     }
 
-    return 0;
+    qc->have_total = 1;
 }
 
 static const char *emailquery_uidsearch_result_partid(uint64_t partnum, void *rock)
@@ -3694,7 +3722,7 @@ static int emailquery_uidsearch(jmap_req_t *req,
 
     qr->rock = rrock;
     qr->total_ceiling = msgdata->count;
-    qr->next = emailquery_uidsearch_result_next;
+    qr->filln = emailquery_uidsearch_result_filln;
     qr->partid = emailquery_uidsearch_result_partid;
     qr->free = emailquery_uidsearch_result_free;
 
@@ -3750,20 +3778,6 @@ done:
     return r;
 }
 
-struct emailquery_cache {
-    struct emailquery_result qr;
-    struct emailquery_match *uncollapsed_matches;
-    size_t uncollapsed_len;
-    struct emailquery_match *collapsed_matches;
-    size_t collapsed_len;
-    struct hashset *seen_threads;
-    size_t *nextinthread;
-    hashu64_table firstinthread;
-    int have_total;
-    char *fingerprint;
-    time_t last_accessed;
-};
-
 static void emailquery_cache_reset(struct emailquery_cache *qc)
 {
     size_t i;
@@ -3803,21 +3817,8 @@ static void emailquery_cache_loadn(struct emailquery *q,
         }
     }
 
-    /* keep fetching items until we've either found everything, or we have enough
-     * results in the accululator we're looking at */
-    size_t *want = q->collapse_threads ? &qc->collapsed_len : &qc->uncollapsed_len;
-    while (!qc->have_total && *want < n) {
-        struct emailquery_match *match = &qc->uncollapsed_matches[qc->uncollapsed_len];
-        if (!qc->qr.next(match, qc->qr.rock)) {
-            qc->have_total = 1;
-            break;
-        }
-        qc->uncollapsed_len++;
-        // if collapsing threads, only add this if we haven't seen the thread yet
-        if (q->collapse_threads && hashset_add(qc->seen_threads, &match->cid)) {
-            qc->collapsed_matches[qc->collapsed_len++] = *match;
-        }
-    }
+    // fill the caches
+    qc->qr.filln(q, qc, n);
 
     /* Postprocess total matches */
     if (qc->have_total && qc->uncollapsed_len) {
