@@ -21837,4 +21837,148 @@ EOF
     $self->assert_num_equals(1, scalar grep { m/Xapian: truncating/ } @lines);
 }
 
+sub test_email_query_seen_shared
+    :min_version_3_5 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.other");
+    $admin->setacl("user.other", admin => 'lrswipkxtecdan') or die;
+    $admin->setacl("user.other", other => 'lrswipkxtecdn') or die;
+    $admin->setacl("user.other", cassandane => 'lrswipkxtecdn') or die;
+
+    my $service = $self->{instance}->get_service("http");
+    my $otherJmap = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $otherJmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+    ]);
+
+    xlog "create two emails in shared mailbox";
+    my $res = $otherJmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'email1' => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'email1',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'email2' => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'email2',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $email1 = $res->[0][1]->{created}{email1}{id};
+    $self->assert_not_null($email1);
+    my $email2 = $res->[0][1]->{created}{email2}{id};
+    $self->assert_not_null($email2);
+    my @emailIds = sort ($email1, $email2);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            accountId => 'other',
+            update => {
+                $email1 => {
+                    keywords => {
+                        '$seen' => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$email1});
+
+    my $methods = [
+        ['Email/get', {
+            accountId => 'other',
+            ids => [$email1],
+            properties => [ 'keywords' ],
+        }, 'R1'],
+        ['Email/get', {
+            accountId => 'other',
+            ids => [$email2],
+            properties => [ 'keywords' ],
+        }, 'R2'],
+        ['Email/query', {
+            accountId => 'other',
+            filter => {
+                hasKeyword => '$seen',
+            },
+            sort => [{
+                property => 'id'
+            }],
+        }, 'R3'],
+        ['Email/query', {
+            accountId => 'other',
+            filter => {
+                notKeyword => '$seen',
+            },
+            sort => [{
+                property => 'id'
+            }],
+        }, 'R4'],
+    ];
+
+    $res = $otherJmap->CallMethods($methods);
+    $self->assert_deep_equals({},
+        $res->[0][1]{list}[0]{keywords});
+    $self->assert_deep_equals({},
+        $res->[1][1]{list}[0]{keywords});
+    $self->assert_deep_equals([], $res->[2][1]{ids});
+    $self->assert_deep_equals(\@emailIds, $res->[3][1]{ids});
+
+    $res = $jmap->CallMethods($methods);
+    $self->assert_deep_equals({'$seen' => JSON::true},
+        $res->[0][1]{list}[0]{keywords});
+    $self->assert_deep_equals({},
+        $res->[1][1]{list}[0]{keywords});
+    $self->assert_deep_equals([$email1], $res->[2][1]{ids});
+    $self->assert_deep_equals([$email2], $res->[3][1]{ids});
+}
+
 1;
