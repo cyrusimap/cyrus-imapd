@@ -7767,8 +7767,10 @@ static int proppatch_shareesactas(xmlNodePtr prop, unsigned set,
     int is_valid = 0;
 
     if (!pctx->txn->req_tgt.collection && pctx->txn->req_tgt.userid) {
-        int have_rights = mboxname_userownsmailbox(httpd_userid, mailbox_name(pctx->mailbox)) ||
-                    (cyrus_acl_myrights(httpd_authstate, pctx->mailbox->acl) & DACL_ADMIN);
+        int have_rights =
+            mboxname_userownsmailbox(httpd_userid, mailbox_name(pctx->mailbox)) ||
+            (cyrus_acl_myrights(httpd_authstate, mailbox_acl(pctx->mailbox)) & DACL_ADMIN);
+
         if (have_rights) {
             xmlChar *freeme = xmlNodeGetContent(prop);
             const char *val = (const char *) freeme;
