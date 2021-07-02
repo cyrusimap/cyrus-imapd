@@ -44,9 +44,7 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
       assert(size);
 
       table->size = size;
-      do {
-        table->seed = rand();
-      } while (table->seed == 0);
+      table->seed = rand(); /* might be zero, that's okay */
 
       /* Allocate the table -- different for using memory pools and not */
       if (use_mpool) {
