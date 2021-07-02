@@ -7567,7 +7567,7 @@ static int principal_state_init(jmap_req_t *req, SHA_CTX *sha1)
     int r = jmap_openmbox(req, calhomename, &mbox, 0);
     if (!r) {
         struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "%s" MODSEQ_FMT, req->userid, mbox->foldermodseq);
+        buf_printf(&buf, "%s" MODSEQ_FMT, req->userid, mailbox_foldermodseq(mbox));
         SHA1_Update(sha1, buf_base(&buf), buf_len(&buf));
         buf_free(&buf);
     }
