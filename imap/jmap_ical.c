@@ -491,6 +491,9 @@ static const char *jstimezones_get_jstzid(jstimezones_t *jstzones, const char *t
     if (!strcasecmp(tzid, "Etc/UTC")) {
         return tzid;
     }
+    else if (!strcasecmp(tzid, "UTC")) {
+        return "Etc/UTC";
+    }
 
     if (jstzones && jstzones->tzs.count) {
         icaltimezone *tz = hash_lookup(tzid, &jstzones->bytzid);
