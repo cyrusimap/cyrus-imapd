@@ -12134,7 +12134,8 @@ static void cmd_xfer(const char *tag, const char *name,
             list.allow_usersubs = 1;
         }
 
-        mboxlist_findall(NULL, mbname_intname(mbname), 1, NULL, NULL, xfer_addmbox, &list);
+        /* admin namespace, use original name */
+        mboxlist_findall(NULL, name, 1, NULL, NULL, xfer_addmbox, &list);
     }
 
     r = xfer_init(toserver, &xfer);
