@@ -798,7 +798,7 @@ static int dav_store_notification(struct transaction_t *txn,
     int r;
 
     mbentry_t *mbentry = NULL;
-    r = mboxlist_lookup_by_uniqueid(mailbox->uniqueid, &mbentry, NULL);
+    r = mboxlist_lookup_by_uniqueid(mailbox_uniqueid(mailbox), &mbentry, NULL);
     if (r) goto done;
 
     /* Find message UID for the resource */

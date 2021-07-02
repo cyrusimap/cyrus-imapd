@@ -7511,10 +7511,10 @@ HIDDEN int caldav_bump_defaultalarms(struct mailbox *mailbox)
         goto done;
     }
 
-    r = mboxlist_lookup_by_uniqueid(mailbox->uniqueid, &mbentry, NULL);
+    r = mboxlist_lookup_by_uniqueid(mailbox_uniqueid(mailbox), &mbentry, NULL);
     if (r) {
         syslog(LOG_ERR, "%s: failed to lookup mbentry %s: %s",
-                __func__, mailbox->uniqueid, error_message(r));
+                __func__, mailbox_uniqueid(mailbox), error_message(r));
         r = HTTP_SERVER_ERROR;
         goto done;
     }

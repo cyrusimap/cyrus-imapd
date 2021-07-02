@@ -3287,7 +3287,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Open calendar mailbox. */
-    if (!rock->mailbox || strcmp(rock->mailbox->uniqueid, rock->mbentry->uniqueid)) {
+    if (!rock->mailbox || strcmp(mailbox_uniqueid(rock->mailbox), rock->mbentry->uniqueid)) {
         jmap_closembox(req, &rock->mailbox);
         r = jmap_openmbox_by_uniqueid(req, rock->mbentry->uniqueid, &rock->mailbox, 0);
         if (r) goto done;
@@ -4740,14 +4740,14 @@ static int setcalendarevents_create(jmap_req_t *req,
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         struct buf blobid = BUF_INITIALIZER;
-        if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox), mbox->i.last_uid,
-                                       req->userid, NULL, NULL, &blobid)) {
+        if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox),
+                    mbox->i.last_uid, req->userid, NULL, NULL, &blobid)) {
             json_object_set_new(create, "blobId",
                                 json_string(buf_cstring(&blobid)));
         }
         buf_reset(&blobid);
-        if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox), mbox->i.last_uid,
-                                       NULL, NULL, NULL, &blobid)) {
+        if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox),
+                    mbox->i.last_uid, NULL, NULL, NULL, &blobid)) {
             json_object_set_new(create, "debugBlobId",
                                 json_string(buf_cstring(&blobid)));
         }
@@ -5522,14 +5522,14 @@ static int setcalendarevents_update(jmap_req_t *req,
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         struct buf blobid = BUF_INITIALIZER;
-        if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox), mbox->i.last_uid,
-                                       req->userid, NULL, NULL, &blobid)) {
+        if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox),
+                    mbox->i.last_uid, req->userid, NULL, NULL, &blobid)) {
             json_object_set_new(update, "blobId",
                                 json_string(buf_cstring(&blobid)));
         }
         buf_reset(&blobid);
-        if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox), mbox->i.last_uid,
-                                       NULL, NULL, NULL, &blobid)) {
+        if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox),
+                    mbox->i.last_uid, NULL, NULL, NULL, &blobid)) {
             json_object_set_new(update, "debugBlobId",
                                 json_string(buf_cstring(&blobid)));
         }
@@ -8511,7 +8511,7 @@ static int principal_getavailability_cb(void *vrock, struct caldav_data *cdata)
         }
     }
 
-    if (!rock->mbox || strcmp(rock->mbox->uniqueid, rock->mbentry->uniqueid)) {
+    if (!rock->mbox || strcmp(mailbox_uniqueid(rock->mbox), rock->mbentry->uniqueid)) {
         /* reset state for calendar collection */
         if (rock->mbox) {
             jmap_closembox(rock->req, &rock->mbox);
@@ -8900,7 +8900,7 @@ static struct seqset *_readseen(struct mailbox *mbox, const char *userid)
     int r = seen_open(userid, SEEN_SILENT, &seendb);
     if (!r) {
         struct seendata sd = SEENDATA_INITIALIZER;
-        r = seen_read(seendb, mbox->uniqueid, &sd);
+        r = seen_read(seendb, mailbox_uniqueid(mbox), &sd);
         if (!r) {
             seenuids = seqset_parse(sd.seenuids, NULL, sd.lastuid);
             seen_freedata(&sd);
@@ -9236,7 +9236,7 @@ static void notif_set(struct jmap_req *req,
             goto done;
         }
         struct seendata sd = SEENDATA_INITIALIZER;
-        r = seen_lockread(seendb, notifmbox->uniqueid, &sd);
+        r = seen_lockread(seendb, mailbox_uniqueid(notifmbox), &sd);
         if (r) {
             buf_setcstr(&buf, "can not read seen.db: ");
             buf_appendcstr(&buf, error_message(r));
@@ -9294,7 +9294,7 @@ static void notif_set(struct jmap_req *req,
         sd.lastread = time(NULL);
         sd.lastchange = sd.lastread;
         sd.lastuid = seqset_last(seenuids);
-        r = seen_write(seendb, notifmbox->uniqueid, &sd);
+        r = seen_write(seendb, mailbox_uniqueid(notifmbox), &sd);
         seen_freedata(&sd);
         if (r) {
             buf_setcstr(&buf, "can not write seen.db: ");
