@@ -44,6 +44,7 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
       assert(size);
 
       table->size = size;
+      table->count = 0;
       table->seed = rand(); /* might be zero, that's okay */
 
       /* Allocate the table -- different for using memory pools and not */
@@ -94,12 +95,13 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
           }
           (table->table)[val] -> next = NULL;
           (table->table)[val] -> data = data;
+          table->count++;
           return (table->table)[val] -> data;
       }
 
       /*
       ** This spot in the table is already in use.  See if the current string
-      ** has already been inserted, and if so, increment its count.
+      ** has already been inserted, and if so, replace its data
       */
       for (prev = &((table->table)[val]), ptr=(table->table)[val];
            ptr;
@@ -125,6 +127,7 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
               newptr->data = data;
               newptr->next = ptr;
               *prev = newptr;
+              table->count++;
               return data;
           }
       }
@@ -143,9 +146,9 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       newptr->data = data;
       newptr->next = NULL;
       *prev = newptr;
+      table->count++;
       return data;
 }
-
 
 /*
 ** Look up a key and return the associated data.  Returns NULL if
@@ -227,6 +230,7 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
                   free(ptr->key);
                   free(ptr);
               }
+              table->count--;
               return data;
           }
           if (cmpresult < 0) {
@@ -287,6 +291,7 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
       }
       table->table = NULL;
       table->size = 0;
+      table->count = 0;
 }
 
 /*
@@ -335,19 +340,8 @@ EXPORTED strarray_t *hash_keys(hash_table *table)
 
 EXPORTED int hash_numrecords(hash_table *table)
 {
-    unsigned i;
-    bucket *temp;
-    int count = 0;
-
-    for (i = 0; i < table->size; i++) {
-        temp = (table->table)[i];
-        while (temp) {
-            count++;
-            temp = temp->next;
-        }
-    }
-
-    return count;
+    /* XXX macro or inline this if we keep the count field long term */
+    return table->count;
 }
 
 EXPORTED void hash_enumerate_sorted(hash_table *table, void (*func)(const char *, void *, void *),
