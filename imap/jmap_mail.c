@@ -1587,7 +1587,8 @@ static void emailsearch_folders_internalise(struct index_state *state,
                 mbentry_t *mbentry = NULL;
                 if (!mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL)) {
                     int foldernum =
-                        conversation_folder_number(internal->cstate, mbentry->name, 0);
+                        conversation_folder_number(internal->cstate,
+                                CONV_FOLDER_KEY_MBE(internal->cstate, mbentry), 0);
                     if (foldernum >= 0) {
                         bv_set(&val->foldernums, foldernum);
                         strarray_append(&val->foldernames, mbentry->name);
