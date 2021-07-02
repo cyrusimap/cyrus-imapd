@@ -54,6 +54,7 @@
 #include "ical_support.h"
 #include "message.h"
 #include "strhash.h"
+#include "stristr.h"
 #include "util.h"
 
 #ifdef HAVE_ICAL
@@ -560,7 +561,16 @@ EXPORTED icalcomponent *icalcomponent_new_stream(struct mailbox *mailbox,
 
 EXPORTED icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
 {
-    return icalparser_parse_string(buf_cstring(buf));
+    const char *rawical = buf_cstring(buf);
+    icalcomponent *ical = icalparser_parse_string(rawical);
+
+    if (!ical && !stristr(rawical, "END:VCALENDAR")) {
+        char *fixed = strconcat(rawical, "END:VCALENDAR", NULL);
+        ical = icalparser_parse_string(fixed);
+        free(fixed);
+    }
+
+    return ical;
 }
 
 EXPORTED struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
