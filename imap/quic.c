@@ -370,19 +370,26 @@ HIDDEN int quic_input(struct quic_context *ctx, struct protstream *pin)
     struct sockaddr_storage remote_addr;
     socklen_t remote_addrlen;
     uint8_t data[USHRT_MAX];
-    ssize_t datalen, nread = 0;
-    int n, r;
+    size_t n, datalen, nread = 0;
+    int r;
 
-    prot_read(pin, (char *) &remote_addrlen, sizeof(remote_addrlen));
-    prot_read(pin, (char *) &remote_addr, remote_addrlen);
-    prot_read(pin, (char *) &datalen, sizeof(datalen));
-    for (; datalen; datalen -= n, nread += n) {
+    n = prot_read(pin, (char *) &remote_addrlen, sizeof(remote_addrlen));
+    if (n < sizeof(remote_addrlen)) goto ioerror;
+
+    n = prot_read(pin, (char *) &remote_addr, remote_addrlen);
+    if (n < remote_addrlen) goto ioerror;
+
+    n = prot_read(pin, (char *) &datalen, sizeof(datalen));
+    if (n < sizeof(datalen)) goto ioerror;
+
+    for (; n && datalen; datalen -= n, nread += n) {
         n = prot_read(pin, (char *) data + nread, datalen);
     }
 
-    syslog(LOG_DEBUG, "quic_input: read %zd of %zd bytes", nread, datalen);
+    syslog(LOG_DEBUG, "quic_input: read %zd bytes", nread);
 
-    if (nread == 0) {
+ioerror:
+    if (n == 0) {
         if (prot_IS_EOF(pin)) {
             /* Client closed connection */
             syslog(LOG_DEBUG, "client closed connection");
@@ -391,7 +398,7 @@ HIDDEN int quic_input(struct quic_context *ctx, struct protstream *pin)
             /* Client timeout or I/O error */
         }
 
-        return 1;
+        return EOF;
     }
 
     ngtcp2_path path = {
