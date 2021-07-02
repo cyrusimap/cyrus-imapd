@@ -5,11 +5,13 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <syslog.h>
 
 #include "assert.h"
 #include "hash.h"
 #include "mpool.h"
 #include "strhash.h"
+#include "util.h"
 #include "xmalloc.h"
 
 /*
@@ -46,6 +48,7 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
       table->size = size;
       table->count = 0;
       table->seed = rand(); /* might be zero, that's okay */
+      table->hash_load_warned_at = 0;
 
       /* Allocate the table -- different for using memory pools and not */
       if (use_mpool) {
@@ -66,12 +69,29 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
       return table;
 }
 
+#define check_load_factor(table) do {                                   \
+    hash_table *t = (table);                                            \
+    const double load_factor = t->count * 1.0 / t->size;                \
+    if (load_factor > 3.0) {                                            \
+        if (t->hash_load_warned_at == 0                                 \
+            || (int) load_factor > t->hash_load_warned_at) {            \
+            xsyslog(LOG_DEBUG, "hash table load factor exceeds 3.0",    \
+                               "table=<%p> entries=<" SIZE_T_FMT ">"    \
+                               " buckets=<" SIZE_T_FMT "> load=<%.2g>", \
+                               t, t->count, t->size, load_factor);      \
+            t->hash_load_warned_at = (int) load_factor;                 \
+        }                                                               \
+    }                                                                   \
+    else {                                                              \
+        t->hash_load_warned_at = 0;                                     \
+    }                                                                   \
+} while(0)
+
 /*
 ** Insert 'key' into hash table.
 ** Returns a non-NULL pointer which is either the passed @data pointer
 ** or, if there was already an entry for @key, the old data pointer.
 */
-
 EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
       unsigned val = strhash_seeded(table->seed, key) % table->size;
@@ -96,6 +116,7 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
           (table->table)[val] -> next = NULL;
           (table->table)[val] -> data = data;
           table->count++;
+          check_load_factor(table);
           return (table->table)[val] -> data;
       }
 
@@ -128,6 +149,7 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
               newptr->next = ptr;
               *prev = newptr;
               table->count++;
+              check_load_factor(table);
               return data;
           }
       }
@@ -147,6 +169,7 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       newptr->next = NULL;
       *prev = newptr;
       table->count++;
+      check_load_factor(table);
       return data;
 }
 
