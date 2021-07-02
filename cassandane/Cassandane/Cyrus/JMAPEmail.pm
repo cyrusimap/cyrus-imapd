@@ -12672,7 +12672,7 @@ sub test_email_get_calendarevents_utc
     $self->assert_not_null($jsevent1);
     $self->assert_str_equals("Foo", $jsevent1->{title});
     $self->assert_str_equals('2018-05-18T09:00:00', $jsevent1->{start});
-    $self->assert_str_equals('UTC', $jsevent1->{timeZone});
+    $self->assert_str_equals('Etc/UTC', $jsevent1->{timeZone});
     $self->assert_str_equals('PT1H', $jsevent1->{duration});
 }
 
