@@ -111,7 +111,6 @@
 #include <libxml/uri.h>
 
 static unsigned accept_encodings = 0;
-static char *httpd_altsvc = NULL;
 
 #ifdef HAVE_ZLIB
 #include <zlib.h>
@@ -417,6 +416,7 @@ struct protstream *httpd_out = NULL;
 struct protstream *httpd_in = NULL;
 struct protgroup *protin = NULL;
 strarray_t *httpd_log_headers = NULL;
+char *httpd_altsvc = NULL;
 static struct http_connection http_conn;
 
 static sasl_ssf_t extprops_ssf = 0;
@@ -2690,7 +2690,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         httpdate_gen(datestr, sizeof(datestr), now);
         simple_hdr(txn, "Date", "%s", datestr);
 
-        if (httpd_altsvc && (txn->flags.ver < VER_2)) {
+        if (httpd_altsvc && (txn->flags.ver <= VER_2)) {
             simple_hdr(txn, "Alt-Svc", "%s", httpd_altsvc);
         }
 

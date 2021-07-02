@@ -571,7 +571,7 @@ HIDDEN void http2_altsvc(struct buf *altsvc)
         const char *config_altsvc = config_getstring(IMAPOPT_HTTP_H2_ALTSVC);
 
         if (config_altsvc) {
-            buf_printf(altsvc, "h2=\"%s\"", config_altsvc);
+            buf_printf(altsvc, "%sh2=\"%s\"", sep, config_altsvc);
             sep = ", ";
         }
         if (httpd_localip) {
@@ -730,6 +730,19 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
     if (r) {
         syslog(LOG_ERR, "nghttp2_submit_settings: %s", nghttp2_strerror(r));
         return HTTP_SERVER_ERROR;
+    }
+
+    if (httpd_altsvc) {
+        /* Remove h2c from Alt-Svc value */
+        char *p = strstr(httpd_altsvc, "h2c=");
+        if (p == httpd_altsvc) {
+            free(httpd_altsvc);
+            httpd_altsvc = NULL;
+        }
+        else if (p) {
+            while (*--p == ' ');
+            *p  = '\0';
+        }
     }
 
     /* Write frame(s) */
