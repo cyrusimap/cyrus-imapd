@@ -743,6 +743,20 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
             while (*--p == ' ');
             *p  = '\0';
         }
+
+        if (httpd_altsvc) {
+            char *origin = strconcat("https://", config_servername, NULL);
+
+            r = nghttp2_submit_altsvc(ctx->session, NGHTTP2_FLAG_NONE, 0,
+                                      (uint8_t *) origin, strlen(origin),
+                                      (uint8_t *) httpd_altsvc, strlen(httpd_altsvc));
+            free(origin);
+
+            if (r) {
+                syslog(LOG_ERR, "nghttp2_submit_altsvc: %s", nghttp2_strerror(r));
+                return HTTP_SERVER_ERROR;
+            }
+        }
     }
 
     /* Write frame(s) */
