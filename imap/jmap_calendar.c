@@ -1702,7 +1702,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
             r = caldav_bump_defaultalarms(mbox);
             if (r) {
                 syslog(LOG_ERR, "failed to bump default alarms for %s: %s",
-                        mbox->name, error_message(r));
+                        mailbox_name(mbox), error_message(r));
             }
         }
     }
@@ -3076,9 +3076,9 @@ static int copyblob(jmap_req_t *req, const char *blobid, struct mailbox *dstmbox
     /* Write blob to file */
     const char *blob_base = srcpart ? blob.s + srcpart->header_offset : blob.s;
     size_t size = srcpart ? srcpart->header_size + srcpart->content_size : blob.len;
-    FILE *fp = append_newstage(dstmbox->name, time(NULL), 0, &stage);
+    FILE *fp = append_newstage(mailbox_name(dstmbox), time(NULL), 0, &stage);
     if (!fp) {
-        syslog(LOG_ERR, "%s: append_newstage(%s) failed", __func__, dstmbox->name);
+        syslog(LOG_ERR, "%s: append_newstage(%s) failed", __func__, mailbox_name(dstmbox));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -3316,7 +3316,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     mr = msgrecord_from_uid(rock->mailbox, cdata->dav.imap_uid);
     if (!mr) {
         syslog(LOG_ERR, "msgrecord_from_uid failed for %s:%d",
-                rock->mailbox->name, cdata->dav.imap_uid);
+                mailbox_name(rock->mailbox), cdata->dav.imap_uid);
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -3324,7 +3324,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     r = msgrecord_get_systemflags(mr, &system_flags);
     if (r) {
         syslog(LOG_ERR, "msgrecord_get_systemflags failed for %s:%d: %s",
-                rock->mailbox->name, cdata->dav.imap_uid, error_message(r));
+                mailbox_name(rock->mailbox), cdata->dav.imap_uid, error_message(r));
         goto done;
     }
     json_object_set_new(jsevent, "isDraft", json_boolean(system_flags & FLAG_DRAFT));
@@ -4237,9 +4237,9 @@ static int append_eventnotif(const char *from,
     }
     buf_reset(&buf);
 
-    FILE *fp = append_newstage(notifmbox->name, created, 0, &stage);
+    FILE *fp = append_newstage(mailbox_name(notifmbox), created, 0, &stage);
     if (!fp) {
-        xsyslog(LOG_ERR, "append_newstage failed", "name=%s", notifmbox->name);
+        xsyslog(LOG_ERR, "append_newstage failed", "name=%s", mailbox_name(notifmbox));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -4717,7 +4717,7 @@ static int setcalendarevents_create(jmap_req_t *req,
         if (!r) {
             json_t *event_copy = json_deep_copy(event);
             remove_peruserprops(event_copy);
-            int r2 = create_eventnotif(req, notifmbox, mbox->name, "created", uid,
+            int r2 = create_eventnotif(req, notifmbox, mailbox_name(mbox), "created", uid,
                     &schedule_addresses, NULL, is_draft, event_copy, NULL);
             if (r2) {
                 xsyslog(LOG_WARNING, "could not create notification",
@@ -5501,7 +5501,7 @@ static int setcalendarevents_update(jmap_req_t *req,
             remove_peruserprops(patch_copy);
             remove_peruserprops(old_event);
             if (json_object_size(patch_copy)) {
-                int r2 = create_eventnotif(req, notifmbox, mbox->name,
+                int r2 = create_eventnotif(req, notifmbox, mailbox_name(mbox),
                         "updated", eid->uid, &schedule_addresses, NULL,
                         record.system_flags & FLAG_DRAFT, old_event, patch_copy);
                 if (r2) {
@@ -5679,8 +5679,8 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     json_t *old_event = jmapical_tojmap(oldical, NULL, &jmapctx);
     json_object_del(old_event, "updated");
     remove_peruserprops(old_event);
-    int r2 = create_eventnotif(req, notifmbox, mbox->name, "destroyed", eid->uid,
-            &schedule_addresses, NULL,
+    int r2 = create_eventnotif(req, notifmbox, mailbox_name(mbox),
+            "destroyed", eid->uid, &schedule_addresses, NULL,
             record.system_flags & FLAG_DRAFT, old_event, NULL);
     if (r2) {
         xsyslog(LOG_WARNING, "could not create notification",

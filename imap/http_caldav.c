@@ -1126,7 +1126,7 @@ HIDDEN int caldav_is_personalized(struct mailbox *mailbox,
                                   const char *userid,
                                   struct buf *userdata)
 {
-    if (caldav_is_secretarymode(mailbox->name)) return 0;
+    if (caldav_is_secretarymode(mailbox_name(mailbox))) return 0;
 
     if (cdata->comp_flags.shared) {
         /* Lookup per-user calendar data */
@@ -1354,7 +1354,7 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
             icalcomponent *ical = NULL;
             int defaultalerts = read_usedefaultalerts(dl, mailbox, record, &ical);
             if (defaultalerts) {
-                add_defaultalarm_guid(mailbox->name, userid, buf, &buf_len);
+                add_defaultalarm_guid(mailbox_name(mailbox), userid, buf, &buf_len);
             }
             icalcomponent_free(ical);
 
@@ -1379,7 +1379,7 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
         size_t buf_len = MESSAGE_GUID_SIZE;
 
         message_guid_export(&record->guid, buf);
-        add_defaultalarm_guid(mailbox->name, userid, buf, &buf_len);
+        add_defaultalarm_guid(mailbox_name(mailbox), userid, buf, &buf_len);
 
         struct message_guid guid;
         message_guid_generate(&guid, buf, buf_len);
@@ -2048,7 +2048,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
     if (ical) {
         icalcomponent *comp = icalcomponent_get_first_real_component(ical);
         if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
-            int r2 = jmap_create_caldaveventnotif(txn, mailbox->name,
+            int r2 = jmap_create_caldaveventnotif(txn, mailbox_name(mailbox),
                     cdata->ical_uid, &schedule_addresses, is_draft, ical, NULL);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
@@ -3050,10 +3050,10 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         if (has_defaultalerts) {
             /* Read default alarms */
             icalcomponent *withtime =
-                caldav_read_calendar_icalalarms(mailbox->name, httpd_userid,
+                caldav_read_calendar_icalalarms(mailbox_name(mailbox), httpd_userid,
                         CALDAV_DEFAULTALARMS_ANNOT_WITHTIME);
             icalcomponent *withdate =
-                caldav_read_calendar_icalalarms(mailbox->name, httpd_userid,
+                caldav_read_calendar_icalalarms(mailbox_name(mailbox), httpd_userid,
                         CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
             /* Add default alarms */
             icalcomponent_add_defaultalerts(ical, withtime, withdate);
@@ -4918,7 +4918,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 oldical = caldav_record_to_ical(mailbox, cdata,
                         NULL, NULL);
             }
-            int r2 = jmap_create_caldaveventnotif(txn, mailbox->name, uid,
+            int r2 = jmap_create_caldaveventnotif(txn, mailbox_name(mailbox), uid,
                     &schedule_addresses, is_draft, oldical, ical);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
@@ -7506,7 +7506,7 @@ HIDDEN int caldav_bump_defaultalarms(struct mailbox *mailbox)
     db = caldav_open_mailbox(mailbox);
     if (!db) {
         syslog(LOG_ERR, "%s: can't open caldav.db for %s",
-                __func__, mailbox->name);
+                __func__, mailbox_name(mailbox));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -7521,7 +7521,7 @@ HIDDEN int caldav_bump_defaultalarms(struct mailbox *mailbox)
     r = caldav_foreach(db, mbentry, bumpdefaultalarms_cb, &data);
     if (r) {
         syslog(LOG_ERR, "%s: failed to iterate caldav.db %s: %s",
-                __func__, mailbox->name, error_message(r));
+                __func__, mailbox_name(mailbox), error_message(r));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -7533,7 +7533,7 @@ HIDDEN int caldav_bump_defaultalarms(struct mailbox *mailbox)
     iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     if (!iter) {
         syslog(LOG_ERR, "%s: can't open mailbox iterator for %s",
-                __func__, mailbox->name);
+                __func__, mailbox_name(mailbox));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -7578,7 +7578,7 @@ HIDDEN int caldav_bump_defaultalarms(struct mailbox *mailbox)
         r = mailbox_rewrite_index_record(mailbox, &copyrecord);
         if (r) {
             syslog(LOG_ERR, "%s: rewrite index record %s:%d: %s",
-                    __func__, mailbox->name, record->uid, error_message(r));
+                    __func__, mailbox_name(mailbox), record->uid, error_message(r));
             continue;
         }
         if (dl) {
@@ -7591,14 +7591,14 @@ HIDDEN int caldav_bump_defaultalarms(struct mailbox *mailbox)
                                      httpd_userid, &userdata);
             if (r) {
                 syslog(LOG_ERR, "%s: can't update per-user modseq for record %s:%d: %s",
-                        __func__, mailbox->name, record->uid, error_message(r));
+                        __func__, mailbox_name(mailbox), record->uid, error_message(r));
                 continue;
             }
         }
         r = caldav_alarm_touch_record(mailbox, record, /*force*/1);
         if (r) {
             syslog(LOG_ERR, "%s: touch alarms for index record %s:%d: %s",
-                    __func__, mailbox->name, record->uid, error_message(r));
+                    __func__, mailbox_name(mailbox), record->uid, error_message(r));
             continue;
         }
     }
@@ -7767,7 +7767,7 @@ static int proppatch_shareesactas(xmlNodePtr prop, unsigned set,
     int is_valid = 0;
 
     if (!pctx->txn->req_tgt.collection && pctx->txn->req_tgt.userid) {
-        int have_rights = mboxname_userownsmailbox(httpd_userid, pctx->mailbox->name) ||
+        int have_rights = mboxname_userownsmailbox(httpd_userid, mailbox_name(pctx->mailbox)) ||
                     (cyrus_acl_myrights(httpd_authstate, pctx->mailbox->acl) & DACL_ADMIN);
         if (have_rights) {
             xmlChar *freeme = xmlNodeGetContent(prop);
@@ -8864,7 +8864,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     uint32_t newuid = 0;
     strarray_t myimapflags = STRARRAY_INITIALIZER;
     int usedefaultalerts = 0; // for per-user data
-    int is_secretarymode = caldav_is_secretarymode(mailbox->name);
+    int is_secretarymode = caldav_is_secretarymode(mailbox_name(mailbox));
 
     /* Copy add_imapflags, we might need to add some flags */
     if (add_imapflags) strarray_cat(&myimapflags, add_imapflags);
