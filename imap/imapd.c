@@ -11730,6 +11730,7 @@ static void cmd_xfer(const char *tag, const char *name,
         }
         mbname_free(&mbname);
 
+        /* admin namespace, use original name */
         mboxlist_findall(NULL, name, 1, NULL, NULL, xfer_addmbox, &list);
         free(intname);
     }
