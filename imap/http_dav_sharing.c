@@ -1921,7 +1921,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     }
     if (ret) goto done;
 
-    /* Make sure its a share-resource element */
+    /* Make sure it is a share-resource element */
     if (!xmlStrcmp(root->name, BAD_CAST "share")) legacy = 1;
     else if (xmlStrcmp(root->name, BAD_CAST "share-resource")) {
         txn->error.desc =
