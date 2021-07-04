@@ -91,21 +91,11 @@ static int stream_close_cb(nghttp3_conn *conn, int64_t stream_id,
 {
     struct transaction_t *txn = stream_user_data;
 
-    syslog(LOG_DEBUG, "stream_close(id=%ld): %lu", stream_id, app_error_code);
+    syslog(LOG_DEBUG, "H3 stream_close(id=%ld): %lu", stream_id, app_error_code);
 
     if (txn) {
         /* Memory cleanup */
-        struct http3_stream *strm = txn->strm_ctx;
-        int i;
-
         nghttp3_conn_set_stream_user_data(conn, stream_id, NULL);
-
-        for (i = 0; i < ptrarray_size(&strm->body_chunks); i++) {
-            struct buf *buf = ptrarray_nth(&strm->body_chunks, i);
-            buf_destroy(buf);
-        }
-        ptrarray_fini(&strm->body_chunks);
-
         transaction_free(txn);
         free(txn);
     }
@@ -122,7 +112,7 @@ static int recv_data_cb(nghttp3_conn *conn __attribute__((unused)),
 
     if (!txn) return 0;
 
-    syslog(LOG_DEBUG, "recv_data_cb(id=%ld, len=%zu, txnflags=%#x)",
+    syslog(LOG_DEBUG, "H3 recv_data_cb(id=%ld, len=%zu, txnflags=%#x)",
            stream_id, datalen, txn->req_body.flags);
 
     if (txn->req_body.flags & BODY_DISCARD) return 0;
@@ -134,6 +124,29 @@ static int recv_data_cb(nghttp3_conn *conn __attribute__((unused)),
     }
 
     return 0;
+}
+
+static void _end_stream(struct transaction_t *txn)
+{
+    if (txn) {
+        struct http3_stream *strm = txn->strm_ctx;
+
+        if (strm) {
+            int i;
+
+            for (i = 0; i < HTTP3_MAX_HEADERS; i++) {
+                free(strm->resp_hdrs[i].value);
+            }
+            for (i = 0; i < ptrarray_size(&strm->body_chunks); i++) {
+                struct buf *buf = ptrarray_nth(&strm->body_chunks, i);
+                buf_destroy(buf);
+            }
+            ptrarray_fini(&strm->body_chunks);
+            free(strm);
+        }
+
+        txn->strm_ctx = NULL;
+    }
 }
 
 static int begin_headers_cb(nghttp3_conn *conn, int64_t stream_id,
@@ -160,7 +173,7 @@ static int begin_headers_cb(nghttp3_conn *conn, int64_t stream_id,
 
     strm->id = stream_id;
     txn->strm_ctx = strm;
-//    ptrarray_add(&txn->done_callbacks, &_end_stream);
+    ptrarray_add(&txn->done_callbacks, &_end_stream);
 
     /* Create header cache */
     if (!(txn->req_hdrs = spool_new_hdrcache())) {
@@ -297,6 +310,11 @@ static int resp_body_chunk(struct transaction_t *txn,
                            const char *data, unsigned datalen,
                            int last_chunk, MD5_CTX *md5ctx);
 
+static void _reset(struct http_connection *conn)
+{
+    quic_close(QUIC_CTX(conn));
+}
+
 static int open_conn(void *conn)
 {
     struct http_connection *http_conn = conn;
@@ -317,6 +335,8 @@ static int open_conn(void *conn)
     r = nghttp3_conn_server_new(&h3_conn, &callbacks, &settings,
                                 nghttp3_mem_default(), conn);
     http_conn->sess_ctx = h3_conn;
+
+    ptrarray_add(&http_conn->reset_callbacks, &_reset);
 
     r = quic_open_stream(QUIC_CTX(http_conn), 0, &ctrl_stream_id, NULL);
     r = nghttp3_conn_bind_control_stream(h3_conn, ctrl_stream_id);
@@ -362,11 +382,6 @@ static struct quic_app_context h3 = {
       { NULL,    NULL, NULL } }
 };
 
-static void _reset(struct http_connection *conn)
-{
-    quic_close(QUIC_CTX(conn));
-}
-
 static void _shutdown(struct http_connection *conn)
 {
     quic_shutdown(QUIC_CTX(conn));
@@ -384,7 +399,6 @@ HIDDEN int http3_init(struct http_connection *conn, struct buf *serverinfo)
 
     if (!r) {
         QUIC_CTX(conn) = qctx;
-        ptrarray_add(&conn->reset_callbacks, &_reset);
         ptrarray_add(&conn->shutdown_callbacks, &_shutdown);
     }
 
