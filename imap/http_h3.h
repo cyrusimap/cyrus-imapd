@@ -46,7 +46,6 @@
 
 #include <config.h>
 
-#include "md5.h"
 #include "util.h"
 
 extern int http3_init(struct http_connection *conn, struct buf *serverinfo);

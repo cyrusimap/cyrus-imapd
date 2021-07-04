@@ -428,30 +428,29 @@ static void http3_output(struct http_connection *conn)
 {
     nghttp3_conn *h3_conn = conn->sess_ctx;
     int64_t stream_id = -1;
-    int fin = 0;
+    int fin = 0, write_more;
     struct iovec iov[16];
     nghttp3_ssize iovcnt = 0;
-    ssize_t nwrite, datalen = 0;
+    ssize_t datalen = 0;
 
     do {
         if (h3_conn) {
             iovcnt = nghttp3_conn_writev_stream(h3_conn, &stream_id, &fin,
                                                 (nghttp3_vec *) iov,
                                                 sizeof(iov) / sizeof(iov[0]));
-            syslog(LOG_DEBUG, "nghttp3_conn_writev_stream: %ld, %ld, %d",
+            syslog(LOG_DEBUG,
+                   "nghttp3_conn_writev_stream(): id=%ld, iovcnt=%ld, fin=%d",
                    stream_id, iovcnt, fin);
         }
 
-        nwrite = quic_output(QUIC_CTX(conn), stream_id, fin, iov, iovcnt, &datalen);
+        write_more = quic_output(QUIC_CTX(conn),
+                                 stream_id, fin, iov, iovcnt, &datalen);
+
         if (datalen >= 0) {
             nghttp3_conn_add_write_offset(h3_conn, stream_id, datalen);
         }
-        if (nwrite == 0) break;
 
-        (void) nwrite;
-    } while (datalen >= 0 || nwrite == -240);
-//    } while (stream_id >= 0);
-//    } while (iovcnt);
+    } while (write_more);
 }
 
 HIDDEN void http3_input(struct http_connection *conn)

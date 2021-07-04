@@ -253,7 +253,7 @@ static int recv_stream_data_cb(ngtcp2_conn *conn,
     struct quic_context *ctx = user_data;
     int fin = flags & NGTCP2_STREAM_DATA_FLAG_FIN;
 
-    syslog(LOG_DEBUG, "recv_stream_data(0x%x, %ld, %lu, %zu)",
+    syslog(LOG_DEBUG, "QUIC recv_stream_data(0x%x, %ld, %lu, %zu)",
            flags, stream_id, offset, datalen);
 
     ssize_t consumed = ctx->app_ctx->read_stream(ctx->app_ctx->conn,
@@ -269,7 +269,18 @@ static int stream_open_cb(ngtcp2_conn *conn __attribute__((unused)),
                           int64_t stream_id,
                           void *user_data __attribute__((unused)))
 {
-    syslog(LOG_DEBUG, "stream_open(%lu)", stream_id);
+    syslog(LOG_DEBUG, "QUIC stream_open(%ld)", stream_id);
+
+    return 0;
+}
+
+static int stream_close_cb(ngtcp2_conn *conn __attribute__((unused)),
+                           int64_t stream_id,
+                           uint64_t app_error_code,
+                           void *user_data __attribute__((unused)),
+                           void *stream_user_data __attribute__((unused)))
+{
+    syslog(LOG_DEBUG, "QUIC stream_close(%ld, %lu)", stream_id, app_error_code);
 
     return 0;
 }
@@ -340,7 +351,7 @@ static ngtcp2_callbacks callbacks = {
     acked_crypto_offset_cb,
     NULL, // acked_stream_data_offset
     stream_open_cb,
-    NULL, // stream_close
+    stream_close_cb,
     NULL, // recv_stateless_reset
     NULL, // recv_retry
     NULL, // extend_max_streams_bidi
@@ -364,6 +375,21 @@ static ngtcp2_callbacks callbacks = {
     NULL, // ack_datagram
     NULL, // lost_datagram
 };
+
+static void send_data(int sock, ngtcp2_path *path, uint8_t *data, ssize_t nwrite)
+{
+    ssize_t sent;
+
+    do {
+        sent = sendto(sock, data, nwrite, 0,
+                      path->remote.addr, path->remote.addrlen);
+    } while (sent < 0 && errno == EINTR);
+
+    syslog(LOG_DEBUG, "send_data(): sent %zd of %zd bytes", sent, nwrite);
+
+    if (sent != nwrite) {
+    }
+}
 
 HIDDEN int quic_input(struct quic_context *ctx, struct protstream *pin)
 {
@@ -530,16 +556,14 @@ ioerror:
     return 0;
 }
 
-HIDDEN ssize_t quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
-                           const struct iovec *iov, int iovcnt, ssize_t *datalen)
+HIDDEN int quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
+                       const struct iovec *iov, int iovcnt, ssize_t *datalen)
 {
     uint8_t data[USHRT_MAX];
-    ssize_t nwrite, sent;
+    ssize_t nwrite;
     uint32_t flags = NGTCP2_WRITE_STREAM_FLAG_MORE |
         (fin ? NGTCP2_WRITE_STREAM_FLAG_FIN : 0);
     ngtcp2_path_storage ps;
-
-    syslog(LOG_DEBUG, "write stream (%ld, %d, %d)", stream_id, iovcnt, fin);
 
     ngtcp2_path_storage_zero(&ps);
 
@@ -548,21 +572,17 @@ HIDDEN ssize_t quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
                                                flags, stream_id,
                                                (ngtcp2_vec *) iov, iovcnt,
                                                timestamp())) > 0) {
-        do {
-            sent = sendto(ctx->sock, data, nwrite, 0,
-                          ps.path.remote.addr, ps.path.remote.addrlen);
-        } while (sent < 0 && errno == EINTR);
 
-        syslog(LOG_DEBUG, "write stream (%ld, %ld): sent %zd of %zd bytes\n",
-               stream_id, *datalen, sent, nwrite);
+        syslog(LOG_DEBUG, "ngtcp2_conn_writev_stream(%ld, %d, %d): %ld, %ld",
+               stream_id, iovcnt, fin, nwrite, *datalen);
 
-        if (sent != nwrite) {
-        }
+        send_data(ctx->sock, &ps.path, data, nwrite);
     }
 
-    syslog(LOG_DEBUG, "write stream (%ld, %ld)", stream_id, nwrite);
+    syslog(LOG_DEBUG, "ngtcp2_conn_writev_stream(%ld, %d, %d): %ld, %ld",
+           stream_id, iovcnt, fin, nwrite, *datalen);
 
-    return nwrite;
+    return nwrite == NGTCP2_ERR_WRITE_MORE;
 }
 
 HIDDEN void quic_close(struct quic_context *ctx)

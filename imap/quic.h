@@ -64,8 +64,8 @@ extern int quic_init(struct quic_context **ctx, struct quic_app_context *app);
 
 extern int quic_input(struct quic_context *ctx, struct protstream *pin);
 
-extern ssize_t quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
-                           const struct iovec *iov, int iovcnt, ssize_t *datalen);
+extern int quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
+                       const struct iovec *iov, int iovcnt, ssize_t *datalen);
 
 extern void quic_close(struct quic_context *ctx);
 
