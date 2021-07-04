@@ -587,7 +587,23 @@ HIDDEN int quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
 
 HIDDEN void quic_close(struct quic_context *ctx)
 {
-    syslog(LOG_DEBUG, "quic_close()");
+    uint8_t data[USHRT_MAX];
+    ssize_t nwrite;
+    ngtcp2_path_storage ps;
+
+    ngtcp2_path_storage_zero(&ps);
+
+    nwrite = ngtcp2_conn_write_connection_close(ctx->qconn,
+                                                &ps.path, NULL,
+                                                data, sizeof(data),
+                                                NGTCP2_APPLICATION_ERROR,
+                                                timestamp());
+
+    syslog(LOG_DEBUG, "ngtcp2_conn_write_connection_close(): %zd", nwrite);
+
+    if (nwrite > 0) {
+        send_data(ctx->sock, &ps.path, data, nwrite);
+    }
 
     if (ctx->tls) {
         tls_reset_servertls(&ctx->tls);
