@@ -112,7 +112,7 @@ static int recv_data_cb(nghttp3_conn *conn __attribute__((unused)),
 
     if (!txn) return 0;
 
-    syslog(LOG_DEBUG, "H3 recv_data_cb(id=%ld, len=%zu, txnflags=%#x)",
+    syslog(LOG_DEBUG, "H3 recv_data(id=%ld, len=%zu, txnflags=%#x)",
            stream_id, datalen, txn->req_body.flags);
 
     if (txn->req_body.flags & BODY_DISCARD) return 0;
@@ -126,13 +126,15 @@ static int recv_data_cb(nghttp3_conn *conn __attribute__((unused)),
     return 0;
 }
 
-static void _end_stream(struct transaction_t *txn)
+static void stream_done(struct transaction_t *txn)
 {
     if (txn) {
         struct http3_stream *strm = txn->strm_ctx;
 
         if (strm) {
             int i;
+
+            syslog(LOG_DEBUG, "H3 stream_done(%ld)", strm->id);
 
             for (i = 0; i < HTTP3_MAX_HEADERS; i++) {
                 free(strm->resp_hdrs[i].value);
@@ -153,7 +155,7 @@ static int begin_headers_cb(nghttp3_conn *conn, int64_t stream_id,
                             void *conn_user_data,
                             void *stream_user_data __attribute__((unused)))
 {
-    syslog(LOG_DEBUG, "begin_headers(%ld)", stream_id);
+    syslog(LOG_DEBUG, "H3 begin_headers(%ld)", stream_id);
 
     struct transaction_t *txn = xzmalloc(sizeof(struct transaction_t));
 
@@ -173,7 +175,7 @@ static int begin_headers_cb(nghttp3_conn *conn, int64_t stream_id,
 
     strm->id = stream_id;
     txn->strm_ctx = strm;
-    ptrarray_add(&txn->done_callbacks, &_end_stream);
+    ptrarray_add(&txn->done_callbacks, &stream_done);
 
     /* Create header cache */
     if (!(txn->req_hdrs = spool_new_hdrcache())) {
@@ -205,7 +207,8 @@ static int recv_header_cb(nghttp3_conn *conn __attribute__((unused)),
     char *my_name = xstrndup((const char *) h3name.base, h3name.len);
     char *my_value = xstrndup((const char *) h3val.base, h3val.len);
 
-    syslog(LOG_DEBUG, "recv_header(%ld:  %s: %s)", stream_id, my_name, my_value);
+    syslog(LOG_DEBUG, "H3 recv_header(%ld:  %s: %s)",
+           stream_id, my_name, my_value);
 
     if (my_name[0] == ':') {
         switch (my_name[1]) {
@@ -241,7 +244,7 @@ static int end_headers_cb(nghttp3_conn *conn __attribute__((unused)),
                           void *conn_user_data __attribute__((unused)),
                           void *stream_user_data)
 {
-    syslog(LOG_DEBUG, "end_headers(%ld)", stream_id);
+    syslog(LOG_DEBUG, "H3 end_headers(%ld)", stream_id);
 
     struct transaction_t *txn = stream_user_data;
 
@@ -267,7 +270,8 @@ static int end_stream_cb(nghttp3_conn *conn __attribute__((unused)),
 {
     struct transaction_t *txn = stream_user_data;
 
-    syslog(LOG_DEBUG, "end_stream(%ld, 0x%X)", stream_id, txn->req_body.flags);
+    syslog(LOG_DEBUG, "H3 end_stream(%ld, 0x%X)",
+           stream_id, txn->req_body.flags);
 
     /* Check that we still want to process the request */
     if (!(txn->req_body.flags & BODY_DISCARD)) {
@@ -323,7 +327,7 @@ static int open_conn(void *conn)
     int64_t ctrl_stream_id, qpack_enc_stream_id, qpack_dec_stream_id;
     int r;
 
-    syslog(LOG_DEBUG, "h3_open()");
+    syslog(LOG_DEBUG, "H3 open_conn()");
 
     http_conn->begin_resp_headers = &begin_resp_headers;
     http_conn->add_resp_header = &add_resp_header;
@@ -353,7 +357,7 @@ static void close_conn(void *conn)
 {
     struct http_connection *http_conn = conn;
 
-   syslog(LOG_DEBUG, "h3_close()");
+   syslog(LOG_DEBUG, "H3 close_conn()");
 
     if (http_conn && http_conn->sess_ctx) {
         nghttp3_conn_del((nghttp3_conn *) http_conn->sess_ctx);
@@ -365,10 +369,13 @@ static ssize_t read_stream(void *conn, int64_t stream_id,
 {
     struct http_connection *http_conn = conn;
 
-    syslog(LOG_DEBUG, "h3_read_stream(%d)", fin);
+    ssize_t n = nghttp3_conn_read_stream((nghttp3_conn *) http_conn->sess_ctx,
+                                         stream_id, src, srclen, fin);
 
-    return nghttp3_conn_read_stream((nghttp3_conn *) http_conn->sess_ctx,
-                                    stream_id, src, srclen, fin);
+    syslog(LOG_DEBUG, "nghttp3_conn_read_stream(id=%ld, len=%zu, fin=%d): %zi",
+           stream_id, srclen, fin, n);
+
+    return n;
 }
     
 static struct quic_app_context h3 = {
@@ -455,15 +462,16 @@ HIDDEN void http3_input(struct http_connection *conn)
         conn->close = 1;
         conn->close_str = prot_error(conn->pin);
     }
-
-    http3_output(conn);
+    else {
+        http3_output(conn);
+    }
 }
  
 static void begin_resp_headers(struct transaction_t *txn, long code)
 {
     struct http3_stream *strm = (struct http3_stream *) txn->strm_ctx;
 
-    syslog(LOG_DEBUG, "http3_begin_headers()");
+    syslog(LOG_DEBUG, "H3 begin_resp_headers(%ld)", code);
 
     strm->num_resp_hdrs = 0;
 
@@ -485,8 +493,8 @@ static void add_resp_header(struct transaction_t *txn,
 {
     struct http3_stream *strm = (struct http3_stream *) txn->strm_ctx;
 
-    syslog(LOG_DEBUG,
-           "http3_add_header(name = %s, num = %ld)", name, strm->num_resp_hdrs);
+    syslog(LOG_DEBUG, "H3 add_resp_header(name = %s, num = %ld)",
+           name, strm->num_resp_hdrs);
 
     if (strm->num_resp_hdrs >= HTTP3_MAX_HEADERS) {
         buf_free(value);
@@ -572,7 +580,7 @@ static nghttp3_ssize read_data(nghttp3_conn *conn __attribute__((unused)),
     }
 
     syslog(LOG_DEBUG,
-           "read_data: id=%ld, n=%ld, flags=0x%X", stream_id, n, *pflags);
+           "H3 read_data: id=%ld, n=%ld, flags=0x%X", stream_id, n, *pflags);
 
     return n; 
 }
@@ -587,7 +595,7 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     int r = 0;
 
     syslog(LOG_DEBUG,
-           "http3_end_headers(code = %ld, len = %ld, flags.te = %#x)",
+           "H3 end_resp_headers(code = %ld, len = %ld, flags.te = %#x)",
            code, txn->resp_body.len, txn->flags.te);
 
     if (txn->conn->logfd != -1) {
@@ -598,13 +606,15 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     switch (code) {
     case 0:
         /* Trailer */
-        syslog(LOG_DEBUG, "%s(id=%ld)", "nghttp3_conn_submit_trailers", strm->id);
-
         r = nghttp3_conn_submit_trailers(h3_conn, strm->id,
                                          strm->resp_hdrs, strm->num_resp_hdrs);
+
+        syslog(LOG_DEBUG, "nghttp3_conn_submit_trailers(id=%ld): %s",
+               strm->id, nghttp3_strerror(r));
+
         if (r) {
-            syslog(LOG_ERR, "%s: %s",
-                   "nghttp3_conn_submit_trailers", nghttp3_strerror(r));
+            syslog(LOG_ERR, "nghttp3_conn_submit_trailers(id=%ld): %s",
+                   strm->id, nghttp3_strerror(r));
         }
         return r;
 
@@ -635,12 +645,12 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     r = nghttp3_conn_submit_response(h3_conn, strm->id,
                                      strm->resp_hdrs, strm->num_resp_hdrs, drp);
 
-    syslog(LOG_DEBUG, "%s(id=%ld): %s",
-           "nghttp3_conn_submit_response", strm->id, nghttp3_strerror(r));
+    syslog(LOG_DEBUG, "nghttp3_conn_submit_response(id=%ld): %s",
+           strm->id, nghttp3_strerror(r));
 
     if (r) {
-        syslog(LOG_ERR, "%s(id=%ld): %s",
-               "nghttp3_conn_submit_response", strm->id, nghttp3_strerror(r));
+        syslog(LOG_ERR, "nghttp3_conn_submit_response(id=%ld): %s",
+               strm->id, nghttp3_strerror(r));
     }
 
     return r;
@@ -653,7 +663,7 @@ static int resp_body_chunk(struct transaction_t *txn,
 {
     struct http3_stream *strm = (struct http3_stream *) txn->strm_ctx;
 
-    syslog(LOG_DEBUG, "http3_data_chunk(datalen=%u, last=%d)",
+    syslog(LOG_DEBUG, "H3 resp_body_chunk(datalen=%u, last=%d)",
            datalen, last_chunk);
 
     if (!datalen && !last_chunk) return 0;
