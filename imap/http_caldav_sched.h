@@ -173,7 +173,8 @@ extern void sched_request(const char *onuserid, const strarray_t *schedule_addre
                           icalcomponent *oldical, icalcomponent *newical);
 extern void sched_reply(const char *onuserid, const strarray_t *schedule_addresses,
                         icalcomponent *oldical, icalcomponent *newical);
-extern void sched_deliver(const char *sender, const char *recipient, void *data, void *rock);
+extern void sched_deliver(const char *userid, const char *sender, const char *recipient,
+                          void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
                                         xmlChar *recipient, xmlChar *status);
 extern int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
