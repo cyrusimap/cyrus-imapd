@@ -1,6 +1,5 @@
 language: c
 os: linux
-dist: trusty
 group: edge
 services:
 - docker
