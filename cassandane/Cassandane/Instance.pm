@@ -2335,6 +2335,7 @@ sub run_mbpath
             xapian => {
                 t1 => "$basedir/search/$xpath",
                 t2 => "$basedir/search2/$xpath",
+                t3 => "$basedir/search3/$xpath",
             },
         };
         return $res;
