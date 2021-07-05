@@ -1795,7 +1795,7 @@ sub delve_docs
 }
 
 sub test_dedup_part_index
-    :needs_search_xapian
+    :min_version_3_3 :needs_search_xapian
 {
     my ($self) = @_;
 
@@ -1840,6 +1840,7 @@ sub test_dedup_part_index
 }
 
 sub test_dedup_part_compact
+    :min_version_3_3 :needs_search_xapian
 {
     my ($self) = @_;
 
