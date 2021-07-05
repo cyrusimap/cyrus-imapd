@@ -55,7 +55,7 @@ before_script:
   --enable-coverage --enable-calalarmd --enable-autocreate --enable-nntp --enable-http
   --enable-xapian --enable-unit-tests --enable-replication --with-openssl=yes
   --enable-murder --enable-idled --enable-sieve
-- make
+- make -k
 script:
 - make check
 branches:
