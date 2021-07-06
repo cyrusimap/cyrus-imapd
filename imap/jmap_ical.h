@@ -177,7 +177,7 @@ struct jmapical_datetime {
 
 #define JMAPICAL_DATETIME_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 }
 
-/* True if all components are zero */
+/* True if all time components are zero */
 extern int jmapical_datetime_has_zero_time(const struct jmapical_datetime *dt);
 
 /* Convert DateTime to ical date, truncating time components */
@@ -219,7 +219,7 @@ struct jmapical_duration {
 
 #define JMAPICAL_DURATION_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 }
 
-/* True if all components are zero */
+/* True if all time components are zero */
 extern int jmapical_duration_has_zero_time(const struct jmapical_duration *dur);
 
 /* Convert Duration to ical duration, truncating subseconds */
