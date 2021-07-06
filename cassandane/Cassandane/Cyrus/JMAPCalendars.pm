@@ -3362,6 +3362,7 @@ sub test_calendarevent_set_participants
                 sendTo => {
                     imip => 'mailto:bar@local',
                 },
+                invitedBy => 'foo',
             },
             'bam' => {
                 name => 'Bam',
