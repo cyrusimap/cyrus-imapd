@@ -243,6 +243,93 @@ done:
     return r;
 }
 
+HIDDEN int jmap_email_hasattachment(const struct body *part,
+                                    json_t *imagesize_by_partid)
+{
+    if (!part) return 0;
+
+    if (!strcmp(part->type, "MULTIPART")) {
+        int i;
+        for (i = 0; i < part->numparts; i++) {
+            if (jmap_email_hasattachment(part->subpart + i, imagesize_by_partid)) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if (!strcmp(part->type, "IMAGE")) {
+        if (!strcmpsafe(part->disposition, "ATTACHMENT")) {
+            return 1;
+        }
+        /* Check image dimensions, if available. Fall back to false positive. */
+        ssize_t dim1 = SSIZE_MAX, dim2 = SSIZE_MAX;
+        if (part->part_id) {
+            json_t *imagesize = json_object_get(imagesize_by_partid, part->part_id);
+            if (json_array_size(imagesize) >= 2) {
+                dim1 = json_integer_value(json_array_get(imagesize, 0));
+                dim2 = json_integer_value(json_array_get(imagesize, 1));
+            }
+        }
+        return dim1 >= 256 && dim2 >= 256;
+    }
+
+
+    /* Determine file name, if any. */
+    const char *filename = NULL;
+    struct param *param;
+    for (param = part->disposition_params; param; param = param->next) {
+        if (!strncasecmp(param->attribute, "filename", 8)) {
+            filename = param->value;
+            break;
+        }
+    }
+    if (!filename) {
+        for (param = part->params; param; param = param->next) {
+            if (!strncasecmp(param->attribute, "name", 4)) {
+                filename = param->value;
+                break;
+            }
+        }
+    }
+    if (filename) return 1;
+
+    /* Signatures are no attachments */
+    if (!strcmp(part->type, "APPLICATION") &&
+            (!strcmp(part->subtype, "PGP-KEYS") ||
+             !strcmp(part->subtype, "PGP-SIGNATURE") ||
+             !strcmp(part->subtype, "PKCS7-SIGNATURE") ||
+             !strcmp(part->subtype, "X-PKCS7-SIGNATURE"))) {
+        return 0;
+    }
+
+    /* Unnamed octet streams are no attachments */
+    if (!strcmp(part->type, "APPLICATION") &&
+            !strcmp(part->subtype, "OCTET-STREAM")) {
+        return 0;
+    }
+
+    /* All of the following are attachments */
+    if ((!strcmp(part->type, "APPLICATION") &&
+                !strcmp(part->subtype, "PDF"))) {
+        return 1;
+    }
+    else if ((!strcmp(part->type, "MESSAGE") &&
+                !strcmp(part->subtype, "RFC822"))) {
+        return 1;
+    }
+    else if ((!strcmp(part->type, "TEXT") &&
+                !strcmp(part->subtype, "RFC822"))) {
+        return 1;
+    }
+    else if ((!strcmp(part->type, "TEXT") &&
+                !strcmp(part->subtype, "CALENDAR"))) {
+        return 1;
+    }
+
+    return !strcmpsafe(part->disposition, "ATTACHMENT");
+}
+
 HIDDEN void jmap_emailbodies_fini(struct emailbodies *bodies)
 {
     ptrarray_fini(&bodies->attslist);
@@ -806,16 +893,11 @@ static int _email_matchmime_evaluate(json_t *filter,
     if (JNOTNULL(jval = json_object_get(filter, "hasAttachment"))) {
         const struct body *body;
         if (message_get_cachebody(m, &body) == 0) {
-            struct emailbodies bodies = EMAILBODIES_INITIALIZER;
-            if (jmap_emailbodies_extract(body, &bodies) == 0) {
-                int have = ptrarray_size(&bodies.attslist) > 0;
-                int want = jval == json_true();
-                jmap_emailbodies_fini(&bodies);
-                if (have == want) {
-                    have_matches++;
-                }
-                else return 0;
+            int has_att = jmap_email_hasattachment(body, NULL);
+            if (json_boolean(has_att) == jval) {
+                have_matches++;
             }
+            else return 0;
         }
     }
 
