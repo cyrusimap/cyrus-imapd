@@ -565,7 +565,7 @@ static int meth_post_isched(struct transaction_t *txn,
                     sched_param_fini(&sparam);
 
                     if (r) sched_data.status = REQSTAT_NOUSER;
-                    else sched_deliver(httpd_userid, recipient, &sched_data, authstate);
+                    else sched_deliver(httpd_userid, httpd_userid, recipient, &sched_data, authstate);
 
                     xml_add_schedresponse(root, NULL, BAD_CAST recipient,
                                           BAD_CAST sched_data.status);
