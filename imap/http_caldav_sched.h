@@ -169,9 +169,9 @@ extern int isched_send(struct caldav_sched_param *sparam, const char *recipient,
 
 extern int sched_busytime_query(struct transaction_t *txn,
                                 struct mime_type_t *mime, icalcomponent *comp);
-extern void sched_request(const char *onuserid, const strarray_t *schedule_addresses, const char *organizer,
+extern void sched_request(const char *userid, const strarray_t *schedule_addresses, const char *organizer,
                           icalcomponent *oldical, icalcomponent *newical);
-extern void sched_reply(const char *onuserid, const strarray_t *schedule_addresses,
+extern void sched_reply(const char *userid, const strarray_t *schedule_addresses,
                         icalcomponent *oldical, icalcomponent *newical);
 extern void sched_deliver(const char *userid, const char *sender, const char *recipient,
                           void *data, void *rock);
