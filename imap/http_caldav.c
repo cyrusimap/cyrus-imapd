@@ -4357,10 +4357,14 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             goto done;
         }
         if (icaltime_compare(dtend, dtstart) < 1) {
-            txn->error.desc = "DTEND must occur after DTSTART";
-            txn->error.precond = CALDAV_VALID_DATA;
-            ret = HTTP_FORBIDDEN;
-            goto done;
+            if (icaltime_compare(dtend, dtstart) < 0) {
+                txn->error.desc = "DTEND must occur after DTSTART";
+                txn->error.precond = CALDAV_VALID_DATA;
+                ret = HTTP_FORBIDDEN;
+                goto done;
+            }
+            syslog(LOG_ERR, "IOERROR: saw bad timediff %s %s",
+                   httpd_userid, uid);
         }
     }
 
@@ -4399,10 +4403,14 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 goto done;
             }
             if (icaltime_compare(dtend, dtstart) < 1) {
-                txn->error.desc = "DTEND must occur after DTSTART";
-                txn->error.precond = CALDAV_VALID_OBJECT;
-                ret = HTTP_FORBIDDEN;
-                goto done;
+                if (icaltime_compare(dtend, dtstart) < 0) {
+                    txn->error.desc = "DTEND must occur after DTSTART";
+                    txn->error.precond = CALDAV_VALID_OBJECT;
+                    ret = HTTP_FORBIDDEN;
+                    goto done;
+                }
+                syslog(LOG_ERR, "IOERROR: saw bad timediff in component %s %s",
+                       httpd_userid, uid);
             }
         }
 
