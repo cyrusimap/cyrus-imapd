@@ -890,6 +890,33 @@ static int caldav_is_secretarymode(const char *mboxname)
     return is_secretarymode;
 }
 
+static void strip_schedule_params(icalcomponent *ical)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    if (!comp) return;
+
+    /* Only remove SCHEDULE-FORCE-SEND */
+
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    for (comp = icalcomponent_get_first_component(ical, kind);
+            comp;
+            comp = icalcomponent_get_next_component(ical, kind)) {
+
+        /* Grab the organizer */
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+
+        /* Remove CalDAV Scheduling parameters from organizer */
+        icalproperty_remove_parameter_by_name(prop, "SCHEDULE-FORCE-SEND");
+
+        /* Remove CalDAV Scheduling parameters from attendees */
+        for (prop = icalcomponent_get_first_invitee(comp);
+                prop;
+                prop = icalcomponent_get_next_invitee(comp)) {
+            icalproperty_remove_parameter_by_name(prop, "SCHEDULE-FORCE-SEND");
+        }
+    }
+}
+
 /* Store the iCal data in the specified calendar/resource */
 EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                                    struct mailbox *mailbox, const char *resource,
@@ -990,6 +1017,9 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
         strip_vtimezones(ical);
         tzbyref = 1;
     }
+
+    /* Remove schedule parameters */
+    strip_schedule_params(ical);
 
     /* Set Schedule-Tag, if any */
     if (flags & NEW_STAG) {
