@@ -1961,6 +1961,15 @@ static json_t *participant_from_ical(icalproperty *prop,
         }
     }
 
+    /* scheduleAgent */
+    param = icalproperty_get_first_parameter(prop, ICAL_SCHEDULEAGENT_PARAMETER);
+    if (param) {
+        buf_setcstr(&buf, icalparameter_get_value_as_string(param));
+        buf_lcase(&buf);
+        json_object_set_new(p, "scheduleAgent", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
     /* scheduleStatus */
     param = icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER);
     if (param) {
@@ -4287,7 +4296,29 @@ participant_to_ical(icalcomponent *comp,
         jmap_parser_invalid(parser, "scheduleSequence");
     }
 
-    /* FIXME scheduleAgent */
+    /* scheduleAgent */
+    json_t *scheduleAgent = json_object_get(jpart, "scheduleAgent");
+    if (json_is_string(scheduleAgent)) {
+        const char *s = json_string_value(scheduleAgent);
+        icalparameter_scheduleagent val = ICAL_SCHEDULEAGENT_X;
+        if (!strcmp(s, "client"))
+            val = ICAL_SCHEDULEAGENT_CLIENT;
+        else if (!strcmp(s, "server"))
+            val = ICAL_SCHEDULEAGENT_SERVER;
+        else if (!strcmp(s, "none"))
+            val = ICAL_SCHEDULEAGENT_NONE;
+
+        param = icalparameter_new_scheduleagent(val);
+        if (val == ICAL_SCHEDULEAGENT_X) {
+            icalparameter_set_xvalue(param, s);
+        }
+
+        icalproperty_add_parameter(prop, param);
+    }
+    else if (JNOTNULL(scheduleAgent)) {
+        jmap_parser_invalid(parser, "scheduleAgent");
+    }
+
     /* FIXME scheduleForceSend */
 
     /* scheduleStatus */
