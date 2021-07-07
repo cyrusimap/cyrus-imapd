@@ -280,8 +280,11 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     secprops = mysasl_secprops(0);
     sasl_setprop(sieved_saslconn, SASL_SEC_PROPS, secprops);
 
-    if (actions_init() != TIMSIEVE_OK)
-      fatal("Error initializing actions",-1);
+    if (config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
+        /* can't use home directories with timsieved */
+        syslog(LOG_ERR, "can't use home directories");
+        fatal("Error initializing actions",-1);
+    }
 
     sieved_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 

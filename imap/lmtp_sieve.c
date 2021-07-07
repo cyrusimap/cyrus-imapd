@@ -61,6 +61,7 @@
 #include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"
+#include "imap/user.h"
 #include "lmtpd.h"
 #include "lmtp_sieve.h"
 #include "lmtpengine.h"
@@ -80,7 +81,6 @@
 #include "imap/lmtpstats.h"
 
 static int sieve_usehomedir = 0;
-static const char *sieve_dir = NULL;
 
 /* data per script */
 typedef struct script_data {
@@ -794,11 +794,6 @@ sieve_interp_t *setup_sieve(void)
         strarray_append(&mark, "\\flagged");
 
     sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
-    if (!sieve_usehomedir) {
-        sieve_dir = config_getstring(IMAPOPT_SIEVEDIR);
-    } else {
-        sieve_dir = NULL;
-    }
 
     interp = sieve_interp_alloc(NULL);
     assert(interp != NULL);
@@ -835,8 +830,6 @@ sieve_interp_t *setup_sieve(void)
 static int sieve_find_script(const char *user, const char *domain,
                              const char *script, char *fname, size_t size)
 {
-    char *ext = NULL;
-
     if (!user && !script) {
         return -1;
     }
@@ -855,44 +848,36 @@ static int sieve_find_script(const char *user, const char *domain,
         /* check ~USERNAME/.sieve */
         snprintf(fname, size, "%s/%s", pent->pw_dir, script ? script : ".sieve");
     } else { /* look in sieve_dir */
-        size_t len = strlcpy(fname, sieve_dir, size);
+        char x[PATH_MAX];
+        char *ext;
+        if (user && domain) {
+            snprintf(x, sizeof(x), "%s@%s", user, domain);
+            ext = user_sieve_path(x);
+        } else if (user)
+            ext = user_sieve_path(user);
+        else if (domain) {
+            snprintf(x, sizeof(x), "@%s", domain);
+            ext = user_sieve_path(x);
+        } else
+            ext = user_sieve_path(NULL);
 
-        if (domain) {
-            char dhash = (char) dir_hash_c(domain, config_fulldirhash);
-            len += snprintf(fname+len, size-len, "%s%c/%s",
-                            FNAME_DOMAINDIR, dhash, domain);
-        }
+        size_t len = strlcpy(fname, ext, size);
+        free(ext);
 
-        if (!user) { /* global script */
-            len = strlcat(fname, "/global/", size);
-        }
-        else {
-            char hash = (char) dir_hash_c(user, config_fulldirhash);
-            len += snprintf(fname+len, size-len, "/%c/%s/", hash, user);
+        if (!script) { /* default script */
+            strlcat(fname + len, "/defaultbc", size - len);
 
-            if (!script) { /* default script */
-                char *bc_fname;
-
-                strlcat(fname, "defaultbc", size);
-
-                bc_fname = sieve_getdefaultbcfname(fname);
-                if (bc_fname) {
-                    sieve_rebuild(NULL, bc_fname, 0, NULL);
-                    free(bc_fname);
-                }
-
-                return 0;
+            char* bc_fname = sieve_getdefaultbcfname(fname);
+            if (bc_fname) {
+                sieve_rebuild(NULL, bc_fname, 0, NULL);
+                free(bc_fname);
             }
+
+            return 0;
         }
-
-        snprintf(fname+len, size-len, "%s.bc", script);
-    }
-
-    /* don't do this for ~username ones */
-    ext = strrchr(fname, '.');
-    if (ext && !strcmp(ext, ".bc"))
+        snprintf(fname+len, size-len, "/%s.bc", script);
         sieve_rebuild(NULL, fname, 0, NULL);
-
+    }
     return 0;
 }
 

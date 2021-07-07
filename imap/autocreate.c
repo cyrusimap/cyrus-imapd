@@ -104,7 +104,6 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     int do_compile = 0;
     const char *compiled_source_script = NULL;
     const char *sievename = get_script_name(source_script);
-    const char *sieve_script_dir = NULL;
     char sieve_script_name[MAX_FILENAME];
     char sieve_bcscript_name[MAX_FILENAME];
     char sieve_default[MAX_FILENAME];
@@ -121,18 +120,13 @@ static int autocreate_sieve(const char *userid, const char *source_script)
         return 1;
     }
 
-    /* Check if sievedir is defined in imapd.conf */
-    if(!config_getstring(IMAPOPT_SIEVEDIR)) {
-        syslog(LOG_WARNING, "autocreate_sieve: sievedir option is not defined. Check imapd.conf");
-        return 1;
-    }
-
     /* Check if autocreate_sieve_compiledscript is defined in imapd.conf */
     if(!(compiled_source_script = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_SCRIPT_COMPILED))) {
         syslog(LOG_WARNING, "autocreate_sieve: autocreate_sieve_compiledscript option is not defined. Compiling it");
         do_compile = 1;
     }
 
+    char *sieve_script_dir;
     if (!(sieve_script_dir = user_sieve_path(userid))) {
         syslog(LOG_WARNING, "autocreate_sieve: unable to determine sieve directory for user %s", userid);
         return 1;
@@ -140,30 +134,37 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 
     if(snprintf(sieve_tmpname, MAX_FILENAME, "%s/%s.script.NEW",sieve_script_dir, sievename) >= MAX_FILENAME) {
         syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
+        free(sieve_script_dir);
         return 1;
     }
     if(snprintf(sieve_bctmpname, MAX_FILENAME, "%s/%s.bc.NEW",sieve_script_dir, sievename) >= MAX_FILENAME) {
         syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
+        free(sieve_script_dir);
         return 1;
     }
     if(snprintf(sieve_script_name, MAX_FILENAME, "%s/%s.script",sieve_script_dir, sievename) >= MAX_FILENAME) {
         syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
+        free(sieve_script_dir);
         return 1;
     }
     if(snprintf(sieve_bcscript_name, MAX_FILENAME, "%s/%s.bc",sieve_script_dir, sievename) >= MAX_FILENAME) {
         syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
+        free(sieve_script_dir);
         return 1;
     }
     if(snprintf(sieve_default, MAX_FILENAME, "%s/%s",sieve_script_dir,"defaultbc") >= MAX_FILENAME) {
         syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
+        free(sieve_script_dir);
         return 1;
     }
     /* XXX no directory? umm */
     if(snprintf(sieve_bclink_name, MAX_FILENAME, "%s.bc", sievename) >= MAX_FILENAME) {
         syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
+        free(sieve_script_dir);
         return 1;
     }
 
+    free(sieve_script_dir);
     /* Check if a default sieve filter alrady exists */
     if(!stat(sieve_default,&statbuf)) {
         syslog(LOG_WARNING,"autocreate_sieve: Default sieve script already exists");

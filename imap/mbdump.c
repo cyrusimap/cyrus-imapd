@@ -660,7 +660,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
          * xxx can't use home directories currently
          * (it makes almost no sense in the conext of a murder) */
         if (!sieve_usehomedir) {
-            const char *sieve_path = user_sieve_path(userid);
+            char *sieve_path = user_sieve_path(userid);
             mbdir = opendir(sieve_path);
 
             if (!mbdir) {
@@ -693,13 +693,17 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 
                         /* dump file */
                         r = dump_file(0, !tag, pin, pout, filename, tag_fname, NULL, 0);
-                        if (r) goto done;
+                        if (r) {
+                            free(sieve_path);
+                            goto done;
+                        }
                     }
                 }
 
                 closedir(mbdir);
                 mbdir = NULL;
             }
+            free(sieve_path);
         } /* end if !sieve_userhomedir */
 
     } /* end if user INBOX */
@@ -833,7 +837,6 @@ EXPORTED int undump_mailbox(const char *mbname,
     int r = 0;
     int curfile = -1;
     struct mailbox *mailbox = NULL;
-    const char *sieve_path = NULL;
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     char *userid = NULL;
     int first_annotation = 1;
@@ -857,9 +860,6 @@ EXPORTED int undump_mailbox(const char *mbname,
 
     if (mboxname_isusermailbox(mbname, 1)) {
         userid = mboxname_to_userid(mbname);
-        if(!sieve_usehomedir) {
-            sieve_path = user_sieve_path(userid);
-        }
     }
 
     c = getword(pin, &data);
@@ -1123,9 +1123,11 @@ EXPORTED int undump_mailbox(const char *mbname,
                        realname);
                 continue;
             } else {
+                char *sieve_path = user_sieve_path(userid);
                 if(snprintf(fnamebuf, sizeof(fnamebuf),
                             "%s/%s", sieve_path, realname) == -1) {
                     r = IMAP_PROTOCOL_ERROR;
+                    free(sieve_path);
                     goto done;
                 } else if(isdefault) {
                     char linkbuf[2048];
@@ -1146,6 +1148,7 @@ EXPORTED int undump_mailbox(const char *mbname,
                     }
 
                 }
+                free(sieve_path);
             }
         } else {
             struct data_file *df;
