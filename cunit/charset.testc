@@ -1071,4 +1071,20 @@ static void test_charset_decode(void)
 #undef TESTCASE
 }
 
+static void test_mime_quote_string(void)
+{
+    #define TESTCASE(input, output) \
+    { \
+        char *t = mime_quote_string(input); \
+        if (t == NULL) CU_ASSERT_PTR_NULL(output); \
+        CU_ASSERT_STRING_EQUAL(t, output); \
+        free(t); \
+    }
+    TESTCASE("abc", NULL);
+    TESTCASE("a, b", "\"a, b\"");
+    TESTCASE("a \"b", "\"a \\\"b\"");
+    TESTCASE("a @b", "\"a @b\"");
+}
+
+#undef TESTCASE
 /* vim: set ft=c: */
