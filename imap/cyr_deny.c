@@ -229,7 +229,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "cyr_deny", 0, 0);
 
-    denydb_init(0);
+    denydb_init();
 
     r = denydb_open(/*create*/(mode == DENY));
     if (r) {

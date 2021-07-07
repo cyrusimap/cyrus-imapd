@@ -348,7 +348,7 @@ static void done_cb(void*rock __attribute__((unused)))
 static void init_internal()
 {
     if (!denydb_initialized) {
-        denydb_init(0);
+        denydb_init();
         cyrus_modules_add(done_cb, NULL);
     }
     if (!denydb) {
@@ -357,11 +357,8 @@ static void init_internal()
 }
 
 /* must be called after cyrus_init */
-EXPORTED void denydb_init(int myflags)
+EXPORTED void denydb_init(void)
 {
-    if (myflags & DENYDB_SYNC) {
-        cyrusdb_sync(DENYDB);
-    }
     denydb_initialized = 1;
 }
 

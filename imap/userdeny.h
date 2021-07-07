@@ -63,8 +63,7 @@ int denydb_open(int create);
 void denydb_close(void);
 
 /* initialize database structures */
-#define DENYDB_SYNC 0x02
-void denydb_init(int flags);
+void denydb_init(void);
 
 /* done with database stuff */
 void denydb_done(void);
