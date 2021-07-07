@@ -516,7 +516,7 @@ EXPORTED void http_proto_host(hdrcache_t req_hdrs, const char **proto, const cha
 {
     const char **fwd;
 
-    if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS) &&
+    if (//config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS) &&
         (fwd = spool_getheader(req_hdrs, "Forwarded"))) {
         /* Proxied request - parse last Forwarded header for proto and host */
         /* XXX  This is destructive of the header but we don't care
