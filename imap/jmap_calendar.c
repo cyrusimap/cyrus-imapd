@@ -165,6 +165,8 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
                 JMAP_CALENDARS_EXTENSION, json_object());
+        json_object_set_new(settings->server_capabilities,
+                JMAP_CALENDARS_EXTENSION_STD, json_object());
 
         for (mp = jmap_calendar_methods_nonstandard; mp->name; mp++) {
             hash_insert(mp->name, mp, &settings->methods);
@@ -178,6 +180,7 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities)
 {
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities, JMAP_CALENDARS_EXTENSION, json_object());
+        json_object_set_new(account_capabilities, JMAP_CALENDARS_EXTENSION_STD, json_object());
     }
 }
 
