@@ -1334,6 +1334,11 @@ static void dispose_db(struct dbengine *db)
 
 /************************************************************/
 
+static int mylock(struct dbengine *db, struct txn **mytid, int flags)
+{
+    return newtxn(db, flags & CYRUSDB_SHARED, mytid);
+}
+
 static int opendb(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
 {
     struct dbengine *db;
@@ -1432,7 +1437,7 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
     *ret = db;
 
     if (mytid) {
-        r = newtxn(db, flags & CYRUSDB_SHARED, mytid);
+        r = mylock(db, mytid, flags);
         if (r) goto done;
     }
 
@@ -2546,6 +2551,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_twoskip =
     &store,
     &delete,
 
+    &mylock,
     &mycommit,
     &myabort,
 

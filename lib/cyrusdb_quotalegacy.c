@@ -922,6 +922,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy =
     &store,
     &delete,
 
+    NULL, /* lock */
     &commit_txn,
     &abort_txn,
 
