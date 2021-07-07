@@ -477,7 +477,7 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
     struct dlist *dl = NULL, *al;
     const char *type_str;
     struct buf msg_buf = BUF_INITIALIZER;
-    struct buf inbuf, *outbuf = NULL;
+    struct buf inbuf = BUF_INITIALIZER, *outbuf = NULL;
     xmlDocPtr indoc = NULL, outdoc;
     xmlNodePtr notify = NULL, root, node, type;
     xmlNodePtr resp = NULL, sharedurl = NULL, node2;
