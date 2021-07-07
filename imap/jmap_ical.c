@@ -3018,6 +3018,8 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
         }
     }
 
+    // FIXME sentBy
+
     /* recurrenceRules */
     if (jmap_wantprop(props, "recurrenceRules") && !is_override) {
         json_object_set_new(event, "recurrenceRules",
