@@ -626,12 +626,14 @@ specialuse: SPECIALUSE string    {
                                                       SIEVE_MISSING_REQUIRE,
                                                       "special-use");
                                      }
+                                     /* XXX  commented out until FM UI catches up
                                      else if (*mailboxid != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_CONFLICTING_TAGS,
                                                       ":specialuse",
                                                       ":mailboxid");
                                      }
+                                     */
 
                                      *specialuse = $2;
                                  }
@@ -651,12 +653,14 @@ mailboxid: MAILBOXID string      {
                                                       SIEVE_MISSING_REQUIRE,
                                                       "mailboxid");
                                      }
+                                     /* XXX  commented out until FM UI catches up
                                      else if (*specialuse != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_CONFLICTING_TAGS,
                                                       ":mailboxid",
                                                       ":specialuse");
                                      }
+                                     */
 
                                      *mailboxid = $2;
                                  }
