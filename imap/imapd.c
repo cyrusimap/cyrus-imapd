@@ -11768,7 +11768,6 @@ static int xfer_finalsync(struct xfer_header *xfer)
     if (!r && xfer->userid) {
         r = sync_do_user_seen(&xfer->sync_cs, xfer->userid, replica_seen);
         if (!r) r = sync_do_user_sub(&xfer->sync_cs, xfer->userid, replica_subs);
-        if (!r) r = sync_do_user_sieve(&xfer->sync_cs, xfer->userid, replica_sieve);
     }
 
   done:
@@ -13418,7 +13417,8 @@ static int recursivematch_cb(struct findall_data *data, void *rockp)
             r = mboxname_iscalendarmailbox(intname, 0) ||
                 mboxname_isaddressbookmailbox(intname, 0) ||
                 mboxname_isdavdrivemailbox(intname, 0) ||
-                mboxname_isdavnotificationsmailbox(intname, 0);
+                mboxname_isdavnotificationsmailbox(intname, 0) ||
+                mboxname_issievemailbox(intname, 0);
 
             if (!data->mbname) mbname_free(&mbname);
 

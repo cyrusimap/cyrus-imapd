@@ -1,0 +1,14 @@
+Description:
+
+Store Sieve scripts in a special mailbox rather than in 'sievedir'.
+Compiled bytecode is still stored in 'sievedir'.
+
+
+Config changes:
+
+Added 'sieve_folder'
+
+
+Upgrade instructions:
+
+None - Sieve scripts will be migrated on-the-fly.

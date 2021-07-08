@@ -66,6 +66,7 @@
 #define MBTYPE_JMAPSUBMIT   0x2    /* JMAP Mail Submission Mailbox */
 #define MBTYPE_JMAPPUSHSUB  0x3    /* JMAP Push Subscriptions */
 #define MBTYPE_JMAPNOTIFY   0x4    /* JMAP Notifications */
+#define MBTYPE_SIEVE        0x5    /* Sieve Script Mailbox */
 
 #define MBTYPE_COLLECTION   0x8    /* WebDAV Collection Mailbox */
 #define MBTYPE_CALENDAR     0x9    /* CalDAV Calendar Mailbox */
