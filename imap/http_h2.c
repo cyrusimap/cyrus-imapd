@@ -79,56 +79,6 @@ struct http2_stream {
 
 static nghttp2_session_callbacks *http2_callbacks = NULL;
 
-static ssize_t send_cb(nghttp2_session *session __attribute__((unused)),
-                       const uint8_t *data, size_t length,
-                       int flags __attribute__((unused)),
-                       void *user_data)
-{
-    struct http_connection *conn = (struct http_connection *) user_data;
-    struct protstream *pout = conn->pout;
-    int r;
-
-    r = prot_write(pout, (const char *) data, length);
-
-    syslog(LOG_DEBUG, "http2_send_cb(%zu): %d", length, r);
-
-    if (r) return NGHTTP2_ERR_CALLBACK_FAILURE;
-
-    return length;
-}
-
-static ssize_t recv_cb(nghttp2_session *session __attribute__((unused)),
-                       uint8_t *buf, size_t length,
-                       int flags __attribute__((unused)),
-                       void *user_data)
-{
-    struct http_connection *conn = (struct http_connection *) user_data;
-    struct protstream *pin = conn->pin;
-    ssize_t n;
-
-    
-    n = prot_read(pin, (char *) buf, length);
-    if (n) {
-        /* We received some data - don't block next time
-           Note: This callback gets called multiple times until it
-           would block.  We don't actually want to block and prevent
-           output from being submitted */
-        prot_NONBLOCK(pin);
-    }
-    else {
-        /* No data -  block next time (for client timeout) */
-        prot_BLOCK(pin);
-
-        n = NGHTTP2_ERR_WOULDBLOCK;
-    }
-
-    syslog(LOG_DEBUG,
-           "http2_recv_cb(%zu): n = %zd, eof = %d, err = '%s', errno = %m",
-           length, n, pin->eof, pin->error ? pin->error : "");
-
-    return n;
-}
-
 static ssize_t data_source_read_cb(nghttp2_session *sess __attribute__((unused)),
                                    int32_t stream_id,
                                    uint8_t *buf, size_t length,
@@ -515,9 +465,25 @@ static void http2_output(struct http_connection *conn)
 
     if (nghttp2_session_want_write(ctx->session)) {
         /* Send queued frame(s) */
-        int r = nghttp2_session_send(ctx->session);
-        if (r) {
-            syslog(LOG_ERR, "nghttp2_session_send: %s", nghttp2_strerror(r));
+        const uint8_t *data;
+        ssize_t nwrite;
+
+        while ((nwrite = nghttp2_session_mem_send(ctx->session, &data)) > 0) {
+            int r = prot_write(conn->pout, (const char *) data, nwrite);
+
+            if (r) {
+                syslog(LOG_ERR, "prot_write(): %s", prot_error(conn->pout));
+                conn->close = 1;
+                break;
+            }
+            else {
+                syslog(LOG_DEBUG, "http2_output(): sent %zd bytes", nwrite);
+            }
+        }
+
+        if (nwrite < 0) {
+            syslog(LOG_ERR,
+                   "nghttp2_session_mem_send: %s", nghttp2_strerror(nwrite));
             conn->close = 1;
         }
     }
@@ -525,7 +491,6 @@ static void http2_output(struct http_connection *conn)
         /* We're done */
         syslog(LOG_DEBUG, "closing connection");
         conn->close = 1;
-        return;
     }
 }
 
@@ -557,10 +522,6 @@ HIDDEN int http2_init(struct http_connection *conn, struct buf *serverinfo)
         return 0;
     }
 
-    nghttp2_session_callbacks_set_send_callback(http2_callbacks,
-                                                &send_cb);
-    nghttp2_session_callbacks_set_recv_callback(http2_callbacks,
-                                                &recv_cb);
     nghttp2_session_callbacks_set_on_begin_headers_callback(http2_callbacks,
                                                             &begin_headers_cb);
     nghttp2_session_callbacks_set_on_header_callback(http2_callbacks,
@@ -974,45 +935,63 @@ HIDDEN void http2_input(struct http_connection *conn)
     syslog(LOG_DEBUG, "http2_input()  goaway: %d, eof: %d, want read: %d",
            goaway, prot_IS_EOF(pin), want_read);
 
-    if (prot_IS_EOF(pin)) {
-        /* Client closed connection */
-        syslog(LOG_DEBUG, "client closed connection");
-        nghttp2_session_terminate_session(ctx->session, NGHTTP2_NO_ERROR);
-        conn->close = 1;
-    }
-    else if (prot_error(pin)) {
-        /* Client timeout or I/O error */
-        goaway = 1;
-        conn->close_str = prot_error(pin);
-        err = NGHTTP2_REFUSED_STREAM;
-    }
-    else if (want_read && !goaway) {
+    if (want_read && !goaway) {
         /* Read frame(s) */
-        int r = nghttp2_session_recv(ctx->session);
+        char data[PROT_BUFSIZE];
+        ssize_t nread;
 
-        if (!r) {
-            /* Successfully received frames */
-            syslog(LOG_DEBUG, "nghttp2_session_recv: success");
+        while ((nread = prot_read(pin, data, PROT_BUFSIZE)) > 0) {
+            syslog(LOG_DEBUG, "http2_input(): read %zd bytes", nread);
+
+            ssize_t r = nghttp2_session_mem_recv(ctx->session,
+                                                 (const uint8_t *) data, nread);
+
+            if (r < 0) {
+                /* Failure */
+                syslog(LOG_ERR,
+                       "nghttp2_session_mem_recv: %s", nghttp2_strerror(r));
+                goaway = 1;
+                conn->close_str = nghttp2_strerror(r);
+
+                switch (r) {
+                case NGHTTP2_ERR_BAD_CLIENT_MAGIC:
+                    err = NGHTTP2_PROTOCOL_ERROR;
+                    break;
+                case NGHTTP2_ERR_FLOODED:
+                    err = NGHTTP2_ENHANCE_YOUR_CALM;
+                    break;
+                default:
+                    err = NGHTTP2_INTERNAL_ERROR;
+                    break;
+                }
+
+                break;
+            }
+            else {
+                /* Successfully received frames */
+                syslog(LOG_DEBUG, "nghttp2_session_mem_recv: %zd", r);
+
+                /* Don't block next time (so we can submit output) */
+                prot_NONBLOCK(pin);
+            }
         }
-        else if (r == NGHTTP2_ERR_EOF) {
+
+        if (prot_IS_EOF(pin)) {
             /* Client closed connection */
             syslog(LOG_DEBUG, "client closed connection");
+            nghttp2_session_terminate_session(ctx->session, NGHTTP2_NO_ERROR);
             conn->close = 1;
+            return;
+        }
+        else if (prot_error(pin)) {
+            /* Client timeout or I/O error */
+            goaway = 1;
+            conn->close_str = prot_error(pin);
+            err = NGHTTP2_REFUSED_STREAM;
         }
         else {
-            /* Failure */
-            syslog(LOG_DEBUG, "nghttp2_session_recv: %s (%s)",
-                   nghttp2_strerror(r), prot_error(pin));
-            goaway = 1;
-
-            conn->close_str = nghttp2_strerror(r);
-
-            if (r == NGHTTP2_ERR_BAD_CLIENT_MAGIC)
-              err = NGHTTP2_PROTOCOL_ERROR;
-            else if (r == NGHTTP2_ERR_FLOODED)
-              err = NGHTTP2_ENHANCE_YOUR_CALM;
-            else
-              err = NGHTTP2_INTERNAL_ERROR;
+            /* No more data -  block next time (for client timeout) */
+            prot_BLOCK(pin);
         }
     }
 
@@ -1020,13 +999,10 @@ HIDDEN void http2_input(struct http_connection *conn)
         /* Tell client we are closing session */
         end_session(conn, err);
         conn->close = 1;
-        return;
     }
 
     /* Write frame(s) */
     http2_output(conn);
-
-    return;
 }
 
 #else /* !HAVE_NGHTTP2 */
