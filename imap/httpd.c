@@ -2187,7 +2187,6 @@ static void cmdloop(struct http_connection *conn)
         if (ret == HTTP_SHUTDOWN) {
             syslog(LOG_WARNING,
                    "Shutdown file: \"%s\", closing connection", conn->close_str);
-            protgroup_free(protin);
             shut_down(0);
         }
 
