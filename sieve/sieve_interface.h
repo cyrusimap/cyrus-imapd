@@ -126,8 +126,6 @@ typedef struct sieve_duplicate {
 } sieve_duplicate_t;
 
 
-/* sieve_imapflags: NULL -> defaults to \flagged */
-
 typedef struct sieve_redirect_context {
     const char *addr;
     int is_ext_list :1;
