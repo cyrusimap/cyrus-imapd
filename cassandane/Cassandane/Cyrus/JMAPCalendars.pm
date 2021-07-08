@@ -2310,9 +2310,11 @@ sub test_calendarevent_set_simple
 }
 
 sub test_calendarevent_set_subseconds
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :max_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
+
+    # subseconds were deprecated in 3.5 but included as experimental in 3.4
 
     my $jmap = $self->{jmap};
     my $calid = "Default";
@@ -2398,52 +2400,6 @@ sub test_calendarevent_set_subseconds
     $self->assert_str_equals($event->{created}, $ret->{created});
     $self->assert_str_equals($event->{updated}, $ret->{updated});
     $self->assert_normalized_event_equals($event, $ret);
-}
-
-sub test_calendarevent_get_alerts_utctrigger_subseconds
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
-
-    my ($id, $ical) = $self->icalfile('alerts_utctrigger_subseconds');
-
-    my $alerts = {
-        '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1' => {
-            '@type' => 'Alert',
-            trigger => {
-                '@type' => 'AbsoluteTrigger',
-                when => '2016-09-28T13:55:00.987Z',
-            },
-            action => "display",
-        },
-        '0CF835D0-CFEB-44AE-904A-C36AB63B73BB-2' => {
-            '@type' => 'Alert',
-            trigger => {
-                '@type' => 'AbsoluteTrigger',
-                when => '2016-09-28T14:05:00.123Z',
-            },
-            action => "display",
-        },
-        '0CF835D0-CFEB-44AE-904A-C46AB64B73BB-3' => {
-            '@type' => 'Alert',
-            trigger => {
-                '@type' => 'AbsoluteTrigger',
-                when => '2016-09-28T14:55:00.987Z',
-            },
-            action => "display",
-        },
-        '0CF855D0-CFEB-44AE-904A-C56AB65B75BB-4' => {
-            '@type' => 'Alert',
-            trigger => {
-                '@type' => 'AbsoluteTrigger',
-                when => '2016-09-28T15:05:00.123Z',
-            },
-            action => "display",
-        },
-    };
-
-    my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_deep_equals($alerts, $event->{alerts});
 }
 
 sub test_calendarevent_set_bymonth
@@ -6448,7 +6404,7 @@ sub test_calendarevent_query_expandrecurrences
                     title => "event1",
                     description => "",
                     freeBusyStatus => "busy",
-                    start => "2019-01-01T09:00:00.123",
+                    start => "2019-01-01T09:00:00",
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
                     recurrenceRule => {
@@ -6456,10 +6412,10 @@ sub test_calendarevent_query_expandrecurrences
                         count => 3,
                     },
                     recurrenceOverrides => {
-                        '2019-01-08T09:00:00.123' => {
-                            start => '2019-01-08T12:00:00.456',
+                        '2019-01-08T09:00:00' => {
+                            start => '2019-01-08T12:00:00',
                         },
-                        '2019-01-03T13:00:00.789' => {
+                        '2019-01-03T13:00:00' => {
                             title => 'rdate',
                         },
                     },
@@ -6495,11 +6451,11 @@ sub test_calendarevent_query_expandrecurrences
     ]);
     $self->assert_num_equals(5, $res->[0][1]{total});
     $self->assert_deep_equals([
-            'event1uid;2019-01-15T09:00:00.123',
-            'event1uid;2019-01-08T09:00:00.123',
-            'event1uid;2019-01-03T13:00:00.789',
+            'event1uid;2019-01-15T09:00:00',
+            'event1uid;2019-01-08T09:00:00',
+            'event1uid;2019-01-03T13:00:00',
             'event2uid',
-            'event1uid;2019-01-01T09:00:00.123',
+            'event1uid;2019-01-01T09:00:00',
     ], $res->[0][1]{ids});
 }
 
