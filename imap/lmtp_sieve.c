@@ -55,6 +55,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "acl.h"
 #include "annotate.h"
 #include "append.h"
 #include "assert.h"
@@ -1132,7 +1133,8 @@ static int sieve_fileinto(void *ac,
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                           &imap4flags, NULL, userid, sd->authstate, md->id,
                           userid, mdata->notifyheader,
-                          intname, md->date, 0 /*savedate*/, quotaoverride, 0);
+                          intname, md->date, 0 /*savedate*/, quotaoverride,
+                          ACL_INSERT);
 
     if (ret == IMAP_MAILBOX_NONEXISTENT) {
         /* if "plus" folder under INBOX, then try to create it */
@@ -1156,7 +1158,8 @@ static int sieve_fileinto(void *ac,
             ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                                   &imap4flags, NULL, userid, sd->authstate, md->id,
                                   userid, mdata->notifyheader,
-                                  intname, md->date, 0 /*savedate*/, quotaoverride, 0);
+                                  intname, md->date, 0 /*savedate*/, quotaoverride,
+                                  ACL_INSERT);
         }
     }
 
@@ -1369,7 +1372,7 @@ static int sieve_snooze(void *ac,
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                           &imap4flags, annots, userid, sd->authstate, md->id,
                           userid, mdata->notifyheader,
-                          intname, md->date, until, quotaoverride, 0);
+                          intname, md->date, until, quotaoverride, ACL_INSERT);
 
     strarray_free(imapflags);
     freeentryatts(annots);
@@ -1472,7 +1475,7 @@ static int sieve_keep(void *ac,
     ret = deliver_mailbox(md->f, mydata->content, mydata->stage, md->size,
                           &imap4flags, NULL, authuser, authstate, md->id,
                           userid, mydata->notifyheader, intname, md->date,
-                          0 /*savedate*/, quotaoverride, acloverride);
+                          0 /*savedate*/, quotaoverride, acloverride ? 0 : ACL_POST);
 
     if (freeme) auth_freestate(freeme);
 

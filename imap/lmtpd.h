@@ -91,6 +91,6 @@ extern int deliver_mailbox(FILE *f,
                            char *date,
                            time_t savedate,
                            int quotaoverride,
-                           int acloverride);
+                           long aclcheck);
 
 #endif /* LMTPD_H */
