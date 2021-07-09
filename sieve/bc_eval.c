@@ -1572,7 +1572,7 @@ envelope_err:
                 json = parse_string(json, variables);
             }
 
-            res = interp->jmapquery(sc, m, json);
+            res = interp->jmapquery(interp->interp_context, sc, m, json);
         }
         else res = 0;
         break;

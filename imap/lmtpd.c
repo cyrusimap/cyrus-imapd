@@ -851,7 +851,7 @@ int deliver(message_data_t *msgdata, char *authuser,
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
-            struct sieve_interp_ctx ctx = { mbname_userid(mbname), NULL };
+            struct sieve_interp_ctx ctx = { mbname_userid(mbname), state, NULL };
             sieve_interp_t *interp = setup_sieve(&ctx);
 
             sieve_srs_init();
