@@ -105,6 +105,8 @@ enum cyrus_opt {
     CYRUSOPT_SQL_USESSL,
     /* Checkpoint after every recovery (OFF) */
     CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
+    /* Lowercase uid and strip leading and trailing blanks (OFF) */
+    CYRUSOPT_NORMALIZEUID,
 
     CYRUSOPT_LAST
 

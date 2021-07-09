@@ -150,9 +150,11 @@ static char allowedchars[256] = {
 static const char *mycanonifyid(const char *identifier, size_t len)
 {
     static char retbuf[81];
+    char backup[81];
     struct group *grp;
     char *p;
     int username_tolower = 0;
+    int ic,rbc;
 
     if (!len) len = strlen(identifier);
     if (len >= sizeof(retbuf)) return NULL;
@@ -192,6 +194,22 @@ static const char *mycanonifyid(const char *identifier, size_t len)
         default:
             break;
         }
+    }
+
+    if( (libcyrus_config_getswitch(CYRUSOPT_NORMALIZEUID) == 1) ) {
+        strcpy(backup,retbuf);
+       /* remove leading blanks */
+       for(ic=0; isblank(backup[ic]); ic++);
+       for(rbc=0; backup[ic]; ic++) {
+            retbuf[rbc] = ( isalpha(backup[ic]) ?
+                 tolower(backup[ic]) : backup[ic] );
+            rbc++;
+       }
+       retbuf[rbc] = '\0';
+       /* remove trailing blanks */
+       for(--rbc; isblank(retbuf[rbc]); rbc--) {
+            retbuf[rbc] = '\0';
+       }
     }
 
     return retbuf;

@@ -346,6 +346,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
                                   config_getswitch(IMAPOPT_UNIX_GROUP_ENABLE));
         libcyrus_config_setswitch(CYRUSOPT_USERNAME_TOLOWER,
                                   config_getswitch(IMAPOPT_USERNAME_TOLOWER));
+	libcyrus_config_setswitch(CYRUSOPT_NORMALIZEUID,
+				  config_getswitch(CYRUSOPT_NORMALIZEUID));
         libcyrus_config_setswitch(CYRUSOPT_SKIPLIST_UNSAFE,
                                   config_getswitch(IMAPOPT_SKIPLIST_UNSAFE));
         libcyrus_config_setstring(CYRUSOPT_TEMP_PATH,
