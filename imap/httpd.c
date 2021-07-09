@@ -2362,25 +2362,27 @@ static int parse_connection(struct transaction_t *txn)
     const char **conn = spool_getheader(txn->req_hdrs, "Connection");
     int i;
 
-    if (conn && txn->flags.ver == VER_2) {
-        txn->error.desc = "Connection not allowed in HTTP/2";
-        return HTTP_BAD_REQUEST;
-    }
-
     if (!httpd_timeout || txn->flags.ver == VER_1_0) {
         /* Non-persistent connection by default */
         txn->flags.conn |= CONN_CLOSE;
     }
 
+    if (!conn) return 0;
+
+    if (txn->flags.ver == VER_2) {
+        txn->error.desc = "Connection not allowed in HTTP/2";
+        return HTTP_BAD_REQUEST;
+    }
+
     /* Look for interesting connection tokens */
-    for (i = 0; conn && conn[i]; i++) {
+    for (i = 0; conn[i]; i++) {
         tok_t tok = TOK_INITIALIZER(conn[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
         char *token;
 
         while ((token = tok_next(&tok))) {
             switch (txn->flags.ver) {
             case VER_1_1:
-                if (!strcasecmp(token, "Upgrade")) {
+                if (!strcasecmp(token, "upgrade")) {
                     /* Client wants to upgrade */
                     parse_upgrade(txn);
                 }
