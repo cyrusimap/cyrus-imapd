@@ -2312,6 +2312,50 @@ static int parse_expect(struct transaction_t *txn)
 }
 
 
+/* Parse Upgrade header(s) for supported protocols */
+static void parse_upgrade(struct transaction_t *txn)
+{
+    const char **upgrade = spool_getheader(txn->req_hdrs, "Upgrade");
+    int i;
+
+    if (!upgrade) return;
+
+    for (i = 0; upgrade[i]; i++) {
+        tok_t tok = TOK_INITIALIZER(upgrade[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        char *token;
+
+        while ((token = tok_next(&tok))) {
+            if (!txn->conn->tls_ctx && httpd_tls_enabled &&
+                !strcasecmp(token, TLS_VERSION)) {
+                /* Upgrade to TLS */
+                txn->flags.conn |= CONN_UPGRADE;
+                txn->flags.upgrade |= UPGRADE_TLS;
+                break;
+            }
+            else if (http2_enabled && !strcasecmp(token, HTTP2_CLEARTEXT_ID)) {
+                /* Upgrade to HTTP/2 */
+                txn->flags.conn |= CONN_UPGRADE;
+                txn->flags.upgrade |= UPGRADE_HTTP2;
+                break;
+            }
+            else if (ws_enabled() && !strcasecmp(token, WS_TOKEN)) {
+                /* Upgrade to WebSockets */
+                txn->flags.conn |= CONN_UPGRADE;
+                txn->flags.upgrade |= UPGRADE_WS;
+                break;
+            }
+            else {
+                /* Unknown/unsupported protocol - no upgrade */
+            }
+        }
+
+        tok_fini(&tok);
+
+        if (txn->flags.conn & CONN_UPGRADE) break;
+    }
+}
+
+
 /* Parse Connection header(s) for interesting options */
 static int parse_connection(struct transaction_t *txn)
 {
@@ -2338,35 +2382,7 @@ static int parse_connection(struct transaction_t *txn)
             case VER_1_1:
                 if (!strcasecmp(token, "Upgrade")) {
                     /* Client wants to upgrade */
-                    const char **upgrade =
-                        spool_getheader(txn->req_hdrs, "Upgrade");
-
-                    if (upgrade && upgrade[0]) {
-                        if (!txn->conn->tls_ctx && httpd_tls_enabled &&
-                            !strncasecmp(upgrade[0], TLS_VERSION,
-                                         strcspn(upgrade[0], " ,"))) {
-                            /* Upgrade to TLS */
-                            txn->flags.conn |= CONN_UPGRADE;
-                            txn->flags.upgrade |= UPGRADE_TLS;
-                        }
-                        else if (http2_enabled &&
-                                 !strncasecmp(upgrade[0], HTTP2_CLEARTEXT_ID,
-                                              strcspn(upgrade[0], " ,"))) {
-                            /* Upgrade to HTTP/2 */
-                            txn->flags.conn |= CONN_UPGRADE;
-                            txn->flags.upgrade |= UPGRADE_HTTP2;
-                        }
-                        else if (ws_enabled() &&
-                                 !strncasecmp(upgrade[0], WS_TOKEN,
-                                              strcspn(upgrade[0], " ,"))) {
-                            /* Upgrade to WebSockets */
-                            txn->flags.conn |= CONN_UPGRADE;
-                            txn->flags.upgrade |= UPGRADE_WS;
-                        }
-                        else {
-                            /* Unknown/unsupported protocol - no upgrade */
-                        }
-                    }
+                    parse_upgrade(txn);
                 }
                 else if (!strcasecmp(token, "close")) {
                     /* Non-persistent connection */
