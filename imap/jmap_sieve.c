@@ -1599,14 +1599,22 @@ static int getmetadata(void *sc, const char *extname,
     return r ? 0 : 1;
 }
 
-static int jmapquery(void *sc, void *mc, const char *json)
+struct sieve_interp_ctx {
+    struct conversations_state *cstate;
+    struct carddav_db *carddavdb;
+};
+
+static int jmapquery(void *ic, void *sc, void *mc, const char *json)
 {
+    struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
     const char *userid = sd->userid;
     json_error_t jerr;
     json_t *jfilter, *err = NULL;
     int matches = 0;
+
+    (void) ctx->cstate;  // silence compiler until we actually use cstate
 
     /* Create filter from json */
     jfilter = json_loads(json, 0, &jerr);
@@ -2022,7 +2030,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     struct buf buf = BUF_INITIALIZER;
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
-    struct carddav_db *carddavdb = NULL;
+    struct sieve_interp_ctx interp_ctx = { NULL, NULL };
     sieve_interp_t *interp = NULL;
     sieve_execute_t *exe = NULL;
     time_t last_vaca_resp = 0;
@@ -2171,7 +2179,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     }
 
     /* create interpreter */
-    interp = sieve_interp_alloc(&carddavdb);
+    interp = sieve_interp_alloc(&interp_ctx);
     sieve_register_header(interp, getheader);
     sieve_register_headersection(interp, getheadersection);
     sieve_register_envelope(interp, getenvelope);
@@ -2256,6 +2264,9 @@ static int jmap_sieve_test(struct jmap_req *req)
             }
         }
     }
+
+    if (interp_ctx.cstate) conversations_commit(&interp_ctx.cstate);
+    if (interp_ctx.carddavdb) carddav_close(interp_ctx.carddavdb);
 
     /* Build response */
     if (!json_object_size(completed)) {

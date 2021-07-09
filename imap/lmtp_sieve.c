@@ -1815,8 +1815,9 @@ static sieve_duplicate_t duplicate = {
 #ifdef WITH_JMAP
 #include "jmap_mail_query.h"
 
-static int jmapquery(void *sc, void *mc, const char *json)
+static int jmapquery(void *ic, void *sc, void *mc, const char *json)
 {
+    struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *m = ((deliver_data_t *) mc)->m;
     struct message_content *content = ((deliver_data_t *) mc)->content;
@@ -1824,6 +1825,8 @@ static int jmapquery(void *sc, void *mc, const char *json)
     json_error_t jerr;
     json_t *jfilter, *err = NULL;
     int matches = 0;
+
+    (void) ctx->cstate;  // silence compiler until we actually use cstate
 
     /* Create filter from json */
     jfilter = json_loads(json, 0, &jerr);

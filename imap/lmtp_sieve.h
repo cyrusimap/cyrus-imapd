@@ -44,6 +44,7 @@
 #define LMTP_SIEVE_H
 
 #include "lmtpd.h"
+#include "conversations.h"
 #include "sieve/sieve_interface.h"
 
 #ifdef WITH_DAV
@@ -54,6 +55,7 @@ struct carddav_db { };
 
 struct sieve_interp_ctx {
     const char *userid;
+    struct conversations_state *cstate;
     struct carddav_db *carddavdb;
 };
 

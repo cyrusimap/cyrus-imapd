@@ -94,8 +94,8 @@ typedef int sieve_list_validator(void *interp_context, const char *list);
 typedef int sieve_list_comparator(const char *text, size_t tlen,
                                   const char *list, strarray_t *match_vars,
                                   void *rock);
-typedef int sieve_jmapquery(void *script_context, void *message_context,
-                            const char *json);
+typedef int sieve_jmapquery(void *interp_context, void *script_context,
+                            void *message_context, const char *json);
 
 /* MUST keep this struct sync'd with bodypart in imap/message.h */
 typedef struct sieve_bodypart {
