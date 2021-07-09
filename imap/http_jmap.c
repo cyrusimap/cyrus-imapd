@@ -1407,6 +1407,9 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
         buf_move(outbuf, &txn->resp_body.payload);
     }
 
+    /* Clear error string */
+    txn->error.desc = NULL;
+
     json_decref(req);
 
     return ret;
