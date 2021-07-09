@@ -802,7 +802,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 },
         { NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, 1 }  /* MUST be last */
     };
-    size_t niv = (sizeof(iv) / sizeof(iv[0])) - !ws_enabled();
+    size_t niv = (sizeof(iv) / sizeof(iv[0])) - !ws_enabled;
     struct http2_context *ctx;
     int r;
 

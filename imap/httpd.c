@@ -434,6 +434,7 @@ static int http2_enabled = 0;
 
 int ignorequota = 0;
 int apns_enabled = 0;
+int ws_enabled = 0;
 
 /* List of HTTP auth schemes that we support -
    in descending order of security properties */
@@ -873,7 +874,7 @@ int service_init(int argc __attribute__((unused)),
     }
 
     http2_enabled = http2_init(&http_conn, &serverinfo);
-    ws_init(&http_conn, &serverinfo);
+    ws_enabled = ws_init(&http_conn, &serverinfo);
 
 #ifdef HAVE_ZLIB
     buf_printf(&serverinfo, " Zlib/%s", ZLIB_VERSION);
@@ -2338,7 +2339,7 @@ static void parse_upgrade(struct transaction_t *txn)
                 txn->flags.upgrade |= UPGRADE_HTTP2;
                 break;
             }
-            else if (ws_enabled() && !strcasecmp(token, WS_TOKEN)) {
+            else if (ws_enabled && !strcasecmp(token, WS_TOKEN)) {
                 /* Upgrade to WebSockets */
                 txn->flags.conn |= CONN_UPGRADE;
                 txn->flags.upgrade |= UPGRADE_WS;
@@ -4646,7 +4647,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
 
     /* Bootstrap WebSockets over HTTP/2, if requested */
     if ((txn->flags.ver != VER_2) ||
-        !ws_enabled() || !cparams || !cparams->endpoint) {
+        !ws_enabled || !cparams || !cparams->endpoint) {
         return HTTP_NOT_IMPLEMENTED;
     }
 
@@ -4683,7 +4684,7 @@ static int meth_get(struct transaction_t *txn,
             return ws_start_channel(txn, NULL, &ws_echo);
         }
 
-        if (ws_enabled()) {
+        if (ws_enabled) {
             txn->flags.upgrade |= UPGRADE_WS;
             txn->flags.conn |= CONN_UPGRADE;
         }
@@ -4829,7 +4830,7 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
                 txn->req_tgt.allow |= http_namespaces[i]->allow;
         }
 
-        if (ws_enabled() && (txn->flags.ver == VER_2)) {
+        if (ws_enabled && (txn->flags.ver == VER_2)) {
             /* CONNECT allowed for bootstrapping WebSocket over HTTP/2 */
             txn->req_tgt.allow |= ALLOW_CONNECT;
         }
@@ -4841,7 +4842,7 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
             if (r) return r;
         }
         else if (!strcmp(txn->req_uri->path, "/") &&
-                 ws_enabled() && (txn->flags.ver == VER_2)) {
+                 ws_enabled && (txn->flags.ver == VER_2)) {
             /* WS 'echo' endpoint */
             txn->req_tgt.allow |= ALLOW_CONNECT;
         }

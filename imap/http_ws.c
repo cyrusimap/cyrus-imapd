@@ -614,18 +614,13 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 }
 
 
-HIDDEN void ws_init(struct http_connection *conn __attribute__((unused)),
-                    struct buf *serverinfo)
+HIDDEN int ws_init(struct http_connection *conn __attribute__((unused)),
+                   struct buf *serverinfo)
 {
     buf_printf(serverinfo, " Wslay/%s", WSLAY_VERSION);
 
     ws_timeout = config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm');
-    if (ws_timeout < 0) ws_timeout = 0;
-}
 
-
-HIDDEN int ws_enabled()
-{
     return (ws_timeout > 0);
 }
 
@@ -1026,12 +1021,8 @@ HIDDEN void ws_send(struct transaction_t *txn, struct buf *outbuf)
 
 #else /* !HAVE_WSLAY */
 
-HIDDEN void ws_init(struct http_connection *conn __attribute__((unused)),
-                    struct buf *serverinfo __attribute__((unused)))
-{
-}
-
-HIDDEN int ws_enabled()
+HIDDEN int ws_init(struct http_connection *conn __attribute__((unused)),
+                   struct buf *serverinfo __attribute__((unused)))
 {
     return 0;
 }

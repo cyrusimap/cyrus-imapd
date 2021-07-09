@@ -191,7 +191,7 @@ static void jmap_init(struct buf *serverinfo)
     jmap_sieve_init(&my_jmap_settings);
 #endif
 
-    if (ws_enabled()) {
+    if (ws_enabled) {
         jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL, 's');
         if (jmap_push_poll < 0) jmap_push_poll = 0;
 
@@ -309,7 +309,7 @@ static int jmap_parse_path(struct transaction_t *txn)
             /* Get "resource" */
             tgt->resource = tgt->collection + strlen(JMAP_DOWNLOAD_COL);
         }
-        else if (ws_enabled() && !strcmp(tgt->collection, JMAP_WS_COL)) {
+        else if (ws_enabled && !strcmp(tgt->collection, JMAP_WS_COL)) {
             tgt->flags = JMAP_ENDPOINT_WS;
             tgt->allow = (txn->flags.ver == VER_2) ? ALLOW_CONNECT : ALLOW_READ;
         }

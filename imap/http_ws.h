@@ -62,9 +62,7 @@ enum wslay_opcode {
 #define WS_TOKEN         "websocket"
 #define WS_VERSION       "13"
 
-extern void ws_init(struct http_connection *conn, struct buf *serverinfo);
-
-extern int ws_enabled();
+extern int ws_init(struct http_connection *conn, struct buf *serverinfo);
 
 typedef int ws_data_callback(struct transaction_t *txn, enum wslay_opcode opcode,
                              struct buf *inbuf, struct buf *outbuf,
