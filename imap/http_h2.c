@@ -1,6 +1,6 @@
 /* http_h2.c - HTTP/2 support functions
  *
- * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2021 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -78,28 +78,6 @@ struct http2_stream {
 };
 
 static nghttp2_session_callbacks *http2_callbacks = NULL;
-
-static ssize_t data_source_read_cb(nghttp2_session *sess __attribute__((unused)),
-                                   int32_t stream_id,
-                                   uint8_t *buf, size_t length,
-                                   uint32_t *data_flags,
-                                   nghttp2_data_source *source,
-                                   void *user_data __attribute__((unused)))
-{
-    struct protstream *s = source->ptr;
-    size_t n = prot_read(s, (char *) buf, length);
-
-    syslog(LOG_DEBUG,
-           "http2_data_source_read_cb(id=%d, len=%zu): n=%zu, eof=%d",
-           stream_id, length, n, !s->cnt);
-
-    if (!s->cnt) {
-        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-        prot_free(s);  /* Done with the protstream */
-    }
-
-    return n;
-}
 
 static void stream_fini(struct transaction_t *txn)
 {
@@ -274,11 +252,11 @@ static int frame_recv_cb(nghttp2_session *session,
             if (txn->conn->logfd != -1) {
                 /* telemetry log */
                 buf_reset(logbuf);
-                buf_printf(logbuf, "%s %s %s\r\n",         /* request-line*/
+                buf_printf(logbuf, "%s %s %s\r\n",            /* request-line */
                            txn->req_line.meth, txn->req_line.uri, HTTP2_VERSION);
                 spool_enum_hdrcache(txn->req_hdrs,            /* header fields */
                                     &log_cachehdr, logbuf);
-                buf_appendcstr(logbuf, "\r\n");            /* CRLF */
+                buf_appendcstr(logbuf, "\r\n");               /* CRLF */
                 write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
             }
 
@@ -587,6 +565,10 @@ static void begin_resp_headers(struct transaction_t *txn, long code)
 {
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
+    syslog(LOG_DEBUG,
+           "http2_begin_resp_headers(code = %ld, len = %ld, flags.te = %#x)",
+           code, txn->resp_body.len, txn->flags.te);
+
     strm->num_resp_hdrs = 0;
 
     if (txn->conn->logfd != -1) {
@@ -652,7 +634,7 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     int r;
 
     syslog(LOG_DEBUG,
-           "http2_end_headers(code = %ld, len = %ld, flags.te = %#x)",
+           "http2_end_resp_headers(code = %ld, len = %ld, flags.te = %#x)",
            code, txn->resp_body.len, txn->flags.te);
 
     if (txn->conn->logfd != -1) {
@@ -663,13 +645,13 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     switch (code) {
     case 0:
         /* Trailer */
-        syslog(LOG_DEBUG, "%s(id=%d)", "nghttp2_submit_trailers", strm->id);
+        syslog(LOG_DEBUG, "%s(id=%d)", "nghttp2_submit_trailer", strm->id);
 
         r = nghttp2_submit_trailer(ctx->session, strm->id,
                                    strm->resp_hdrs, strm->num_resp_hdrs);
         if (r) {
             syslog(LOG_ERR, "%s: %s",
-                   "nghttp2_submit_trailers", nghttp2_strerror(r));
+                   "nghttp2_submit_trailer", nghttp2_strerror(r));
         }
 
         return r;
@@ -711,6 +693,28 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     return r;
 }
 
+static ssize_t data_source_read_cb(nghttp2_session *sess __attribute__((unused)),
+                                   int32_t stream_id,
+                                   uint8_t *buf, size_t length,
+                                   uint32_t *data_flags,
+                                   nghttp2_data_source *source,
+                                   void *user_data __attribute__((unused)))
+{
+    struct protstream *s = source->ptr;
+    size_t n = prot_read(s, (char *) buf, length);
+
+    syslog(LOG_DEBUG,
+           "http2_data_source_read_cb(id=%d, len=%zu): n=%zu, eof=%d",
+           stream_id, length, n, !s->cnt);
+
+    if (!s->cnt) {
+        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+        prot_free(s);  /* Done with the protstream */
+    }
+
+    return n;
+}
+
 static int resp_body_chunk(struct transaction_t *txn,
                            const char *data, unsigned datalen,
                            int last_chunk, MD5_CTX *md5ctx)
@@ -722,7 +726,7 @@ static int resp_body_chunk(struct transaction_t *txn,
     nghttp2_data_provider prd;
     int r;
 
-    syslog(LOG_DEBUG, "http2_data_chunk(datalen=%u, last=%d)",
+    syslog(LOG_DEBUG, "http2_resp_data_chunk(datalen=%u, last=%d)",
            datalen, last_chunk);
 
     if (!datalen && !last_chunk) return 0;
@@ -747,8 +751,7 @@ static int resp_body_chunk(struct transaction_t *txn,
        may not be sent prior to the original pointer becoming invalid.
     */
     struct protstream *s = prot_readmap(xmemdup(data, datalen), datalen);
-    s->buf = s->ptr;
-    s->buf_size = datalen;
+    s->buf = s->ptr;  /* So prot_free() will free the copy of the data */
 
     prd.source.ptr = s;
     prd.read_callback = data_source_read_cb;
