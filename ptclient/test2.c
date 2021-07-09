@@ -45,7 +45,7 @@
 
 int main(void) {
   char cacheid[16]="4224423";
-  openlog("testr", LOG_PID, SYSLOG_FACILITY);
+  openlog("cyrus/testr", LOG_PID, SYSLOG_FACILITY);
 
   if (!auth_setid("cg2v@club.cc.cmu.edu",cacheid))
     printf ("Auth_memberof(cg2v,cg2v:me) is %d\n",
