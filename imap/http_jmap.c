@@ -165,7 +165,9 @@ static void jmap_init(struct buf *serverinfo)
     namespace_jmap.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_JMAP;
 
-    if (namespace_jmap.enabled && !config_getswitch(IMAPOPT_CONVERSATIONS)) {
+    if (namespace_jmap.enabled && !config_getswitch(IMAPOPT_CONVERSATIONS) &&
+        /* proxy servers don't need conversations */
+        (!config_mupdate_server || config_getstring(IMAPOPT_PROXYSERVERS))) {
         syslog(LOG_ERR,
                "ERROR: cannot enable %s module with conversations disabled",
                namespace_jmap.name);
@@ -325,6 +327,29 @@ static int jmap_parse_path(const char *path, struct request_target_t *tgt,
         tgt->allow |= ALLOW_POST;
     }
 
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        /* Locate the authenticated user's INBOX */
+        char *inbox = mboxname_user_mbox(httpd_userid, NULL);
+        int r = proxy_mlookup(inbox, &tgt->mbentry, NULL, NULL);
+
+        free(inbox);
+
+        if (r) {
+            syslog(LOG_ERR, "mlookup(%s) failed: %s", inbox, error_message(r));
+
+            switch (r) {
+            case IMAP_PERMISSION_DENIED:
+                return HTTP_FORBIDDEN;
+
+            case IMAP_MAILBOX_NONEXISTENT:
+                return HTTP_NOT_FOUND;
+
+            default:
+                return HTTP_SERVER_ERROR;
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -338,6 +363,18 @@ static int meth_get(struct transaction_t *txn,
     if (r) return r;
     if (!(txn->req_tgt.allow & ALLOW_READ)) {
         return HTTP_NOT_FOUND;
+    }
+
+    if (txn->req_tgt.mbentry && txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        return http_pipe_req_resp(be, txn);
     }
 
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
@@ -427,6 +464,18 @@ static int meth_post(struct transaction_t *txn,
     if (ret) return ret;
     if (!(txn->req_tgt.allow & ALLOW_POST)) {
         return HTTP_NOT_ALLOWED;
+    }
+
+    if (txn->req_tgt.mbentry && txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        return http_pipe_req_resp(be, txn);
     }
 
     /* Handle uploads */
