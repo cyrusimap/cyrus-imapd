@@ -835,6 +835,10 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     memset(&be_conn, 0, sizeof(struct http_connection));
     be_conn.pin = be->in;
     be_conn.pout = be->out;
+    be_conn.begin_resp_headers = txn->conn->begin_resp_headers;
+    be_conn.add_resp_header = txn->conn->add_resp_header;
+    be_conn.end_resp_headers = txn->conn->end_resp_headers;
+    be_conn.resp_body_chunk = txn->conn->resp_body_chunk;
 
     memset(&be_txn, 0, sizeof(struct transaction_t));
     be_txn.flags.ver = VER_1_1;
