@@ -567,7 +567,7 @@ static int send_response(void *ac, void *ic, void *sc,
 }
 
 #ifdef WITH_JMAP
-static int jmapquery(void *sc, void *mc, const char *json)
+static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const char *json)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
