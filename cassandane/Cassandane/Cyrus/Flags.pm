@@ -239,6 +239,73 @@ sub test_seen_otheruser
     $self->check_messages(\%msg);
 }
 
+# https://github.com/cyrusimap/cyrus-imapd/issues/3240
+sub test_seen_sharedmb_nosharedseen
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $folder = 'shared';
+
+    # shared mailbox with sharedseen=false
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create($folder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl('shared', 'cassandane' => 'lrswipkxtecdan');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setmetadata($folder,
+        '/shared/vendor/cmu/cyrus-imapd/sharedseen' => 'false'
+    );
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+
+    # add some messages
+    my $talk = $self->{store}->get_client();
+    $self->{store}->set_folder("Shared Folders/$folder");
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    # fiddle with seen flag, making sure we get both the expected results
+    # and the expected untagged fetch response
+    xlog $self, "Set \\Seen on message A";
+    my $res = $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Clear \\Seen on message A";
+    $res = $talk->store('1', '-flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    $msg{A}->set_attribute(flags => []);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Set \\Seen on message A again";
+    $res = $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    # seen flag should survive a reconnect
+    xlog $self, "Reconnect, \\Seen should still be on message A";
+    $self->{store}->disconnect();
+    $self->{store}->connect();
+    $self->{store}->_select();
+    $self->check_messages(\%msg);
+}
+
 #
 # Test that
 #  - the \Flagged flag can be set
