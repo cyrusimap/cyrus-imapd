@@ -96,6 +96,7 @@ enum mboxop { DUMP,
               CHECKPOINT,
               UNDUMP,
               VERIFY,
+              ADD_ROOTS,
               NONE };
 
 struct dumprock {
@@ -882,6 +883,91 @@ static void do_verify(void)
     mboxlist_allmbox("", &verify_cb, &found, MBOXTREE_TOMBSTONES);
 }
 
+struct root_rock {
+    mbname_t *mbname;
+    char *mboxid;
+};
+
+static int addroots_cb(const mbentry_t *mbentry, void *rockp)
+{
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    struct root_rock *rrock = rockp;
+    int is_root = 0, is_child = 0;
+
+    /* Skip DELETED.* mailboxes */
+    if (mbname_isdeleted(mbname)) {
+        mbname_free(&mbname);
+        return 0;
+    }
+
+    const char *userid = mbname_userid(mbname);
+
+    if (userid) {
+        if (strarray_size(mbname_boxes(mbname)) == 0) {
+            /* INBOX */
+            is_root = 1;
+        }
+        else if (rrock->mbname &&
+                 !strcmpnull(userid, mbname_userid(rrock->mbname))) {
+            /* Same user */
+            is_child = 1;
+        }
+    }
+    else {
+        /* Shared mailbox */
+        const strarray_t *boxes = mbname_boxes(mbname);
+
+        if (strarray_size(boxes) == 1) {
+            /* Toplevel mailbox */
+            is_root = 1;
+        }
+        else if (rrock->mbname &&
+                 !strcmpnull(strarray_nth(boxes, 0),
+                             strarray_nth(mbname_boxes(rrock->mbname), 0))) {
+            /* Same root */
+            is_child = 1;
+        }
+    }
+
+    if (is_root) {
+        /* Switch to new root */
+        mbname_free(&rrock->mbname);
+        free(rrock->mboxid);
+
+        rrock->mbname = mbname;
+        rrock->mboxid = xstrdup(mbentry->uniqueid);
+    }
+    else if (is_child) {
+        /* Add root mailboxid to child */
+        mbentry_t *newentry = mboxlist_entry_copy(mbentry);
+
+        newentry->root_mailboxid = xstrdup(rrock->mboxid);
+        mboxlist_update(newentry, 1 /* localonly */);
+        mboxlist_entry_free(&newentry);
+
+        mbname_free(&mbname);
+    }
+    else {
+        /* Orphaned mailbox */
+        mbname_free(&mbname);
+    }
+
+    return 0;
+}
+
+static void do_addroots(int intermediary)
+{
+    struct root_rock rrock = { NULL, NULL };
+    int flags = MBOXTREE_TOMBSTONES;
+
+    if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
+
+    mboxlist_allmbox("", &addroots_cb, &rrock, flags);
+
+    mbname_free(&rrock.mbname);
+    free(rrock.mboxid);
+}
+
 static void usage(void)
 {
     fprintf(stderr, "DUMP:\n");
@@ -907,7 +993,7 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
     int dointermediary = 0;
 
-    while ((opt = getopt(argc, argv, "C:awmdurcxf:p:viy")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:awmdurcxf:p:vsiy")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -974,6 +1060,11 @@ int main(int argc, char *argv[])
 
         case 'v':
             if (op == NONE) op = VERIFY;
+            else usage();
+            break;
+
+        case 's':
+            if (op == NONE) op = ADD_ROOTS;
             else usage();
             break;
 
@@ -1053,6 +1144,16 @@ int main(int argc, char *argv[])
         mboxlist_open(mboxdb_fname);
 
         do_verify();
+
+        mboxlist_close();
+        mboxlist_done();
+        break;
+
+    case ADD_ROOTS:
+        mboxlist_init(0);
+        mboxlist_open(mboxdb_fname);
+
+        do_addroots(dointermediary);
 
         mboxlist_close();
         mboxlist_done();

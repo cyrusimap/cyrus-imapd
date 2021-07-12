@@ -249,6 +249,9 @@ int main(int argc, char **argv)
         do_mboxlist();
     }
 
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    unsigned flags = !xflag ? MBOXLIST_CREATE_DBONLY : 0;
+
     /* Deal with nonexistent mailboxes */
     if (start_part) {
         /* We were handed a mailbox that does not exist currently */
@@ -289,8 +292,12 @@ int main(int argc, char **argv)
             char *intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
 
             /* don't notify mailbox creation here */
-            r = mboxlist_createmailboxlock(intname, 0, start_part, 1,
-                                           NULL, NULL, 0, 0, !xflag, 0, NULL);
+            mbentry.name = intname;
+            mbentry.mbtype = MBTYPE_EMAIL;
+            mbentry.partition = start_part;
+            r = mboxlist_createmailboxlock(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                       1/*isadmin*/, NULL/*userid*/, NULL/*authstate*/,
+                                       flags, NULL/*mailboxptr*/);
             if (r) {
                 fprintf(stderr, "could not create %s\n", argv[i]);
             }
@@ -356,8 +363,12 @@ int main(int argc, char **argv)
         /* create p (database only) and reconstruct it */
         /* partition is defined by the parent mailbox */
         /* don't notify mailbox creation here */
-        r = mboxlist_createmailboxlock(name, 0, NULL, 1,
-                                       NULL, NULL, 0, 0, !xflag, 0, NULL);
+        mbentry.name = name;
+        mbentry.mbtype = MBTYPE_EMAIL;
+        mbentry.partition = NULL;
+        r = mboxlist_createmailboxlock(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                       1/*isadmin*/, NULL/*userid*/, NULL/*authstate*/,
+                                       flags, NULL/*mailboxptr*/);
         if (r) {
             fprintf(stderr, "createmailbox %s: %s\n",
                     name, error_message(r));

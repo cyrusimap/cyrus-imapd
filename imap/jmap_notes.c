@@ -171,9 +171,10 @@ static int lookup_notes_collection(const char *accountid, mbentry_t **mbentry)
             goto done;
         }
 
-        if (*mbentry) free((*mbentry)->name);
-        else *mbentry = mboxlist_entry_create();
+        mboxlist_entry_free(mbentry);
+        *mbentry = mboxlist_entry_create();
         (*mbentry)->name = xstrdup(notesname);
+       (*mbentry)->mbtype = MBTYPE_EMAIL;
     }
     else if (!r) {
         int rights = httpd_myrights(httpd_authstate, *mbentry);
@@ -217,10 +218,9 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
             goto done;
         }
 
-        r = mboxlist_createmailbox(mbentry->name, MBTYPE_EMAIL,
-                                   NULL, 1 /* admin */, accountid,
-                                   httpd_authstate,
-                                   0, 0, 0, 0, NULL);
+        r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, accountid, httpd_authstate,
+                                   0/*flags*/, NULL/*mailboxptr*/);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                    mbentry->name, error_message(r));

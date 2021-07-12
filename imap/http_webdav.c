@@ -356,10 +356,13 @@ static int my_webdav_auth(const char *userid)
         mboxlist_entry_free(&mbentry);
 
         if (!r) {
-            r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_COLLECTION,
-                                       NULL, httpd_userisadmin || httpd_userisproxyadmin,
+            mbentry_t mbentry = MBENTRY_INITIALIZER;
+            mbentry.name = (char *) mbname_intname(mbname);
+            mbentry.mbtype = MBTYPE_COLLECTION;
+            r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                       httpd_userisadmin || httpd_userisproxyadmin,
                                        userid, httpd_authstate,
-                                       0, 0, 0, 0, NULL);
+                                       0/*flags*/, NULL/*mailboxptr*/);
             if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                           mbname_intname(mbname), error_message(r));
         }

@@ -352,9 +352,10 @@ static int lookup_notify_collection(const char *userid, mbentry_t **mbentry)
             goto done;
         }
 
-        if (*mbentry) free((*mbentry)->name);
-        else *mbentry = mboxlist_entry_create();
+        mboxlist_entry_free(mbentry);
+        *mbentry = mboxlist_entry_create();
         (*mbentry)->name = xstrdup(notifyname);
+        (*mbentry)->mbtype = MBTYPE_COLLECTION;
     }
 
   done:
@@ -379,9 +380,9 @@ static int _create_notify_collection(const char *userid, struct mailbox **mailbo
             goto done;
         }
 
-        r = mboxlist_createmailbox(mbentry->name, MBTYPE_COLLECTION,
-                                   NULL, 1 /* admin */, userid, NULL,
-                                   0, 0, 0, 0, mailbox);
+        r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, userid, NULL/*authstate*/,
+                                   0/*flags*/, mailbox);
         /* we lost the race, that's OK */
         if (r == IMAP_MAILBOX_LOCKED) r = 0;
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",

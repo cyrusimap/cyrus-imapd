@@ -5736,13 +5736,14 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     struct mboxlock *namespacelock = mboxname_usernamespacelock(txn->req_tgt.mbentry->name);
 
     /* Create the mailbox */
-    r = mboxlist_createmailbox(txn->req_tgt.mbentry->name,
-                               mparams->mkcol.mbtype, partition,
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    mbentry.name = txn->req_tgt.mbentry->name;
+    mbentry.mbtype = mparams->mkcol.mbtype;
+    mbentry.partition = partition;
+    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
                                httpd_userisadmin || httpd_userisproxyadmin,
                                httpd_userid, httpd_authstate,
-                               /*localonly*/0, /*forceuser*/0,
-                               /*dbonly*/0, /*notify*/0,
-                               &mailbox);
+                               0/*flags*/, &mailbox);
 
     if (instr && !r) {
         /* Start construction of our mkcol/mkcalendar response */

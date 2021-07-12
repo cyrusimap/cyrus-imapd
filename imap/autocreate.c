@@ -768,11 +768,13 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         goto done;
     }
 
-    r = mboxlist_createmailbox(inboxname, /*mbtype*/0, /*partition*/NULL,
-                               /*isadmin*/1, userid, auth_state,
-                               /*localonly*/0, /*forceuser*/0,
-                               /*dbonly*/0, /*notify*/1,
-                               /*mailboxptr*/NULL);
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    mbentry.name = inboxname;
+    mbentry.mbtype = MBTYPE_EMAIL;
+
+    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                               1/*isadmin*/, userid, auth_state,
+                               MBOXLIST_CREATE_NOTIFY, NULL/*mailboxptr*/);
 
     if (!r) r = mboxlist_changesub(inboxname, userid, auth_state, 1, 1, 1);
     if (r) {
@@ -815,11 +817,12 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         struct autocreate_acl_rock aclrock = { namespace, foldername, name,
                                                auth_state, userid };
 
-        r = mboxlist_createmailbox(foldername, /*mbtype*/0, /*partition*/NULL,
-                                   /*isadmin*/1, userid, auth_state,
-                                   /*localonly*/0, /*forceuser*/0,
-                                   /*dbonly*/0, /*notify*/1,
-                                   /*mailboxptr*/NULL);
+        mbentry.name = foldername;
+        mbentry.mbtype = MBTYPE_EMAIL;
+
+        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, userid, auth_state,
+                                   MBOXLIST_CREATE_NOTIFY, NULL/*mailboxptr*/);
 
         if (!r) {
             numcrt++;
