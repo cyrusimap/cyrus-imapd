@@ -603,7 +603,7 @@ struct namespace_t *http_namespaces[] = {
 };
 
 
-static void http1_begin_resp_headers(struct transaction_t *txn, long code)
+EXPORTED void http1_begin_resp_headers(struct transaction_t *txn, long code)
 {
     if (code) {
         prot_printf(txn->conn->pout, "%s\r\n",
@@ -611,7 +611,7 @@ static void http1_begin_resp_headers(struct transaction_t *txn, long code)
     }
 }
 
-static void http1_add_resp_header(struct transaction_t *txn,
+EXPORTED void http1_add_resp_header(struct transaction_t *txn,
                                   const char *name, struct buf *value)
 {
     prot_printf(txn->conn->pout, "%c%s: ", toupper(name[0]), name+1);
@@ -621,7 +621,7 @@ static void http1_add_resp_header(struct transaction_t *txn,
     buf_free(value);
 }
 
-static int http1_end_resp_headers(struct transaction_t *txn,
+EXPORTED int http1_end_resp_headers(struct transaction_t *txn,
                                   long code __attribute__((unused)))
 {
     /* CRLF terminating the header block */
@@ -630,7 +630,7 @@ static int http1_end_resp_headers(struct transaction_t *txn,
     return 0;
 }
 
-static int http1_resp_body_chunk(struct transaction_t *txn,
+EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
                                  const char *data, unsigned datalen,
                                  int last_chunk, MD5_CTX *md5ctx)
 {

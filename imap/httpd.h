@@ -632,4 +632,12 @@ extern int zlib_compress(struct transaction_t *txn, unsigned flags,
 extern void brotli_init(struct transaction_t *txn);
 extern void zstd_init(struct transaction_t *txn);
 
+extern void http1_begin_resp_headers(struct transaction_t *txn, long code);
+extern void http1_add_resp_header(struct transaction_t *txn,
+                                  const char *name, struct buf *value);
+extern int http1_end_resp_headers(struct transaction_t *txn, long code);
+extern int http1_resp_body_chunk(struct transaction_t *txn,
+                                 const char *data, unsigned datalen,
+                                 int last_chunk, MD5_CTX *md5ctx);
+
 #endif /* HTTPD_H */
