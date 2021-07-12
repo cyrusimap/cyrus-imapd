@@ -111,7 +111,8 @@ static int is_valid_jmapid(const char *s)
 }
 
 /* Forward declarations */
-static json_t *calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *master);
+static json_t *calendarevent_from_ical(icalcomponent *comp, hash_table *props,
+                                       int is_override, ptrarray_t *overrides);
 static void calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
                                   struct jmap_parser *parser, json_t *jsevent);
 
@@ -998,11 +999,11 @@ override_exdate_from_ical(icalproperty *prop, const char *tzid_start)
 }
 
 static json_t*
-overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
+overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
+                    json_t *event, const char *tzid_start)
 {
     icalproperty *prop;
     json_t *overrides = json_object();
-    const char *uid = icalcomponent_get_uid(comp);
 
     /* RDATE */
     for (prop = icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY);
@@ -1030,21 +1031,13 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
 
     /* VEVENT exceptions */
     json_t *exceptions = json_object();
-    icalcomponent *excomp, *ical;
 
-    ical = icalcomponent_get_parent(comp);
-    for (excomp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-         excomp;
-         excomp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-
-        if (excomp == comp) continue; /* skip toplevel promoted object */
-
-        /* Skip unrelated VEVENTs */
-        const char *exuid = icalcomponent_get_uid(excomp);
-        if (strcmpsafe(exuid, uid)) continue;
+    int i;
+    for (i = 0; i < ptrarray_size(icaloverrides); i++) {
+        icalcomponent *excomp = ptrarray_nth(icaloverrides, i);
 
         /* Convert VEVENT exception to JMAP */
-        json_t *ex = calendarevent_from_ical(excomp, NULL, comp);
+        json_t *ex = calendarevent_from_ical(excomp, NULL, 1, NULL);
         if (!ex) continue;
 
         /* Recurrence-id */
@@ -2107,16 +2100,16 @@ locale_from_ical(icalcomponent *comp)
  * props:  if not NULL, only convert properties named as keys
  */
 static json_t*
-calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *master)
+calendarevent_from_ical(icalcomponent *comp, hash_table *props,
+                        int is_override, ptrarray_t *overrides)
 {
     icalproperty* prop = NULL;
-    int is_exception = master != NULL;
     hash_table *wantprops = NULL;
     json_t *event = json_pack("{s:s}", "@type", "jsevent");
     struct buf buf = BUF_INITIALIZER;
     char *tzid_start = NULL;
 
-    if (jmap_wantprop(props, "recurrenceOverrides") && !is_exception) {
+    if (jmap_wantprop(props, "recurrenceOverrides") && !is_override) {
         /* Fetch all properties if recurrenceOverrides are requested,
          * otherwise we might return incomplete override patches */
         wantprops = props;
@@ -2171,17 +2164,17 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
 
     /* uid */
     const char *uid = icalcomponent_get_uid(comp);
-    if (uid && !is_exception) {
+    if (uid && !is_override) {
         json_object_set_new(event, "uid", json_string(uid));
     }
 
     /* relatedTo */
-    if (jmap_wantprop(props, "relatedTo") && !is_exception) {
+    if (jmap_wantprop(props, "relatedTo") && !is_override) {
         json_object_set_new(event, "relatedTo", relatedto_from_ical(comp));
     }
 
     /* prodId */
-    if (jmap_wantprop(props, "prodId") && !is_exception) {
+    if (jmap_wantprop(props, "prodId") && !is_override) {
         icalcomponent *ical = icalcomponent_get_parent(comp);
         const char *prodid = NULL;
         prop = icalcomponent_get_first_property(ical, ICAL_PRODID_PROPERTY);
@@ -2313,7 +2306,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* recurrenceRule */
-    if (jmap_wantprop(props, "recurrenceRule") && !is_exception) {
+    if (jmap_wantprop(props, "recurrenceRule") && !is_override) {
         json_object_set_new(event, "recurrenceRule", recurrence_from_ical(comp));
     }
 
@@ -2367,7 +2360,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* replyTo */
-    if (jmap_wantprop(props, "replyTo") && !is_exception) {
+    if (jmap_wantprop(props, "replyTo") && !is_override) {
         if ((prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY))) {
             json_object_set_new(event, "replyTo",rsvpto_from_ical(prop));
         }
@@ -2391,9 +2384,9 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* recurrenceOverrides - must be last to generate patches */
-    if (jmap_wantprop(props, "recurrenceOverrides") && !is_exception) {
+    if (jmap_wantprop(props, "recurrenceOverrides") && !is_override) {
         json_object_set_new(event, "recurrenceOverrides",
-                overrides_from_ical(comp, event, tzid_start));
+                overrides_from_ical(comp, overrides, event, tzid_start));
     }
 
     if (wantprops) {
@@ -2409,6 +2402,8 @@ json_t*
 jmapical_tojmap_all(icalcomponent *ical, hash_table *props)
 {
     icalcomponent* comp;
+    int has_overrides = 0;
+    hash_table overrides_by_uid = HASH_TABLE_INITIALIZER;
 
     /* Locate all main VEVENTs. */
     ptrarray_t todo = PTRARRAY_INITIALIZER;
@@ -2418,10 +2413,12 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props)
          comp;
          comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
 
-        icalproperty *recurid = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        if (recurid) continue;
+        if (!icalcomponent_get_uid(comp)) continue;
 
-        if (icalcomponent_get_uid(comp) == NULL) continue;
+        if (icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+            has_overrides = 1;
+            continue;
+        }
 
         ptrarray_append(&todo, comp);
     }
@@ -2433,14 +2430,53 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props)
         return json_array();
     }
 
+    if (has_overrides) {
+        /* Map overrides by UID */
+        construct_hash_table(&overrides_by_uid, ptrarray_size(&todo), 0);
+
+        for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+             comp;
+             comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+
+            const char *uid = icalcomponent_get_uid(comp);
+            if (!uid) continue;
+
+            if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+                continue;
+            }
+
+            ptrarray_t *overrides = hash_lookup(uid, &overrides_by_uid);
+            if (!overrides) {
+                overrides = ptrarray_new();
+                hash_insert(uid, overrides, &overrides_by_uid);
+            }
+            ptrarray_append(overrides, comp);
+        }
+    }
+
     /* Convert the VEVENTs to JMAP. */
     json_t *events = json_array();
     while ((comp = ptrarray_pop(&todo))) {
-        json_t *jsevent = calendarevent_from_ical(comp, props, NULL);
+        ptrarray_t *overrides = NULL;
+        if (has_overrides) {
+            const char *uid = icalcomponent_get_uid(comp);
+            overrides = hash_lookup(uid, &overrides_by_uid);
+        }
+        json_t *jsevent = calendarevent_from_ical(comp, props, 0, overrides);
         if (jsevent) json_array_append_new(events, jsevent);
     }
 
+    if (has_overrides) {
+        hash_iter *hit = hash_table_iter(&overrides_by_uid);
+        while (hash_iter_next(hit)) {
+            ptrarray_t *overrides = hash_iter_val(hit);
+            ptrarray_free(overrides);
+        }
+        hash_iter_free(&hit);
+        free_hash_table(&overrides_by_uid, NULL);
+    }
     ptrarray_fini(&todo);
+
     return events;
 }
 
@@ -4414,7 +4450,7 @@ overrides_to_ical(icalcomponent *comp, icalcomponent *oldical,
     icaltimezone *tzstart = tz_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
 
     /* Convert current master event to JMAP */
-    json_t *master = calendarevent_from_ical(comp, NULL, NULL);
+    json_t *master = calendarevent_from_ical(comp, NULL, 0, NULL);
     if (!master) return;
     json_object_del(master, "recurrenceRule");
     json_object_del(master, "recurrenceOverrides");
