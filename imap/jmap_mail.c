@@ -7245,6 +7245,34 @@ static int _email_get_bodies(jmap_req_t *req,
         json_object_set_new(email, "calendarEvents", calendar_events);
     }
 
+    /* previousCalendarEvent -- non-standard */
+    if (jmap_wantprop(props, "previousCalendarEvent")) {
+        json_t *event = json_null();
+        struct buf buf = BUF_INITIALIZER;
+        // cost is "load message body", so fetch with bodies
+        r = _cyrusmsg_need_msg(msg);
+        if (r) goto done;
+        message_get_field(msg->_m, "X-ME-Cal-Previous", MESSAGE_RAW, &buf);
+        if (buf_len(&buf)) {
+           char *data = NULL;
+           size_t datalen = 0;
+            charset_decode_mimebody(buf_base(&buf), buf_len(&buf), ENCODING_BASE64, &data, &datalen);
+           if (data) {
+                json_error_t jerr;
+                event = json_loadb(data, datalen, JSON_DECODE_ANY, &jerr);
+            }
+            free(data);
+        }
+        if (event) {
+            buf_reset(&buf);
+            // extract the UID from the header too
+            message_get_field(msg->_m, "X-ME-Cal-UID", MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+            json_object_set_new(event, "uid", json_stringn(buf_base(&buf), buf_len(&buf)));
+        }
+        buf_free(&buf);
+        json_object_set_new(email, "previousCalendarEvent", event);
+    }
+
     /* hasAttachment */
     if (jmap_wantprop(props, "hasAttachment")) {
         int has_att = 0;
@@ -7678,6 +7706,11 @@ static const jmap_property_t email_props[] = {
     },
     {
         "calendarEvents",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "previousCalendarEvent",
         JMAP_MAIL_EXTENSION,
         JMAP_PROP_IMMUTABLE
     },
@@ -9548,6 +9581,11 @@ static void _email_parse_bodies(jmap_req_t *req,
     /* calendarEvents is read-only */
     if (JNOTNULL(json_object_get(jemail, "calendarEvents"))) {
         jmap_parser_invalid(parser, "calendarEvents");
+    }
+
+    /* previousCalendarEvent is read-only */
+    if (JNOTNULL(json_object_get(jemail, "previousCalendarEvent"))) {
+        jmap_parser_invalid(parser, "previousCalendarEvent");
     }
 
     if (!email->body) {
