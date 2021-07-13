@@ -375,7 +375,11 @@ static int meth_get(struct transaction_t *txn,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
-        return http_pipe_req_resp(be, txn);
+        r = http_pipe_req_resp(be, txn);
+        if (!r && (txn->req_tgt.flags == JMAP_ENDPOINT_WS)) {
+            txn->be = be;
+        }
+        return r;
     }
 
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
