@@ -54,6 +54,7 @@
 
 #include "httpd.h"
 #include "http_proxy.h"
+#include "http_ws.h"
 #include "iptostring.h"
 #include "mupdate-client.h"
 #include "prot.h"
@@ -615,6 +616,10 @@ static void write_cachehdr(const char *name, const char *contents,
 }
 
 
+static const char *upgrade_tokens[] = {
+    TLS_VERSION, HTTP2_CLEARTEXT_ID, WS_TOKEN, NULL
+};
+
 /* Send a cached response to the client */
 static void send_response(struct transaction_t *txn, long code,
                           hdrcache_t hdrs, struct buf *body)
@@ -872,6 +877,10 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     prot_printf(be->out, "Host: %s\r\n", be->hostname);
     write_forwarding_hdrs(&be_txn, txn->req_hdrs, txn->req_line.ver,
                           https ? "https" : "http");
+    if (txn->flags.upgrade) {
+        prot_puts(be->out, "Connection: Upgrade\r\n");
+        comma_list_hdr(&be_txn, "Upgrade", upgrade_tokens, txn->flags.upgrade);
+    }
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, &be_txn);
     if ((hdr = spool_getheader(txn->req_hdrs, "TE"))) {
         for (; *hdr; hdr++) prot_printf(be->out, "TE: %s\r\n", *hdr);
@@ -924,6 +933,9 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
                 txn->conn->end_resp_headers(txn, http_err);
             }
         }
+        else if (code == 101) { /* Switching Protocols */
+            break;
+        }
     } while (code < 200);
 
     if (r) proxy_downserver(be);
@@ -941,6 +953,7 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 
         /* Not expecting a body for 204/304 response or any HEAD response */
         switch (code) {
+        case 101: /* Switching Protocols */
         case 204: /* No Content */
         case 304: /* Not Modified */
             break;
