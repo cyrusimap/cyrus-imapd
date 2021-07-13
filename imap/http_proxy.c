@@ -672,19 +672,22 @@ static void send_response(struct transaction_t *txn, long code,
             }
         }
         else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
-            if (txn->flags.ver == VER_2) {
-                /* Prevent end of stream */
-                txn->flags.te = TE_CHUNKED;
+            txn->resp_body.len = strtoul(hdr[0], NULL, 10);
+
+            if (txn->flags.ver != VER_2) {
+                simple_hdr(txn, "Content-Length", "%s", hdr[0]);
             }
-            else simple_hdr(txn, "Content-Length", "%s", hdr[0]);
         }
 
         txn->conn->end_resp_headers(txn, code);
     }
     else {
         /* Body is buffered, so send using "identity" TE */
-        if (txn->flags.ver != VER_2)
+        txn->resp_body.len = len;
+
+        if (txn->flags.ver != VER_2) {
             simple_hdr(txn, "Content-Length", "%lu", len);
+        }
         txn->conn->end_resp_headers(txn, code);
         write_body(0, txn, buf_base(body), len);
     }
@@ -695,18 +698,19 @@ static void send_response(struct transaction_t *txn, long code,
 static unsigned pipe_chunk(struct protstream *pin, struct transaction_t *txn,
                            unsigned len)
 {
-    char buf[PROT_BUFSIZE];
     unsigned n = 0;
 
     /* Read 'len' octets */
+    buf_reset(&txn->resp_body.payload);
     for (; len; len -= n) {
-        n = prot_read(pin, buf, MIN(len, PROT_BUFSIZE));
+        n = prot_readbuf(pin, &txn->resp_body.payload, len);
         if (!n) break;
-
-        write_body(0, txn, buf, n);
     }
 
-    return n;
+    len = buf_len(&txn->resp_body.payload);
+    write_body(0, txn, buf_base(&txn->resp_body.payload), len);
+               
+    return len;
 }
 
 
@@ -939,6 +943,7 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
         default:
             if (txn->meth == METH_HEAD) break;
 
+            resp_body.framing = FRAMING_UNKNOWN;
             if (pipe_resp_body(be->in, txn, resp_hdrs, &resp_body)) {
                 /* Couldn't pipe the body and can't finish response */
                 txn->flags.conn = CONN_CLOSE;
@@ -947,6 +952,7 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     }
 
     if (resp_body.flags & BODY_CLOSE) proxy_downserver(be);
+    buf_free(&resp_body.payload);
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
@@ -980,7 +986,7 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
         for (; *hdr; hdr++) prot_printf(pout, "%s: %s\r\n", name, *hdr)
 
 
-    resp_body.payload = txn->resp_body.payload;
+    memset(&resp_body, 0, sizeof(struct body_t));
 
     if (txn->meth == METH_MOVE) {
         /*
@@ -1222,7 +1228,7 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
         free(lock);
     }
 
-    txn->resp_body.payload = resp_body.payload;
+    buf_free(&resp_body.payload);
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
     return r;
