@@ -6197,6 +6197,18 @@ done:
     return r;
 }
 
+static int _cyrusmsg_need_msg(struct cyrusmsg *msg)
+{
+    if (msg->_m)
+        return 0;
+    if (!msg->mr)
+        return IMAP_INTERNAL;
+
+    int r = msgrecord_get_message(msg->mr, &msg->_m);
+    if (r) return r;
+    return 0;
+}
+
 static int _cyrusmsg_need_part0(struct cyrusmsg *msg)
 {
     if (msg->part0)
@@ -6350,12 +6362,9 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
     /* Try to read the value from the index record or header cache */
     if (msg->mr && part == msg->part0 && !msg->rfc822part &&
             !want_all && want_form != HEADER_FORM_RAW) {
-        if (!msg->_m) {
-            int r = msgrecord_get_message(msg->mr, &msg->_m);
-            if (r) return json_null();
-        }
         struct buf buf = BUF_INITIALIZER;
-        int r = message_get_field(msg->_m, lcasename, MESSAGE_RAW|MESSAGE_LAST, &buf);
+        int r = _cyrusmsg_need_msg(msg);
+        if (!r) r = message_get_field(msg->_m, lcasename, MESSAGE_RAW|MESSAGE_LAST, &buf);
         if (r) return json_null();
         json_t *jval = NULL;
         if (buf_len(&buf)) jval = conv(buf_cstring(&buf));
@@ -6556,7 +6565,7 @@ static int _email_get_meta(jmap_req_t *req,
         int r = 0;
         struct buf buf = BUF_INITIALIZER;
         json_t *jval = json_null();
-        if (!msg->_m) r = msgrecord_get_message(msg->mr, &msg->_m);
+        r = _cyrusmsg_need_msg(msg);
         if (!r) r = message_get_field(msg->_m, "x-spam-score", MESSAGE_RAW, &buf);
         if (!r && buf_len(&buf)) jval = json_real(atof(buf_cstring(&buf)));
         json_object_set_new(email, "spamScore", jval);
@@ -6580,7 +6589,7 @@ static int _email_get_meta(jmap_req_t *req,
         struct buf buf = BUF_INITIALIZER;
         json_t *jval = json_null();
 
-        if (!msg->_m) r = msgrecord_get_message(msg->mr, &msg->_m);
+        r = _cyrusmsg_need_msg(msg);
         if (!r) r = message_get_field(msg->_m, hdrname, MESSAGE_RAW, &buf);
         if (!r && buf_len(&buf)) {
             const char *blobid =
