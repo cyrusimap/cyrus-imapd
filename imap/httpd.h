@@ -402,6 +402,8 @@ struct transaction_t {
                                              - error desc string
                                         */
 
+    struct backend *be;                 /* Connection to backend server */
+
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
     void *zstd;                         /* Zstandard compression context */
