@@ -473,9 +473,6 @@ HIDDEN struct namespace httpd_namespace;
 /* we want a list of our outgoing connections here and which one we're
    currently piping */
 
-/* the current server most commands go to */
-struct backend *backend_current = NULL;
-
 /* our cached connections */
 struct backend **backend_cached = NULL;
 
@@ -704,7 +701,6 @@ static void httpd_reset(struct http_connection *conn)
     }
     if (backend_cached) free(backend_cached);
     backend_cached = NULL;
-    backend_current = NULL;
 
     index_text_extractor_destroy();
 
@@ -2024,6 +2020,8 @@ EXPORTED void transaction_free(struct transaction_t *txn)
 
     transaction_reset(txn);
 
+    if (txn->be) proxy_downserver(txn->be);
+
     buf_free(&txn->req_body.payload);
     buf_free(&txn->resp_body.payload);
     buf_free(&txn->zbuf);
@@ -2088,6 +2086,7 @@ static int http1_input(struct transaction_t *txn)
   done:
     /* Handle errors (success responses handled by method functions) */
     if (ret) error_response(ret, txn);
+    else if (txn->be) protgroup_insert(protin, txn->be->in);
 
     /* Read and discard any unread request body */
     if (!(txn->flags.conn & CONN_CLOSE)) {
@@ -2138,7 +2137,7 @@ static void cmdloop(struct http_connection *conn)
         do {
             /* Flush any buffered output */
             prot_flush(httpd_out);
-            if (backend_current) prot_flush(backend_current->out);
+            if (txn.be) prot_flush(txn.be->out);
 
             /* Check for shutdown file */
             if (shutdown_file(txn.buf.s, txn.buf.alloc) ||
@@ -2155,8 +2154,9 @@ static void cmdloop(struct http_connection *conn)
             syslog(LOG_DEBUG, "proxy_check_input()");
 
         } while (!proxy_check_input(protin, httpd_in, httpd_out,
-                                    backend_current ? backend_current->in : NULL,
-                                    NULL, 0));
+                                    txn.be ? txn.be->in : NULL,
+                                    txn.be ? txn.be->out : NULL,
+                                    0 /* timeout */));
 
         
         /* Start command timer */
@@ -2165,6 +2165,11 @@ static void cmdloop(struct http_connection *conn)
         if (conn->sess_ctx) {
             /* HTTP/2 input */
             http2_input(conn);
+        }
+        else if (txn.be) {
+            /* HTTP/1.1 tunnel */
+            txn.conn->close = 1;
+            txn.conn->close_str = "Backend disconnect";
         }
         else {
             if (txn.ws_ctx) {
