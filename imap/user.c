@@ -606,34 +606,10 @@ EXPORTED char *user_hash_xapian(const char *userid, const char *root)
     if (!mbname_userid(mbname)) goto out;
 
     if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
-        const char *domain = mbname_domain(mbname);
-        const char *localpart = mbname_localpart(mbname);
-        char c[2], d[2];
-
-        if (domain)
-            basedir = strconcat(root,
-                                FNAME_DOMAINDIR,
-                                dir_hash_b(domain, config_fulldirhash, d),
-                                "/", domain,
-                                "/", dir_hash_b(localpart, config_fulldirhash, c),
-                                FNAME_USERDIR,
-                                localpart,
-                                (char *)NULL);
-        else
-            basedir = strconcat(root,
-                                "/", dir_hash_b(localpart, config_fulldirhash, c),
-                                FNAME_USERDIR,
-                                localpart,
-                                (char *)NULL);
+        basedir = user_hash_xapian_byname(mbname, root);
     }
     else {
-        char path[MAX_MAILBOX_PATH+1];
-        mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mbentry->uniqueid);
-
-        basedir = strconcat(root,
-                            FNAME_USERDIR,
-                            path,
-                            (char *)NULL);
+        basedir = user_hash_xapian_byid(mbentry->uniqueid, root);
     }
 
  out:
@@ -642,6 +618,43 @@ EXPORTED char *user_hash_xapian(const char *userid, const char *root)
     free(inboxname);
 
     return basedir;
+}
+
+EXPORTED char *user_hash_xapian_byname(const mbname_t *mbname, const char *root)
+{
+    char *basedir = NULL;
+    const char *domain = mbname_domain(mbname);
+    const char *localpart = mbname_localpart(mbname);
+    char c[2], d[2];
+
+    if (domain)
+        basedir = strconcat(root,
+                            FNAME_DOMAINDIR,
+                            dir_hash_b(domain, config_fulldirhash, d),
+                            "/", domain,
+                            "/", dir_hash_b(localpart, config_fulldirhash, c),
+                            FNAME_USERDIR,
+                            localpart,
+                            (char *)NULL);
+    else
+        basedir = strconcat(root,
+                            "/", dir_hash_b(localpart, config_fulldirhash, c),
+                            FNAME_USERDIR,
+                            localpart,
+                            (char *)NULL);
+
+    return basedir;
+}
+
+EXPORTED char *user_hash_xapian_byid(const char *mboxid, const char *root)
+{
+    char path[MAX_MAILBOX_PATH+1];
+    mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mboxid);
+
+    return strconcat(root,
+                     FNAME_USERDIR,
+                     path,
+                     (char *)NULL);
 }
 
 static const char *_namelock_name_from_userid(const char *userid)
