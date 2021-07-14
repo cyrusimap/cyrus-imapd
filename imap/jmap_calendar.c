@@ -3558,6 +3558,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
             }
             json_object_set_new(set.not_created, key, err);
             json_decref(create);
+            json_decref(invalid);
             r = 0;
             continue;
         }
