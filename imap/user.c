@@ -278,7 +278,7 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
 
     assert(user_isnamespacelocked(userid));
 
-    if (!(mbentry->mbtype &  MBTYPE_LEGACY_DIRS)) {
+    if (!(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
         for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
             strarray_appendm(&paths,
                              mboxid_conf_getpath(mbentry->uniqueid, *suffixes));
@@ -334,7 +334,7 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
     user_deletequotaroots(userid);
 
     /* delete all the search engine data (if any) */
-//    search_deluser(userid);
+    search_deluser(mbentry);
 
 #ifdef WITH_DAV
     /* delete all the calendar alarms for the user */

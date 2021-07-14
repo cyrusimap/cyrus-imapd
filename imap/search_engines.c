@@ -320,10 +320,10 @@ EXPORTED int search_compact(const char *userid,
     return (se->compact ? se->compact(userid, reindextiers, srctiers, desttier, flags) : 0);
 }
 
-EXPORTED int search_deluser(const char *userid)
+EXPORTED int search_deluser(const mbentry_t *mbentry)
 {
     const struct search_engine *se = search_engine();
-    return (se->deluser ? se->deluser(userid) : 0);
+    return (se->deluser ? se->deluser(mbentry) : 0);
 }
 
 EXPORTED int search_check_config(char **errstr)
