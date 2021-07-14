@@ -302,6 +302,8 @@ int mboxname_make_parent(char *namebuf);
 
 char *mboxname_conf_getpath(const mbname_t *mbname,
                             const char *suffix);
+char *mboxname_conf_getpath_legacy(const mbname_t *mbname, const char *suffix);
+char *mboxid_conf_getpath(const char *mboxid, const char *suffix);
 
 /* ======================== COUNTERS ==================== */
 
