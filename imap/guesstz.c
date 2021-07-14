@@ -148,17 +148,17 @@ static int format_offset(int32_t offset, char *buffer)
         sign = '-';
     }
 
-    int hours = offset / 3600;
-    int minutes = (offset % 3600) / 60;
-    int seconds = offset % 60;
+    unsigned hours = offset / 3600;
+    unsigned minutes = (offset % 3600) / 60;
+    unsigned seconds = offset % 60;
 
     if (hours > 23 || minutes > 59 || seconds > 59) {
         return 0;
     }
 
-    snprintf(buffer, 8, "%c%02i%02i", sign, hours, minutes);
+    snprintf(buffer, 8, "%c%02u%02u", sign, hours, minutes);
     if (seconds) {
-        snprintf(buffer + 5, 3, "%02i", seconds);
+        snprintf(buffer + 5, 3, "%02u", seconds);
     }
 
     return strlen(buffer);
