@@ -2885,7 +2885,7 @@ static void getcalendarevents_filterinstance(json_t *myevent,
     jmap_filterprops(myevent, props);
     json_object_set_new(myevent, "id", json_string(id));
     json_object_set_new(myevent, "uid", json_string(ical_uid));
-    json_object_set_new(myevent, "@type", json_string("JSEvent"));
+    json_object_set_new(myevent, "@type", json_string("Event"));
 }
 
 static int getcalendarevents_getinstances(json_t *jsevent,
@@ -3464,7 +3464,7 @@ gotevent:
         jmap_filterprops(jsevent, props);
         json_object_set_new(jsevent, "id", json_string(cdata->ical_uid));
         json_object_set_new(jsevent, "uid", json_string(cdata->ical_uid));
-        json_object_set_new(jsevent, "@type", json_string("JSEvent"));
+        json_object_set_new(jsevent, "@type", json_string("Event"));
         json_array_append_new(rock->get->list, jsevent);
     }
     else {
@@ -3477,7 +3477,7 @@ gotevent:
                 jmap_filterprops(myevent, props);
                 json_object_set_new(myevent, "id", json_string(cdata->ical_uid));
                 json_object_set_new(myevent, "uid", json_string(cdata->ical_uid));
-                json_object_set_new(myevent, "@type", json_string("JSEvent"));
+                json_object_set_new(myevent, "@type", json_string("Event"));
                 json_array_append_new(rock->get->list, myevent);
             }
         }
@@ -3671,7 +3671,7 @@ static const jmap_property_t event_props[] = {
         0
     },
 
-    /* JSEvent properties */
+    /* Event properties */
     {
         "start",
         NULL,
@@ -4663,7 +4663,7 @@ static int setcalendarevents_create(jmap_req_t *req,
         setcalendarevents_set_utctimes(event, NULL, parser.invalid);
     }
 
-    /* Convert JSEvent to iCalendar */
+    /* Convert Event to iCalendar */
     ical = jmapical_toical(event, NULL, parser.invalid, &jmapctx);
     if (json_array_size(parser.invalid)) {
         r = 0;
@@ -5010,7 +5010,7 @@ static int setcalendarevents_apply_patch(struct jmapical_jmapcontext *jmapctx,
             }
         }
 
-        /* Create the new JSEvent */
+        /* Create the new Event */
         new_event = json_deep_copy(old_event);
         json_t *new_overrides = json_object_get(new_event, "recurrenceOverrides");
         if (new_override) {
