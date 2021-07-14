@@ -108,6 +108,7 @@ static const struct dav_namespace_t {
     { XML_NS_MECOM, "MC" },
     { XML_NS_MOBME, "MM" },
     { XML_NS_CYRUS, "CY" },
+    { XML_NS_JMAPCAL, "JMAPCAL" },
     { XML_NS_USERFLAG, "UF" },
     { XML_NS_SYSFLAG, "SF" },
 };
@@ -139,8 +140,6 @@ static void my_dav_shutdown(void);
 static int get_server_info(struct transaction_t *txn);
 
 static unsigned long principal_allow_cb(struct request_target_t *tgt);
-static int principal_parse_path(const char *path, struct request_target_t *tgt,
-                                const char **resultstr);
 static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
                                   struct propfind_ctx *fctx,
                                   xmlNodePtr prop, xmlNodePtr resp,
@@ -488,7 +487,7 @@ static unsigned long principal_allow_cb(struct request_target_t *tgt)
 
 
 /* Parse request-target path in DAV principals namespace */
-static int principal_parse_path(const char *path, struct request_target_t *tgt,
+HIDDEN int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **resultstr)
 {
     char *p;
@@ -1337,6 +1336,10 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
                               (const char *) nsDef->prefix);
                 else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CYRUS))
                     ensure_ns(respNs, NS_CYRUS, root,
+                              (const char *) nsDef->href,
+                              (const char *) nsDef->prefix);
+                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_JMAPCAL))
+                    ensure_ns(respNs, NS_JMAPCAL, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
                 else
@@ -3724,6 +3727,16 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
         }
     }
 
+    /* Process any post-processor functions */
+    if (ptrarray_size(&pctx->postprocs)) {
+        pctx_postproc_t proc;
+        while ((proc = ptrarray_pop(&pctx->postprocs))) {
+            /* XXX - allow return values? */
+            proc(pctx);
+        }
+        ptrarray_fini(&pctx->postprocs);
+    }
+
     return 0;
 }
 
@@ -5060,6 +5073,13 @@ static int meth_delete_resource(struct transaction_t *txn,
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     needrights = DACL_RMRSRC;
+    if (txn->req_tgt.namespace == &namespace_calendar) {
+        /* JMAP introduced the right to remove an event
+         * only if it is organized by the user (or there
+         * is no organizer at all). The CalDAV namespace
+         * needs to to assert this right later. */
+        needrights |= DACL_RMOWNRSRC;
+    }
     if (!(rights & needrights)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -7101,6 +7121,14 @@ int meth_put(struct transaction_t *txn, void *params)
 
         reqd_rights = DACL_WRITECONT;
 
+        if (txn->req_tgt.namespace == &namespace_calendar) {
+            /* JMAP introduced the right to update an event
+             * only if it is organized by the user (or there
+             * is no organizer at all). The CalDAV namespace
+             * needs to to assert this right later. */
+            reqd_rights |= DACL_UPDATEOWNRSRC;
+        }
+
         if (txn->req_tgt.allow & ALLOW_USERDATA) reqd_rights |= DACL_PROPRSRC;
     }
 
@@ -8459,7 +8487,9 @@ int meth_unlock(struct transaction_t *txn, void *params)
 int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,
                        struct mailbox *mailbox, struct index_record *oldrecord,
-                       modseq_t createdmodseq, strarray_t *imapflags)
+                       modseq_t createdmodseq,
+                       const strarray_t *add_imapflags,
+                       const strarray_t *del_imapflags)
 {
     int ret = HTTP_CREATED, r;
     hdrcache_t hdrcache = txn->req_hdrs;
@@ -8586,11 +8616,17 @@ int dav_store_resource(struct transaction_t *txn,
         }
 
         /* XXX - casemerge?  Doesn't matter with flags */
-        if (imapflags) {
+        if (add_imapflags) {
             if (flaglist)
-                strarray_cat(flaglist, imapflags);
+                strarray_cat(flaglist, add_imapflags);
             else
-                flaglist = strarray_dup(imapflags);
+                flaglist = strarray_dup(add_imapflags);
+        }
+        if (del_imapflags && flaglist) {
+            int i;
+            for (i = 0; i < strarray_size(del_imapflags); i++) {
+                strarray_remove_all_case(flaglist, strarray_nth(del_imapflags, i));
+            }
         }
 
         /* Append the message to the mailbox */

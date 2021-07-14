@@ -598,11 +598,11 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
 
 #ifdef WITH_JMAP
     if (sched_data->oldical) {
-        jsevent = jmapical_tojmap(sched_data->oldical, NULL);
+        jsevent = jmapical_tojmap(sched_data->oldical, NULL, NULL);
 
         if (sched_data->newical) {
             /* Updated event */
-            json_t *new_jsevent = jmapical_tojmap(sched_data->newical, NULL);
+            json_t *new_jsevent = jmapical_tojmap(sched_data->newical, NULL, NULL);
 
             patch = jmap_patchobject_create(jsevent, new_jsevent);
             json_decref(new_jsevent);
@@ -615,7 +615,7 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
     else {
         /* New event */
         jsevent = json_null();
-        patch = jmapical_tojmap(sched_data->newical, NULL);
+        patch = jmapical_tojmap(sched_data->newical, NULL, NULL);
     }
 #else
     jsevent = json_null();
@@ -1963,7 +1963,8 @@ static void sched_deliver_local(const char *userid,
     strarray_append(&recipient_addresses, recipient);
     if (!r) r = caldav_store_resource(&txn, ical, mailbox,
                                       buf_cstring(&resource), cdata->dav.createdmodseq,
-                                      caldavdb, NEW_STAG, recipient, &recipient_addresses);
+                                      caldavdb, NEW_STAG, NULL, NULL,
+                                      recipient, &recipient_addresses);
     strarray_fini(&recipient_addresses);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
@@ -1986,7 +1987,8 @@ static void sched_deliver_local(const char *userid,
 
         /* Store the message in the recipient's Inbox */
         r = caldav_store_resource(&txn, sched_data->itip, inbox,
-                                  buf_cstring(&resource), 0, caldavdb, 0, NULL, NULL);
+                                  buf_cstring(&resource), 0, caldavdb, 0,
+                                  NULL, NULL, NULL, NULL);
         /* XXX  What do we do if storing to Inbox fails? */
     }
 
@@ -3258,7 +3260,8 @@ void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
     struct buf buf = BUF_INITIALIZER;
 
     /* allow override of schedule-address per-message (FM specific) */
-    const char **hdr = spool_getheader(req_hdrs, "Schedule-Address");
+    const char **hdr = req_hdrs ?
+        spool_getheader(req_hdrs, "Schedule-Address") : NULL;
 
     if (hdr) {
         if (!strncasecmp(hdr[0], "mailto:", 7))

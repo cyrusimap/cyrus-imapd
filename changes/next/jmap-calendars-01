@@ -1,0 +1,12 @@
+Description:
+
+Implements the JMAP calendars specification (draft-ietf-jmap-calendars).
+
+Config changes:
+
+Adds the 'jmap_guesstz_fname' option to specify alternative file paths
+for the timezone guessing database.
+
+Upgrade instructions:
+
+TBD.

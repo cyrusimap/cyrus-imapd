@@ -75,6 +75,14 @@ extern struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop);
 extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
 
+/* Returns if default alerts are explicitly enabled (1) or disabled (0).
+   Returns -1 otherwise. */
+extern int icalcomponent_read_usedefaultalerts(icalcomponent *comp);
+
+extern void icalcomponent_add_defaultalerts(icalcomponent *ical,
+                                            icalcomponent *alarms_withtime,
+                                            icalcomponent *alarms_withdate);
+
 /* If range is a NULL period, callback() is executed for ALL occurrences,
    otherwise callback() is only executed for occurrences that overlap the range.
    callback() returns true (1) while it wants more occurrences, 0 to finish.
@@ -136,6 +144,27 @@ extern icaltimetype icaltime_convert_to_utc(const struct icaltimetype tt,
 extern int icalcomponent_apply_vpatch(icalcomponent *ical,
                                       icalcomponent *vpatch,
                                       int *num_changes, const char **errstr);
+
+extern icaltimezone *icaltimezone_lookup_tzid(const char *tzid);
+
+struct observance {
+    const char *name;
+    icaltimetype onset;
+    int offset_from;
+    int offset_to;
+    int is_daylight;
+    int is_std;
+    int is_gmt;
+};
+
+extern void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
+                                                     icaltimetype *startp, icaltimetype *endp,
+                                                     icalarray *obsarray,
+                                                     struct observance **proleptic,
+                                                     icalcomponent **eternal_std,
+                                                     icalcomponent **eternal_dst,
+                                                     icaltimetype *last_dtstart,
+                                                     int ms_compatible);
 
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory

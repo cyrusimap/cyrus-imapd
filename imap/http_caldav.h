@@ -53,6 +53,8 @@ extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                                  struct mailbox *mailbox, const char *resource,
                                  modseq_t createdmodseq,
                                  struct caldav_db *caldavdb, unsigned flags,
+                                 const strarray_t *add_imapflags,
+                                 const strarray_t *del_imapflags,
                                  const char *userid, const strarray_t *schedule_addresses);
 
 extern icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
@@ -66,5 +68,60 @@ extern int caldav_is_personalized(struct mailbox *mailbox,
                                   struct buf *userdata);
 
 extern char *caldav_scheddefault(const char *userid);
+
+extern void caldav_attachment_url(struct buf *buf, const char *userid,
+                                  const char *proto, const char *host,
+                                  const char *managedid);
+
+/* Update refcounts for managed attachments owned by userid.
+ * For updated events, both ical and oldical must be non-null.
+ * for deleted events, ical must be null.
+ * Returns HTTP_NOT_FOUND for any invalid managed id, or some
+ * other HTTP error on internal error. */
+extern int caldav_manage_attachments(const char *userid,
+                                     icalcomponent *ical,
+                                     icalcomponent *oldical);
+
+#define CALDAV_DEFAULTALARMS_ANNOT_WITHTIME \
+    DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-datetime"
+
+#define CALDAV_DEFAULTALARMS_ANNOT_WITHDATE \
+    DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-date"
+
+/* Read the default alarms for mailbox mboxname and userid as
+ * icalcomponent. The VALARMs are wrapped inside a libical
+ * XROOT component */
+extern icalcomponent *caldav_read_calendar_icalalarms(const char *mboxname,
+                                                      const char *userid,
+                                                      const char *annot);
+
+/* Write the default alarms in ical to annot, or delete if ical is NULL.
+ * The alarms MUST be wrapped in either a XROOT or VCALENDAR component. */
+extern int caldav_write_defaultalarms(struct mailbox *mailbox,
+                                      const char *userid,
+                                      const char *annot,
+                                      icalcomponent *ical);
+
+/* Bump the modseq of all records in mailbox that contain iCalendar
+ * components with enabled default alarms. Also forces calalarmd to
+ * recalculate the alarms for these records.
+ *
+ * Side-effect warning: if the mailbox has an open annotation state
+ * that isn't scoped to SCOPE_MESSAGE, then the state is committed
+ * and rescoped to messages. */
+extern int caldav_bump_defaultalarms(struct mailbox *mailbox);
+
+extern icaltimezone *caldav_get_calendar_tz(const char *mboxname, const char *userid);
+
+#ifdef WITH_JMAP
+extern int jmap_create_caldaveventnotif(struct transaction_t *txn,
+                                        const char *calmboxname,
+                                        const char *ical_uid,
+                                        const strarray_t *schedule_addresses,
+                                        int is_draft,
+                                        icalcomponent *oldical,
+                                        icalcomponent *newical);
+
+#endif
 
 #endif /* HTTP_CALDAV_H */

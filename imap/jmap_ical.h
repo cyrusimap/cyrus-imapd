@@ -51,6 +51,8 @@ extern "C" {
 #include <jansson.h>
 #include <libical/ical.h>
 
+#include "jmap_util.h"
+
 #define JMAPICAL_ERROR_UNKNOWN  -1
 #define JMAPICAL_ERROR_CALLBACK 1
 #define JMAPICAL_ERROR_MEMORY   2
@@ -59,9 +61,9 @@ extern "C" {
 #define JMAPICAL_ERROR_UID      5
 
 /* Custom iCalendar properties */
+#define JMAPICAL_XPROP_ID            "X-JMAP-ID"
 #define JMAPICAL_XPROP_LOCATION      "X-JMAP-LOCATION"
-/* FIXME libical doesn't parse USEDEFAULTALERTS, must use X-prefix */
-#define JMAPICAL_XPROP_USEDEFALERTS  "X-JMAP-USEDEFAULTALERTS"
+#define JMAPICAL_XPROP_SHOWWITHOUTTIME "X-JMAP-SHOW-WITHOUT-TIME"
 
 /* Custom iCalendar parameters */
 #define JMAPICAL_XPARAM_CID           "X-JMAP-CID"
@@ -70,9 +72,13 @@ extern "C" {
 #define JMAPICAL_XPARAM_FEATURE       "X-JMAP-FEATURE"
 #define JMAPICAL_XPARAM_GEO           "X-JMAP-GEO"
 #define JMAPICAL_XPARAM_ID            "X-JMAP-ID"
+#define JMAPICAL_XPARAM_INVITEDBY     "X-JMAP-INVITEDBY"
 #define JMAPICAL_XPARAM_LINKID        "X-JMAP-LINKID"
 #define JMAPICAL_XPARAM_LOCATIONID    "X-JMAP-LOCATIONID"
+#define JMAPICAL_XPARAM_LOCATIONTYPE  "X-JMAP-LOCATIONTYPE"
 #define JMAPICAL_XPARAM_NAME          "X-JMAP-NAME"
+#define JMAPICAL_XPARAM_PARENTID      "X-JMAP-PARENTID"
+#define JMAPICAL_XPARAM_PARENTPROP    "X-JMAP-PARENTPROP"
 #define JMAPICAL_XPARAM_REL           "X-JMAP-REL"
 #define JMAPICAL_XPARAM_ROLE          "X-JMAP-ROLE"
 #define JMAPICAL_XPARAM_RSVP_URI      "X-JMAP-RSVP-URI"
@@ -82,17 +88,33 @@ extern "C" {
 #define JMAPICAL_XPARAM_SEQUENCE      "X-SEQUENCE" /*used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_COMMENT       "X-COMMENT" /*used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
+#define JMAPICAL_XPARAM_ISDEFAULT     "X-IS-DEFAULT" /* Prop value is default */
+
+struct jmapical_jmapcontext {
+    void (*blobid_from_href)(struct buf *blobid,
+                             const char *href,
+                             const char *managedid,
+                             void *rock);
+    void (*href_from_blobid)(struct buf *href,
+                             struct buf *managedid,
+                             const char *blobid,
+                             void *rock);
+    char *emailalert_defaultrecipient;
+    void *rock;
+};
 
 
 /* Converts the iCalendar component ical to JSCalendar.
  * Returns NULL on error.
  */
-json_t* jmapical_tojmap(icalcomponent *ical, hash_table *props);
+json_t* jmapical_tojmap(icalcomponent *ical, hash_table *props,
+                        struct jmapical_jmapcontext *jmapctx);
 
 /* Converts the iCalendar component ical to an array of JSCalendar objects.
  * Returns NULL on error.
  */
-json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props);
+json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
+                            struct jmapical_jmapcontext *jmapctx);
 
 /* Convert the jsevent to iCalendar.
  * The oldical argument points to the previous VCALENDAR of the event,
@@ -100,8 +122,43 @@ json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props);
  * Returns a new ical component, or NULL on error.
  */
 icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
-                               json_t *invalid);
+                               json_t *invalid,
+                               struct jmapical_jmapcontext *jmapctx);
+
+
+/* Convert the iCalendar VALARM to a JSCalendar Alert.
+ * Return NULL on error. */
+json_t *jmapical_alert_from_ical(icalcomponent *valarm);
+
+/* Convert alert to iCalendar VALARM. Returns NULL on error */
+extern icalcomponent *jmapical_alert_to_ical(json_t *alert, struct jmap_parser *parser,
+                                             const char *alert_uid,
+                                             const char *description,
+                                             const char *email_summary,
+                                             const char *email_recipient);
+
+
 void icalcomponent_add_required_timezones(icalcomponent *ical);
+
+/* jstimezones allows to resolve standard and non-standard timezone
+ * identifiers to ical timezones. It mainly is useful to handle
+ * iCalendar data that embeds non-standard VTIMEZONES */
+typedef struct jstimezones jstimezones_t;
+
+/* Create a resolver for VTIMEZONEs embedded in VCALENDAR ical. */
+extern jstimezones_t *jstimezones_new(icalcomponent *ical);
+
+/* Resolve tzid to a timezone.
+ *
+ * If jstzones is not NULL, first look up the timezones in the custom
+ * resolver. If not found, lookup tzid in the standard timezones.
+ *
+ * Returns NULL if no timezone is found.
+ */
+extern icaltimezone *jstimezones_lookup_tzid(jstimezones_t* jstzones, const char *tzid);
+
+/* Free a timezone resolver */
+extern void jstimezones_free(jstimezones_t **jstzonesptr);
 
 /* for CalDAV content negotiation */
 struct buf *icalcomponent_as_jevent_string(icalcomponent *ical);
@@ -119,9 +176,9 @@ struct jmapical_datetime {
     bit64 nano;
 };
 
-#define JMAPICAL_DATETIME_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 };
+#define JMAPICAL_DATETIME_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 }
 
-/* True if all components are zero */
+/* True if all time components are zero */
 extern int jmapical_datetime_has_zero_time(const struct jmapical_datetime *dt);
 
 /* Convert DateTime to ical date, truncating time components */
@@ -163,17 +220,27 @@ struct jmapical_duration {
 
 #define JMAPICAL_DURATION_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 }
 
-/* True if all components are zero */
+/* True if all time components are zero */
 extern int jmapical_duration_has_zero_time(const struct jmapical_duration *dur);
+
+/* Convert Duration to ical duration, truncating subseconds */
+extern struct icaldurationtype jmapical_duration_to_icalduration(const struct jmapical_duration *dur);
 
 /* Convert ical duration to Duration with zero subseconds */
 extern void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
                                                 struct jmapical_duration *dur);
 
+/* Convert ical duration property value to Duration with subseconds */
+extern int jmapical_duration_from_icalprop(icalproperty *prop, struct jmapical_duration *dur);
+
 /* Calculate time-range between t1 and t2 into Duration dur */
-extern void jmapical_duration_between(time_t t1, bit64 t1nanos,
-                                      time_t t2, bit64 t2nanos,
-                                      struct jmapical_duration *dur);
+extern void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
+                                               time_t t2, bit64 t2nanos,
+                                               struct jmapical_duration *dur);
+
+extern void jmapical_duration_between_utctime(const struct jmapical_datetime *t1,
+                                              const struct jmapical_datetime *t2,
+                                              struct jmapical_duration *dur);
 
 extern void jmapical_duration_as_string(const struct jmapical_duration *dur, struct buf *buf);
 extern int jmapical_duration_from_string(const char *val, struct jmapical_duration *dur);

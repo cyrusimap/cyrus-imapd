@@ -77,6 +77,7 @@
 #define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
 #define XML_NS_DAVMOUNT "http://purl.org/NET/webdav/mount/"
+#define XML_NS_JMAPCAL  "urn:ietf:params:jmap:calendars"
 
 #define USER_COLLECTION_PREFIX  "user"
 #define GROUP_COLLECTION_PREFIX "group"
@@ -97,8 +98,11 @@ enum {
     NS_MECOM,
     NS_MOBME,
     NS_CYRUS,
+    NS_JMAPCAL,
+    NS_USERFLAG,
+    NS_SYSFLAG
 };
-#define NUM_NAMESPACE 8
+#define NUM_NAMESPACE 9
 
 /* Cyrus-specific privileges */
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */
@@ -111,6 +115,11 @@ enum {
 #define DACL_ADMIN      ACL_ADMIN       /* CY:admin (aggregates
                                            DAV:read-acl, DAV:write-acl,
                                            DAV:unlock and DAV:share) */
+
+/* JMAP-specific privileges */
+#define DACL_UPDATEOWNRSRC  ACL_USER6   /* CY:update-own-resource - used for JMAP */
+#define DACL_RMOWNRSRC  ACL_USER5       /* CY:remove-own-resource - used for JMAP */
+#define DACL_UPDATEPRIVATE ACL_USER4
 
 /* WebDAV (RFC 3744) privileges */
 #define DACL_READ       (ACL_READ\
@@ -370,7 +379,6 @@ struct propfind_ctx {
     xmlBufferPtr xmlbuf;                /* Buffer for dumping XML nodes */
 };
 
-
 /* Context for patching (writing) properties */
 struct proppatch_ctx {
     struct transaction_t *txn;          /* request transaction */
@@ -382,8 +390,10 @@ struct proppatch_ctx {
     struct txn *tid;                    /* Transaction ID for annot writes */
     int *ret;                           /* Return code to pass up to caller */
     struct buf buf;                     /* Working buffer */
+    ptrarray_t postprocs;               /* Post-processors after patching */
 };
-
+/* Post processor function after properties are patched */
+typedef void (*pctx_postproc_t)(struct proppatch_ctx *);
 
 /* Structure for property status */
 struct propstat {
@@ -702,7 +712,9 @@ int dav_check_precond(struct transaction_t *txn, struct meth_params *params,
 int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,
                        struct mailbox *mailbox, struct index_record *oldrecord,
-                       modseq_t createdmodseq, strarray_t *imapflags);
+                       modseq_t createdmodseq,
+                       const strarray_t *add_imapflags,
+                       const strarray_t *del_imapflags);
 int dav_premethod(struct transaction_t *txn);
 unsigned get_preferences(struct transaction_t *txn);
 struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types);
@@ -913,5 +925,9 @@ int proppatch_todb(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
                    struct propstat propstat[], void *rock);
 int proppatch_restype(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
                       struct propstat propstat[], void *rock);
+
+/* Parse request-target path in DAV principals namespace */
+int principal_parse_path(const char *path, struct request_target_t *tgt,
+                         const char **resultstr);
 
 #endif /* HTTP_DAV_H */
