@@ -2871,7 +2871,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
 {
     icalproperty* prop = NULL;
     hash_table *wantprops = NULL;
-    json_t *event = json_pack("{s:s}", "@type", "JSEvent");
+    json_t *event = json_pack("{s:s}", "@type", "Event");
     struct buf buf = BUF_INITIALIZER;
     jstimezones_t myjstzones = JSTIMEZONES_INITIALIZER;
 
@@ -6035,7 +6035,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
     jprop = json_object_get(event, "@type");
     if (JNOTNULL(jprop) && json_is_string(jprop)) {
-        if (strcmp(json_string_value(jprop), "JSEvent")) {
+        if (strcmp(json_string_value(jprop), "Event")) {
             jmap_parser_invalid(parser, "@type");
         }
     } else if (JNOTNULL(jprop)) {
