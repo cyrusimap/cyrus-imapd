@@ -794,7 +794,7 @@ static int dav_store_notification(struct transaction_t *txn,
 {
     struct webdav_data *wdata;
     struct index_record *oldrecord = NULL, record;
-    struct buf *xmlbuf;
+    struct buf *xmlbuf = NULL;
     int r;
 
     mbentry_t *mbentry = NULL;
