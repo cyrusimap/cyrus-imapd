@@ -141,7 +141,8 @@ static int reset_single(const char *userid)
         (void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0);
     }
 
-    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, mblist, MBOXTREE_DELETED);
+    struct sync_unuser_rock urock = { mblist, NULL };
+    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, &urock, MBOXTREE_DELETED);
     if (r) goto fail;
 
     for (i = mblist->count; i; i--) {
@@ -158,10 +159,11 @@ static int reset_single(const char *userid)
         if (r) goto fail;
     }
 
-    r = user_deletedata(userid, 1);
+    r = user_deletedata(urock.inbox, 1);
 
  fail:
     mboxname_release(&namespacelock);
+    mboxlist_entry_free(&urock.inbox);
     strarray_free(mblist);
     strarray_free(sublist);
 

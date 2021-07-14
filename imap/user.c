@@ -70,6 +70,7 @@
 #endif
 
 #include "assert.h"
+#include "dav_util.h"
 #include "global.h"
 #include "mailbox.h"
 #include "mboxkey.h"
@@ -238,15 +239,8 @@ static int delete_cb(const char *sievedir, const char *name,
     return SIEVEDIR_OK;
 }
 
-static int user_deletesieve(const char *user)
+static int user_deletesieve(const char *sieve_path)
 {
-    const char *sieve_path;
-
-    /* oh well */
-    if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
-
-    sieve_path = user_sieve_path(user);
-
     /* remove contents of sieve_path */
     sievedir_foreach(sieve_path, 0/*flags*/, &delete_cb, NULL);
 
@@ -255,50 +249,97 @@ static int user_deletesieve(const char *user)
     return 0;
 }
 
-EXPORTED int user_deletedata(const char *userid, int wipe_user)
+static const char *wipe_user_file_suffixes[] = {
+    FNAME_SEENSUFFIX,
+    FNAME_MBOXKEYSUFFIX,  /* XXX  what do we do about multiple backends? */
+    NULL
+};
+
+static const char *user_file_suffixes[] = {
+    FNAME_DAVSUFFIX,      /* even if DAV is turned off, this is fine */
+    FNAME_SUBSSUFFIX,
+
+    /* XXX: one could make an argument for keeping the counters
+     * file forever, so that UIDVALIDITY never gets reused. */
+    FNAME_COUNTERSSUFFIX,
+
+    /* NOTE: even if conversations aren't enabled, we want to clean up */
+    FNAME_CONVERSATIONS_SUFFIX,
+    NULL
+};
+
+EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
 {
-    char *fname;
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    const char *userid = mbname_userid(mbname);
+    strarray_t fnames = STRARRAY_INITIALIZER;
+    strarray_t dnames = STRARRAY_INITIALIZER;
+    const char *sieve_path = NULL, **suffixes;
+    int i;
 
     assert(user_isnamespacelocked(userid));
 
-    /* delete seen state and mbox keys */
-    if(wipe_user) {
-        seen_delete_user(userid);
-        /* XXX  what do we do about multiple backends? */
-        mboxkey_delete_user(userid);
+    if (!(mbentry->mbtype &  MBTYPE_LEGACY_DIRS)) {
+        if (wipe_user) {
+            for (suffixes = wipe_user_file_suffixes; *suffixes; suffixes++) {
+                strarray_appendm(&fnames,
+                                 mboxid_conf_getpath(mbentry->uniqueid, *suffixes));
+            }
+
+            /* delete entire userdata directory */
+            strarray_appendm(&dnames,
+                             mboxid_conf_getpath(mbentry->uniqueid, NULL));
+        }
+
+        for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
+            strarray_appendm(&fnames,
+                             mboxid_conf_getpath(mbentry->uniqueid, *suffixes));
+        }
+
+        if (!config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
+            sieve_path = user_sieve_path_byid(mbentry->uniqueid);
+        }
+    }
+    else {
+        if (wipe_user) {
+            for (suffixes = wipe_user_file_suffixes; *suffixes; suffixes++) {
+                strarray_appendm(&fnames,
+                                 mboxname_conf_getpath_legacy(mbname, *suffixes));
+            }
+        }
+
+        for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
+            strarray_appendm(&fnames,
+                             mboxname_conf_getpath_legacy(mbname, *suffixes));
+        }
+
+        if (!config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
+            sieve_path = user_sieve_path_byname(mbname);
+        }
     }
 
-    /* delete subscriptions */
-    fname = user_hash_subs(userid);
-    (void) unlink(fname);
-    free(fname);
+    /* delete files in our list */
+    for (i = 0; i < strarray_size(&fnames); i++) {
+        (void) unlink(strarray_nth(&fnames, i));
+    }
+    strarray_fini(&fnames);
+
+    /* remove directories in our list */
+    for (i = 0; i < strarray_size(&dnames); i++) {
+        (void) rmdir(strarray_nth(&dnames, i));
+    }
+    strarray_fini(&dnames);
+
+    if (sieve_path) {
+        /* delete sieve scripts */
+        user_deletesieve(sieve_path);
+    }
 
     /* delete quotas */
     user_deletequotaroots(userid);
 
-    /* delete sieve scripts */
-    user_deletesieve(userid);
-
-    /* NOTE: even if conversations aren't enabled, we want to clean up */
-
-    /* delete conversations file */
-    fname = conversations_getuserpath(userid);
-    (void) unlink(fname);
-    free(fname);
-
-    /* XXX: one could make an argument for keeping the counters
-     * file forever, so that UIDVALIDITY never gets reused. */
-    fname = user_hash_meta(userid, "counters");
-    (void) unlink(fname);
-    free(fname);
-
-    /* delete dav database (even if DAV is turned off, this is fine) */
-    fname = user_hash_meta(userid, "dav");
-    (void) unlink(fname);
-    free(fname);
-
     /* delete all the search engine data (if any) */
-    search_deluser(userid);
+//    search_deluser(userid);
 
 #ifdef WITH_DAV
     /* delete all the calendar alarms for the user */
@@ -309,6 +350,8 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
 
     // make sure it gets removed everywhere else
     sync_log_unuser(userid);
+
+    mbname_free(&mbname);
 
     return 0;
 }
