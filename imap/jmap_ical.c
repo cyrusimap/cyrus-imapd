@@ -110,11 +110,119 @@ static int is_valid_jmapid(const char *s)
     return i > 0 && s[i] == '\0';
 }
 
+/* A helper structure to organize iCalendar components */
+struct icalcomps {
+    hash_table by_uidrecurid; /* pointer to icalcomponent */
+    hash_table by_uid; /* ptrarray_t of icalcomponent */
+    struct buf buf;
+};
+
+#define ICALCOMPS_INITIALIZER { \
+    HASH_TABLE_INITIALIZER, \
+    HASH_TABLE_INITIALIZER, \
+    BUF_INITIALIZER \
+}
+
+static const char *make_uidrecurid(icalcomponent *comp, struct buf *buf)
+{
+    const char *uid = icalcomponent_get_uid(comp);
+    if (!uid) return NULL;
+
+    icalproperty *recurid = icalcomponent_get_first_property(comp,
+            ICAL_RECURRENCEID_PROPERTY);
+    if (!recurid) return NULL;
+
+    buf_setcstr(buf, uid);
+    buf_putc(buf, ';');
+    // append complete prop, including any TZID
+    buf_appendcstr(buf, icalproperty_as_ical_string(recurid));
+    return buf_cstring(buf);
+}
+
+static void icalcomps_init(struct icalcomps *comps, icalcomponent *ical)
+{
+    int ncomps = icalcomponent_count_components(ical, ICAL_VEVENT_COMPONENT);
+    construct_hash_table(&comps->by_uidrecurid, ncomps + 1, 0);
+    construct_hash_table(&comps->by_uid, ncomps + 1, 0);
+
+    icalcomponent *comp;
+    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+
+        const char *uid = icalcomponent_get_uid(comp);
+        if (!uid) continue;
+        icalproperty *recurid =icalcomponent_get_first_property(comp,
+                ICAL_RECURRENCEID_PROPERTY);
+
+        ptrarray_t *complist = hash_lookup(uid, &comps->by_uid);
+        if (!complist) {
+            complist = ptrarray_new();
+            hash_insert(uid, complist, &comps->by_uid);
+        }
+        if (recurid) {
+            ptrarray_append(complist, comp);
+        }
+        else {
+            // main component goes first
+            ptrarray_unshift(complist, comp);
+        }
+
+        const char *uidrecurid = make_uidrecurid(comp, &comps->buf);
+        if (uidrecurid) {
+            hash_insert(uidrecurid, comp, &comps->by_uidrecurid);
+        }
+    }
+
+    buf_reset(&comps->buf);
+}
+
+static void icalcomps_fini(struct icalcomps *comps)
+{
+    if (comps->by_uid.size) {
+        hash_iter *hit = hash_table_iter(&comps->by_uid);
+        while (hash_iter_next(hit)) {
+            ptrarray_t *complist = hash_iter_val(hit);
+            ptrarray_free(complist);
+        }
+        hash_iter_free(&hit);
+        free_hash_table(&comps->by_uid, NULL);
+    }
+    if (comps->by_uidrecurid.size) {
+        free_hash_table(&comps->by_uidrecurid, NULL);
+    }
+    buf_free(&comps->buf);
+}
+
+static icalcomponent *icalcomps_by_uidrecurid(struct icalcomps *comps,
+                                              icalcomponent *ofcomp)
+{
+    if (!comps || !comps->by_uidrecurid.size) {
+        return NULL;
+    }
+
+    const char *uidrecurid = make_uidrecurid(ofcomp, &comps->buf);
+    if (!uidrecurid) {
+        return NULL;
+    }
+
+    return hash_lookup(uidrecurid, &comps->by_uidrecurid);
+}
+
+static ptrarray_t *icalcomps_by_uid(struct icalcomps *comps, const char *uid)
+{
+    if (!comps || !comps->by_uid.size) {
+        return NULL;
+    }
+    return hash_lookup(uid, &comps->by_uid);
+}
+
 /* Forward declarations */
 static json_t *calendarevent_from_ical(icalcomponent *comp, hash_table *props,
                                        int is_override, ptrarray_t *overrides);
-static void calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
-                                  struct jmap_parser *parser, json_t *jsevent);
+static void calendarevent_to_ical(icalcomponent *comp,
+                                  struct jmap_parser *parser, json_t *jsevent,
+                                  struct icalcomps *oldcomps);
 
 #define JMAPICAL_SHA1KEY_LEN (2*SHA1_DIGEST_LENGTH+1)
 
@@ -3205,8 +3313,10 @@ participant_to_ical(icalcomponent *comp,
 /* Create or update the ORGANIZER and ATTENDEEs in the VEVENT component comp as
  * defined by the participants and replyTo property. */
 static void
-participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event,
-                     icalcomponent *oldical)
+participants_to_ical(icalcomponent *comp,
+                     struct jmap_parser *parser,
+                     json_t *event,
+                     struct icalcomps *oldcomps)
 {
     /* Purge existing ATTENDEEs and ORGANIZER */
     remove_icalprop(comp, ICAL_ATTENDEE_PROPERTY);
@@ -3215,16 +3325,18 @@ participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *ev
     /* iCalendar events may only contain an ORGANIZER or an ATTENDEE.
      * We allow to update such events, but we reject them during creation. */
     int allow_organizer_attendee_only = 0;
-    if (oldical) {
-        icalcomponent_kind kind = icalcomponent_isa(comp);
-        icalcomponent *oldcomp;
-        for (oldcomp = icalcomponent_get_first_component(oldical, kind);
-             oldcomp;
-             oldcomp = icalcomponent_get_next_component(oldical, kind)) {
-            if ((icalcomponent_get_first_property(oldcomp, ICAL_ORGANIZER_PROPERTY) == NULL) !=
-                (icalcomponent_get_first_property(oldcomp, ICAL_ATTENDEE_PROPERTY) == NULL)) {
-                allow_organizer_attendee_only = 1;
-                break;
+    if (oldcomps) {
+        const char *uid = icalcomponent_get_uid(comp);
+        ptrarray_t *complist = icalcomps_by_uid(oldcomps, uid);
+        if (complist) {
+            int i;
+            for (i = 0; i < ptrarray_size(complist); i++) {
+                icalcomponent *tmp = ptrarray_nth(complist, i);
+                if ((icalcomponent_get_first_property(tmp, ICAL_ORGANIZER_PROPERTY) == NULL) !=
+                     (icalcomponent_get_first_property(tmp, ICAL_ATTENDEE_PROPERTY) == NULL)) {
+                    allow_organizer_attendee_only = 1;
+                    break;
+                }
             }
         }
     }
@@ -4423,8 +4535,10 @@ static void set_language_icalprop(icalcomponent *comp, icalproperty_kind kind,
 }
 
 static void
-overrides_to_ical(icalcomponent *comp, icalcomponent *oldical,
-                  struct jmap_parser *parser, json_t *overrides)
+overrides_to_ical(icalcomponent *comp,
+                  struct jmap_parser *parser,
+                  json_t *overrides,
+                  struct icalcomps *oldcomps)
 {
     icalcomponent *excomp, *next, *ical;
 
@@ -4554,7 +4668,7 @@ overrides_to_ical(icalcomponent *comp, icalcomponent *oldical,
             else if (jrecurrenceId) {
                 jmap_parser_invalid(parser, "recurrenceId");
             }
-            calendarevent_to_ical(excomp, oldical, parser, ex);
+            calendarevent_to_ical(excomp, parser, ex, oldcomps);
             jmap_parser_pop(parser);
 
             /* Add the exception */
@@ -4573,8 +4687,10 @@ overrides_to_ical(icalcomponent *comp, icalcomponent *oldical,
  * does not implement patch object semantics.
  */
 static void
-calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
-                      struct jmap_parser *parser, json_t *event)
+calendarevent_to_ical(icalcomponent *comp,
+                      struct jmap_parser *parser,
+                      json_t *event,
+                      struct icalcomps *oldcomps)
 {
     icalproperty *prop = NULL;
     icaltimezone *utc = icaltimezone_get_utc_timezone();
@@ -4589,45 +4705,15 @@ calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
     int is_exc = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY) != NULL;
 
     /* Locate previous version of this component, if any */
-    if (oldical) {
-        char *recurid = NULL;
-        if ((prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)))  {
-            icaltimetype recuridt = icalcomponent_get_recurrenceid(comp);
-            recurid = icaltime_as_ical_string_r(recuridt);
-        }
-        /* Lookup main VEVENT in old component */
-        icalcomponent *maincomp = NULL;
-        icalcomponent *tmp;
-        for (tmp = icalcomponent_get_first_component(oldical, ICAL_VEVENT_COMPONENT);
-             tmp && !maincomp;
-             tmp = icalcomponent_get_next_component(oldical, ICAL_VEVENT_COMPONENT)) {
-
-            if (strcmpsafe(uid, icalcomponent_get_uid(tmp))) continue;
-
-            if (!icalcomponent_get_first_property(tmp, ICAL_RECURRENCEID_PROPERTY)) {
-                maincomp = tmp;
+    if (oldcomps) {
+        oldcomp = icalcomps_by_uidrecurid(oldcomps, comp);
+        if (!oldcomp) {
+            // fall back using main component
+            ptrarray_t *complist = icalcomps_by_uid(oldcomps, uid);
+            if (complist) {
+                oldcomp = ptrarray_nth(complist, 0);
             }
         }
-        if (recurid) {
-            /* Lookup VEVENT exception in old component, if any */
-            for (tmp = icalcomponent_get_first_component(oldical, ICAL_VEVENT_COMPONENT);
-                 tmp && !oldcomp;
-                 tmp = icalcomponent_get_next_component(oldical, ICAL_VEVENT_COMPONENT)) {
-
-                if (strcmpsafe(uid, icalcomponent_get_uid(tmp))) continue;
-
-                if (icalcomponent_get_first_property(tmp, ICAL_RECURRENCEID_PROPERTY)) {
-                    icaltimetype tmprecuridt = icalcomponent_get_recurrenceid(tmp);
-                    char *tmprecurid = icaltime_as_ical_string_r(tmprecuridt);
-                    if (!strcmpsafe(recurid, tmprecurid)) {
-                        oldcomp = tmp;
-                    }
-                    free(tmprecurid);
-                }
-            }
-        }
-        if (!oldcomp) oldcomp = maincomp;
-        free(recurid);
     }
 
     json_t *jprop = json_object_get(event, "excluded");
@@ -4917,7 +5003,7 @@ calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
     }
 
     /* replyTo and participants */
-    participants_to_ical(comp, parser, event, oldical);
+    participants_to_ical(comp, parser, event, oldcomps);
 
     /* participantId: readonly */
 
@@ -4947,7 +5033,7 @@ calendarevent_to_ical(icalcomponent *comp, icalcomponent *oldical,
     /* recurrenceOverrides - must be last to apply patches */
     jprop = json_object_get(event, "recurrenceOverrides");
     if (json_is_null(jprop) || json_is_object(jprop)) {
-        overrides_to_ical(comp, oldical, parser, jprop);
+        overrides_to_ical(comp, parser, jprop, oldcomps);
     } else if (jprop) {
         jmap_parser_invalid(parser, "recurrenceOverrides");
     }
@@ -4958,6 +5044,12 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical, json_t *invalid)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     icalcomponent *ical = NULL;
+    struct icalcomps oldcomps = ICALCOMPS_INITIALIZER;
+
+    if (oldical) {
+        // Keep track of previous VEVENT versions
+        icalcomps_init(&oldcomps, oldical);
+    }
 
     /* uid */
     const char *uid = json_string_value(json_object_get(jsevent, "uid"));
@@ -4979,7 +5071,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical, json_t *invalid)
         icalcomponent_add_component(ical, comp);
 
         /* Convert the JMAP calendar event to ical. */
-        calendarevent_to_ical(comp, oldical, &parser, jsevent);
+        calendarevent_to_ical(comp, &parser, jsevent, &oldcomps);
         icalcomponent_add_required_timezones(ical);
     }
     else jmap_parser_invalid(&parser, "uid");
@@ -4991,6 +5083,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical, json_t *invalid)
         ical = NULL;
     }
 
+    icalcomps_fini(&oldcomps);
     jmap_parser_fini(&parser);
     return ical;
 }
