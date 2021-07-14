@@ -272,28 +272,29 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
 {
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     const char *userid = mbname_userid(mbname);
-    strarray_t fnames = STRARRAY_INITIALIZER;
-    strarray_t dnames = STRARRAY_INITIALIZER;
+    strarray_t paths = STRARRAY_INITIALIZER;
     const char *sieve_path = NULL, **suffixes;
     int i;
 
     assert(user_isnamespacelocked(userid));
 
     if (!(mbentry->mbtype &  MBTYPE_LEGACY_DIRS)) {
+        for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
+            strarray_appendm(&paths,
+                             mboxid_conf_getpath(mbentry->uniqueid, *suffixes));
+        }
+
         if (wipe_user) {
+            /* XXX  we could probably just do removedir() for this case
+               and not bother populating the list of paths */
             for (suffixes = wipe_user_file_suffixes; *suffixes; suffixes++) {
-                strarray_appendm(&fnames,
+                strarray_appendm(&paths,
                                  mboxid_conf_getpath(mbentry->uniqueid, *suffixes));
             }
 
             /* delete entire userdata directory */
-            strarray_appendm(&dnames,
+            strarray_appendm(&paths,
                              mboxid_conf_getpath(mbentry->uniqueid, NULL));
-        }
-
-        for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
-            strarray_appendm(&fnames,
-                             mboxid_conf_getpath(mbentry->uniqueid, *suffixes));
         }
 
         if (!config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
@@ -301,16 +302,16 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
         }
     }
     else {
-        if (wipe_user) {
-            for (suffixes = wipe_user_file_suffixes; *suffixes; suffixes++) {
-                strarray_appendm(&fnames,
-                                 mboxname_conf_getpath_legacy(mbname, *suffixes));
-            }
+        for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
+            strarray_appendm(&paths,
+                             mboxname_conf_getpath_legacy(mbname, *suffixes));
         }
 
-        for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
-            strarray_appendm(&fnames,
-                             mboxname_conf_getpath_legacy(mbname, *suffixes));
+        if (wipe_user) {
+            for (suffixes = wipe_user_file_suffixes; *suffixes; suffixes++) {
+                strarray_appendm(&paths,
+                                 mboxname_conf_getpath_legacy(mbname, *suffixes));
+            }
         }
 
         if (!config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
@@ -318,17 +319,11 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
         }
     }
 
-    /* delete files in our list */
-    for (i = 0; i < strarray_size(&fnames); i++) {
-        (void) unlink(strarray_nth(&fnames, i));
+    /* delete paths in our list */
+    for (i = 0; i < strarray_size(&paths); i++) {
+        (void) remove(strarray_nth(&paths, i));
     }
-    strarray_fini(&fnames);
-
-    /* remove directories in our list */
-    for (i = 0; i < strarray_size(&dnames); i++) {
-        (void) rmdir(strarray_nth(&dnames, i));
-    }
-    strarray_fini(&dnames);
+    strarray_fini(&paths);
 
     if (sieve_path) {
         /* delete sieve scripts */
