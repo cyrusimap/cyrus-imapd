@@ -320,7 +320,7 @@ static int activefile_open(const char *mboxname, const char *partition,
                            strarray_t **ret)
 {
     char *fname = activefile_fname(mboxname);
-    int r;
+    int r = 0;
 
     if (!fname) return IMAP_MAILBOX_NONEXISTENT;
 
@@ -328,12 +328,11 @@ static int activefile_open(const char *mboxname, const char *partition,
     r = mappedfile_open(activefile, fname, MAPPEDFILE_CREATE|MAPPEDFILE_RW);
     if (!r && !mappedfile_size(*activefile))
         _activefile_init(mboxname, partition, *activefile);
-    free(fname);
     if (r) {
         xsyslog(LOG_ERR, "mappedfile_open failed",
                          "fname=<%s> error=<%s>",
                          fname, error_message(r));
-        return r;
+        goto done;
     }
 
     /* take the requested lock (a better helper API would allow this to be
@@ -344,12 +343,16 @@ static int activefile_open(const char *mboxname, const char *partition,
         xsyslog(LOG_ERR, "mappedfile_readlock failed",
                          "fname=<%s> error=<%s>",
                          fname, error_message(r));
-        return IMAP_MAILBOX_LOCKED;
+        r = IMAP_MAILBOX_LOCKED;
+        goto done;
     }
 
     /* finally, read the contents */
     *ret = activefile_read(*activefile);
-    return 0;
+
+done:
+    free(fname);
+    return r;
 }
 
 static int xapstat(const char *path)
