@@ -9457,6 +9457,7 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
     json_t *jn = NULL;
     mbname_t *mbname = NULL;
     struct dlist *dl = NULL;
+    xmlDocPtr doc = NULL;
 
     /* Make sure it's a calendar share notification */
     if (message_get_subject(msg, &buf) ||
@@ -9505,7 +9506,6 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
     if (!mbname) goto done;
 
     /* Parse XML notification */
-    xmlDocPtr doc = NULL;
     if (!message_get_body(msg, &buf)) {
         xmlParserCtxtPtr ctxt = xmlNewParserCtxt();
         if (ctxt) {
