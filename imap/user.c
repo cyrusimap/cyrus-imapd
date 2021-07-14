@@ -135,9 +135,47 @@ static int user_deleteacl(char *name, int matchlen, int category, void* rock)
 }
 #endif
 
-EXPORTED const char *user_sieve_path(const char *inuser)
+static const char *user_sieve_path_byname(const mbname_t *mbname)
 {
     static char sieve_path[2048];
+    const char *localpart = mbname_localpart(mbname);
+    const char *domain = mbname_domain(mbname);
+    size_t len, size = sizeof(sieve_path);
+
+    len = strlcpy(sieve_path, config_getstring(IMAPOPT_SIEVEDIR), size);
+
+    if (config_virtdomains && domain) {
+        char d = (char) dir_hash_c(domain, config_fulldirhash);
+        len += snprintf(sieve_path + len, size - len, "%s%c/%s",
+                        FNAME_DOMAINDIR, d, domain);
+    }
+
+    if (localpart) {
+        const char *userid = config_virtdomains ? localpart : mbname_userid(mbname);
+        char c = (char) dir_hash_c(userid, config_fulldirhash);
+        snprintf(sieve_path + len, size - len, "/%c/%s", c, userid);
+    }
+    else {
+        strlcat(sieve_path, "/global", size);
+    }
+
+    return sieve_path;
+}
+
+static const char *user_sieve_path_byid(const char *mboxid)
+{
+    static char sieve_path[2048];
+
+    mboxname_id_hash(sieve_path, sizeof(sieve_path),
+                     config_getstring(IMAPOPT_SIEVEDIR),
+                     mboxid);
+
+    return sieve_path;
+}
+
+EXPORTED const char *user_sieve_path(const char *inuser)
+{
+    const char *sieve_path;
     char *user = xstrdupnull(inuser);
     char *p;
 
@@ -162,14 +200,12 @@ EXPORTED const char *user_sieve_path(const char *inuser)
         int r = mboxlist_lookup(inboxname, &mbentry, NULL);
         free(inboxname);
 
-        if (r) sieve_path[0] = '\0';
+        if (r) sieve_path = "";
         else if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
             legacy = 1;
         }
         else {
-            mboxname_id_hash(sieve_path, sizeof(sieve_path),
-                             config_getstring(IMAPOPT_SIEVEDIR),
-                             mbentry->uniqueid);
+            sieve_path = user_sieve_path_byid(mbentry->uniqueid);
         }
         mboxlist_entry_free(&mbentry);
     }
@@ -179,25 +215,7 @@ EXPORTED const char *user_sieve_path(const char *inuser)
     }
 
     if (legacy) {
-        const char *domain = mbname_domain(mbname);
-        size_t len, size = sizeof(sieve_path);
-
-        len = strlcpy(sieve_path, config_getstring(IMAPOPT_SIEVEDIR), size);
-
-        if (config_virtdomains && domain) {
-            char d = (char) dir_hash_c(domain, config_fulldirhash);
-            len += snprintf(sieve_path + len, size - len, "%s%c/%s",
-                            FNAME_DOMAINDIR, d, domain);
-        }
-
-        if (localpart) {
-            const char *userid = config_virtdomains ? localpart : user;
-            char c = (char) dir_hash_c(userid, config_fulldirhash);
-            snprintf(sieve_path + len, size - len, "/%c/%s", c, userid);
-        }
-        else {
-            strlcat(sieve_path, "/global", size);
-        }
+        sieve_path = user_sieve_path_byname(mbname);
     }
 
     mbname_free(&mbname);
