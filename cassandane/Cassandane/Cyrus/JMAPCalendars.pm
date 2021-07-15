@@ -14215,4 +14215,81 @@ EOF
 
 }
 
+sub test_calendarevent_get_recurrenceid
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//foo//bar//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART;TZID=Europe/Berlin:20160928T160000
+RECURRENCE-ID;TZID=Europe/London:20160928T010000
+DURATION:PT1H
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+PRIORITY:3
+SEQUENCE:9
+SUMMARY:test
+RRULE:FREQ=MONTHLY
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $event = $self->putandget_vevent('2a358cee-6489-4f14-a57f-c104db4dc357',
+        $ical, ['start', 'timeZone', 'recurrenceId', 'recurrenceIdTimeZone']);
+
+    $self->assert_str_equals('2016-09-28T16:00:00', $event->{start});
+    $self->assert_str_equals('Europe/Berlin', $event->{timeZone});
+    $self->assert_str_equals('2016-09-28T01:00:00', $event->{recurrenceId});
+    $self->assert_str_equals('Europe/London', $event->{recurrenceIdTimeZone});
+}
+
+sub test_calendarevent_set_recurrenceid
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    title => 'event1',
+                    start => '2021-01-01T01:00:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2022-02-02T02:00:00',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+            properties => ['start', 'timeZone', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{event1}{id});
+    $self->assert_str_equals('2021-01-01T01:00:00',
+        $res->[1][1]{list}[0]{start});
+    $self->assert_str_equals('Europe/Berlin',
+        $res->[1][1]{list}[0]{timeZone});
+    $self->assert_str_equals('2022-02-02T02:00:00',
+        $res->[1][1]{list}[0]{recurrenceId});
+    $self->assert_str_equals('Europe/London',
+        $res->[1][1]{list}[0]{recurrenceIdTimeZone});
+}
+
 1;
