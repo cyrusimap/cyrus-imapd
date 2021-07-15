@@ -245,6 +245,12 @@ magic(AltNamespace => sub {
 magic(NoAltNamespace => sub {
     shift->config_set(altnamespace => 'no');
 });
+magic(NoMailboxLegacyDirs => sub {
+    shift->config_set(mailbox_legacy_dirs => 'no');
+});
+magic(MailboxLegacyDirs => sub {
+    shift->config_set(mailbox_legacy_dirs => 'yes');
+});
 magic(CrossDomains => sub {
     shift->config_set(crossdomains => 'yes');
 });
