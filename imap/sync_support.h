@@ -398,11 +398,6 @@ struct dlist *sync_parseline(struct protstream *in);
 
 /* ====================================================================== */
 
-struct sync_unuser_rock {
-    strarray_t *list;
-    mbentry_t *inbox;
-};
-
 int addmbox(char *name, int matchlen, int category, void *rock);
 int addmbox_cb(const mbentry_t *mbentry, void *rock);
 

@@ -3682,12 +3682,8 @@ int sync_apply_seen(struct dlist *kin,
 
 EXPORTED int addmbox_cb(const mbentry_t *mbentry, void *rock)
 {
-    struct sync_unuser_rock *urock = (struct sync_unuser_rock *) rock;
-    strarray_append(urock->list, mbentry->name);
-    if (!urock->inbox) {
-        /* first mbentry will be INBOX */
-        urock->inbox = mboxlist_entry_copy(mbentry);
-    }
+    strarray_t *list = (strarray_t *)rock;
+    strarray_append(list, mbentry->name);
     return 0;
 }
 
@@ -3714,9 +3710,14 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         mboxlist_changesub(name, userid, sstate->authstate, 0, 0, 0);
     }
 
+    mbentry_t *mbentry = NULL;
+    char *inbox = mboxname_user_mbox(userid, 0);
+    r = mboxlist_lookup_allow_all(inbox, &mbentry, NULL);
+    free(inbox);
+    if (r) goto done;
+
     strarray_truncate(list, 0);
-    struct sync_unuser_rock urock = { list, NULL };
-    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, &urock, 0);
+    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, 0);
     if (r) goto done;
 
     /* delete in reverse so INBOX is last */
@@ -3730,11 +3731,11 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         if (r) goto done;
     }
 
-    r = user_deletedata(urock.inbox, 1);
+    if (mbentry) r = user_deletedata(mbentry, 1);
 
  done:
     mboxname_release(&namespacelock);
-    mboxlist_entry_free(&urock.inbox);
+    mboxlist_entry_free(&mbentry);
     strarray_free(list);
 
     return r;
