@@ -316,12 +316,6 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
         }
     }
 
-    /* delete paths in our list */
-    for (i = 0; i < strarray_size(&paths); i++) {
-        (void) remove(strarray_nth(&paths, i));
-    }
-    strarray_fini(&paths);
-
     if (sieve_path) {
         /* delete sieve scripts */
         user_deletesieve(sieve_path);
@@ -337,6 +331,14 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
     /* delete all the calendar alarms for the user */
     caldav_alarm_delete_user(userid);
 #endif /* WITH_DAV */
+
+    /* delete paths in our list */
+    /* XXX  MUST do this last in case one of the functions above
+       needs to operate on the userdata directory (e.g. Xapian) */
+    for (i = 0; i < strarray_size(&paths); i++) {
+        (void) remove(strarray_nth(&paths, i));
+    }
+    strarray_fini(&paths);
 
     proc_killuser(userid);
 
