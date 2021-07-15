@@ -128,7 +128,7 @@ icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
 
 /* Convert the iCalendar VALARM to a JSCalendar Alert.
  * Return NULL on error. */
-json_t *jmapical_alert_from_ical(icalcomponent *valarm);
+json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *id);
 
 /* Convert alert to iCalendar VALARM. Returns NULL on error */
 extern icalcomponent *jmapical_alert_to_ical(json_t *alert, struct jmap_parser *parser,

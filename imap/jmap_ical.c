@@ -2109,8 +2109,13 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
     return participants;
 }
 
-HIDDEN json_t *jmapical_alert_from_ical(icalcomponent *valarm)
+HIDDEN json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *idbuf)
 {
+    const char *id = icalcomponent_get_uid(valarm);
+    char keybuf[JMAPICAL_SHA1KEY_LEN];
+    if (!id) id = sha1key(icalcomponent_as_ical_string(valarm), keybuf);
+    buf_setcstr(idbuf, id);
+
     /* Determine TRIGGER and RELATED parameter */
     struct icaltriggertype trigger = {
         icaltime_null_time(), icaldurationtype_null_duration()
@@ -2200,18 +2205,14 @@ alerts_from_ical(icalcomponent *comp)
 {
     json_t* alerts = json_object();
     icalcomponent* alarm;
+    struct buf idbuf = BUF_INITIALIZER;
 
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
          alarm;
          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
 
-        /* alert id */
-        const char *id = icalcomponent_get_uid(alarm);
-        char keybuf[JMAPICAL_SHA1KEY_LEN];
-        if (!id) id = sha1key(icalcomponent_as_ical_string(alarm), keybuf);
-
-        json_t *alert = jmapical_alert_from_ical(alarm);
-        if (alert) json_object_set_new(alerts, id, alert);
+        json_t *alert = jmapical_alert_from_ical(alarm, &idbuf);
+        if (alert) json_object_set_new(alerts, buf_cstring(&idbuf), alert);
     }
 
     if (!json_object_size(alerts)) {
@@ -2219,6 +2220,7 @@ alerts_from_ical(icalcomponent *comp)
         alerts = json_null();
     }
 
+    buf_free(&idbuf);
     return alerts;
 }
 
