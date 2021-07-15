@@ -258,9 +258,6 @@ static const char *wipe_user_file_suffixes[] = {
 static const char *user_file_suffixes[] = {
     FNAME_DAVSUFFIX,      /* even if DAV is turned off, this is fine */
     FNAME_SUBSSUFFIX,
-
-    /* XXX: one could make an argument for keeping the counters
-     * file forever, so that UIDVALIDITY never gets reused. */
     FNAME_COUNTERSSUFFIX,
 
     /* NOTE: even if conversations aren't enabled, we want to clean up */
