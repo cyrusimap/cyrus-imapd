@@ -44,11 +44,22 @@ use warnings;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use File::Basename;
 
 sub new
 {
     my ($class, @args) = @_;
-    return $class->SUPER::new({ adminstore => 1 }, @args);
+
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(conversations => 'yes',
+                 httpmodules => 'carddav caldav jmap');
+
+    return $class->SUPER::new({
+        config => $config,
+        jmap => 1,
+        adminstore => 1,
+        services => [ 'imap', 'http', 'sieve' ]
+    }, @args);
 }
 
 sub set_up
@@ -317,6 +328,28 @@ sub test_admin_inbox_imm
     $self->check_folder_not_ondisk($inbox, deleted => 1);
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
 
+    xlog $self, "Subscribe to INBOX";
+    $talk->subscribe("INBOX");
+
+    xlog $self, "Install a sieve script";
+    $self->{instance}->install_sieve_script(<<EOF
+keep;
+EOF
+    );
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Verify user data files/directories exist";
+    my $data = $self->{instance}->run_mbpath('-u', 'cassandane');
+    $self->assert( -f $data->{user}{'sub'});
+    $self->assert( -f $data->{user}{dav});
+    $self->assert( -f $data->{user}{counters});
+    $self->assert( -f $data->{user}{conversations});
+    $self->assert( -f $data->{user}{xapianactive});
+    $self->assert( -f "$data->{user}{sieve}/defaultbc");
+    $self->assert( -d $data->{xapian}{t1});
+
     xlog $self, "admin can delete $inbox";
     $admintalk->delete($inbox);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -348,6 +381,11 @@ sub test_admin_inbox_imm
     $self->check_folder_not_ondisk($subfolder);
     $self->check_folder_not_ondisk($inbox, deleted => 1);
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    xlog $self, "Verify user data directories have been deleted";
+    $self->assert( !-e dirname($data->{user}{dav}));
+    $self->assert( !-e $data->{user}{sieve});
+    $self->assert( !-e $data->{xapian}{t1});
 }
 
 sub test_admin_inbox_del
