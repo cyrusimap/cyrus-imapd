@@ -303,11 +303,19 @@ sub test_admin_inbox_imm
     my $admintalk = $self->{adminstore}->get_client();
     my $inbox = 'user.cassandane';
     my $subfolder = 'user.cassandane.foo';
+    my $sharedfolder = 'shared';
 
     xlog $self, "First create a sub folder";
     $talk->create($subfolder)
         or $self->fail("Cannot create folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Create a shared folder";
+    $admintalk->create($sharedfolder)
+        or $self->fail("Cannot create folder $sharedfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $admintalk->setacl($sharedfolder, admin => 'lrswipkxtecdan');
+    $admintalk->setacl($sharedfolder, cassandane => 'lrsip');
 
     xlog $self, "Generate a message in $inbox";
     my %exp_inbox;
@@ -321,6 +329,18 @@ sub test_admin_inbox_imm
     $self->{gen}->set_next_uid(1);
     $exp_sub{A} = $self->make_message("Message $subfolder A");
     $self->check_messages(\%exp_sub);
+    $talk->unselect();
+
+    xlog $self, "Generate a message in $sharedfolder";
+    my %exp_shared;
+    $store->set_folder($sharedfolder);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+    $exp_shared{A} = $self->make_message("Message $sharedfolder A");
+    $self->check_messages(\%exp_shared);
+
+    xlog $self, "Set \\Seen on message A";
+    $talk->store('1', '+flags', '(\\Seen)');
     $talk->unselect();
 
     $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
@@ -343,6 +363,7 @@ EOF
     xlog $self, "Verify user data files/directories exist";
     my $data = $self->{instance}->run_mbpath('-u', 'cassandane');
     $self->assert( -f $data->{user}{'sub'});
+    $self->assert( -f $data->{user}{seen});
     $self->assert( -f $data->{user}{dav});
     $self->assert( -f $data->{user}{counters});
     $self->assert( -f $data->{user}{conversations});
