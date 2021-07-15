@@ -464,18 +464,25 @@ static json_t *getcalendar_defaultalerts(const char *userid,
                                          const char *annot)
 {
     icalcomponent *ical = caldav_read_calendar_icalalarms(mboxname, userid, annot);
-    if (!ical) return json_array();
+    if (!ical) return json_null();
 
-    json_t *alerts = json_array();
+    json_t *alerts = json_object();
     icalcomponent *valarm;
+    struct buf idbuf = BUF_INITIALIZER;
     for (valarm = icalcomponent_get_first_component(ical, ICAL_VALARM_COMPONENT);
          valarm;
          valarm = icalcomponent_get_next_component(ical, ICAL_VALARM_COMPONENT)) {
-        json_t *alert = jmapical_alert_from_ical(valarm);
-        if (alert) json_array_append_new(alerts, alert);
+        json_t *alert = jmapical_alert_from_ical(valarm, &idbuf);
+        if (alert) json_object_set_new(alerts, buf_cstring(&idbuf), alert);
+    }
+
+    if (!json_object_size(alerts)) {
+        json_decref(alerts);
+        alerts = json_null();
     }
 
     icalcomponent_free(ical);
+    buf_free(&idbuf);
     return alerts;
 }
 
@@ -1213,6 +1220,44 @@ static void setcalendar_props_fini(struct setcalendar_props *props)
     }
 }
 
+static void setcalendar_readalerts(struct jmap_parser *parser,
+                                   const char *propname,
+                                   json_t *arg,
+                                   const char *emailrecipient,
+                                   ptrarray_t **alertsp)
+{
+    ptrarray_t *alerts = NULL;
+
+    json_t *jprop = json_object_get(arg, propname);
+    if (json_is_object(jprop)) {
+        jmap_parser_push(parser, propname);
+        const char *id;
+        json_t *jalert;
+        json_object_foreach(jprop, id, jalert) {
+            jmap_parser_push(parser, id);
+            icalcomponent *valarm =
+                jmapical_alert_to_ical(jalert, parser, id, NULL, NULL,
+                                       emailrecipient);
+            if (valarm) {
+                if (!alerts) {
+                    alerts = ptrarray_new();
+                }
+                ptrarray_append(alerts, valarm);
+            }
+            jmap_parser_pop(parser);
+        }
+        jmap_parser_pop(parser);
+    }
+    else if (json_is_null(jprop)) {
+        alerts = ptrarray_new();
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, propname);
+    }
+
+    *alertsp = alerts;
+}
+
 static void setcalendar_readprops(jmap_req_t *req,
                                   struct jmap_parser *parser,
                                   struct setcalendar_props *props,
@@ -1407,63 +1452,13 @@ static void setcalendar_readprops(jmap_req_t *req,
         jmap_parser_invalid(parser, "myRights");
     }
 
-    char *emailalert_recipient = _emailalert_defaultrecipient(req->userid);
-
     /* defaultAlertsWithTime */
-    jprop = json_object_get(arg, "defaultAlertsWithTime");
-    if (json_is_array(jprop)) {
-        size_t i;
-        json_t *jalert;
-        json_array_foreach(jprop, i, jalert) {
-            jmap_parser_push_index(parser, "defaultAlertsWithTime", i, NULL);
-            char *id = xstrdup(makeuuid());
-            icalcomponent *valarm =
-                jmapical_alert_to_ical(jalert, parser, id, NULL, NULL,
-                                       emailalert_recipient);
-            if (valarm) {
-                if (!props->defaultalerts_withtime) {
-                    props->defaultalerts_withtime = ptrarray_new();
-                }
-                ptrarray_append(props->defaultalerts_withtime, valarm);
-            }
-            free(id);
-            jmap_parser_pop(parser);
-        }
-    }
-    else if (json_is_null(jprop)) {
-        props->defaultalerts_withtime = ptrarray_new();
-    }
-    else if (jprop) {
-        jmap_parser_invalid(parser, "defaultAlertsWithTime");
-    }
-
     /* defaultAlertsWithoutTime */
-    jprop = json_object_get(arg, "defaultAlertsWithoutTime");
-    if (json_is_array(jprop)) {
-        size_t i;
-        json_t *jalert;
-        json_array_foreach(jprop, i, jalert) {
-            jmap_parser_push_index(parser, "defaultAlertsWithoutTime", i, NULL);
-            char *id = xstrdup(makeuuid());
-            icalcomponent *valarm =
-                jmapical_alert_to_ical(jalert, parser, id, NULL, NULL,
-                                       emailalert_recipient);
-            if (valarm) {
-                if (!props->defaultalerts_withouttime) {
-                    props->defaultalerts_withouttime = ptrarray_new();
-                }
-                ptrarray_append(props->defaultalerts_withouttime, valarm);
-            }
-            free(id);
-            jmap_parser_pop(parser);
-        }
-    }
-    else if (json_is_null(jprop)) {
-        props->defaultalerts_withouttime = ptrarray_new();
-    }
-    else if (jprop) {
-        jmap_parser_invalid(parser, "defaultAlertsWithoutTime");
-    }
+    char *emailalert_recipient = _emailalert_defaultrecipient(req->userid);
+    setcalendar_readalerts(parser, "defaultAlertsWithTime", arg,
+            emailalert_recipient, &props->defaultalerts_withtime);
+    setcalendar_readalerts(parser, "defaultAlertsWithoutTime", arg,
+            emailalert_recipient, &props->defaultalerts_withouttime);
 
     /* role - just make sure its valid */
     jprop = json_object_get(arg, "role");
