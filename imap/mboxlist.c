@@ -2308,11 +2308,6 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
             r = IMAP_IOERROR;
             if (!force) goto done;
         }
-        /* This mailbox is gone completely, so mark its modseq */
-        if (!r && !isremote && mboxname_isdeletedmailbox(name, NULL)) {
-            mboxname_setmodseq(name, mailbox_foldermodseq(mailbox), mbentry->mbtype,
-                               MBOXMODSEQ_ISFOLDER|MBOXMODSEQ_ISDELETE);
-        }
         if (r && !force) goto done;
     }
 
