@@ -2968,9 +2968,11 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
     if (!mailbox->i.dirty)
         return 0;
 
-    mboxname_setmodseq(mailbox_name(mailbox),
-                       mailbox->i.highestmodseq,
-                       mailbox_mbtype(mailbox), /*flags*/0);
+    if (!mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL)) {
+        mboxname_setmodseq(mailbox_name(mailbox),
+                           mailbox->i.highestmodseq,
+                           mailbox_mbtype(mailbox), /*flags*/0);
+    }
 
     assert(mailbox_index_islocked(mailbox, 1));
 
