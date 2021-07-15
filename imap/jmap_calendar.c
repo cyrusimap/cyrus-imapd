@@ -2898,6 +2898,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
     hash_table *props = rock->get->props;
     icalcomponent *myical = NULL;
     mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    json_t *jrtzid = json_object_get(jsevent, "timeZone");
     int r = 0;
 
     int i;
@@ -2917,6 +2918,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
                     json_object_set_new(myevent, "start", json_string(eid->recurid));
                 }
                 json_object_set_new(myevent, "recurrenceId", json_string(eid->recurid));
+                json_object_set(myevent, "recurrenceIdTimeZone", jrtzid);
                 json_array_append_new(rock->get->list, myevent);
             }
             else {
@@ -2966,6 +2968,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
             }
             getcalendarevents_filterinstance(myevent, props, eid->raw, cdata->ical_uid);
             json_object_set_new(myevent, "recurrenceId", json_string(eid->recurid));
+            json_object_set(myevent, "recurrenceIdTimeZone", jrtzid);
             json_array_append_new(rock->get->list, myevent);
         }
     }
@@ -3606,6 +3609,11 @@ static const jmap_property_t event_props[] = {
     },
     {
         "recurrenceId",
+        NULL,
+        0
+    },
+    {
+        "recurrenceIdTimeZone",
         NULL,
         0
     },
@@ -4997,6 +5005,7 @@ static int setcalendarevents_apply_patch(struct jmapical_jmapcontext *jmapctx,
         json_object_del(new_override, "method");
         json_object_del(new_override, "prodId");
         json_object_del(new_override, "recurrenceId");
+        json_object_del(new_override, "recurrenceIdTimeZone");
         json_object_del(new_override, "recurrenceRules");
         json_object_del(new_override, "recurrenceOverrides");
         json_object_del(new_override, "excludedRecurrenceRules");
