@@ -497,13 +497,16 @@ static json_t *calendarrights_to_jmap(int rights, int is_owner)
             "mayAdmin",
             (rights & JACL_ADMIN) == JACL_ADMIN,
             "mayUpdatePrivate",
-            (rights & JACL_UPDATEPRIVATE) == JACL_UPDATEPRIVATE,
+            (((rights & JACL_UPDATEPRIVATE) == JACL_UPDATEPRIVATE) ||
+             ((rights & JACL_WRITE) == JACL_WRITE)),
             "mayUpdateOwn",
-            (rights & JACL_UPDATEOWN) == JACL_UPDATEOWN,
+            (((rights & JACL_UPDATEOWN) == JACL_UPDATEOWN) ||
+             ((rights & JACL_WRITE) == JACL_WRITE)),
             "mayUpdateAll",
             (rights & JACL_WRITE) == JACL_WRITE,
             "mayRemoveOwn",
-            (rights & JACL_REMOVEOWN) == JACL_REMOVEOWN,
+            (((rights & JACL_REMOVEOWN) == JACL_REMOVEOWN) ||
+             ((rights & JACL_REMOVEITEMS) == JACL_REMOVEITEMS)),
             "mayRemoveAll",
             (rights & JACL_REMOVEITEMS) == JACL_REMOVEITEMS);
 }
