@@ -284,6 +284,8 @@ EXPORTED int caldav_alarm_commit_reconstruct(const char *userid)
     // if we succeeded, drop the copy of events in this DB
     if (!r) r = sqldb_exec(db, "DROP TABLE events;", NULL, NULL, NULL);
 
+    free(prefix);
+
     return r;
 }
 
