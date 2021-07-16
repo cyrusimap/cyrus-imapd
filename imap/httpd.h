@@ -589,6 +589,7 @@ extern void content_md5_hdr(struct transaction_t *txn,
 extern void comma_list_hdr(struct transaction_t *txn,
                            const char *hdr, const char *vals[],
                            unsigned flags, ...);
+extern void connection_hdrs(struct transaction_t *txn);
 extern void response_header(long code, struct transaction_t *txn);
 extern void buf_printf_markup(struct buf *buf, unsigned level,
                               const char *fmt, ...)

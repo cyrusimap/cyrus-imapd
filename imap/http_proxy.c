@@ -631,24 +631,7 @@ static void send_response(struct transaction_t *txn, long code,
      */
     txn->conn->begin_resp_headers(txn, code);
     write_forwarding_hdrs(txn, hdrs, HTTP_VERSION, NULL);
-
-    if (txn->flags.conn && txn->flags.ver != VER_2) {
-        /* Construct Connection header - HTTP/1.x only */
-        const char *conn_tokens[] =
-            { "close", "Upgrade", "Keep-Alive", NULL };
-        const char *upgrade_tokens[] =
-            { TLS_VERSION, HTTP2_CLEARTEXT_ID, NULL };
-
-        comma_list_hdr(txn, "Connection", conn_tokens, txn->flags.conn);
-
-        if (txn->flags.upgrade) {
-            comma_list_hdr(txn, "Upgrade", upgrade_tokens, txn->flags.upgrade);
-        }
-
-        if (txn->flags.conn & CONN_KEEPALIVE) {
-            simple_hdr(txn, "Keep-Alive", "timeout=%d", httpd_timeout);
-        }
-    }
+    connection_hdrs(txn);
 
     if (txn->conn->tls_ctx) {
         simple_hdr(txn, "Strict-Transport-Security", "max-age=600");

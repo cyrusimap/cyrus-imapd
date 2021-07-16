@@ -2676,47 +2676,15 @@ static void write_cachehdr(const char *name, const char *contents,
     simple_hdr(txn, name, "%s", contents);
 }
 
-EXPORTED void response_header(long code, struct transaction_t *txn)
+static const char *upgrd_tokens[] =
+    { TLS_VERSION, HTTP2_CLEARTEXT_ID, WS_TOKEN, NULL };
+
+HIDDEN void connection_hdrs(struct transaction_t *txn)
 {
-    int i, size;
-    time_t now;
-    char datestr[30];
-    va_list noargs;
-    double cmdtime, nettime;
-    const char **hdr, *sep;
-    struct auth_challenge_t *auth_chal = &txn->auth_chal;
-    struct resp_body_t *resp_body = &txn->resp_body;
-    struct buf *logbuf = &txn->conn->logbuf;
-    const char *upgrd_tokens[] =
-        { TLS_VERSION, HTTP2_CLEARTEXT_ID, WS_TOKEN, NULL };
-    const char *te[] = { "deflate", "gzip", "chunked", NULL };
-    const char *ce[] = { "deflate", "gzip", "br", "zstd", NULL };
-
-    /* Stop method processing alarm */
-    alarm(0);
-    gotsigalrm = 0;
-
-
-    /* Status-Line */
-    txn->conn->begin_resp_headers(txn, code);
-
-
-    switch (code) {
-    default:
-        /* Final response */
-        now = time(0);
-        httpdate_gen(datestr, sizeof(datestr), now);
-        simple_hdr(txn, "Date", "%s", datestr);
-
-        if (httpd_altsvc && (txn->flags.ver <= VER_2)) {
-            simple_hdr(txn, "Alt-Svc", "%s", httpd_altsvc);
-        }
-
-        /* Fall through and specify connection options and/or links */
-        GCC_FALLTHROUGH
-
-    case HTTP_SWITCH_PROT:
-        if (txn->flags.conn && (txn->flags.ver < VER_2)) {
+    switch (txn->flags.ver) {
+    case VER_1_0:
+    case VER_1_1:
+        if (txn->flags.conn) {
             /* Construct Connection header */
             const char *conn_tokens[] =
                 { "close", "Upgrade", "Keep-Alive", NULL };
@@ -2736,6 +2704,53 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 simple_hdr(txn, "Keep-Alive", "timeout=%d", httpd_timeout);
             }
         }
+
+        /* Fall through and specify Alt-Svc */
+        GCC_FALLTHROUGH
+
+    case VER_2:
+        if (httpd_altsvc) {
+            simple_hdr(txn, "Alt-Svc", "%s", httpd_altsvc);
+        }
+        break;
+    }
+}
+
+EXPORTED void response_header(long code, struct transaction_t *txn)
+{
+    int i, size;
+    time_t now;
+    char datestr[30];
+    va_list noargs;
+    double cmdtime, nettime;
+    const char **hdr, *sep;
+    struct auth_challenge_t *auth_chal = &txn->auth_chal;
+    struct resp_body_t *resp_body = &txn->resp_body;
+    struct buf *logbuf = &txn->conn->logbuf;
+    const char *te[] = { "deflate", "gzip", "chunked", NULL };
+    const char *ce[] = { "deflate", "gzip", "br", "zstd", NULL };
+
+    /* Stop method processing alarm */
+    alarm(0);
+    gotsigalrm = 0;
+
+
+    /* Status-Line */
+    txn->conn->begin_resp_headers(txn, code);
+
+
+    switch (code) {
+    default:
+        /* Final response */
+        now = time(0);
+        httpdate_gen(datestr, sizeof(datestr), now);
+        simple_hdr(txn, "Date", "%s", datestr);
+
+        /* Fall through and specify connection/protocol options and/or links */
+        GCC_FALLTHROUGH
+
+    case HTTP_SWITCH_PROT:
+        connection_hdrs(txn);
 
         /* Fall through and specify links */
         GCC_FALLTHROUGH
