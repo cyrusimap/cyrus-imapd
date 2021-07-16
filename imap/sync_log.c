@@ -139,7 +139,7 @@ EXPORTED void sync_log_done(void)
 {
     sync_log_reset();
     if (rightnow_log) {
-        buf_free(rightnow_log);
+        buf_destroy(rightnow_log);
         rightnow_log = NULL;
     }
 
