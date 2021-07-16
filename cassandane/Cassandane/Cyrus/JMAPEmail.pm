@@ -22222,7 +22222,7 @@ EOF
 }
 
 sub test_email_get_hasattachment
-    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap :AltNamespace
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
