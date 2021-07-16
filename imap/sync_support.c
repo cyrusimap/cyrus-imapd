@@ -7607,7 +7607,10 @@ EXPORTED int sync_connect(struct sync_client_state *sync_cs)
                               (verbose > 1 ? fileno(stderr) : -1));
 
     // auth_status means there was an error
-    if (!backend) return IMAP_AGAIN;
+    if (!backend) {
+        free_callbacks(cb);
+        return IMAP_AGAIN;
+    }
 
 connected:
 

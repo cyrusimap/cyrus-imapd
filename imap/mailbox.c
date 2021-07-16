@@ -6135,7 +6135,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     struct conversations_state *oldcstate = NULL;
     struct conversations_state *newcstate = NULL;
     char *newquotaroot = NULL;
-    char *newuniqueid;
+    char *newuniqueid = NULL;
 
     assert(mailbox_index_islocked(oldmailbox, 1));
 
@@ -6262,6 +6262,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     if (newmailboxptr) *newmailboxptr = newmailbox;
     else mailbox_close(&newmailbox);
     free(newquotaroot);
+    free(newuniqueid);
 
     return 0;
 
@@ -6276,6 +6277,7 @@ fail:
     mailbox_abort(newmailbox);
     mailbox_close(&newmailbox);
     free(newquotaroot);
+    free(newuniqueid);
 
     return r;
 }
