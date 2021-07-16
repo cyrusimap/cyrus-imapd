@@ -6135,7 +6135,7 @@ MsgData **index_msgdata_load(struct index_state *state,
 
     /* set mailbox level states */
     for (j = 0; sortcrit[j].key; j++); // count how many we need
-    preload = xzmalloc(j * sizeof(int));
+    if (j) preload = xzmalloc(j * sizeof(int));
     for (j = 0; sortcrit[j].key; j++) {
         label = sortcrit[j].key;
         switch(label) {
