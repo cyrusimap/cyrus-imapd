@@ -2290,7 +2290,6 @@ EXPORTED int mboxname_contains_parent(const char *mboxname, const char *prev)
 EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
 {
     char *fname = NULL;
-    char c[2], d[2];
 
     if (mbname->localpart) {
         char *mboxname = mboxname_user_mbox(mbname_userid(mbname), NULL);
@@ -2300,24 +2299,27 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
         free(mboxname);
 
         if (!r && !(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
-            char path[MAX_MAILBOX_PATH+1];
-
-            mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mbentry->uniqueid);
-
-            if (suffix) {
-                fname = strconcat(config_dir,
-                                  FNAME_USERDIR,
-                                  path, "/", suffix, ".db",
-                                  (char *)NULL);
-            }
-            else {
-                fname = strconcat(config_dir,
-                                  FNAME_USERDIR,
-                                  path,
-                                  (char *)NULL);
-            }
+            fname = mboxid_conf_getpath(mbentry->uniqueid, suffix);
         }
-        else if (mbname->domain) {
+
+        mboxlist_entry_free(&mbentry);
+    }
+
+    if (!fname) {
+        fname = mboxname_conf_getpath_legacy(mbname, suffix);
+    }
+
+    return fname;
+}
+
+EXPORTED char *mboxname_conf_getpath_legacy(const mbname_t *mbname,
+                                            const char *suffix)
+{
+    char *fname = NULL;
+    char c[2], d[2];
+
+    if (mbname->localpart) {
+        if (mbname->domain) {
             if (suffix) {
                 fname = strconcat(config_dir,
                                   FNAME_DOMAINDIR,
@@ -2353,7 +2355,6 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
                                   (char *)NULL);
             }
         }
-        mboxlist_entry_free(&mbentry);
     }
     else if (mbname->domain) {
         if (suffix) {
@@ -2381,6 +2382,29 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
         else {
             fname = xstrdup(config_dir);
         }
+    }
+
+    return fname;
+}
+
+EXPORTED char *mboxid_conf_getpath(const char *mboxid, const char *suffix)
+{
+    char *fname = NULL;
+    char path[MAX_MAILBOX_PATH+1];
+
+    mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mboxid);
+
+    if (suffix) {
+        fname = strconcat(config_dir,
+                          FNAME_USERDIR,
+                          path, "/", suffix, ".db",
+                          (char *)NULL);
+    }
+    else {
+        fname = strconcat(config_dir,
+                          FNAME_USERDIR,
+                          path,
+                          (char *)NULL);
     }
 
     return fname;

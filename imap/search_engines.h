@@ -156,6 +156,8 @@ struct search_langstat {
     size_t count;
 };
 
+struct mboxlist_entry;
+
 #define SEARCH_FLAG_CAN_BATCH      (1<<0)
 #define SEARCH_FLAG_CAN_GUIDSEARCH (1<<1)
 struct search_engine {
@@ -191,7 +193,7 @@ struct search_engine {
     int (*compact)(const char *userid, const strarray_t *reindextiers,
                    const strarray_t *srctiers, const char *desttier,
                    int flags);
-    int (*deluser)(const char *userid);
+    int (*deluser)(const struct mboxlist_entry *mbentry);
     int (*check_config)(char **errstr);
     int (*langstats)(const char *userid, ptrarray_t *lstats, size_t *total_docs);
     int (*can_match)(enum search_op matchop, int partnum);
@@ -247,7 +249,7 @@ void search_free_internalised(void *internalised);
 int search_list_files(const char *userid, strarray_t *);
 int search_compact(const char *userid, const strarray_t *reindextiers,
                    const strarray_t *srctiers, const char *desttier, int verbose);
-int search_deluser(const char *userid);
+int search_deluser(const struct mboxlist_entry *mbentry);
 int search_check_config(char **errstr);
 
 int search_upgrade(const char *userid);

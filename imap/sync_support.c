@@ -3710,6 +3710,12 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         mboxlist_changesub(name, userid, sstate->authstate, 0, 0, 0);
     }
 
+    mbentry_t *mbentry = NULL;
+    char *inbox = mboxname_user_mbox(userid, 0);
+    r = mboxlist_lookup_allow_all(inbox, &mbentry, NULL);
+    free(inbox);
+    if (r) goto done;
+
     strarray_truncate(list, 0);
     r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, 0);
     if (r) goto done;
@@ -3725,10 +3731,11 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         if (r) goto done;
     }
 
-    r = user_deletedata(userid, 1);
+    if (mbentry) r = user_deletedata(mbentry, 1);
 
  done:
     mboxname_release(&namespacelock);
+    mboxlist_entry_free(&mbentry);
     strarray_free(list);
 
     return r;

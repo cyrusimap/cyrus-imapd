@@ -7338,7 +7338,6 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         mbname_free(&mbname);
         return;
     }
-    mboxlist_entry_free(&mbentry);
 
     struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
 
@@ -7387,9 +7386,10 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         const char *userid = mbname_userid(mbname);
         if (userid) {
             r = mboxlist_usermboxtree(userid, NULL, delmbox, NULL, MBOXTREE_INTERMEDIATES);
-            if (!r) r = user_deletedata(userid, 1);
+            if (!r) r = user_deletedata(mbentry, 1);
         }
     }
+    mboxlist_entry_free(&mbentry);
 
     mboxname_release(&namespacelock);
 
@@ -12116,6 +12116,11 @@ static void cmd_xfer(const char *tag, const char *name,
                     if (r) goto next;
                 }
             }
+            mbentry_t *inbox_mbentry = NULL;
+            char *inbox = mboxname_user_mbox(xfer->userid, 0);
+            r = mboxlist_lookup_allow_all(inbox, &inbox_mbentry, NULL);
+            free(inbox);
+            if (r) goto next;
 
             r = mboxlist_usermboxtree(xfer->userid, NULL, xfer_addusermbox,
                                       xfer, MBOXTREE_DELETED);
@@ -12128,9 +12133,10 @@ static void cmd_xfer(const char *tag, const char *name,
                 /* this was a successful user move, and we need to delete
                    certain user meta-data (but not seen state!) */
                 syslog(LOG_INFO, "XFER: deleting user metadata");
-                user_deletedata(xfer->userid, 0);
+                user_deletedata(inbox_mbentry, 0);
             }
             mboxname_release(&namespacelock);
+            mboxlist_entry_free(&inbox_mbentry);
         }
 
       next:

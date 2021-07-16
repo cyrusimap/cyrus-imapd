@@ -141,6 +141,12 @@ static int reset_single(const char *userid)
         (void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0);
     }
 
+    mbentry_t *mbentry = NULL;
+    char *inbox = mboxname_user_mbox(userid, 0);
+    r = mboxlist_lookup_allow_all(inbox, &mbentry, NULL);
+    free(inbox);
+    if (r) goto fail;
+
     r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, mblist, MBOXTREE_DELETED);
     if (r) goto fail;
 
@@ -158,10 +164,11 @@ static int reset_single(const char *userid)
         if (r) goto fail;
     }
 
-    r = user_deletedata(userid, 1);
+    if (mbentry) r = user_deletedata(mbentry, 1);
 
  fail:
     mboxname_release(&namespacelock);
+    mboxlist_entry_free(&mbentry);
     strarray_free(mblist);
     strarray_free(sublist);
 

@@ -4148,11 +4148,16 @@ out:
     return r;
 }
 
+struct delete_rock {
+    const mbentry_t *mbentry;
+    const mbname_t *mbname;
+};
+
 /* cleanup */
 static void delete_one(const char *key, const char *val __attribute__((unused)), void *rock)
 {
-    const char *mboxname = (const char *)rock;
-    const char *partition = NULL;
+    struct delete_rock *drock = (struct delete_rock *) rock;
+    const char *partition = NULL, *root = NULL;
     char *tier = NULL;
     char *basedir = NULL;
 
@@ -4161,7 +4166,15 @@ static void delete_one(const char *key, const char *val __attribute__((unused)),
     tier = xstrndup(key, partition - key);
     partition += 16; /* skip over name */
 
-    xapian_basedir(tier, mboxname, partition, NULL, &basedir);
+    root = xapian_rootdir(tier, partition);
+
+    if (drock->mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+        basedir = user_hash_xapian_byname(drock->mbname, root);
+    }
+    else {
+        basedir = user_hash_xapian_byid(drock->mbentry->uniqueid, root);
+    }
+
     if (basedir)
         removedir(basedir);
 
@@ -4169,15 +4182,23 @@ static void delete_one(const char *key, const char *val __attribute__((unused)),
     free(tier);
 }
 
-static int delete_user(const char *userid)
+static int delete_user(const mbentry_t *mbentry)
 {
-    char *mboxname = mboxname_user_mbox(userid, /*subfolder*/NULL);
-    char *activename = activefile_fname(mboxname);
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    const char *userid = mbname_userid(mbname);
+    char *activename = NULL;
     struct mappedfile *activefile = NULL;
     struct mboxlock *xapiandb_namelock = NULL;
     char *namelock_fname = NULL;
     int r = 0;
 
+
+    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+        activename = mboxname_conf_getpath_legacy(mbname, FNAME_XAPIANSUFFIX);
+    }
+    else {
+        activename = mboxid_conf_getpath(mbentry->uniqueid, FNAME_XAPIANSUFFIX);
+    }
 
     /* Get an exclusive namelock */
     namelock_fname = xapiandb_namelock_fname_from_userid(userid);
@@ -4196,7 +4217,8 @@ static int delete_user(const char *userid)
     r = mappedfile_writelock(activefile);
     if (r) goto out;
 
-    config_foreachoverflowstring(delete_one, mboxname);
+    struct delete_rock drock = { mbentry, mbname };
+    config_foreachoverflowstring(delete_one, &drock);
     unlink(activename);
 
 out:
@@ -4212,7 +4234,7 @@ out:
 
     free(namelock_fname);
     free(activename);
-    free(mboxname);
+    mbname_free(&mbname);
 
     return r;
 }
