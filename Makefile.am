@@ -724,13 +724,13 @@ check-local:
 check-discrete: cunit/unit
 	@echo "Running unit tests, one at a time"
 	@vg= ; \
-		test -z "$$VG" || vg="$(VALGRIND)" ; \
+		test -z "$$VG" || vg="$(VALGRIND) --quiet --error-exitcode=75 --log-fd=3" ; \
 		cd cunit ; \
 		fails=0 ; \
 		tests=0 ; \
 		while read t ; do \
 			tests=$$(($$tests + 1)) ; \
-			if $$vg ./unit -v $$t >/dev/null 2>/dev/null ; then \
+			if $$vg ./unit $$t >/dev/null 3>&2 2>/dev/null ; then \
 				echo "[  OK  ] $$t" ; \
 			else \
 				fails=$$(($$fails + 1)) ; \
