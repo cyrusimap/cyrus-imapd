@@ -665,7 +665,7 @@ static int store_resource(struct transaction_t *txn,
 
     struct buf *buf = vcard_as_buf(vcard);
     if (buf_len(buf) > (size_t) vcard_max_size) {
-        buf_free(buf);
+        buf_destroy(buf);
         txn->error.precond = CARDDAV_MAX_SIZE;
         return HTTP_FORBIDDEN;
     }
