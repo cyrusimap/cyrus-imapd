@@ -591,8 +591,9 @@ static void write_cachehdr(const char *name, const char *contents,
 {
     struct transaction_t *txn = (struct transaction_t *) rock;
     const char **hdr, *hop_by_hop[] =
-        { "authorization", "connection", "content-length", "expect", "forwarded",
-          "host", "http2-settings", "keep-alive", "strict-transport-security",
+        { "alt-svc", "authorization", "connection", "content-length",
+          "expect", "forwarded", "host", "http2-settings", "keep-alive",
+          "strict-transport-security",
           "te", "trailer", "transfer-encoding", "upgrade", "via", NULL };
 
     /* Ignore private headers in our cache */
