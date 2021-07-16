@@ -1001,6 +1001,7 @@ HTML_PART "\r\n"
     CU_ASSERT_PTR_NULL(part->params);
     CU_ASSERT_STRING_EQUAL(part->encoding, "BASE64");
 
+    message_free_body(&body);
 #undef HTML_PART
 }
 
@@ -1189,6 +1190,7 @@ static void test_cache_simple(void)
     CU_ASSERT_EQUAL(r, 0);
 
     message_free_body(body);
+    free(body);
 
     message_read_bodystructure(&record, &body);
     CU_ASSERT_PTR_NOT_NULL_FATAL(body);

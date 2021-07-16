@@ -673,6 +673,7 @@ static void test_sort(void)
     CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
     CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL2);
 
+    arrayu64_fini(&a);
 #undef VAL0
 #undef VAL1
 #undef VAL2

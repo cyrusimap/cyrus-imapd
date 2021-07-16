@@ -70,6 +70,8 @@ static void test_set(void)
     CU_ASSERT_MEMEQUAL(dynarray_nth(da, 4), &zero, sizeof(zero));
     CU_ASSERT_MEMEQUAL(dynarray_nth(da, 5), &val, sizeof(val));
     CU_ASSERT_MEMEQUAL(dynarray_nth(da, -1), &val, sizeof(val));
+
+    dynarray_free(&da);
 }
 
 static void test_truncate(void)
@@ -90,6 +92,8 @@ static void test_truncate(void)
     CU_ASSERT_EQUAL(da->count, 3);
     val = 0;
     CU_ASSERT_MEMEQUAL(da->data + sizeof(uint32_t)*4, &val, sizeof(uint32_t));
+
+    dynarray_free(&da);
 }
 
 /* vim: set ft=c: */

@@ -43,6 +43,8 @@ static void test_auto(void)
     CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 1), &b2), 0);
 //    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, -1), &b2), 0);
 
+    buf_free(&b1);
+    buf_free(&b2);
     bufarray_fini(&ba);
     CU_ASSERT_EQUAL(bufarray_size(&ba), 0);
     CU_ASSERT_EQUAL(ba.alloc, 0);
@@ -77,6 +79,8 @@ static void test_heap(void)
     CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(ba, 1), &b2), 0);
 //    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(ba, -1), &b2), 0);
 
+    buf_free(&b1);
+    buf_free(&b2);
     bufarray_free(&ba);
 }
 

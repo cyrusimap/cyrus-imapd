@@ -1201,6 +1201,7 @@ static void test_charset_decode(void)
             } \
         } \
         CU_ASSERT(memcmp(_dst.s, _want, _wantlen) == 0); \
+        buf_free(&_dst); \
     }
 
     TESTCASE("", 0, "", 0, ENCODING_NONE);
@@ -1231,6 +1232,7 @@ static void test_broken_length_hint(void)
     s = charset_to_utf8(body, strlen(body), cs, ENCODING_QP);
     CU_ASSERT_STRING_EQUAL(body, s);
     charset_free(&cs);
+    free(s);
 }
 
 static void test_utf8_normalize(void)

@@ -1478,6 +1478,7 @@ static void test_sortrawuniq(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD3);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD2);
 
+    strarray_fini(&sa);
 #undef WORD0
 #undef WORD1
 #undef WORD2
@@ -1529,6 +1530,7 @@ static void test_sortmboxuniq(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD1);
 
+    strarray_fini(&sa);
 #undef WORD0
 #undef WORD1
 #undef WORD2
