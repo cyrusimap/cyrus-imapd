@@ -12116,6 +12116,11 @@ static void cmd_xfer(const char *tag, const char *name,
                     if (r) goto next;
                 }
             }
+            mbentry_t *inbox_mbentry = NULL;
+            char *inbox = mboxname_user_mbox(xfer->userid, 0);
+            r = mboxlist_lookup_allow_all(inbox, &inbox_mbentry, NULL);
+            free(inbox);
+            if (r) goto next;
 
             r = mboxlist_usermboxtree(xfer->userid, NULL, xfer_addusermbox,
                                       xfer, MBOXTREE_DELETED);
@@ -12128,11 +12133,10 @@ static void cmd_xfer(const char *tag, const char *name,
                 /* this was a successful user move, and we need to delete
                    certain user meta-data (but not seen state!) */
                 syslog(LOG_INFO, "XFER: deleting user metadata");
-                /* NOTE: mailboxes were added in reverse, so the inbox last */
-                for (item = xfer->items; item->next; item = item->next);
-                user_deletedata(item->mbentry, 0);
+                user_deletedata(inbox_mbentry, 0);
             }
             mboxname_release(&namespacelock);
+            mboxlist_entry_free(&inbox_mbentry);
         }
 
       next:
