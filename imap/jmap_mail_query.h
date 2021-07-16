@@ -95,6 +95,9 @@ extern void jmap_emailbodies_fini(struct emailbodies *bodies);
 extern int jmap_emailbodies_extract(const struct body *root,
                                     struct emailbodies *bodies);
 
+extern int jmap_email_hasattachment(const struct body *root,
+                                    json_t *imagesize_by_partid);
+
 struct jmap_email_filter_parser_rock {
     struct jmap_parser *parser;
     json_t *unsupported;

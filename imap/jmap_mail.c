@@ -6073,7 +6073,7 @@ struct cyrusmsg {
     const struct body *part0;        /* Root body-part */
     const struct body *rfc822part;   /* RFC 822 root part for embedded message */
     const struct buf *mime;          /* Raw MIME buffer */
-    json_t *imagesize_by_part;       /* FastMail-specific extension */
+    json_t *imagesize_by_partid;     /* FastMail-specific extension */
 
     message_t *_m;                   /* Message loaded from message record */
     struct body *_mybody;            /* Bodystructure */
@@ -6093,7 +6093,7 @@ static void _cyrusmsg_free(struct cyrusmsg **msgptr)
         free(msg->_mybody);
     }
     buf_free(&msg->_mymime);
-    json_decref(msg->imagesize_by_part);
+    json_decref(msg->imagesize_by_partid);
     if (msg->_headers_by_part_id) {
         free_hash_table(msg->_headers_by_part_id, NULL);
         free(msg->_headers_by_part_id);
@@ -6973,17 +6973,17 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     /* FastMail extension properties */
     if (jmap_wantprop(bodyprops, "imageSize")) {
         json_t *imagesize = json_null();
-        if (msg->mr && msg->imagesize_by_part == NULL) {
+        if (msg->mr && msg->imagesize_by_partid == NULL) {
             /* This is the first attempt to read the vendor annotation.
              * Load the annotation value, if any, for top-level messages.
              * Use JSON null for an unsuccessful attempt, so we know not
              * to try again. */
-            msg->imagesize_by_part = _email_read_jannot(req, msg->mr,
+            msg->imagesize_by_partid = _email_read_jannot(req, msg->mr,
                     "/vendor/messagingengine.com/imagesize", 1);
-            if (!msg->imagesize_by_part)
-                msg->imagesize_by_part = json_null();
+            if (!msg->imagesize_by_partid)
+                msg->imagesize_by_partid = json_null();
         }
-        imagesize = json_object_get(msg->imagesize_by_part, part->part_id);
+        imagesize = json_object_get(msg->imagesize_by_partid, part->part_id);
         json_object_set(jbodypart, "imageSize", imagesize ? imagesize : json_null());
     }
     if (jmap_wantprop(bodyprops, "isDeleted")) {
@@ -7102,6 +7102,17 @@ static int _email_get_bodies(jmap_req_t *req,
         r = _cyrusmsg_need_part0(msg);
         if (r) return r;
         part =  msg->part0;
+    }
+
+    /* Load image sizes by bodypart, if required. */
+    if (jmap_wantprop(args->props, "hasAttachment") ||
+                jmap_wantprop(args->bodyprops, "imageSize")) {
+        if (msg->mr && msg->imagesize_by_partid == NULL) {
+            msg->imagesize_by_partid = _email_read_jannot(req, msg->mr,
+                    "/vendor/messagingengine.com/imagesize", 1);
+            if (!msg->imagesize_by_partid)
+                msg->imagesize_by_partid = json_null();
+        }
     }
 
     /* Dissect message into its parts */
@@ -7275,13 +7286,26 @@ static int _email_get_bodies(jmap_req_t *req,
 
     /* hasAttachment */
     if (jmap_wantprop(props, "hasAttachment")) {
+        static int check_annotations = -1;
+        if (check_annotations < 0) {
+            const char *rawflags = config_getstring(IMAPOPT_MAILBOX_INITIAL_FLAGS);
+            if (rawflags) {
+                strarray_t *flags = strarray_split(rawflags, NULL, 0);
+                if (flags &&
+                        strarray_find_case(flags, JMAP_HAS_ATTACHMENT_FLAG, 0) >= 0) {
+                    check_annotations = 1;
+                }
+            }
+            if (check_annotations < 0) {
+                check_annotations = 0;
+            }
+        }
         int has_att = 0;
-        if (msg->rfc822part == NULL) {
+        if (!msg->rfc822part && check_annotations) {
             msgrecord_hasflag(msg->mr, JMAP_HAS_ATTACHMENT_FLAG, &has_att);
         }
-        else {
-            has_att = bodies.attslist.count > 0;
-        }
+        else has_att = jmap_email_hasattachment(part, msg->imagesize_by_partid);
+
         json_object_set_new(email, "hasAttachment", json_boolean(has_att));
     }
 
