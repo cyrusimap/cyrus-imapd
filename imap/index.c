@@ -6121,6 +6121,7 @@ MsgData **index_msgdata_load(struct index_state *state,
     struct index_record record;
     struct conversations_state *cstate = NULL;
     conversation_t conv = CONVERSATION_INIT;
+    int *preload = NULL;
 
     if (!n) return NULL;
 
@@ -6131,6 +6132,32 @@ MsgData **index_msgdata_load(struct index_state *state,
 
     if (found_anchor)
         *found_anchor = 0;
+
+    /* set mailbox level states */
+    for (j = 0; sortcrit[j].key; j++); // count how many we need
+    if (j) preload = xzmalloc(j * sizeof(int));
+    for (j = 0; sortcrit[j].key; j++) {
+        label = sortcrit[j].key;
+        switch(label) {
+        case SORT_SAVEDATE:
+#ifdef WITH_JMAP
+        case SORT_SNOOZEDUNTIL:
+#endif
+            preload[j] = !strcmpnull(mailbox_uniqueid(mailbox), sortcrit[j].args.mailbox.id);
+            break;
+
+        case SORT_HASCONVFLAG:
+            preload[j] = -1;
+            if (!cstate) cstate = conversations_get_mbox(index_mboxname(state));
+            assert(cstate);
+            if (cstate->counted_flags)
+                preload[j] = strarray_find_case(cstate->counted_flags, sortcrit[j].args.flag.name, 0);
+            break;
+
+        default:
+            break;
+        }
+    }
 
     for (i = 0 ; i < n ; i++) {
         cur = &md[i];
@@ -6248,7 +6275,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 break;
             }
             case SORT_SAVEDATE:
-                if (!strcmpnull(mailbox_uniqueid(mailbox), sortcrit[j].args.mailbox.id)) {
+                if (preload[j]) {
                     cur->savedate = record.savedate;
                 }
                 else {
@@ -6258,8 +6285,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 break;
             case SORT_SNOOZEDUNTIL:
 #ifdef WITH_JMAP
-                if ((record.internal_flags & FLAG_INTERNAL_SNOOZED) &&
-                    !strcmpnull(mailbox_uniqueid(mailbox), sortcrit[j].args.mailbox.id)) {
+                if (preload[j] && (record.internal_flags & FLAG_INTERNAL_SNOOZED)) {
                     /* SAVEDATE == snoozed#until */
                     cur->savedate = record.savedate;
 
@@ -6308,10 +6334,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 break;
             }
             case SORT_HASCONVFLAG: {
-                const char *name = sortcrit[j].args.flag.name;
-                int idx = -1;
-                if (cstate->counted_flags)
-                    idx = strarray_find_case(cstate->counted_flags, name, 0);
+                int idx = preload[j];
                 /* flag exists in the conversation at all */
                 if (idx >= 0 && conv.counts[idx] > 0 && j < 31)
                     cur->hasflag |= (1<<j);
@@ -6335,6 +6358,8 @@ MsgData **index_msgdata_load(struct index_state *state,
         free(tmpenv);
         conversation_fini(&conv);
     }
+
+    free(preload);
 
     return ptrs;
 }
