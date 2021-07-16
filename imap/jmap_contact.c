@@ -3768,9 +3768,8 @@ static int _blob_to_card(struct jmap_req *req,
     charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
 
     /* Now encode the blob */
-    encbuf = xmalloc(len64+1);
+    encbuf = xzmalloc(len64+1);
     charset_encode_mimebody(base, len, encbuf, &len64, NULL, 0 /* no wrap */);
-    encbuf[len64] = '\0';
     base = encbuf;
 
     /* (Re)write vCard property */
