@@ -118,7 +118,7 @@ static void test_initmcstr(void)
 static void test_long(void)
 {
     struct buf b = BUF_INITIALIZER;
-    int i;
+    uint16_t i;
     char *exp;
 #define SZ  6
 #define N 10000
@@ -130,7 +130,7 @@ static void test_long(void)
     CU_ASSERT_PTR_NULL(b.s);
 
     for (i = 0 ; i < N ; i++) {
-        snprintf(tt, sizeof(tt), "%c%05d", 'A'+(i%26), i);
+        snprintf(tt, sizeof(tt), "%c%05d", 'A'+(char)(i%26), i);
         buf_appendcstr(&b, tt);
     }
     buf_cstring(&b);
@@ -142,7 +142,7 @@ static void test_long(void)
 
     exp = xmalloc(SZ*N+1);
     for (i = 0 ; i < N ; i++)
-        snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(i%26), i);
+        snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(char)(i%26), i);
     CU_ASSERT(!strcmp(b.s, exp));
     free(exp);
 
@@ -414,7 +414,7 @@ static void test_printf(void)
 static void test_long_printf(void)
 {
     struct buf b = BUF_INITIALIZER;
-    int i;
+    uint16_t i;
     const char *s;
     char *exp;
 #define SZ  6
@@ -427,7 +427,7 @@ static void test_long_printf(void)
 
     exp = xmalloc(SZ*N+1);
     for (i = 0 ; i < N ; i++)
-        snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(i%26), i);
+        snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(char)(i%26), i);
 
     buf_printf(&b, "x%sy", exp);
     s = buf_cstring(&b);
