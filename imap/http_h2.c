@@ -279,6 +279,13 @@ static int frame_recv_cb(nghttp2_session *session,
         GCC_FALLTHROUGH
 
     case NGHTTP2_DATA:
+        if (txn->be) {
+            /* Tunnel - stream input to backend */
+            prot_putbuf(txn->be->out, &txn->req_body.payload);
+            prot_flush(txn->be->out);
+            break;
+        }
+
         if (txn->ws_ctx) {
             /* WebSocket over HTTP/2 input */
             ws_input(txn);
@@ -662,6 +669,14 @@ static int end_resp_headers(struct transaction_t *txn, long code)
         /* Provisional response */
         flags = NGHTTP2_FLAG_NONE;
         break;
+
+    case HTTP_OK:
+        if (txn->meth == METH_CONNECT) {
+            /* Tunnel - DO NOT end stream */
+            break;
+        }
+
+        GCC_FALLTHROUGH
 
     default:
         if (txn->meth != METH_HEAD &&

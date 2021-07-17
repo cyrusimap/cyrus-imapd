@@ -100,6 +100,7 @@
 #include "md5.h"
 
 /* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 #include "imap/http_err.h"
 
 #ifdef WITH_DAV
@@ -414,7 +415,6 @@ int httpd_userisanonymous = 1;
 const char *httpd_localip = NULL, *httpd_remoteip = NULL;
 struct protstream *httpd_out = NULL;
 struct protstream *httpd_in = NULL;
-struct protgroup *protin = NULL;
 strarray_t *httpd_log_headers = NULL;
 char *httpd_altsvc = NULL;
 static struct http_connection http_conn;
@@ -429,7 +429,7 @@ int config_httpprettytelemetry;
 
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
-
+static ptrarray_t httpd_streams = PTRARRAY_INITIALIZER;
 static int http2_enabled = 0;
 
 int ignorequota = 0;
@@ -723,7 +723,7 @@ static void httpd_reset(struct http_connection *conn)
 
     httpd_in = httpd_out = NULL;
 
-    if (protin) protgroup_reset(protin);
+    ptrarray_fini(&httpd_streams);
 
     /* Reset auxiliary connection contexts */
     conn_reset_t proc;
@@ -834,9 +834,6 @@ int service_init(int argc __attribute__((unused)),
         }
     }
 
-    /* Create a protgroup for input from the client and selected backend */
-    protin = protgroup_new(2);
-
     config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
 
     httpd_log_headers = strarray_split(config_getstring(IMAPOPT_HTTPLOGHEADERS),
@@ -934,7 +931,6 @@ int service_main(int argc __attribute__((unused)),
 
     httpd_in = prot_new(0, 0);
     httpd_out = prot_new(1, 1);
-    protgroup_insert(protin, httpd_in);
 
     /* Setup HTTP connection */
     http_conn.pin = httpd_in;
@@ -1153,8 +1149,6 @@ void shut_down(int code)
 
     prometheus_increment(code ? CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_ERROR
                               : CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_OK);
-
-    if (protin) protgroup_free(protin);
 
     if (config_auditlog)
         syslog(LOG_NOTICE,
@@ -2037,7 +2031,7 @@ static int http1_input(struct transaction_t *txn)
 
     do {
         /* Read request-line */
-        syslog(LOG_DEBUG, "read & parse request-line");
+        syslog(LOG_DEBUG, "read request-line");
         if (!prot_fgets(req_line->buf, MAX_REQ_LINE+1, httpd_in)) {
             txn->error.desc = prot_error(httpd_in);
             if (txn->error.desc && strcmp(txn->error.desc, PROT_EOF_STRING)) {
@@ -2058,10 +2052,12 @@ static int http1_input(struct transaction_t *txn)
 
 
     /* Parse request-line = method SP request-target SP HTTP-version CRLF */
+    syslog(LOG_DEBUG, "parse request-line");
     ret = parse_request_line(txn);
 
     /* Parse headers */
     if (!ret) {
+        syslog(LOG_DEBUG, "read headers");
         ret = http_read_headers(httpd_in, 1 /* read_sep */,
                                 &txn->req_hdrs, &txn->error.desc);
     }
@@ -2072,6 +2068,7 @@ static int http1_input(struct transaction_t *txn)
     }
 
     /* Examine request */
+    syslog(LOG_DEBUG, "examine request");
     ret = examine_request(txn, NULL);
     if (ret) goto done;
 
@@ -2079,12 +2076,12 @@ static int http1_input(struct transaction_t *txn)
     if (txn->flags.ver == VER_1_1) alarm(httpd_keepalive);
 
     /* Process the requested method */
+    syslog(LOG_DEBUG, "process request");
     ret = process_request(txn);
 
   done:
     /* Handle errors (success responses handled by method functions) */
     if (ret) error_response(ret, txn);
-    else if (txn->be) protgroup_insert(protin, txn->be->in);
 
     /* Read and discard any unread request body */
     if (!(txn->flags.conn & CONN_CLOSE)) {
@@ -2115,6 +2112,8 @@ static void cmdloop(struct http_connection *conn)
         brotli_init(&txn);
         zstd_init(&txn);
     }
+
+    ptrarray_append(&httpd_streams, &txn);
 
     /* Enable command timer */
     cmdtime_settimer(1);
@@ -2149,12 +2148,11 @@ static void cmdloop(struct http_connection *conn)
 
             signals_poll();
 
-            syslog(LOG_DEBUG, "proxy_check_input()");
+            syslog(LOG_DEBUG, "http_proxy_check_input()");
 
-        } while (!proxy_check_input(protin, httpd_in, httpd_out,
-                                    txn.be ? txn.be->in : NULL,
-                                    txn.be ? txn.be->out : NULL,
-                                    0 /* timeout */));
+        } while (!http_proxy_check_input(&httpd_streams,
+                                         txn.be ? txn.be->out : NULL,
+                                         0 /* timeout */));
 
         
         /* Start command timer */
@@ -4704,6 +4702,23 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
         return HTTP_BAD_REQUEST;
     }
 
+    if (txn->req_tgt.mbentry && txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              NULL, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        ret = http_proxy_h2_connect(be, txn);
+        if (!ret) {
+            txn->be = be;
+            ptrarray_append(&httpd_streams, txn);
+        }
+        return ret;
+    }
+    
     ret = ws_start_channel(txn, cparams->ws.subprotocol, cparams->ws.data_cb);
 
     return (ret == HTTP_UPGRADE) ? HTTP_BAD_REQUEST : ret;
