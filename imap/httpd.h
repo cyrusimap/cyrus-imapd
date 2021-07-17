@@ -616,6 +616,7 @@ extern int check_precond(struct transaction_t *txn,
 
 extern void log_cachehdr(const char *name, const char *contents,
                          const char *raw, void *rock);
+extern void log_request(long code, struct transaction_t *txn);
 
 extern int examine_request(struct transaction_t *txn, const char *uri);
 extern int process_request(struct transaction_t *txn);

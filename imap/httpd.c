@@ -2716,412 +2716,17 @@ HIDDEN void connection_hdrs(struct transaction_t *txn)
     }
 }
 
-EXPORTED void response_header(long code, struct transaction_t *txn)
+const char *te_strings[] = { "deflate", "gzip", "chunked", NULL };
+const char *ce_strings[] = { "deflate", "gzip", "br", "zstd", NULL };
+
+HIDDEN void log_request(long code, struct transaction_t *txn)
 {
     int i, size;
-    time_t now;
-    char datestr[30];
     va_list noargs;
     double cmdtime, nettime;
     const char **hdr, *sep;
-    struct auth_challenge_t *auth_chal = &txn->auth_chal;
-    struct resp_body_t *resp_body = &txn->resp_body;
     struct buf *logbuf = &txn->conn->logbuf;
-    const char *te[] = { "deflate", "gzip", "chunked", NULL };
-    const char *ce[] = { "deflate", "gzip", "br", "zstd", NULL };
 
-    /* Stop method processing alarm */
-    alarm(0);
-    gotsigalrm = 0;
-
-
-    /* Status-Line */
-    txn->conn->begin_resp_headers(txn, code);
-
-
-    switch (code) {
-    default:
-        /* Final response */
-        now = time(0);
-        httpdate_gen(datestr, sizeof(datestr), now);
-        simple_hdr(txn, "Date", "%s", datestr);
-
-        /* Fall through and specify connection/protocol options and/or links */
-        GCC_FALLTHROUGH
-
-    case HTTP_SWITCH_PROT:
-        connection_hdrs(txn);
-
-        /* Fall through and specify links */
-        GCC_FALLTHROUGH
-
-    case HTTP_EARLY_HINTS:
-        size = strarray_size(&resp_body->links);
-        for (i = 0; i < size; i++) {
-            simple_hdr(txn, "Link", "%s", strarray_nth(&resp_body->links, i));
-        }
-
-        if (code >= HTTP_OK) break;
-
-        /* Fall through as provisional response */
-        GCC_FALLTHROUGH
-
-    case HTTP_CONTINUE:
-    case HTTP_PROCESSING:
-        /* Provisional response - nothing else needed */
-        txn->conn->end_resp_headers(txn, code);
-
-        /* Force the response to the client immediately */
-        prot_flush(httpd_out);
-
-        /* Restart method processing alarm (HTTP/1.1 only) */
-        if (!txn->ws_ctx && (txn->flags.ver == VER_1_1)) alarm(httpd_keepalive);
-
-        goto log;
-    }
-
-
-    /* Control Data */
-    if (txn->conn->tls_ctx) {
-        simple_hdr(txn, "Strict-Transport-Security", "max-age=600");
-    }
-    if (txn->location) {
-        simple_hdr(txn, "Location", "%s", txn->location);
-    }
-    if (txn->flags.mime) {
-        simple_hdr(txn, "MIME-Version", "1.0");
-    }
-    if (txn->flags.cc) {
-        /* Construct Cache-Control header */
-        const char *cc_dirs[] =
-            { "must-revalidate", "no-cache", "no-store", "no-transform",
-              "public", "private", "max-age=%d", "immutable", NULL };
-
-        comma_list_hdr(txn, "Cache-Control",
-                       cc_dirs, txn->flags.cc, resp_body->maxage);
-
-        if (txn->flags.cc & CC_MAXAGE) {
-            httpdate_gen(datestr, sizeof(datestr), now + resp_body->maxage);
-            simple_hdr(txn, "Expires", "%s", datestr);
-        }
-    }
-    if (txn->flags.cors) {
-        /* Construct Cross-Origin Resource Sharing headers */
-        simple_hdr(txn, "Access-Control-Allow-Origin", "%s",
-                      *spool_getheader(txn->req_hdrs, "Origin"));
-        simple_hdr(txn, "Access-Control-Allow-Credentials", "true");
-
-        if (txn->flags.cors == CORS_PREFLIGHT) {
-            allow_hdr(txn, "Access-Control-Allow-Methods", txn->req_tgt.allow);
-
-            for (hdr = spool_getheader(txn->req_hdrs,
-                                       "Access-Control-Request-Headers");
-                 hdr && *hdr; hdr++) {
-                simple_hdr(txn, "Access-Control-Allow-Headers", "%s", *hdr);
-            }
-            simple_hdr(txn, "Access-Control-Max-Age", "3600");
-        }
-    }
-    if (txn->flags.vary && !(txn->flags.cc & CC_NOCACHE)) {
-        /* Construct Vary header */
-        const char *vary_hdrs[] = { "Accept", "Accept-Encoding", "Brief",
-                                    "Prefer", "If-None-Match",
-                                    "CalDAV-Timezones", NULL };
-
-        comma_list_hdr(txn, "Vary", vary_hdrs, txn->flags.vary);
-    }
-
-
-    /* Authentication Challenges */
-    if (code == HTTP_UNAUTHORIZED) {
-        if (!auth_chal->scheme) {
-            /* Require authentication by advertising all available schemes */
-            list_auth_schemes(txn);
-        }
-        else {
-            /* Continue with current authentication exchange */
-            WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
-        }
-    }
-    else if (auth_chal->param) {
-        /* Authentication completed with success data */
-        if (auth_chal->scheme->flags & AUTH_SUCCESS_WWW) {
-            /* Special handling of success data for this scheme */
-            WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
-        }
-        else {
-            /* Default handling of success data */
-            simple_hdr(txn, "Authentication-Info", "%s", auth_chal->param);
-        }
-    }
-
-    /* Response Context */
-    if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
-        simple_hdr(txn, "iSchedule-Version", "1.0");
-
-        if (resp_body->iserial) {
-            simple_hdr(txn, "iSchedule-Capabilities", TIME_T_FMT, resp_body->iserial);
-        }
-    }
-    if (resp_body->patch) {
-        accept_patch_hdr(txn, resp_body->patch);
-    }
-
-    switch (code) {
-    case HTTP_OK:
-        switch (txn->meth) {
-        case METH_CONNECT:
-            if (txn->ws_ctx) {
-                /* Add WebSocket headers */
-                ws_add_resp_hdrs(txn);
-            }
-            break;
-
-        case METH_GET:
-        case METH_HEAD:
-            /* Construct Accept-Ranges header for GET and HEAD responses */
-            simple_hdr(txn, "Accept-Ranges",
-                       txn->flags.ranges ? "bytes" : "none");
-            break;
-
-        case METH_OPTIONS:
-            if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-                simple_hdr(txn, "Server", "%s", buf_cstring(&serverinfo));
-            }
-
-            if (!httpd_userid && !auth_chal->scheme) {
-                /* Advertise all available auth schemes */
-                list_auth_schemes(txn);
-            }
-
-            if (txn->req_tgt.allow & ALLOW_DAV) {
-                /* Construct DAV header(s) based on namespace of request URL */
-                simple_hdr(txn, "DAV", "1, 2, 3, access-control,"
-                           " extended-mkcol, resource-sharing");
-                if (txn->req_tgt.allow & ALLOW_CAL) {
-                    simple_hdr(txn, "DAV", "calendar-access%s%s",
-                               (txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
-                               ", calendar-auto-schedule" : "",
-                               (txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
-                               ", calendar-no-timezone" : "");
-                    simple_hdr(txn, "DAV", "calendar-query-extended%s%s",
-                               (txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
-                               ", calendar-availability" : "",
-                               (txn->req_tgt.allow & ALLOW_CAL_ATTACH) ?
-                               ", calendar-managed-attachments" : "");
-
-                    /* Backwards compatibility with older Apple clients */
-                    simple_hdr(txn, "DAV", "calendarserver-sharing%s",
-                               (txn->req_tgt.allow &
-                                (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) ==
-                               (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED) ?
-                               ", inbox-availability" : "");
-                }
-                if (txn->req_tgt.allow & ALLOW_CARD) {
-                    simple_hdr(txn, "DAV", "addressbook");
-                }
-            }
-
-            /* Access-Control-Allow-Methods supersedes Allow */
-            if (txn->flags.cors != CORS_PREFLIGHT) {
-                /* Construct Allow header(s) */
-                allow_hdr(txn, "Allow", txn->req_tgt.allow);
-            }
-            break;
-        }
-
-        /* Fall through and specify supported content codings */
-        GCC_FALLTHROUGH
-
-    case HTTP_CREATED:
-    case HTTP_ACCEPTED:
-    case HTTP_NO_CONTENT:
-    case HTTP_RESET_CONTENT:
-    case HTTP_PARTIAL:
-    case HTTP_MULTI_STATUS:
-        if (accept_encodings && buf_len(&txn->req_body.payload)) {
-            comma_list_hdr(txn, "Accept-Encoding", ce, accept_encodings);
-        }
-        break;
-
-    case HTTP_NOT_ALLOWED:
-        /* Construct Allow header(s) for 405 response */
-        allow_hdr(txn, "Allow", txn->req_tgt.allow);
-        break;
-
-    case HTTP_BAD_CE:
-        /* Construct Accept-Encoding header for 415 response */
-        if (accept_encodings) {
-            comma_list_hdr(txn, "Accept-Encoding", ce, accept_encodings);
-        }
-        else simple_hdr(txn, "Accept-Encoding", "identity");
-        break;
-    }
-
-
-    /* Validators */
-    if (resp_body->lock) {
-        simple_hdr(txn, "Lock-Token", "<%s>", resp_body->lock);
-        if (txn->flags.cors) Access_Control_Expose("Lock-Token");
-    }
-    if (resp_body->ctag) {
-        simple_hdr(txn, "CTag", "%s", resp_body->ctag);
-        if (txn->flags.cors) Access_Control_Expose("CTag");
-    }
-    if (resp_body->stag) {
-        simple_hdr(txn, "Schedule-Tag", "\"%s\"", resp_body->stag);
-        if (txn->flags.cors) Access_Control_Expose("Schedule-Tag");
-    }
-    if (resp_body->etag) {
-        simple_hdr(txn, "ETag", "%s\"%s\"",
-                      resp_body->enc.proc ? "W/" : "", resp_body->etag);
-        if (txn->flags.cors) Access_Control_Expose("ETag");
-    }
-    if (resp_body->lastmod) {
-        /* Last-Modified MUST NOT be in the future */
-        resp_body->lastmod = MIN(resp_body->lastmod, now);
-        httpdate_gen(datestr, sizeof(datestr), resp_body->lastmod);
-        simple_hdr(txn, "Last-Modified", "%s", datestr);
-    }
-
-
-    /* Representation Metadata */
-    if (resp_body->prefs) {
-        /* Construct Preference-Applied header */
-        const char *prefs[] =
-            { "return=minimal", "return=representation", "depth-noroot", NULL };
-
-        comma_list_hdr(txn, "Preference-Applied", prefs, resp_body->prefs);
-        if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
-    }
-    if (resp_body->cmid) {
-        simple_hdr(txn, "Cal-Managed-ID", "%s", resp_body->cmid);
-        if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
-    }
-    if (resp_body->type) {
-        simple_hdr(txn, "Content-Type", "%s", resp_body->type);
-        if (resp_body->dispo.fname) {
-            /* Construct Content-Disposition header */
-            const unsigned char *p = (const unsigned char *)resp_body->dispo.fname;
-            char *encfname = NULL;
-            for (p = (unsigned char *)resp_body->dispo.fname; p && *p; p++) {
-                if (*p >= 0x80) {
-                    encfname = charset_encode_mimexvalue(resp_body->dispo.fname, NULL);
-                    break;
-                }
-            }
-            if (encfname) {
-                simple_hdr(txn, "Content-Disposition", "%s; filename*=%s",
-                        resp_body->dispo.attach ? "attachment" : "inline",
-                        encfname);
-            }
-            else {
-                simple_hdr(txn, "Content-Disposition", "%s; filename=\"%s\"",
-                        resp_body->dispo.attach ? "attachment" : "inline",
-                        resp_body->dispo.fname);
-            }
-            free(encfname);
-        }
-        if (txn->resp_body.enc.proc) {
-            /* Construct Content-Encoding header */
-            comma_list_hdr(txn, "Content-Encoding", ce, txn->resp_body.enc.type);
-        }
-        if (resp_body->lang) {
-            simple_hdr(txn, "Content-Language", "%s", resp_body->lang);
-        }
-        if (resp_body->loc) {
-            xmlChar *uri = xmlURIEscapeStr(BAD_CAST resp_body->loc, BAD_CAST ":/?=");
-            simple_hdr(txn, "Content-Location", "%s", (const char *) uri);
-            free(uri);
-
-            if (txn->flags.cors) Access_Control_Expose("Content-Location");
-        }
-        if (resp_body->md5) {
-            content_md5_hdr(txn, resp_body->md5);
-        }
-    }
-
-
-    /* Payload */
-    switch (code) {
-    case HTTP_NO_CONTENT:
-    case HTTP_NOT_MODIFIED:
-        /* MUST NOT include a body */
-        resp_body->len = 0;
-        break;
-
-    case HTTP_PARTIAL:
-    case HTTP_BAD_RANGE:
-        if (resp_body->range) {
-            simple_hdr(txn, "Content-Range", "bytes %lu-%lu/%lu",
-                       resp_body->range->first, resp_body->range->last,
-                       resp_body->len);
-
-            /* Set actual content length of range */
-            resp_body->len =
-                resp_body->range->last - resp_body->range->first + 1;
-
-            free(resp_body->range);
-        }
-        else {
-            simple_hdr(txn, "Content-Range", "bytes */%lu", resp_body->len);
-            resp_body->len = 0;  /* No content */
-        }
-
-        /* Fall through and specify framing */
-        GCC_FALLTHROUGH
-
-    default:
-        if (txn->flags.te) {
-            /* HTTP/1.1 only - we use close-delimiting for HTTP/1.0 */
-            if (txn->flags.ver == VER_1_1) {
-                /* Construct Transfer-Encoding header */
-                comma_list_hdr(txn, "Transfer-Encoding", te, txn->flags.te);
-            }
-
-            if (txn->flags.trailer & ~TRAILER_PROXY) {
-                /* Construct Trailer header */
-                const char *trailer_hdrs[] = { "Content-MD5", "CTag", NULL };
-
-                comma_list_hdr(txn, "Trailer", trailer_hdrs, txn->flags.trailer);
-            }
-        }
-        else {
-            /* Content-Length */
-            switch (txn->meth) {
-            case METH_CONNECT:
-                /* MUST NOT include per Section 4.3.6 of RFC 7231 */
-                break;
-
-            case METH_HEAD:
-                if (!resp_body->len) {
-                    /* We don't know if the length is zero or if it wasn't set -
-                       MUST NOT include if it doesn't match what would be
-                       returned for GET, per Section 3.3.2 of RFC 7231 */
-                    break;
-                }
-
-                GCC_FALLTHROUGH
-
-            default:
-                simple_hdr(txn, "Content-Length", "%lu", resp_body->len);
-                break;
-            }
-        }
-    }
-
-
-    /* Extra headers */
-    if (resp_body->extra_hdrs) {
-        spool_enum_hdrcache(resp_body->extra_hdrs, &write_cachehdr, txn);
-    }
-
-
-    /* End of headers */
-    txn->conn->end_resp_headers(txn, code);
-
-
-  log:
     /* Log the client request and our response */
     buf_reset(logbuf);
 
@@ -3299,12 +2904,12 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     }
     if (txn->flags.te) {
         buf_printf(logbuf, "%stx-encoding=", sep);
-        comma_list_body(logbuf, te, txn->flags.te, 0, noargs);
+        comma_list_body(logbuf, te_strings, txn->flags.te, 0, noargs);
         sep = "; ";
     }
-    if (resp_body->enc.proc && (resp_body->len || txn->flags.te)) {
+    if (txn->resp_body.enc.type && (txn->resp_body.len || txn->flags.te)) {
         buf_printf(logbuf, "%scnt-encoding=", sep);
-        comma_list_body(logbuf, ce, resp_body->enc.type, 0, noargs);
+        comma_list_body(logbuf, ce_strings, txn->resp_body.enc.type, 0, noargs);
         sep = "; ";
     }
     if (txn->location) {
@@ -3327,6 +2932,410 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                cmdtime, nettime, cmdtime + nettime);
 
     syslog(LOG_INFO, "%s", buf_cstring(logbuf));
+}
+
+EXPORTED void response_header(long code, struct transaction_t *txn)
+{
+    int i, size;
+    time_t now;
+    char datestr[30];
+    const char **hdr;
+    struct auth_challenge_t *auth_chal = &txn->auth_chal;
+    struct resp_body_t *resp_body = &txn->resp_body;
+
+    /* Stop method processing alarm */
+    alarm(0);
+    gotsigalrm = 0;
+
+
+    /* Status-Line */
+    txn->conn->begin_resp_headers(txn, code);
+
+
+    switch (code) {
+    default:
+        /* Final response */
+        now = time(0);
+        httpdate_gen(datestr, sizeof(datestr), now);
+        simple_hdr(txn, "Date", "%s", datestr);
+
+        /* Fall through and specify connection/protocol options and/or links */
+        GCC_FALLTHROUGH
+
+    case HTTP_SWITCH_PROT:
+        connection_hdrs(txn);
+
+        /* Fall through and specify links */
+        GCC_FALLTHROUGH
+
+    case HTTP_EARLY_HINTS:
+        size = strarray_size(&resp_body->links);
+        for (i = 0; i < size; i++) {
+            simple_hdr(txn, "Link", "%s", strarray_nth(&resp_body->links, i));
+        }
+
+        if (code >= HTTP_OK) break;
+
+        /* Fall through as provisional response */
+        GCC_FALLTHROUGH
+
+    case HTTP_CONTINUE:
+    case HTTP_PROCESSING:
+        /* Provisional response - nothing else needed */
+        txn->conn->end_resp_headers(txn, code);
+
+        /* Force the response to the client immediately */
+        prot_flush(httpd_out);
+
+        /* Restart method processing alarm (HTTP/1.1 only) */
+        if (!txn->ws_ctx && (txn->flags.ver == VER_1_1)) alarm(httpd_keepalive);
+
+        log_request(code, txn);
+        return;
+    }
+
+
+    /* Control Data */
+    if (txn->conn->tls_ctx) {
+        simple_hdr(txn, "Strict-Transport-Security", "max-age=600");
+    }
+    if (txn->location) {
+        simple_hdr(txn, "Location", "%s", txn->location);
+    }
+    if (txn->flags.mime) {
+        simple_hdr(txn, "MIME-Version", "1.0");
+    }
+    if (txn->flags.cc) {
+        /* Construct Cache-Control header */
+        const char *cc_dirs[] =
+            { "must-revalidate", "no-cache", "no-store", "no-transform",
+              "public", "private", "max-age=%d", "immutable", NULL };
+
+        comma_list_hdr(txn, "Cache-Control",
+                       cc_dirs, txn->flags.cc, resp_body->maxage);
+
+        if (txn->flags.cc & CC_MAXAGE) {
+            httpdate_gen(datestr, sizeof(datestr), now + resp_body->maxage);
+            simple_hdr(txn, "Expires", "%s", datestr);
+        }
+    }
+    if (txn->flags.cors) {
+        /* Construct Cross-Origin Resource Sharing headers */
+        simple_hdr(txn, "Access-Control-Allow-Origin", "%s",
+                      *spool_getheader(txn->req_hdrs, "Origin"));
+        simple_hdr(txn, "Access-Control-Allow-Credentials", "true");
+
+        if (txn->flags.cors == CORS_PREFLIGHT) {
+            allow_hdr(txn, "Access-Control-Allow-Methods", txn->req_tgt.allow);
+
+            for (hdr = spool_getheader(txn->req_hdrs,
+                                       "Access-Control-Request-Headers");
+                 hdr && *hdr; hdr++) {
+                simple_hdr(txn, "Access-Control-Allow-Headers", "%s", *hdr);
+            }
+            simple_hdr(txn, "Access-Control-Max-Age", "3600");
+        }
+    }
+    if (txn->flags.vary && !(txn->flags.cc & CC_NOCACHE)) {
+        /* Construct Vary header */
+        const char *vary_hdrs[] = { "Accept", "Accept-Encoding", "Brief",
+                                    "Prefer", "If-None-Match",
+                                    "CalDAV-Timezones", NULL };
+
+        comma_list_hdr(txn, "Vary", vary_hdrs, txn->flags.vary);
+    }
+
+
+    /* Authentication Challenges */
+    if (code == HTTP_UNAUTHORIZED) {
+        if (!auth_chal->scheme) {
+            /* Require authentication by advertising all available schemes */
+            list_auth_schemes(txn);
+        }
+        else {
+            /* Continue with current authentication exchange */
+            WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
+        }
+    }
+    else if (auth_chal->param) {
+        /* Authentication completed with success data */
+        if (auth_chal->scheme->flags & AUTH_SUCCESS_WWW) {
+            /* Special handling of success data for this scheme */
+            WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
+        }
+        else {
+            /* Default handling of success data */
+            simple_hdr(txn, "Authentication-Info", "%s", auth_chal->param);
+        }
+    }
+
+    /* Response Context */
+    if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
+        simple_hdr(txn, "iSchedule-Version", "1.0");
+
+        if (resp_body->iserial) {
+            simple_hdr(txn, "iSchedule-Capabilities", TIME_T_FMT, resp_body->iserial);
+        }
+    }
+    if (resp_body->patch) {
+        accept_patch_hdr(txn, resp_body->patch);
+    }
+
+    switch (code) {
+    case HTTP_OK:
+        switch (txn->meth) {
+        case METH_CONNECT:
+            if (txn->ws_ctx) {
+                /* Add WebSocket headers */
+                ws_add_resp_hdrs(txn);
+            }
+            break;
+
+        case METH_GET:
+        case METH_HEAD:
+            /* Construct Accept-Ranges header for GET and HEAD responses */
+            simple_hdr(txn, "Accept-Ranges",
+                       txn->flags.ranges ? "bytes" : "none");
+            break;
+
+        case METH_OPTIONS:
+            if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+                simple_hdr(txn, "Server", "%s", buf_cstring(&serverinfo));
+            }
+
+            if (!httpd_userid && !auth_chal->scheme) {
+                /* Advertise all available auth schemes */
+                list_auth_schemes(txn);
+            }
+
+            if (txn->req_tgt.allow & ALLOW_DAV) {
+                /* Construct DAV header(s) based on namespace of request URL */
+                simple_hdr(txn, "DAV", "1, 2, 3, access-control,"
+                           " extended-mkcol, resource-sharing");
+                if (txn->req_tgt.allow & ALLOW_CAL) {
+                    simple_hdr(txn, "DAV", "calendar-access%s%s",
+                               (txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
+                               ", calendar-auto-schedule" : "",
+                               (txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
+                               ", calendar-no-timezone" : "");
+                    simple_hdr(txn, "DAV", "calendar-query-extended%s%s",
+                               (txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
+                               ", calendar-availability" : "",
+                               (txn->req_tgt.allow & ALLOW_CAL_ATTACH) ?
+                               ", calendar-managed-attachments" : "");
+
+                    /* Backwards compatibility with older Apple clients */
+                    simple_hdr(txn, "DAV", "calendarserver-sharing%s",
+                               (txn->req_tgt.allow &
+                                (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) ==
+                               (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED) ?
+                               ", inbox-availability" : "");
+                }
+                if (txn->req_tgt.allow & ALLOW_CARD) {
+                    simple_hdr(txn, "DAV", "addressbook");
+                }
+            }
+
+            /* Access-Control-Allow-Methods supersedes Allow */
+            if (txn->flags.cors != CORS_PREFLIGHT) {
+                /* Construct Allow header(s) */
+                allow_hdr(txn, "Allow", txn->req_tgt.allow);
+            }
+            break;
+        }
+
+        /* Fall through and specify supported content codings */
+        GCC_FALLTHROUGH
+
+    case HTTP_CREATED:
+    case HTTP_ACCEPTED:
+    case HTTP_NO_CONTENT:
+    case HTTP_RESET_CONTENT:
+    case HTTP_PARTIAL:
+    case HTTP_MULTI_STATUS:
+        if (accept_encodings && buf_len(&txn->req_body.payload)) {
+            comma_list_hdr(txn, "Accept-Encoding", ce_strings, accept_encodings);
+        }
+        break;
+
+    case HTTP_NOT_ALLOWED:
+        /* Construct Allow header(s) for 405 response */
+        allow_hdr(txn, "Allow", txn->req_tgt.allow);
+        break;
+
+    case HTTP_BAD_CE:
+        /* Construct Accept-Encoding header for 415 response */
+        if (accept_encodings) {
+            comma_list_hdr(txn, "Accept-Encoding", ce_strings, accept_encodings);
+        }
+        else simple_hdr(txn, "Accept-Encoding", "identity");
+        break;
+    }
+
+
+    /* Validators */
+    if (resp_body->lock) {
+        simple_hdr(txn, "Lock-Token", "<%s>", resp_body->lock);
+        if (txn->flags.cors) Access_Control_Expose("Lock-Token");
+    }
+    if (resp_body->ctag) {
+        simple_hdr(txn, "CTag", "%s", resp_body->ctag);
+        if (txn->flags.cors) Access_Control_Expose("CTag");
+    }
+    if (resp_body->stag) {
+        simple_hdr(txn, "Schedule-Tag", "\"%s\"", resp_body->stag);
+        if (txn->flags.cors) Access_Control_Expose("Schedule-Tag");
+    }
+    if (resp_body->etag) {
+        simple_hdr(txn, "ETag", "%s\"%s\"",
+                      resp_body->enc.proc ? "W/" : "", resp_body->etag);
+        if (txn->flags.cors) Access_Control_Expose("ETag");
+    }
+    if (resp_body->lastmod) {
+        /* Last-Modified MUST NOT be in the future */
+        resp_body->lastmod = MIN(resp_body->lastmod, now);
+        httpdate_gen(datestr, sizeof(datestr), resp_body->lastmod);
+        simple_hdr(txn, "Last-Modified", "%s", datestr);
+    }
+
+
+    /* Representation Metadata */
+    if (resp_body->prefs) {
+        /* Construct Preference-Applied header */
+        const char *prefs[] =
+            { "return=minimal", "return=representation", "depth-noroot", NULL };
+
+        comma_list_hdr(txn, "Preference-Applied", prefs, resp_body->prefs);
+        if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
+    }
+    if (resp_body->cmid) {
+        simple_hdr(txn, "Cal-Managed-ID", "%s", resp_body->cmid);
+        if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
+    }
+    if (resp_body->type) {
+        simple_hdr(txn, "Content-Type", "%s", resp_body->type);
+        if (resp_body->dispo.fname) {
+            /* Construct Content-Disposition header */
+            const unsigned char *p = (const unsigned char *)resp_body->dispo.fname;
+            char *encfname = NULL;
+            for (p = (unsigned char *)resp_body->dispo.fname; p && *p; p++) {
+                if (*p >= 0x80) {
+                    encfname = charset_encode_mimexvalue(resp_body->dispo.fname, NULL);
+                    break;
+                }
+            }
+            if (encfname) {
+                simple_hdr(txn, "Content-Disposition", "%s; filename*=%s",
+                        resp_body->dispo.attach ? "attachment" : "inline",
+                        encfname);
+            }
+            else {
+                simple_hdr(txn, "Content-Disposition", "%s; filename=\"%s\"",
+                        resp_body->dispo.attach ? "attachment" : "inline",
+                        resp_body->dispo.fname);
+            }
+            free(encfname);
+        }
+        if (txn->resp_body.enc.proc) {
+            /* Construct Content-Encoding header */
+            comma_list_hdr(txn, "Content-Encoding", ce_strings, txn->resp_body.enc.type);
+        }
+        if (resp_body->lang) {
+            simple_hdr(txn, "Content-Language", "%s", resp_body->lang);
+        }
+        if (resp_body->loc) {
+            xmlChar *uri = xmlURIEscapeStr(BAD_CAST resp_body->loc, BAD_CAST ":/?=");
+            simple_hdr(txn, "Content-Location", "%s", (const char *) uri);
+            free(uri);
+
+            if (txn->flags.cors) Access_Control_Expose("Content-Location");
+        }
+        if (resp_body->md5) {
+            content_md5_hdr(txn, resp_body->md5);
+        }
+    }
+
+
+    /* Payload */
+    switch (code) {
+    case HTTP_NO_CONTENT:
+    case HTTP_NOT_MODIFIED:
+        /* MUST NOT include a body */
+        resp_body->len = 0;
+        break;
+
+    case HTTP_PARTIAL:
+    case HTTP_BAD_RANGE:
+        if (resp_body->range) {
+            simple_hdr(txn, "Content-Range", "bytes %lu-%lu/%lu",
+                       resp_body->range->first, resp_body->range->last,
+                       resp_body->len);
+
+            /* Set actual content length of range */
+            resp_body->len =
+                resp_body->range->last - resp_body->range->first + 1;
+
+            free(resp_body->range);
+        }
+        else {
+            simple_hdr(txn, "Content-Range", "bytes */%lu", resp_body->len);
+            resp_body->len = 0;  /* No content */
+        }
+
+        /* Fall through and specify framing */
+        GCC_FALLTHROUGH
+
+    default:
+        if (txn->flags.te) {
+            /* HTTP/1.1 only - we use close-delimiting for HTTP/1.0 */
+            if (txn->flags.ver == VER_1_1) {
+                /* Construct Transfer-Encoding header */
+                comma_list_hdr(txn, "Transfer-Encoding", te_strings, txn->flags.te);
+            }
+
+            if (txn->flags.trailer & ~TRAILER_PROXY) {
+                /* Construct Trailer header */
+                const char *trailer_hdrs[] = { "Content-MD5", "CTag", NULL };
+
+                comma_list_hdr(txn, "Trailer", trailer_hdrs, txn->flags.trailer);
+            }
+        }
+        else {
+            /* Content-Length */
+            switch (txn->meth) {
+            case METH_CONNECT:
+                /* MUST NOT include per Section 4.3.6 of RFC 7231 */
+                break;
+
+            case METH_HEAD:
+                if (!resp_body->len) {
+                    /* We don't know if the length is zero or if it wasn't set -
+                       MUST NOT include if it doesn't match what would be
+                       returned for GET, per Section 3.3.2 of RFC 7231 */
+                    break;
+                }
+
+                GCC_FALLTHROUGH
+
+            default:
+                simple_hdr(txn, "Content-Length", "%lu", resp_body->len);
+                break;
+            }
+        }
+    }
+
+
+    /* Extra headers */
+    if (resp_body->extra_hdrs) {
+        spool_enum_hdrcache(resp_body->extra_hdrs, &write_cachehdr, txn);
+    }
+
+
+    /* End of headers */
+    txn->conn->end_resp_headers(txn, code);
+
+
+    log_request(code, txn);
 }
 
 

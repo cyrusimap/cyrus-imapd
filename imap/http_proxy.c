@@ -805,7 +805,28 @@ static int pipe_resp_body(struct protstream *pin, struct transaction_t *txn,
     return 0;
 }
 
+static void log_proxy_request(long code, txn_t *txn,
+                              hdrcache_t resp_hdrs, struct body_t *resp_body)
+{
+    extern const char *ce_strings[];
 
+    /* Set body params on txn */
+    txn->flags.te = resp_body->te;
+    txn->resp_body.len = resp_body->len;
+
+    const char **hdr = spool_getheader(resp_hdrs, "Content-Encoding");
+    if (hdr) {
+        int i;
+        for (i = 0; ce_strings[i]; i++) {
+            if (!strcasecmp(*hdr, ce_strings[i])) {
+                txn->resp_body.enc.type = (1 << i);
+                break;
+            }
+        }
+    }
+
+    log_request(code, txn);
+}
 
 /* Proxy (pipe) a client-request/server-response to/from a backend. */
 EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
@@ -934,6 +955,8 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
             }
         }
     }
+
+    log_proxy_request(http_err, txn, resp_hdrs, &resp_body);
 
     if (resp_body.flags & BODY_CLOSE) proxy_downserver(be);
     buf_free(&resp_body.payload);
@@ -1145,9 +1168,12 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
             /* Couldn't pipe the body and can't finish response */
             txn->flags.conn = CONN_CLOSE;
             proxy_downserver(dest_be);
-            goto done;
         }
     }
+
+    log_proxy_request(http_err, txn, resp_hdrs, &resp_body);
+
+    if (txn->flags.conn & CONN_CLOSE) goto done;
 
 
   delete:
