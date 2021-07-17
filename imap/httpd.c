@@ -3287,7 +3287,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
     /* Add any auxiliary response data */
     sep = " (";
-    if ((hdr = spool_getheader(txn->req_hdrs, ":stream-id"))) {
+    if (txn->req_hdrs &&
+        (hdr = spool_getheader(txn->req_hdrs, ":stream-id"))) {
         buf_printf(logbuf, "%sstream-id=%s", sep, hdr[0]);
         sep = "; ";
     }
