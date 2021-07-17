@@ -1329,7 +1329,9 @@ EXPORTED int http_proxy_h2_connect(struct backend *be, struct transaction_t *txn
     http_err = http_status_to_code(code);
     send_response(txn, http_err, resp_hdrs, &resp_body.payload);
 
-  done:
+    log_proxy_request(http_err, txn, resp_hdrs, &resp_body);
+
+ done:
     buf_free(&resp_body.payload);
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
