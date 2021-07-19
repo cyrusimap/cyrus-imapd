@@ -480,7 +480,7 @@ EXPORTED void config_reset(void)
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-        if (imapopts[opt].t == OPT_STRING &&
+        if ((imapopts[opt].t == OPT_STRING || imapopts[opt].t == OPT_DURATION) &&
             (imapopts[opt].seen ||
              (imapopts[opt].def.s &&
               imapopts[opt].val.s != imapopts[opt].def.s &&
@@ -874,7 +874,9 @@ static void config_read_file(const char *filename)
 
             /* If we've seen it already, we're replacing it, so we need
              * to free the current string if there is one */
-            if (imapopts[opt].seen && imapopts[opt].t == OPT_STRING)
+            if (imapopts[opt].seen
+                && (imapopts[opt].t == OPT_STRING
+                    || imapopts[opt].t == OPT_DURATION))
                 free((char *)imapopts[opt].val.s);
 
             if (service_specific)
