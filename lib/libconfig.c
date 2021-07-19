@@ -203,7 +203,7 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
     /* make a copy and append the default unit if necessary */
     copy = xzmalloc(len + 2);
     strlcpy(copy, str, len + 2);
-    if (cyrus_isdigit(copy[len-1]))
+    if (len > 0 && cyrus_isdigit(copy[len-1]))
         copy[len] = defunit;
 
     p = copy;
