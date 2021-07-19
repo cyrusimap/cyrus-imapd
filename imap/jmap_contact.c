@@ -1763,10 +1763,11 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             for (param = entry->params; param; param = param->next) {
                 if (!strcasecmp(param->name, "label")) {
                     label = param->value;
+                    label_len = strlen(label);
                 }
             }
             json_object_set_new(item, "type", json_string("uri"));
-            if (label) json_object_set_new(item, "label", json_string(label));
+            if (label) json_object_set_new(item, "label", json_stringn(label, label_len));
             json_object_set_new(item, "value", json_string(entry->v.value));
             json_array_append_new(online, item);
         }
