@@ -1408,4 +1408,235 @@ sub test_imap_list_notes
 
 }
 
+sub test_cyr_expire_delete_findpaths_legacy
+    :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+{
+    my ($self) = @_;
+
+    my $adminstore = $self->{adminstore};
+    my $admintalk = $adminstore->get_client();
+
+    my $inbox = "user.magicuser";
+    my $subfolder = "$inbox.foo";
+
+    $admintalk->create($inbox);
+    $admintalk->setacl($inbox, admin => 'lrswipkxtecdan');
+    $admintalk->create($subfolder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $adminstore->set_folder($subfolder);
+    $self->make_message("Email", store => $adminstore) or die;
+
+    # Create the search database.
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Delete $subfolder";
+    $admintalk->unselect();
+    $admintalk->delete($subfolder)
+        or $self->fail("Cannot delete folder $subfolder: $@");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "Ensure we can't select $subfolder anymore";
+    $admintalk->select($subfolder);
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $admintalk->get_last_error());
+
+    my ($datapath) = $self->{instance}->folder_to_deleted_directories($subfolder);
+    $self->assert_not_null($datapath);
+
+    xlog $self, "Run cyr_expire -D now.";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
+
+    # the folder should not exist now!
+    $self->assert(!-d $datapath);
+
+    # Delete the entire user!
+    $admintalk->delete($inbox);
+
+    my $basedir = $self->{instance}{basedir};
+    open(FH, "-|", "find", $basedir);
+    my @files = grep { m{/user/magicuser/} and not m{/conf/lock/} } <FH>;
+    close(FH);
+
+    xlog $self, "DELETED files exists";
+    $self->assert(scalar grep { m{/DELETED/} } @files);
+    xlog $self, "no non-deleted paths";
+    $self->assert(not scalar grep { not m{/DELETED/} } @files);
+
+    xlog $self, "Run cyr_expire -D now.";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
+
+    open(FH, "-|", "find", $basedir);
+    @files = grep { m{/user/magicuser/} and not m{/conf/lock/} } <FH>;
+    close(FH);
+
+    xlog $self, "no DELETED files exists";
+    $self->assert(not scalar grep { m{/DELETED/} } @files);
+    xlog $self, "no non-deleted paths";
+    $self->assert(not scalar grep { not m{/DELETED/} } @files);
+}
+
+sub test_cyr_expire_delete_findpaths_nolegacy
+    :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs
+{
+    my ($self) = @_;
+
+    my $adminstore = $self->{adminstore};
+    my $admintalk = $adminstore->get_client();
+
+    my $inbox = "user.magicuser";
+    my $subfolder = "$inbox.foo";
+
+    $admintalk->create($inbox);
+    $admintalk->setacl($inbox, admin => 'lrswipkxtecdan');
+    $admintalk->create($subfolder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $adminstore->set_folder($subfolder);
+    $self->make_message("Email", store => $adminstore) or die;
+
+    # Create the search database.
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $admintalk->status($inbox, ['mailboxid']);
+    my $inboxid = $res->{mailboxid}[0];
+    $res = $admintalk->status($subfolder, ['mailboxid']);
+    my $subid = $res->{mailboxid}[0];
+
+    xlog $self, "Delete $subfolder";
+    $admintalk->unselect();
+    $admintalk->delete($subfolder)
+        or $self->fail("Cannot delete folder $subfolder: $@");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "Ensure we can't select $subfolder anymore";
+    $admintalk->select($subfolder);
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $admintalk->get_last_error());
+
+    my ($datapath) = $self->{instance}->folder_to_deleted_directories($subfolder);
+    $self->assert_not_null($datapath);
+
+    xlog $self, "Run cyr_expire -D now.";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
+
+    # the folder should not exist now!
+    $self->assert(!-d $datapath);
+
+    # Delete the entire user!
+    $admintalk->delete($inbox);
+
+    my $basedir = $self->{instance}{basedir};
+    open(FH, "-|", "find", $basedir);
+    my @files = grep { m{/uuid/} } <FH>;
+    close(FH);
+
+    xlog $self, "files for the inbox still exist";
+    $self->assert(scalar grep { m{$inboxid} } @files);
+    xlog $self, "no files left for subfolder";
+    $self->assert(not scalar grep { m{$subid} } @files);
+
+    xlog $self, "Run cyr_expire -D now.";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
+
+    open(FH, "-|", "find", $basedir);
+    @files = grep { m{/uuid/} } <FH>;
+    close(FH);
+
+    use Data::Dumper;
+    xlog $self, "no files for the inbox still exist" . Dumper(\@files, $inboxid);;
+    $self->assert(not scalar grep { m{$inboxid} } @files);
+}
+
+sub test_sync_reset_legacy
+    :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+{
+    my ($self) = @_;
+
+    my $adminstore = $self->{adminstore};
+    my $admintalk = $adminstore->get_client();
+
+    my $inbox = "user.magicuser";
+    my $subfolder = "$inbox.foo";
+
+    $admintalk->create($inbox);
+    $admintalk->setacl($inbox, admin => 'lrswipkxtecdan');
+    $admintalk->create($subfolder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $adminstore->set_folder($subfolder);
+    $self->make_message("Email", store => $adminstore) or die;
+
+    # Create the search database.
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $basedir = $self->{instance}{basedir};
+    open(FH, "-|", "find", $basedir);
+    my @files = grep { m{/user/magicuser/} and not m{/conf/lock/} } <FH>;
+    close(FH);
+
+    xlog $self, "files exist";
+    $self->assert(@files);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'sync_reset', '-f' => 'magicuser' );
+
+    open(FH, "-|", "find", $basedir);
+    @files = grep { m{/user/magicuser/} and not m{/conf/lock/} } <FH>;
+    close(FH);
+
+    xlog $self, "no files left for this user";
+    $self->assert(not @files);
+}
+
+sub test_sync_reset_nolegacy
+    :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs
+{
+    my ($self) = @_;
+
+    my $adminstore = $self->{adminstore};
+    my $admintalk = $adminstore->get_client();
+
+    my $inbox = "user.magicuser";
+    my $subfolder = "$inbox.foo";
+
+    $admintalk->create($inbox);
+    $admintalk->setacl($inbox, admin => 'lrswipkxtecdan');
+    $admintalk->create($subfolder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $adminstore->set_folder($subfolder);
+    $self->make_message("Email", store => $adminstore) or die;
+
+    # Create the search database.
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $admintalk->status($inbox, ['mailboxid']);
+    my $inboxid = $res->{mailboxid}[0];
+    $res = $admintalk->status($subfolder, ['mailboxid']);
+    my $subid = $res->{mailboxid}[0];
+
+    my $basedir = $self->{instance}{basedir};
+    open(FH, "-|", "find", $basedir);
+    my @files = grep { m{/uuid/} } <FH>;
+    close(FH);
+
+    xlog $self, "files exists";
+    $self->assert(scalar grep { m{$inboxid} } @files);
+    $self->assert(scalar grep { m{$subid} } @files);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'sync_reset', '-f' => 'magicuser' );
+
+    open(FH, "-|", "find", $basedir);
+    @files = grep { m{/uuid/} } <FH>;
+    close(FH);
+
+    xlog $self, "ensure there's no files left matching either uuid!";
+    $self->assert(not scalar grep { m{$inboxid} } @files);
+    $self->assert(not scalar grep { m{$subid} } @files);
+}
+
 1;
