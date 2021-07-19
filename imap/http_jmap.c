@@ -89,6 +89,7 @@ static void jmap_reset(void);
 static void jmap_shutdown(void);
 
 /* HTTP method handlers */
+static int meth_connect_jmap(struct transaction_t *txn, void *params);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_options_jmap(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
@@ -119,7 +120,7 @@ struct namespace_t namespace_jmap = {
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
-        { &meth_connect,        &ws_params },           /* CONNECT      */
+        { &meth_connect_jmap,   &ws_params },           /* CONNECT      */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get,            NULL },                 /* GET          */
@@ -353,6 +354,20 @@ static int jmap_parse_path(struct transaction_t *txn)
     }
 
     return 0;
+}
+
+/* Perform a CONNECT request */
+static int meth_connect_jmap(struct transaction_t *txn, void *params)
+{
+    /* Parse the path */
+    int r = jmap_parse_path(txn);
+    if (r) return r;
+
+    if (!(txn->req_tgt.allow & ALLOW_CONNECT)) {
+        return HTTP_NOT_ALLOWED;
+    }
+
+    return meth_connect(txn, params);
 }
 
 /* Perform a GET/HEAD request */

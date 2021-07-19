@@ -4672,6 +4672,7 @@ static int ws_echo(struct transaction_t *txn __attribute__((unused)),
 HIDDEN int meth_connect(struct transaction_t *txn, void *params)
 {
     struct connect_params *cparams = (struct connect_params *) params;
+    int ret;
 
     /* Bootstrap WebSockets over HTTP/2, if requested */
     if ((txn->flags.ver != VER_2) ||
@@ -4686,51 +4687,28 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
         return HTTP_BAD_REQUEST;
     }
 
-    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
-        /* Locate the authenticated user's INBOX */
-        char *inbox = mboxname_user_mbox(httpd_userid, NULL);
-        int r = proxy_mlookup(inbox, &txn->req_tgt.mbentry, NULL, NULL);
+    if (txn->req_tgt.mbentry && txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
 
-        free(inbox);
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              NULL, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
 
-        if (r) {
-            syslog(LOG_ERR, "mlookup(%s) failed: %s", inbox, error_message(r));
+        ret = http_proxy_h2_connect(be, txn);
+        if (!ret) {
+            txn->be = be;
+            ptrarray_append(&httpd_streams, txn);
 
-            switch (r) {
-            case IMAP_PERMISSION_DENIED:
-                return HTTP_FORBIDDEN;
-
-            case IMAP_MAILBOX_NONEXISTENT:
-                return HTTP_NOT_FOUND;
-
-            default:
-                return HTTP_SERVER_ERROR;
-            }
+            /* Adjust inactivity timer */
+            prot_settimeout(httpd_in,
+                            config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm'));
         }
-
-        if (txn->req_tgt.mbentry->server) {
-            /* Remote mailbox */
-            struct backend *be;
-
-            be = proxy_findserver(txn->req_tgt.mbentry->server,
-                                  &http_protocol, httpd_userid,
-                                  NULL, NULL, NULL, httpd_in);
-            if (!be) return HTTP_UNAVAILABLE;
-
-            int r = http_proxy_h2_connect(be, txn);
-            if (!r) {
-                txn->be = be;
-                ptrarray_append(&httpd_streams, txn);
-
-                /* Adjust inactivity timer */
-                prot_settimeout(httpd_in,
-                                config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm'));
-            }
-            return r;
-        }
+        return ret;
     }
 
-    int ret = ws_start_channel(txn, cparams->subprotocol, cparams->data_cb);
+    ret = ws_start_channel(txn, cparams->subprotocol, cparams->data_cb);
 
     return (ret == HTTP_UPGRADE) ? HTTP_BAD_REQUEST : ret;
 }
