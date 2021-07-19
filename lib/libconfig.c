@@ -1001,6 +1001,7 @@ static void config_read_file(const char *filename)
             {
                 /* make sure it's parseable, though we don't know the default units */
                 if (config_parseduration(p, '\0', NULL)) {
+                    imapopts[opt].seen = 0; /* not seen after all */
                     snprintf(errbuf, sizeof(errbuf),
                              "unparsable duration '%s' for %s in line %d",
                              p, imapopts[opt].optname, lineno);
