@@ -403,8 +403,22 @@ EOF
     $self->check_folder_not_ondisk($inbox, deleted => 1);
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
 
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
     xlog $self, "Verify user data directories have been deleted";
-    $self->assert( !-e dirname($data->{user}{dav}));
+    if ($maj > 3 || ($maj == 3 && $min > 4)) {
+        # Entire UUID-hashed directory should be removed
+        $self->assert( !-e dirname($data->{user}{dav}));
+    }
+    else {
+        # Name-hashed directory will be left behind, so check individual files
+        $self->assert( !-e $data->{user}{'sub'});
+        $self->assert( !-e $data->{user}{seen});
+        $self->assert( !-e $data->{user}{dav});
+        $self->assert( !-e $data->{user}{counters});
+        $self->assert( !-e $data->{user}{conversations});
+        $self->assert( !-e $data->{user}{xapianactive});
+    }
     $self->assert( !-e $data->{user}{sieve});
     $self->assert( !-e $data->{xapian}{t1});
 }
