@@ -4714,6 +4714,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
         ret = http_proxy_h2_connect(be, txn);
         if (!ret) {
             txn->be = be;
+            txn->flags.te = TE_CHUNKED;
             ptrarray_append(&httpd_streams, txn);
 
             /* Adjust inactivity timer */
