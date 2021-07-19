@@ -4715,6 +4715,10 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
         if (!ret) {
             txn->be = be;
             ptrarray_append(&httpd_streams, txn);
+
+            /* Adjust inactivity timer */
+            prot_settimeout(httpd_in,
+                            config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm'));
         }
         return ret;
     }
