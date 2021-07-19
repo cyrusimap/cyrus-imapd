@@ -180,3 +180,51 @@
     fun:is_valid_mapping
     ...
 }
+{
+    # The libconfig:*_invalid tests all fatal out from in libconfig, which
+    # is fine in reality, but under CUnit we're trapping the fatal and not
+    # actually exiting.  Which means we detect some leaks that aren't real.
+    config_read_string_fname_leak
+    Memcheck:Leak
+    match-leak-kinds: definite
+    fun:malloc
+    fun:xmalloc
+    fun:xstrdup
+    fun:config_read_string
+    fun:test_*_invalid
+    ...
+    obj:*/libcunit*
+    ...
+}
+{
+    # The libconfig:*_invalid tests all fatal out from in libconfig, which
+    # is fine in reality, but under CUnit we're trapping the fatal and not
+    # actually exiting.  Which means we detect some leaks that aren't real.
+    config_read_file_buf_leak
+    Memcheck:Leak
+    match-leak-kinds: definite
+    fun:malloc
+    fun:xmalloc
+    fun:config_read_file
+    fun:config_read
+    fun:config_read_string
+    fun:test_*_invalid
+    ...
+    obj:*/libcunit*
+    ...
+}
+{
+    # The parse:getint tests each check for fatal parse errors, but when
+    # this occurs the protstream structure is leaked.
+    parse_getint_protstream_leak
+    Memcheck:Leak
+    match-leak-kinds: definite
+    fun:malloc
+    fun:xmalloc
+    fun:xzmalloc
+    fun:prot_readmap
+    fun:test_get*int*
+    ...
+    obj:*/libcunit*
+    ...
+}
