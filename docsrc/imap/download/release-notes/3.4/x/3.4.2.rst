@@ -1,0 +1,50 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.4.2 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.2/cyrus-imapd-3.4.2.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.2/cyrus-imapd-3.4.2.tar.gz.sig
+
+.. _relnotes-3.4.2-changes:
+
+Changes since 3.4.1
+===================
+
+Security fixes:
+---------------
+
+* Fixed CVE-2021-33582_: Certain user inputs are used as hash table keys during
+  processing.  A poorly chosen string hashing algorithm meant that the user
+  could control which bucket their data was stored in, allowing a malicious
+  user to direct many inputs to a single bucket.  Each subsequent insertion to
+  the same bucket requires a strcmp of every other entry in it.  At tens of
+  thousands of entries, each new insertion could keep the CPU busy in a strcmp
+  loop for minutes.
+
+  The string hashing algorithm has been replaced with a better one, and now
+  also uses a random seed per hash table, so malicious inputs cannot be
+  precomputed.
+
+  Discovered by Matthew Horsfall, Fastmail
+
+.. _CVE-2021-33582: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-33582
+
+Build changes
+-------------
+
+* Fixed :issue:`3527`: build problems when `--without-sieve` configured
+
+Bug fixes
+---------
+
+* Fixed: missing CY namespace in some DAV responses
+* Fixed: don't allow JMAP uploads if the user does not have r/w access to any
+  mailbox/calendar/addressbook
+* Fixed: Email/query sometimes chose the wrong search algorithm
+* Fixed :issue:`3488`: LMTP delivery to shared mailboxes was broken
+* Fixed :issue:`3528`: 'lookup' ACL alone was not allowing IMAP LIST
+* Fixed: RTF message bodies were treated as plain text in search snippets
