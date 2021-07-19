@@ -496,6 +496,12 @@ EXPORTED void config_reset(void)
     /* free the overflow table */
     free_hash_table(&confighash, free);
 
+    /* in normal use this was either freed already or we fatal'd out,
+     * but under cunit we may continue after catching a fatal, so make
+     * sure includehash gets reset with everything else
+     */
+    free_hash_table(&includehash, NULL);
+
     /* we no longer have loaded config */
     config_loaded = 0;
 }
