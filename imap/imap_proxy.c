@@ -68,7 +68,8 @@
 
 extern unsigned int proxy_cmdcnt;
 extern struct protstream *imapd_in, *imapd_out;
-extern struct backend *backend_inbox, *backend_current, **backend_cached;
+extern struct backend *backend_inbox, *backend_current;
+extern ptrarray_t backend_cached;
 extern char *imapd_userid, *proxy_userid;
 extern struct namespace imapd_namespace;
 

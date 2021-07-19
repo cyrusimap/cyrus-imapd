@@ -156,7 +156,7 @@ static struct protstream *deliver_out, *deliver_in;
 int deliver_logfd = -1; /* used in lmtpengine.c */
 
 /* our cached connections */
-struct backend **backend_cached = NULL;
+ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 static struct protocol_t lmtp_protocol =
 { "lmtp", "lmtp", TYPE_STD,
@@ -1009,13 +1009,12 @@ void shut_down(int code)
     in_shutdown = 1;
 
     /* close backend connections */
-    i = 0;
-    while (backend_cached && backend_cached[i]) {
-        proxy_downserver(backend_cached[i]);
-        free(backend_cached[i]);
-        i++;
+    for (i = 0; i < ptrarray_size(&backend_cached); i++) {
+        struct backend *be = ptrarray_nth(&backend_cached, i);
+        proxy_downserver(be);
+        free(be);
     }
-    if (backend_cached) free(backend_cached);
+    ptrarray_fini(&backend_cached);
 
     if (excluded_specialuse) strarray_free(excluded_specialuse);
 
