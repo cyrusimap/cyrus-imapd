@@ -296,17 +296,17 @@ EXPORTED const char *conversations_folder_mboxname(const struct conversations_st
 
     // make it writeable even though const, because we're fiddling cache
     struct conversations_state *backdoor = (struct conversations_state *)state;
-    if (!backdoor->altnames) backdoor->altnames = strarray_new();
-    const char *res = strarray_nth(backdoor->altnames, foldernum);
+    if (!backdoor->altrep) backdoor->altrep = strarray_new();
+    const char *res = strarray_nth(backdoor->altrep, foldernum);
     if (!res) {
         if (!val) return NULL;
         // cache lookup
         mbentry_t *mbentry = NULL;
         int r = mboxlist_lookup_by_uniqueid(val, &mbentry, NULL);
         if (r || !mbentry) return NULL;
-        strarray_set(backdoor->altnames, foldernum, mbentry->name);
+        strarray_set(backdoor->altrep, foldernum, mbentry->name);
         mboxlist_entry_free(&mbentry);
-        res = strarray_nth(backdoor->altnames, foldernum);
+        res = strarray_nth(backdoor->altrep, foldernum);
     }
     return res;
 }
@@ -322,17 +322,17 @@ EXPORTED const char *conversations_folder_uniqueid(const struct conversations_st
 
     // make it writeable even though const, because we're fiddling cache
     struct conversations_state *backdoor = (struct conversations_state *)state;
-    if (!backdoor->altnames) backdoor->altnames = strarray_new();
-    const char *res = strarray_nth(backdoor->altnames, foldernum);
+    if (!backdoor->altrep) backdoor->altrep = strarray_new();
+    const char *res = strarray_nth(backdoor->altrep, foldernum);
     if (!res) {
         if (!val) return NULL;
         // cache lookup
         mbentry_t *mbentry = NULL;
         int r = mboxlist_lookup(val, &mbentry, NULL);
         if (r || !mbentry) return NULL;
-        strarray_set(backdoor->altnames, foldernum, mbentry->name);
+        strarray_set(backdoor->altrep, foldernum, mbentry->name);
         mboxlist_entry_free(&mbentry);
-        res = strarray_nth(backdoor->altnames, foldernum);
+        res = strarray_nth(backdoor->altrep, foldernum);
     }
     return res;
 }
@@ -524,8 +524,8 @@ static void _conv_remove(struct conversations_state *state)
                 strarray_free(cur->s.counted_flags);
             if (cur->s.folders)
                 strarray_free(cur->s.folders);
-            if (cur->s.altnames)
-                strarray_free(cur->s.altnames);
+            if (cur->s.altrep)
+                strarray_free(cur->s.altrep);
             if (cur->local_namespacelock)
                 mboxname_release(&cur->local_namespacelock);
             free(cur);

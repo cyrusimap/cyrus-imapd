@@ -97,7 +97,7 @@ struct conversations_state {
     char *annotmboxname;
     strarray_t *counted_flags;
     strarray_t *folders;
-    strarray_t *altnames;  // cache the alternative mboxname or uniqueid
+    strarray_t *altrep;  // cache the alternative mboxname or uniqueid
     hash_table folderstatus;
     struct conv_quota quota;
     int trashfolder;
