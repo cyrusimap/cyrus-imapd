@@ -94,7 +94,7 @@ struct stagemsg {
 };
 
 static int append_addseen(struct mailbox *mailbox, const char *userid,
-                          struct seqset *newseen);
+                          seqset_t *newseen);
 static int append_setseen(struct appendstate *as, msgrecord_t *mr);
 
 /*
@@ -241,8 +241,7 @@ static void append_free(struct appendstate *as)
     if (!as) return;
     if (as->s == APPEND_DONE) return;
 
-    seqset_free(as->seen_seq);
-    as->seen_seq = NULL;
+    seqset_free(&as->seen_seq);
 
     mboxevent_freequeue(&as->mboxevents);
     as->event_type = 0;
@@ -1632,14 +1631,14 @@ static int append_setseen(struct appendstate *as, msgrecord_t *msgrec)
  */
 static int append_addseen(struct mailbox *mailbox,
                           const char *userid,
-                          struct seqset *newseen)
+                          seqset_t *newseen)
 {
     int r;
     struct seen *seendb = NULL;
     struct seendata sd = SEENDATA_INITIALIZER;
-    struct seqset *oldseen;
+    seqset_t *oldseen;
 
-    if (!newseen->len)
+    if (!seqset_first(newseen))
         return 0;
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
@@ -1664,7 +1663,7 @@ static int append_addseen(struct mailbox *mailbox,
     /* add the extra items */
     seqset_join(oldseen, newseen);
     sd.seenuids = seqset_cstring(oldseen);
-    seqset_free(oldseen);
+    seqset_free(&oldseen);
 
     /* and write it out */
     sd.lastchange = time(NULL);

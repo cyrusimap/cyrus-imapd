@@ -176,7 +176,7 @@ struct storeargs {
     unsigned last_msgno;
     unsigned last_found;
     /* returned to caller */
-    struct seqset *modified;
+    seqset_t *modified;
 };
 
 /* values for operation */

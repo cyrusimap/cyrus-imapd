@@ -1,4 +1,4 @@
-/* sequence.h -- Routines for dealing with message sequences
+/* seqset.h -- Routines for dealing with message sequences
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -43,23 +43,11 @@
 /* Header for internal usage of index.c + programs that make raw access
  * to index files */
 
-#ifndef SEQUENCE_H
-#define SEQUENCE_H
+#ifndef SEQSET_H
+#define SEQSET_H
 
-struct seq_range {
-    unsigned low;
-    unsigned high;
-};
-
-struct seqset {
-    struct seq_range *set;
-    size_t len;
-    size_t alloc;
-    unsigned current;
-    unsigned prev;
-    unsigned maxval;
-    int flags;
-};
+struct seqset;
+typedef struct seqset seqset_t;
 
 #define SEQ_SPARSE 1
 #define SEQ_MERGE 2
@@ -67,20 +55,21 @@ struct seqset {
 extern unsigned seq_lastnum(const char *list);
 
 /* for writing */
-extern struct seqset *seqset_init(unsigned maxval, int flags);
-void seqset_add(struct seqset *seq, unsigned num, int ismember);
+extern seqset_t *seqset_init(unsigned maxval, int flags);
+void seqset_add(seqset_t *seq, unsigned num, int ismember);
 
-extern struct seqset *seqset_parse(const char *sequence,
-                                   struct seqset *set,
-                                   unsigned maxval);
-extern void seqset_join(struct seqset *a, const struct seqset *b);
-extern int seqset_ismember(struct seqset *set, unsigned num);
-extern unsigned seqset_getnext(struct seqset *set);
-extern unsigned seqset_first(const struct seqset *set);
-extern unsigned seqset_firstnonmember(const struct seqset *set);
-extern unsigned seqset_last(const struct seqset *set);
-extern char *seqset_cstring(const struct seqset *set);
-extern void seqset_free(struct seqset *set);
-extern struct seqset *seqset_dup(const struct seqset *);
+extern seqset_t *seqset_parse(const char *sequence,
+                              seqset_t *set,
+                              unsigned maxval);
+extern void seqset_join(seqset_t *dst, const seqset_t *src);
+extern int seqset_ismember(const seqset_t *set, unsigned num);
+extern void seqset_reset(const seqset_t *set);
+extern unsigned seqset_getnext(const seqset_t *set);
+extern unsigned seqset_first(const seqset_t *set);
+extern unsigned seqset_firstnonmember(const seqset_t *set);
+extern unsigned seqset_last(const seqset_t *set);
+extern char *seqset_cstring(const seqset_t *set);
+extern void seqset_free(seqset_t **setp);
+extern seqset_t *seqset_dup(const seqset_t *src);
 
-#endif /* SEQUENCE_H */
+#endif /* SEQSET_H */

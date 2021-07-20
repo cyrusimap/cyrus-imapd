@@ -186,7 +186,7 @@ static void index_thread_refs(struct index_state *state,
                               unsigned *msgno_list, unsigned int nmsg,
                               int usinguid);
 
-static struct seqset *_parse_sequence(struct index_state *state,
+static seqset_t *_parse_sequence(struct index_state *state,
                                       const char *sequence, int usinguid);
 static void massage_header(char *hdr);
 
@@ -390,7 +390,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     int r;
     uint32_t msgno;
     struct index_map *im;
-    struct seqset *seq = NULL;
+    seqset_t *seq = NULL;
     struct index_record record;
     int numexpunged = 0;
     struct mboxevent *mboxevent = NULL;
@@ -457,7 +457,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
         mboxevent_extract_record(mboxevent, state->mailbox, &record);
     }
 
-    seqset_free(seq);
+    seqset_free(&seq);
 
     mboxevent_extract_mailbox(mboxevent, state->mailbox);
     mboxevent_set_access(mboxevent, NULL, NULL, state->userid, mailbox_name(state->mailbox), 1);
@@ -481,7 +481,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
 
 static char *index_buildseen(struct index_state *state, const char *oldseenuids)
 {
-    struct seqset *outlist;
+    seqset_t *outlist;
     uint32_t msgno;
     unsigned oldmax;
     struct index_map *im;
@@ -498,18 +498,18 @@ static char *index_buildseen(struct index_state *state, const char *oldseenuids)
      * a massive pain... */
     oldmax = seq_lastnum(oldseenuids);
     if (oldmax > state->last_uid) {
-        struct seqset *seq = seqset_parse(oldseenuids, NULL, oldmax);
+        seqset_t *seq = seqset_parse(oldseenuids, NULL, oldmax);
         uint32_t uid;
 
         /* for each future UID, copy the state in the old seenuids */
         for (uid = state->last_uid + 1; uid <= oldmax; uid++)
             seqset_add(outlist, uid, seqset_ismember(seq, uid));
 
-        seqset_free(seq);
+        seqset_free(&seq);
     }
 
     out = seqset_cstring(outlist);
-    seqset_free(outlist);
+    seqset_free(&outlist);
 
     return out;
 }
@@ -584,10 +584,10 @@ static int index_writeseen(struct index_state *state)
 }
 
 /* caller must free the list with seqset_free() when done */
-static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
+static seqset_t *_readseen(struct index_state *state, unsigned *recentuid)
 {
     struct mailbox *mailbox = state->mailbox;
-    struct seqset *seenlist = NULL;
+    seqset_t *seenlist = NULL;
 
     /* Obtain seen information */
     if (state->internalseen) {
@@ -637,7 +637,7 @@ static void index_refresh_locked(struct index_state *state)
     modseq_t delayed_modseq = 0;
     struct index_map *im;
     uint32_t need_records;
-    struct seqset *seenlist;
+    seqset_t *seenlist;
     int i;
 
     /* need to start by having enough space for the entire index state
@@ -791,7 +791,7 @@ static void index_refresh_locked(struct index_state *state)
         num_expunged++;
     }
 
-    seqset_free(seenlist);
+    seqset_free(&seenlist);
 
     /* update the header tracking data */
     state->oldexists = state->exists; /* we last knew about this many */
@@ -851,7 +851,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     if (init->vanishedlist) {
         char *vanished;
         const char *sequence = NULL;
-        struct seqset *seq = NULL;
+        seqset_t *seq = NULL;
         struct index_map *im;
         uint32_t msgno;
 
@@ -875,7 +875,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 continue;
             index_printflags(state, msgno, 1, 0);
         }
-        seqset_free(seq);
+        seqset_free(&seq);
     }
 }
 
@@ -941,12 +941,12 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 /*
  * Perform UID FETCH (VANISHED) on a sequence.
  */
-struct seqset *index_vanished(struct index_state *state,
+seqset_t *index_vanished(struct index_state *state,
                               struct vanished_params *params)
 {
     struct mailbox *mailbox = state->mailbox;
-    struct seqset *outlist;
-    struct seqset *seq;
+    seqset_t *outlist;
+    seqset_t *seq;
 
     /* check uidvalidity match */
     if (params->uidvalidity_is_max) {
@@ -980,8 +980,8 @@ struct seqset *index_vanished(struct index_state *state,
     }
     else {
         unsigned prevuid = 0;
-        struct seqset *msgnolist;
-        struct seqset *uidlist;
+        seqset_t *msgnolist;
+        seqset_t *uidlist;
         uint32_t msgno;
         unsigned uid;
 
@@ -1003,8 +1003,8 @@ struct seqset *index_vanished(struct index_state *state,
                 /* ok, they matched - so we can start after here */
                 prevuid = uid;
             }
-            seqset_free(msgnolist);
-            seqset_free(uidlist);
+            seqset_free(&msgnolist);
+            seqset_free(&uidlist);
         }
 
         const message_t *msg;
@@ -1037,7 +1037,7 @@ struct seqset *index_vanished(struct index_state *state,
         }
     }
 
-    seqset_free(seq);
+    seqset_free(&seq);
 
     return outlist;
 }
@@ -1092,7 +1092,7 @@ static int _fetch_setseen(struct index_state *state,
 
 /* seq can be NULL - means "ALL" */
 EXPORTED void index_fetchresponses(struct index_state *state,
-                          struct seqset *seq,
+                          seqset_t *seq,
                           int usinguid,
                           const struct fetchargs *fetchargs,
                           int *fetchedsomething)
@@ -1177,8 +1177,8 @@ EXPORTED int index_fetch(struct index_state *state,
                 const struct fetchargs *fetchargs,
                 int *fetchedsomething)
 {
-    struct seqset *seq;
-    struct seqset *vanishedlist = NULL;
+    seqset_t *seq;
+    seqset_t *vanishedlist = NULL;
     struct index_map *im;
     uint32_t msgno;
     int r;
@@ -1226,17 +1226,17 @@ EXPORTED int index_fetch(struct index_state *state,
 
     index_checkflags(state, 1, 0);
 
-    if (vanishedlist && vanishedlist->len) {
+    if (seqset_first(vanishedlist)) {
         char *vanished = seqset_cstring(vanishedlist);
         prot_printf(state->out, "* VANISHED (EARLIER) %s\r\n", vanished);
         free(vanished);
     }
 
-    seqset_free(vanishedlist);
+    seqset_free(&vanishedlist);
 
     index_fetchresponses(state, seq, usinguid, fetchargs, fetchedsomething);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 
     index_tellchanges(state, usinguid, usinguid, 0);
 
@@ -1253,7 +1253,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     int i, r = 0;
     uint32_t msgno;
     int userflag;
-    struct seqset *seq;
+    seqset_t *seq;
     struct index_map *im;
     const strarray_t *flags = &storeargs->flags;
     struct mboxevent *mboxevents = NULL;
@@ -1447,7 +1447,7 @@ out:
     mboxevent_freequeue(&mboxevents);
     if (storeargs->operation == STORE_ANNOTATION && r)
         annotate_state_abort(&mailbox->annot_state);
-    seqset_free(seq);
+    seqset_free(&seq);
     index_unlock(state);
     index_tellchanges(state, storeargs->usinguid, storeargs->usinguid,
                       (storeargs->unchangedsince != ~0ULL));
@@ -1456,7 +1456,7 @@ out:
 }
 
 static void prefetch_messages(struct index_state *state,
-                              struct seqset *seq,
+                              seqset_t *seq,
                               int usinguid)
 {
     struct mailbox *mailbox = state->mailbox;
@@ -1493,7 +1493,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
                         struct namespace *namespace, int isadmin)
 {
     struct index_record record;
-    struct seqset *seq = NULL;
+    seqset_t *seq = NULL;
     struct index_map *im;
     uint32_t msgno;
     struct appendstate as;
@@ -1551,7 +1551,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
     }
 
 out:
-    seqset_free(seq);
+    seqset_free(&seq);
 
     if (msgrec) msgrecord_unref(&msgrec);
     if (!r) {
@@ -1569,7 +1569,7 @@ out:
 
 EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
                           unsigned int warmup_flags,
-                          struct seqset *uids)
+                          seqset_t *uids)
 {
     const char *fname = NULL;
     char *userid = NULL;
@@ -2002,15 +2002,15 @@ EXPORTED int index_search(struct index_state *state,
 
         if (nmsg) {
             if (searchargs->returnopts & SEARCH_RETURN_ALL) {
-                struct seqset *seq = search_folder_get_seqset(folder);
+                seqset_t *seq = search_folder_get_seqset(folder);
 
-                if (seq->len) {
+                if (seqset_first(seq)) {
                     char *str = seqset_cstring(seq);
                     prot_printf(state->out, " ALL %s", str);
                     free(str);
                 }
 
-                seqset_free(seq);
+                seqset_free(&seq);
             }
             if (searchargs->returnopts & SEARCH_RETURN_RELEVANCY) {
                 prot_printf(state->out, " RELEVANCY (");
@@ -2083,20 +2083,20 @@ EXPORTED int index_sort(struct index_state *state,
 
         if (nmsg) {
             if (searchargs->returnopts & SEARCH_RETURN_ALL) {
-                struct seqset *seq = seqset_init(0, SEQ_SPARSE);
+                seqset_t *seq = seqset_init(0, SEQ_SPARSE);
 
                 for (i = 0 ; i < query->merged_msgdata.count ; i++) {
                     MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
                     seqset_add(seq, usinguid ? md->uid : md->msgno, 1);
                 }
 
-                if (seq->len) {
+                if (seqset_first(seq)) {
                     char *str = seqset_cstring(seq);
                     prot_printf(state->out, " ALL %s", str);
                     free(str);
                 }
 
-                seqset_free(seq);
+                seqset_free(&seq);
             }
             if (searchargs->returnopts & SEARCH_RETURN_RELEVANCY) {
                 prot_printf(state->out, " RELEVANCY (");
@@ -2988,7 +2988,7 @@ index_copy(struct index_state *state,
     struct appendstate appendstate;
     uint32_t msgno, checkval;
     long docopyuid;
-    struct seqset *seq;
+    seqset_t *seq;
     struct mailbox *srcmailbox = NULL;
     struct mailbox *destmailbox = NULL;
     struct index_map *im;
@@ -3022,7 +3022,7 @@ index_copy(struct index_state *state,
         index_copysetup(state, msgno, &copyargs);
     }
 
-    seqset_free(seq);
+    seqset_free(&seq);
 
     if (copyargs.nummsg == 0) {
         r =  IMAP_NO_NOSUCHMSG;
@@ -3074,7 +3074,7 @@ index_copy(struct index_state *state,
 
     if (docopyuid || ismove) {
         char *source;
-        struct seqset *seq;
+        seqset_t *seq;
         unsigned uidvalidity = destmailbox->i.uidvalidity;
 
         seq = seqset_init(0, SEQ_SPARSE);
@@ -3101,7 +3101,7 @@ index_copy(struct index_state *state,
         }
 
         free(source);
-        seqset_free(seq);
+        seqset_free(&seq);
     }
 
     if (!r) {
@@ -3200,7 +3200,7 @@ EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
                       int usinguid, struct protstream *pout)
 {
     uint32_t msgno;
-    struct seqset *seq;
+    seqset_t *seq;
     struct index_map *im;
     int r;
 
@@ -3216,7 +3216,7 @@ EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
         index_appendremote(state, msgno, pout);
     }
 
-    seqset_free(seq);
+    seqset_free(&seq);
 
     return 0;
 }
@@ -3805,7 +3805,7 @@ static void index_tellexpunge(struct index_state *state)
 {
     unsigned oldmsgno;
     uint32_t msgno = 1;
-    struct seqset *vanishedlist;
+    seqset_t *vanishedlist;
     struct index_map *im;
     unsigned exists = state->exists;
 
@@ -3840,12 +3840,12 @@ static void index_tellexpunge(struct index_state *state)
     }
 
     /* report all vanished if we're doing it this way */
-    if (vanishedlist->len) {
+    if (seqset_first(vanishedlist)) {
         char *vanished = seqset_cstring(vanishedlist);
         prot_printf(state->out, "* VANISHED %s\r\n", vanished);
         free(vanished);
     }
-    seqset_free(vanishedlist);
+    seqset_free(&vanishedlist);
 
     /* highestmodseq can now come forward to real-time */
     state->delayed_modseq = 0;
@@ -8132,7 +8132,7 @@ EXPORTED int index_hasrights(const struct index_state *state, int rights)
 /*
  * Parse a sequence into an array of sorted & merged ranges.
  */
-static struct seqset *_parse_sequence(struct index_state *state,
+static seqset_t *_parse_sequence(struct index_state *state,
                                       const char *sequence, int usinguid)
 {
     unsigned maxval;
@@ -8152,11 +8152,6 @@ static struct seqset *_parse_sequence(struct index_state *state,
     else maxval = state->exists;
 
     return seqset_parse(sequence, NULL, maxval);
-}
-
-EXPORTED void freesequencelist(struct seqset *l)
-{
-    seqset_free(l);
 }
 
 /*

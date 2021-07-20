@@ -68,7 +68,7 @@
 #include "mboxname.h"
 #include "xstats.h"
 #include "search_engines.h"
-#include "sequence.h"
+#include "seqset.h"
 #include "cyr_lock.h"
 #include "xapian_wrap.h"
 #include "command.h"
@@ -574,9 +574,9 @@ static int indexeddb_close(struct indexeddb **idbptr, int abort)
 
 /* parse both the old version 1 (just max UID rather than range) and
  * current version sequence from a mapped database value */
-static struct seqset *parse_indexed(const char *data, size_t datalen)
+static seqset_t *parse_indexed(const char *data, size_t datalen)
 {
-    struct seqset *seq = NULL;
+    seqset_t *seq = NULL;
     const char *rest;
     bit64 version;
     char *val;
@@ -847,7 +847,7 @@ static int read_indexed(const char *userid,
                         const strarray_t *activedirs,
                         const strarray_t *activetiers,
                         const char *uniqueid,
-                        struct seqset *res,
+                        seqset_t *res,
                         int do_cache,
                         int verbose)
 {
@@ -897,10 +897,10 @@ static int read_indexed(const char *userid,
         goto out;
     }
     else if (!r) {
-        struct seqset *seq = parse_indexed(data, datalen);
+        seqset_t *seq = parse_indexed(data, datalen);
         if (seq) {
             seqset_join(res, seq);
-            seqset_free(seq);
+            seqset_free(&seq);
             if (verbose > 1) {
                 xsyslog(LOG_INFO, "read top tier seq", "seq=<%.*s>",
                         (int)datalen, data);
@@ -978,10 +978,10 @@ static int read_indexed(const char *userid,
         }
 
         /* Parse and join the sequence sets */
-        struct seqset *seq = parse_indexed(data, datalen);
+        seqset_t *seq = parse_indexed(data, datalen);
         if (seq) {
             seqset_join(res, seq);
-            seqset_free(seq);
+            seqset_free(&seq);
             if (verbose > 1) {
                 xsyslog(LOG_INFO, "read tier", "tier=<%s> seq=<%.*s>",
                         strarray_nth(activetiers, i), (int)datalen, data);
@@ -1009,7 +1009,7 @@ out:
  * indexing does what you would expect. */
 static int store_indexed(struct indexeddb *idb,
                          const char *key, size_t keylen,
-                         const struct seqset *val)
+                         const seqset_t *val)
 {
     struct buf data = BUF_INITIALIZER;
     char *str = NULL;
@@ -1023,11 +1023,11 @@ static int store_indexed(struct indexeddb *idb,
     }
     else if (r) return r;
     else {
-        struct seqset *seq = parse_indexed(olddata, oldlen);
+        seqset_t *seq = parse_indexed(olddata, oldlen);
         if (seq) {
             seqset_join(seq, val);
             str = seqset_cstring(seq);
-            seqset_free(seq);
+            seqset_free(&seq);
         }
         else {
             str = seqset_cstring(val);
@@ -1051,7 +1051,7 @@ static int write_indexed(const char *dir,
                          const char *mboxname,
                          uint32_t uidvalidity,
                          const char *uniqueid,
-                         struct seqset *seq,
+                         seqset_t *seq,
                          int verbose)
 {
     struct buf path = BUF_INITIALIZER;
@@ -1399,7 +1399,7 @@ typedef struct xapian_builder xapian_builder_t;
 struct xapian_builder {
     search_builder_t super;
     struct xapiandb_lock lock;
-    struct seqset *indexed;
+    seqset_t *indexed;
     struct mailbox *mailbox;
     int opts;
     struct opnode *root;
@@ -2132,7 +2132,7 @@ static void end_search(search_builder_t *bx)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
 
-    if (bb->indexed) seqset_free(bb->indexed);
+    seqset_free(&bb->indexed);
     ptrarray_fini(&bb->stack);
     if (bb->root) opnode_delete(bb->root);
 
@@ -2171,8 +2171,8 @@ struct xapian_update_receiver
     struct mboxlock *xapiandb_namelock;
     unsigned int uncommitted;
     unsigned int commits;
-    struct seqset *oldindexed;
-    struct seqset *indexed;
+    seqset_t *oldindexed;
+    seqset_t *indexed;
     strarray_t *activedirs;
     strarray_t *activetiers;
     hash_table cached_seqs;
@@ -2753,8 +2753,8 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     }
 
     /* purge any stale cache for this mailbox index sequences */
-    struct seqset *seq = hash_del(mailbox_name(mailbox), &tr->cached_seqs);
-    if (seq) seqset_free(seq);
+    seqset_t *seq = hash_del(mailbox_name(mailbox), &tr->cached_seqs);
+    seqset_free(&seq);
 
     tr->super.mailbox = mailbox;
     tr->super.mbname = mbname_from_intname(mailbox_name(mailbox));
@@ -2798,7 +2798,7 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     /* Is this GUID record in an already cached sequence set? */
-    struct seqset *seq = hash_lookup(rec->mailbox, &tr->cached_seqs);
+    seqset_t *seq = hash_lookup(rec->mailbox, &tr->cached_seqs);
     if (seq) {
         return seqset_ismember(seq, rec->uid) ? CYRUSDB_DONE : 0;
     }
@@ -2831,13 +2831,13 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
                 rec->mailbox, error_message(r));
         goto out;
     }
-    hash_insert(rec->mailbox, seq, &tr->cached_seqs);
 
 out:
     if (r) {
-        seqset_free(seq);
+        seqset_free(&seq);
         return 0;
     }
+    hash_insert(rec->mailbox, seq, &tr->cached_seqs);
     return seqset_ismember(seq, rec->uid) ? CYRUSDB_DONE : 0;
 }
 
@@ -2894,14 +2894,8 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     r = flush(rx);
 
     /* flush before cleaning up, since indexed data is written by flush */
-    if (tr->indexed) {
-        seqset_free(tr->indexed);
-        tr->indexed = NULL;
-    }
-    if (tr->oldindexed) {
-        seqset_free(tr->oldindexed);
-        tr->oldindexed = NULL;
-    }
+    seqset_free(&tr->indexed);
+    seqset_free(&tr->oldindexed);
 
     tr->super.mailbox = NULL;
     mbname_free(&tr->super.mbname);
@@ -2986,11 +2980,17 @@ static void free_receiver(xapian_receiver_t *tr)
     free(tr);
 }
 
+static void _free_cached_seqset(void *p)
+{
+    seqset_t *seq = (seqset_t *)p;
+    seqset_free(&seq);
+}
+
 static int end_update(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-    free_hash_table(&tr->cached_seqs, (void(*)(void*))seqset_free);
 
+    free_hash_table(&tr->cached_seqs, _free_cached_seqset);
     free_receiver(&tr->super);
 
     return 0;
@@ -3336,11 +3336,11 @@ static int copyindexed_cb(void *rock,
     }
 
     /* Copy the record */
-    struct seqset *seq = parse_indexed(data, datalen);
+    seqset_t *seq = parse_indexed(data, datalen);
     int r = 0;
     if (seq) {
         r = store_indexed(filter->idb, key, keylen, seq);
-        seqset_free(seq);
+        seqset_free(&seq);
     }
 
     return r;
@@ -3468,7 +3468,7 @@ static int reindex_mb(void *rock,
 {
     struct mbfilter *filter = (struct mbfilter *)rock;
     char *mboxname = xstrndup(key, keylen);
-    struct seqset *seq = parse_indexed(data, datalen);
+    seqset_t *seq = parse_indexed(data, datalen);
     xapian_update_receiver_t *tr = NULL;
     struct mailbox *mailbox = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -3628,7 +3628,7 @@ done:
     if (tr) {
         strarray_free(tr->activedirs);
         strarray_free(tr->activetiers);
-        if (tr->indexed) seqset_free(tr->indexed);
+        seqset_free(&tr->indexed);
         if (tr->dbw) xapian_dbw_close(tr->dbw);
         free_receiver(&tr->super);
     }
@@ -3639,7 +3639,7 @@ done:
     }
     ptrarray_fini(&batch);
     free(mboxname);
-    seqset_free(seq);
+    seqset_free(&seq);
     strarray_fini(&alldirs);
     buf_free(&buf);
     return r;

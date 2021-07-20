@@ -72,7 +72,7 @@
 #include "quota.h"
 #include "retry.h"
 #include "seen.h"
-#include "sequence.h"
+#include "seqset.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "user.h"
@@ -180,7 +180,7 @@ static void header_set_num_records(char *buf, unsigned int nrecords)
 /* create a downgraded index file in cyrus.index.  We don't copy back
  * expunged messages, sorry */
 static int dump_index(struct mailbox *mailbox, int oldversion,
-                      struct seqset *expunged_seq, int first, int sync,
+                      seqset_t *expunged_seq, int first, int sync,
                       struct protstream *pin, struct protstream *pout)
 {
     char oldname[MAX_MAILBOX_PATH];
@@ -486,7 +486,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     char *userid = NULL;
     struct quota q;
     struct data_file *df;
-    struct seqset *expunged_seq = NULL;
+    seqset_t *expunged_seq = NULL;
     const char *dirpath = mailbox_datapath(mailbox, 0);
 
     /* XXX - archivepath */
@@ -749,7 +749,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     prot_flush(pout);
 
     if (mbdir) closedir(mbdir);
-    seqset_free(expunged_seq);
+    seqset_free(&expunged_seq);
     free(userid);
 
     return r;
@@ -759,7 +759,7 @@ static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
 {
     struct seen *seendb = (struct seen *)rock;
     int r;
-    struct seqset *seq = NULL;
+    seqset_t *seq = NULL;
     struct mailbox *mailbox = NULL;
     const message_t *msg;
     struct seendata sd = SEENDATA_INITIALIZER;
@@ -797,7 +797,7 @@ static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
         mailbox->i.recenttime = sd.lastread;
 
  done:
-    seqset_free(seq);
+    seqset_free(&seq);
     mailbox_close(&mailbox);
     return r;
 }

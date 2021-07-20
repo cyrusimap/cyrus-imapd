@@ -393,8 +393,8 @@ EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
     if (!event)
         return;
 
-    seqset_free(event->uidset);
-    seqset_free(event->olduidset);
+    seqset_free(&event->uidset);
+    seqset_free(&event->olduidset);
     strarray_fini(&event->midset);
     strarray_fini(&event->flagnames);
 
@@ -1629,7 +1629,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND) && event->uidset) {
         imapurl.uid = seqset_first(event->uidset);
         /* don't add uidset parameter to MessageNew and MessageAppend events */
-        seqset_free(event->uidset);
+        seqset_free(&event->uidset);
         event->uidset = NULL;
     }
 
