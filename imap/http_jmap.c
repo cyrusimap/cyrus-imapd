@@ -377,6 +377,10 @@ static int meth_get(struct transaction_t *txn,
         r = http_pipe_req_resp(be, txn);
         if (!r && (txn->req_tgt.flags == JMAP_ENDPOINT_WS)) {
             txn->be = be;
+
+            /* Adjust inactivity timer */
+            prot_settimeout(httpd_in,
+                            2 + config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm'));
         }
         return r;
     }

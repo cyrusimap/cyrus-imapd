@@ -4719,7 +4719,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
 
             /* Adjust inactivity timer */
             prot_settimeout(httpd_in,
-                            config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm'));
+                            2 + config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm'));
         }
         return ret;
     }
