@@ -965,34 +965,34 @@ HIDDEN void ws_input(struct transaction_t *txn)
             "goaway=<%d>, eof=<%d>, want read=<%d>, want write=<%d>",
             goaway, prot_IS_EOF(pin), want_read, want_write);
 
-    if (prot_IS_EOF(pin)) {
-        /* Client closed connection */
-        syslog(LOG_DEBUG, "client closed connection");
-        wslay_event_shutdown_write(ev);
-        txn->flags.conn = CONN_CLOSE;
-    }
-    else if (prot_error(pin)) {
-        /* Client timeout or I/O error */
-        goaway = 1;
-        txn->error.desc = prot_error(pin);
-    }
-    else if (want_read && !goaway) {
+    if (want_read && !goaway) {
         /* Read frame(s) */
         int r = wslay_event_recv(ev);
 
-        if (!r) {
-            /* Successfully received frames */
-            xsyslog(LOG_DEBUG, "WS recv: success", NULL);
-
-            /* Reset request payload buffer */
-            buf_reset(&txn->req_body.payload);
+        if (prot_IS_EOF(pin)) {
+            /* Client closed connection */
+            syslog(LOG_DEBUG, "client closed connection");
+            wslay_event_shutdown_write(ev);
+            txn->flags.conn = CONN_CLOSE;
         }
-        else {
+        else if (prot_error(pin)) {
+            /* Client timeout or I/O error */
+            goaway = 1;
+            txn->error.desc = prot_error(pin);
+        }
+        else if (r) {
             /* Failure */
             xsyslog(LOG_DEBUG, "WS recv failed", "err=<%s>, prot err=<%s>",
                     wslay_error_as_str(r), prot_error(pin));
             goaway = 1;
             txn->error.desc = wslay_error_as_str(r);
+        }
+        else {
+            /* Successfully received frames */
+            xsyslog(LOG_DEBUG, "WS recv: success", NULL);
+
+            /* Reset request payload buffer */
+            buf_reset(&txn->req_body.payload);
         }
     }
 
