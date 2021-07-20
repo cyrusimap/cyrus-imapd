@@ -1124,10 +1124,6 @@ EXPORTED int mboxlist_update(const mbentry_t *mbentry, int localonly)
 
     r = mboxlist_update_entry(mbentry->name, mbentry, &tid);
 
-    if (!r)
-        mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, mbentry->mbtype,
-                           MBOXMODSEQ_ISFOLDER);
-
     /* commit the change to mupdate */
     if (!r && !localonly && config_mupdate_server) {
         mupdate_handle *mupdate_h = NULL;
@@ -1164,6 +1160,9 @@ EXPORTED int mboxlist_update(const mbentry_t *mbentry, int localonly)
                 xsyslog(LOG_ERR, "DBERROR: error committing transaction",
                                  "error=<%s>", cyrusdb_strerror(r2));
         }
+        if (!r)
+            mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, mbentry->mbtype,
+                               MBOXMODSEQ_ISFOLDER);
     }
 
     return r;
