@@ -3136,6 +3136,25 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
                              name, cyrusdb_strerror(r));
             r = IMAP_IOERROR;
         }
+    }
+
+    /* 4. Commit transaction */
+    if (!r) {
+        if((r = cyrusdb_commit(mbdb, tid)) != 0) {
+            xsyslog(LOG_ERR, "DBERROR: failed on commit",
+                             "error=<%s>",
+                             cyrusdb_strerror(r));
+            r = IMAP_IOERROR;
+        }
+        tid = NULL;
+    }
+
+    /* 5. Change backup copy (cyrus.header) */
+    /* we already have it locked from above */
+    if (!r && !(mbentry->mbtype & MBTYPE_REMOTE)) {
+        mailbox_set_acl(mailbox, newacl);
+        /* want to commit immediately to ensure ordering */
+        r = mailbox_commit(mailbox);
 
         /* send a AclChange event notification */
         struct mboxevent *mboxevent = mboxevent_new(EVENT_ACL_CHANGE);
@@ -3145,26 +3164,6 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
 
         mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
-
-    }
-
-    /* 4. Change backup copy (cyrus.header) */
-    /* we already have it locked from above */
-    if (!r && !(mbentry->mbtype & MBTYPE_REMOTE)) {
-        mailbox_set_acl(mailbox, newacl);
-        /* want to commit immediately to ensure ordering */
-        r = mailbox_commit(mailbox);
-    }
-
-    /* 5. Commit transaction */
-    if (!r) {
-        if((r = cyrusdb_commit(mbdb, tid)) != 0) {
-            xsyslog(LOG_ERR, "DBERROR: failed on commit",
-                             "error=<%s>",
-                             cyrusdb_strerror(r));
-            r = IMAP_IOERROR;
-        }
-        tid = NULL;
     }
 
     /* 6. Change mupdate entry  */
