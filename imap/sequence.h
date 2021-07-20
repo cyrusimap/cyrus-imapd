@@ -64,7 +64,7 @@ struct seqset {
 #define SEQ_SPARSE 1
 #define SEQ_MERGE 2
 
-extern unsigned int seq_lastnum(const char *list, const char **numstart);
+extern unsigned seq_lastnum(const char *list);
 
 /* for writing */
 extern struct seqset *seqset_init(unsigned maxval, int flags);

@@ -125,16 +125,11 @@ EXPORTED void seqset_add(struct seqset *seq, unsigned num, int ismember)
 }
 
 
-/* read the final number from a sequence string and return it.
- * if given "numstart", return a pointer to the start of
- * that number in the string */
-EXPORTED unsigned int seq_lastnum(const char *list, const char **numstart)
+/* read the final number from a sequence string and return it */
+EXPORTED unsigned seq_lastnum(const char *list)
 {
     const char *tail;
     uint32_t retval = 0;
-
-    if (numstart)
-        *numstart = list;
 
     /* empty */
     if (!list) return 0;
@@ -150,9 +145,6 @@ EXPORTED unsigned int seq_lastnum(const char *list, const char **numstart)
     /* read the number */
     if (parseuint32(tail, NULL, &retval))
         retval = 0;
-
-    if (numstart)
-        *numstart = tail;
 
     return retval;
 }

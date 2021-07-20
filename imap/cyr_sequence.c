@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
                 seqset_add(seq, num, isadd);
         }
         if (origlist) {
-            unsigned oldmax = seq_lastnum(origlist, NULL);
+            unsigned oldmax = seq_lastnum(origlist);
             if (oldmax > maxval) {
                 struct seqset *origseq = seqset_parse(origlist, NULL, oldmax);
                 unsigned val;

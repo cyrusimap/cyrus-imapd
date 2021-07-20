@@ -496,7 +496,7 @@ static char *index_buildseen(struct index_state *state, const char *oldseenuids)
     /* there may be future already seen UIDs that this process isn't
      * allowed to know about, but we can't blat them either!  This is
      * a massive pain... */
-    oldmax = seq_lastnum(oldseenuids, NULL);
+    oldmax = seq_lastnum(oldseenuids);
     if (oldmax > state->last_uid) {
         struct seqset *seq = seqset_parse(oldseenuids, NULL, oldmax);
         uint32_t uid;
