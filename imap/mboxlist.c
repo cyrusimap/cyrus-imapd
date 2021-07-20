@@ -1594,9 +1594,10 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
     mbentry_t *mbentry = NULL, *parent = NULL;
     struct mailbox *mailbox = NULL;
     int r = 0;
-    struct txn *tid = NULL;
 
-    r = mboxlist_lookup_allow_all(mboxname, &mbentry, &tid);
+    assert_namespacelocked(mboxname);
+
+    r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
     if (r || !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) goto done;
 
     r = mboxlist_findparent(mboxname, &parent);
@@ -1630,17 +1631,12 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
     mbentry->createdmodseq = mailbox->i.createdmodseq;
     mbentry->foldermodseq = mailbox->i.highestmodseq;
 
-    r = mboxlist_update_entry(mboxname, mbentry, &tid);
+    r = mboxlist_update_entry(mboxname, mbentry, NULL);
     if (r) goto done;
 
 done:
+    // XXX - cleanup on error?
     mailbox_close(&mailbox);
-    if (tid) {
-        if (r) cyrusdb_abort(mbdb, tid);
-        else {
-            r = cyrusdb_commit(mbdb, tid);
-        }
-    }
     mboxlist_entry_free(&mbentry);
     mboxlist_entry_free(&parent);
     return r;
