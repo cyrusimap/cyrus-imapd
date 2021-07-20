@@ -79,7 +79,7 @@ struct http2_stream {
 
 static nghttp2_session_callbacks *http2_callbacks = NULL;
 
-static void stream_fini(struct transaction_t *txn)
+static void stream_free(struct transaction_t *txn)
 {
     if (txn) {
         struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
@@ -133,7 +133,7 @@ static int begin_headers_cb(nghttp2_session *session,
 
     strm->id = frame->hd.stream_id;
     txn->strm_ctx = strm;
-    ptrarray_add(&txn->done_callbacks, &stream_fini);
+    ptrarray_add(&txn->done_callbacks, &stream_free);
 
     /* Tell syslog our stream-id */
     buf_printf(&txn->buf, "%d", strm->id);
@@ -423,7 +423,7 @@ static void end_session(struct http_connection *conn,
     }
 }
 
-static void session_fini(struct http_connection *conn)
+static void session_free(struct http_connection *conn)
 {
     struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
 
@@ -472,7 +472,7 @@ static void http2_output(struct http_connection *conn)
     }
 }
 
-static void http2_fini(struct http_connection *conn)
+static void http2_done(struct http_connection *conn)
 {
     struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
     if (ctx) {
@@ -481,7 +481,7 @@ static void http2_fini(struct http_connection *conn)
             end_session(conn, 0);
             http2_output(conn);
         }
-        session_fini(conn);
+        session_free(conn);
     }
 
     nghttp2_session_callbacks_del(http2_callbacks);
@@ -520,7 +520,7 @@ HIDDEN int http2_init(struct http_connection *conn, struct buf *serverinfo)
                                                              &frame_send_cb);
     }
 
-    ptrarray_add(&conn->shutdown_callbacks, &http2_fini);
+    ptrarray_add(&conn->shutdown_callbacks, &http2_done);
 
     return 1;
 }
@@ -830,7 +830,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
     }
 
     conn->sess_ctx = ctx;
-    ptrarray_add(&conn->reset_callbacks, &session_fini);
+    ptrarray_add(&conn->reset_callbacks, &session_free);
 
     if (txn && (txn->flags.conn & CONN_UPGRADE)) {
         struct http2_stream *strm;
@@ -873,7 +873,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         strm->id = nghttp2_session_get_last_proc_stream_id(ctx->session);
         txn->strm_ctx = strm;
         txn->flags.ver = VER_2;
-        ptrarray_add(&txn->done_callbacks, &stream_fini);
+        ptrarray_add(&txn->done_callbacks, &stream_free);
     }
 
     conn->begin_resp_headers = &begin_resp_headers;
