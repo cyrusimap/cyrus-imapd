@@ -69,7 +69,7 @@ void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
 
 struct backend *
 proxy_findserver(const char *server, struct protocol_t *prot,
-                 const char *userid, struct backend ***cache,
+                 const char *userid, ptrarray_t *cache,
                  struct backend **current, struct backend **inbox,
                  struct protstream *clientin);
 

@@ -550,7 +550,7 @@ extern struct namespace_t namespace_cgi;
 
 /* XXX  These should be included in struct transaction_t */
 extern struct buf serverinfo;
-extern struct backend **backend_cached;
+extern ptrarray_t backend_cached;
 extern struct protstream *httpd_in;
 extern struct protstream *httpd_out;
 extern int https;

@@ -160,7 +160,7 @@ struct backend *backend_inbox = NULL;
 struct backend *backend_current = NULL;
 
 /* our cached connections */
-struct backend **backend_cached = NULL;
+ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 /* cached connection to mupdate master (for multiple XFER and MUPDATEPUSH) */
 static mupdate_handle *mupdate_h = NULL;
@@ -747,17 +747,15 @@ static void imapd_reset(void)
     proc_cleanup();
 
     /* close backend connections */
-    i = 0;
-    while (backend_cached && backend_cached[i]) {
-        proxy_downserver(backend_cached[i]);
-        if (backend_cached[i]->last_result.s) {
-            free(backend_cached[i]->last_result.s);
+    for (i = 0; i < ptrarray_size(&backend_cached); i++) {
+        struct backend *be = ptrarray_nth(&backend_cached, i);
+        proxy_downserver(be);
+        if (be->last_result.s) {
+            free(be->last_result.s);
         }
-        free(backend_cached[i]);
-        i++;
+        free(be);
     }
-    if (backend_cached) free(backend_cached);
-    backend_cached = NULL;
+    ptrarray_fini(&backend_cached);
     backend_inbox = backend_current = NULL;
     if (mupdate_h) mupdate_disconnect(&mupdate_h);
     mupdate_h = NULL;
@@ -1087,16 +1085,15 @@ void shut_down(int code)
 
     proc_cleanup();
 
-    i = 0;
-    while (backend_cached && backend_cached[i]) {
-        proxy_downserver(backend_cached[i]);
-        if (backend_cached[i]->last_result.s) {
-            free(backend_cached[i]->last_result.s);
+    for (i = 0; i < ptrarray_size(&backend_cached); i++) {
+        struct backend *be = ptrarray_nth(&backend_cached, i);
+        proxy_downserver(be);
+        if (be->last_result.s) {
+            free(be->last_result.s);
         }
-        free(backend_cached[i]);
-        i++;
+        free(be);
     }
-    if (backend_cached) free(backend_cached);
+    ptrarray_fini(&backend_cached);
     if (mupdate_h) mupdate_disconnect(&mupdate_h);
 
     index_text_extractor_destroy();
