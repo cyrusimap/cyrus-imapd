@@ -3421,6 +3421,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         uint32_t num;
         for (num = 0; num < numfolders; num++) {
             const char *mboxname = conversations_folder_mboxname(req->cstate, num);
+            if (!mboxname) continue;
             if (jmap_hasrights(req, mboxname, ACL_READ|ACL_LOOKUP)) {
                 bv_set(&gsq->readable_folders, num);
             }
@@ -3430,12 +3431,13 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         // all user-owned mailboxes are readable
         bv_setall(&gsq->readable_folders);
     }
+
     // filter all folders that aren't regular mailboxes
     uint32_t num;
     for (num = 0; num < numfolders; num++) {
         const char *mboxname = conversations_folder_mboxname(req->cstate, num);
         mbentry_t *mbentry = NULL;
-        if (mboxname_isnondeliverymailbox(mboxname, 0) ||
+        if (!mboxname || mboxname_isnondeliverymailbox(mboxname, 0) ||
             mboxlist_lookup_allow_all(mboxname, &mbentry, NULL) ||
             mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
             bv_clear(&gsq->readable_folders, num);

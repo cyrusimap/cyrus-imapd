@@ -381,12 +381,14 @@ static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
 {
     struct getblob_cb_rock *rock = vrock;
 
+    const char *uniqueid = conv_guidrec_uniqueid(rec);
+    if (!uniqueid) return 0;
+
     struct getblob_rec *getblob = xzmalloc(sizeof(struct getblob_rec));
     getblob->blob_id = rock->blob_id;
     getblob->uid = rec->uid;
     getblob->part = xstrdupnull(rec->part);
 
-    const char *uniqueid = conv_guidrec_uniqueid(rec);
     ptrarray_t *getblobs = hash_lookup(uniqueid, rock->getblobs_by_uniqueid);
     if (!getblobs) {
         getblobs = ptrarray_new();

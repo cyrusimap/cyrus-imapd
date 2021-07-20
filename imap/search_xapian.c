@@ -1783,8 +1783,11 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *vrock)
             return 0;
     }
 
+    const char *mboxname = conv_guidrec_mboxname(rec);
+    if (!mboxname) return 0;
+
     // XXX: update this API to work with uniqueids?
-    return bb->proc(conv_guidrec_mboxname(rec), 0, rec->uid, rec->part, bb->rock);
+    return bb->proc(mboxname, 0, rec->uid, rec->part, bb->rock);
 }
 
 
@@ -2781,6 +2784,7 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     const char *uniqueid = conv_guidrec_uniqueid(rec);
+    if (!uniqueid) return 0;
 
     /* Is this GUID record in an already cached sequence set? */
     seqset_t *seq = hash_lookup(uniqueid, &tr->cached_seqs);
