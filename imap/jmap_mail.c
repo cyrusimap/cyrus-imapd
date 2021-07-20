@@ -3450,6 +3450,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         uint32_t num;
         for (num = 0; num < numfolders; num++) {
             const char *mboxname = conversations_folder_mboxname(req->cstate, num);
+            if (!mboxname) continue;
             hash_insert(mboxname, (void*)((uintptr_t)num+1), &foldernum_by_mboxname);
         }
 
