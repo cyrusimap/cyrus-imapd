@@ -289,6 +289,8 @@ EXPORTED const char *conversations_folder_mboxname(const struct conversations_st
                                                    int foldernum)
 {
     const char *val = strarray_nth(state->folders, foldernum);
+    if (!strcmpsafe(val, "-")) return NULL;  // tombstone
+
     if (state->folders_byname)
         return val;
 
@@ -313,6 +315,8 @@ EXPORTED const char *conversations_folder_uniqueid(const struct conversations_st
                                                    int foldernum)
 {
     const char *val = strarray_nth(state->folders, foldernum);
+    if (!strcmpsafe(val, "-")) return NULL;  // tombstone
+
     if (!state->folders_byname)
         return val;
 
