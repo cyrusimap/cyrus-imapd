@@ -289,7 +289,8 @@ EXPORTED const char *conversations_folder_mboxname(const struct conversations_st
                                                    int foldernum)
 {
     const char *val = strarray_nth(state->folders, foldernum);
-    if (!strcmpsafe(val, "-")) return NULL;  // tombstone
+    if (!val) return NULL; // missing?  Weird - we've requested past the end of the list
+    if (!strcmp(val, "-")) return NULL;  // tombstone
 
     if (state->folders_byname)
         return val;
@@ -299,7 +300,6 @@ EXPORTED const char *conversations_folder_mboxname(const struct conversations_st
     if (!backdoor->altrep) backdoor->altrep = strarray_new();
     const char *res = strarray_nth(backdoor->altrep, foldernum);
     if (!res) {
-        if (!val) return NULL;
         // cache lookup
         mbentry_t *mbentry = NULL;
         int r = mboxlist_lookup_by_uniqueid(val, &mbentry, NULL);
@@ -315,7 +315,8 @@ EXPORTED const char *conversations_folder_uniqueid(const struct conversations_st
                                                    int foldernum)
 {
     const char *val = strarray_nth(state->folders, foldernum);
-    if (!strcmpsafe(val, "-")) return NULL;  // tombstone
+    if (!val) return NULL; // missing?  Weird - we've requested past the end of the list
+    if (!strcmp(val, "-")) return NULL;  // tombstone
 
     if (!state->folders_byname)
         return val;
@@ -325,7 +326,6 @@ EXPORTED const char *conversations_folder_uniqueid(const struct conversations_st
     if (!backdoor->altrep) backdoor->altrep = strarray_new();
     const char *res = strarray_nth(backdoor->altrep, foldernum);
     if (!res) {
-        if (!val) return NULL;
         // cache lookup
         mbentry_t *mbentry = NULL;
         int r = mboxlist_lookup(val, &mbentry, NULL);
