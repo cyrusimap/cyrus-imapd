@@ -1124,10 +1124,6 @@ EXPORTED int mboxlist_update(const mbentry_t *mbentry, int localonly)
 
     r = mboxlist_update_entry(mbentry->name, mbentry, &tid);
 
-    if (!r)
-        mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, mbentry->mbtype,
-                           MBOXMODSEQ_ISFOLDER);
-
     /* commit the change to mupdate */
     if (!r && !localonly && config_mupdate_server) {
         mupdate_handle *mupdate_h = NULL;
@@ -1164,6 +1160,9 @@ EXPORTED int mboxlist_update(const mbentry_t *mbentry, int localonly)
                 xsyslog(LOG_ERR, "DBERROR: error committing transaction",
                                  "error=<%s>", cyrusdb_strerror(r2));
         }
+        if (!r)
+            mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, mbentry->mbtype,
+                               MBOXMODSEQ_ISFOLDER);
     }
 
     return r;
@@ -1595,9 +1594,10 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
     mbentry_t *mbentry = NULL, *parent = NULL;
     struct mailbox *mailbox = NULL;
     int r = 0;
-    struct txn *tid = NULL;
 
-    r = mboxlist_lookup_allow_all(mboxname, &mbentry, &tid);
+    assert_namespacelocked(mboxname);
+
+    r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
     if (r || !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) goto done;
 
     r = mboxlist_findparent(mboxname, &parent);
@@ -1631,17 +1631,12 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
     mbentry->createdmodseq = mailbox->i.createdmodseq;
     mbentry->foldermodseq = mailbox->i.highestmodseq;
 
-    r = mboxlist_update_entry(mboxname, mbentry, &tid);
+    r = mboxlist_update_entry(mboxname, mbentry, NULL);
     if (r) goto done;
 
 done:
+    // XXX - cleanup on error?
     mailbox_close(&mailbox);
-    if (tid) {
-        if (r) cyrusdb_abort(mbdb, tid);
-        else {
-            r = cyrusdb_commit(mbdb, tid);
-        }
-    }
     mboxlist_entry_free(&mbentry);
     mboxlist_entry_free(&parent);
     return r;
@@ -3141,6 +3136,25 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
                              name, cyrusdb_strerror(r));
             r = IMAP_IOERROR;
         }
+    }
+
+    /* 4. Commit transaction */
+    if (!r) {
+        if((r = cyrusdb_commit(mbdb, tid)) != 0) {
+            xsyslog(LOG_ERR, "DBERROR: failed on commit",
+                             "error=<%s>",
+                             cyrusdb_strerror(r));
+            r = IMAP_IOERROR;
+        }
+        tid = NULL;
+    }
+
+    /* 5. Change backup copy (cyrus.header) */
+    /* we already have it locked from above */
+    if (!r && !(mbentry->mbtype & MBTYPE_REMOTE)) {
+        mailbox_set_acl(mailbox, newacl);
+        /* want to commit immediately to ensure ordering */
+        r = mailbox_commit(mailbox);
 
         /* send a AclChange event notification */
         struct mboxevent *mboxevent = mboxevent_new(EVENT_ACL_CHANGE);
@@ -3150,26 +3164,6 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
 
         mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
-
-    }
-
-    /* 4. Change backup copy (cyrus.header) */
-    /* we already have it locked from above */
-    if (!r && !(mbentry->mbtype & MBTYPE_REMOTE)) {
-        mailbox_set_acl(mailbox, newacl);
-        /* want to commit immediately to ensure ordering */
-        r = mailbox_commit(mailbox);
-    }
-
-    /* 5. Commit transaction */
-    if (!r) {
-        if((r = cyrusdb_commit(mbdb, tid)) != 0) {
-            xsyslog(LOG_ERR, "DBERROR: failed on commit",
-                             "error=<%s>",
-                             cyrusdb_strerror(r));
-            r = IMAP_IOERROR;
-        }
-        tid = NULL;
     }
 
     /* 6. Change mupdate entry  */

@@ -2412,46 +2412,6 @@ EXPORTED char *mboxid_conf_getpath(const char *mboxid, const char *suffix)
 
 /* ========================= COUNTERS ============================ */
 
-static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
-{
-    bit64 fileval = 0;
-    mbname_t *mbname = NULL;
-    char *fname = NULL;
-    const char *base = NULL;
-    size_t len = 0;
-    int fd = -1;
-
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, metaname);
-    if (!fname) goto done;
-
-    fd = open(fname, O_RDONLY);
-
-    /* read the value - note: we don't care if it's being rewritten,
-     * we'll still get a consistent read on either the old or new
-     * value */
-    if (fd != -1) {
-        struct stat sbuf;
-        if (fstat(fd, &sbuf)) {
-            xsyslog(LOG_ERR, "IOERROR: fstat failed",
-                             "filename=<%s>", fname);
-            goto done;
-        }
-        if (sbuf.st_size) {
-            map_refresh(fd, 1, &base, &len, sbuf.st_size, metaname, mboxname);
-            parsenum(base, NULL, sbuf.st_size, &fileval);
-            map_free(&base, &len);
-        }
-    }
-
- done:
-    if (fd != -1) close(fd);
-    mbname_free(&mbname);
-    free(fname);
-    return fileval;
-}
-
 #define MV_VERSION 8
 
 #define MV_OFF_GENERATION 0
@@ -2768,25 +2728,15 @@ static void mboxname_counters_to_buf(const struct mboxname_counters *vals, char 
 /* XXX - inform about errors?  Any error causes the value of at least
    last+1 to be returned.  An error only on writing causes
    max(last, fileval) + 1 to still be returned */
-static int mboxname_load_counters(const char *mboxname, struct mboxname_counters *vals, int *fdp)
+static int mboxname_load_fcounters(const char *fname, struct mboxname_counters *vals, int *fdp)
 {
     int fd = -1;
-    char *fname = NULL;
     struct stat sbuf, fbuf;
     const char *base = NULL;
     size_t len = 0;
-    mbname_t *mbname = NULL;
     int r = 0;
 
     memset(vals, 0, sizeof(struct mboxname_counters));
-
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, "counters");
-    if (!fname) {
-        r = IMAP_MAILBOX_BADNAME;
-        goto done;
-    }
 
     /* get a blocking lock on fd */
     for (;;) {
@@ -2827,19 +2777,13 @@ static int mboxname_load_counters(const char *mboxname, struct mboxname_counters
         goto done;
     }
 
-    if (sbuf.st_size >= 8) {
+    if (sbuf.st_size) {
         /* read the old value */
-        map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
+        map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", fname);
         if (len >= 8) {
             r = mboxname_buf_to_counters(base, len, vals);
         }
         map_free(&base, &len);
-    }
-    else {
-        /* going to have to read the old files */
-        vals->mailmodseq = vals->caldavmodseq = vals->carddavmodseq =
-            vals->highestmodseq = mboxname_readval_old(mboxname, "modseq");
-        vals->uidvalidity = mboxname_readval_old(mboxname, "uidvalidity");
     }
 
 done:
@@ -2853,28 +2797,16 @@ done:
         /* maintain the lock until we're done */
         *fdp = fd;
     }
-    mbname_free(&mbname);
-    free(fname);
     return r;
 }
 
-static int mboxname_set_counters(const char *mboxname, struct mboxname_counters *vals, int fd)
+static int mboxname_set_fcounters(const char *fname, struct mboxname_counters *vals, int fd)
 {
-    char *fname = NULL;
-    mbname_t *mbname = NULL;
     char buf[MV_LENGTH];
     char newfname[MAX_MAILBOX_PATH];
     int newfd = -1;
     int n = 0;
     int r = 0;
-
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, "counters");
-    if (!fname) {
-        r = IMAP_MAILBOX_BADNAME;
-        goto done;
-    }
 
     snprintf(newfname, MAX_MAILBOX_PATH, "%s.NEW", fname);
     newfd = open(newfname, O_CREAT | O_TRUNC | O_WRONLY, 0644);
@@ -2921,8 +2853,6 @@ static int mboxname_set_counters(const char *mboxname, struct mboxname_counters 
         lock_unlock(fd, fname);
         close(fd);
     }
-    mbname_free(&mbname);
-    free(fname);
 
     return r;
 }
@@ -2934,44 +2864,18 @@ static int mboxname_unload_counters(int fd)
     return 0;
 }
 
-EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals)
+static int mboxname_read_fcounters(const char *fname, struct mboxname_counters *vals)
 {
     int r = 0;
-    mbname_t *mbname = NULL;
     struct stat sbuf;
-    char *fname = NULL;
     const char *base = NULL;
     size_t len = 0;
     int fd = -1;
 
     memset(vals, 0, sizeof(struct mboxname_counters));
 
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, "counters");
-    if (!fname) {
-        r = IMAP_MAILBOX_BADNAME;
-        goto done;
-    }
-
     fd = open(fname, O_RDONLY);
-
-    /* if no file, import from the old files potentially, and write a file regardless */
-    if (fd < 0) {
-        /* race => multiple rewrites, won't hurt too much */
-        r = mboxname_load_counters(mboxname, vals, &fd);
-        if (r) goto done;
-        r = mboxname_set_counters(mboxname, vals, fd);
-        fd = -1;
-        if (r) goto done;
-        free(fname);
-        fname = mboxname_conf_getpath(mbname, "modseq");
-        if (fname) unlink(fname);
-        free(fname);
-        fname = mboxname_conf_getpath(mbname, "uidvalidity");
-        if (fname) unlink(fname);
-        goto done;
-    }
+    if (fd < 0) goto done;
 
     if (fstat(fd, &sbuf)) {
         xsyslog(LOG_ERR, "IOERROR: fstat failed",
@@ -2981,7 +2885,7 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
     }
 
     if (sbuf.st_size >= 8) {
-        map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
+        map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", fname);
         if (len >= 8)
             r = mboxname_buf_to_counters(base, len, vals);
         map_free(&base, &len);
@@ -2989,14 +2893,26 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
 
  done:
     if (fd != -1) close(fd);
-    mbname_free(&mbname);
+    return r;
+}
+
+EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals)
+{
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    int r = mboxname_read_fcounters(fname, vals);
+
     free(fname);
+    mbname_free(&mbname);
+
     return r;
 }
 
 enum domodseq { MBOXMODSEQ, QUOTAMODSEQ, RACLMODSEQ };
 
-static modseq_t mboxname_domodseq(const char *mboxname,
+static modseq_t mboxname_domodseq(const char *fname,
+                                  const char *mboxname,
                                   modseq_t last,
                                   enum domodseq domodseq,
                                   int mbtype,   // for MBOXMODSEQ
@@ -3015,7 +2931,7 @@ static modseq_t mboxname_domodseq(const char *mboxname,
         return last + add;
 
     /* XXX error handling */
-    if (mboxname_load_counters(mboxname, &counters, &fd))
+    if (mboxname_load_fcounters(fname, &counters, &fd))
         return last + add;
 
     oldcounters = counters;
@@ -3103,7 +3019,7 @@ static modseq_t mboxname_domodseq(const char *mboxname,
     }
 
     if (memcmp(&counters, &oldcounters, sizeof(struct mboxname_counters)))
-        mboxname_set_counters(mboxname, &counters, fd);
+        mboxname_set_fcounters(fname, &counters, fd);
     else
         mboxname_unload_counters(fd);
 
@@ -3112,12 +3028,28 @@ static modseq_t mboxname_domodseq(const char *mboxname,
 
 EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int flags)
 {
-    return mboxname_domodseq(mboxname, last, MBOXMODSEQ, mbtype, flags, 1);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, MBOXMODSEQ, mbtype, flags, 1);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t last, int mbtype, int flags)
 {
-    return mboxname_domodseq(mboxname, last, MBOXMODSEQ, mbtype, flags, 0);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, MBOXMODSEQ, mbtype, flags, 0);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED modseq_t mboxname_readquotamodseq(const char *mboxname)
@@ -3127,20 +3059,42 @@ EXPORTED modseq_t mboxname_readquotamodseq(const char *mboxname)
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return 0;
 
-    if (mboxname_read_counters(mboxname, &counters))
-        return 0;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
 
+    int r = mboxname_read_fcounters(fname, &counters);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    if (r) return 0;
     return counters.quotamodseq;
 }
 
 EXPORTED modseq_t mboxname_nextquotamodseq(const char *mboxname, modseq_t last)
 {
-    return mboxname_domodseq(mboxname, last, QUOTAMODSEQ, 0, 0, 1);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, QUOTAMODSEQ, 0, 0, 1);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED modseq_t mboxname_setquotamodseq(const char *mboxname, modseq_t last)
 {
-    return mboxname_domodseq(mboxname, last, QUOTAMODSEQ, 0, 0, 0);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, QUOTAMODSEQ, 0, 0, 0);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED modseq_t mboxname_readraclmodseq(const char *mboxname)
@@ -3153,46 +3107,77 @@ EXPORTED modseq_t mboxname_readraclmodseq(const char *mboxname)
     if (!mboxname_isusermailbox(mboxname, /*isinbox*/1))
         return 0;  // raclmodseq is only defined on user inboxes
 
-    if (mboxname_read_counters(mboxname, &counters))
-        return 0;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = fname = mboxname_conf_getpath(mbname, "counters");
 
+    int r = mboxname_read_fcounters(fname, &counters);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    if (r) return 0;
     return counters.raclmodseq;
 }
 
 EXPORTED modseq_t mboxname_nextraclmodseq(const char *mboxname, modseq_t last)
 {
-    return mboxname_domodseq(mboxname, last, RACLMODSEQ, 0, 0, 1);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, RACLMODSEQ, 0, 0, 1);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED modseq_t mboxname_setraclmodseq(const char *mboxname, modseq_t last)
 {
-    return mboxname_domodseq(mboxname, last, RACLMODSEQ, 0, 0, 0);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, RACLMODSEQ, 0, 0, 0);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED uint32_t mboxname_readuidvalidity(const char *mboxname)
 {
-    struct mboxname_counters counters;
-
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return 0;
 
-    if (mboxname_read_counters(mboxname, &counters))
-        return 0;
+    struct mboxname_counters counters;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
 
+    int r = mboxname_read_counters(mboxname, &counters);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    if (r) return 0;
     return counters.uidvalidity;
 }
 
 EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
 {
-    struct mboxname_counters counters;
-    int fd = -1;
-
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return last + 1;
 
+    struct mboxname_counters counters;
+    int fd = -1;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
     /* XXX error handling */
-    if (mboxname_load_counters(mboxname, &counters, &fd))
-        return last + 1;
+    if (mboxname_load_fcounters(fname, &counters, &fd)) {
+        counters.uidvalidity = last + 1;
+        goto done;
+    }
 
     if (counters.uidvalidity < last)
         counters.uidvalidity = last;
@@ -3200,23 +3185,30 @@ EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
     counters.uidvalidity++;
 
     /* always set, because we always increased */
-    mboxname_set_counters(mboxname, &counters, fd);
+    mboxname_set_fcounters(fname, &counters, fd);
+
+ done:
+    free(fname);
+    mbname_free(&mbname);
 
     return counters.uidvalidity;
 }
 
 EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
 {
-    struct mboxname_counters counters;
-    int fd = -1;
-    int dirty = 0;
-
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return val;
 
-    /* XXX error handling */
-    if (mboxname_load_counters(mboxname, &counters, &fd))
-        return val;
+    struct mboxname_counters counters;
+    int fd = -1;
+    int dirty = 0;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    if (mboxname_load_fcounters(fname, &counters, &fd)) {
+        counters.uidvalidity = val;
+        goto done;
+    }
 
     if (counters.uidvalidity < val) {
         counters.uidvalidity = val;
@@ -3224,9 +3216,13 @@ EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
     }
 
     if (dirty)
-        mboxname_set_counters(mboxname, &counters, fd);
+        mboxname_set_fcounters(fname, &counters, fd);
     else
         mboxname_unload_counters(fd);
+
+ done:
+    free(fname);
+    mbname_free(&mbname);
 
     return val;
 }

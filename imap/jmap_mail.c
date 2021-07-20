@@ -8254,7 +8254,9 @@ static void _email_append(jmap_req_t *req,
 
         /* Convert intermediary mailbox to real mailbox */
         if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
             r = mboxlist_promote_intermediary(mbentry->name);
+            mboxname_release(&namespacelock);
             if (r) goto done;
         }
 
@@ -11738,7 +11740,9 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxrec->mbox_id);
             int r = 0;
             if (mbentry && mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
                 r = mboxlist_promote_intermediary(mbentry->name);
+                mboxname_release(&namespacelock);
             }
             else if (!mbentry) {
                 r = IMAP_MAILBOX_NONEXISTENT;
@@ -11813,7 +11817,9 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
             if (mbentry) {
                 int r = 0;
                 if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
                     r = mboxlist_promote_intermediary(mbentry->name);
+                    mboxname_release(&namespacelock);
                 }
                 if (!r) jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
             }
@@ -13244,7 +13250,9 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
         mbentry_t *mbentry = NULL;
         r = jmap_mboxlist_lookup(dst_mboxname, &mbentry, NULL);
         if (!r && (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
-            r = mboxlist_promote_intermediary(dst_mboxname);
+            struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
+            r = mboxlist_promote_intermediary(mbentry->name);
+            mboxname_release(&namespacelock);
         }
         if (!r) {
             struct mailbox *dst_mbox = NULL;

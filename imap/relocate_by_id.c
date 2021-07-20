@@ -437,7 +437,9 @@ static int find_p(const mbentry_t *mbentry, void *rock)
             if (!quiet) printf("\nPromoting intermediary: %s\n", extname);
 
             if (!nochanges) {
+                struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
                 r = mboxlist_promote_intermediary(mbentry->name);
+                mboxname_release(&namespacelock);
                 if (r) {
                     fprintf(stderr,
                             "\tFailed to promote intermediary %s: %s\n",
