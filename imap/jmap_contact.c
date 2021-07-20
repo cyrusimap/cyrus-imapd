@@ -1631,7 +1631,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 }
                 else if (!strcasecmp(param->name, "label")) {
                     label = param->value;
-                    label_len = strlen(label);
+                    if (label) label_len = strlen(label);
                 }
             }
             json_object_set_new(item, "type", json_string(type));
@@ -1706,7 +1706,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 }
                 else if (!strcasecmp(param->name, "label")) {
                     label = param->value;
-                    label_len = strlen(label);
+                    if (label) label_len = strlen(label);
                 }
             }
             json_object_set_new(item, "type", json_string(type));
@@ -1746,7 +1746,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 }
                 else if (!strcasecmp(param->name, "label")) {
                     label = param->value;
-                    label_len = strlen(label);
+                    if (label) label_len = strlen(label);
                 }
             }
             json_object_set_new(item, "type", json_string(type));
@@ -1763,7 +1763,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             for (param = entry->params; param; param = param->next) {
                 if (!strcasecmp(param->name, "label")) {
                     label = param->value;
-                    label_len = strlen(label);
+                    if (label) label_len = strlen(label);
                 }
             }
             json_object_set_new(item, "type", json_string("uri"));
