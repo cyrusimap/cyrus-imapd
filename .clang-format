@@ -1,0 +1,10 @@
+BasedOnStyle: LLVM
+# not supported in v7.0.1: AllowShortBlocksOnASingleLine: Empty
+# not supported in v7.0.1: AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+BinPackArguments: false
+BraceWrapping:
+  BeforeElse:      true
+IndentCaseLabels: true
+IndentWidth:     4
