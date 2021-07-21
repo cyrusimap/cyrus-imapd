@@ -2641,12 +2641,26 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     char *userid = NULL;
 
     tr->flags = flags;
+    tr->mode = (flags & (SEARCH_UPDATE_XAPINDEXED|SEARCH_UPDATE_AUDIT)) ?
+        XAPIAN_DBW_XAPINDEXED : XAPIAN_DBW_CONVINDEXED;
 
     /* not an indexable mailbox, fine - return a code to avoid
      * trying to index each message as well */
     if (!fname) {
         r = IMAP_MAILBOX_NONEXISTENT;
         goto out;
+    }
+
+    /* make sure the conversations are open before we start indexing
+     * to avoid deadlocking against the search state */
+    if (tr->mode == XAPIAN_DBW_CONVINDEXED) {
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+        if (!cstate) {
+            xsyslog(LOG_INFO, "can't open conversations", "mailbox=<%s>",
+                    mailbox->name);
+            r = IMAP_MAILBOX_NOTSUPPORTED;
+            goto out;
+        }
     }
 
     /* Do nothing if there is no userid */
@@ -2711,9 +2725,6 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     }
 
     assert(active->count);
-
-    tr->mode = (flags & (SEARCH_UPDATE_XAPINDEXED|SEARCH_UPDATE_AUDIT)) ?
-        XAPIAN_DBW_XAPINDEXED : XAPIAN_DBW_CONVINDEXED;
 
     /* doesn't matter if the first one doesn't exist yet, we'll create it. Only stat the others if we're going
      * to be opening them */
