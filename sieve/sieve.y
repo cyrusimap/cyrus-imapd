@@ -3100,6 +3100,7 @@ static test_t *build_date(sieve_script_t *sscript,
     }
 
     t->u.dt.date_part = verify_date_part(sscript, part);
+    free(part); /* done with this string */
     t->u.dt.header_name = hn;
     t->u.dt.kl = kl;
 
