@@ -6,5 +6,6 @@ AllowShortLoopsOnASingleLine: true
 BinPackArguments: false
 BraceWrapping:
   BeforeElse:      true
+BreakBeforeBraces: Stroustrup
 IndentCaseLabels: true
 IndentWidth:     4
