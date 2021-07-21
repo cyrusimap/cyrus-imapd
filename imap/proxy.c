@@ -192,7 +192,7 @@ EXPORTED struct backend * proxy_findserver(const char *server,          /* hostn
     ret->inbox = inbox;
 
     /* insert server in list of cache connections */
-    if (cache) ptrarray_append(cache, ret);
+    if (cache) ptrarray_add(cache, ret);
 
     return ret;
 }
