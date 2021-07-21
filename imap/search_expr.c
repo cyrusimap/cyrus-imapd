@@ -1530,10 +1530,7 @@ static int search_header_match(message_t *m, const union search_value *v,
 static void internalise_sequence(const union search_value *v,
                                  void **internalisedp, unsigned maxval)
 {
-    if (*internalisedp) {
-        seqset_free(*internalisedp);
-        *internalisedp = NULL;
-    }
+    seqset_free((seqset_t **)internalisedp);
     if (v) {
         *internalisedp = seqset_parse(v->s, NULL, maxval);
     }
@@ -1556,7 +1553,7 @@ static int search_seq_match(message_t *m,
                             void *internalised,
                             void *data1)
 {
-    struct seqset *seq = internalised;
+    seqset_t *seq = internalised;
     int r;
     uint32_t u;
     int (*getter)(message_t *, uint32_t *) = (int(*)(message_t *, uint32_t *))data1;
@@ -2359,15 +2356,12 @@ static void search_seen_internalise(struct index_state *state,
                                     const union search_value *v,
                                     void **internalisedp)
 {
-    if (*internalisedp) {
-        seqset_free((struct seqset *)*internalisedp);
-        *internalisedp = NULL;
-    }
+    seqset_free((seqset_t **)internalisedp);
     if (v) {
         if (!mailbox_internal_seen(state->mailbox, v->s)) {
             // read sequence of seen uids from seendb,
             // fall back to owner systemflags on error
-            struct seqset *seen = NULL;
+            seqset_t *seen = NULL;
             struct seen *seendb = NULL;
             int r = seen_open(v->s, SEEN_SILENT, &seendb);
             if (!r) {
@@ -2399,7 +2393,7 @@ static int search_seen_match(message_t *m,
                              void *data1 __attribute__((unused)))
 {
     if (internalised) {
-        struct seqset *seen = internalised;
+        seqset_t *seen = internalised;
         uint32_t uid;
         if (!message_get_uid(m, &uid)) {
             return seqset_ismember(seen, uid);

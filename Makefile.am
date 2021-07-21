@@ -190,7 +190,6 @@ sbin_PROGRAMS += \
 	imap/cyr_expire \
 	imap/cyr_info \
 	imap/cyr_buildinfo \
-	imap/cyr_sequence \
 	imap/cyr_synclog \
 	imap/cyr_userseen \
 	imap/cyr_virusscan \
@@ -794,6 +793,7 @@ include_HEADERS = \
 	lib/procinfo.h \
 	lib/retry.h \
 	lib/rfc822tok.h \
+	lib/seqset.h \
 	lib/signals.h \
 	lib/smallarrayu64.h \
 	lib/sqldb.h \
@@ -921,9 +921,6 @@ imap_cyr_info_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_buildinfo_SOURCES = imap/cli_fatal.c imap/cyr_buildinfo.c imap/mutex_fake.c master/masterconf.c
 imap_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD)
-
-imap_cyr_sequence_SOURCES = imap/cli_fatal.c imap/cyr_sequence.c imap/mutex_fake.c
-imap_cyr_sequence_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_synclog_SOURCES = imap/cli_fatal.c imap/cyr_synclog.c imap/mutex_fake.c
 imap_cyr_synclog_LDADD = $(LD_UTILITY_ADD)
@@ -1079,8 +1076,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/search_sort.h \
 	imap/seen.h \
 	imap/seen_db.c \
-	imap/sequence.c \
-	imap/sequence.h \
 	imap/setproctitle.c \
 	imap/sievedir.c \
 	imap/sievedir.h \
@@ -1494,6 +1489,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/prot.c \
 	lib/ptrarray.c \
 	lib/rfc822tok.c \
+	lib/seqset.c \
 	lib/signals.c \
 	lib/stristr.c \
 	lib/times.c \

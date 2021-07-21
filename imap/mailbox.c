@@ -102,7 +102,7 @@
 #include "seen.h"
 #include "user.h"
 #include "util.h"
-#include "sequence.h"
+#include "seqset.h"
 #include "statuscache.h"
 #include "strarray.h"
 #include "sync_log.h"
@@ -131,6 +131,7 @@ struct mailbox_iter {
     uint32_t recno;
     uint32_t num_records;
     unsigned skipflags;
+    seqset_t *uidset;
 };
 
 
@@ -152,7 +153,7 @@ static struct mailboxlist *open_mailboxes = NULL;
 struct mailbox_repack {
     struct mailbox *mailbox;
     struct mailbox newmailbox;
-    struct seqset *seqset;
+    seqset_t *seqset;
     struct synccrcs crcs;
     char *userid;
     ptrarray_t caches;
@@ -4627,7 +4628,7 @@ static void mailbox_repack_abort(struct mailbox_repack **repackptr)
 
     if (!repack) return; /* safe against double-free */
 
-    seqset_free(repack->seqset);
+    seqset_free(&repack->seqset);
 
     /* close and remove index */
     xclose(repack->newmailbox.index_fd);
@@ -4770,7 +4771,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
         map_free(&repack->newmailbox.index_base, &repack->newmailbox.index_len);
     }
 
-    seqset_free(repack->seqset);
+    seqset_free(&repack->seqset);
     free(repack->userid);
     free(repack);
     *repackptr = NULL;
@@ -7628,6 +7629,12 @@ EXPORTED void mailbox_iter_startuid(struct mailbox_iter *iter, uint32_t uid)
     iter->recno = uid ? mailbox_finduid(mailbox, uid-1) : 0;
 }
 
+EXPORTED void mailbox_iter_uidset(struct mailbox_iter *iter, seqset_t *seq)
+{
+    iter->uidset = seq;
+    mailbox_iter_startuid(iter, seqset_first(seq));
+}
+
 EXPORTED const message_t *mailbox_iter_step(struct mailbox_iter *iter)
 {
     if (mailbox_wait_cb) mailbox_wait_cb(mailbox_wait_cb_rock);
@@ -7639,6 +7646,10 @@ EXPORTED const message_t *mailbox_iter_step(struct mailbox_iter *iter)
         if ((record->system_flags & iter->skipflags)) continue;
         if ((record->internal_flags & iter->skipflags)) continue;
         if (iter->changedsince && record->modseq <= iter->changedsince) continue;
+        if (iter->uidset) {
+            if (record->uid > seqset_last(iter->uidset)) return NULL;
+            if (!seqset_ismember(iter->uidset, record->uid)) continue;
+        }
         return iter->msg;
     }
 

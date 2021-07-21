@@ -434,7 +434,7 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
         unsigned numrecent = 0;
         unsigned numunseen = 0;
         /* Read \Seen state */
-        struct seqset *seq = NULL;
+        seqset_t *seq = NULL;
         int internalseen = mailbox_internal_seen(mailbox, userid);
         unsigned recentuid;
 
@@ -470,7 +470,7 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
             }
         }
         mailbox_iter_done(&iter);
-        seqset_free(seq);
+        seqset_free(&seq);
 
         status_fill_seen(userid, sdata, numrecent, numunseen);
     }

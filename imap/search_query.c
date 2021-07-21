@@ -171,9 +171,9 @@ EXPORTED void search_folder_use_msn(search_folder_t *folder, struct index_state 
  * MSNs if search_folder_use_msn() has been called).  The caller is
  * responsible for freeing the result using seqset_free()
  */
-EXPORTED struct seqset *search_folder_get_seqset(const search_folder_t *folder)
+EXPORTED seqset_t *search_folder_get_seqset(const search_folder_t *folder)
 {
-    struct seqset *seq = seqset_init(0, SEQ_SPARSE);
+    seqset_t *seq = seqset_init(0, SEQ_SPARSE);
     int uid;
 
     for (uid = bv_next_set(&folder->uids, 0) ;

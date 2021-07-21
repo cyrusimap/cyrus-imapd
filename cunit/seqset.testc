@@ -2,17 +2,16 @@
 #include "cunit/cyrunit.h"
 #include "xmalloc.h"
 #include "util.h"
-#include "imap/sequence.h"
+#include "seqset.h"
 
 static void test_empty(void)
 {
-    struct seqset *seq;
+    seqset_t *seq;
     char *s;
 
     seq = seqset_init(/*maxval*/0, SEQ_SPARSE);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
 
-    CU_ASSERT_EQUAL(seq->len, 0);
     CU_ASSERT_EQUAL(seqset_first(seq), 0);
     CU_ASSERT_EQUAL(seqset_last(seq), 0);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -21,18 +20,17 @@ static void test_empty(void)
     CU_ASSERT_STRING_EQUAL(s, "");
     free(s);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 }
 
 static void test_add_contiguous(void)
 {
-    struct seqset *seq;
+    seqset_t *seq;
     char *s;
 
     seq = seqset_init(/*maxval*/0, SEQ_SPARSE);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
 
-    CU_ASSERT_EQUAL(seq->len, 0);
     CU_ASSERT_EQUAL(seqset_first(seq), 0);
     CU_ASSERT_EQUAL(seqset_last(seq), 0);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -43,7 +41,6 @@ static void test_add_contiguous(void)
 
     seqset_add(seq, 1, /*ismember*/1);
 
-    CU_ASSERT_EQUAL(seq->len, 1);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 1);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -55,7 +52,6 @@ static void test_add_contiguous(void)
 
     seqset_add(seq, 2, /*ismember*/1);
 
-    CU_ASSERT_EQUAL(seq->len, 1);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 2);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -68,7 +64,6 @@ static void test_add_contiguous(void)
 
     seqset_add(seq, 3, /*ismember*/1);
 
-    CU_ASSERT_EQUAL(seq->len, 1);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 3);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -82,7 +77,6 @@ static void test_add_contiguous(void)
 
     seqset_add(seq, 4, /*ismember*/1);
 
-    CU_ASSERT_EQUAL(seq->len, 1);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 4);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -95,18 +89,17 @@ static void test_add_contiguous(void)
     CU_ASSERT_STRING_EQUAL(s, "1:4");
     free(s);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 }
 
 static void test_add_noncontiguous(void)
 {
-    struct seqset *seq;
+    seqset_t *seq;
     char *s;
 
     seq = seqset_init(/*maxval*/0, SEQ_SPARSE);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
 
-    CU_ASSERT_EQUAL(seq->len, 0);
     CU_ASSERT_EQUAL(seqset_first(seq), 0);
     CU_ASSERT_EQUAL(seqset_last(seq), 0);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -117,7 +110,6 @@ static void test_add_noncontiguous(void)
 
     seqset_add(seq, 1, /*ismember*/1);
 
-    CU_ASSERT_EQUAL(seq->len, 1);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 1);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -133,7 +125,6 @@ static void test_add_noncontiguous(void)
      * for the next member number.  Duh. */
     seqset_add(seq, 2, /*ismember*/0);
 
-    CU_ASSERT_EQUAL(seq->len, 1);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 1);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -146,7 +137,6 @@ static void test_add_noncontiguous(void)
 
     seqset_add(seq, 3, /*ismember*/1);
 
-    CU_ASSERT_EQUAL(seq->len, 2);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 3);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -160,7 +150,6 @@ static void test_add_noncontiguous(void)
 
     seqset_add(seq, 4, /*ismember*/1);
 
-    CU_ASSERT_EQUAL(seq->len, 2);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 4);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -175,7 +164,6 @@ static void test_add_noncontiguous(void)
 
     seqset_add(seq, 5, /*ismember*/1);
 
-    CU_ASSERT_EQUAL(seq->len, 2);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 5);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -189,13 +177,13 @@ static void test_add_noncontiguous(void)
     CU_ASSERT_STRING_EQUAL(s, "1,3:5");
     free(s);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 }
 
 static void test_dup(void)
 {
-    struct seqset *seq;
-    struct seqset *seq2;
+    seqset_t *seq;
+    seqset_t *seq2;
     char *s;
 
     seq = seqset_init(/*maxval*/0, SEQ_SPARSE);
@@ -207,7 +195,6 @@ static void test_dup(void)
     seqset_add(seq, 4, /*ismember*/1);
     seqset_add(seq, 5, /*ismember*/1);
 
-    CU_ASSERT_EQUAL(seq->len, 2);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 5);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -225,7 +212,6 @@ static void test_dup(void)
     CU_ASSERT_PTR_NOT_NULL(seq2);
     CU_ASSERT_PTR_NOT_EQUAL(seq, seq2);
 
-    CU_ASSERT_EQUAL(seq->len, 2);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 5);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -239,7 +225,6 @@ static void test_dup(void)
     CU_ASSERT_STRING_EQUAL(s, "1,3:5");
     free(s);
 
-    CU_ASSERT_EQUAL(seq2->len, 2);
     CU_ASSERT_EQUAL(seqset_first(seq2), 1);
     CU_ASSERT_EQUAL(seqset_last(seq2), 5);
     CU_ASSERT_EQUAL(seqset_ismember(seq2, 0), 0);
@@ -253,13 +238,13 @@ static void test_dup(void)
     CU_ASSERT_STRING_EQUAL(s, "1,3:5");
     free(s);
 
-    seqset_free(seq);
-    seqset_free(seq2);
+    seqset_free(&seq);
+    seqset_free(&seq2);
 }
 
 static void test_iteration(void)
 {
-    struct seqset *seq;
+    seqset_t *seq;
     unsigned i;
     char *s;
 
@@ -272,7 +257,6 @@ static void test_iteration(void)
     seqset_add(seq, 4, /*ismember*/1);
     seqset_add(seq, 5, /*ismember*/1);
 
-    CU_ASSERT_EQUAL(seq->len, 2);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 5);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -286,9 +270,7 @@ static void test_iteration(void)
     CU_ASSERT_STRING_EQUAL(s, "1,3:5");
     free(s);
 
-    /* HACK */
-    seq->prev = 0;
-    seq->current = 0;
+    seqset_reset(seq);
 
     i = seqset_getnext(NULL);
     CU_ASSERT_EQUAL(i, 0);
@@ -306,18 +288,17 @@ static void test_iteration(void)
     i = seqset_getnext(seq);
     CU_ASSERT_EQUAL(i, 0);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 }
 
 static void test_parse(void)
 {
-    struct seqset *seq;
+    seqset_t *seq;
     char *s;
 
     seq = seqset_parse("1", NULL, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
 
-    CU_ASSERT_EQUAL(seq->len, 1);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 1);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -327,14 +308,13 @@ static void test_parse(void)
     CU_ASSERT_STRING_EQUAL(s, "1");
     free(s);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 
     /* ----- */
 
     seq = seqset_parse("1:3", NULL, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
 
-    CU_ASSERT_EQUAL(seq->len, 1);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 3);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -346,14 +326,13 @@ static void test_parse(void)
     CU_ASSERT_STRING_EQUAL(s, "1:3");
     free(s);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 
     /* ----- */
 
     seq = seqset_parse("1:3,5", NULL, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
 
-    CU_ASSERT_EQUAL(seq->len, 2);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 5);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -367,14 +346,13 @@ static void test_parse(void)
     CU_ASSERT_STRING_EQUAL(s, "1:3,5");
     free(s);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 
     /* ----- */
 
     seq = seqset_parse("1:3,5,8:11", NULL, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
 
-    CU_ASSERT_EQUAL(seq->len, 3);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), 11);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -394,14 +372,13 @@ static void test_parse(void)
     CU_ASSERT_STRING_EQUAL(s, "1:3,5,8:11");
     free(s);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 
     /* ----- */
 
     seq = seqset_parse("1:*", NULL, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
 
-    CU_ASSERT_EQUAL(seq->len, 1);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), UINT_MAX);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -413,14 +390,13 @@ static void test_parse(void)
     CU_ASSERT_STRING_EQUAL(s, "1:*");
     free(s);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 
     /* ----- */
 
     seq = seqset_parse("1:3,5:*", NULL, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
 
-    CU_ASSERT_EQUAL(seq->len, 2);
     CU_ASSERT_EQUAL(seqset_first(seq), 1);
     CU_ASSERT_EQUAL(seqset_last(seq), UINT_MAX);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 0), 0);
@@ -436,7 +412,7 @@ static void test_parse(void)
     CU_ASSERT_STRING_EQUAL(s, "1:3,5:*");
     free(s);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 }
 
 #if 0
@@ -445,7 +421,7 @@ static void test_parse(void)
 // subtly buggy corner case in Cyrus.  So just ignore.
 static void XXX_test_star(void)
 {
-    struct seqset *seq;
+    seqset_t *seq;
     char *s;
 
     /* The "*" character is specified in RFC 3501 with what might be
@@ -456,7 +432,6 @@ static void XXX_test_star(void)
     seq = seqset_parse("*", NULL, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
 
-    CU_ASSERT_EQUAL(seq->len, 1);
     CU_ASSERT_EQUAL(seqset_first(seq), UINT_MAX);
     CU_ASSERT_EQUAL(seqset_last(seq), UINT_MAX);
     s = seqset_cstring(seq);
@@ -498,20 +473,20 @@ static void XXX_test_star(void)
     CU_ASSERT_EQUAL(seqset_ismember(seq, 7), 0);
     CU_ASSERT_EQUAL(seqset_ismember(seq, 8), 0);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 }
 #endif
 
 static void test_join(void)
 {
-    struct seqset *res = seqset_init(0, SEQ_MERGE);
-    struct seqset *seq;
+    seqset_t *res = seqset_init(0, SEQ_MERGE);
+    seqset_t *seq;
     char *s;
 
     seq = seqset_parse("1:100", NULL, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
     seqset_join(res, seq);
-    seqset_free(seq);
+    seqset_free(&seq);
 
     s = seqset_cstring(res);
     CU_ASSERT_STRING_EQUAL(s, "1:100");
@@ -520,18 +495,18 @@ static void test_join(void)
     seq = seqset_parse("1:5,7:30,40:99", NULL, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
     seqset_join(res, seq);
-    seqset_free(seq);
+    seqset_free(&seq);
 
     s = seqset_cstring(res);
     CU_ASSERT_STRING_EQUAL(s, "1:100");
     free(s);
 
-    seqset_free(res);
+    seqset_free(&res);
 }
 
 static void test_simplify(void)
 {
-    struct seqset *seq;
+    seqset_t *seq;
     char *s;
 
     seq = seqset_parse("1:3,4,5:8,10,12:12,13:14,16:20", NULL, 0);
@@ -541,7 +516,7 @@ static void test_simplify(void)
     CU_ASSERT_STRING_EQUAL(s, "1:8,10,12:14,16:20");
     free(s);
 
-    seqset_free(seq);
+    seqset_free(&seq);
 }
 
 /* vim: set ft=c: */

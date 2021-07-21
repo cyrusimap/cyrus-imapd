@@ -206,9 +206,9 @@ struct mboxevent {
 
     strarray_t flagnames;
     struct timeval timestamp;
-    struct seqset *uidset;
+    seqset_t *uidset;
     strarray_t midset;
-    struct seqset *olduidset;
+    seqset_t *olduidset;
 
     struct mboxevent *prev;
     struct mboxevent *next;

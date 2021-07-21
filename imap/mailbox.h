@@ -54,7 +54,7 @@
 #include "message.h"
 #include "ptrarray.h"
 #include "quota.h"
-#include "sequence.h"
+#include "seqset.h"
 #include "util.h"
 
 #define MAX_MAILBOX_NAME 490
@@ -698,6 +698,7 @@ extern struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
                                               modseq_t changedsince,
                                               unsigned flags);
 extern void mailbox_iter_startuid(struct mailbox_iter *iter, uint32_t uid);
+extern void mailbox_iter_uidset(struct mailbox_iter *iter, seqset_t *seq);
 extern const message_t *mailbox_iter_step(struct mailbox_iter *iter);
 extern void mailbox_iter_done(struct mailbox_iter **iterp);
 

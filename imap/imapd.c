@@ -3700,7 +3700,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
             init.authstate = imapd_authstate;
             init.out = imapd_out;
             r = index_open(intname, &init, &state);
-            if (init.vanishedlist) seqset_free(init.vanishedlist);
+            seqset_free(&init.vanishedlist);
         }
         if (!r) doclose = 1;
 
@@ -4480,8 +4480,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-        if (init.vanishedlist) seqset_free(init.vanishedlist);
-        init.vanishedlist = NULL;
+        seqset_free(&init.vanishedlist);
         if (doclose) index_close(&imapd_index);
         free(intname);
         return;
@@ -4492,8 +4491,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     index_select(imapd_index, &init);
 
-    if (init.vanishedlist) seqset_free(init.vanishedlist);
-    init.vanishedlist = NULL;
+    seqset_free(&init.vanishedlist);
 
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
                 index_hasrights(imapd_index, ACL_READ_WRITE) ?
@@ -6022,7 +6020,7 @@ notflagsdammit:
  freeflags:
     strarray_fini(&storeargs.flags);
     freeentryatts(storeargs.entryatts);
-    seqset_free(storeargs.modified);
+    seqset_free(&storeargs.modified);
     free(modified);
 }
 
@@ -10693,7 +10691,7 @@ static void cmd_xwarmup(const char *tag)
     char mytime[100];
     struct buf arg = BUF_INITIALIZER;
     int warmup_flags = 0;
-    struct seqset *uids = NULL;
+    seqset_t *uids = NULL;
     /* We deal with the mboxlist API instead of the index_state API or
      * mailbox API to avoid the overhead of index_open(), which will
      * block while reading all the cyrus.index...we want to be
@@ -10806,7 +10804,7 @@ out_noprint:
     mboxlist_entry_free(&mbentry);
     free(intname);
     buf_free(&arg);
-    if (uids) seqset_free(uids);
+    seqset_free(&uids);
 }
 
 static void free_snippetargs(struct snippetargs **sap)
@@ -11298,7 +11296,7 @@ static int xfer_backport_seen_item(struct xfer_item *item,
                                    struct seen *seendb)
 {
     struct mailbox *mailbox = item->mailbox;
-    struct seqset *outlist = NULL;
+    seqset_t *outlist = NULL;
     struct seendata sd = SEENDATA_INITIALIZER;
     int r;
 
@@ -11326,7 +11324,7 @@ static int xfer_backport_seen_item(struct xfer_item *item,
     r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
 
     seen_freedata(&sd);
-    seqset_free(outlist);
+    seqset_free(&outlist);
 
     return r;
 }
