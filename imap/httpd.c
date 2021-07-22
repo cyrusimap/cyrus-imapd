@@ -2012,7 +2012,11 @@ EXPORTED void transaction_free(struct transaction_t *txn)
 
     transaction_reset(txn);
 
-    if (txn->be) proxy_downserver(txn->be);
+    if (txn->be) {
+        proxy_downserver(txn->be);
+        free(txn->be->context);
+        free(txn->be);
+    }
 
     buf_free(&txn->req_body.payload);
     buf_free(&txn->resp_body.payload);
