@@ -121,7 +121,6 @@ struct mboxlist_entry {
     char *acl;
     /* extra fields */
     char *uniqueid;
-    char *root_uid;
     /* legacy upgrade support */
     char *legacy_specialuse;
     /* replication support */
