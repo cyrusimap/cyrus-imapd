@@ -1619,6 +1619,7 @@ link_from_ical(icalproperty *prop, struct jmapical_jmapcontext *jmapctx)
         jmapctx->blobid_from_href(&blobid, href, mid, jmapctx->rock);
         if (buf_len(&blobid)) {
             json_object_set_new(link, "blobId", json_string(buf_cstring(&blobid)));
+            json_object_del(link, "href");
         }
         buf_free(&blobid);
     }
@@ -3898,27 +3899,28 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
         validate_type(parser, link, "Link");
 
         /* href */
-        href = json_string_value(json_object_get(link, "href"));
-
         /* blobId */
-        json_t *jblobid = json_object_get(link, "blobId");
-        if (jmapctx && jmapctx->href_from_blobid && json_is_string(jblobid)) {
-            blobid = json_string_value(json_object_get(link, "blobId"));
-            jmapctx->href_from_blobid(&blobhref, &blobmid, blobid, jmapctx->rock);
-            if (buf_len(&blobhref)) {
-                if (!href || !strcmp(href, buf_cstring(&blobhref))) {
-                    href = buf_cstring(&blobhref);
-                }
-                else jmap_parser_invalid(parser, "blobId");
-            }
-        }
-        else if (JNOTNULL(jblobid)) {
+        href = json_string_value(json_object_get(link, "href"));
+        blobid = json_string_value(json_object_get(link, "blobId"));
+        if (!href == !blobid) {
+            jmap_parser_invalid(parser, "href");
             jmap_parser_invalid(parser, "blobId");
         }
-
-        if (!href || *href == '\0') {
-            jmap_parser_invalid(parser, "href");
-            href = NULL;
+        else if (blobid) {
+            if (jmapctx && jmapctx->href_from_blobid) {
+                jmapctx->href_from_blobid(&blobhref, &blobmid, blobid, jmapctx->rock);
+                if (buf_len(&blobhref)) {
+                    href = buf_cstring(&blobhref);
+                }
+                else {
+                    xsyslog(LOG_ERR, "can not translate blobId to href", NULL);
+                    jmap_parser_invalid(parser, "blobId");
+                }
+            }
+            else {
+                xsyslog(LOG_ERR, "need jmapcontext to translate blobId to href", NULL);
+                jmap_parser_invalid(parser, "blobId");
+            }
         }
 
         /* contentType */
