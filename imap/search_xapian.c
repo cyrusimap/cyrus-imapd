@@ -2108,6 +2108,16 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->mailbox = mailbox;
     bb->opts = opts;
 
+    /* make sure the conversations are open before we start indexing
+     * to avoid deadlocking against the search state */
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (!cstate) {
+        xsyslog(LOG_INFO, "can't open conversations", "mailbox=<%s>",
+                mailbox->name);
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+        goto out;
+    }
+
     r = xapiandb_lock_open(mailbox, &bb->lock);
     if (r) goto out;
     if (!bb->lock.activedirs || !bb->lock.activedirs->count) goto out;
@@ -2658,6 +2668,16 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         goto out;
     }
 
+    /* make sure the conversations are open before we start indexing
+     * to avoid deadlocking against the search state */
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (!cstate) {
+        xsyslog(LOG_INFO, "can't open conversations", "mailbox=<%s>",
+                mailbox->name);
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+        goto out;
+    }
+
     /* Do nothing if there is no userid */
     userid = mboxname_to_userid(mailbox_name(mailbox));
     if (!userid) goto out;
@@ -3000,12 +3020,23 @@ static int begin_mailbox_snippets(search_text_receiver_t *rx,
                                   struct mailbox *mailbox,
                                   int incremental __attribute__((unused)))
 {
+    int r;
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
+
+    /* make sure the conversations are open before we start indexing
+     * to avoid deadlocking against the search state */
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (!cstate) {
+        xsyslog(LOG_INFO, "can't open conversations", "mailbox=<%s>",
+                mailbox->name);
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+        goto out;
+    }
 
     tr->super.mailbox = mailbox;
     tr->super.mbname = mbname_from_intname(mailbox_name(mailbox));
 
-    int r = xapiandb_lock_open(mailbox, &tr->lock);
+    r = xapiandb_lock_open(mailbox, &tr->lock);
     if (r) goto out;
     if (!tr->lock.activedirs || !tr->lock.activedirs->count) goto out;
 
