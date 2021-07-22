@@ -429,7 +429,7 @@ int config_httpprettytelemetry;
 
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
-static ptrarray_t httpd_streams = PTRARRAY_INITIALIZER;
+static ptrarray_t httpd_pipes = PTRARRAY_INITIALIZER;
 static int http2_enabled = 0;
 
 int ignorequota = 0;
@@ -723,7 +723,7 @@ static void httpd_reset(struct http_connection *conn)
 
     httpd_in = httpd_out = NULL;
 
-    ptrarray_fini(&httpd_streams);
+    ptrarray_fini(&httpd_pipes);
 
     /* Reset auxiliary connection contexts */
     conn_reset_t proc;
@@ -2113,7 +2113,7 @@ static void cmdloop(struct http_connection *conn)
         zstd_init(&txn);
     }
 
-    ptrarray_append(&httpd_streams, &txn);
+    ptrarray_append(&httpd_pipes, &txn);
 
     /* Enable command timer */
     cmdtime_settimer(1);
@@ -2150,7 +2150,7 @@ static void cmdloop(struct http_connection *conn)
 
             syslog(LOG_DEBUG, "http_proxy_check_input()");
 
-        } while (!http_proxy_check_input(&httpd_streams,
+        } while (!http_proxy_check_input(&httpd_pipes,
                                          txn.be ? txn.be->out : NULL,
                                          0 /* timeout */));
 
@@ -4715,7 +4715,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
         if (!ret) {
             txn->be = be;
             txn->flags.te = TE_CHUNKED;
-            ptrarray_append(&httpd_streams, txn);
+            ptrarray_append(&httpd_pipes, txn);
 
             /* Adjust inactivity timer */
             prot_settimeout(httpd_in,
