@@ -1310,6 +1310,7 @@ EXPORTED int http_proxy_h2_connect(struct backend *be, struct transaction_t *txn
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, &be_txn);
     prot_puts(be->out, "\r\n");
     prot_flush(be->out);
+    buf_free(&be_txn.buf);
 
     /* Read response from backend */
     resp_body.flags = 0;
