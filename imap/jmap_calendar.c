@@ -8915,7 +8915,7 @@ struct find_notifuid_rock {
     int foldernum;
     uint32_t uid;
     int check_seen;
-    struct seqset *seenuids;
+    seqset_t *seenuids;
 };
 
 static int find_notifuid_cb(const conv_guidrec_t *rec, void *vrock)
@@ -8956,9 +8956,9 @@ struct notifsearch {
     int check_seen;
 };
 
-static struct seqset *_readseen(struct mailbox *mbox, const char *userid)
+static seqset_t *_readseen(struct mailbox *mbox, const char *userid)
 {
-    struct seqset *seenuids = NULL;
+    seqset_t *seenuids = NULL;
     struct seen *seendb = NULL;
 
     int r = seen_open(userid, SEEN_SILENT, &seendb);
@@ -8989,7 +8989,7 @@ static void notifsearch_run(const char *userid,
                             json_t **errp)
 {
     struct buf buf = BUF_INITIALIZER;
-    struct seqset *seenuids = NULL;
+    seqset_t *seenuids = NULL;
 
     if (search->check_seen && !mailbox_internal_seen(notifmbox, userid)) {
         seenuids = _readseen(notifmbox, userid);
@@ -9171,7 +9171,7 @@ static void notif_get(struct jmap_req *req,
                       json_t **err)
 {
     struct mailbox *notifmbox = NULL;
-    struct seqset *seenuids = NULL;
+    seqset_t *seenuids = NULL;
 
     int r = jmap_openmbox(req, notifmb->name, &notifmbox, 0);
     if (r) {
@@ -9260,7 +9260,7 @@ static void notif_set(struct jmap_req *req,
 {
     struct mailbox *notifmbox = NULL;
     struct seen *seendb = NULL;
-    struct seqset *seenuids = NULL;
+    seqset_t *seenuids = NULL;
     struct buf buf = BUF_INITIALIZER;
 
     buf_printf(&buf, MODSEQ_FMT, statemodseq);
