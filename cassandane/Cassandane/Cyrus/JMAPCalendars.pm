@@ -9153,15 +9153,19 @@ sub test_calendarevent_set_linkblobid
     my $event = $res->[1][1]{list}[0];
     $self->assert_str_equals('enclosure', $event->{links}{link1}{rel});
     $self->assert_str_equals($blobId, $event->{links}{link1}{blobId});
-    $self->assert_not_null($event->{links}{link1}{href});
+    $self->assert_null($event->{links}{link1}{href});
 
     xlog "download blob via CalDAV";
+    my $service = $self->{instance}->get_service("http");
+    my $href = 'http://' . $service->host() . ':'. $service->port() .
+     '/dav/calendars/user/cassandane/Attachments/' .
+     substr $event->{links}{link1}{blobId}, 1;
     my $RawRequest = {
         headers => {
             'Authorization' => $CalDAV->auth_header(),
         },
     };
-    $res = $CalDAV->ua->get($event->{links}{link1}{href}, $RawRequest);
+    $res = $CalDAV->ua->get($href, $RawRequest);
     $self->assert_str_equals('jmapblob', $res->{content});
 
     xlog "Remove link from event";
@@ -9214,6 +9218,50 @@ sub test_calendarevent_set_linkblobid
         }, 'R1']
     ]);
     $self->assert_str_equals($eventId, $res->[0][1]{destroyed}[0]);
+
+    xlog "blobId and href are mutually exclusive";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2019-12-10T23:30:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    links => {
+                        link1 => {
+                            rel => 'enclosure',
+                            blobId => $blobId,
+                            href => 'somehref',
+                        },
+                    },
+                },
+                2 => {
+                    uid => 'eventuid1local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2019-12-10T23:30:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    links => {
+                        link1 => {
+                            rel => 'enclosure',
+                        },
+                    },
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals(['links/link1/href', 'links/link1/blobId'],
+        $res->[0][1]{notCreated}{1}{properties});
+    $self->assert_deep_equals(['links/link1/href', 'links/link1/blobId'],
+        $res->[0][1]{notCreated}{2}{properties});
 }
 
 sub test_calendar_get_defaultalerts
