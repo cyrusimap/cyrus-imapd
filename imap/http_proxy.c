@@ -1349,29 +1349,30 @@ EXPORTED int http_proxy_h2_connect(struct backend *be, struct transaction_t *txn
  * If serverout is NULL:
  *   - returns 1 if input from clientin is pending, otherwise returns 0.
  */
-EXPORTED int http_proxy_check_input(ptrarray_t *streams,
-                                    struct protstream *serverout,
+EXPORTED int http_proxy_check_input(struct http_connection *conn,
+                                    ptrarray_t *pipes,
                                     unsigned long timeout_sec)
 {
-    static struct protgroup *protin = NULL;
+    struct protgroup *protin = conn->pgin;
     struct protgroup *protout = NULL;
     struct timeval timeout = { timeout_sec, 0 };
-    struct protstream *clientin, *clientout;
-    struct transaction_t *txn;
+    struct protstream *clientin = conn->pin;
+    struct protstream *clientout = conn->pout;
+    struct protstream *serverout = NULL;
+    struct transaction_t *txn = NULL;
     int n, ret = 0;
 
-    if (!protin) protin = protgroup_new(0);
-    else protgroup_reset(protin);
-
-    txn = ptrarray_nth(streams, 0);
-    clientin = txn->conn->pin;
-    clientout = txn->conn->pout;
+    protgroup_reset(protin);
     protgroup_insert(protin, clientin);
-    if (txn->be) protgroup_insert(protin, txn->be->in);
 
-    for (n = 1; n < ptrarray_size(streams); n++) {
-        txn = ptrarray_nth(streams, n);
-        if (txn->be) protgroup_insert(protin, txn->be->in);
+    for (n = 0; n < ptrarray_size(pipes); n++) {
+        txn = ptrarray_nth(pipes, n);
+        protgroup_insert(protin, txn->be->in);
+
+        if (txn->flags.ver < VER_2) {
+            /* stream client input directly to server */
+            serverout = txn->be->out;
+        }
     }
 
     n = prot_select(protin, PROT_NO_FD, &protout, NULL,
@@ -1386,6 +1387,7 @@ EXPORTED int http_proxy_check_input(ptrarray_t *streams,
         for (; n; n--) {
             struct protstream *pin = protgroup_getelement(protout, n-1);
             struct protstream *pout = NULL;
+            int idx = -1;
 
             if (pin == clientin) {
                 /* input from client */
@@ -1402,10 +1404,16 @@ EXPORTED int http_proxy_check_input(ptrarray_t *streams,
                 pout = clientout;
 
                 /* find the txn that this input belongs to */
-                int t;
-                for (t = 0; t < ptrarray_size(streams); t++) {
-                    txn = ptrarray_nth(streams, t);
-                    if (txn->be && (pin == txn->be->in)) break;
+                for (idx = 0; idx < ptrarray_size(pipes); idx++) {
+                    txn = ptrarray_nth(pipes, idx);
+                    if (pin == txn->be->in) break;
+                }
+
+                if (pin != txn->be->in) {
+                    /* XXX shouldn't get here !!! */
+                    fatal("unknown protstream returned"
+                          " by prot_select() in http_proxy_check_input()",
+                          EX_SOFTWARE);
                 }
             }
 
@@ -1424,7 +1432,24 @@ EXPORTED int http_proxy_check_input(ptrarray_t *streams,
                 } while (pin->cnt > 0);
 
                 if ((err = prot_error(pin)) != NULL) {
-                    if (serverout && !strcmp(err, PROT_EOF_STRING)) {
+                    if (pin != clientin) {
+                        /* we're pipelining, and the server connection closed */
+                        ptrarray_remove(pipes, idx);
+
+                        /* send a "final" chunk to close the stream */
+                        txn->conn->resp_body_chunk(txn, NULL, 0, 1, NULL);
+
+                        if (serverout) {
+                            /* HTTP/1.x */
+                            ret = -1;
+                        }
+                        else {
+                            /* HTTP/2+ */
+                            transaction_free(txn);
+                            free(txn);
+                        }
+                    }
+                    else if (serverout && prot_IS_EOF(pin)) {
                         /* we're pipelining, and the connection closed */
                         ret = -1;
                     }

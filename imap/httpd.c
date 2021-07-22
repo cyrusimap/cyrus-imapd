@@ -793,6 +793,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* Initialize HTTP connection */
     memset(&http_conn, 0, sizeof(struct http_connection));
+    http_conn.pgin = protgroup_new(0);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -1102,6 +1103,7 @@ void shut_down(int code)
     ptrarray_fini(&http_conn.shutdown_callbacks);
     ptrarray_fini(&http_conn.reset_callbacks);
 
+    protgroup_free(http_conn.pgin);
     buf_free(&http_conn.logbuf);
 
     /* Do any namespace specific cleanup */
@@ -2087,6 +2089,14 @@ static int http1_input(struct transaction_t *txn)
     /* Handle errors (success responses handled by method functions) */
     if (ret) error_response(ret, txn);
 
+    else if (txn->be) {
+        ptrarray_append(&httpd_pipes, txn);
+
+        /* Remove this backend from cache as it can't be reused (for now) */
+        ptrarray_remove(&backend_cached,
+                        ptrarray_find(&backend_cached, txn->be, 0));
+    }
+
     /* Read and discard any unread request body */
     if (!(txn->flags.conn & CONN_CLOSE)) {
         txn->req_body.flags |= BODY_DISCARD;
@@ -2116,8 +2126,6 @@ static void cmdloop(struct http_connection *conn)
         brotli_init(&txn);
         zstd_init(&txn);
     }
-
-    ptrarray_append(&httpd_pipes, &txn);
 
     /* Enable command timer */
     cmdtime_settimer(1);
@@ -2154,8 +2162,7 @@ static void cmdloop(struct http_connection *conn)
 
             syslog(LOG_DEBUG, "http_proxy_check_input()");
 
-        } while (!http_proxy_check_input(&httpd_pipes,
-                                         txn.be ? txn.be->out : NULL,
+        } while (!http_proxy_check_input(conn, &httpd_pipes,
                                          0 /* timeout */));
 
         
