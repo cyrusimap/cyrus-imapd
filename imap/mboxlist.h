@@ -128,7 +128,7 @@ struct mboxlist_entry {
 };
 
 #define MBENTRY_INITIALIZER  { NULL, NULL, 0, 0, 0, 0, 0, NULL, NULL, NULL, \
-                               NULL, NULL, NULL, PTRARRAY_INITIALIZER }
+                               NULL, NULL, PTRARRAY_INITIALIZER }
 
 typedef struct mboxlist_entry mbentry_t;
 

@@ -1746,8 +1746,6 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = foldermodseq ? foldermodseq : newmailbox->i.highestmodseq;
-        newmbentry->root_uid =
-            xstrdupnull(parent ? parent->root_uid : newmbentry->uniqueid);
     }
     r = mboxlist_update_entry(mboxname, newmbentry, NULL);
 
