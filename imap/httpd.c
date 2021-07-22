@@ -4712,7 +4712,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
                               &http_protocol, httpd_userid,
-                              NULL, NULL, NULL, httpd_in);
+                              &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
         ret = http_proxy_h2_connect(be, txn);
@@ -4720,6 +4720,10 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
             txn->be = be;
             txn->flags.te = TE_CHUNKED;
             ptrarray_append(&httpd_pipes, txn);
+
+            /* Remove this backend from cache as it can't be reused (for now) */
+            ptrarray_remove(&backend_cached,
+                            ptrarray_find(&backend_cached, be, 0));
 
             /* Adjust inactivity timer */
             prot_settimeout(httpd_in,
