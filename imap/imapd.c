@@ -2070,8 +2070,6 @@ static void cmdloop(void)
                 prometheus_increment(CYRUS_IMAP_SCAN_TOTAL);
             }
             else if (!strcmp(cmd.s, "Syncapply")) {
-                if (!imapd_userisadmin) goto badcmd;
-
                 struct dlist *kl = sync_parseline(imapd_in);
 
                 if (kl) {
@@ -2081,8 +2079,6 @@ static void cmdloop(void)
                 else goto badrepl;
             }
             else if (!strcmp(cmd.s, "Syncget")) {
-                if (!imapd_userisadmin) goto badcmd;
-
                 struct dlist *kl = sync_parseline(imapd_in);
 
                 if (kl) {
@@ -2100,8 +2096,6 @@ static void cmdloop(void)
                 cmd_syncrestart(tag.s, &reserve_list, 1);
             }
             else if (!strcmp(cmd.s, "Syncrestore")) {
-                if (!imapd_userisadmin) goto badcmd;
-
                 struct dlist *kl = sync_parseline(imapd_in);
 
                 if (kl) {
