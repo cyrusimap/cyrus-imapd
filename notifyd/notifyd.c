@@ -228,10 +228,6 @@ EXPORTED int service_main(int argc __attribute__((unused)),
                  char **argv __attribute__((unused)),
                  char **envp __attribute__((unused)))
 {
-    int r = 0;
-
-    r = do_notify();
-
-    shut_down(r);
+    shut_down(do_notify());
     return 0;
 }
