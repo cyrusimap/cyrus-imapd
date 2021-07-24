@@ -1779,29 +1779,14 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *vrock)
     xapian_builder_t *bb = rock->bb;
 
     if (!(bb->opts & SEARCH_MULTIPLE)) {
-        if (conversations_guid_mbox_cmp(rec, bb->mailbox))
+        if (conv_guidrec_mboxcmp(rec, bb->mailbox))
             return 0;
     }
 
-    const char *mboxname;
-    if (rec->version > CONV_GUIDREC_BYNAME_VERSION) {
-        mboxname = strarray_nth(&rock->mboxname_by_foldernum, rec->foldernum);
-        if (!mboxname) {
-            mbentry_t *mbentry = NULL;
-            int r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
-            if (r) {
-                xsyslog(LOG_ERR, "failed to lookup mbentry", "uniqueid=<%s>",
-                        rec->mailbox);
-                return r;
-            }
-            char *mymboxname = xstrdup(mbentry->name);
-            mboxlist_entry_free(&mbentry);
-            strarray_setm(&rock->mboxname_by_foldernum, rec->foldernum, mymboxname);
-            mboxname = mymboxname;
-        }
-    }
-    else mboxname = rec->mailbox;
+    const char *mboxname = conv_guidrec_mboxname(rec);
+    if (!mboxname) return 0;
 
+    // XXX: update this API to work with uniqueids?
     return bb->proc(mboxname, 0, rec->uid, rec->part, bb->rock);
 }
 
@@ -2781,24 +2766,28 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
 
     if (doctype == XAPIAN_WRAP_DOCTYPE_MSG && rec->part) return 0;
 
-    /* Is this a part in the message we are just indexing? */
-    if (doctype == XAPIAN_WRAP_DOCTYPE_PART && rec->uid == tr->super.uid &&
-         !strcmp(rec->mailbox, (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
-                 mailbox_uniqueid(tr->super.mailbox) : mailbox_name(tr->super.mailbox))) {
-        return 0;
-    }
+    int same_mailbox = !conv_guidrec_mboxcmp(rec, tr->super.mailbox);
 
-    /* Is this GUID record in the mailbox we are currently indexing? */
-    if (!conversations_guid_mbox_cmp(rec, tr->super.mailbox)) {
+    if (same_mailbox) {
+        /* Is this a part in the message we are just indexing? */
+        if (doctype == XAPIAN_WRAP_DOCTYPE_PART && rec->uid == tr->super.uid)
+            return 0;
+
+        /* Is it in our known indexed list? */
         if (seqset_ismember(tr->indexed, rec->uid) ||
             seqset_ismember(tr->oldindexed, rec->uid)) {
             return CYRUSDB_DONE;
         }
+
+        /* otherwise clearly not */
         return 0;
     }
 
+    const char *uniqueid = conv_guidrec_uniqueid(rec);
+    if (!uniqueid) return 0;
+
     /* Is this GUID record in an already cached sequence set? */
-    seqset_t *seq = hash_lookup(rec->mailbox, &tr->cached_seqs);
+    seqset_t *seq = hash_lookup(uniqueid, &tr->cached_seqs);
     if (seq) {
         return seqset_ismember(seq, rec->uid) ? CYRUSDB_DONE : 0;
     }
@@ -2807,37 +2796,16 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
     seq = seqset_init(0, SEQ_MERGE);
     int r = 0;
 
-    const char *mboxuniqueid;
-    mbentry_t *mbentry = NULL;
-    if (rec->version > CONV_GUIDREC_BYNAME_VERSION) {
-        mboxuniqueid = rec->mailbox;
-    }
-    else {
-        r = mboxlist_lookup(rec->mailbox, &mbentry, NULL);
-        if (r) {
-            syslog(LOG_ERR, "is_indexed_cb: mboxlist_lookup %s failed: %s",
-                    rec->mailbox, error_message(r));
-            goto out;
-        }
-        mboxuniqueid = mbentry->uniqueid;
-    }
-
     r = read_indexed(mbname_userid(tr->super.mbname),
             tr->activedirs, tr->activetiers,
-            mboxuniqueid, seq, /*do_cache*/1, tr->super.verbose);
-    if (mbentry) mboxlist_entry_free(&mbentry);
+            uniqueid, seq, /*do_cache*/1, tr->super.verbose);
     if (r) {
         syslog(LOG_ERR, "is_indexed_cb: read_indexed %s failed: %s",
-                rec->mailbox, error_message(r));
-        goto out;
-    }
-
-out:
-    if (r) {
+               uniqueid, error_message(r));
         seqset_free(&seq);
         return 0;
     }
-    hash_insert(rec->mailbox, seq, &tr->cached_seqs);
+    hash_insert(uniqueid, seq, &tr->cached_seqs);
     return seqset_ismember(seq, rec->uid) ? CYRUSDB_DONE : 0;
 }
 

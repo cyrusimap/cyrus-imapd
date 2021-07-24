@@ -97,6 +97,7 @@ struct conversations_state {
     char *annotmboxname;
     strarray_t *counted_flags;
     strarray_t *folders;
+    strarray_t *altrep;  // cache the alternative mboxname or uniqueid
     hash_table folderstatus;
     struct conv_quota quota;
     int trashfolder;
@@ -139,8 +140,8 @@ struct conv_folder {
 #define CONV_GUIDREC_BYNAME_VERSION 0x1   // last folders byname version
 
 struct conv_guidrec {
+    const struct conversations_state *cstate;  // this conversationsdb!
     const char      *guidrep; // [MESSAGE_GUID_SIZE*2], hex-encoded
-    const char      *mailbox;       // if version >= 2 mboxid, else mboxname
     int             foldernum;
     uint32_t        uid;
     const char      *part;
@@ -230,8 +231,10 @@ extern struct conversations_state *conversations_get_user(const char *username);
 extern struct conversations_state *conversations_get_mbox(const char *mboxname);
 
 extern int conversations_num_folders(struct conversations_state *state);
-extern const char* conversations_folder_name(struct conversations_state *state,
-                                             int foldernum);
+extern const char* conversations_folder_mboxname(const struct conversations_state *state,
+                                                 int foldernum);
+extern const char* conversations_folder_uniqueid(const struct conversations_state *state,
+                                                 int foldernum);
 extern int conversation_folder_number(struct conversations_state *state,
                                       const char *name,
                                       int create_flag);
@@ -253,9 +256,6 @@ extern conv_folder_t *conversation_get_folder(conversation_t *conv,
 extern void conversation_normalise_subject(struct buf *);
 
 /* G record */
-#define conversations_guid_mbox_cmp(guidrec, m) \
-    strcmp(guidrec->mailbox,                       \
-           guidrec->version > CONV_GUIDREC_BYNAME_VERSION ? mailbox_uniqueid(m) : mailbox_name(m))
 extern int conversations_guid_exists(struct conversations_state *state,
                                      const char *guidrep);
 extern int conversations_guid_foreach(struct conversations_state *state,
@@ -269,6 +269,19 @@ extern int conversations_iterate_searchset(struct conversations_state *state,
 extern conversation_id_t conversations_guid_cid_lookup(struct conversations_state *state,
                                                        const char *guidrep);
 
+/* lookup the matching name or uniqueid */
+#define conv_guidrec_mboxname(rec) conversations_folder_mboxname((rec)->cstate, (rec)->foldernum)
+#define conv_guidrec_uniqueid(rec) conversations_folder_uniqueid((rec)->cstate, (rec)->foldernum)
+#define conv_guidrec_mbentry(rec, mbentryp) ( \
+  ((rec)->version > CONV_GUIDREC_BYNAME_VERSION) ? \
+   mboxlist_lookup_by_uniqueid(conv_guidrec_uniqueid(rec), mbentryp, NULL) : \
+   mboxlist_lookup(conv_guidrec_mboxname(rec), mbentryp, NULL) \
+ )
+#define conv_guidrec_mboxcmp(rec, mbox) ( \
+  ((rec)->version > CONV_GUIDREC_BYNAME_VERSION) ? \
+   strcmpsafe(conv_guidrec_uniqueid(rec), (mbox)->uniqueid) : \
+   strcmpsafe(conv_guidrec_mboxname(rec), (mbox)->name) \
+ )
 /* F record items */
 extern int conversation_getstatus(struct conversations_state *state,
                                   const char *mailbox,

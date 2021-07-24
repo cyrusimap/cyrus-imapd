@@ -5750,7 +5750,7 @@ static int mailbox_delete_conversations(struct mailbox *mailbox)
     mailbox_iter_done(&iter);
     if (r) return r;
 
-    return conversations_rename_folder(cstate, mailbox_name(mailbox), NULL);
+    return conversations_rename_folder(cstate, CONV_FOLDER_KEY_MBOX(cstate, mailbox), NULL);
 }
 
 static int mailbox_delete_internal(struct mailbox **mailboxptr)
@@ -6106,10 +6106,11 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
             /* we never store data about deleted mailboxes */
             r = mailbox_delete_conversations(oldmailbox);
         }
-        else {
+        else if (oldcstate->folders_byname) {
             /* we can just rename within the same user */
             r = conversations_rename_folder(oldcstate, mailbox_name(oldmailbox), newname);
         }
+        // otherwise, we don't need to rename because it's the same uniqueid
     }
 
     /* unless on a replica, bump the modseq */
@@ -6239,7 +6240,9 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     if (oldcstate && newcstate && !strcmp(oldcstate->path, newcstate->path)) {
         /* we can just rename within the same user */
-        r = conversations_rename_folder(oldcstate, mailbox_name(oldmailbox), newname);
+        if (oldcstate->folders_byname) {
+            r = conversations_rename_folder(oldcstate, mailbox_name(oldmailbox), newname);
+        }
     }
     else {
         /* have to handle each one separately */

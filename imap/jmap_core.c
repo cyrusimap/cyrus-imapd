@@ -374,22 +374,25 @@ struct getblob_rec {
 struct getblob_cb_rock {
     jmap_req_t *req;
     const char *blob_id;
-    hash_table *getblobs_by_mailbox;
+    hash_table *getblobs_by_uniqueid;
 };
 
 static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
 {
     struct getblob_cb_rock *rock = vrock;
 
+    const char *uniqueid = conv_guidrec_uniqueid(rec);
+    if (!uniqueid) return 0;
+
     struct getblob_rec *getblob = xzmalloc(sizeof(struct getblob_rec));
     getblob->blob_id = rock->blob_id;
     getblob->uid = rec->uid;
     getblob->part = xstrdupnull(rec->part);
 
-    ptrarray_t *getblobs = hash_lookup(rec->mailbox, rock->getblobs_by_mailbox);
+    ptrarray_t *getblobs = hash_lookup(uniqueid, rock->getblobs_by_uniqueid);
     if (!getblobs) {
         getblobs = ptrarray_new();
-        hash_insert(rec->mailbox, getblobs, rock->getblobs_by_mailbox);
+        hash_insert(uniqueid, getblobs, rock->getblobs_by_uniqueid);
     }
     ptrarray_append(getblobs, getblob);
 
@@ -432,12 +435,12 @@ static int jmap_blob_get(jmap_req_t *req)
     }
 
     /* Sort blob lookups by mailbox */
-    hash_table getblobs_by_mailbox = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&getblobs_by_mailbox, 128, 0);
+    hash_table getblobs_by_uniqueid = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&getblobs_by_uniqueid, 128, 0);
     json_array_foreach(get.ids, i, jval) {
         const char *blob_id = json_string_value(jval);
         if (*blob_id == 'G') {
-            struct getblob_cb_rock rock = { req, blob_id, &getblobs_by_mailbox };
+            struct getblob_cb_rock rock = { req, blob_id, &getblobs_by_uniqueid };
             int r = conversations_guid_foreach(req->cstate, blob_id + 1, getblob_cb, &rock);
             if (r) {
                 syslog(LOG_ERR, "jmap_blob_get: can't lookup guid %s: %s",
@@ -448,18 +451,13 @@ static int jmap_blob_get(jmap_req_t *req)
 
     /* Lookup blobs by mailbox */
     json_t *found = json_object();
-    hash_iter *iter = hash_table_iter(&getblobs_by_mailbox);
+    hash_iter *iter = hash_table_iter(&getblobs_by_uniqueid);
     while (hash_iter_next(iter)) {
-        const char *mailbox = hash_iter_key(iter);
+        const char *uniqueid = hash_iter_key(iter);
         ptrarray_t *getblobs = hash_iter_val(iter);
         struct mailbox *mbox = NULL;
-        mbentry_t *mbentry = NULL;
+        const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, uniqueid);
         int r = 0;
-
-        if (req->cstate->folders_byname)
-            jmap_mboxlist_lookup(mailbox, &mbentry, NULL);
-        else
-            mbentry = jmap_mbentry_by_uniqueid_copy(req, mailbox);
 
         /* Open mailbox */
         if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
@@ -472,7 +470,6 @@ static int jmap_blob_get(jmap_req_t *req)
                        mbentry->name, error_message(r));
             }
         }
-        mboxlist_entry_free(&mbentry);
         if (r) continue;
 
         int j;
@@ -544,7 +541,7 @@ static int jmap_blob_get(jmap_req_t *req)
         ptrarray_free(getblobs);
     }
     hash_iter_free(&iter);
-    free_hash_table(&getblobs_by_mailbox, NULL);
+    free_hash_table(&getblobs_by_uniqueid, NULL);
 
     /* Report found blobs */
     if (json_object_size(found)) {

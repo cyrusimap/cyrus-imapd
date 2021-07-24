@@ -1167,9 +1167,9 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
         if (rec->part) return 0;
     }
 
-    r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
+    r = conv_guidrec_mbentry(rec, &mbentry);
     if (r) {
-        syslog(LOG_ERR, "jmap_findblob: no mbentry for %s", rec->mailbox);
+        syslog(LOG_ERR, "jmap_findblob: no mbentry for %s", conv_guidrec_mboxname(rec));
         return r;
     }
 
