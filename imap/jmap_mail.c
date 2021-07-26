@@ -2599,7 +2599,7 @@ struct emailquery_result {
     int is_imapfoldersearch;
     size_t total_ceiling;
 
-    void(*filln)(struct emailquery *q, struct emailquery_cache *qc, size_t n);
+    void(*ensure)(struct emailquery *q, struct emailquery_cache *qc, size_t n);
     const char *(*partid)(uint64_t partnum, void *rock);
     void(*free)(void *rock);
     void *rock;
@@ -3481,7 +3481,7 @@ struct emailquery_guidsearch_result_rock {
     size_t pos;
 };
 
-static void emailquery_guidsearch_result_filln(struct emailquery *q, struct emailquery_cache *qc, size_t n)
+static void emailquery_guidsearch_result_ensure(struct emailquery *q, struct emailquery_cache *qc, size_t n)
 {
     struct emailquery_guidsearch_result_rock *rrock = qc->qr.rock;
 
@@ -3545,7 +3545,7 @@ static int emailquery_guidsearch(jmap_req_t *req,
 
     qr->rock = rrock;
     qr->total_ceiling = gsq.total;
-    qr->filln = emailquery_guidsearch_result_filln;
+    qr->ensure = emailquery_guidsearch_result_ensure;
     qr->free = emailquery_guidsearch_result_free;
     qr->partid = NULL;
 
@@ -3570,7 +3570,7 @@ struct emailquery_uidsearch_result_rock {
     uint64_t partnum_seq;
 };
 
-static void emailquery_uidsearch_result_filln(struct emailquery *q, struct emailquery_cache *qc, size_t n)
+static void emailquery_uidsearch_result_ensure(struct emailquery *q, struct emailquery_cache *qc, size_t n)
 {
     struct emailquery_uidsearch_result_rock *rrock = qc->qr.rock;
     ptrarray_t *msgdata = &rrock->query->merged_msgdata;
@@ -3726,7 +3726,7 @@ static int emailquery_uidsearch(jmap_req_t *req,
 
     qr->rock = rrock;
     qr->total_ceiling = msgdata->count;
-    qr->filln = emailquery_uidsearch_result_filln;
+    qr->ensure = emailquery_uidsearch_result_ensure;
     qr->partid = emailquery_uidsearch_result_partid;
     qr->free = emailquery_uidsearch_result_free;
 
@@ -3802,9 +3802,9 @@ static void emailquery_cache_reset(struct emailquery_cache *qc)
     memset(qc, 0, sizeof(struct emailquery_cache));
 }
 
-static void emailquery_cache_loadn(struct emailquery *q,
-                                   struct emailquery_cache *qc,
-                                   size_t n)
+static void emailquery_cache_ensure(struct emailquery *q,
+                                    struct emailquery_cache *qc,
+                                    size_t n)
 {
     if (qc->have_total) return; // all done
 
@@ -3822,7 +3822,7 @@ static void emailquery_cache_loadn(struct emailquery *q,
     }
 
     // fill the caches
-    qc->qr.filln(q, qc, n);
+    qc->qr.ensure(q, qc, n);
 
     /* Postprocess total matches */
     if (qc->have_total && qc->uncollapsed_len) {
@@ -3875,12 +3875,12 @@ static void emailquery_cache_slice(struct emailquery *q,
             // is the window already within the loaded section?
             if (have_len < need) {
                 // fill just to the end of the window
-                emailquery_cache_loadn(q, qc, need);
+                emailquery_cache_ensure(q, qc, need);
             }
         }
         else {
             // load everything into cache
-            emailquery_cache_loadn(q, qc, SIZE_MAX);
+            emailquery_cache_ensure(q, qc, SIZE_MAX);
         }
     }
 
