@@ -65,6 +65,12 @@
 #include "util.h"
 #include "xsha1.h"
 
+#define charset_base64_len_unpadded(n) \
+    ((n) * 4 / 3)
+
+#define charset_base64_len_padded(n) \
+    (charset_base64_len_unpadded(n) + 4)
+
 typedef int comp_pat;
 /*
  * Charset identifies a character encoding.
