@@ -97,6 +97,7 @@ if [ ! $ITEM ] || [ $ITEM == timezones ] ; then
   autoreconf -i
   PKG_CONFIG_PATH=$PKG_CONFIG_PATH:$PREFIX/lib/pkgconfig ./configure --prefix=$PREFIX
   make $MAKEOPTS
+  make check
   sudo make install
 )
 fi
