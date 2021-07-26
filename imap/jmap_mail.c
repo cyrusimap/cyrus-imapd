@@ -8299,7 +8299,10 @@ static void _email_append(jmap_req_t *req,
         }
 
         /* If we haven't picked a mailbox, remember the last one. */
-        if (last) free(last);
+        if (last) {
+            free(last);
+            last = NULL;
+        }
         if (!mboxname) last = xstrdup(mbentry->name);
 
         /* Map mailbox id to mailbox name. */
