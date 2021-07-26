@@ -403,6 +403,7 @@ void free_test(test_t *t)
 
     case BC_DATE:
     case BC_CURRENTDATE:
+        free(t->u.dt.zone.offset);
         free(t->u.dt.header_name);
         strarray_free(t->u.dt.kl);
         break;

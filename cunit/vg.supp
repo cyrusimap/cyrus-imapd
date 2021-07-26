@@ -40,143 +40,50 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 {
-   bdb_environment_leak
-   Memcheck:Leak
-   fun:malloc
-   ...
-   fun:__env_config
-   fun:__env_open
-   ...
-   fun:init
-   fun:cyrusdb_init
-   ...
-}
-{
-   getpwnam_leak
-   Memcheck:Leak
-   fun:malloc
-   ...
-   fun:__nss_database_lookup
-   ...
-   fun:getpwnam
-   ...
-}
-{
-   getgrouplist_leak
-   Memcheck:Leak
-   fun:malloc
-   ...
-   fun:__nss_database_lookup
-   ...
-   fun:getgrouplist
-   ...
-}
-{
-   getpwuid_leak
-   Memcheck:Leak
-   fun:malloc
-   ...
-   fun:__nss_database_lookup
-   ...
-   fun:getpwuid
-   ...
-}
-{
-   zlib_inflateInit2_cond
-   Memcheck:Cond
-   fun:inflateReset2
-   fun:inflateInit2_
-   fun:prot_setcompress
-   ...
-}
-{
-   zlib_inflateInit2_cond
-   Memcheck:Cond
-   fun:inflateReset2
-   fun:inflateInit2_
-   fun:buf_inflate
-   ...
-}
-{
-    zlib_deflate_cond
-    Memcheck:Cond
-    fun:memcpy
-    ...
-    fun:deflate
-    fun:prot_flush_encode
-    ...
-}
-{
-    zlib_deflate_data4
-    Memcheck:Value4
-    fun:memcpy
-    ...
-    fun:deflate
-    fun:prot_flush_encode
-    ...
-}
-{
-    zlib_deflate_data8
-    Memcheck:Value8
-    fun:memcpy
-    ...
-    fun:deflate
-    fun:prot_flush_encode
-    ...
-}
-{
-    libcrypto_bugs_1
-    Memcheck:Cond
-    ...
-    fun:X509_verify
-    ...
-}
-{
-    libcrypto_bugs_2
-    Memcheck:Cond
-    ...
-    fun:RSA_sign
-    ...
-}
-{
-    libcrypto_bugs_3
-    Memcheck:Cond
-    ...
-    fun:DH_generate_key
-    ...
-}
-{
-    libcrypto_bugs_4
-    Memcheck:Cond
-    ...
-    fun:DH_compute_key
-    ...
-}
-{
-    libcrypto_bugs_5
-    Memcheck:Cond
-    ...
-    fun:RSA_setup_blinding
-    ...
-}
-{
-    libcrypto_bugs_6
+    # The libconfig:*_invalid tests all fatal out from in libconfig, which
+    # is fine in reality, but under CUnit we're trapping the fatal and not
+    # actually exiting.  Which means we detect some leaks that aren't real.
+    config_read_string_fname_leak
     Memcheck:Leak
+    match-leak-kinds: definite
     fun:malloc
+    fun:xmalloc
+    fun:xstrdup
+    fun:config_read_string
+    fun:test_*_invalid
     ...
-    fun:get_dh1024
-    ...
-    fun:tls_init_serverengine
+    obj:*/libcunit*
     ...
 }
 {
-    # This function is part of the unit tests and deliberately
-    # passes bogus mappings to msync() in the expectation of
-    # generating an error from the kernel.
-    is_valid_mapping
-    Memcheck:Param
-    msync(start)
-    fun:__msync_nocancel
-    fun:is_valid_mapping
+    # The libconfig:*_invalid tests all fatal out from in libconfig, which
+    # is fine in reality, but under CUnit we're trapping the fatal and not
+    # actually exiting.  Which means we detect some leaks that aren't real.
+    config_read_file_buf_leak
+    Memcheck:Leak
+    match-leak-kinds: definite
+    fun:malloc
+    fun:xmalloc
+    fun:config_read_file
+    fun:config_read
+    fun:config_read_string
+    fun:test_*_invalid
+    ...
+    obj:*/libcunit*
+    ...
+}
+{
+    # The parse:getint tests each check for fatal parse errors, but when
+    # this occurs the protstream structure is leaked.
+    parse_getint_protstream_leak
+    Memcheck:Leak
+    match-leak-kinds: definite
+    fun:malloc
+    fun:xmalloc
+    fun:xzmalloc
+    fun:prot_readmap
+    fun:test_get*int*
+    ...
+    obj:*/libcunit*
     ...
 }

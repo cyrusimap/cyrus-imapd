@@ -2416,7 +2416,7 @@ static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 static int search_attr_initialized = 0;
 
 static void done_cb(void *rock __attribute__((unused))) {
-    /* do nothing */
+    free_hash_table(&attrs_by_name, NULL);
 }
 
 static void init_internal() {

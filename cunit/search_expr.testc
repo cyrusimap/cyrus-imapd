@@ -652,6 +652,7 @@ static void test_normalise(void)
         s = search_expr_serialise(e); \
         CU_ASSERT_STRING_EQUAL(s, expected_out); \
         search_expr_free(e); \
+        free(s); \
     }
 
     /*

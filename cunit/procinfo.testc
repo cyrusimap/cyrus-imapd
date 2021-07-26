@@ -71,6 +71,8 @@ static void test_add_procinfo(void)
 	CU_ASSERT_NOT_EQUAL(pinfo->start, 0);
 	CU_ASSERT_TRUE((pinfo->start <= time(NULL)));
 	CU_ASSERT_TRUE((pinfo->vmsize > 0));
+
+    deinit_piarray(&piarray);
 }
 
 static void test_sort_procinfo(void)
@@ -160,4 +162,6 @@ static void test_sort_procinfo(void)
 	CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "U") == 0));
 	CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "R") == 0));
 	CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "C") == 0));
+
+    deinit_piarray(&piarray);
 }
