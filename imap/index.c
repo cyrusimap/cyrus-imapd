@@ -4708,6 +4708,7 @@ static int index_storeflag(struct index_state *state,
     int dirty = 0;
     modseq_t oldmodseq;
     struct index_map *im = &state->map[msgno-1];
+    struct index_record *record;
     int r;
 
     memset(modified_flags, 0, sizeof(struct index_modified_flags));
@@ -4739,6 +4740,9 @@ static int index_storeflag(struct index_state *state,
     uint32_t system_flags;
     uint32_t internal_flags;
     uint32_t user_flags[MAX_USER_FLAGS/32];
+    
+    r = msgrecord_get_index_record_rw(msgrec, &record);
+    if (r) return r;
 
     r = msgrecord_get_systemflags(msgrec, &system_flags);
     if (r) return r;
@@ -4870,6 +4874,8 @@ static int index_storeflag(struct index_state *state,
     r = msgrecord_set_internalflags(msgrec, internal_flags);
     if (r) return r;
     r = msgrecord_set_userflags(msgrec, user_flags);
+    if (r) return r;
+    r = index_rewrite_record(state, msgno, record, /*silent*/0);
     if (r) return r;
 
     /* if it's silent and unchanged, update the seen value, but
