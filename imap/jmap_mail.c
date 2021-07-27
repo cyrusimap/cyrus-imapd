@@ -4157,7 +4157,6 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
         emailquery_cache.last_accessed = time(NULL);
         is_cached = 1;
     }
-    buf_free(&fingerprint);
 
     /* Build response */
     emailquery_buildresult(q, &emailquery_cache, errp);
@@ -4218,6 +4217,7 @@ done:
         }
         else *errp = jmap_server_error(r);
     }
+    buf_free(&fingerprint);
     free(querystate);
     return res;
 }
