@@ -2917,6 +2917,13 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
         buf_printf(logbuf, "%sallow-origin", sep);
         sep = "; ";
     }
+#ifdef WITH_DAV
+    else if (txn->error.precond) {
+        buf_printf(logbuf, "%sprecond=", sep);
+        dav_precond_as_string(logbuf, &txn->error);
+        sep = "; ";
+    }
+#endif
     else if (txn->error.desc) {
         buf_printf(logbuf, "%serror=%s", sep, txn->error.desc);
         sep = "; ";

@@ -740,6 +740,8 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx);
 void free_entry_list(struct propfind_entry_list *elist);
 
+void dav_precond_as_string(struct buf *buf, struct error_t *err);
+
 /* DAV method processing functions */
 int meth_acl(struct transaction_t *txn, void *params);
 int meth_copy_move(struct transaction_t *txn, void *params);

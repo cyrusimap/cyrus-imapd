@@ -451,6 +451,31 @@ static const struct precond_t {
     { "max-resource-size", NS_CARDDAV },
 };
 
+void dav_precond_as_string(struct buf *buf, struct error_t *err)
+{
+    const struct precond_t *precond = &preconds[err->precond];
+
+    switch (precond->ns) {
+    case NS_DAV:
+        buf_appendcstr(buf, "DAV:");
+        break;
+    case NS_CALDAV:
+        buf_appendcstr(buf, "CALDAV:");
+        break;
+    case NS_CARDDAV:
+        buf_appendcstr(buf, "CARDDAV:");
+        break;
+    case NS_ISCHED:
+        buf_appendcstr(buf, "ISCHED:");
+        break;
+    case NS_MECOM:
+        buf_appendcstr(buf, "MECOM:");
+        break;
+    }
+
+    buf_appendcstr(buf, precond->name);
+}
+
 
 /* Check ACL on userid's principal (Inbox): ACL_LOOKUP right gives access */
 static int principal_acl_check(const char *userid, struct auth_state *authstate)
