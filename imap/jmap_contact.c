@@ -246,10 +246,10 @@ static void strip_spurious_deletes(struct changes_rock *urock)
 
 static json_t *jmap_utf8string(const char *s)
 {
-    char *freeme = NULL;
-    json_t *jval = json_string(jmap_decode_to_utf8("utf-8", ENCODING_NONE,
-                s, strlen(s), 1.0, &freeme, NULL));
-    free(freeme);
+    struct buf buf = BUF_INITIALIZER;
+    jmap_decode_to_utf8("utf-8", ENCODING_NONE, s, strlen(s), 1.0, &buf, NULL);
+    json_t *jval = json_string(buf_cstring(&buf));
+    buf_free(&buf);
     return jval;
 }
 

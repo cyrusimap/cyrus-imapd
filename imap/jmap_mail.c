@@ -374,12 +374,12 @@ static char *_decode_to_utf8(const char *charset,
                              int *is_encoding_problem)
 {
     /* XXX - keep confidence 0.0 for regression? */
-    char *cbuf = NULL;
-    const char *cval = jmap_decode_to_utf8(charset,
+    struct buf buf = BUF_INITIALIZER;
+    jmap_decode_to_utf8(charset,
             encoding_lookupname(encoding),
-            data, datalen, 0.0, &cbuf,
+            data, datalen, 0.0, &buf,
             is_encoding_problem);
-    return cbuf ? cbuf : xstrdupnull(cval);
+    return datalen && buf_len(&buf) ? buf_release(&buf) : NULL;
 }
 
 struct headers {

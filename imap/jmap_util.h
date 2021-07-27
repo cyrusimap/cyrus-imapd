@@ -113,26 +113,28 @@ extern json_t *jmap_server_error(int r);
 extern char *jmap_encode_base64_nopad(const char *data, size_t len);
 extern char *jmap_decode_base64_nopad(const char *b64, size_t b64len);
 
-/* Decode the text in data of datalen bytes to UTF-8 to a C-string.
+/* Decode the text in data of datalen bytes to UTF-8.
  *
- * Attempt to detect the right character encoding if conversion to
+ * Attempts to detect the right character encoding if conversion to
  * UTF-8 yields any invalid or replacement characters.
+ * UTF-8 input with replacement characters is considered valid input.
  *
  * Parameters:
  * - charset indicates the presumed character encoding.
  * - encoding must be one of the encodings defined in charset.h
+ * - data points to the encoded bytes
+ * - datalen indicates the byte length of data
  * - confidence indicates the threshold for charset detection (0 to 1.0)
- * - val holds any allocated memory to which the return value points to
+ * - dst points to a buffer for the decoded output. The buffer is NOT
+ *   reset to allow for consecutive decoding.
  * - (optional) is_encoding_problem is set for invalid byte sequences
  *
- * The return value MAY point to data if data is a C-string and does not
- * contain invalid UTF-8 (but may contain replacement) characters.
  */
-extern const char *jmap_decode_to_utf8(const char *charset, int encoding,
-                                       const char *data, size_t datalen,
-                                       float confidence,
-                                       char **val,
-                                       int *is_encoding_problem);
+extern void jmap_decode_to_utf8(const char *charset, int encoding,
+                                const char *data, size_t datalen,
+                                float confidence,
+                                struct buf *buf,
+                                int *is_encoding_problem);
 
 extern const char *jmap_encode_rawdata_blobid(const char prefix,
                                               const char *mboxid,

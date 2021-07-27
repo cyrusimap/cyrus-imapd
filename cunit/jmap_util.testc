@@ -142,9 +142,11 @@ static void test_decode_to_utf8(void)
         int encoding;
         float confidence;
         const char *want_val;
-        int want_alloc;
         int want_is_encoding_problem;
     };
+
+
+    // this is all about "Adélaïde"
 
     struct testcase tcs[] = {{
         // ISO-8859-1 encoded data claims to be UTF-8, confidence 0.51
@@ -154,7 +156,6 @@ static void test_decode_to_utf8(void)
         ENCODING_NONE,
         0.51,
         "Ad""\xc3\xa9""la""\xc3\xaf""de",
-        1,
         1
 #else
         "Ad""\xe9""la""\xef""de",
@@ -162,7 +163,6 @@ static void test_decode_to_utf8(void)
         ENCODING_NONE,
         0.51,
         "Ad""\xef\xbf\xbd""la""\xef\xbf\xbd""de",
-        1,
         1
 #endif
     }, {
@@ -172,7 +172,6 @@ static void test_decode_to_utf8(void)
         ENCODING_NONE,
         1.0,
         "Ad""\xef\xbf\xbd""la""\xef\xbf\xbd""de",
-        1,
         1
     }, {
         // Fast-path valid UTF-8
@@ -181,7 +180,6 @@ static void test_decode_to_utf8(void)
         ENCODING_NONE,
         0.51,
         "Ad""\xc3\xa9""la""\xc3\xaf""de",
-        0,
         0
     }, {
         // Fast-path valid UTF-8 with replacement chars
@@ -190,29 +188,26 @@ static void test_decode_to_utf8(void)
         ENCODING_NONE,
         0.51,
         "Ad""\xef\xbf\xbd""la""\xef\xbf\xbd""de",
-        0,
         0
     }, {
-        NULL, NULL, ENCODING_UNKNOWN, 0.0, NULL, 0, 0
+        NULL, NULL, ENCODING_UNKNOWN, 0.0, NULL, 0
     }};
 
+    struct buf buf = BUF_INITIALIZER;
     struct testcase *tc;
     for (tc = tcs; tc->data; tc++) {
-        char *cbuf = NULL;
         int is_problem = 0;
-        const char *cval = jmap_decode_to_utf8(tc->charset, tc->encoding,
-            tc->data, strlen(tc->data), tc->confidence, &cbuf, &is_problem);
+        buf_reset(&buf);
+
+        jmap_decode_to_utf8(tc->charset, tc->encoding,
+            tc->data, strlen(tc->data), tc->confidence, &buf, &is_problem);
         if (tc->want_val)
-            CU_ASSERT_STRING_EQUAL(tc->want_val, cval);
+            CU_ASSERT_STRING_EQUAL(tc->want_val, buf_cstring(&buf));
         else
-            CU_ASSERT_PTR_NULL(cval);
-        if (tc->want_alloc)
-            CU_ASSERT_PTR_NOT_NULL(cbuf);
-        else
-            CU_ASSERT_PTR_NULL(cbuf);
+            CU_ASSERT_EQUAL(0, buf_len(&buf));
         CU_ASSERT_EQUAL(tc->want_is_encoding_problem, is_problem);
-        free(cbuf);
     }
+    buf_free(&buf);
 }
 
 /* vim: set ft=c: */

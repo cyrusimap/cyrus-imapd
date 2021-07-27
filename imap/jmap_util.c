@@ -558,25 +558,23 @@ HIDDEN char *jmap_decode_base64_nopad(const char *b64, size_t b64len)
     return data;
 }
 
-EXPORTED const char *jmap_decode_to_utf8(const char *charset, int encoding,
-                                         const char *data, size_t datalen,
-                                         float confidence,
-                                         char **val,
-                                         int *is_encoding_problem)
+EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
+                                  const char *data, size_t datalen,
+                                  float confidence,
+                                  struct buf *dst,
+                                  int *is_encoding_problem)
 {
     charset_t cs = charset_lookupname(charset);
     char *text = NULL;
-    *val = NULL;
     const char *charset_id = charset_canon_name(cs);
     assert(confidence >= 0.0 && confidence <= 1.0);
 
-    /* Attempt fast path without allocation */
-    if (encoding == ENCODING_NONE && data[datalen] == '\0' &&
-            !strcasecmp(charset_id, "UTF-8")) {
+    /* Attempt fast path if data claims to be UTF-8 */
+    if (encoding == ENCODING_NONE && !strcasecmp(charset_id, "UTF-8")) {
         struct char_counts counts = charset_count_validutf8(data, datalen);
         if (!counts.invalid) {
-            charset_free(&cs);
-            return data;
+            buf_setmap(dst, data, datalen);
+            goto done;
         }
     }
 
@@ -689,8 +687,8 @@ EXPORTED const char *jmap_decode_to_utf8(const char *charset, int encoding,
 
 done:
     charset_free(&cs);
-    *val = text;
-    return text;
+    if (text) buf_setcstr(dst, text);
+    free(text);
 }
 
 /*
@@ -870,9 +868,13 @@ static char *_decode_mimeheader(const char *raw)
     char *val = NULL;
     if (is_8bit) {
         int r = 0;
-        const char *cval = jmap_decode_to_utf8("utf-8", ENCODING_NONE,
-                                               raw, strlen(raw), 0.0, &val, &r);
-        if (!val) val = xstrdupnull(cval);
+        struct buf buf = BUF_INITIALIZER;
+        jmap_decode_to_utf8("utf-8", ENCODING_NONE,
+                raw, strlen(raw), 0.0, &buf, &r);
+        if (buf_len(&buf))
+            val = buf_release(&buf);
+        else
+            buf_free(&buf);
     }
     if (!val) {
         val = charset_decode_mimeheader(raw, CHARSET_KEEPCASE);
