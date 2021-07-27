@@ -1755,6 +1755,7 @@ static const search_attr_t emailsearch_folders_attr = {
     /*get_countability*/NULL,
     emailsearch_folders_duplicate,
     emailsearch_folders_free,
+    /*freeattr*/NULL,
     (void*)0 /*is_otherthan*/
 };
 
@@ -1852,6 +1853,7 @@ static const search_attr_t emailsearch_headermatch_attr_uncached = {
     /*get_countability*/NULL,
     emailsearch_headermatch_duplicate,
     emailsearch_headermatch_free,
+    /*freeattr*/NULL,
     NULL
 };
 
@@ -1868,6 +1870,7 @@ static const search_attr_t emailsearch_headermatch_attr_cached = {
     /*get_countability*/NULL,
     emailsearch_headermatch_duplicate,
     emailsearch_headermatch_free,
+    /*freeattr*/NULL,
     NULL
 };
 

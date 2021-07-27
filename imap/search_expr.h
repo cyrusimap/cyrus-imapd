@@ -101,6 +101,7 @@ struct search_attr {
     unsigned int (*get_countability)(const union search_value *);
     void (*duplicate)(union search_value *, const union search_value *);
     void (*free)(union search_value *);
+    void (*freeattr)(struct search_attr *);
     void *data1;        /* extra data for the functions above */
 };
 
