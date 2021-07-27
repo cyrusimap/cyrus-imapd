@@ -2416,6 +2416,12 @@ static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 static int search_attr_initialized = 0;
 
 static void done_cb(void *rock __attribute__((unused))) {
+    hash_iter *iter = hash_table_iter(&attrs_by_name);
+    while (hash_iter_next(iter)) {
+        struct search_attr *attr = hash_iter_val(iter);
+        if (attr->freeattr) attr->freeattr(attr);
+    }
+    hash_iter_free(&iter);
     free_hash_table(&attrs_by_name, NULL);
 }
 
@@ -2448,6 +2454,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_list_duplicate,
             search_list_free,
+            /*freeattr*/NULL,
             (void *)message_get_bcc
         },{
             "cclist",
@@ -2462,6 +2469,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_list_duplicate,
             search_list_free,
+            /*freeattr*/NULL,
             (void *)message_get_cc
         },{
             "fromlist",
@@ -2476,6 +2484,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_list_duplicate,
             search_list_free,
+            /*freeattr*/NULL,
             (void *)message_get_from
         },{
             "tolist",
@@ -2490,6 +2499,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_list_duplicate,
             search_list_free,
+            /*freeattr*/NULL,
             (void *)message_get_to
         },{
             "bcc",
@@ -2504,6 +2514,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_bcc
         },{
             "deliveredto",
@@ -2518,6 +2529,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_deliveredto
         },{
             "cc",
@@ -2532,6 +2544,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_cc
         },{
             "from",
@@ -2546,6 +2559,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_from
         },{
             "message-id",
@@ -2560,6 +2574,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_messageid
         },{
             "listid",
@@ -2574,6 +2589,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             NULL
         },{
             "contenttype",
@@ -2588,6 +2604,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             NULL
         },{
             "subject",
@@ -2602,6 +2619,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_subject
         },{
             "to",
@@ -2616,6 +2634,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_to
         },{
             "msgno",
@@ -2630,6 +2649,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_msgno
         },{
             "uid",
@@ -2644,6 +2664,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_uid
         },{
             "systemflags",
@@ -2658,6 +2679,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_systemflags
         },{
             "indexflags",
@@ -2672,6 +2694,7 @@ EXPORTED void search_attr_init(void)
             search_indexflags_get_countability,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_indexflags
         },{
             "keyword",
@@ -2686,6 +2709,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             NULL
         },{
             "convflags",
@@ -2700,6 +2724,7 @@ EXPORTED void search_attr_init(void)
             search_convflags_get_countability,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             NULL
         },{
             "allconvflags",
@@ -2714,6 +2739,7 @@ EXPORTED void search_attr_init(void)
             search_convflags_get_countability,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             NULL
         },{
             "convmodseq",
@@ -2728,6 +2754,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             NULL
         },{
             "modseq",
@@ -2742,6 +2769,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_modseq
         },{
             "cid",
@@ -2756,6 +2784,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_cid
         },{
             "emailid",
@@ -2770,6 +2799,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)NULL
         },{
             "threadid",
@@ -2784,6 +2814,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)NULL
         },{
             "folder",
@@ -2798,6 +2829,7 @@ EXPORTED void search_attr_init(void)
             search_folder_get_countability,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)NULL
         },{
             "annotation",
@@ -2812,6 +2844,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_annotation_duplicate,
             search_annotation_free,
+            /*freeattr*/NULL,
             (void *)NULL
         },{
             "size",
@@ -2826,6 +2859,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_size
         },{
             "internaldate",
@@ -2840,6 +2874,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_internaldate
         },{
             "savedate",
@@ -2854,6 +2889,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_savedate
         },{
             "indexversion",
@@ -2868,6 +2904,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_indexversion
         },{
             "sentdate",
@@ -2882,6 +2919,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_sentdate
         },{
             "spamscore",
@@ -2896,6 +2934,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_spamscore
         },{
             "body",
@@ -2910,6 +2949,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)1       /* skipheader flag */
         },{
             "text",
@@ -2924,6 +2964,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0       /* skipheader flag */
         },{
             "date",
@@ -2938,6 +2979,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_gmtime
         },{
             "location",     /* for iCalendar */
@@ -2952,6 +2994,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0
         },{
             "attachmentname",
@@ -2966,6 +3009,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0
         },{
             "attachmentbody",
@@ -2980,6 +3024,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0       /* skipheader flag */
         },{
             "language",
@@ -2994,6 +3039,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0
         }, {
             "priority",
@@ -3008,6 +3054,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_priority
         },{
             "seen",
@@ -3022,6 +3069,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0
         }
     };
@@ -3050,6 +3098,12 @@ EXPORTED const search_attr_t *search_attr_find(const char *name)
     return hash_lookup(tmp, &attrs_by_name);
 }
 
+static void field_attr_free(search_attr_t *attr)
+{
+    free((char*)attr->name);
+    free(attr);
+}
+
 /*
  * Find and return a search attribute for the named header field.  Used
  * when building comparison nodes for the HEADER search criterion in a
@@ -3074,6 +3128,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
         /*get_countability*/NULL,
         search_string_duplicate,
         search_string_free,
+        field_attr_free,
         NULL
     };
 
@@ -3099,6 +3154,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
                    ? SEARCH_COST_CACHE : SEARCH_COST_BODY;
         attr->part = (config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS)
                         ? SEARCH_PART_HEADERS : -1);
+        attr->freeattr = field_attr_free;
         attr->data1 = strchr(key, ':')+1;
         hash_insert(attr->name, (void *)attr, &attrs_by_name);
         key = NULL;     /* attr takes this over */
