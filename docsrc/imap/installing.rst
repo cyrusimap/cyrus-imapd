@@ -424,4 +424,4 @@ More information is almost always logged to **syslog**. Make sure you start sysl
 Join us on the :ref:`mailing lists <feedback-mailing-lists>` if you need help
 or just want to chat about Cyrus, IMAP, etc.
 
-.. _FastMail : https://www.fastmail.com
+.. _Fastmail : https://www.fastmail.com

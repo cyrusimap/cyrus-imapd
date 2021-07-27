@@ -344,4 +344,4 @@ version, operating system and affected libraries.
 
 Next: :ref:`installing Cyrus <installing>`.
 
-.. _FastMail : https://www.fastmail.com
+.. _Fastmail : https://www.fastmail.com
