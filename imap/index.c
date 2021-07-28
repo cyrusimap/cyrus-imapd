@@ -4740,7 +4740,7 @@ static int index_storeflag(struct index_state *state,
     uint32_t system_flags;
     uint32_t internal_flags;
     uint32_t user_flags[MAX_USER_FLAGS/32];
-    
+
     r = msgrecord_get_index_record_rw(msgrec, &record);
     if (r) return r;
 
