@@ -670,14 +670,6 @@ static int end_resp_headers(struct transaction_t *txn, long code)
         flags = NGHTTP2_FLAG_NONE;
         break;
 
-    case HTTP_OK:
-        if (txn->meth == METH_CONNECT) {
-            /* Tunnel - DO NOT end stream */
-            break;
-        }
-
-        GCC_FALLTHROUGH
-
     default:
         if (txn->meth != METH_HEAD &&
             (txn->resp_body.len || (txn->flags.te & TE_CHUNKED))) {
