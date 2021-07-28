@@ -876,7 +876,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         ptrarray_add(&txn->done_callbacks, &stream_free);
 
         /* Tell syslog our stream-id */
-        buf_printf(&txn->buf, "%d", strm->id);
+        buf_printf(buf, "%d", strm->id);
         spool_replace_header(xstrdup(":stream-id"),
                              buf_release(&txn->buf), txn->req_hdrs);
     }
