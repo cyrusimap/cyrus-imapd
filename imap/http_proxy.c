@@ -602,6 +602,7 @@ static void write_cachehdr(const char *name, const char *contents,
     /* Ignore private headers in our cache */
     if (name[0] == ':') return;
 
+    /* Ignore HTTP/1.1 specific hop-by-hop header when proxying to HTTP/2 */
     if (txn->meth == METH_CONNECT && !strcasecmp(name, "Sec-WebSocket-Accept"))
         return;
 
