@@ -330,7 +330,7 @@ EXPORTED const char *conversations_folder_uniqueid(const struct conversations_st
         mbentry_t *mbentry = NULL;
         int r = mboxlist_lookup(val, &mbentry, NULL);
         if (r || !mbentry) return NULL;
-        strarray_set(backdoor->altrep, foldernum, mbentry->name);
+        strarray_set(backdoor->altrep, foldernum, mbentry->uniqueid);
         mboxlist_entry_free(&mbentry);
         res = strarray_nth(backdoor->altrep, foldernum);
     }
