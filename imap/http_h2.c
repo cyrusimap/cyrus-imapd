@@ -630,7 +630,7 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
-    uint8_t flags = NGHTTP2_FLAG_NONE;
+    uint8_t flags = NGHTTP2_FLAG_END_STREAM;
     int r;
 
     syslog(LOG_DEBUG,
@@ -660,22 +660,14 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     case HTTP_CONTINUE:
     case HTTP_PROCESSING:
         /* Provisional response */
-        break;
-
-    case HTTP_NO_CONTENT:
-    case HTTP_NOT_MODIFIED:
-        /* MUST NOT include a body */
-        flags = NGHTTP2_FLAG_END_STREAM;
+        flags = NGHTTP2_FLAG_NONE;
         break;
 
     default:
-        if (txn->meth == METH_HEAD) {
-            /* MUST NOT include a body */
-            flags = NGHTTP2_FLAG_END_STREAM;
-        }
-        else if (!(txn->resp_body.len || (txn->flags.te & TE_CHUNKED))) {
-            /* Empty body */
-            flags = NGHTTP2_FLAG_END_STREAM;
+        if (txn->meth != METH_HEAD &&
+            (txn->resp_body.len || (txn->flags.te & TE_CHUNKED))) {
+            /* Response has a body */
+            flags = NGHTTP2_FLAG_NONE;
         }
         break;
     }
