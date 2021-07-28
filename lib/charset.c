@@ -3273,6 +3273,8 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
         } else {
             /* byte 3: pad */
             d[2] = '=';
+            /* byte 4: pad */
+            d[3] = '=';
         }
     }
 

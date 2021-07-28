@@ -5,6 +5,9 @@
 
 extern int charset_debug;
 
+#define CU_ASSERT_MEMEQUAL(actual, expected, sz) \
+    CU_ASSERT_EQUAL(memcmp(actual, expected, sz), 0)
+
 /* The Unicode Replacement character 0xfffd in UTF-8 encoding */
 #define UTF8_REPLACEMENT    "\357\277\275"
 /* The Replacement char after search normalisation */
@@ -1384,6 +1387,51 @@ static void test_qpencode_mimebody(void)
              "0123456789" "0123456789" "0123456789" "0123456789",
              "0123456789" "0123456789" "0123456789" "0123456789"
              "0123456789" "0123456789" "0123456789" "01=\r\n23456789", 1);
+
+#undef TESTCASE
+}
+
+static void test_encode_mimebody(void)
+{
+#define TESTCASE(in, want, wrap, wantlines) \
+    { \
+        size_t inlen = strlen(in); \
+        size_t wantlen = strlen(want); \
+        size_t preflight_outlen = 0xffee; \
+        int preflight_outlines = 0x1234; \
+        char *preflight_retval = charset_encode_mimebody(NULL, inlen, NULL, \
+            &preflight_outlen, &preflight_outlines, wrap); \
+        CU_ASSERT_PTR_NULL(preflight_retval); \
+        CU_ASSERT_EQUAL(wantlen, preflight_outlen); \
+        CU_ASSERT_EQUAL(wantlines, preflight_outlines); \
+        char *retval = malloc(preflight_outlen); \
+        size_t encode_outlen = 0x1234; \
+        int encode_outlines = 0xffee; \
+        char *encode_retval = charset_encode_mimebody(in, inlen, \
+                retval, &encode_outlen, &encode_outlines, wrap); \
+        CU_ASSERT_PTR_EQUAL(retval, encode_retval); \
+        CU_ASSERT_EQUAL(wantlen, encode_outlen); \
+        CU_ASSERT_MEMEQUAL(retval, want, wantlen); \
+        CU_ASSERT_EQUAL(wantlines, encode_outlines); \
+        free(retval); \
+    }
+
+    TESTCASE("a", "YQ==", 0, 1);
+    TESTCASE("ab", "YWI=", 0, 1);
+    TESTCASE("abc", "YWJj", 0, 1);
+    TESTCASE("abcd", "YWJjZA==", 0, 1);
+    TESTCASE("abcde", "YWJjZGU=", 0, 1);
+    TESTCASE("abcdef", "YWJjZGVm", 0, 1);
+
+
+    TESTCASE("012345678901234567890123456789012345678901234567890123",
+             "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIz\r\n",
+             1, 1);
+
+    TESTCASE("0123456789012345678901234567890123456789012345678901234",
+             "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIz\r\n"
+             "NA==\r\n",
+             1, 2);
 
 #undef TESTCASE
 }
