@@ -782,13 +782,16 @@ static int message_parse_body(struct msg *msg, struct body *body,
 
     /* Charset id and encoding id are stored in the binary
      * bodystructure, but we don't have that one here. */
-    struct param *param = body->params;
-    while (param) {
-        if (!strcasecmp(param->attribute, "CHARSET")) {
-            body->charset_id = xstrdupnull(param->value);
-            break;
+    body->charset_id = NULL;
+    if (body->params) {
+        charset_t cs = !strcmp(body->type, "TEXT") ?
+            charset_lookupname("us-ascii") : CHARSET_UNKNOWN_CHARSET;
+        message_parse_charset_params(body->params, &cs);
+        if (cs != CHARSET_UNKNOWN_CHARSET) {
+            /* Use parameter value, instead of canonical name */
+            body->charset_id = xstrdup(charset_alias_name(cs));
         }
-        param = param->next;
+        charset_free(&cs);
     }
 
     body->charset_enc = encoding_lookupname(body->encoding);
@@ -1076,17 +1079,33 @@ static void message_parse_encoding(const char *hdr, char **hdrp)
     *hdrp = message_ucase(xstrndup(hdr, len));
 }
 
+EXPORTED void message_parse_charset_params(const struct param *params,
+                                           charset_t *c_ptr)
+{
+    const struct param *param;
+    for (param = params; param; param = param->next) {
+        if (!strcasecmp(param->attribute, "charset")) {
+            if (param->value && *param->value) {
+                charset_t cs = charset_lookupname(param->value);
+                if (cs == CHARSET_UNKNOWN_CHARSET) {
+                    xsyslog(LOG_NOTICE, "unknown charset", "charset=<%s>", param->value);
+                    continue;
+                }
+                charset_free(c_ptr);
+                *c_ptr = cs;
+            }
+        }
+    }
+}
+
 /*
  * parse a charset and encoding out of a body structure
  */
 static void message_parse_charset(const struct body *body,
                                   int *e_ptr, charset_t *c_ptr)
 {
-
     int encoding = ENCODING_NONE;
     charset_t charset = charset_lookupname("us-ascii");
-    struct param *param;
-
 
     if (body->encoding) {
         switch (body->encoding[0]) {
@@ -1120,17 +1139,7 @@ static void message_parse_charset(const struct body *body,
     }
 
     if (!body->type || !strcmp(body->type, "TEXT")) {
-        for (param = body->params; param; param = param->next) {
-            if (!strcasecmp(param->attribute, "charset")) {
-                if (param->value && *param->value) {
-                    charset_free(&charset);
-                    charset = charset_lookupname(param->value);
-                    if (charset == CHARSET_UNKNOWN_CHARSET)
-                        syslog(LOG_NOTICE, "message_parse_charset: unknown charset %s for text/%s", param->value, body->subtype);
-                }
-                break;
-            }
-        }
+        message_parse_charset_params(body->params, &charset);
     }
     else if (!strcmp(body->type, "MESSAGE")) {
         if (!strcmp(body->subtype, "RFC822")) {

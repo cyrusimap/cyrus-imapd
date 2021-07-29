@@ -6734,7 +6734,6 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
                                    const struct body *part)
 {
     struct buf buf = BUF_INITIALIZER;
-    struct param *param;
 
     hash_table *bodyprops = args->bodyprops;
     ptrarray_t *want_bodyheaders = &args->want_bodyheaders;
@@ -6819,6 +6818,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
         const char *fname = NULL;
         char *val = NULL;
         int is_extended = 0;
+        const struct param *param;
 
         /* Lookup name parameter. Disposition header has precedence */
         for (param = part->disposition_params; param; param = param->next) {
@@ -6884,21 +6884,15 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
                 char *type = NULL;
                 char *subtype = NULL;
                 struct param *param = NULL;
+                charset_t cs = CHARSET_UNKNOWN_CHARSET;
+
                 message_parse_type(hdr, &type, &subtype, &param);
-                struct param *p;
-                for (p = param; p; p = p->next) {
-                    if (!strcasecmpsafe("charset", p->attribute)) {
-                        if (p->value) {
-                            struct buf buf = BUF_INITIALIZER;
-                            buf_setcstr(&buf, p->value);
-                            buf_trim(&buf);
-                            if (buf_len(&buf)) {
-                                jcharset = json_string(buf_cstring(&buf));
-                            }
-                            buf_free(&buf);
-                        }
-                    }
-                }
+                if (param)
+                    message_parse_charset_params(param, &cs);
+                if (cs != CHARSET_UNKNOWN_CHARSET)
+                    jcharset = json_string(charset_alias_name(cs));
+
+                charset_free(&cs);
                 json_decref(jrawheader);
                 param_free(&param);
                 free(type);
