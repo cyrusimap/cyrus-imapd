@@ -2090,6 +2090,7 @@ static int http1_input(struct transaction_t *txn)
     if (ret) error_response(ret, txn);
 
     else if (txn->be) {
+        /* Add this backend to list of current pipes */
         ptrarray_append(&httpd_pipes, txn);
 
         /* Remove this backend from cache as it can't be reused (for now) */
@@ -4725,7 +4726,9 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
         ret = http_proxy_h2_connect(be, txn);
         if (!ret) {
             txn->be = be;
-            txn->flags.te = TE_CHUNKED;
+            txn->flags.te = TE_CHUNKED;  /* Keep H2 stream open */
+
+            /* Add this backend to list of current pipes */
             ptrarray_append(&httpd_pipes, txn);
 
             /* Remove this backend from cache as it can't be reused (for now) */
