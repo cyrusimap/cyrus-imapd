@@ -106,7 +106,7 @@ static int jmap_eventsource(struct transaction_t *txn);
 static ws_data_callback jmap_ws;
 
 static struct connect_params ws_params = {
-    JMAP_BASE_URL JMAP_WS_COL, JMAP_WS_PROTOCOL, &jmap_ws
+    &jmap_parse_path, { JMAP_BASE_URL JMAP_WS_COL, JMAP_WS_PROTOCOL, &jmap_ws }
 };
 
 

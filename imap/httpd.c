@@ -541,7 +541,7 @@ const struct known_meth_t http_methods[] = {
 static ws_data_callback ws_echo;
 
 static struct connect_params ws_params = {
-    "/", NULL /* sub-protocol */, &ws_echo
+    NULL, { "/", NULL /* sub-protocol */, &ws_echo }
 };
 
 /* Namespace to fetch static content from filesystem */
@@ -4673,21 +4673,32 @@ static int ws_echo(struct transaction_t *txn __attribute__((unused)),
 HIDDEN int meth_connect(struct transaction_t *txn, void *params)
 {
     struct connect_params *cparams = (struct connect_params *) params;
+    int ret;
 
     /* Bootstrap WebSockets over HTTP/2, if requested */
-    if ((txn->flags.ver != VER_2) ||
-        !ws_enabled || !cparams || !cparams->endpoint) {
+    if ((txn->flags.ver != VER_2) || !ws_enabled || !cparams) {
         return HTTP_NOT_IMPLEMENTED;
     }
 
-    if (strcmp(txn->req_uri->path, cparams->endpoint)) return HTTP_NOT_ALLOWED;
+    if (cparams->parse_path) {
+        /* Parse the path */
+        ret = cparams->parse_path(txn->req_uri->path,
+                                  &txn->req_tgt, &txn->error.desc);
+        if (ret) return ret;
+        else if (!(txn->req_tgt.allow & ALLOW_CONNECT)) {
+            return HTTP_NOT_ALLOWED;
+        }
+    }
+    else if (strcmp(txn->req_uri->path, cparams->ws.endpoint)) {
+        return HTTP_NOT_ALLOWED;
+    }
 
     if (!(txn->flags.upgrade & UPGRADE_WS)) {
         txn->error.desc = "Missing/unsupported :protocol value ";
         return HTTP_BAD_REQUEST;
     }
 
-    int ret = ws_start_channel(txn, cparams->subprotocol, cparams->data_cb);
+    ret = ws_start_channel(txn, cparams->ws.subprotocol, cparams->ws.data_cb);
 
     return (ret == HTTP_UPGRADE) ? HTTP_BAD_REQUEST : ret;
 }
