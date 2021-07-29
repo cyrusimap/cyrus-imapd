@@ -87,10 +87,11 @@ static int  jmap_need_auth(struct transaction_t *txn);
 static int  jmap_auth(const char *userid);
 static void jmap_reset(void);
 static void jmap_shutdown(void);
+static int  jmap_parse_path(const char *path, struct request_target_t *tgt,
+                            const char **resultstr);
 
 /* HTTP method handlers */
 static int meth_get(struct transaction_t *txn, void *params);
-static int meth_options_jmap(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
 
 /* JMAP Requests */
@@ -128,7 +129,7 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL },                 /* MKCALENDAR   */
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
-        { &meth_options_jmap,   NULL },                 /* OPTIONS      */
+        { &meth_options,        &jmap_parse_path },     /* OPTIONS      */
         { NULL,                 NULL },                 /* PATCH        */
         { &meth_post,           NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
@@ -259,37 +260,33 @@ enum {
     JMAP_ENDPOINT_EVENTSOURCE
 };
 
-static int jmap_parse_path(struct transaction_t *txn)
+static int jmap_parse_path(const char *path, struct request_target_t *tgt,
+                           const char **resultstr)
 {
-    struct request_target_t *tgt = &txn->req_tgt;
     size_t len;
     char *p;
 
     if (*tgt->path) return 0;  /* Already parsed */
 
     /* Make a working copy of target path */
-    strlcpy(tgt->path, txn->req_uri->path, sizeof(tgt->path));
+    strlcpy(tgt->path, path, sizeof(tgt->path));
     p = tgt->path;
 
     /* Sanity check namespace */
     len = strlen(namespace_jmap.prefix);
     if (strlen(p) < len ||
         strncmp(namespace_jmap.prefix, p, len) ||
-        (tgt->path[len] && tgt->path[len] != '/')) {
-        txn->error.desc = "Namespace mismatch request target path";
+        (path[len] && path[len] != '/')) {
+        *resultstr = "Namespace mismatch request target path";
         return HTTP_FORBIDDEN;
     }
 
     /* Skip namespace */
     p += len;
-    if (!*p) {
-        /* Canonicalize URL */
-        txn->location = JMAP_BASE_URL;
-        return HTTP_MOVED;
-    }
 
     /* Check for path after prefix */
-    if (*++p) {
+    if (*p == '/') p++;
+    if (*p) {
         /* Get "collection" */
         tgt->collection = p;
 
@@ -311,7 +308,7 @@ static int jmap_parse_path(struct transaction_t *txn)
         }
         else if (ws_enabled && !strcmp(tgt->collection, JMAP_WS_COL)) {
             tgt->flags = JMAP_ENDPOINT_WS;
-            tgt->allow = (txn->flags.ver == VER_2) ? ALLOW_CONNECT : ALLOW_READ;
+            tgt->allow = ALLOW_CONNECT;
         }
         else if (!strncmp(tgt->collection,
                           JMAP_EVENTSOURCE_COL, strlen(JMAP_EVENTSOURCE_COL))) {
@@ -334,12 +331,13 @@ static int jmap_parse_path(struct transaction_t *txn)
 static int meth_get(struct transaction_t *txn,
                     void *params __attribute__((unused)))
 {
-    int r = jmap_parse_path(txn);
+    int r = jmap_parse_path(txn->req_uri->path,
+                            &txn->req_tgt, &txn->error.desc);
 
+    if (r) return r;
     if (!(txn->req_tgt.allow & ALLOW_READ)) {
         return HTTP_NOT_FOUND;
     }
-    else if (r) return r;
 
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
         return jmap_get_session(txn);
@@ -422,7 +420,8 @@ static int meth_post(struct transaction_t *txn,
     int ret;
     json_t *req = NULL, *res = NULL;
 
-    ret = jmap_parse_path(txn);
+    ret = jmap_parse_path(txn->req_uri->path,
+                          &txn->req_tgt, &txn->error.desc);
 
     if (ret) return ret;
     if (!(txn->req_tgt.allow & ALLOW_POST)) {
@@ -472,16 +471,6 @@ static int meth_post(struct transaction_t *txn,
 
     syslog(LOG_DEBUG, ">>>> jmap_post: Exit");
     return ret;
-}
-
-/* Perform an OPTIONS request */
-static int meth_options_jmap(struct transaction_t *txn, void *params)
-{
-    /* Parse the path */
-    int r = jmap_parse_path(txn);
-    if (r) return r;
-
-    return meth_options(txn, params);
 }
 
 
