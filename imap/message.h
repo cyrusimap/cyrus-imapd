@@ -197,6 +197,8 @@ extern void message_free_body(struct body *body);
 extern void message_parse_type(const char *hdr, char **typep, char **subtypep, struct param **paramp);
 extern void message_parse_disposition(const char *hdr, char **hdpr, struct param **paramp);
 
+extern void message_parse_charset_params(const struct param *params, charset_t *c_ptr);
+
 /* NOTE - scribbles on its input */
 extern void message_parse_env_address(char *str, struct address *addr);
 
