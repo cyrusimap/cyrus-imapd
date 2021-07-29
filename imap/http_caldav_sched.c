@@ -2145,7 +2145,8 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 
         return (icaldurationtype_as_int(olddur) != icaldurationtype_as_int(newdur));
     }
-    else if ((kind == ICAL_RDATE_PROPERTY) || (kind == ICAL_EXDATE_PROPERTY)) {
+    else if ((kind == ICAL_RDATE_PROPERTY) || (kind == ICAL_EXDATE_PROPERTY) ||
+             (kind == ICAL_ATTACH_PROPERTY)) {
         const char *str;
         uint32_t old_crc = 0, new_crc = 0;
 
@@ -2322,6 +2323,8 @@ static int check_changes_any(icalcomponent *old,
     else if (propcmp(old, comp, ICAL_LOCATION_PROPERTY))
         is_changed = 1;
     else if (propcmp(old, comp, ICAL_DESCRIPTION_PROPERTY))
+        is_changed = 1;
+    else if (propcmp(old, comp, ICAL_ATTACH_PROPERTY))
         is_changed = 1;
     else if (propcmp(old, comp, ICAL_POLLWINNER_PROPERTY))
         is_changed = 1;
