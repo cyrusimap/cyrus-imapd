@@ -2949,7 +2949,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     const char *etag = NULL, **hdr;
     time_t lastmod = 0;
-    icalcomponent *ical = NULL, *comp, *nextc, *master = NULL;
+    icalcomponent *ical = NULL, *oldical = NULL, *comp, *nextc, *master = NULL;
     icalcomponent_kind kind;
     icalproperty *aprop = NULL, *prop;
     icalparameter *param;
@@ -3095,6 +3095,10 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
         /* Update reference count */
         decrement_refcount(mid->s, attachments, webdavdb);
+    }
+
+    if (cdata->organizer) {
+        oldical = icalcomponent_clone(ical);
     }
 
     if (op == ATTACH_REMOVE) aprop = NULL;
@@ -3321,6 +3325,34 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     /* Finished with attachment collection */
     mailbox_unlock_index(attachments, NULL);
 
+    if (cdata->organizer) {
+        /* Scheduling object resource */
+        const char **hdr;
+
+        /* XXX - check date range? - don't send in the past */
+
+        get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                               txn->req_tgt.userid, &schedule_addresses);
+
+        char *userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
+            xstrdup(txn->req_tgt.userid) :
+            mboxname_to_userid(txn->req_tgt.mbentry->name);
+        if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
+            /* Organizer scheduling object resource */
+            if (_scheduling_enabled(txn, calendar))
+                sched_request(userid, &schedule_addresses,
+                              cdata->organizer, oldical, ical);
+        }
+        else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
+                 strcasecmp(hdr[0], "F")) {
+            /* Attendee scheduling object resource */
+            if (_scheduling_enabled(txn, calendar) && strarray_size(&schedule_addresses))
+                sched_reply(userid, &schedule_addresses, oldical, ical);
+        }
+
+        free(userid);
+    }
+
     /* Store updated calendar resource */
     ret = caldav_store_resource(txn, ical, calendar, txn->req_tgt.resource,
                                 record.createdmodseq,
@@ -3367,6 +3399,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     strarray_fini(&schedule_addresses);
     if (aprop) icalproperty_free(aprop);
     if (ical) icalcomponent_free(ical);
+    if (oldical) icalcomponent_free(oldical);
     if (caldavdb) caldav_close(caldavdb);
     if (webdavdb) webdav_close(webdavdb);
     mailbox_close(&attachments);
