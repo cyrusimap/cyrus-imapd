@@ -11961,6 +11961,17 @@ MIME-Version: 1.0
 This is a test email.
 EOF
 
+    my $emailWithBogusContentTypeParams = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+Content-Type: text/html; charset=text/plain; charset=utf-8
+MIME-Version: 1.0
+
+This is a test email.
+EOF
+
 
     my @testCases = ({
         desc => "Email without Content-Type header",
@@ -11977,6 +11988,11 @@ EOF
         rawEmail => $emailWithNonTextContentType,
         wantContentType => 'application/data',
         wantCharset => undef,
+    }, {
+        desc => "Email with bogus Content-Type params",
+        rawEmail => $emailWithBogusContentTypeParams,
+        wantContentType => 'text/html',
+        wantCharset => 'utf-8',
     });
 
     foreach (@testCases) {
