@@ -281,6 +281,9 @@ static int jmap_parse_path(const char *path, struct request_target_t *tgt,
         return HTTP_FORBIDDEN;
     }
 
+    /* Always allow read, even if no content */
+    tgt->allow = ALLOW_READ;
+
     /* Skip namespace */
     p += len;
 
@@ -293,7 +296,7 @@ static int jmap_parse_path(const char *path, struct request_target_t *tgt,
         if (!strncmp(tgt->collection, JMAP_UPLOAD_COL,
                           strlen(JMAP_UPLOAD_COL))) {
             tgt->flags = JMAP_ENDPOINT_UPLOAD;
-            tgt->allow = ALLOW_POST;
+            tgt->allow |= ALLOW_POST;
 
             /* Get "resource" which must be the accountId */
             tgt->resource = tgt->collection + strlen(JMAP_UPLOAD_COL);
@@ -301,19 +304,17 @@ static int jmap_parse_path(const char *path, struct request_target_t *tgt,
         else if (!strncmp(tgt->collection,
                           JMAP_DOWNLOAD_COL, strlen(JMAP_DOWNLOAD_COL))) {
             tgt->flags = JMAP_ENDPOINT_DOWNLOAD;
-            tgt->allow = ALLOW_READ;
 
             /* Get "resource" */
             tgt->resource = tgt->collection + strlen(JMAP_DOWNLOAD_COL);
         }
         else if (ws_enabled && !strcmp(tgt->collection, JMAP_WS_COL)) {
             tgt->flags = JMAP_ENDPOINT_WS;
-            tgt->allow = ALLOW_READ|ALLOW_CONNECT;
+            tgt->allow |= ALLOW_CONNECT;
         }
         else if (!strncmp(tgt->collection,
                           JMAP_EVENTSOURCE_COL, strlen(JMAP_EVENTSOURCE_COL))) {
             tgt->flags = JMAP_ENDPOINT_EVENTSOURCE;
-            tgt->allow = ALLOW_READ;
         }
         else {
             return HTTP_NOT_FOUND;
@@ -321,7 +322,7 @@ static int jmap_parse_path(const char *path, struct request_target_t *tgt,
     }
     else {
         tgt->flags = JMAP_ENDPOINT_API;
-        tgt->allow = ALLOW_POST|ALLOW_READ;
+        tgt->allow |= ALLOW_POST;
     }
 
     return 0;
