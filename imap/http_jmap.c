@@ -308,7 +308,7 @@ static int jmap_parse_path(const char *path, struct request_target_t *tgt,
         }
         else if (ws_enabled && !strcmp(tgt->collection, JMAP_WS_COL)) {
             tgt->flags = JMAP_ENDPOINT_WS;
-            tgt->allow = ALLOW_CONNECT;
+            tgt->allow = ALLOW_READ|ALLOW_CONNECT;
         }
         else if (!strncmp(tgt->collection,
                           JMAP_EVENTSOURCE_COL, strlen(JMAP_EVENTSOURCE_COL))) {
