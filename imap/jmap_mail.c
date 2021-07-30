@@ -9949,7 +9949,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     content_size = buf_len(&ctx.blob);
 
     /* Determine target encoding */
-    encoding = src_encoding = ctx.encoding;
+    encoding = src_encoding = buf_cstring(&ctx.encoding);
 
     if (!strcasecmpsafe(emailpart->type, "MESSAGE")) {
         if (!strcasecmpsafe(src_encoding, "BASE64")) {
@@ -13555,9 +13555,9 @@ static int jmap_emailheader_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx
             goto done;
         }
 
-        ctx->content_type = xstrdup(ctx->accept_mime);
+        buf_setcstr(&ctx->content_type, ctx->accept_mime);
     }
-    else if (mimetype) ctx->content_type = xstrdup(mimetype);
+    else if (mimetype) buf_setcstr(&ctx->content_type, mimetype);
 
     /* Open mailbox, we need it now */
     if ((r = jmap_openmbox(req, mboxname, &mailbox, 0))) {
@@ -13598,14 +13598,14 @@ static int jmap_emailheader_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx
                               (char *) buf_base(blob), buf_len(blob), &outlen);
             if (r == SASL_OK) {
                 buf_truncate(blob, outlen);
-                ctx->encoding = xstrdup("BINARY");
+                buf_setcstr(&ctx->encoding, "BINARY");
             }
             else {
                 ctx->errstr = "failed to decode blob";
                 res = HTTP_SERVER_ERROR;
             }
         }
-        else ctx->encoding = xstrdup("BASE64");
+        else buf_setcstr(&ctx->encoding, "BASE64");
     }
     else {
         res = HTTP_NOT_FOUND;

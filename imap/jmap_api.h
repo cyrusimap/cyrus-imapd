@@ -174,8 +174,8 @@ typedef struct {
     const char *accept_mime;     // input to the handler
     unsigned decode : 1;         // input to the handler
     struct buf blob;             // output from the handler
-    char *content_type;          // output from the handler
-    char *encoding;              // output from the handler
+    struct buf content_type;     // output from the handler
+    struct buf encoding;         // output from the handler
     const char *errstr;          // output from the handler
 } jmap_getblob_context_t;
 

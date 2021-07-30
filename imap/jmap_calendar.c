@@ -1608,11 +1608,9 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
     if (userid) {
         /* Set Content headers */
         if (!ctx->accept_mime || !strcmp(ctx->accept_mime, "text/calendar")) {
-            struct buf buf = BUF_INITIALIZER;
-
-            buf_setcstr(&buf, "text/calendar");
-            if (comp_type) buf_printf(&buf, "; component=%s", comp_type);
-            ctx->content_type = buf_release(&buf);
+            buf_setcstr(&ctx->content_type, "text/calendar");
+            if (comp_type)
+                buf_printf(&ctx->content_type, "; component=%s", comp_type);
         }
 
         /* Write body */
@@ -1625,14 +1623,14 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
         const char *epilogue = "\r\nEnd of MIME multipart body.\r\n";
         char boundary[100];
         struct buf *blob = &ctx->blob;
-        struct buf buf = BUF_INITIALIZER;
 
         snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
                  *spool_getheader(req->txn->req_hdrs, ":authority"),
                  (long) getpid(), (long) time(0), (long) rand());
 
-        buf_printf(&buf, "multipart/mixed; boundary=\"%s\"", boundary);
-        ctx->content_type = buf_release(&buf);
+        buf_reset(&ctx->content_type);
+        buf_printf(&ctx->content_type,
+                "multipart/mixed; boundary=\"%s\"", boundary);
 
         buf_setcstr(blob, preamble);
 
@@ -1657,7 +1655,7 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
         buf_printf(blob, "\r\n--%s--\r\n%s", boundary, epilogue);
     }
 
-    ctx->encoding = xstrdup("8BIT");
+    buf_setcstr(&ctx->encoding, "8BIT");
 
     message_free_body(body);
     free(body);
