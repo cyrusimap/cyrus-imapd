@@ -1918,8 +1918,7 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
             res = HTTP_NOT_ACCEPTABLE;
             goto done;
         }
-
-        ctx->content_type = xstrdup(ctx->accept_mime);
+        buf_setcstr(&ctx->content_type, ctx->accept_mime);
     }
 
     const mbentry_t *mbentry;
@@ -1976,27 +1975,26 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
                 res = HTTP_NOT_ACCEPTABLE;
                 goto done;
             }
-
-            ctx->content_type = xstrdup(ctx->accept_mime);
+            buf_setcstr(&ctx->content_type, ctx->accept_mime);
         }
-        else {
-            ctx->content_type = xstrdupnull(mediatype);
+        else if (mediatype) {
+            buf_setcstr(&ctx->content_type, mediatype);
         }
+        else buf_reset(&ctx->content_type);
 
-        ctx->encoding = xstrdup("BINARY");
+        buf_setcstr(&ctx->encoding, "BINARY");
     }
     else {
         if (!ctx->accept_mime || !strcmp(ctx->accept_mime, "text/vcard")) {
             struct vparse_entry *entry =
                 vparse_get_entry(vcard->objects, NULL, "VERSION");
-            struct buf buf = BUF_INITIALIZER;
 
-            buf_setcstr(&buf, "text/vcard");
-            if (entry) buf_printf(&buf, "; version=%s", entry->v.value);
-            ctx->content_type = buf_release(&buf);
+            buf_setcstr(&ctx->content_type, "text/vcard");
+            if (entry)
+                buf_printf(&ctx->content_type, "; version=%s", entry->v.value);
         }
 
-        ctx->encoding = xstrdup("8BIT");
+        buf_setcstr(&ctx->encoding, "8BIT");
         vparse_tobuf(vcard, &ctx->blob);
     }
 
@@ -3742,7 +3740,8 @@ static int _blob_to_card(struct jmap_req *req,
 
     switch (r) {
     case 0:
-        if (!ctx.content_type || strchr(ctx.content_type, '/')) break;
+        if (!buf_len(&ctx.content_type) ||
+                strchr(buf_cstring(&ctx.content_type), '/')) break;
 
         /* Fall through */
         GCC_FALLTHROUGH
@@ -3780,16 +3779,16 @@ static int _blob_to_card(struct jmap_req *req,
 
     vparse_add_param(entry, "ENCODING", "b");
 
-    if (ctx.content_type) {
-        char *subtype = xstrdupnull(strchr(ctx.content_type, '/'));
-
+    if (buf_len(&ctx.content_type)) {
+        char *subtype = xstrdupnull(strchr(buf_cstring(&ctx.content_type), '/'));
         vparse_add_param(entry, "TYPE", ucase(subtype+1));
         free(subtype);
     }
 
     /* Add this blob to our list */
     property_blob_t *blob = property_blob_new(key, prop,
-                                              ctx.content_type, &ctx.blob);
+                                              buf_cstring(&ctx.content_type),
+                                              &ctx.blob);
     ptrarray_append(blobs, blob);
 
   done:
