@@ -489,10 +489,13 @@ struct method_t {
 };
 
 struct connect_params {
-    /* WebSocket parameters */
-    const char *endpoint;
-    const char *subprotocol;
-    const void *data_cb;
+    parse_path_t parse_path;
+    struct {
+        /* WebSocket parameters */
+        const char *endpoint;
+        const char *subprotocol;
+        const void *data_cb;
+    } ws;
 };
 
 struct namespace_t {
