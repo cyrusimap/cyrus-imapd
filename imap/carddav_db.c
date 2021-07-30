@@ -1136,7 +1136,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 {
     int r = 0;
     FILE *f = NULL;
-    struct stagemsg *stage;
+    struct stagemsg *stage = NULL;
     char *header;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     struct appendstate as;
@@ -1144,6 +1144,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     char *freeme = NULL;
     char datestr[80];
     static int vcard_max_size = -1;
+    char *mbuserid = NULL;
 
     if (vcard_max_size < 0) {
         vcard_max_size = config_getint(IMAPOPT_VCARD_MAX_SIZE);
@@ -1167,14 +1168,15 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     vparse_tobuf(vcard, &buf);
     if (buf_len(&buf) > (size_t) vcard_max_size) {
         buf_free(&buf);
-        return IMAP_MESSAGE_TOO_LARGE;
+        r = IMAP_MESSAGE_TOO_LARGE;
+        goto done;
     }
 
     /* Create header for resource */
     const char *uid = vparse_stringval(vcard, "uid");
     const char *fullname = vparse_stringval(vcard, "fn");
     if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
-    char *mbuserid = mboxname_to_userid(mailbox_name(mailbox));
+    mbuserid = mboxname_to_userid(mailbox_name(mailbox));
 
     time_to_rfc5322(now, datestr, sizeof(datestr));
 
