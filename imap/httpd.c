@@ -2788,8 +2788,8 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
             buf_printf(logbuf, "%sexpect=%s", sep, hdr[0]);
             sep = "; ";
         }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Transfer-Encoding"))) {
-            buf_printf(logbuf, "%stx-encoding=%s", sep, hdr[0]);
+        if ((hdr = spool_getheader(txn->req_hdrs, "TE"))) {
+            buf_printf(logbuf, "%ste=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Content-Encoding"))) {
