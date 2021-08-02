@@ -1838,6 +1838,7 @@ static void postauth_check_hdrs(struct transaction_t *txn)
                 (!strcasecmp(e->token, "gzip") ||
                  !strcasecmp(e->token, "x-gzip"))) {
                 txn->flags.te = TE_GZIP;
+                txn->resp_body.enc.proc = &zlib_compress;
             }
             free(e->token);
         }
@@ -2787,8 +2788,8 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
             buf_printf(logbuf, "%sexpect=%s", sep, hdr[0]);
             sep = "; ";
         }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Transfer-Encoding"))) {
-            buf_printf(logbuf, "%stx-encoding=%s", sep, hdr[0]);
+        if ((hdr = spool_getheader(txn->req_hdrs, "TE"))) {
+            buf_printf(logbuf, "%ste=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Content-Encoding"))) {
@@ -3240,7 +3241,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             }
             free(encfname);
         }
-        if (txn->resp_body.enc.proc) {
+        if (txn->resp_body.enc.type) {
             /* Construct Content-Encoding header */
             comma_list_hdr(txn, "Content-Encoding", ce_strings, txn->resp_body.enc.type);
         }
@@ -3504,7 +3505,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     }
 
     /* Compress data */
-    if (txn->resp_body.enc.proc || txn->flags.te & ~TE_CHUNKED) {
+    if (txn->resp_body.enc.proc) {
         unsigned flags = 0;
 
         if (code) flags |= COMPRESS_START;
