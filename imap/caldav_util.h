@@ -99,6 +99,8 @@ extern int caldav_create_defaultcalendars(const char *userid,
                                           const struct auth_state *authstate,
                                           mbentry_t **mbentryp);
 
+extern int caldav_is_secretarymode(const char *mboxname);
+
 extern void caldav_attachment_url(struct buf *buf, const char *userid,
                                   const char *proto, const char *host,
                                   const char *managedid);
@@ -160,5 +162,7 @@ extern int jmap_create_caldaveventnotif(struct transaction_t *txn,
                                         icalcomponent *newical);
 
 #endif
+
+extern int caldav_is_secretarymode(const char *mboxname);
 
 #endif /* HTTP_CALDAV_H */
