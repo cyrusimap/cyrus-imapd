@@ -66,8 +66,6 @@
 
 static icaltimezone *utc_zone = NULL;
 
-static int caldav_is_secretarymode(const char *mboxname);
-
 /* Replace TZID aliases with the actual TZIDs */
 EXPORTED void replace_tzid_aliases(icalcomponent *ical,
                                    struct hash_table *tzid_table)
@@ -869,7 +867,7 @@ static int personalize_resource(struct transaction_t *txn,
     return ret;
 }
 
-static int caldav_is_secretarymode(const char *mboxname)
+HIDDEN int caldav_is_secretarymode(const char *mboxname)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
     int is_secretarymode = 0;
