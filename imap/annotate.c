@@ -1235,8 +1235,7 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
     }
     else {
         /* Mailbox pattern */
-        r = mboxlist_findall(NULL, *mboxname ? mboxname : "*",
-                             1, NULL, NULL, &_findall, &frock);
+        r = mboxlist_findall(NULL, mboxname, 1, NULL, NULL, &_findall, &frock);
     }
 
 out:
