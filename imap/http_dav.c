@@ -1664,8 +1664,8 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond,
             (fctx->mode == PROPFIND_ALL || fctx->mode == PROPFIND_NAME)) {
             struct allprop_rock arock = { fctx, propstat };
 
-            annotatemore_findall(mailbox_name(fctx->mailbox), 0, "*", /*modseq*/0,
-                                 allprop_cb, &arock, /*flags*/0);
+            annotatemore_findall_mailbox(fctx->mailbox, 0, "*", /*modseq*/0,
+                                         allprop_cb, &arock, /*flags*/0);
         }
 
         /* Check if we have any propstat elements */

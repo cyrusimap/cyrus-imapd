@@ -288,7 +288,7 @@ static void remove_listitem(struct mailboxlist *remitem)
     fatal("didn't find item in list", EX_SOFTWARE);
 }
 
-EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
+EXPORTED const char *mailbox_meta_fname(const struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
@@ -303,7 +303,7 @@ EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
     return fnamebuf;
 }
 
-EXPORTED const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
+EXPORTED const char *mailbox_meta_newfname(const struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
@@ -1787,8 +1787,8 @@ EXPORTED struct entryattlist *mailbox_extract_annots(const struct mailbox *mailb
                                                      const struct index_record *record)
 {
     struct entryattlist *annots = NULL;
-    int r = annotatemore_findall(mailbox_name(mailbox), record->uid, "*", /*modseq*/0,
-                                 load_annot_cb, &annots, /*flags*/0);
+    int r = annotatemore_findall_mailbox(mailbox, record->uid, "*", /*modseq*/0,
+                                         load_annot_cb, &annots, /*flags*/0);
     if (r) return NULL;
     return annots;
 }
@@ -3352,7 +3352,7 @@ static void mailbox_annot_update_counts(struct mailbox *mailbox,
     /* expunged records don't count */
     if (record && record->internal_flags & FLAG_INTERNAL_EXPUNGED) return;
 
-    annotatemore_findall(mailbox_name(mailbox), record ? record->uid : 0, /* all entries*/"*",
+    annotatemore_findall_mailbox(mailbox, record ? record->uid : 0, /* all entries*/"*",
                          /*modseq*/0, calc_one_annot, &cr, /*flags*/0);
 
     if (record)
@@ -3396,7 +3396,7 @@ EXPORTED struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int force)
         crcs.annot ^= crc_virtannot(mailbox, record);
 
         struct annot_calc_rock cr = { mailbox, 0, 0 };
-        annotatemore_findall(mailbox_name(mailbox), record->uid, /* all entries*/"*",
+        annotatemore_findall_mailbox(mailbox, record->uid, /* all entries*/"*",
                              /*modseq*/0, calc_one_annot, &cr, /*flags*/0);
 
         crcs.annot ^= cr.annot;
@@ -7268,7 +7268,7 @@ static int find_annots(struct mailbox *mailbox, struct found_uids *annots)
 {
     int r = 0;
 
-    r = annotatemore_findall(mailbox_name(mailbox), ANNOTATE_ANY_UID, "*",
+    r = annotatemore_findall_mailbox(mailbox, ANNOTATE_ANY_UID, "*",
                              /*modseq*/0, addannot_uid, annots, /*flags*/0);
     if (r) return r;
 

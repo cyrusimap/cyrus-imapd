@@ -1105,7 +1105,7 @@ EXPORTED void index_fetchresponses(struct index_state *state,
     /* Keep an open reference on the per-mailbox db to avoid
      * doing too many slow database opens during the fetch */
     if ((fetchargs->fetchitems & FETCH_ANNOTATION))
-        annotate_getdb(mailbox_uniqueid(state->mailbox), &annot_db);
+        annotate_getdb(state->mailbox, &annot_db);
 
     start = 1;
     end = state->exists;

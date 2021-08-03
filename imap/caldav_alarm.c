@@ -674,7 +674,7 @@ static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid
 
     syslog(LOG_DEBUG, "checking per-user-data");
     mailbox_get_annotate_state(mailbox, uid, NULL);
-    annotatemore_findall(mailbox_name(mailbox), uid, PER_USER_CAL_DATA, /* modseq */ 0,
+    annotatemore_findall_mailbox(mailbox, uid, PER_USER_CAL_DATA, /* modseq */ 0,
                          &has_peruser_alarms_cb, &hrock, /* flags */ 0);
 
     return has_alarms;
@@ -943,7 +943,7 @@ static int process_valarms(struct mailbox *mailbox,
     syslog(LOG_DEBUG, "processing per-user alarms");
 
     mailbox_get_annotate_state(mailbox, record->uid, NULL);
-    annotatemore_findall(mailbox_name(mailbox), record->uid, PER_USER_CAL_DATA,
+    annotatemore_findall_mailbox(mailbox, record->uid, PER_USER_CAL_DATA,
                          /* modseq */ 0, &process_peruser_alarms_cb,
                          &prock, /* flags */ 0);
 

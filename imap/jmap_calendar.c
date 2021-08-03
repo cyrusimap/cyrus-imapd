@@ -1650,9 +1650,8 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
 
         /* Write userdata parts */
         struct calendarevent_getblob_rock rock = { boundary, blob };
-        annotatemore_findall(mailbox_name(mailbox), uid,
-                             PER_USER_CAL_DATA, 0, _calendarevent_getblob_cb,
-                             &rock, 0);
+        annotatemore_findall_mailbox(mailbox, uid, PER_USER_CAL_DATA, 0,
+                                     _calendarevent_getblob_cb, &rock, 0);
 
         /* Write close-delimiter and epilogue */
         buf_printf(blob, "\r\n--%s--\r\n%s", boundary, epilogue);

@@ -609,7 +609,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
         struct dump_annotation_rock actx;
         actx.tag = tag;
         actx.pout = pout;
-        annotatemore_findall(mailbox_name(mailbox), 0, "*", /*modseq*/0,
+        annotatemore_findall_mailbox(mailbox, 0, "*", /*modseq*/0,
                              dump_annotations, (void *) &actx, /*flags*/0);
     }
 
