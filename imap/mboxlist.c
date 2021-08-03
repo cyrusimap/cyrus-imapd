@@ -1060,8 +1060,10 @@ static int mboxlist_update_entry(const char *name,
 
                 if (strcmp(name, oldid->name)) {
                     /* Renamed mailbox */
-                    add_former_name(name_history, oldid->name,
+                    char *dbname = mboxname_to_dbname(oldid->name);
+                    add_former_name(name_history, dbname,
                                     time(NULL), oldid->foldermodseq);
+                    free(dbname);
                 }
                 mboxlist_entry_free(&oldid);
             }
@@ -1078,7 +1080,7 @@ static int mboxlist_update_entry(const char *name,
         dlist_free(&dl);
         buf_free(&mboxent);
 
-        if (!r && config_auditlog) {
+        if (!r && config_auditlog && (!old || strcmpsafe(old->acl, mbentry->acl))) {
             /* XXX is there a difference between "" and NULL? */
             xsyslog(LOG_NOTICE, "auditlog: acl",
                                 "sessionid=<%s> "
@@ -1212,6 +1214,25 @@ EXPORTED int mboxlist_findparent(const char *mboxname,
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
     int r = _findparent(mbname, mbentryp, 0);
+    mbname_free(&mbname);
+    return r;
+}
+
+static int mboxlist_findusermbentry(const char *mboxname,
+                                    mbentry_t **mbentryp)
+{
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    int r = 0;
+    if (!mbname_userid(mbname)) {
+        // fall back to findparent if no user
+        r = _findparent(mbname, mbentryp, 0);
+    }
+    else {
+        // get the INBOX!
+        mbname_set_isdeleted(mbname, 0);
+        mbname_set_boxes(mbname, NULL);
+        r = mboxlist_lookup(mbname_intname(mbname), mbentryp, NULL);
+    }
     mbname_free(&mbname);
     return r;
 }
@@ -1671,7 +1692,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     char *acl = NULL;
     struct mailbox *newmailbox = NULL;
     int isremote = mbtype & MBTYPE_REMOTE;
-    mbentry_t *parent = NULL, *newmbentry = NULL;
+    mbentry_t *usermbentry = NULL, *newmbentry = NULL;
 
     r = mboxlist_create_namecheck(mboxname, userid, auth_state,
                                   isadmin, (flags & MBOXLIST_CREATE_FORCEUSER));
@@ -1714,9 +1735,9 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     r = mboxlist_create_partition(mboxname, mbentry->partition, &newpartition);
     if (r) goto done;
 
-    r = mboxlist_findparent(mboxname, &parent);
+    r = mboxlist_findusermbentry(mboxname, &usermbentry);
     if (!r) {
-        mbtype |= (parent->mbtype & MBTYPE_LEGACY_DIRS);
+        mbtype |= (usermbentry->mbtype & MBTYPE_LEGACY_DIRS);
     }
     else if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
     else if (config_getswitch(IMAPOPT_MAILBOX_LEGACY_DIRS))
@@ -1793,7 +1814,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     free(acl);
     free(newpartition);
     mboxlist_entry_free(&newmbentry);
-    mboxlist_entry_free(&parent);
+    mboxlist_entry_free(&usermbentry);
 
     return r;
 }
