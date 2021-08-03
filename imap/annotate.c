@@ -639,6 +639,7 @@ out:
 }
 
 static int _annotate_getdb(const char *mboxid,
+                           const struct mailbox *mailbox,
                            unsigned int uid,
                            int dbflags,
                            annotate_db_t **dbp)
@@ -681,7 +682,11 @@ static int _annotate_getdb(const char *mboxid,
     }
     /* not found, open/create a new one */
 
-    r = annotate_dbname(mboxid, &fname);
+    if (mailbox)
+        r = annotate_dbname_mailbox(mailbox, &fname);
+    else
+        r = annotate_dbname(mboxid, &fname);
+
     if (r)
         goto error;
 #if DEBUG
@@ -722,7 +727,7 @@ HIDDEN int annotate_getdb(const char *mboxid, annotate_db_t **dbp)
         return IMAP_INTERNAL;   /* we don't return the global db */
     }
     /* synthetic UID '1' forces per-mailbox mode */
-    return _annotate_getdb(mboxid, 1, CYRUSDB_CREATE, dbp);
+    return _annotate_getdb(mboxid, NULL, 1, CYRUSDB_CREATE, dbp);
 }
 
 static void annotate_closedb(annotate_db_t *d)
@@ -779,7 +784,7 @@ EXPORTED void annotatemore_open(void)
     annotate_db_t *d = NULL;
 
     /* force opening the global annotations db */
-    r = _annotate_getdb(NULL, 0, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(NULL, NULL, 0, CYRUSDB_CREATE, &d);
     if (r)
         fatal("can't open global annotations database", EX_TEMPFAIL);
 
@@ -1214,7 +1219,7 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
         if (!r) mboxid = mbentry->uniqueid;
     }
 
-    r = _annotate_getdb(mboxid, uid, 0, &frock.d);
+    r = _annotate_getdb(mboxid, NULL, uid, 0, &frock.d);
     if (r) {
         if (r == CYRUSDB_NOTFOUND)
             r = 0;
@@ -1436,7 +1441,7 @@ static int annotate_state_set_scope(annotate_state_t *state,
     state->mailbox = mailbox;
     state->uid = uid;
 
-    r = _annotate_getdb(mailbox ? mailbox_uniqueid(mailbox) : NULL, uid,
+    r = _annotate_getdb(mailbox ? mailbox_uniqueid(mailbox) : NULL, mailbox, uid,
                         CYRUSDB_CREATE, &state->d);
 
 out:
@@ -2797,7 +2802,7 @@ static int _annotate_lookup(const char *mboxname, const char *mboxid,
         mboxid = mbentry ? mbentry->uniqueid : "";
     }
 
-    r = _annotate_getdb(uid ? mboxid : NULL, uid, 0, &d);
+    r = _annotate_getdb(uid ? mboxid : NULL, NULL, uid, 0, &d);
     if (r) {
         if (r == CYRUSDB_NOTFOUND) r = 0;
         goto done;
@@ -2998,7 +3003,7 @@ static int write_entry(struct mailbox *mailbox,
     const char *mboxid = mailbox ? mailbox_uniqueid(mailbox) : "";
     modseq_t modseq = mdata ? mdata->modseq : 0;
 
-    r = _annotate_getdb(mboxid, uid, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(mboxid, mailbox, uid, CYRUSDB_CREATE, &d);
     if (r)
         return r;
 
@@ -3099,7 +3104,7 @@ EXPORTED int annotatemore_rawwrite(const char *mboxname, const char *entry,
 
     init_internal();
 
-    r = _annotate_getdb(NULL, uid, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(NULL, NULL, uid, CYRUSDB_CREATE, &d);
     if (r) goto done;
 
     if (mboxname && *mboxname) {
@@ -3149,13 +3154,13 @@ EXPORTED int annotatemore_write(const char *mboxname, const char *entry,
 
     init_internal();
 
-    r = _annotate_getdb(NULL, /*uid*/0, CYRUSDB_CREATE, &d);
-    if (r) goto done;
-
     if (mboxname) {
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (r) goto done;
     }
+
+    r = _annotate_getdb(mailbox_uniqueid(mailbox), mailbox, /*uid*/0, CYRUSDB_CREATE, &d);
+    if (r) goto done;
 
     r = write_entry(mailbox, /*uid*/0, entry, userid, value,
                     /*ignorequota*/1, /*silent*/0, NULL, /*maywrite*/1);
@@ -3910,7 +3915,7 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
     init_internal();
 
     /* rewrite any per-folder annotations from the global db */
-    r = _annotate_getdb(NULL, 0, /*don't create*/0, &d);
+    r = _annotate_getdb(NULL, NULL, 0, /*don't create*/0, &d);
     if (r == CYRUSDB_NOTFOUND) {
         /* no global database, must not be anything to rename */
         r = 0;
@@ -4006,7 +4011,7 @@ EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)
 
     if (!is_rename) {
         /* remove any per-folder annotations from the global db */
-        r = _annotate_getdb(NULL, 0, /*don't create*/0, &d);
+        r = _annotate_getdb(NULL, NULL, 0, /*don't create*/0, &d);
         if (r == CYRUSDB_NOTFOUND) {
             /* no global database, must not be anything to rename */
             r = 0;
@@ -4050,7 +4055,7 @@ EXPORTED int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 
     init_internal();
 
-    r = _annotate_getdb(mailbox_uniqueid(newmailbox), newuid, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(mailbox_uniqueid(newmailbox), newmailbox, newuid, CYRUSDB_CREATE, &d);
     if (r) return r;
 
     annotate_begin(d);
@@ -4089,7 +4094,7 @@ HIDDEN int annotate_msg_cleanup(struct mailbox *mailbox, unsigned int uid)
 
     assert(uid);
 
-    r = _annotate_getdb(mailbox_uniqueid(mailbox), uid, 0, &d);
+    r = _annotate_getdb(mailbox_uniqueid(mailbox), mailbox, uid, 0, &d);
     if (r) return r;
 
     /* must be in a transaction to modify the db */
@@ -4483,7 +4488,7 @@ EXPORTED int annotatemore_upgrade(void)
 
     /* check if we need to upgrade */
     annotatemore_open();
-    r = _annotate_getdb(NULL, 0, 0, &db);
+    r = _annotate_getdb(NULL, NULL, 0, 0, &db);
     if (r) goto done;
 
     r = cyrusdb_foreach(db->db, "", 0, NULL, _check_rec_cb, &do_upgrade, NULL);
@@ -4513,7 +4518,7 @@ EXPORTED int annotatemore_upgrade(void)
 
     /* open a new db file */
     annotatemore_open();
-    r = _annotate_getdb(NULL, 0, CYRUSDB_CREATE, &db);
+    r = _annotate_getdb(NULL, NULL, 0, CYRUSDB_CREATE, &db);
     if (r) goto done;
 
     /* perform upgrade from backup to new db */
