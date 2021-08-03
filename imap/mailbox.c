@@ -288,7 +288,7 @@ static void remove_listitem(struct mailboxlist *remitem)
     fatal("didn't find item in list", EX_SOFTWARE);
 }
 
-EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
+EXPORTED const char *mailbox_meta_fname(const struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
@@ -303,7 +303,7 @@ EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
     return fnamebuf;
 }
 
-EXPORTED const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
+EXPORTED const char *mailbox_meta_newfname(const struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
     uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);

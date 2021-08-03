@@ -524,8 +524,8 @@ extern mailbox_notifyproc_t *mailbox_get_updatenotifier(void);
 
 /* file names on disk */
 #define META_FNAME_NEW 1
-extern const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile);
-extern const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile);
+extern const char *mailbox_meta_fname(const struct mailbox *mailbox, int metafile);
+extern const char *mailbox_meta_newfname(const struct mailbox *mailbox, int metafile);
 extern int mailbox_meta_rename(struct mailbox *mailbox, int metafile);
 
 extern const char *mailbox_record_fname(struct mailbox *mailbox,
