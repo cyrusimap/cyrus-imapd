@@ -1080,7 +1080,7 @@ static int mboxlist_update_entry(const char *name,
         dlist_free(&dl);
         buf_free(&mboxent);
 
-        if (!r && config_auditlog) {
+        if (!r && config_auditlog && (!old || strcmpsafe(old->acl, mbentry->acl))) {
             /* XXX is there a difference between "" and NULL? */
             xsyslog(LOG_NOTICE, "auditlog: acl",
                                 "sessionid=<%s> "
