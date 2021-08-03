@@ -1060,8 +1060,10 @@ static int mboxlist_update_entry(const char *name,
 
                 if (strcmp(name, oldid->name)) {
                     /* Renamed mailbox */
-                    add_former_name(name_history, oldid->name,
+                    char *dbname = mboxname_to_dbname(oldid->name);
+                    add_former_name(name_history, dbname,
                                     time(NULL), oldid->foldermodseq);
+                    free(dbname);
                 }
                 mboxlist_entry_free(&oldid);
             }
