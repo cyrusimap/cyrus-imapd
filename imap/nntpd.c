@@ -2638,7 +2638,7 @@ static void cmd_list(char *arg1, char *arg2)
 
         strcpy(pattern, newsprefix);
         strcat(pattern, "*");
-        annotatemore_findall(pattern, 0, "/comment", /*modseq*/0,
+        annotatemore_findall_pattern(pattern, 0, "/comment", /*modseq*/0,
                              newsgroups_cb, lrock.wild, /*flags*/0);
 
         prot_printf(nntp_out, ".\r\n");

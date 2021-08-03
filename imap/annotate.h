@@ -155,9 +155,16 @@ typedef int (*annotatemore_find_proc_t)(const char *mailbox,
 /* For findall() matches also tombstones */
 #define ANNOTATE_TOMBSTONES  (1<<0)
 
-/* 'proc'ess all annotations matching 'mailbox' and 'entry' */
-int annotatemore_findall(const char *mboxname, uint32_t uid,
-                         const char *entry,
+/* 'proc'ess all annotations matching 'mailbox' and 'entry'.
+ * if 'mailbox' is NULL, then 'pattern' is a pattern for
+ * mboxlist_findall and will return all matching entries.. */
+EXPORTED int annotatemore_findall_mailbox(const struct mailbox *mailbox,
+                         uint32_t uid, const char *entry,
+                         modseq_t since_modseq,
+                         annotatemore_find_proc_t proc, void *rock,
+                         int flags);
+EXPORTED int annotatemore_findall_pattern(const char *pattern,
+                         uint32_t uid, const char *entry,
                          modseq_t since_modseq,
                          annotatemore_find_proc_t proc, void *rock,
                          int flags);

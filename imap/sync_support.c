@@ -1382,7 +1382,7 @@ int read_annotations(const struct mailbox *mailbox,
                      int flags)
 {
     *resp = NULL;
-    return annotatemore_findall(mailbox_name(mailbox), record ? record->uid : 0,
+    return annotatemore_findall_mailbox(mailbox, record ? record->uid : 0,
                                 /* all entries*/"*", /*XXX since_modseq*/0,
                                 read_one_annot, (void *)resp, flags);
 }
@@ -3067,7 +3067,7 @@ done:
 
 /* ====================================================================== */
 
-static int getannotation_cb(const char *mailbox,
+static int getannotation_cb(const char *mboxname,
                             uint32_t uid __attribute__((unused)),
                             const char *entry, const char *userid,
                             const struct buf *value,
@@ -3078,7 +3078,7 @@ static int getannotation_cb(const char *mailbox,
     struct dlist *kl;
 
     kl = dlist_newkvlist(NULL, "ANNOTATION");
-    dlist_setatom(kl, "MBOXNAME", mailbox);
+    dlist_setatom(kl, "MBOXNAME", mboxname);
     dlist_setatom(kl, "ENTRY", entry);
     dlist_setatom(kl, "USERID", userid);
     dlist_setmap(kl, "VALUE", value->s, value->len);
@@ -3091,7 +3091,8 @@ static int getannotation_cb(const char *mailbox,
 int sync_get_annotation(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
-    return annotatemore_findall(mboxname, 0, "*", /*modseq*/0,
+    assert (!*mboxname); // we can only get server annotations with this function
+    return annotatemore_findall_pattern(mboxname, 0, "*", /*modseq*/0,
                                 &getannotation_cb, (void *) sstate->pout,
                                 /*flags*/0);
 }
@@ -6176,7 +6177,7 @@ int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname)
     r = do_getannotation(sync_cs, mboxname, replica_annot);
     if (r) goto bail;
 
-    r = annotatemore_findall(mboxname, 0, "*", /*modseq*/0, &do_annotation_cb,
+    r = annotatemore_findall_pattern(mboxname, 0, "*", /*modseq*/0, &do_annotation_cb,
                              master_annot, /*flags*/0);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: fetching annotations failed",

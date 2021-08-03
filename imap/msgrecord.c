@@ -507,7 +507,7 @@ EXPORTED int msgrecord_annot_findall(msgrecord_t *mr,
 {
     int r = msgrecord_need(mr, M_MAILBOX|M_UID|M_ANNOTATIONS);
     if (r) return r;
-    return annotatemore_findall(mailbox_name(mr->mbox), mr->record.uid, entry, /*modseq*/0,
+    return annotatemore_findall_mailbox(mr->mbox, mr->record.uid, entry, /*modseq*/0,
                                 proc, rock, /*flags*/0);
 }
 

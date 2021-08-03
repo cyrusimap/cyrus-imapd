@@ -1048,7 +1048,9 @@ static int split_attribs(const char *data, int datalen,
 }
 
 struct find_rock {
-    const char *mboxname;
+    const char *pattern;
+    const struct mailbox *mailbox;
+    const mbentry_t *mbentry;
     const char *entry;
     struct glob *eglob;
     unsigned int uid;
@@ -1142,7 +1144,7 @@ static int find_cb(void *rock, const char *key, size_t keylen,
     }
 
     if (!r) {
-        const char *mboxname = frock->mboxname;
+        const char *mboxname = frock->mbentry ? frock->mbentry->name : "";
         char *owner = NULL;
 
         if (!strcmp(userid, OWNER_USERID_TOKEN)) {
@@ -1182,13 +1184,14 @@ static int _findall(struct findall_data *data, void *rock)
     }
     keylen = p - key;
 
-    frock->mboxname = mboxname;
+    frock->mbentry = data->mbentry;
 
     return cyrusdb_foreach(frock->d->db, key, keylen,
                            &find_p, &find_cb, frock, tid(frock->d));
 }
 
-EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
+static int annotatemore_findall_full(const char *pattern, /* internal */
+                         const struct mailbox *mailbox,
                          unsigned int uid,
                          const char *entry,
                          modseq_t since_modseq,
@@ -1198,14 +1201,14 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
 {
     int r;
     struct find_rock frock;
-    mbentry_t *mbentry = NULL;
-    const char *mboxid = "";
 
     init_internal();
 
-    assert(mboxname);
+    assert(pattern || mailbox);
     assert(entry);
-    frock.mboxname = mboxname;
+
+    frock.pattern = pattern;
+    frock.mailbox = mailbox;
     frock.entry = entry;
     frock.eglob = glob_init(entry, '/');
     frock.d = NULL;
@@ -1215,36 +1218,63 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
     frock.since_modseq = since_modseq;
     frock.flags = flags;
 
-    if (*mboxname) {
-        r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
-        if (!r) mboxid = mbentry->uniqueid;
-    }
-
-    r = _annotate_getdb(mboxid, NULL, uid, 0, &frock.d);
+    r = _annotate_getdb(mailbox ? mailbox_uniqueid(mailbox) : NULL, mailbox, uid, 0, &frock.d);
     if (r) {
         if (r == CYRUSDB_NOTFOUND)
             r = 0;
         goto out;
     }
 
-    if (mbentry || !*mboxname) {
-        /* Single mailbox (or server entries) */
-        struct findall_data data = { .mbentry = mbentry, .is_exactmatch = 1 };
-
+    if (mailbox) {
+        /* Single mailbox entries */
+        mbentry_t *mbentry = NULL;
+        r = mboxlist_lookup_allow_all(mailbox_name(mailbox), &mbentry, NULL);
+        if (!r) {
+            struct findall_data data = { .mbentry = mbentry, .is_exactmatch = 1 };
+            r = _findall(&data, &frock);
+        }
+        mboxlist_entry_free(&mbentry);
+    }
+    else if (!*pattern) {
+        /* Server entries */
+        struct findall_data data = { .mbentry = NULL, .is_exactmatch = 1 };
         r = _findall(&data, &frock);
     }
     else {
         /* Mailbox pattern */
-        r = mboxlist_findall(NULL, mboxname, 1, NULL, NULL, &_findall, &frock);
+        r = mboxlist_findall(NULL, pattern, 1, NULL, NULL, &_findall, &frock);
     }
 
 out:
-    mboxlist_entry_free(&mbentry);
     glob_free(&frock.eglob);
     annotate_putdb(&frock.d);
 
     return r;
 }
+
+EXPORTED int annotatemore_findall_mailbox(const struct mailbox *mailbox,
+                         unsigned int uid,
+                         const char *entry,
+                         modseq_t since_modseq,
+                         annotatemore_find_proc_t proc,
+                         void *rock,
+                         int flags)
+{
+    return annotatemore_findall_full(NULL, mailbox, uid, entry, since_modseq, proc, rock, flags);
+}
+
+EXPORTED int annotatemore_findall_pattern(const char *pattern,
+                         unsigned int uid,
+                         const char *entry,
+                         modseq_t since_modseq,
+                         annotatemore_find_proc_t proc,
+                         void *rock,
+                         int flags)
+{
+    return annotatemore_findall_full(pattern, NULL, uid, entry, since_modseq, proc, rock, flags);
+}
+
+
 /***************************  Annotate State Management  ***************************/
 
 EXPORTED annotate_state_t *annotate_state_new(void)
@@ -1952,10 +1982,9 @@ static int rw_cb(const char *mailbox __attribute__((unused)),
 static void annotation_get_fromdb(annotate_state_t *state,
                                   struct annotate_entry_list *entry)
 {
-    const char *mboxname = (state->mailbox ? mailbox_name(state->mailbox) : "");
     state->found = 0;
 
-    annotatemore_findall(mboxname, state->uid, entry->name, 0, &rw_cb, state, 0);
+    annotatemore_findall_mailbox(state->mailbox, state->uid, entry->name, 0, &rw_cb, state, 0);
 
     if (state->found != state->attribs &&
         (!strchr(entry->name, '%') && !strchr(entry->name, '*'))) {
@@ -3941,9 +3970,9 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
     /* delete displayname records only */
     struct rename_rock rrock = { oldmailbox, .newmailbox = NULL, .copy = 0 };
 
-    r = annotatemore_findall(mailbox_name(oldmailbox), /*olduid*/0,
-                             IMAP_ANNOT_NS "displayname", /*modseq*/0,
-                             &rename_cb, &rrock, /*flags*/0);
+    r = annotatemore_findall_mailbox(oldmailbox, /*olduid*/0,
+                                     IMAP_ANNOT_NS "displayname", /*modseq*/0,
+                                     &rename_cb, &rrock, /*flags*/0);
     if (r) goto done;
 
     r = annotate_commit(d);
@@ -3984,8 +4013,8 @@ static int _annotate_rewrite(struct mailbox *oldmailbox,
     rrock.newuid = newuid;
     rrock.copy = copy;
 
-    return annotatemore_findall(mailbox_name(oldmailbox), olduid, "*", /*modseq*/0,
-                                &rename_cb, &rrock, /*flags*/0);
+    return annotatemore_findall_mailbox(oldmailbox, olduid, "*", /*modseq*/0,
+                                        &rename_cb, &rrock, /*flags*/0);
 }
 
 EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)

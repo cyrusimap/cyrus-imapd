@@ -3804,8 +3804,8 @@ static int _mboxset_state_validate(jmap_req_t *req,
     struct buf pattern = BUF_INITIALIZER;
     buf_initmcstr(&pattern, mboxname_user_mbox(req->accountid, NULL));
     buf_putc(&pattern, '*');
-    annotatemore_findall(buf_cstring(&pattern), 0, "/specialuse", 0,
-                         _mboxset_state_find_specialuse_cb, state, 0);
+    annotatemore_findall_pattern(buf_cstring(&pattern), 0, "/specialuse", 0,
+                                 _mboxset_state_find_specialuse_cb, state, 0);
     buf_free(&pattern);
 
     /* Apply changes */

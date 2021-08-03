@@ -1088,9 +1088,9 @@ static int recreate_calendar(const mbentry_t *mbentry,
         mbname_set_isdeleted(mbname, 0);
         free(mbname_pop_boxes(mbname));
         mbname_push_boxes(mbname, "%");
-        annotatemore_findall(mbname_intname(mbname), 0/*uid*/,
-                             disp_annot, 0/*since_modseq*/,
-                             &lookup_cal_by_dispname, &crock, 0/*flags*/);
+        annotatemore_findall_pattern(mbname_intname(mbname), 0/*uid*/,
+                                     disp_annot, 0/*since_modseq*/,
+                                     &lookup_cal_by_dispname, &crock, 0/*flags*/);
         mbname_free(&mbname);
 
         if (crock.mboxname) {
