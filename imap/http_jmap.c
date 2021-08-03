@@ -768,9 +768,10 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
             }
         }
 
-        if (*mbentry) free((*mbentry)->name);
-        else *mbentry = mboxlist_entry_create();
+        mboxlist_entry_free(mbentry);
+        *mbentry = mboxlist_entry_create();
         (*mbentry)->name = xstrdup(uploadname);
+        (*mbentry)->mbtype = MBTYPE_COLLECTION;
     }
     else if (!r) {
         int rights = httpd_myrights(httpd_authstate, *mbentry);
@@ -824,9 +825,9 @@ static int _create_upload_collection(const char *accountid,
             is_shared = 1;
         }
 
-        r = mboxlist_createmailbox(mbentry->name, MBTYPE_COLLECTION,
-                                   NULL, 1 /* admin */, accountid,
-                                   httpd_authstate, 0, 0, 0, 0, mailbox);
+        r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, accountid, httpd_authstate,
+                                   0/*flags*/, mailbox);
         /* we lost the race, that's OK */
         if (r == IMAP_MAILBOX_LOCKED) r = 0;
         else {

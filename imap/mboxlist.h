@@ -122,6 +122,9 @@ struct mboxlist_entry {
     ptrarray_t name_history;
 };
 
+#define MBENTRY_INITIALIZER  { NULL, NULL, 0, 0, 0, 0, 0, NULL, NULL, NULL, \
+                               NULL, NULL, PTRARRAY_INITIALIZER }
+
 typedef struct mboxlist_entry mbentry_t;
 
 typedef struct {
@@ -173,58 +176,34 @@ int mboxlist_createmailboxcheck(const char *name, int mbtype,
                                 char **newacl, char **newpartition,
                                 int forceuser);
 
+/* create the local mailbox without touching mupdate */
+#define MBOXLIST_CREATE_LOCALONLY           (1<<0)
+/* allow the creation of user.x.<name> without a user.x */
+#define MBOXLIST_CREATE_FORCEUSER           (1<<1)
+/* skip filesystem operations (e.g. reconstruct) */
+#define MBOXLIST_CREATE_DBONLY              (1<<2)
+/* send a MailboxCreate event notification */
+#define MBOXLIST_CREATE_NOTIFY              (1<<3)
+/* create mailbox from sync */
+#define MBOXLIST_CREATE_SYNC                (1<<4)
+/* don't promote intermediary into a real mailbox */
+#define MBOXLIST_CREATE_KEEP_INTERMEDIARIES (1<<5)
+
 /* create mailbox */
-/* localonly creates the local mailbox without touching mupdate */
-/* forceuser allows the creation of user.x.<name> without a user.x */
-/* dbonly skips filesystem operations (e.g. reconstruct) */
-/* notify sends a MailboxCreate event notification */
 /* if given a mailbox pointer, return the still-locked mailbox
  * for further manipulation */
-int mboxlist_createmailbox(const char *name, int mbtype,
-                           const char *partition,
-                           int isadmin, const char *userid,
+int mboxlist_createmailbox(const mbentry_t *mbentry,
+                           unsigned mboxopts, modseq_t highestmodseq,
+                           unsigned isadmin, const char *userid,
                            const struct auth_state *auth_state,
-                           int localonly, int forceuser, int dbonly,
-                           int notify, struct mailbox **mailboxptr);
+                           unsigned flags, struct mailbox **mboxptr);
 
 /* create mailbox with wrapping namespacelock */
-int mboxlist_createmailboxlock(const char *name, int mbtype,
-                           const char *partition,
-                           int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           int localonly, int forceuser, int dbonly,
-                           int notify, struct mailbox **mailboxptr);
-
-
-/* create mailbox with uniqueid */
-int mboxlist_createmailbox_unq(const char *name, int mbtype,
-                           const char *partition,
-                           int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           int localonly, int forceuser, int dbonly,
-                           int notify, const char *uniqueid,
-                           struct mailbox **mailboxptr);
-
-/* create mailbox with options and uniqueid */
-int mboxlist_createmailbox_opts(const char *name, int mbtype,
-                                const char *partition,
-                                int isadmin, const char *userid,
-                                const struct auth_state *auth_state,
-                                int options, int localonly,
-                                int forceuser, int dbonly,
-                                int notify, const char *uniqueid,
-                                struct mailbox **mailboxptr);
-
-/* create mailbox from sync */
-int mboxlist_createsync(const char *name, int mbtype, const char *partition,
-                        const char *userid, const struct auth_state *auth_state,
-                        int options, unsigned uidvalidity,
-                        modseq_t createdmodseq,
-                        modseq_t highestmodseq,
-                        modseq_t foldermodseq, const char *acl,
-                        const char *uniqueid, int local_only,
-                        int keep_intermediaries,
-                        struct mailbox **mboxptr);
+int mboxlist_createmailboxlock(const mbentry_t *mbentry,
+                               unsigned mboxopts, modseq_t highestmodseq,
+                               unsigned isadmin, const char *userid,
+                               const struct auth_state *auth_state,
+                               unsigned flags, struct mailbox **mboxptr);
 
 #define MBOXLIST_DELETE_CHECKACL            (1<<0)
 /* setting local_only disables any communication with the mupdate server

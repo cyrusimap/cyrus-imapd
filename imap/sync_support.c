@@ -2832,11 +2832,23 @@ int sync_apply_mailbox(struct dlist *kin,
                 r = IMAP_MAILBOX_MOVED;
             }
             else {
-                r = mboxlist_createsync(mboxname, mbtype, partition,
-                                            sstate->userid, sstate->authstate,
-                                            options, uidvalidity, createdmodseq,
-                                            highestmodseq, foldermodseq, acl,
-                                            uniqueid, sstate->local_only, 0, &mailbox);
+                mbentry_t mbentry = MBENTRY_INITIALIZER;
+                mbentry.name = (char *) mboxname;
+                mbentry.partition = (char *) partition;
+                mbentry.uniqueid = (char *) uniqueid;
+                mbentry.acl = (char *) acl;
+                mbentry.mbtype = mbtype;
+                mbentry.uidvalidity = uidvalidity;
+                mbentry.createdmodseq = createdmodseq;
+                mbentry.foldermodseq = foldermodseq;
+
+                unsigned flags = MBOXLIST_CREATE_SYNC;
+                if (sstate->local_only) flags |= MBOXLIST_CREATE_LOCALONLY;
+
+                r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
+                                           1/*isadmin*/,
+                                           sstate->userid, sstate->authstate,
+                                           flags, &mailbox);
             }
             /* set a highestmodseq of 0 so ALL changes are future
              * changes and get applied */
@@ -3983,12 +3995,24 @@ int sync_restore_mailbox(struct dlist *kin,
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
         if (r == IMAP_MAILBOX_NONEXISTENT) { // did we win a race?
-            r = mboxlist_createsync(mboxname, mbtype, partition,
-                                    sstate->userid, sstate->authstate,
-                                    options, uidvalidity, createdmodseq,
-                                    highestmodseq, foldermodseq, acl,
-                                    uniqueid, sstate->local_only, 0, &mailbox);
-            syslog(LOG_DEBUG, "%s: mboxlist_createsync %s: %s",
+            mbentry_t mbentry = MBENTRY_INITIALIZER;
+            mbentry.name = (char *) mboxname;
+            mbentry.partition = (char *) partition;
+            mbentry.uniqueid = (char *) uniqueid;
+            mbentry.acl = (char *) acl;
+            mbentry.mbtype = mbtype;
+            mbentry.uidvalidity = uidvalidity;
+            mbentry.createdmodseq = createdmodseq;
+            mbentry.foldermodseq = foldermodseq;
+
+            unsigned flags = MBOXLIST_CREATE_SYNC;
+            if (sstate->local_only) flags |= MBOXLIST_CREATE_LOCALONLY;
+
+            r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
+                                       1/*isadmin*/,
+                                       sstate->userid, sstate->authstate,
+                                       flags, &mailbox);
+            syslog(LOG_DEBUG, "%s: mboxlist_createmailbox %s: %s",
                 __func__, mboxname, error_message(r));
             is_new_mailbox = 1;
         }

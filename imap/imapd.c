@@ -7088,6 +7088,10 @@ localcreate:
     r = mboxlist_findparent(mbname_intname(mbname), &parent);
     if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
 
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    unsigned flags = MBOXLIST_CREATE_NOTIFY;
+    if (localonly) flags |= MBOXLIST_CREATE_LOCALONLY | MBOXLIST_CREATE_FORCEUSER;
+
     if (!r && (parent || !mbname_userid(mbname))) {
         mbname_t *ancestor = mbname_from_intname(parent ? parent->name : NULL);
         int oldest = strarray_size(mbname_boxes(ancestor));
@@ -7116,12 +7120,13 @@ localcreate:
                     continue;
                 }
 
-                r = mboxlist_createmailbox(mbname_intname(ancestor),
-                                           mbtype, partition,
-                                           imapd_userisadmin
-                                           || imapd_userisproxyadmin,
+                mbentry.name = (char *) mbname_intname(ancestor);
+                mbentry.partition = (char *) partition;
+                mbentry.mbtype = mbtype;
+                r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                           imapd_userisadmin || imapd_userisproxyadmin,
                                            imapd_userid, imapd_authstate,
-                                           localonly, localonly, 0, 1, NULL);
+                                           flags, NULL/*mailboxptr*/);
                 if (r) {
                     // XXX  should we delete the ancestors we just created?
                     break;
@@ -7138,21 +7143,15 @@ localcreate:
 
 
     // now create the requested mailbox
-    r = mboxlist_createmailbox_opts(
-            mbname_intname(mbname),                             // const char *name
-            mbtype,                                             // int mbtype
-            partition,                                          // const char *partition
-            imapd_userisadmin || imapd_userisproxyadmin,        // int isadmin
-            imapd_userid,                                       // const char *userid
-            imapd_authstate,                                    // struct auth_state *auth_state
-            options,                                            // options
-            localonly,                                          // int localonly
-            localonly,                                          // int forceuser
-            0,                                                  // int dbonly
-            1,                                                  // int notify
-            uniqueid,                                           // const char *uniqueid
-            &mailbox                                            // struct mailbox **mailboxptr
-        );
+    mbentry.name = (char *) mbname_intname(mbname);
+    mbentry.partition = (char *) partition;
+    mbentry.uniqueid = (char *) uniqueid;
+    mbentry.mbtype = mbtype;
+
+    r = mboxlist_createmailbox(&mbentry, options, 0/*highestmodseq*/,
+                               imapd_userisadmin || imapd_userisproxyadmin,
+                               imapd_userid, imapd_authstate,
+                               flags, &mailbox);
 
 #ifdef USE_AUTOCREATE
     // Clausing autocreate for the INBOX
@@ -7161,19 +7160,10 @@ localcreate:
             int autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
 
             if (autocreatequotastorage > 0) {
-                r = mboxlist_createmailbox(
-                        mbname_intname(mbname),
-                        0,
-                        partition,
-                        1,
-                        imapd_userid,
-                        imapd_authstate,
-                        0,
-                        0,
-                        0,
-                        1,
-                        &mailbox
-                    );
+                mbentry.uniqueid = NULL;
+                r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                           1/*isadmin*/, imapd_userid, imapd_authstate,
+                                           MBOXLIST_CREATE_NOTIFY, &mailbox);
 
                 if (r) {
                     prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));

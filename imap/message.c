@@ -3529,8 +3529,13 @@ static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* create the mailbox - it's OK to do as admin because this only ever gets
          * a user subfolder for this conversations.db owner */
-        r = mboxlist_createmailbox(mboxname, MBTYPE_COLLECTION, NULL, 1 /* admin */, NULL, NULL,
-                                   0, 0, 0, 0, mailboxptr);
+        mbentry_t mbentry = MBENTRY_INITIALIZER;
+        mbentry.name = (char *) mboxname;
+        mbentry.mbtype = MBTYPE_COLLECTION;
+
+        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, NULL/*userid*/, NULL/*authstate*/,
+                                   0/*flags*/, mailboxptr);
     }
 
     mboxname_release(&namespacelock);

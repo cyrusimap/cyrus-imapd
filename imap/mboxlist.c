@@ -1653,19 +1653,19 @@ done:
  *
  */
 
-static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
-                                const char *partition,
-                                int isadmin, const char *userid,
-                                const struct auth_state *auth_state,
-                                int options, unsigned uidvalidity,
-                                modseq_t createdmodseq,
-                                modseq_t highestmodseq,
-                                modseq_t foldermodseq,
-                                const char *copyacl, const char *uniqueid,
-                                int localonly, int forceuser, int dbonly,
-                                int keep_intermediaries,
-                                struct mailbox **mboxptr)
+EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
+                                    unsigned options, modseq_t highestmodseq,
+                                    unsigned isadmin, const char *userid,
+                                    const struct auth_state *auth_state,
+                                    unsigned flags, struct mailbox **mboxptr)
 {
+    const char *mboxname = mbentry->name;
+    const char *uniqueid = mbentry->uniqueid;
+    uint32_t mbtype = mbentry->mbtype;
+    uint32_t uidvalidity = mbentry->uidvalidity;
+    modseq_t createdmodseq = mbentry->createdmodseq;
+    modseq_t foldermodseq = mbentry->foldermodseq;
+
     int r;
     char *newpartition = NULL;
     char *acl = NULL;
@@ -1674,20 +1674,44 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     mbentry_t *parent = NULL, *newmbentry = NULL;
 
     r = mboxlist_create_namecheck(mboxname, userid, auth_state,
-                                  isadmin, forceuser);
+                                  isadmin, (flags & MBOXLIST_CREATE_FORCEUSER));
     if (r) goto done;
 
     assert_namespacelocked(mboxname);
 
-    if (copyacl) {
-        acl = xstrdup(copyacl);
+    init_internal();
+
+    if (!(flags & MBOXLIST_CREATE_SYNC)) {
+        options |= config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
+            | OPT_POP3_NEW_UIDL;
+
+        /* check if a mailbox tombstone or intermediate record exists */
+        mbentry_t *oldmbentry = NULL;
+        r = mboxlist_lookup_allow_all(mboxname, &oldmbentry, NULL);
+        if (!r) {
+            if (oldmbentry->mbtype & MBTYPE_DELETED) {
+                /* then the UIDVALIDITY must be higher than before */
+                if (uidvalidity <= oldmbentry->uidvalidity)
+                    uidvalidity = oldmbentry->uidvalidity+1;
+            }
+            else if (oldmbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                /* then use the existing mailbox ID and createdmodseq */
+                if (!uniqueid) uniqueid = oldmbentry->uniqueid;
+                createdmodseq = oldmbentry->createdmodseq;
+            }
+        }
+        mboxlist_entry_free(&oldmbentry);
+    }
+
+    if (mbentry->acl) {
+        acl = xstrdup(mbentry->acl);
     }
     else {
         r = mboxlist_create_acl(mboxname, &acl);
         if (r) goto done;
     }
 
-    r = mboxlist_create_partition(mboxname, partition, &newpartition);
+    r = mboxlist_create_partition(mboxname, mbentry->partition, &newpartition);
     if (r) goto done;
 
     r = mboxlist_findparent(mboxname, &parent);
@@ -1698,7 +1722,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     else if (config_getswitch(IMAPOPT_MAILBOX_LEGACY_DIRS))
         mbtype |= MBTYPE_LEGACY_DIRS;
 
-    if (!dbonly && !isremote) {
+    if (!(flags & MBOXLIST_CREATE_DBONLY) && !isremote) {
         /* Filesystem Operations */
         r = mailbox_create(mboxname, mbtype, newpartition, acl, uniqueid,
                            options, uidvalidity, createdmodseq, highestmodseq, &newmailbox);
@@ -1720,7 +1744,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     }
     r = mboxlist_update_entry(mboxname, newmbentry, NULL);
 
-    if (!r && !keep_intermediaries) {
+    if (!r && !(flags & MBOXLIST_CREATE_KEEP_INTERMEDIARIES)) {
         /* create any missing intermediaries */
         r = mboxlist_update_intermediaries(mboxname, mbtype, newmbentry->foldermodseq);
     }
@@ -1733,7 +1757,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     }
 
     /* 9. set MUPDATE entry as commited (CRASH: commited) */
-    if (!r && config_mupdate_server && !localonly) {
+    if (!r && config_mupdate_server && !(flags & MBOXLIST_CREATE_LOCALONLY)) {
         mupdate_handle *mupdate_h = NULL;
         char *loc = strconcat(config_servername, "!", newpartition, (char *)NULL);
 
@@ -1749,7 +1773,17 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         free(loc);
     }
 
-done:
+    if (!r && (flags & MBOXLIST_CREATE_NOTIFY)) {
+        /* send a MailboxCreate event notification */
+        struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_CREATE);
+        mboxevent_extract_mailbox(mboxevent, newmailbox);
+        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox_name(newmailbox), 1);
+
+        mboxevent_notify(&mboxevent);
+        mboxevent_free(&mboxevent);
+    }
+
+ done:
     if (newmailbox) {
         if (r) mailbox_delete(&newmailbox);
         else if (mboxptr) *mboxptr = newmailbox;
@@ -1764,127 +1798,20 @@ done:
     return r;
 }
 
-EXPORTED int mboxlist_createmailboxlock(const char *name, int mbtype,
-                           const char *partition,
-                           int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           int localonly, int forceuser, int dbonly,
-                           int notify, struct mailbox **mailboxptr)
+EXPORTED int mboxlist_createmailboxlock(const mbentry_t *mbentry,
+                                        unsigned options, modseq_t highestmodseq,
+                                        unsigned isadmin, const char *userid,
+                                        const struct auth_state *auth_state,
+                                        unsigned flags, struct mailbox **mboxptr)
 {
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
 
-    int r = mboxlist_createmailbox_unq(name, mbtype, partition, isadmin,
-                                      userid, auth_state, localonly,
-                                      forceuser, dbonly, notify, NULL,
-                                      mailboxptr);
+    int r = mboxlist_createmailbox(mbentry, options, highestmodseq,
+                                   isadmin, userid, auth_state,
+                                   flags, mboxptr);
 
     mboxname_release(&namespacelock);
     return r;
-}
-
-EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
-                           const char *partition,
-                           int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           int localonly, int forceuser, int dbonly,
-                           int notify, struct mailbox **mailboxptr)
-{
-    return mboxlist_createmailbox_unq(name, mbtype, partition, isadmin,
-                                      userid, auth_state, localonly,
-                                      forceuser, dbonly, notify, NULL,
-                                      mailboxptr);
-}
-
-EXPORTED int mboxlist_createmailbox_unq(const char *name, int mbtype,
-                           const char *partition,
-                           int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           int localonly, int forceuser, int dbonly,
-                           int notify, const char *uniqueid,
-                           struct mailbox **mailboxptr)
-{
-    int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
-                  | OPT_POP3_NEW_UIDL;
-
-    return mboxlist_createmailbox_opts(name, mbtype, partition, isadmin, userid,
-                                       auth_state, options, localonly, forceuser,
-                                       dbonly, notify, uniqueid, mailboxptr);
-}
-
-EXPORTED int mboxlist_createmailbox_opts(const char *name, int mbtype,
-                                         const char *partition,
-                                         int isadmin, const char *userid,
-                                         const struct auth_state *auth_state,
-                                         int options, int localonly,
-                                         int forceuser, int dbonly,
-                                         int notify, const char *uniqueid,
-                                         struct mailbox **mailboxptr)
-{
-    int r;
-    struct mailbox *mailbox = NULL;
-    uint32_t uidvalidity = 0;
-    modseq_t createdmodseq = 0;
-    mbentry_t *oldmbentry = NULL;
-
-    init_internal();
-
-    /* check if a mailbox tombstone or intermediate record exists */
-    r = mboxlist_lookup_allow_all(name, &oldmbentry, NULL);
-    if (!r) {
-        if (oldmbentry->mbtype & MBTYPE_DELETED) {
-            /* then the UIDVALIDITY must be higher than before */
-            if (uidvalidity <= oldmbentry->uidvalidity)
-                uidvalidity = oldmbentry->uidvalidity+1;
-        }
-        else if (oldmbentry->mbtype & MBTYPE_INTERMEDIATE) {
-            /* then use the existing mailbox ID and createdmodseq */
-            if (!uniqueid) uniqueid = oldmbentry->uniqueid;
-            createdmodseq = oldmbentry->createdmodseq;
-        }
-    }
-
-    r = mboxlist_createmailbox_full(name, mbtype, partition,
-                                    isadmin, userid, auth_state,
-                                    options, uidvalidity, createdmodseq, 0, 0, NULL,
-                                    uniqueid, localonly,
-                                    forceuser, dbonly, 0, &mailbox);
-
-    if (notify && !r) {
-        /* send a MailboxCreate event notification */
-        struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_CREATE);
-        mboxevent_extract_mailbox(mboxevent, mailbox);
-        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox_name(mailbox), 1);
-
-        mboxevent_notify(&mboxevent);
-        mboxevent_free(&mboxevent);
-    }
-
-    if (mailboxptr && !r) *mailboxptr = mailbox;
-    else mailbox_close(&mailbox);
-
-    mboxlist_entry_free(&oldmbentry);
-
-    return r;
-}
-
-EXPORTED int mboxlist_createsync(const char *name, int mbtype,
-                        const char *partition,
-                        const char *userid, const struct auth_state *auth_state,
-                        int options, unsigned uidvalidity,
-                        modseq_t createdmodseq,
-                        modseq_t highestmodseq,
-                        modseq_t foldermodseq,
-                        const char *acl, const char *uniqueid,
-                        int local_only, int keep_intermediaries,
-                        struct mailbox **mboxptr)
-{
-    return mboxlist_createmailbox_full(name, mbtype, partition,
-                                       1, userid, auth_state,
-                                       options, uidvalidity,
-                                       createdmodseq, highestmodseq,
-                                       foldermodseq, acl, uniqueid,
-                                       local_only, 1, 0,
-                                       keep_intermediaries, mboxptr);
 }
 
 /* insert an entry for the proxy */
