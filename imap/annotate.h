@@ -285,7 +285,7 @@ void annotate_done(void);
  * annotations at all on the mailbox. These APIs are for performance
  * optimisations only; the other annotate APIs will manage their own
  * references internally. */
-int annotate_getdb(const char *mboxid, annotate_db_t **dbp);
+int annotate_getdb(const struct mailbox *mailbox, annotate_db_t **dbp);
 void annotate_putdb(annotate_db_t **dbp);
 
 /* Maybe this isn't the right place - move later */

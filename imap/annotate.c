@@ -720,14 +720,15 @@ error:
     return r;
 }
 
-HIDDEN int annotate_getdb(const char *mboxid, annotate_db_t **dbp)
+HIDDEN int annotate_getdb(const struct mailbox *mailbox, annotate_db_t **dbp)
 {
-    if (!mboxid || !*mboxid) {
-        syslog(LOG_ERR, "IOERROR: annotate_getdb called with no mboxid");
+    if (!mailbox) {
+        syslog(LOG_ERR, "IOERROR: annotate_getdb called with no mailbox");
         return IMAP_INTERNAL;   /* we don't return the global db */
     }
-    /* synthetic UID '1' forces per-mailbox mode */
-    return _annotate_getdb(mboxid, NULL, 1, CYRUSDB_CREATE, dbp);
+    /* ANNOTATE_ANY_UID forces UID mode */
+    return _annotate_getdb(mailbox_uniqueid(mailbox), mailbox, ANNOTATE_ANY_UID,
+                           CYRUSDB_CREATE, dbp);
 }
 
 static void annotate_closedb(annotate_db_t *d)
