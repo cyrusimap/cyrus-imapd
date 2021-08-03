@@ -607,7 +607,7 @@ static int annotate_dbname_mbentry(const mbentry_t *mbentry,
     return 0;
 }
 
-static int annotate_dbname_mailbox(struct mailbox *mailbox, char **fnamep)
+static int annotate_dbname_mailbox(const struct mailbox *mailbox, char **fnamep)
 {
     const char *conf_fname;
 
