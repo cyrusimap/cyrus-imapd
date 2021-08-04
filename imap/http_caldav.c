@@ -3386,6 +3386,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
     icalproperty *prop = NULL;
     const char *uid = NULL, *organizer = NULL;
     struct caldav_sched_param sparam;
+    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
 
     /* Check Content-Type */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
@@ -3442,7 +3443,10 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
         ret = HTTP_FORBIDDEN;
         goto done;
     }
-    r = caladdress_lookup(organizer, &sparam, NULL); // XXX: this needs to lookup the user's principal
+
+    get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                           txn->req_tgt.userid, &schedule_addresses);
+    r = caladdress_lookup(organizer, &sparam, &schedule_addresses);
     if (r) {
         txn->error.precond = CALDAV_VALID_ORGANIZER;
         ret = HTTP_FORBIDDEN;
@@ -3480,6 +3484,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
 
   done:
     if (ical) icalcomponent_free(ical);
+    strarray_fini(&schedule_addresses);
 
     return ret;
 }
