@@ -4716,18 +4716,12 @@ mboxlist_opensubs(const char *userid,
     int db_r = cyrusdb_open(SUBDB, subsfname, flags, ret);
 
     if (db_r == CYRUSDB_OK) {
-        // check if we have the version key in the DB - if not we need to upgrade
-        const char *key = DB_HIERSEP_STR "VER" DB_HIERSEP_STR;
-        size_t keylen = 5;
-        const char *data = NULL;
-        size_t datalen = 0;
-        db_r = cyrusdb_fetch(*ret, key, keylen, &data, &datalen, NULL);
-        if (db_r != CYRUSDB_OK)
-            r = mboxlist_upgrade_subs(userid, subsfname, ret);
+        r = mboxlist_upgrade_subs(userid, subsfname, ret);
     }
     else {
         r = create ? IMAP_IOERROR : IMAP_NOTFOUND;
     }
+
     free(subsfname);
 
     return r;
@@ -5390,35 +5384,33 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
 
 
 static int _upgrade_subs_cb(void *rock, const char *key, size_t keylen,
-                            const char *data __attribute__((unused)),
-                            size_t datalen __attribute__((unused)))
+                            const char *data, size_t datalen)
 {
     struct upgrade_rock *urock = (struct upgrade_rock *) rock;
     struct buf *namebuf = urock->namebuf;
     char *dbname = NULL;
-    int r;
 
     buf_setmap(namebuf, key, keylen);
     dbname = mboxname_to_dbname(buf_cstring(namebuf));
     mboxlist_dbname_to_key(dbname, strlen(dbname), urock->userid, namebuf);
     free(dbname);
 
-    r = cyrusdb_store(urock->db,
-                      buf_base(namebuf), buf_len(namebuf), "", 0, urock->tid);
+    const char *newkey = buf_base(namebuf);
+    size_t newkeylen = buf_len(namebuf);
 
-    return (r == CYRUSDB_OK ? 0 : IMAP_IOERROR);
+    return cyrusdb_store(urock->db, newkey, newkeylen, data, datalen, urock->tid);
 }
 
-static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, struct db **subs)
+static int mboxlist_upgrade_subs_work(const char *userid, const char *subsfname, struct db **subs)
 {
-    int r, r2 = 0;
+    int db_r = 0;
+    int r2 = 0;
     char *newsubsfname = NULL;
     struct buf buf = BUF_INITIALIZER;
+    struct db *oldsubs = *subs;
     struct db *newsubs = NULL;
-    struct txn *tid = NULL;
-    struct upgrade_rock urock = { userid, &buf, NULL, &tid, NULL, NULL };
-
-    struct mboxlock *namespacelock = user_namespacelock(userid);
+    struct txn *oldtid = NULL;
+    struct txn *newtid = NULL;
 
     /* create new db file name */
     buf_setcstr(&buf, subsfname);
@@ -5426,41 +5418,41 @@ static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, stru
     newsubsfname = buf_release(&buf);
 
     /* open new db file */
-    r = cyrusdb_open(SUBDB, newsubsfname, CYRUSDB_CREATE, &newsubs);
-    if (!r) {
+    db_r = cyrusdb_open(SUBDB, newsubsfname, CYRUSDB_CREATE, &newsubs);
+    if (!db_r) {
         /* add version record */
-        r = cyrusdb_store(newsubs,
-                          DB_HIERSEP_STR "VER" DB_HIERSEP_STR, 5, "2", 1, &tid);
+        db_r = cyrusdb_store(newsubs,
+                             DB_HIERSEP_STR "VER" DB_HIERSEP_STR, 5, "2", 1, &newtid);
     }
-    if (r) {
+    if (db_r) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", newsubsfname,
-               cyrusdb_strerror(r));
+               cyrusdb_strerror(db_r));
         fatal("can't open new subscriptions file", EX_TEMPFAIL);
     }
 
     /* perform upgrade from old to new db */
-    urock.db = newsubs;
-    r = cyrusdb_foreach(*subs, "", 0, NULL, _upgrade_subs_cb, &urock, NULL);
-
-    r2 = cyrusdb_close(*subs);
+    struct upgrade_rock urock = { userid, &buf, newsubs, &newtid, NULL, NULL };
+    db_r = cyrusdb_foreach(oldsubs, "", 0, NULL, _upgrade_subs_cb, &urock, &oldtid);
+    r2 = cyrusdb_abort(oldsubs, oldtid);
+    if (!r2) r2 = cyrusdb_close(oldsubs);
     if (r2) {
         syslog(LOG_ERR, "DBERROR: error closing %s: %s", subsfname,
                cyrusdb_strerror(r2));
-        if (!r) r = r2;
+        if (!db_r) db_r = r2;
     }
     *subs = NULL;
 
     /* complete txn on new db */
-    if (tid) {
-        if (r) {
-            r2 = cyrusdb_abort(newsubs, tid);
+    if (newtid) {
+        if (db_r) {
+            r2 = cyrusdb_abort(newsubs, newtid);
         } else {
-            r2 = cyrusdb_commit(newsubs, tid);
+            r2 = cyrusdb_commit(newsubs, newtid);
         }
 
         if (r2) {
             syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_upgrade_subs: %s",
-                   r ? "aborting" : "committing", cyrusdb_strerror(r2));
+                   db_r ? "aborting" : "committing", cyrusdb_strerror(r2));
         }
     }
 
@@ -5468,21 +5460,47 @@ static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, stru
     if (r2) {
         syslog(LOG_ERR, "DBERROR: error closing %s: %s", newsubsfname,
                cyrusdb_strerror(r2));
-        if (!r) r = r2;
+        if (!db_r) db_r = r2;
     }
 
-    if (!r) {
+    if (!db_r) {
         /* rename new db file */
-        r = rename(newsubsfname, subsfname);
-        if (!r) {
-            /* reopen upgraded db under regular name */
-            r = cyrusdb_open(SUBDB, subsfname, 0, subs);
+        if (rename(newsubsfname, subsfname) < 0) {
+            syslog(LOG_ERR, "DBERROR: renaming %s: %m", newsubsfname);
+            fatal("can't rename subscriptions file", EX_TEMPFAIL);
         }
+        /* reopen upgraded db under regular name (not-create, we're sure it will
+         * be there due to locks! */
+        db_r = cyrusdb_open(SUBDB, subsfname, 0, subs);
     }
 
     unlink(newsubsfname);
     free(newsubsfname);
     buf_free(&buf);
+
+    return db_r ? IMAP_IOERROR : 0;
+}
+
+static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, struct db **subs)
+{
+    // if we have the DB key already in the DB, nothing to do!
+    const char *key = DB_HIERSEP_STR "VER" DB_HIERSEP_STR;
+    size_t keylen = 5;
+    const char *data = NULL;
+    size_t datalen = 0;
+    int db_r = cyrusdb_fetch(*subs, key, keylen, &data, &datalen, NULL);
+    if (db_r == CYRUSDB_OK) return 0;
+    int r = 0;
+
+    // lock the user namespace - we'll hold this lock while we upgrade.
+    struct mboxlock *namespacelock = user_namespacelock(userid);
+
+    /* if we find it this time, we lost the race and someone else already
+     * upgraded the DB.  Bonus. */
+    db_r = cyrusdb_fetch(*subs, key, keylen, &data, &datalen, NULL);
+    if (db_r != CYRUSDB_OK) {
+        r = mboxlist_upgrade_subs_work(userid, subsfname, subs);
+    }
 
     mboxname_release(&namespacelock);
 
