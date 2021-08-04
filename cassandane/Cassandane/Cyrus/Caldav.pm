@@ -100,6 +100,7 @@ sub new
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane');
     $config->set(httpmodules => 'caldav');
+    $config->set(calendar_user_address_set => 'example.com');
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
     $config->set(icalendar_max_size => 100000);
@@ -2303,7 +2304,7 @@ SEQUENCE:0
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
-ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+ORGANIZER;CN=Test User:mailto:cassandane\@example.com
 END:VEVENT
 END:VCALENDAR
 EOF
@@ -4592,6 +4593,54 @@ EOF
     $self->assert_caldav_notified(
         { recipient => 'attendee@local', is_update => JSON::true, method => 'REQUEST' },
     );
+}
+
+sub test_sched_busytime_query
+    :min_version_3_0 :needs_component_httpd :NoVirtDomains
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.friend");
+    $admintalk->setacl("user.friend", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.friend", friend => 'lrswipkxtecdn');
+
+    my $service = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "friend",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $query = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VFREEBUSY
+UID:66687286-1EBF-48B4-B0D5-43144F801E2F
+DTSTAMP:20210802T131858Z
+DTEND:20210903T000000Z
+DTSTART:20210902T210000Z
+ATTENDEE:MAILTO:cassandane\@example.com
+ATTENDEE:MAILTO:friend\@example.com
+ORGANIZER:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "freebusy query";
+    my $res = $CalDAV->Request('POST', 'Outbox',
+                               $query, 'Content-Type' => 'text/calendar');
+    my $text = Dumper($res);
+    $self->assert_matches(qr/schedule-response/, $text);
 }
 
 1;
