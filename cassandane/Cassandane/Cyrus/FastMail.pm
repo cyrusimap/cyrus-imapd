@@ -1721,4 +1721,87 @@ sub test_relocate_legacy_domain
     $self->assert(not @files);
 }
 
+sub test_relocate_messages_still_exist
+    :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+{
+    my ($self) = @_;
+
+    my $adminstore = $self->{adminstore};
+    my $admintalk = $adminstore->get_client();
+
+    my $username = "magicuser\@example.com";
+
+    $admintalk->create("user.$username");
+    $admintalk->setacl("user.$username", admin => 'lrswipkxtecdan');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "Connect as the new user";
+    my $svc = $self->{instance}->get_service('imap');
+    $self->{store} = $svc->create_store(username => $username, folder => 'INBOX');
+    $self->{store}->set_fetch_attributes('uid');
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->make_message("Email 1") or die;
+    $self->make_message("Email 2") or die;
+    $self->make_message("Email xyzzy") or die;
+
+    $imaptalk->create("INBOX.subfolder");
+    $imaptalk->create("INBOX.subfolder2");
+
+    $self->{store}->set_folder("INBOX.subfolder");
+    $self->make_message("Email xyzzy") or die;
+
+    $imaptalk->list('', '*', 'return', [ "status", [ "messages", "uidvalidity", "highestmodseq", "mailboxid" ] ]);
+    my $prestatus = $imaptalk->get_response_code('status');
+
+    # Create the search database.
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $basedir = $self->{instance}{basedir};
+    open(FH, "-|", "find", $basedir);
+    my @files = grep { m{/magicuser/} and not m{/conf/lock/} } <FH>;
+    close(FH);
+
+    xlog $self, "files exist";
+    $self->assert(@files);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'relocate_by_id', '-u' => $username );
+
+    open(FH, "-|", "find", $basedir);
+    @files = grep { m{/magicuser/} and not m{/conf/lock/} } <FH>;
+    close(FH);
+
+    xlog $self, "no files left for this user";
+    $self->assert(not @files);
+
+    $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->select("INBOX");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    my $exists = $imaptalk->get_response_code('exists');
+    $self->assert_num_equals(3, $exists);
+    my $msgs = $imaptalk->search("fuzzy", ["subject", { Quote => "xyzzy" }]) || die;
+    $self->assert_num_equals(1, scalar @$msgs);
+
+    $imaptalk->select("INBOX.subfolder");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $exists = $imaptalk->get_response_code('exists');
+    $self->assert_num_equals(1, $exists);
+    $msgs = $imaptalk->search("fuzzy", ["subject", { Quote => "xyzzy" }]) || die;
+    $self->assert_num_equals(1, scalar @$msgs);
+
+    $imaptalk->select("INBOX.subfolder2");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $exists = $imaptalk->get_response_code('exists');
+    $self->assert_num_equals(0, $exists);
+    $msgs = $imaptalk->search("fuzzy", ["subject", { Quote => "xyzzy" }]) || die;
+    $self->assert_num_equals(0, scalar @$msgs);
+
+    $imaptalk->list('', '*', 'return', [ "status", [ "messages", "uidvalidity", "highestmodseq", "mailboxid" ] ]);
+    my $poststatus = $imaptalk->get_response_code('status');
+
+    $self->assert_deep_equals($prestatus, $poststatus);
+}
+
 1;
