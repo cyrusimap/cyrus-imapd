@@ -54,17 +54,22 @@
 #include <libxml/HTMLparser.h>
 #include <libxml/tree.h>
 
+#include <sasl/saslutil.h>
+
+#include "caldav_util.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "jmap_ical.h"
 #include "jmap_util.h"
+#include "msgrecord.h"
 #include "notify.h"
 #include "crc32.h"
 #include "smtpclient.h"
 #include "strhash.h"
 #include "times.h"
+#include "webdav_db.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
@@ -2009,6 +2014,244 @@ static void schedule_one_attendee(const char *userid, const strarray_t *schedule
     schedule_sub_updates(userid, schedule_addresses, organizer, attendee, h_cutoff, oldical, newical);
 }
 
+static int has_attach(icalcomponent *ical)
+{
+    if (!ical) return 0;
+
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        if (icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY))
+            return 1;
+    }
+
+    return 0;
+}
+
+static void rewrite_attachments_to_binary(struct mailbox *attachments,
+                                          struct webdav_db *webdavdb,
+                                          icalproperty *prop,
+                                          struct buf *baseurl,
+                                          struct buf *bufs)
+{
+    struct buf *msgbuf = &bufs[0];
+    buf_reset(msgbuf);
+    struct buf *blob = &bufs[1];
+    buf_reset(blob);
+    struct buf *b64val = &bufs[2];
+    buf_reset(b64val);
+
+    struct webdav_data *wdata = NULL;
+    msgrecord_t *mr = NULL;
+    struct body *body = NULL;
+
+    // Check if href is a WebDAV attachment URL
+    icalattach *attach = icalproperty_get_attach(prop);
+    if (!attach || !icalattach_get_is_url(attach))
+        goto done;
+    const char *href = icalattach_get_url(attach);
+    if (strncmpsafe(href, buf_cstring(baseurl), buf_len(baseurl)))
+        goto done;
+    const char *mid = href + buf_len(baseurl);
+
+    // Check if entry exists in WebDAV attachments
+    int r = webdav_lookup_uid(webdavdb, mid, &wdata);
+    if (r) {
+        xsyslog(LOG_ERR, "webdav_lookup_uid failed, ""mid=<%s> err=<%s>",
+                mid, cyrusdb_strerror(r));
+        goto done;
+    }
+
+    // Load blob
+    mr = msgrecord_from_uid(attachments, wdata->dav.imap_uid);
+    if (msgrecord_extract_bodystructure(mr, &body)) goto done;
+    if (msgrecord_get_body(mr, msgbuf)) goto done;
+    buf_init_ro(blob, buf_base(msgbuf) + body->content_offset,
+            body->content_size);
+
+    // Encode blob
+    int enc = encoding_lookupname(body->encoding);
+    if (enc == ENCODING_BASE64) {
+        b64val = blob;
+    }
+    else {
+        struct buf *src = &bufs[3];
+        buf_reset(src);
+        struct buf *dst = &bufs[4];
+        buf_reset(dst);
+
+        if (enc != ENCODING_NONE) {
+            if (charset_decode(src, buf_base(blob), buf_len(blob), enc))
+                goto done;
+        }
+        else src = blob;
+
+        unsigned b64len = charset_base64_len_padded(buf_len(src));
+        buf_ensure(dst, b64len);
+        sasl_encode64(src->s, src->len, dst->s, b64len, NULL);
+        buf_truncate(dst, b64len);
+        b64val = dst;
+    }
+    if (!buf_len(b64val)) goto done;
+
+    size_t max_size = config_getint(IMAPOPT_WEBDAV_ATTACHMENT_MAX_BINARY_ATTACH_SIZE);
+    if (max_size && buf_len(b64val) > max_size * 1024) goto done;
+
+    // Rewrite ATTACH property
+    icalattach *newattach = icalattach_new_from_data(buf_cstring(b64val), NULL, 0);
+    icalproperty_set_attach(prop, newattach);
+    icalattach_unref(newattach);
+    icalproperty_remove_parameter_by_kind(prop, ICAL_ENCODING_PARAMETER);
+    icalproperty_remove_parameter_by_kind(prop, ICAL_MANAGEDID_PARAMETER);
+    icalproperty_add_parameter(prop, icalparameter_new_encoding(ICAL_ENCODING_BASE64));
+
+done:
+    msgrecord_unref(&mr);
+    message_free_body(body);
+    free(body);
+}
+
+static void rewrite_attachments_to_url(struct webdav_db *webdavdb,
+                                       icalproperty *prop,
+                                       struct buf *baseurl,
+                                       struct buf *bufs)
+{
+    // Load base64 value
+    icalvalue *icalval = icalproperty_get_value(prop);
+    if (!icalval || icalvalue_isa(icalval) != ICAL_ATTACH_VALUE)
+        return;
+
+    icalattach *attach = icalproperty_get_attach(prop);
+    if (!attach || icalattach_get_is_url(attach))
+        return;
+
+    // Generate managed-id
+    const char *b64data = (const char*) icalattach_get_data(attach);
+    struct buf *data = &bufs[0];
+    buf_reset(data);
+    if (charset_decode(data, b64data, strlen(b64data), ENCODING_BASE64))
+        return;
+    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+    message_guid_generate(&guid, buf_base(data), buf_len(data));
+    const char *mid = message_guid_encode(&guid);
+
+    // Lookup managed attachment
+    struct webdav_data *wdata = NULL;
+    int r = webdav_lookup_uid(webdavdb, mid, &wdata);
+    if (r) {
+        if (r != CYRUSDB_NOTFOUND) {
+            xsyslog(LOG_ERR, "webdav_lookup_uid failed, ""mid=<%s> err=<%s>",
+                    mid, cyrusdb_strerror(r));
+        }
+        return;
+    }
+
+    // Rewrite ATTACH property
+    struct buf *url = &bufs[1];
+    buf_reset(url);
+    buf_copy(url, baseurl);
+    if (url->s[url->len-1] != '/')
+        buf_putc(url, '/');
+    buf_appendcstr(url, mid);
+
+    icalattach *newattach = icalattach_new_from_url(buf_cstring(url));
+    icalproperty_set_attach(prop, newattach);
+    icalattach_unref(newattach);
+    icalproperty_remove_parameter_by_kind(prop, ICAL_VALUE_PARAMETER);
+    icalproperty_remove_parameter_by_kind(prop, ICAL_ENCODING_PARAMETER);
+    icalproperty_remove_parameter_by_kind(prop, ICAL_MANAGEDID_PARAMETER);
+    icalproperty_add_parameter(prop, icalparameter_new_managedid(mid));
+}
+
+HIDDEN void caldav_rewrite_attachments(const char *userid,
+                                       enum caldav_rewrite_attachments_mode mode,
+                                       icalcomponent *oldical,
+                                       icalcomponent *newical,
+                                       icalcomponent **myoldicalp,
+                                       icalcomponent **mynewicalp)
+{
+    int has_oldattach = oldical && has_attach(oldical);
+    int has_newattach = newical && has_attach(newical);
+    if (!has_oldattach && !has_newattach) return;
+
+    struct buf baseurl = BUF_INITIALIZER;
+    mbname_t *mbname = NULL;
+    struct buf bufs[5];
+    size_t i, nbufs = sizeof(bufs) / sizeof(struct buf);
+    memset(bufs, 0, sizeof(bufs));
+    struct mailbox *attachments = NULL;
+    struct webdav_db *webdavdb = NULL;
+
+    // Open attachments mailbox
+    char *mboxname = caldav_mboxname(userid, MANAGED_ATTACH);
+    int r = mailbox_open_irl(mboxname, &attachments);
+    if (r) {
+        xsyslog(LOG_ERR, "can't open attachments",
+                "mboxname=<%s> err<%s>", mboxname, error_message(r));
+    }
+    free(mboxname);
+    if (r) goto done;
+    webdavdb = webdav_open_mailbox(attachments);
+    if (!webdavdb) goto done;
+
+    // Determine base URL for managed attachments
+    mbname = mbname_from_intname(mailbox_name(attachments));
+    const char *davproto = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_SCHEME);
+    if (!davproto)
+        xsyslog(LOG_ERR, "no webdav_attachment_scheme config", NULL);
+    const char *davhost = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_HOST);
+    if (!davhost)
+        xsyslog(LOG_ERR, "no webdav_attachment_host config", NULL);
+    if (!davproto || !davhost) goto done;
+    caldav_attachment_url(&baseurl, mbname_userid(mbname), davproto, davhost, "");
+
+    // Process ATTACH properties
+    if (has_oldattach) {
+        icalcomponent *myoldical = icalcomponent_clone(oldical);
+        icalcomponent *comp;
+        for (comp = icalcomponent_get_first_component(myoldical, ICAL_VEVENT_COMPONENT);
+             comp;
+             comp = icalcomponent_get_next_component(myoldical, ICAL_VEVENT_COMPONENT)) {
+            icalproperty *prop;
+            for (prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
+                 prop;
+                 prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
+                if (mode == caldav_attachments_to_binary)
+                    rewrite_attachments_to_binary(attachments, webdavdb, prop,
+                            &baseurl, bufs);
+                else
+                    rewrite_attachments_to_url(webdavdb, prop, &baseurl, bufs);
+            }
+        }
+        *myoldicalp = myoldical;
+    }
+    if (has_newattach) {
+        icalcomponent *mynewical = icalcomponent_clone(newical);
+        icalcomponent *comp;
+        for (comp = icalcomponent_get_first_component(mynewical, ICAL_VEVENT_COMPONENT);
+             comp;
+             comp = icalcomponent_get_next_component(mynewical, ICAL_VEVENT_COMPONENT)) {
+            icalproperty *prop;
+            for (prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
+                 prop;
+                 prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
+                if (mode == caldav_attachments_to_binary)
+                    rewrite_attachments_to_binary(attachments, webdavdb, prop,
+                            &baseurl, bufs);
+                else
+                    rewrite_attachments_to_url(webdavdb, prop, &baseurl, bufs);
+            }
+        }
+        *mynewicalp = mynewical;
+    }
+
+done:
+    mailbox_close(&attachments);
+    if (webdavdb) webdav_close(webdavdb);
+    for (i = 0; i < nbufs; i++) buf_free(&bufs[i]);
+    mbname_free(&mbname);
+    buf_free(&baseurl);
+}
 
 /* Create and deliver an organizer scheduling request */
 void sched_request(const char *userid, const strarray_t *schedule_addresses,
@@ -2017,6 +2260,8 @@ void sched_request(const char *userid, const strarray_t *schedule_addresses,
 {
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     int rights = 0;
+    icalcomponent *myoldical = NULL;
+    icalcomponent *mynewical = NULL;
 
     mbentry_t *mbentry = NULL;
     char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
@@ -2041,6 +2286,12 @@ void sched_request(const char *userid, const strarray_t *schedule_addresses,
         return;
     }
 
+    /* Rewrite CalDAV managed attachments */
+    caldav_rewrite_attachments(userid, caldav_attachments_to_binary,
+            oldical, newical, &myoldical, &mynewical);
+    if (myoldical) oldical = myoldical;
+    if (mynewical) newical = mynewical;
+
     /* ok, let's figure out who the attendees are */
     strarray_t attendees = STRARRAY_INITIALIZER;
     add_attendees(oldical, organizer, &attendees);
@@ -2056,6 +2307,8 @@ void sched_request(const char *userid, const strarray_t *schedule_addresses,
         schedule_one_attendee(userid, schedule_addresses, organizer, attendee, h_cutoff, oldical, newical);
     }
 
+    if (myoldical) icalcomponent_free(myoldical);
+    if (mynewical) icalcomponent_free(mynewical);
     strarray_fini(&attendees);
 }
 
@@ -2377,6 +2630,8 @@ void sched_reply(const char *userid, const strarray_t *schedule_addresses,
 {
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     int rights = 0;
+    icalcomponent *myoldical = NULL;
+    icalcomponent *mynewical = NULL;
 
     mbentry_t *mbentry = NULL;
     char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
@@ -2398,6 +2653,12 @@ void sched_reply(const char *userid, const strarray_t *schedule_addresses,
         update_organizer_status(newical, NULL, SCHEDSTAT_NOPRIVS);
         return;
     }
+
+    /* Rewrite CalDAV managed attachments */
+    caldav_rewrite_attachments(userid, caldav_attachments_to_binary,
+            oldical, newical, &myoldical, &mynewical);
+    if (myoldical) oldical = myoldical;
+    if (mynewical) newical = mynewical;
 
     /* otherwise we need to decline for each sub event and then we'll still
      * send the accepts if any */
@@ -2427,6 +2688,9 @@ void sched_reply(const char *userid, const strarray_t *schedule_addresses,
         if (reply.didparts) strarray_free(reply.didparts);
         if (reply.itip) icalcomponent_free(reply.itip);
     }
+
+    if (myoldical) icalcomponent_free(myoldical);
+    if (mynewical) icalcomponent_free(mynewical);
 }
 
 void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,

@@ -2695,6 +2695,7 @@ struct getcalendarevents_rock {
     struct jmapical_datetime overrides_after;
     int reduce_participants;
     const char *sched_userid;
+    struct jmapical_jmapcontext *jmapctx;
 };
 
 struct recurid_instanceof_rock {
@@ -3031,7 +3032,7 @@ struct jmapcontext_rock {
     const char *davproto;
     const char *davhost;
     struct webdav_db *webdavdb;
-    struct mailbox *davattachments;
+    struct mailbox *attachments;
 };
 
 static void jmapcontext_blobid_from_href(struct buf *blobid,
@@ -3123,6 +3124,33 @@ done:
     return r;
 }
 
+static int jmapcontext_open_attachments(struct jmapcontext_rock *rock)
+{
+    jmap_req_t *req = rock->req;
+
+    if (!rock->attachments) {
+        char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
+        int r = jmap_openmbox(req, mboxname, &rock->attachments, /*rw*/1);
+        if (r) {
+            xsyslog(LOG_ERR, "can't open attachments",
+                    "mboxname=<%s> err<%s>", mboxname, error_message(r));
+        }
+        free(mboxname);
+        if (r) return r;
+    }
+
+    // webdav.db could have been closed in a commit
+    rock->webdavdb = mailbox_open_webdav(rock->attachments);
+    if (!rock->webdavdb) {
+        xsyslog(LOG_ERR, "mailbox_open_webdav failed",
+                "attachments=<%s>", mailbox_name(rock->attachments));
+        jmap_closembox(req, &rock->attachments);
+        rock->attachments = NULL;
+        return IMAP_INTERNAL;
+    }
+
+    return 0;
+}
 
 static void jmapcontext_href_from_blobid(struct buf *href,
                                          struct buf *managedid,
@@ -3134,32 +3162,13 @@ static void jmapcontext_href_from_blobid(struct buf *href,
     buf_reset(href);
     buf_reset(managedid);
 
-    if (!rock->davattachments) {
-        // Lazily open DAV attachment when we need it.
-        char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
-        int r = jmap_openmbox(req, mboxname, &rock->davattachments, /*rw*/1);
-        if (r) {
-            syslog(LOG_ERR, "%s: can't open %s: %s",
-                    __func__, mboxname, error_message(r));
-        }
-        free(mboxname);
-        if (r) return;
-    }
-
-    if (!rock->webdavdb) {
-        // (Re)open WebDAV attachments DB.
-        rock->webdavdb = mailbox_open_webdav(rock->davattachments);
-        if (!rock->webdavdb) {
-            syslog(LOG_ERR, "%s: mailbox_open_webdav(%s) failed",
-                    __func__, mailbox_name(rock->davattachments));
-            return;
-        }
-    }
+    int r = jmapcontext_open_attachments(rock);
+    if (r) return;
 
     // Check if blob exists in WebDAV attachments
     const char *mid = *blobid == 'G' ? blobid + 1 : blobid;
     struct webdav_data *wdata;
-    int r = webdav_lookup_uid(rock->webdavdb, mid, &wdata);
+    r = webdav_lookup_uid(rock->webdavdb, mid, &wdata);
     if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "%s: webdav_lookup_uid(%s) failed: %s",
                 __func__, mid, cyrusdb_strerror(r));
@@ -3167,7 +3176,7 @@ static void jmapcontext_href_from_blobid(struct buf *href,
     }
     if (r == CYRUSDB_NOTFOUND) {
         // Copy blob from JMAP blobs to managed attachments
-        r = copyblob(req, blobid, rock->davattachments);
+        r = copyblob(req, blobid, rock->attachments);
         if (r) {
             syslog(LOG_ERR, "jmap: copyblob(%s): %s",
                     blobid, error_message(r));
@@ -3206,7 +3215,6 @@ HIDDEN void jmap_calendarcontext_init(struct jmapical_jmapcontext *ctx, jmap_req
                 " WebDAV managed attachments in imapd.conf?", __func__);
     }
 
-    /* Initialize context for email alerts */
     ctx->emailalert_defaultrecipient = _emailalert_defaultrecipient(req->userid);
 }
 
@@ -3214,10 +3222,14 @@ HIDDEN void jmap_calendarcontext_init(struct jmapical_jmapcontext *ctx, jmap_req
 HIDDEN void jmap_calendarcontext_fini(struct jmapical_jmapcontext *ctx)
 {
     struct jmapcontext_rock *rock = ctx->rock;
+    ctx->rock = NULL;
+
+    if (rock->attachments)
+        jmap_closembox(rock->req, &rock->attachments);
     buf_free(&rock->davbaseurl);
-    if (rock->davattachments) jmap_closembox(rock->req, &rock->davattachments);
-    free(rock);
+
     free(ctx->emailalert_defaultrecipient);
+    free(rock);
 }
 
 static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
@@ -3231,9 +3243,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     msgrecord_t *mr = NULL;
     jstimezones_t *jstzones = NULL;
-
-    struct jmapical_jmapcontext jmapctx;
-    jmap_calendarcontext_init(&jmapctx, req);
+    struct jmapical_jmapcontext *jmapctx = rock->jmapctx;
 
     if (!cdata->dav.alive)
         return 0;
@@ -3313,7 +3323,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     jstzones = jstimezones_new(ical);
 
     /* Convert to JMAP */
-    jsevent = jmapical_tojmap(ical, NULL, &jmapctx);
+    jsevent = jmapical_tojmap(ical, NULL, jmapctx);
     if (!jsevent) {
         syslog(LOG_ERR, "jmapical_tojson: can't convert %u:%s",
                 cdata->dav.imap_uid, mailbox_name(rock->mailbox));
@@ -3503,7 +3513,6 @@ done:
     jstimezones_free(&jstzones);
     strarray_fini(&schedule_addresses);
     if (ical) icalcomponent_free(ical);
-    jmap_calendarcontext_fini(&jmapctx);
     msgrecord_unref(&mr);
     return r;
 }
@@ -3807,6 +3816,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     struct caldav_db *db = NULL;
     json_t *err = NULL;
     int r = 0;
+    struct jmapical_jmapcontext jmapctx;
+    jmap_calendarcontext_init(&jmapctx, req);
 
     /* Build callback data */
     int checkacl = strcmp(req->accountid, req->userid);
@@ -3825,7 +3836,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            JMAPICAL_DATETIME_INITIALIZER,
                                            JMAPICAL_DATETIME_INITIALIZER,
                                            0, /* reduce_participants */
-                                           NULL /* sched_userid */
+                                           NULL, /* sched_userid */
+                                           &jmapctx
     };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
@@ -3926,6 +3938,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
+    jmap_calendarcontext_fini(&jmapctx);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
     free(sched_inboxname);
@@ -3949,18 +3962,25 @@ done:
 static int setcalendarevents_schedule(const char *sched_userid,
                                       const strarray_t *schedule_addresses,
                                       icalcomponent *oldical,
-                                      icalcomponent *ical,
+                                      icalcomponent *newical,
                                       int mode)
 {
+    int r = 0;
+
+    /* Make local copies so we can rewrite attachments */
+    if (oldical) oldical = icalcomponent_clone(oldical);
+    if (newical) newical = icalcomponent_clone(newical);
+
     /* Determine if any scheduling is required. */
-    icalcomponent *src = mode & JMAP_DESTROY ? oldical : ical;
     icalcomponent *comp =
-        icalcomponent_get_first_component(src, ICAL_VEVENT_COMPONENT);
+        icalcomponent_get_first_component(mode & JMAP_DESTROY ?
+                oldical : newical, ICAL_VEVENT_COMPONENT);
     icalproperty *prop =
         icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (!prop) return 0;
+    if (!prop) goto done;
+
     const char *organizer = icalproperty_get_organizer(prop);
-    if (!organizer) return 0;
+    if (!organizer) goto done;
     if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 
     /* Validate create/update. */
@@ -3981,17 +4001,18 @@ static int setcalendarevents_schedule(const char *sched_userid,
             if (!strncasecmp(oldorganizer, "mailto:", 7)) oldorganizer += 7;
             if (strcasecmp(oldorganizer, organizer)) {
                 /* XXX This should become a set error. */
-                return 0;
+                goto done;
             }
         }
     }
 
     if (organizer &&
             /* XXX Hack for Outlook */ icalcomponent_get_first_invitee(comp)) {
+
         /* Send scheduling message. */
         if (strarray_find_case(schedule_addresses, organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
-            sched_request(sched_userid, schedule_addresses, organizer, oldical, ical);
+            sched_request(sched_userid, schedule_addresses, organizer, oldical, newical);
         } else {
             /* Attendee scheduling object resource */
             int omit_reply = 0;
@@ -4000,19 +4021,25 @@ static int setcalendarevents_schedule(const char *sched_userid,
                      prop;
                      prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
                     const char *addr = icalproperty_get_attendee(prop);
-                    if (!addr || strncasecmp(addr, "mailto:", 7) || strcasecmp(strarray_nth(schedule_addresses, 0), addr+7))
+                    if (!addr || strncasecmp(addr, "mailto:", 7) ||
+                            strcasecmp(strarray_nth(schedule_addresses, 0), addr+7))
                         continue;
-                    icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
-                    omit_reply = !param || icalparameter_get_partstat(param) == ICAL_PARTSTAT_NEEDSACTION;
+                    icalparameter *param =
+                        icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+                    omit_reply =
+                        !param || icalparameter_get_partstat(param) == ICAL_PARTSTAT_NEEDSACTION;
                     break;
                 }
             }
             if (!omit_reply && strarray_size(schedule_addresses))
-                sched_reply(sched_userid, schedule_addresses, oldical, ical);
+                sched_reply(sched_userid, schedule_addresses, oldical, newical);
         }
     }
 
-    return 0;
+done:
+    if (oldical) icalcomponent_free(oldical);
+    if (newical) icalcomponent_free(newical);
+    return r;
 }
 
 static void remove_itip_properties(icalcomponent *ical)
@@ -4563,9 +4590,6 @@ static int setcalendarevents_create(jmap_req_t *req,
         if (icalendar_max_size <= 0) icalendar_max_size = INT_MAX;
     }
 
-    struct jmapical_jmapcontext jmapctx;
-    jmap_calendarcontext_init(&jmapctx, req);
- 
     /* Validate uid */
     struct caldav_data *mycdata = NULL;
     if ((uid = (char *) json_string_value(json_object_get(event, "uid")))) {
@@ -4689,7 +4713,10 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
 
     /* Convert Event to iCalendar */
+    struct jmapical_jmapcontext jmapctx;
+    jmap_calendarcontext_init(&jmapctx, req);
     ical = jmapical_toical(event, NULL, parser.invalid, &jmapctx);
+    jmap_calendarcontext_fini(&jmapctx);
     if (json_array_size(parser.invalid)) {
         r = 0;
         goto done;
@@ -4700,6 +4727,14 @@ static int setcalendarevents_create(jmap_req_t *req,
     else if (icalendar_max_size != INT_MAX &&
         strlen(icalcomponent_as_ical_string(ical)) > (size_t) icalendar_max_size) {
         r = IMAP_MESSAGE_TOO_LARGE;
+        goto done;
+    }
+
+    /* Manage attachments */
+    int ret = caldav_manage_attachments(req->accountid, ical, NULL);
+    if (ret && ret != HTTP_NOT_FOUND) {
+        syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
+        r = IMAP_INTERNAL;
         goto done;
     }
 
@@ -4791,7 +4826,6 @@ done:
         json_array_extend(invalid, parser.invalid);
     }
     jmap_parser_fini(&parser);
-    jmap_calendarcontext_fini(&jmapctx);
     free(resource);
     free(mboxname);
     free(uid);
@@ -7093,7 +7127,6 @@ static void _calendarevent_copy(jmap_req_t *req,
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     mbentry_t *mbentry = NULL;
     struct jmapical_jmapcontext jmapctx;
-    jmap_calendarcontext_init(&jmapctx, req);
     int r = 0;
 
     /* Read mandatory properties */
@@ -7152,6 +7185,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     }
 
     /* Patch JMAP event */
+    jmap_calendarcontext_init(&jmapctx, req);
     json_t *src_event = jmapical_tojmap(src_ical, NULL, &jmapctx);
     if (src_event) {
         dst_event = jmap_patchobject_apply(src_event, jevent, NULL);
@@ -7162,6 +7196,7 @@ static void _calendarevent_copy(jmap_req_t *req,
         r = IMAP_INTERNAL;
         goto done;
     }
+    jmap_calendarcontext_fini(&jmapctx);
 
     /* Create event */
     json_t *invalid = json_array();
@@ -7191,7 +7226,6 @@ done:
     strarray_fini(&schedule_addresses);
     if (src_ical) icalcomponent_free(src_ical);
     json_decref(dst_event);
-    jmap_calendarcontext_fini(&jmapctx);
     jmap_parser_fini(&myparser);
 }
 

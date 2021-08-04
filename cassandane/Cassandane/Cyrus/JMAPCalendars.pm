@@ -45,6 +45,7 @@ use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
 use Mail::JMAPTalk 0.13;
+use Data::ICal;
 use Data::Dumper;
 use Storable 'dclone';
 use Cwd qw(abs_path);
@@ -14468,6 +14469,334 @@ sub test_calendarevent_set_recurrenceid
         $res->[1][1]{list}[0]{recurrenceId});
     $self->assert_str_equals('Europe/London',
         $res->[1][1]{list}[0]{recurrenceIdTimeZone});
+}
+
+sub assert_rewrite_webdav_attachment_url_itip
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self, $eventHref) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Assert ATTACH in iTIP message is a BINARY value";
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+    my $payload = decode_json($imip->{MESSAGE});
+
+    my $ical = Data::ICal->new(data => $payload->{ical});
+    my %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
+    my $event = $entries{'VEVENT'};
+    $self->assert_not_null($event);
+
+    my $attach = $event->property('ATTACH');
+    $self->assert_num_equals(1, scalar @{$attach});
+    $self->assert_null($attach->[0]->parameters()->{'MANAGED-ID'});
+    $self->assert_str_equals('BINARY', $attach->[0]->parameters()->{VALUE});
+    $self->assert_str_equals('c29tZWJsb2I=', $attach->[0]->value()); # 'someblob' in base64
+
+    xlog "Assert ATTACH on server is a WebDAV attachment URI";
+    my $caldavResponse = $caldav->Request('GET', $eventHref);
+    $ical = Data::ICal->new(data => $caldavResponse->{content});
+    %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
+    $event = $entries{'VEVENT'};
+    $self->assert_not_null($event);
+
+    $attach = $event->property('ATTACH');
+    $self->assert_num_equals(1, scalar @{$attach});
+    $self->assert_not_null($attach->[0]->parameters()->{'MANAGED-ID'});
+    $self->assert_null($attach->[0]->parameters()->{VALUE});
+    my $webdavAttachURI =
+       $self->{instance}->{config}->get('webdav_attachment_scheme') . '://' .
+       $self->{instance}->{config}->get('webdav_attachment_host') .
+       '/dav/calendars/user/cassandane/Attachments/';
+    $self->assert($attach->[0]->value() =~ /^$webdavAttachURI.+/);
+}
+
+sub test_rewrite_webdav_attachment_url_itip_jmap
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Upload blob via JMAP";
+    my $res = $jmap->Upload('someblob', "application/octet-stream");
+    my $blobId = $res->{blobId};
+    $self->assert_not_null($blobId);
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "Create event with a Link.blobId";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2019-12-10T23:30:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    links => {
+                        link1 => {
+                            rel => 'enclosure',
+                            blobId => $blobId,
+                            contentType => 'image/jpg',
+                        },
+                    },
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        part1 => {
+                            '@type' => 'Participant',
+                            sendTo => {
+                                imip => 'mailto:part1@local',
+                            },
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                        },
+                    },
+                    start => '2021-01-01T01:00:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+    my $eventHref = $res->[0][1]{created}{1}{'x-href'};
+    $self->assert_not_null($eventHref);
+
+    $self->assert_rewrite_webdav_attachment_url_itip($eventHref);
+}
+
+sub test_rewrite_webdav_attachment_url_itip_caldav
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+ORGANIZER:cassandane@example.com
+ATTENDEE:attendee@local
+UID:123456789
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
+        'Content-Type' => 'text/calendar');
+    my $eventHref = '/dav/calendars/user/cassandane/Default/test.ics';
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "Add attachment via CalDAV";
+    my $url = $caldav->request_url($eventHref) . '?action=attachment-add';
+    my $res = $caldav->ua->post($url, {
+        headers => {
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment;filename=test',
+            'Prefer' => 'return=representation',
+            'Authorization' => $caldav->auth_header(),
+        },
+        content => 'someblob',
+    });
+    $self->assert_str_equals('201', $res->{status});
+
+    $self->assert_rewrite_webdav_attachment_url_itip($eventHref);
+}
+
+sub test_rewrite_webdav_attachment_binary_itip_caldav
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+ORGANIZER:cassandane@example.com
+ATTENDEE:attendee@local
+UID:123456789
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
+        'Content-Type' => 'text/calendar');
+    my $eventHref = '/dav/calendars/user/cassandane/Default/test.ics';
+
+    xlog "Add attachment via CalDAV";
+    my $url = $caldav->request_url($eventHref) . '?action=attachment-add';
+    my $res = $caldav->ua->post($url, {
+        headers => {
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment;filename=test',
+            'Prefer' => 'return=representation',
+            'Authorization' => $caldav->auth_header(),
+        },
+        content => 'someblob',
+    });
+    $self->assert_str_equals('201', $res->{status});
+
+    # Now we have a blob "someblob" (c29tZWJsb2I=) in managed attachments.
+
+    xlog "Create event via CalDAV";
+    $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+ORGANIZER:cassandane@example.com
+ATTENDEE;PARTSTAT=DECLINED:attendee@local
+UID:123456789
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+ATTACH;VALUE=BINARY:c29tZWJsb2I=
+SEQUENCE:1
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
+        'Schedule-Sender-Address' => 'attendee@local',
+        'Content-Type' => 'text/calendar');
+
+    my $caldavResponse = $caldav->Request('GET', $eventHref);
+    my $ical = Data::ICal->new(data => $caldavResponse->{content});
+    my %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
+    my $event = $entries{'VEVENT'};
+    $self->assert_not_null($event);
+
+    xlog "Assert BINARY ATTACH got rewritten to managed attachment URI";
+    my $attach = $event->property('ATTACH');
+    $self->assert_num_equals(1, scalar @{$attach});
+    $self->assert_not_null($attach->[0]->parameters()->{'MANAGED-ID'});
+    $self->assert_null($attach->[0]->parameters()->{VALUE});
+    my $webdavAttachURI =
+       $self->{instance}->{config}->get('webdav_attachment_scheme') . '://' .
+       $self->{instance}->{config}->get('webdav_attachment_host') .
+       '/dav/calendars/user/cassandane/Attachments/';
+    $self->assert($attach->[0]->value() =~ /^$webdavAttachURI.+/);
+}
+
+sub test_calendarevent_get_attachbinary
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('attachbinary');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_not_null($event);
+    my @links = values %{$event->{links}};
+    $self->assert_num_equals(1, scalar @links);
+    $self->assert_str_equals('data:text/plain;base64,aGVsbG8=', $links[0]{href});
+    $self->assert_str_equals('text/plain', $links[0]{contentType});
+}
+
+sub test_calendarevent_set_attachbinary
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my @testCases = ({
+        link => {
+            href => 'data:;base64,link1',
+        },
+        wantContentType => undef,
+    }, {
+        link => {
+            '@type' => 'Link',
+            href => 'data:application/vnd.type1;base64,link2',
+        },
+        wantContentType => 'application/vnd.type1',
+    });
+
+    for my $i (0 .. $#testCases) {
+        my $tc = $testCases[$i];
+        my $res = $jmap->CallMethods([
+            ['CalendarEvent/set', {
+                create => {
+                    $i => {
+                        calendarIds => {
+                            Default => JSON::true,
+                        },
+                        title => "event1",
+                        start => "2019-12-10T23:30:00",
+                        duration => "PT1H",
+                        timeZone => "Australia/Melbourne",
+                        links => {
+                            link => $tc->{link},
+                        },
+                    },
+                },
+            }, 'R1'],
+            ['CalendarEvent/get', {
+                ids => ['#' . $i],
+                properties => ['links', 'x-href'],
+            }, 'R2'],
+        ]);
+        my $eventId = $res->[0][1]{created}{$i}{id};
+        $self->assert_not_null($eventId);
+        my $xhref = $res->[0][1]{created}{$i}{'x-href'};
+        $self->assert_not_null($xhref);
+
+        my @links = values %{$res->[1][1]{list}[0]{links}};
+        $self->assert_str_equals($tc->{link}{href}, $links[0]->{href});
+        if ($tc->{wantContentType}) {
+            $self->assert_str_equals($tc->{wantContentType},
+                 $links[0]->{contentType});
+         }
+
+        my $caldavResponse = $caldav->Request('GET', $xhref);
+        my $ical = Data::ICal->new(data => $caldavResponse->{content});
+        my %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
+        my $vevent = $entries{'VEVENT'};
+        $self->assert_not_null($vevent);
+
+        my $attach = $vevent->property('ATTACH');
+        $self->assert_num_equals(1, scalar @{$attach});
+        $self->assert_str_equals('BINARY', $attach->[0]->parameters()->{VALUE});
+
+    }
 }
 
 1;
