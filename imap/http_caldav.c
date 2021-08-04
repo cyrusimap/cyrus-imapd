@@ -3659,6 +3659,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     struct caldav_db *db = (struct caldav_db *)destdb;
     icalcomponent *ical = (icalcomponent *)obj;
     icalcomponent *oldical = NULL;
+    icalcomponent *myical = NULL;
+    icalcomponent *myoldical = NULL;
     icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
     icaltimetype dtstart, dtend;
@@ -3859,6 +3861,18 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
+    // Rewrite managed attachments in iTIP message
+    if ((icalcomponent_get_method(ical) != ICAL_METHOD_NONE) ||
+            spool_getheader(txn->req_hdrs, "Schedule-Sender-Address")) {
+        caldav_rewrite_attachments(txn->req_tgt.userid,
+                caldav_attachments_to_url, oldical, ical, &myoldical, &myical);
+        if (myoldical) {
+            icalcomponent_free(oldical);
+            oldical = myoldical;
+        }
+        if (myical) ical = myical;
+    }
+
     if (namespace_calendar.allow & ALLOW_CAL_ATTACH) {
         ret = manage_attachments(txn, mailbox, ical,
                                  cdata, &oldical, &schedule_addresses);
@@ -3987,7 +4001,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
 
   done:
+    if (myoldical && myoldical != oldical) icalcomponent_free(myoldical);
     if (oldical) icalcomponent_free(oldical);
+    if (myical) icalcomponent_free(myical);
     strarray_fini(&schedule_addresses);
     free(sched_userid);
     buf_free(&buf);

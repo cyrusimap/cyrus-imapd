@@ -3085,6 +3085,13 @@ of the incoming network interface, or if no record is found, the
    If not specified, the scheme of the DAV HTTP request that uploaded
    the attachment will be used. */
 
+{ "webdav_attachment_max_binary_attach_size", 1024, INT, "3.6.0" }
+/* The maximum byte length (in kilobytes) of an ATTACH property value
+   when managed attachment URIs get rewritten to BINARY during iTIP processing.
+   Any attachment that exceeds this byte size keeps its managed attachment
+   URI as ATTACH value. A zero size limit causes attachments of any size
+   be rewritten as BINARY. */
+
 { "xbackup_enabled", 0, SWITCH, "3.0.0" }
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin
    users can use this command to provoke a replication of specified users
