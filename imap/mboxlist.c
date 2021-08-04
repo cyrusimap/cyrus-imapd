@@ -97,6 +97,9 @@
 #define DB_HIERSEP_CHAR     DB_HIERSEP_STR[0]
 #define DB_USER_PREFIX      "user" DB_HIERSEP_STR
 
+#define DB_VERSION_KEY      DB_HIERSEP_STR "VER" DB_HIERSEP_STR
+#define DB_VERSION_STR      "2"
+
 static mbname_t *mbname_from_dbname(const char *dbname);
 static char *mbname_dbname(const mbname_t *mbname);
 static char *mboxname_from_dbname(const char *dbname);
@@ -4710,16 +4713,27 @@ mboxlist_opensubs(const char *userid,
                   struct db **ret)
 {
     int r = 0;
-    int flags = create ? CYRUSDB_CREATE : 0;
     char *subsfname = user_hash_subs(userid);
 
-    int db_r = cyrusdb_open(SUBDB, subsfname, flags, ret);
-
+    int db_r = cyrusdb_open(SUBDB, subsfname, /*flags*/0, ret);
     if (db_r == CYRUSDB_OK) {
         r = mboxlist_upgrade_subs(userid, subsfname, ret);
     }
+    else if (create) {
+        db_r = cyrusdb_open(SUBDB, subsfname, CYRUSDB_CREATE, ret);
+        if (db_r == CYRUSDB_OK) {
+            // set the version key
+            const char *key = DB_VERSION_KEY;
+            size_t keylen = strlen(key);
+            const char *data = DB_VERSION_STR;
+            size_t datalen = strlen(data);
+            db_r = cyrusdb_store(*ret, key, keylen, data, datalen, NULL);
+        }
+        if (db_r != CYRUSDB_OK)
+            r = IMAP_IOERROR;
+    }
     else {
-        r = create ? IMAP_IOERROR : IMAP_NOTFOUND;
+        r = IMAP_NOTFOUND;
     }
 
     free(subsfname);
@@ -5421,8 +5435,11 @@ static int mboxlist_upgrade_subs_work(const char *userid, const char *subsfname,
     db_r = cyrusdb_open(SUBDB, newsubsfname, CYRUSDB_CREATE, &newsubs);
     if (!db_r) {
         /* add version record */
-        db_r = cyrusdb_store(newsubs,
-                             DB_HIERSEP_STR "VER" DB_HIERSEP_STR, 5, "2", 1, &newtid);
+        const char *key = DB_VERSION_KEY;
+        size_t keylen = strlen(key);
+        const char *data = DB_VERSION_STR;
+        size_t datalen = strlen(data);
+        db_r = cyrusdb_store(newsubs, key, keylen, data, datalen, &newtid);
     }
     if (db_r) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", newsubsfname,
@@ -5484,11 +5501,12 @@ static int mboxlist_upgrade_subs_work(const char *userid, const char *subsfname,
 static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, struct db **subs)
 {
     // if we have the DB key already in the DB, nothing to do!
-    const char *key = DB_HIERSEP_STR "VER" DB_HIERSEP_STR;
-    size_t keylen = 5;
+    const char *key = DB_VERSION_KEY;
+    size_t keylen = strlen(DB_VERSION_KEY);
     const char *data = NULL;
     size_t datalen = 0;
     int db_r = cyrusdb_fetch(*subs, key, keylen, &data, &datalen, NULL);
+    // XXX: check version?
     if (db_r == CYRUSDB_OK) return 0;
     int r = 0;
 
@@ -5499,6 +5517,7 @@ static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, stru
      * upgraded the DB.  Bonus. */
     db_r = cyrusdb_fetch(*subs, key, keylen, &data, &datalen, NULL);
     if (db_r != CYRUSDB_OK) {
+        syslog(LOG_NOTICE, "mboxlist_upgrade_subs(): %s", userid);
         r = mboxlist_upgrade_subs_work(userid, subsfname, subs);
     }
 
