@@ -1592,15 +1592,31 @@ done:
 static json_t*
 link_from_ical(icalproperty *prop, struct jmapical_jmapcontext *jmapctx)
 {
+    struct buf datauri = BUF_INITIALIZER;
+
+    icalparameter *param = NULL;
+    const char *fmttype = NULL;
+    param = icalproperty_get_first_parameter(prop, ICAL_FMTTYPE_PARAMETER);
+    if (param) fmttype = icalparameter_get_fmttype(param);
+
     /* href */
     const char *href = NULL;
     if (icalproperty_isa(prop) == ICAL_ATTACH_PROPERTY) {
         icalattach *attach = icalproperty_get_attach(prop);
-        /* Ignore ATTACH properties with value BINARY. */
-        if (!attach || !icalattach_get_is_url(attach)) {
-            return NULL;
+        if (!attach) return NULL;
+        if (icalattach_get_is_url(attach)) {
+            href = icalattach_get_url(attach);
         }
-        href = icalattach_get_url(attach);
+        else {
+            const char *data = (const char *)icalattach_get_data(attach);
+            if (data) {
+                buf_setcstr(&datauri, "data:");
+                if (fmttype) buf_appendcstr(&datauri, fmttype);
+                buf_appendcstr(&datauri, ";base64,");
+                buf_appendcstr(&datauri, data);
+                href = buf_cstring(&datauri);
+            }
+        }
     }
     else if (icalproperty_isa(prop) == ICAL_URL_PROPERTY) {
         href = icalproperty_get_value_as_string(prop);
@@ -1608,7 +1624,6 @@ link_from_ical(icalproperty *prop, struct jmapical_jmapcontext *jmapctx)
     if (!href || *href == '\0') return NULL;
 
     json_t *link = json_pack("{s:s: s:s}", "@type", "Link", "href", href);
-    icalparameter *param = NULL;
     const char *s;
 
     /* blobId */
@@ -1630,9 +1645,8 @@ link_from_ical(icalproperty *prop, struct jmapical_jmapcontext *jmapctx)
     }
 
     /* contentType */
-    param = icalproperty_get_first_parameter(prop, ICAL_FMTTYPE_PARAMETER);
-    if (param && ((s = icalparameter_get_fmttype(param)))) {
-        json_object_set_new(link, "contentType", json_string(s));
+    if (fmttype) {
+        json_object_set_new(link, "contentType", json_string(fmttype));
     }
 
     /* title - reuse the same x-param as Apple does for their locations  */
@@ -1667,7 +1681,7 @@ link_from_ical(icalproperty *prop, struct jmapical_jmapcontext *jmapctx)
         json_object_set_new(link, "display", json_string(s));
     }
 
-
+    buf_free(&datauri);
     return link;
 }
 
@@ -4020,18 +4034,40 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
         }
 
         /* Build iCalendar property */
+        prop = NULL;
+
         if (kind == ICAL_URL_PROPERTY) {
             prop = icalproperty_new(ICAL_URL_PROPERTY);
             icalproperty_set_value(prop, icalvalue_new_uri(href));
         }
         else {
-            icalattach *icalatt = icalattach_new_from_url(href);
-            prop = icalproperty_new_attach(icalatt);
-            icalattach_unref(icalatt);
-
-            if (buf_len(&blobmid)) {
-                icalproperty_add_parameter(prop,
-                        icalparameter_new_managedid(buf_cstring(&blobmid)));
+            if (!strncasecmp(href, "data:", 5)) {
+                const char *semicol = strchr(href, ';');
+                if (semicol && !strncasecmp(semicol, ";base64,", 8)) {
+                    const char *b64val = semicol + 8;
+                    if (*b64val) {
+                        icalattach *icalatt = icalattach_new_from_data(b64val, NULL, NULL);
+                        prop = icalproperty_new_attach(icalatt);
+                        icalattach_unref(icalatt);
+                        icalproperty_add_parameter(prop,
+                                icalparameter_new_encoding(ICAL_ENCODING_BASE64));
+                        if (!contenttype && semicol - href > 6) {
+                            buf_setmap(&buf, href + 5, semicol - (href + 5));
+                            icalproperty_add_parameter(prop,
+                                    icalparameter_new_fmttype(buf_cstring(&buf)));
+                            buf_reset(&buf);
+                        }
+                    }
+                }
+            }
+            if (!prop) {
+                icalattach *icalatt = icalattach_new_from_url(href);
+                prop = icalproperty_new_attach(icalatt);
+                icalattach_unref(icalatt);
+                if (buf_len(&blobmid)) {
+                    icalproperty_add_parameter(prop,
+                            icalparameter_new_managedid(buf_cstring(&blobmid)));
+                }
             }
         }
 
