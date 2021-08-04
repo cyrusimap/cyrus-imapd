@@ -3103,7 +3103,6 @@ static int getannotation_cb(const char *mboxname,
 int sync_get_annotation(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
-    assert (!*mboxname); // we can only get server annotations with this function
     return annotatemore_findall_pattern(mboxname, 0, "*", /*modseq*/0,
                                 &getannotation_cb, (void *) sstate->pout,
                                 /*flags*/0);
