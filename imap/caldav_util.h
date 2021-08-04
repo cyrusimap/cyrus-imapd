@@ -114,6 +114,20 @@ extern int caldav_manage_attachments(const char *userid,
                                      icalcomponent *ical,
                                      icalcomponent *oldical);
 
+enum caldav_rewrite_attachments_mode {
+    caldav_attachments_to_binary,
+    caldav_attachments_to_url
+};
+
+// implemented in http_caldav_sched.c
+HIDDEN void caldav_rewrite_attachments(const char *userid,
+                                       enum caldav_rewrite_attachments_mode mode,
+                                       icalcomponent *oldical,
+                                       icalcomponent *newical,
+                                       icalcomponent **myoldicalp,
+                                       icalcomponent **mynewicalp);
+
+
 #define CALDAV_DEFAULTALARMS_ANNOT_WITHTIME \
     DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-datetime"
 
