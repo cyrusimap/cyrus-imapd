@@ -1984,7 +1984,9 @@ static void annotation_get_fromdb(annotate_state_t *state,
 {
     state->found = 0;
 
-    annotatemore_findall_mailbox(state->mailbox, state->uid, entry->name, 0, &rw_cb, state, 0);
+    // if mailbox present, will be a mailbox fetch, otherwise will be a server fetch
+    // with the blank pattern
+    annotatemore_findall_full("", state->mailbox, state->uid, entry->name, 0, &rw_cb, state, 0);
 
     if (state->found != state->attribs &&
         (!strchr(entry->name, '%') && !strchr(entry->name, '*'))) {
