@@ -11,7 +11,7 @@ These are the core organizations who are providing dedicated resources to the Cy
 
 Fastmail_ is a leading e-mail hosting provider that runs on Cyrus software.
 
-*	Bron Gondwana
+* Bron Gondwana
 * Ellie Timoney
 * Ken Murchison
 * Robert Stepanek
@@ -20,13 +20,13 @@ Fastmail_ is a leading e-mail hosting provider that runs on Cyrus software.
 
 `Kolab Systems AG`_ is the developer of the Kolab Groupware system, of which Cyrus IMAP is a core component.
 
-*	Jeroen van Meeuwen
+* Jeroen van Meeuwen
 
 **Isode**
 
 `Isode Ltd`_ is a renowned developer of open-standard e-mail, instant messaging, and directory software. Its internet servers use Cyrus SASL for authentication.
 
-*	Alexey Melnikov
+* Alexey Melnikov
 
 
 Individual contributors and past contributors
@@ -37,10 +37,10 @@ There are also individuals who have dedicated their time to Project Cyrus in var
 * Raymond Poitras
 * Jean-Francois Smigielski
 * Nic Bernstein
-*	Wes Craig
-*	Benn Oshrin
-*	Matt Selsky
-*	Jeffrey T. Eaton
+* Wes Craig
+* Benn Oshrin
+* Matt Selsky
+* Jeffrey T. Eaton
 * Yoni Afek
 * Leena Heino
 * Dan White
@@ -68,7 +68,7 @@ There are also individuals who have dedicated their time to Project Cyrus in var
 * Chris Newman
 * Laurie D. Mann
 * Simon Matter
-*	Greg Banks
+* Greg Banks
 * Conrad Kleinespel
 * Chris Davies
 * Nicola Nye
