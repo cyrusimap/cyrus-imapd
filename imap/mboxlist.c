@@ -114,7 +114,7 @@ static int have_racl = 0;
 static int mboxlist_opensubs(const char *userid, int create, struct db **ret);
 static void mboxlist_closesubs(struct db *sub);
 
-static int mboxlist_upgrade_subs(const char *subsfname, struct db **ret);
+static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, struct db **ret);
 
 static int mboxlist_rmquota(const mbentry_t *mbentry, void *rock);
 static int mboxlist_changequota(const mbentry_t *mbentry, void *rock);
@@ -4709,19 +4709,23 @@ mboxlist_opensubs(const char *userid,
                   int create,
                   struct db **ret)
 {
-    int r = 0, flags;
-    char *subsfname;
+    int r = 0;
+    int flags = create ? CYRUSDB_CREATE : 0;
+    char *subsfname = user_hash_subs(userid);
 
-    /* Build subscription list filename */
-    subsfname = user_hash_subs(userid);
+    int db_r = cyrusdb_open(SUBDB, subsfname, flags, ret);
 
-    flags = create ? CYRUSDB_CREATE : 0;
-
-    r = cyrusdb_open(SUBDB, subsfname, flags, ret);
-    if (r == CYRUSDB_OK) {
-        r = mboxlist_upgrade_subs(userid, ret);
+    if (db_r == CYRUSDB_OK) {
+        // check if we have the version key in the DB - if not we need to upgrade
+        const char *key = DB_HIERSEP_STR "VER" DB_HIERSEP_STR;
+        size_t keylen = 5;
+        const char *data = NULL;
+        size_t datalen = 0;
+        db_r = cyrusdb_fetch(*ret, key, keylen, &data, &datalen, NULL);
+        if (db_r != CYRUSDB_OK)
+            r = mboxlist_upgrade_subs(userid, subsfname, ret);
     }
-    if (r != CYRUSDB_OK) {
+    else {
         r = create ? IMAP_IOERROR : IMAP_NOTFOUND;
     }
     free(subsfname);
@@ -5385,20 +5389,6 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
 }
 
 
-static int _check_subs_cb(void *rock, const char *key, size_t keylen,
-                          const char *data __attribute__((unused)),
-                          size_t datalen __attribute__((unused)))
-{
-    int *do_upgrade = (int *) rock;
-
-    /* check for version record */
-    if (keylen == 5 && !strncmp(key, DB_HIERSEP_STR "VER" DB_HIERSEP_STR, 5)) {
-        *do_upgrade = 0;
-    }
-
-    return CYRUSDB_DONE;
-}
-
 static int _upgrade_subs_cb(void *rock, const char *key, size_t keylen,
                             const char *data __attribute__((unused)),
                             size_t datalen __attribute__((unused)))
@@ -5419,23 +5409,16 @@ static int _upgrade_subs_cb(void *rock, const char *key, size_t keylen,
     return (r == CYRUSDB_OK ? 0 : IMAP_IOERROR);
 }
 
-static int mboxlist_upgrade_subs(const char *userid, struct db **subs)
+static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, struct db **subs)
 {
-    int r, r2 = 0, do_upgrade = 1;
-    char *subsfname = NULL, *newsubsfname = NULL;
+    int r, r2 = 0;
+    char *newsubsfname = NULL;
     struct buf buf = BUF_INITIALIZER;
     struct db *newsubs = NULL;
     struct txn *tid = NULL;
     struct upgrade_rock urock = { userid, &buf, NULL, &tid, NULL, NULL };
 
-    /* check if we need to upgrade */
-    r = cyrusdb_foreach(*subs, "", 0, NULL, _check_subs_cb, &do_upgrade, NULL);
-
-    if (r != CYRUSDB_OK && r != CYRUSDB_DONE) return r;
-    if (!do_upgrade) return 0;
-
-    /* create existing db filename */
-    subsfname = user_hash_subs(userid);
+    struct mboxlock *namespacelock = user_namespacelock(userid);
 
     /* create new db file name */
     buf_setcstr(&buf, subsfname);
@@ -5499,8 +5482,9 @@ static int mboxlist_upgrade_subs(const char *userid, struct db **subs)
 
     unlink(newsubsfname);
     free(newsubsfname);
-    free(subsfname);
     buf_free(&buf);
+
+    mboxname_release(&namespacelock);
 
     return r;
 }
