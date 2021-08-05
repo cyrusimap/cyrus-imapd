@@ -1,4 +1,4 @@
-/* jmap_mail.h -- Routines for handling JMAP mail messages
+/* jmap_calendar.h -- Routines for handling JMAP calendars
  *
  * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,30 +41,18 @@
  *
  */
 
-#ifndef JMAP_MAIL_H
-#define JMAP_MAIL_H
+#ifndef JMAP_CALENDAR_H
+#define JMAP_CALENDAR_H
 
 #include <config.h>
 
-#include "hash.h"
-#include "http_jmap.h"
-#include "jmap_util.h"
+#include "jmap_api.h"
 #include "json_support.h"
-#include "msgrecord.h"
+#include "ptrarray.h"
+#include "util.h"
 
-extern int jmap_email_find(jmap_req_t *req, const char *email_id,
-                           const char *from_accountid,
-                           char **mboxnameptr, uint32_t *uidptr);
-extern int jmap_email_get_with_props(jmap_req_t *req, hash_table *props,
-                                     msgrecord_t *mr, json_t **msgp);
+extern json_t *jmap_calendar_events_from_mime(jmap_req_t *req,
+                                              const ptrarray_t *parts,
+                                              const struct buf *mime);
 
-extern void jmap_emailsubmission_init(jmap_settings_t *settings);
-extern void jmap_emailsubmission_capabilities(json_t *jcapabilities);
-
-extern void jmap_mailbox_init(jmap_settings_t *settings);
-extern void jmap_mailbox_capabilities(json_t *jcapabilities);
-
-extern int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
-                                  char **mboxnameptr, char **uniqueid);
-
-#endif /* JMAP_MAIL_H */
+#endif /* JMAP_CALENDAR_H */

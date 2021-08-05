@@ -3033,6 +3033,7 @@ struct jmapcontext_rock {
     const char *davhost;
     struct webdav_db *webdavdb;
     struct mailbox *attachments;
+    int lock_attachments;
 };
 
 static void jmapcontext_blobid_from_href(struct buf *blobid,
@@ -3130,7 +3131,8 @@ static int jmapcontext_open_attachments(struct jmapcontext_rock *rock)
 
     if (!rock->attachments) {
         char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
-        int r = jmap_openmbox(req, mboxname, &rock->attachments, /*rw*/1);
+        int r = jmap_openmbox(req, mboxname, &rock->attachments,
+                rock->lock_attachments);
         if (r) {
             xsyslog(LOG_ERR, "can't open attachments",
                     "mboxname=<%s> err<%s>", mboxname, error_message(r));
@@ -3138,15 +3140,15 @@ static int jmapcontext_open_attachments(struct jmapcontext_rock *rock)
         free(mboxname);
         if (r) return r;
     }
-
-    // webdav.db could have been closed in a commit
-    rock->webdavdb = mailbox_open_webdav(rock->attachments);
     if (!rock->webdavdb) {
-        xsyslog(LOG_ERR, "mailbox_open_webdav failed",
-                "attachments=<%s>", mailbox_name(rock->attachments));
-        jmap_closembox(req, &rock->attachments);
-        rock->attachments = NULL;
-        return IMAP_INTERNAL;
+        rock->webdavdb = webdav_open_mailbox(rock->attachments);
+        if (!rock->webdavdb) {
+            xsyslog(LOG_ERR, "mailbox_open_webdav failed",
+                    "attachments=<%s>", mailbox_name(rock->attachments));
+            jmap_closembox(req, &rock->attachments);
+            rock->attachments = NULL;
+            return IMAP_INTERNAL;
+        }
     }
 
     return 0;
@@ -3190,12 +3192,15 @@ static void jmapcontext_href_from_blobid(struct buf *href,
     buf_setcstr(managedid, mid);
 }
 
-HIDDEN void jmap_calendarcontext_init(struct jmapical_jmapcontext *ctx, jmap_req_t *req)
+static void jmapcontext_init(struct jmapical_jmapcontext *ctx,
+                             jmap_req_t *req,
+                             int lock_attachments)
 {
     memset(ctx, 0, sizeof(struct jmapical_jmapcontext));
 
     struct jmapcontext_rock *rock = xzmalloc(sizeof(struct jmapcontext_rock));
     rock->req = req;
+    rock->lock_attachments = lock_attachments;
     ctx->rock = rock;
 
     /* Initialize context for Link.blobId */
@@ -3219,13 +3224,15 @@ HIDDEN void jmap_calendarcontext_init(struct jmapical_jmapcontext *ctx, jmap_req
 }
 
 
-HIDDEN void jmap_calendarcontext_fini(struct jmapical_jmapcontext *ctx)
+HIDDEN void jmapcontext_fini(struct jmapical_jmapcontext *ctx)
 {
     struct jmapcontext_rock *rock = ctx->rock;
     ctx->rock = NULL;
 
     if (rock->attachments)
         jmap_closembox(rock->req, &rock->attachments);
+    if (rock->webdavdb)
+        webdav_close(rock->webdavdb);
     buf_free(&rock->davbaseurl);
 
     free(ctx->emailalert_defaultrecipient);
@@ -3817,7 +3824,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     json_t *err = NULL;
     int r = 0;
     struct jmapical_jmapcontext jmapctx;
-    jmap_calendarcontext_init(&jmapctx, req);
+    jmapcontext_init(&jmapctx, req, 0);
 
     /* Build callback data */
     int checkacl = strcmp(req->accountid, req->userid);
@@ -3938,7 +3945,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
-    jmap_calendarcontext_fini(&jmapctx);
+    jmapcontext_fini(&jmapctx);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
     free(sched_inboxname);
@@ -4714,9 +4721,9 @@ static int setcalendarevents_create(jmap_req_t *req,
 
     /* Convert Event to iCalendar */
     struct jmapical_jmapcontext jmapctx;
-    jmap_calendarcontext_init(&jmapctx, req);
+    jmapcontext_init(&jmapctx, req, 1);
     ical = jmapical_toical(event, NULL, parser.invalid, &jmapctx);
-    jmap_calendarcontext_fini(&jmapctx);
+    jmapcontext_fini(&jmapctx);
     if (json_array_size(parser.invalid)) {
         r = 0;
         goto done;
@@ -5473,7 +5480,7 @@ static int setcalendarevents_update(jmap_req_t *req,
 
     /* Apply patch */
     struct jmapical_jmapcontext jmapctx;
-    jmap_calendarcontext_init(&jmapctx, req);
+    jmapcontext_init(&jmapctx, req, 1);
     old_event = jmapical_tojmap(oldical, NULL, &jmapctx);
     if (!old_event) {
         r = IMAP_INTERNAL;
@@ -5490,7 +5497,7 @@ static int setcalendarevents_update(jmap_req_t *req,
             invalid, &schedule_addresses,
             may_updateprivate_only,
             &ical, floatingtz, update, err);
-    jmap_calendarcontext_fini(&jmapctx);
+    jmapcontext_fini(&jmapctx);
     if (floatingtz_is_malloced)
         icaltimezone_free(floatingtz, 1);
 
@@ -5744,7 +5751,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
 
     /* Create notification */
     struct jmapical_jmapcontext jmapctx;
-    jmap_calendarcontext_init(&jmapctx, req);
+    jmapcontext_init(&jmapctx, req, 1);
     json_t *old_event = jmapical_tojmap(oldical, NULL, &jmapctx);
     json_object_del(old_event, "updated");
     remove_peruserprops(old_event);
@@ -5756,7 +5763,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                 "uid=%s error=%s", eid->uid, error_message(r2));
     }
     json_decref(old_event);
-    jmap_calendarcontext_fini(&jmapctx);
+    jmapcontext_fini(&jmapctx);
 
     /* Create mboxevent */
     mboxevent_extract_record(mboxevent, mbox, &record);
@@ -7185,7 +7192,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     }
 
     /* Patch JMAP event */
-    jmap_calendarcontext_init(&jmapctx, req);
+    jmapcontext_init(&jmapctx, req, 1);
     json_t *src_event = jmapical_tojmap(src_ical, NULL, &jmapctx);
     if (src_event) {
         dst_event = jmap_patchobject_apply(src_event, jevent, NULL);
@@ -7196,7 +7203,7 @@ static void _calendarevent_copy(jmap_req_t *req,
         r = IMAP_INTERNAL;
         goto done;
     }
-    jmap_calendarcontext_fini(&jmapctx);
+    jmapcontext_fini(&jmapctx);
 
     /* Create event */
     json_t *invalid = json_array();
@@ -8738,7 +8745,7 @@ static void principal_getavailability(jmap_req_t *req,
     int checkacl = strcmp(req->userid, principalid);
     struct dynarray *busyperiods = dynarray_new(sizeof(struct busyperiod));
     struct jmapical_jmapcontext jmapctx;
-    jmap_calendarcontext_init(&jmapctx, req);
+    jmapcontext_init(&jmapctx, req, 0);
 
     /* Lookup busytime across calendars */
     icaltimetype icalstart = jmapical_datetime_to_icaltime(dtstart, utc);
@@ -8862,7 +8869,7 @@ done:
         json_decref(bp->jevent);
     }
     dynarray_free(&busyperiods);
-    jmap_calendarcontext_fini(&jmapctx);
+    jmapcontext_fini(&jmapctx);
 }
 
 static int jmap_principal_getavailability(struct jmap_req *req)
@@ -10869,4 +10876,82 @@ static int jmap_participantidentity_changes(struct jmap_req *req)
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     return 0;
+}
+
+HIDDEN json_t *jmap_calendar_events_from_mime(jmap_req_t *req,
+                                              ptrarray_t *bodyparts,
+                                              struct buf *mime)
+{
+    json_t *jsevents_by_partid = json_object();
+    struct jmapical_jmapcontext jmapctx;
+    jmapcontext_init(&jmapctx, req, 0);
+    struct buf buf = BUF_INITIALIZER;
+    struct buf rewritebufs[CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS];
+    memset(rewritebufs, 0, sizeof(struct buf) * CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS);
+
+    int i;
+    for (i = 0; i < ptrarray_size(bodyparts); i++) {
+        struct body *part = ptrarray_nth(bodyparts, i);
+
+        /* Parse iCalendar data */
+        icalcomponent *ical = NULL;
+        char *decbuf = NULL;
+        size_t declen = 0;
+        const char *content = buf_base(mime) + part->content_offset;
+        const char *rawical = charset_decode_mimebody(content, part->content_size,
+                part->charset_enc, &decbuf, &declen);
+        if (!rawical) continue;
+        buf_setmap(&buf, rawical, declen);
+        ical = ical_string_as_icalcomponent(&buf);
+        free(decbuf);
+        if (!ical) continue;
+
+        if (icalcomponent_get_method(ical) != ICAL_METHOD_NONE) {
+            /* In-place rewrite BINARY ATTACH to managed attachment */
+            icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+            if (!comp) continue;
+            icalcomponent_kind kind = icalcomponent_isa(comp);
+            for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+                icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
+                for ( ; prop; prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
+
+                    icalvalue *icalval = icalproperty_get_value(prop);
+                    if (!icalval || icalvalue_isa(icalval) != ICAL_ATTACH_VALUE)
+                        continue;
+
+                    icalattach *attach = icalproperty_get_attach(prop);
+                    if (!attach || icalattach_get_is_url(attach))
+                        continue;
+
+                    struct jmapcontext_rock *rock = jmapctx.rock;
+                    if (!jmapcontext_open_attachments(rock)) {
+                        caldav_rewrite_attachprop_to_url(rock->webdavdb,
+                                prop, &rock->davbaseurl, rewritebufs);
+                        int j;
+                        for (j = 0; j < CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS; j++)
+                            buf_reset(&rewritebufs[j]);
+                    }
+                }
+            }
+        }
+
+        /* Convert to Event */
+        json_t *jsevents = jmapical_tojmap_all(ical, NULL, &jmapctx);
+        if (json_array_size(jsevents)) {
+            json_object_set_new(jsevents_by_partid, part->part_id, jsevents);
+        }
+        icalcomponent_free(ical);
+    }
+
+    jmapcontext_fini(&jmapctx);
+    if (!json_object_size(jsevents_by_partid)) {
+        json_decref(jsevents_by_partid);
+        jsevents_by_partid = json_null();
+    }
+
+    int j;
+    for (j = 0; j < CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS; j++)
+        buf_free(&rewritebufs[j]);
+    buf_free(&buf);
+    return jsevents_by_partid;
 }
