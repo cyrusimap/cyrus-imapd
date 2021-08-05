@@ -62,12 +62,17 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_realm => 'Cassandane',
+    $config->set(caldav_historical_age => -1,
+                 caldav_realm => 'Cassandane',
                  conversations => 'yes',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
-                 jmapsubmission_deleteonsend => 'no',
+                 defaultdomain => 'example.com',
+                 httpallowcompress => 'no',
                  httpmodules => 'carddav caldav jmap',
-                 httpallowcompress => 'no');
+                 icalendar_max_size => 100000,
+                 jmap_nonstandard_extensions => 'yes',
+                 jmapsubmission_deleteonsend => 'no',
+                 sync_log => 'yes');
 
     # setup sieve
     my ($maj, $min) = Cassandane::Instance->get_version();
@@ -22901,6 +22906,113 @@ sub test_email_query_convflags_seen_in_trash
         $res->[2][1]{performance}{details}{isGuidSearch});
     $self->assert_equals(JSON::true,
         $res->[3][1]{performance}{details}{isGuidSearch});
+}
+
+sub test_email_get_calendarevents_links_blobid
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+ORGANIZER:cassandane@example.com
+ATTENDEE:attendee@local
+UID:123456789
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
+        'Content-Type' => 'text/calendar');
+    my $eventHref = '/dav/calendars/user/cassandane/Default/test.ics';
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "Add attachment via CalDAV";
+    my $url = $caldav->request_url($eventHref) . '?action=attachment-add';
+    my $caldavResponse = $caldav->ua->post($url, {
+        headers => {
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment;filename=test',
+            'Prefer' => 'return=representation',
+            'Authorization' => $caldav->auth_header(),
+        },
+        content => 'someblob',
+    });
+    $self->assert_str_equals('201', $caldavResponse->{status});
+
+    xlog "Get updated VEVENT via CalDAV";
+    $caldavResponse = $caldav->Request('GET', $eventHref);
+    my $veventWithManagedAttachUrl = $caldavResponse->{content};
+    $self->assert_not_null($veventWithManagedAttachUrl);
+
+    xlog "Get updated VEVENT via iTIP";
+    my $notif = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$notif;
+    my $payload = decode_json($imip->{MESSAGE});
+    my $veventWithManagedAttachBinary = $payload->{ical};
+    $self->assert_not_null($veventWithManagedAttachBinary);
+
+    xlog "Embed VEVENT in email";
+    $self->make_message('test',
+        mime_type => 'multipart/related',
+        mime_boundary => 'boundary',
+        body => ""
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "test"
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/calendar;charset=utf-8\r\n"
+          . "\r\n"
+          . $veventWithManagedAttachUrl
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/calendar;charset=utf-8\r\n"
+          . "\r\n"
+          . $veventWithManagedAttachBinary
+          . "\r\n--boundary--\r\n"
+    ) || die;
+
+    xlog "Fetch email via JMAP";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['calendarEvents'],
+        }, 'R2' ],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    xlog "Assert both events have the same blobId";
+    my @linksFromUrl = values %{$res->[1][1]{list}[0]{calendarEvents}{2}[0]{links}};
+    $self->assert_num_equals(1, scalar @linksFromUrl);
+    my @linksFromBinary = values %{$res->[1][1]{list}[0]{calendarEvents}{3}[0]{links}};
+    $self->assert_num_equals(1, scalar @linksFromBinary);
+    $self->assert_str_equals($linksFromUrl[0]->{blobId}, $linksFromBinary[0]->{blobId});
 }
 
 1;
