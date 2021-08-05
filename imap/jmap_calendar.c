@@ -2037,28 +2037,11 @@ gotevent:
     unsigned want_debugBlobId = jmap_wantprop(rock->get->props, "debugBlobId");
     if (want_blobId || want_debugBlobId) {
         struct buf blobid = BUF_INITIALIZER;
-        const char *uniqueid = NULL;
-
-        /* Get uniqueid of calendar mailbox */
-        if (!rock->mailbox || strcmp(mailbox_uniqueid(rock->mailbox), cdata->dav.mailbox)) {
-            if (!rock->mbentry || strcmp(rock->mbentry->uniqueid, cdata->dav.mailbox)) {
-                mboxlist_entry_free(&rock->mbentry);
-                rock->mbentry = jmap_mbentry_from_dav(rock->req, &cdata->dav);
-            }
-            if (rock->mbentry &&
-                jmap_hasrights_mbentry(rock->req, rock->mbentry, JACL_READITEMS)) {
-                uniqueid = rock->mbentry->uniqueid;
-            }
-        }
-        else {
-            uniqueid = mailbox_uniqueid(rock->mailbox);
-        }
 
         if (want_blobId) {
             json_t *jblobid = json_null();
-            if (uniqueid &&
-                jmap_encode_rawdata_blobid('I', uniqueid, cdata->dav.imap_uid,
-                                           req->userid, NULL, NULL, &blobid)) {
+            if (jmap_encode_rawdata_blobid('I', mbentry->uniqueid,
+                        cdata->dav.imap_uid, req->userid, NULL, NULL, &blobid)) {
                 jblobid = json_string(buf_cstring(&blobid));
             }
             json_object_set_new(jsevent, "blobId", jblobid);
@@ -2066,9 +2049,8 @@ gotevent:
         if (want_debugBlobId) {
             json_t *jblobid = json_null();
             if (httpd_userisadmin) {
-                if (uniqueid &&
-                    jmap_encode_rawdata_blobid('I', uniqueid, cdata->dav.imap_uid,
-                                               NULL, NULL, NULL, &blobid)) {
+                if (jmap_encode_rawdata_blobid('I', mbentry->uniqueid,
+                            cdata->dav.imap_uid, NULL, NULL, NULL, &blobid)) {
                     jblobid = json_string(buf_cstring(&blobid));
                 }
             }
