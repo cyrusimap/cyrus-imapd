@@ -120,13 +120,18 @@ enum caldav_rewrite_attachments_mode {
 };
 
 // implemented in http_caldav_sched.c
-HIDDEN void caldav_rewrite_attachments(const char *userid,
+extern void caldav_rewrite_attachments(const char *userid,
                                        enum caldav_rewrite_attachments_mode mode,
                                        icalcomponent *oldical,
                                        icalcomponent *newical,
                                        icalcomponent **myoldicalp,
                                        icalcomponent **mynewicalp);
 
+#define CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS 2
+extern void caldav_rewrite_attachprop_to_url(struct webdav_db *webdavdb,
+                                             icalproperty *prop,
+                                             struct buf *baseurl,
+                                             struct buf *bufs);
 
 #define CALDAV_DEFAULTALARMS_ANNOT_WITHTIME \
     DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-datetime"
