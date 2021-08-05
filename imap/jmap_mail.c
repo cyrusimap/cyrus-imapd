@@ -69,7 +69,7 @@
 #include "http_dav.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
-#include "jmap_ical.h"
+#include "jmap_calendar.h"
 #include "jmap_mail.h"
 #include "jmap_mail_query.h"
 #include "json_support.h"
@@ -7288,55 +7288,36 @@ static int _email_get_bodies(jmap_req_t *req,
 
     /* calendarEvents -- non-standard */
     if (jmap_wantprop(props, "calendarEvents")) {
-        json_t *calendar_events = json_object();
-        struct jmapical_jmapcontext jmapctx;
-        jmap_calendarcontext_init(&jmapctx, req);
+        ptrarray_t icsbodies = PTRARRAY_INITIALIZER;
+
         int i;
         for (i = 0; i < bodies.attslist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.attslist, i);
             /* Process text/calendar attachments and files ending with .ics */
             if (strcmp(part->type, "TEXT") || strcmp(part->subtype, "CALENDAR")) {
-                int has_ics_attachment = 0;
                 struct param *param = part->disposition_params;
                 while (param) {
                     if (!strcasecmp(param->attribute, "FILENAME")) {
                         size_t len = strlen(param->value);
                         if (len > 4 && !strcasecmp(param->value + len-4, ".ICS")) {
-                            has_ics_attachment = 1;
+                            ptrarray_append(&icsbodies, part);
                         }
                     }
                     param = param->next;
                 }
-                if (!has_ics_attachment)
-                    continue;
             }
-            /* Parse decoded data to iCalendar object */
+            else ptrarray_append(&icsbodies, part);
+        }
+
+        json_t *events = json_null();
+        if (ptrarray_size(&icsbodies)) {
             r = _cyrusmsg_need_mime(msg);
             if (r) goto done;
-            char *decbuf = NULL;
-            size_t declen = 0;
-            const char *rawical = charset_decode_mimebody(msg->mime->s + part->content_offset,
-                    part->content_size, part->charset_enc, &decbuf, &declen);
-            if (!rawical) continue;
-            struct buf buf = BUF_INITIALIZER;
-            buf_setmap(&buf, rawical, declen);
-            icalcomponent *ical = ical_string_as_icalcomponent(&buf);
-            buf_free(&buf);
-            free(decbuf);
-            if (!ical) continue;
-            /* Parse iCalendar object to JSCalendar */
-            json_t *jsevents = jmapical_tojmap_all(ical, NULL, &jmapctx);
-            if (json_array_size(jsevents)) {
-                json_object_set_new(calendar_events, part->part_id, jsevents);
-            }
-            icalcomponent_free(ical);
+            events = jmap_calendar_events_from_mime(req, &icsbodies, msg->mime);
         }
-        jmap_calendarcontext_fini(&jmapctx);
-        if (!json_object_size(calendar_events)) {
-            json_decref(calendar_events);
-            calendar_events = json_null();
-        }
-        json_object_set_new(email, "calendarEvents", calendar_events);
+
+        json_object_set_new(email, "calendarEvents", events);
+        ptrarray_fini(&icsbodies);
     }
 
     /* previousCalendarEvent -- non-standard */
