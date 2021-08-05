@@ -12,6 +12,14 @@ utilities for people trying to approach the code in a sane way.  It's
 not well organized right now but hopefully that will improve with time
 ;)
 
+..  warning::
+
+    This document is woefully out of date.  While some parts of it are still
+    accurate, it has not been reviewed in quite a while.  If you're looking at
+    the code and it doesn't seem to match this, don't assume the code is wrong.
+    Talk to the developers!  We'll revise this document, but don't hold your
+    breath right now.  (This comment written August 5, 2021.)
+
 Memory Allocation
 -----------------
 
