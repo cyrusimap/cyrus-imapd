@@ -2028,11 +2028,11 @@ static int has_attach(icalcomponent *ical)
     return 0;
 }
 
-static void rewrite_attachments_to_binary(struct mailbox *attachments,
-                                          struct webdav_db *webdavdb,
-                                          icalproperty *prop,
-                                          struct buf *baseurl,
-                                          struct buf *bufs)
+static void caldav_rewrite_attachprop_to_binary(struct mailbox *attachments,
+                                                struct webdav_db *webdavdb,
+                                                icalproperty *prop,
+                                                struct buf *baseurl,
+                                                struct buf *bufs)
 {
     struct buf *msgbuf = &bufs[0];
     buf_reset(msgbuf);
@@ -2111,10 +2111,10 @@ done:
     free(body);
 }
 
-static void rewrite_attachments_to_url(struct webdav_db *webdavdb,
-                                       icalproperty *prop,
-                                       struct buf *baseurl,
-                                       struct buf *bufs)
+HIDDEN void caldav_rewrite_attachprop_to_url(struct webdav_db *webdavdb,
+                                             icalproperty *prop,
+                                             struct buf *baseurl,
+                                             struct buf *bufs)
 {
     // Load base64 value
     icalvalue *icalval = icalproperty_get_value(prop);
@@ -2207,7 +2207,7 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
 
     // Process ATTACH properties
     if (has_oldattach) {
-        icalcomponent *myoldical = icalcomponent_clone(oldical);
+        icalcomponent *myoldical = myoldicalp ? icalcomponent_clone(oldical) : oldical;
         icalcomponent *comp;
         for (comp = icalcomponent_get_first_component(myoldical, ICAL_VEVENT_COMPONENT);
              comp;
@@ -2217,16 +2217,16 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
                  prop;
                  prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
                 if (mode == caldav_attachments_to_binary)
-                    rewrite_attachments_to_binary(attachments, webdavdb, prop,
+                    caldav_rewrite_attachprop_to_binary(attachments, webdavdb, prop,
                             &baseurl, bufs);
                 else
-                    rewrite_attachments_to_url(webdavdb, prop, &baseurl, bufs);
+                    caldav_rewrite_attachprop_to_url(webdavdb, prop, &baseurl, bufs);
             }
         }
-        *myoldicalp = myoldical;
+        if (myoldicalp) *myoldicalp = myoldical;
     }
     if (has_newattach) {
-        icalcomponent *mynewical = icalcomponent_clone(newical);
+        icalcomponent *mynewical = mynewicalp ? icalcomponent_clone(newical): newical;
         icalcomponent *comp;
         for (comp = icalcomponent_get_first_component(mynewical, ICAL_VEVENT_COMPONENT);
              comp;
@@ -2236,13 +2236,13 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
                  prop;
                  prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
                 if (mode == caldav_attachments_to_binary)
-                    rewrite_attachments_to_binary(attachments, webdavdb, prop,
+                    caldav_rewrite_attachprop_to_binary(attachments, webdavdb, prop,
                             &baseurl, bufs);
                 else
-                    rewrite_attachments_to_url(webdavdb, prop, &baseurl, bufs);
+                    caldav_rewrite_attachprop_to_url(webdavdb, prop, &baseurl, bufs);
             }
         }
-        *mynewicalp = mynewical;
+        if (mynewicalp) *mynewicalp = mynewical;
     }
 
 done:
