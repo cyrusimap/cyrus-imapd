@@ -16,7 +16,10 @@ need to know to get your work reviewed, approved, and into Cyrus.
 Cyrus doesn't have a hard and fast style guide, *but it will*.  For now,
 consult the [Cyrus hacking
 docs](https://www.cyrusimap.org/imap/developer/guidance/hacking.html), which
-spell out some of the standards of formatting and construction.
+spell out some of the standards of formatting and construction.  This document
+is, at present, quite out of date.  You are probably best served by just
+copying the style of the surrounding code.
+
 
 ## The Tests
 
@@ -29,7 +32,7 @@ There are two kinds of tests:
 * The [Cassandane test
   suite](https://www.cyrusimap.org/imap/developer/developer-testing.html) is an
   integration test suite.  It can and should be run against your build of
-  Cyrus.  You need to get it from a separate repository.  (Follow that link!)
+  Cyrus, and it's right there in the repo under `./cassandane`.
 * The [cunit tests](https://www.cyrusimap.org/imap/developer/unit-tests.html)
   are located in the Cyrus IMAP repository, in `./cunit` and run by `make
   check`.  You should run these, too.
