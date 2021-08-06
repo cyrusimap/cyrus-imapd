@@ -621,7 +621,18 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     case HTTP_CONTINUE:
     case HTTP_PROCESSING:
         /* Provisional response */
-        break;
+        r = nghttp3_conn_submit_info(h3_conn, strm->id,
+                                     strm->resp_hdrs, strm->num_resp_hdrs);
+
+        syslog(LOG_DEBUG, "nghttp3_conn_submit_info(id=%ld): %s",
+               strm->id, nghttp3_strerror(r));
+
+        if (r) {
+            syslog(LOG_ERR, "nghttp3_conn_submit_info(id=%ld): %s",
+                   strm->id, nghttp3_strerror(r));
+        }
+        return r;
+
 
     case HTTP_NO_CONTENT:
     case HTTP_NOT_MODIFIED:
