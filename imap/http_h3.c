@@ -590,7 +590,7 @@ static int end_resp_headers(struct transaction_t *txn, long code)
 {
     nghttp3_conn *h3_conn = txn->conn->sess_ctx;
     struct http3_stream *strm = (struct http3_stream *) txn->strm_ctx;
-    nghttp3_data_reader dr = { read_data }, *drp = &dr;
+    nghttp3_data_reader dr = { read_data }, *drp = NULL;
     int r = 0;
 
     syslog(LOG_DEBUG,
@@ -615,7 +615,7 @@ static int end_resp_headers(struct transaction_t *txn, long code)
             syslog(LOG_ERR, "nghttp3_conn_submit_trailers(id=%ld): %s",
                    strm->id, nghttp3_strerror(r));
         }
-        return r;
+        break;
 
 
     case HTTP_CONTINUE:
@@ -631,36 +631,27 @@ static int end_resp_headers(struct transaction_t *txn, long code)
             syslog(LOG_ERR, "nghttp3_conn_submit_info(id=%ld): %s",
                    strm->id, nghttp3_strerror(r));
         }
-        return r;
-
-
-    case HTTP_NO_CONTENT:
-    case HTTP_NOT_MODIFIED:
-        /* MUST NOT include a body */
-        drp = NULL;
         break;
+
 
     default:
-        if (txn->meth == METH_HEAD) {
-            /* MUST NOT include a body */
-            drp = NULL;
+        if (txn->meth != METH_HEAD &&
+            (txn->resp_body.len || (txn->flags.te & TE_CHUNKED))) {
+            /* Response has a body */
+            drp = &dr;
         }
-        else if (!(txn->resp_body.len || (txn->flags.te & TE_CHUNKED))) {
-            /* Empty body */
-            drp = NULL;
+
+        r = nghttp3_conn_submit_response(h3_conn, strm->id,
+                                         strm->resp_hdrs, strm->num_resp_hdrs, drp);
+
+        syslog(LOG_DEBUG, "nghttp3_conn_submit_response(id=%ld): %s",
+               strm->id, nghttp3_strerror(r));
+
+        if (r) {
+            syslog(LOG_ERR, "nghttp3_conn_submit_response(id=%ld): %s",
+                   strm->id, nghttp3_strerror(r));
         }
         break;
-    }
-
-    r = nghttp3_conn_submit_response(h3_conn, strm->id,
-                                     strm->resp_hdrs, strm->num_resp_hdrs, drp);
-
-    syslog(LOG_DEBUG, "nghttp3_conn_submit_response(id=%ld): %s",
-           strm->id, nghttp3_strerror(r));
-
-    if (r) {
-        syslog(LOG_ERR, "nghttp3_conn_submit_response(id=%ld): %s",
-               strm->id, nghttp3_strerror(r));
     }
 
     return r;
