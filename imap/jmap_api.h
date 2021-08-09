@@ -105,9 +105,9 @@ enum {
 /* JMAP Calendar (draft-ietf-jmap-calendars) privileges */
 #define JACL_READFB         ACL_USER9      /* Keep sync'd with DACL_READFB */
 #define JACL_RSVP           ACL_USER7      /* Keep sync'd with DACL_REPLY */
-#define JACL_UPDATEOWN      ACL_USER6
-#define JACL_REMOVEOWN      ACL_USER5
-#define JACL_UPDATEPRIVATE  ACL_USER4
+#define JACL_WRITEOWN       ACL_USER6
+#define JACL_UPDATEPRIVATE  ACL_USER5
+#define JACL_WRITEALL       (JACL_ADDITEMS|JACL_UPDATEITEMS|JACL_SETSEEN|JACL_SETMETADATA|JACL_REMOVEITEMS)
 
 /* Cyrus-specific privileges */
 #define JACL_LOOKUP         ACL_LOOKUP
