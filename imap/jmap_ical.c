@@ -2107,6 +2107,9 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
     struct hash_table id_by_uri = HASH_TABLE_INITIALIZER;
     icalproperty *prop;
     json_t *participants = json_object();
+    struct buf buf = BUF_INITIALIZER;
+    int is_itip_reply = icalcomponent_get_parent(comp) &&
+        icalcomponent_get_method(icalcomponent_get_parent(comp)) == ICAL_METHOD_REPLY;
 
     /* Collect all attendees in a map to lookup delegates and their ids. */
     construct_hash_table(&attendee_by_uri, 32, 0);
@@ -2130,15 +2133,43 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
 
     /* Map ATTENDEE to JSCalendar */
     icalproperty *orga = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    icalproperty *nextprop;
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+         prop; prop = nextprop) {
+
+        nextprop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
 
         char *uri = normalized_uri(icalproperty_get_value_as_string(prop));
         if (!uri) continue;
         const char *id = hash_lookup(uri, &id_by_uri);
         json_t *p = participant_from_ical(prop, &id_by_uri, orga,
                 json_incref(json_object_get(linksbyparticipant, id)));
+        if (p && is_itip_reply) {
+            /* Set attendee schedule properties from iTIP REPLY */
+            icaltimetype icaldt = icalcomponent_get_dtstamp(comp);
+            struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+            jmapical_datetime_from_icaltime(icaldt, &dt);
+            jmapical_utcdatetime_as_string(&dt, &buf);
+            json_object_set_new(p, "scheduleUpdated",
+                    json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+
+            json_object_set_new(p, "scheduleSequence",
+                    json_integer(icalcomponent_get_sequence(comp)));
+
+            const char *comment = icalcomponent_get_comment(comp);
+            if (!comment) {
+                /* Look for Google Calendar comment */
+                comment = get_icalxparam_value(prop, "X-RESPONSE-COMMENT");
+                if (comment) {
+                    unescape_ical_text(&buf, comment);
+                    comment = buf_cstring(&buf);
+                }
+            }
+            if (comment) json_object_set_new(p, "participationComment",
+                    json_string(comment));
+            buf_reset(&buf);
+        }
         json_object_set_new(participants, id, p);
         free(uri);
     }
@@ -2166,6 +2197,7 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
     }
     free_hash_table(&attendee_by_uri, NULL);
     free_hash_table(&id_by_uri, free);
+    buf_free(&buf);
     return participants;
 }
 
