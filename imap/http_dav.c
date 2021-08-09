@@ -5073,7 +5073,7 @@ static int meth_delete_resource(struct transaction_t *txn,
          * only if it is organized by the user (or there
          * is no organizer at all). The CalDAV namespace
          * needs to to assert this right later. */
-        needrights |= DACL_RMOWNRSRC;
+        needrights |= DACL_WRITEOWNRSRC;
     }
     if (!(rights & needrights)) {
         /* DAV:need-privileges */
@@ -7123,7 +7123,7 @@ int meth_put(struct transaction_t *txn, void *params)
              * only if it is organized by the user (or there
              * is no organizer at all). The CalDAV namespace
              * needs to to assert this right later. */
-            reqd_rights |= DACL_UPDATEOWNRSRC;
+            reqd_rights |= DACL_WRITEOWNRSRC;
         }
 
         if (txn->req_tgt.allow & ALLOW_USERDATA) reqd_rights |= DACL_PROPRSRC;
