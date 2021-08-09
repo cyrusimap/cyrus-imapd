@@ -118,9 +118,8 @@ enum {
                                            DAV:unlock and DAV:share) */
 
 /* JMAP-specific privileges */
-#define DACL_UPDATEOWNRSRC  ACL_USER6   /* CY:update-own-resource - used for JMAP */
-#define DACL_RMOWNRSRC  ACL_USER5       /* CY:remove-own-resource - used for JMAP */
-#define DACL_UPDATEPRIVATE ACL_USER4
+#define DACL_WRITEOWNRSRC  ACL_USER6   /* CY:update-own-resource - used for JMAP */
+#define DACL_UPDATEPRIVATE ACL_USER5
 
 /* WebDAV (RFC 3744) privileges */
 #define DACL_READ       (ACL_READ\
