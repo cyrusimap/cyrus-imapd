@@ -1327,7 +1327,7 @@ sub test_rename_deepfolder_intermediates_rightnow
 }
 
 sub test_imap_list_notes
-    :min_version_3_0 :needs_component_sieve
+    :min_version_3_1 :needs_component_sieve
 {
     my ($self) = @_;
 
