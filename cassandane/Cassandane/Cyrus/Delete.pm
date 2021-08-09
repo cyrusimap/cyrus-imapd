@@ -50,16 +50,24 @@ sub new
 {
     my ($class, @args) = @_;
 
-    my $config = Cassandane::Config->default()->clone();
-    $config->set(conversations => 'yes',
-                 httpmodules => 'carddav caldav jmap');
+    my $buildinfo = Cassandane::BuildInfo->new();
 
-    return $class->SUPER::new({
-        config => $config,
-        jmap => 1,
-        adminstore => 1,
-        services => [ 'imap', 'http', 'sieve' ]
-    }, @args);
+    if ($buildinfo->get('component', 'httpd')) {
+        my $config = Cassandane::Config->default()->clone();
+
+        $config->set(conversations => 'yes',
+                     httpmodules => 'carddav caldav');
+
+        return $class->SUPER::new({
+            config => $config,
+            jmap => 1,
+            adminstore => 1,
+            services => [ 'imap', 'http', 'sieve' ]
+        }, @args);
+    }
+    else {
+        return $class->SUPER::new({ adminstore => 1 }, @args);
+    }
 }
 
 sub set_up
@@ -287,8 +295,86 @@ sub test_self_inbox_del
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
 }
 
+# old version of this test for builds without newer httpd features
+# n.b. 2.5 httpd can't be built anymore because of dependency on
+# very old libical
+sub test_admin_inbox_imm_legacy
+    :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing that an admin can delete the INBOX of a user";
+    xlog $self, "and it will delete the whole user, immediate delete version";
+
+    # can't do the magic disconnect handling on older perl
+    return if ($] < 5.010);
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+    my $inbox = 'user.cassandane';
+    my $subfolder = 'user.cassandane.foo';
+
+    xlog $self, "First create a sub folder";
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Generate a message in $inbox";
+    my %exp_inbox;
+    $exp_inbox{A} = $self->make_message("Message $inbox A");
+    $self->check_messages(\%exp_inbox);
+
+    xlog $self, "Generate a message in $subfolder";
+    my %exp_sub;
+    $store->set_folder($subfolder);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+    $exp_sub{A} = $self->make_message("Message $subfolder A");
+    $self->check_messages(\%exp_sub);
+    $talk->unselect();
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_ondisk($subfolder, expected => \%exp_sub);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    xlog $self, "admin can delete $inbox";
+    $admintalk->delete($inbox);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    {
+        # shut up
+        local $SIG{__DIE__};
+        local $SIG{__WARN__} = sub { 1 };
+
+        xlog $self, "Client was disconnected";
+        my $Res = eval { $talk->select($inbox) };
+        $self->assert_null($Res);
+
+        # reconnect
+        $talk = $store->get_client();
+    }
+
+    xlog $self, "Cannot select $inbox anymore";
+    $talk->select($inbox);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    xlog $self, "Cannot select $subfolder anymore";
+    $talk->select($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    $self->check_folder_not_ondisk($inbox);
+    $self->check_folder_not_ondisk($subfolder);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+}
+
 sub test_admin_inbox_imm
     :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
