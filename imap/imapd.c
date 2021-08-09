@@ -9345,7 +9345,7 @@ static void cmd_status(char *tag, char *name)
     }
 
     // status of selected mailbox, we need to refresh
-    if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
+    if (!r && !strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
         imapd_check(NULL, 0);
 
     if (!r) r = imapd_statusdata(mbentry, statusitems, &sdata);
