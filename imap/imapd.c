@@ -9326,8 +9326,6 @@ static void cmd_status(char *tag, char *name)
 
     /* local mailbox */
 
-    imapd_check(NULL, 0);
-
     c = parse_statusitems(&statusitems, &errstr);
     if (c == EOF) {
         prot_printf(imapd_out, "%s BAD %s\r\n", tag, errstr);
@@ -9351,6 +9349,10 @@ static void cmd_status(char *tag, char *name)
                 IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
         }
     }
+
+    // status of selected mailbox, we need to refresh
+    if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
+        imapd_check(NULL, 0);
 
     if (!r) r = imapd_statusdata(mbentry, statusitems, &sdata);
 
