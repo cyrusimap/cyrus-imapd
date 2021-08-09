@@ -490,32 +490,25 @@ static json_t *calendarrights_to_jmap(int rights, int is_owner)
 {
     if (is_owner) rights |= JACL_RSVP;
 
-    return json_pack("{s:b s:b s:b s:b s:b s:b s:b s:b s:b s:b s:b}",
+    return json_pack("{s:b s:b s:b s:b s:b s:b s:b s:b}",
             "mayReadFreeBusy",
             (rights & JACL_READFB) == JACL_READFB,
             "mayReadItems",
             (rights & JACL_READITEMS) == JACL_READITEMS,
-            "mayAddItems",
-            (rights & (JACL_ADDITEMS|JACL_SETMETADATA)) == (JACL_ADDITEMS|JACL_SETMETADATA),
+            "mayWriteAll",
+            (rights & (JACL_WRITEALL|JACL_RSVP)) == (JACL_WRITEALL|JACL_RSVP),
+            "mayWriteOwn",
+            (((rights & JACL_WRITEOWN) == JACL_WRITEOWN) ||
+             ((rights & JACL_WRITEALL) == JACL_WRITEALL)),
+            "mayUpdatePrivate",
+            (((rights & JACL_UPDATEPRIVATE) == JACL_UPDATEPRIVATE) ||
+             ((rights & JACL_WRITEALL) == JACL_WRITEALL)),
             "mayRSVP",
             (rights & JACL_RSVP) == JACL_RSVP,
             "mayDelete",
             (rights & JACL_DELETE) == JACL_DELETE,
             "mayAdmin",
-            (rights & JACL_ADMIN) == JACL_ADMIN,
-            "mayUpdatePrivate",
-            (((rights & JACL_UPDATEPRIVATE) == JACL_UPDATEPRIVATE) ||
-             ((rights & JACL_WRITE) == JACL_WRITE)),
-            "mayUpdateOwn",
-            (((rights & JACL_UPDATEOWN) == JACL_UPDATEOWN) ||
-             ((rights & JACL_WRITE) == JACL_WRITE)),
-            "mayUpdateAll",
-            (rights & JACL_WRITE) == JACL_WRITE,
-            "mayRemoveOwn",
-            (((rights & JACL_REMOVEOWN) == JACL_REMOVEOWN) ||
-             ((rights & JACL_REMOVEITEMS) == JACL_REMOVEITEMS)),
-            "mayRemoveAll",
-            (rights & JACL_REMOVEITEMS) == JACL_REMOVEITEMS);
+            (rights & JACL_ADMIN) == JACL_ADMIN);
 }
 
 static json_t *calendarrights_to_sharewith(int rights)
@@ -542,24 +535,18 @@ calendar_sharewith_to_rights_iter:
             mask = JACL_READFB;
         else if (!strcmp("mayReadItems", name))
             mask = JACL_READITEMS;
-        else if (!strcmp("mayAddItems", name))
-            mask = JACL_ADDITEMS|JACL_SETMETADATA;
+        else if (!strcmp("mayWriteAll", name))
+            mask = JACL_WRITEALL|JACL_RSVP;
+        else if (!strcmp("mayWriteOwn", name))
+            mask = JACL_WRITEOWN;
+        else if (!strcmp("mayUpdatePrivate", name))
+            mask = JACL_UPDATEPRIVATE;
         else if (!strcmp("mayRSVP", name))
             mask = JACL_RSVP;
         else if (!strcmp("mayDelete", name))
             mask = JACL_DELETE;
         else if (!strcmp("mayAdmin", name))
             mask = JACL_ADMIN;
-        else if (!strcmp("mayUpdatePrivate", name))
-            mask = JACL_UPDATEPRIVATE;
-        else if (!strcmp("mayUpdateOwn", name))
-            mask = JACL_UPDATEOWN;
-        else if (!strcmp("mayUpdateAll", name))
-            mask = JACL_WRITE;
-        else if (!strcmp("mayRemoveOwn", name))
-            mask = JACL_REMOVEOWN;
-        else if (!strcmp("mayRemoveAll", name))
-            mask = JACL_REMOVEITEMS;
         else
             continue;
 
@@ -5422,8 +5409,8 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
     else {
         /* Validate permissions for update */
-        if (!jmap_hasrights_mbentry(req, mbentry, JACL_UPDATEITEMS|JACL_SETMETADATA)) {
-            if (jmap_hasrights_mbentry(req, mbentry, JACL_UPDATEOWN) &&
+        if (!jmap_hasrights_mbentry(req, mbentry, JACL_WRITEALL|JACL_SETMETADATA)) {
+            if (jmap_hasrights_mbentry(req, mbentry, JACL_WRITEOWN) &&
                     (!cdata->organizer ||
                      strarray_find(&schedule_addresses, cdata->organizer, 0) >= 0)) {
                 /* allowed */
@@ -5690,7 +5677,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         goto done;
     }
     if (!jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEITEMS)) {
-        if (!jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEOWN) ||
+        if (!jmap_hasrights_mbentry(req, mbentry, JACL_WRITEOWN) ||
                 (cdata->organizer &&
                  strarray_find(&schedule_addresses, cdata->organizer, 0) < 0)) {
             r = IMAP_PERMISSION_DENIED;

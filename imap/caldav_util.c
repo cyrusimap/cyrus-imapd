@@ -731,7 +731,7 @@ static int personalize_resource(struct transaction_t *txn,
         /* User has read-write access */
         read_only = 0;
     }
-    else if (cdata->dav.imap_uid && (rights & DACL_UPDATEOWNRSRC) &&
+    else if (cdata->dav.imap_uid && (rights & DACL_WRITEOWNRSRC) &&
             (!cdata->organizer ||
              (schedule_addresses &&
               strarray_find(schedule_addresses, cdata->organizer, 0) >= 0))) {
