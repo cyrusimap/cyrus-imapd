@@ -23157,4 +23157,79 @@ EOF
     }
 }
 
+sub test_email_get_calendarevents_deduplicate
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:123456789
+SUMMARY:test
+DTSTART:20160831T153000Z
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+    $ical =~ s/\r?\n/\r\n/gs;
+    my $b64Ical = encode_base64($ical);
+    $b64Ical =~ s/\r?\n/\r\n/gs;
+
+    $self->make_message('test',
+        mime_type => 'multipart/related',
+        mime_boundary => 'boundary',
+        body => ""
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "test"
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/calendar;charset=\"utf-8\"; method=REPLY\r\n"
+          . "Content-Transfer-Encoding: 7bit\r\n"
+          . "\r\n"
+          . $ical
+          . "\r\n--boundary\r\n"
+          . "Content-Type: application/ics; name=\"test.ics\"\r\n"
+          . "Content-Disposition: attachment; filename=\"test.ics\"\r\n"
+          . "Content-Transfer-Encoding: base64\r\n"
+          . "\r\n"
+          . $b64Ical
+          . "\r\n--boundary--\r\n"
+    ) || die;
+
+    xlog "Fetch email via JMAP";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['calendarEvents'],
+        }, 'R2' ],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my @eventMimeParts = values %{$res->[1][1]{list}[0]{calendarEvents}};
+    $self->assert_num_equals(1, scalar @eventMimeParts);
+    $self->assert_num_equals(1, scalar @{$eventMimeParts[0]});
+}
+
 1;
