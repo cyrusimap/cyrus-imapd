@@ -7289,24 +7289,37 @@ static int _email_get_bodies(jmap_req_t *req,
     /* calendarEvents -- non-standard */
     if (jmap_wantprop(props, "calendarEvents")) {
         ptrarray_t icsbodies = PTRARRAY_INITIALIZER;
+        // Google sends the same iTIP message both as a text/calendar
+        // and as a base64-encoded application/ics body
+        struct hashset *icsguids = hashset_new(sizeof(struct message_guid));
 
         int i;
         for (i = 0; i < bodies.attslist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.attslist, i);
-            /* Process text/calendar attachments and files ending with .ics */
-            if (strcmp(part->type, "TEXT") || strcmp(part->subtype, "CALENDAR")) {
+            int is_icsbody = 0;
+
+            /* Process calendar attachments and files ending with .ics */
+            if ((!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "CALENDAR")) ||
+                (!strcmp(part->type, "APPLICATION") && !strcmp(part->subtype, "ICS"))) {
+                is_icsbody = 1;
+            }
+            else {
                 struct param *param = part->disposition_params;
                 while (param) {
-                    if (!strcasecmp(param->attribute, "FILENAME")) {
+                    if (!strcasecmp(param->attribute, "FILENAME") ||
+                        !strcasecmp(param->attribute, "NAME")) {
                         size_t len = strlen(param->value);
                         if (len > 4 && !strcasecmp(param->value + len-4, ".ICS")) {
-                            ptrarray_append(&icsbodies, part);
+                            is_icsbody = 1;
+                            break;
                         }
                     }
                     param = param->next;
                 }
             }
-            else ptrarray_append(&icsbodies, part);
+
+            if (is_icsbody && hashset_add(icsguids, &part->content_guid))
+                ptrarray_append(&icsbodies, part);
         }
 
         json_t *events = json_null();
@@ -7315,9 +7328,10 @@ static int _email_get_bodies(jmap_req_t *req,
             if (r) goto done;
             events = jmap_calendar_events_from_mime(req, &icsbodies, msg->mime);
         }
-
         json_object_set_new(email, "calendarEvents", events);
+
         ptrarray_fini(&icsbodies);
+        hashset_free(&icsguids);
     }
 
     /* previousCalendarEvent -- non-standard */
