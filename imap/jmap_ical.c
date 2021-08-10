@@ -1648,8 +1648,15 @@ link_from_ical(icalproperty *prop, struct jmapical_jmapcontext *jmapctx)
         json_object_set_new(link, "contentType", json_string(fmttype));
     }
 
-    /* title - reuse the same x-param as Apple does for their locations  */
-    if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE))) {
+    /* title */
+    param = icalproperty_get_first_parameter(prop, ICAL_FILENAME_PARAMETER);
+    if (param) {
+        /* read managed attachments FILENAME */
+        json_object_set_new(link, "title",
+                json_string(icalparameter_get_filename(param)));
+    }
+    else if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE))) {
+        /* - support legacy x-param */
         struct buf buf = BUF_INITIALIZER;
         unescape_ical_text(&buf, s);
         json_object_set_new(link, "title", json_string(buf_cstring(&buf)));
@@ -4114,7 +4121,7 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
 
         /* title */
         if (title) {
-            icalproperty_set_xparam(prop, JMAPICAL_XPARAM_TITLE, title, 1);
+            icalproperty_add_parameter(prop, icalparameter_new_filename(title));
         }
 
         /* cid */
