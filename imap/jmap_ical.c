@@ -1437,25 +1437,24 @@ overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
         if (!ex) continue;
 
         /* Recurrence-id */
-        /* Convert the recurrence-id into the timezone of the main event.
-         * Some clients generate the recurrence id as UTC date time,
-         * even if the main VEVENT has a DTSTART with a TZID */
         icaltimetype icalrecurid = icalcomponent_get_recurrenceid(excomp);
-        if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
-            icalrecurid.is_date = icalproperty_get_dtstart(prop).is_date;
-            if (!icalrecurid.is_date) {
-                icalparameter *tzid_param =
-                    icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
-                if (tzid_param) {
-                    const char *start_tzid = icalparameter_get_tzid(tzid_param);
-                    if (start_tzid) {
-                        icaltimezone *start_tz = jstimezones_lookup_tzid(jstzones, start_tzid);
-                        if (start_tz) {
-                            icalrecurid = icaltime_convert_to_zone(icalrecurid, start_tz);
-                        }
-                    }
-                }
-            }
+        icaltimetype dtstartmain = icalcomponent_get_dtstart(comp);
+        icaltimetype dtstartex = icalcomponent_get_dtstart(excomp);
+
+        // Align RECURRENCE-ID type with DTSTART types
+        if (icalrecurid.is_date && !dtstartex.is_date && !dtstartmain.is_date) {
+            /* Old Outlook versions use DATE RECURRENCE-ID for DATETIME DTSTART */
+            icalrecurid.is_date = 0;
+            icalrecurid.hour = dtstartex.hour;
+            icalrecurid.minute = dtstartex.minute;
+            icalrecurid.second = dtstartex.second;
+            icalrecurid.is_daylight = dtstartex.is_daylight;
+            icalrecurid.zone = dtstartex.zone;
+        }
+        else icalrecurid.is_date = dtstartmain.is_date;
+        if (!icalrecurid.is_date && (icalrecurid.zone != dtstartmain.zone)) {
+            icalrecurid = icaltime_convert_to_zone(icalrecurid,
+                     (icaltimezone*) dtstartmain.zone);
         }
 
         /* Format recurrence id */
