@@ -47,6 +47,7 @@
 
 #include "httpd.h"
 #include "quic.h"
+#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -65,6 +66,7 @@ struct quic_context {
     int sock;                            /* Output socket */
     struct sockaddr_storage local_addr;
     socklen_t local_addrlen;
+    struct buf clientbuf;
     SSL_CTX *tls_ctx;
 
     SSL *tls;
@@ -203,6 +205,28 @@ HIDDEN int quic_init(struct quic_context **ctx, struct quic_app_context *app)
     return 0;
 }
 
+static void set_clienthost(ngtcp2_conn *conn, struct quic_context *ctx)
+{
+    const ngtcp2_path *path = ngtcp2_conn_get_path(conn);
+    char hbuf[NI_MAXHOST];
+    int niflags = NI_NUMERICHOST;
+
+    if (getnameinfo(path->remote.addr, path->remote.addrlen,
+                    hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+        buf_printf(&ctx->clientbuf, "%s ", hbuf);
+    }
+
+#ifdef NI_WITHSCOPEID
+    if (remotesock->sa_family == AF_INET6)
+        niflags |= NI_WITHSCOPEID;
+#endif
+    if (getnameinfo(path->remote.addr, path->remote.addrlen,
+                    hbuf, sizeof(hbuf), NULL, 0, niflags) != 0) {
+        strlcpy(hbuf, "unknown", sizeof(hbuf));
+    }
+    buf_printf(&ctx->clientbuf, "[%s]", hbuf);
+}
+
 static int handshake_completed_cb(ngtcp2_conn *conn,
                                   void *user_data __attribute__((unused)))
 {
@@ -223,6 +247,8 @@ static int handshake_completed_cb(ngtcp2_conn *conn,
            tls_cipher_usebits, tls_cipher_algbits,
            SSL_session_reused(ssl) ? "reused" : "new",
            alpn_len, (const char *) alpn);
+
+    set_clienthost(conn, user_data);
 
     return 0;
 }
@@ -656,6 +682,13 @@ HIDDEN int quic_open_stream(void *conn, unsigned bidi,
            bidi, *stream_id, ngtcp2_strerror(r));
 
     return r;
+}
+
+HIDDEN const char *quic_get_clienthost(void *conn)
+{
+    struct quic_context *ctx = conn;
+
+    return buf_cstring(&ctx->clientbuf);
 }
 
 HIDDEN const char *quic_version(void)

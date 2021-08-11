@@ -165,6 +165,8 @@ static int begin_headers_cb(nghttp3_conn *conn, int64_t stream_id,
     txn->flags.vary = VARY_AE;
     txn->req_line.ver = HTTP3_VERSION;
 
+    txn->conn->clienthost = quic_get_clienthost(QUIC_CTX(txn->conn));
+
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
         zlib_init(txn);
         brotli_init(txn);

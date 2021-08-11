@@ -74,6 +74,8 @@ extern void quic_shutdown(struct quic_context *ctx);
 extern int quic_open_stream(void *conn, unsigned bidi,
                             int64_t *stream_id, void *stream_user_data);
 
+extern const char *quic_get_clienthost(void *conn);
+
 extern const char *quic_version(void);
 
 #endif /* QUIC_H */
