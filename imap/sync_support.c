@@ -2818,7 +2818,9 @@ int sync_apply_mailbox(struct dlist *kin,
         struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
         if (!namespacelock) {
             r = IMAP_MAILBOX_LOCKED;
-            syslog(LOG_ERR, "IOERROR: failed to usernamespacelock %s", mboxname);
+            xsyslog(LOG_ERR, "IOERROR: failed to usernamespacelock",
+                             "mailbox=<%s> uniqueid=<%s>",
+                             mboxname, uniqueid);
             goto done;
         }
         // try again under lock
@@ -2863,15 +2865,17 @@ int sync_apply_mailbox(struct dlist *kin,
 
     if (!r && strcmp(mailbox_uniqueid(mailbox), uniqueid)) {
         if (opt_force || mailbox->i.last_uid == 0) {
-            syslog(LOG_NOTICE, "SYNCNOTICE: mailbox uniqueid changed - replacing "
-                             "mailbox=<%s> origuniqueid=<%s> newuniqueid=<%s>",
-                             mboxname, mailbox_uniqueid(mailbox), uniqueid);
+            xsyslog(LOG_NOTICE, "SYNCNOTICE: mailbox uniqueid changed - replacing",
+                                "mailbox=<%s> origuniqueid=<%s> newuniqueid=<%s>",
+                                mboxname, mailbox_uniqueid(mailbox), uniqueid);
             // close first, because we'll be taking the lock and comparing and then away we go
             mailbox_close(&mailbox);
             struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
             if (!namespacelock) {
                 r = IMAP_MAILBOX_LOCKED;
-                syslog(LOG_ERR, "IOERROR: failed to usernamespacelock %s", mboxname);
+                xsyslog(LOG_ERR, "IOERROR: failed to usernamespacelock",
+                                 "mailbox=<%s> uniqueid=<%s>",
+                                 mboxname, uniqueid);
                 goto done;
             }
             r = mailbox_open_iwl(mboxname, &mailbox);
@@ -2910,7 +2914,7 @@ int sync_apply_mailbox(struct dlist *kin,
             mboxname_release(&namespacelock);
         }
         else {
-            xsyslog(LOG_ERR, "SYNCNOTICE: mailbox uniqueid changed - retry ",
+            xsyslog(LOG_ERR, "SYNCERROR: mailbox uniqueid changed - retry",
                              "mailbox=<%s> origuniqueid=<%s> newuniqueid=<%s>",
                              mboxname, mailbox_uniqueid(mailbox), uniqueid);
             r = IMAP_MAILBOX_MOVED;
