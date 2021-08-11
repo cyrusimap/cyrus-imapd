@@ -945,7 +945,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
         break;
 
     nologin:
-        prot_printf(c->pout, "%s BAD Please login first\r\n", c->tag.s);
+        prot_printf(c->pout, "%s BAD \"Please login first\"\r\n", c->tag.s);
         eatline(c->pin, ch);
         break;
     }
