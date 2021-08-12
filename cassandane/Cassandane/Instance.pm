@@ -1349,7 +1349,7 @@ sub _check_sanity
             xlog "INCONSISTENCY FOUND: $file $_";
         }
     }
-    die "INCONSISTENCIES FOUND IN SPOOL" if $found;
+    return $found;
 }
 
 sub _check_syslog
@@ -1434,7 +1434,7 @@ sub stop
     return if ($self->{_stopped});
     $self->{_stopped} = 1;
 
-    $self->_check_sanity();
+    my $sanity_errors = $self->_check_sanity();
 
     xlog "stop $self->{description}: basedir $self->{basedir}";
 
@@ -1456,6 +1456,8 @@ sub stop
     $self->_check_valgrind_logs();
     $self->_check_cores();
     $self->_check_syslog();
+
+    die "INCONSISTENCIES FOUND IN SPOOL" if $sanity_errors;
 }
 
 sub cleanup
