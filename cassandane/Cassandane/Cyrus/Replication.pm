@@ -2041,4 +2041,155 @@ sub test_rolling_retry_wait_limit
     $self->assert_deep_equals([ 15, 20, 20, 20 ], \@waits);
 }
 
+#
+# Test empty mailbox gets overwritten
+#
+sub test_splitbrain_different_uniqueid_unused
+    :min_version_3_5
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $mtalk = $master_store->get_client();
+    my $rtalk = $replica_store->get_client();
+
+    $mtalk->create('INBOX.subfolder');
+    my $mres = $mtalk->status("INBOX.subfolder", ['mailboxid']);
+    my $mid = $mres->{mailboxid}[0];
+    $rtalk->create('INBOX.subfolder');
+    my $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+    my $rid = $rres->{mailboxid}[0];
+
+    $self->assert_not_null($mid);
+    $self->assert_not_null($rid);
+    $self->assert_str_not_equals($mid, $rid);
+
+    $master_store->set_folder("INBOX.subfolder");
+
+    $self->make_message("Message A", store => $master_store);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $rtalk = $replica_store->get_client();
+    $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+    $rid = $rres->{mailboxid}[0];
+
+    $self->assert_str_equals($mid, $rid);
+}
+
+#
+# Test non-empty mailbox causes replication to abort
+#
+sub test_splitbrain_different_uniqueid_nonempty
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $mtalk = $master_store->get_client();
+    my $rtalk = $replica_store->get_client();
+
+    $mtalk->create('INBOX.subfolder');
+    my $mres = $mtalk->status("INBOX.subfolder", ['mailboxid']);
+    my $mid = $mres->{mailboxid}[0];
+    $rtalk->create('INBOX.subfolder');
+    my $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+    my $rid = $rres->{mailboxid}[0];
+
+    $self->assert_not_null($mid);
+    $self->assert_not_null($rid);
+    $self->assert_str_not_equals($mid, $rid);
+
+    $master_store->set_folder("INBOX.subfolder");
+    $replica_store->set_folder("INBOX.subfolder");
+
+    $self->make_message("Message A", store => $master_store);
+    $self->make_message("Message B", store => $replica_store);
+
+    # this will fail
+    eval {
+        $self->run_replication();
+    };
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # sync_client should have logged the failure
+        my @mlines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/IOERROR: user replication failed/, "@mlines");
+        $self->assert_matches(qr/MAILBOX received NO response: IMAP_MAILBOX_MOVED/, "@mlines");
+
+        # sync server should have logged the failure
+        my @rlines = $self->{replica}->getsyslog();
+        $self->assert_matches(qr/SYNCNOTICE: mailbox uniqueid changed - retry/, "@rlines");
+    }
+
+    $rtalk = $replica_store->get_client();
+    $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+    $rid = $rres->{mailboxid}[0];
+
+    $self->assert_str_not_equals($mid, $rid);
+}
+
+#
+# Test mailbox that's had email but is now empty again
+#
+sub test_splitbrain_different_uniqueid_used
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $mtalk = $master_store->get_client();
+    my $rtalk = $replica_store->get_client();
+
+    $mtalk->create('INBOX.subfolder');
+    my $mres = $mtalk->status("INBOX.subfolder", ['mailboxid']);
+    my $mid = $mres->{mailboxid}[0];
+    $rtalk->create('INBOX.subfolder');
+    my $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+    my $rid = $rres->{mailboxid}[0];
+
+    $self->assert_not_null($mid);
+    $self->assert_not_null($rid);
+    $self->assert_str_not_equals($mid, $rid);
+
+    $master_store->set_folder("INBOX.subfolder");
+    $replica_store->set_folder("INBOX.subfolder");
+
+    $self->make_message("Message A", store => $master_store);
+    $self->make_message("Message B", store => $replica_store);
+
+    $rtalk->select('INBOX.subfolder');
+    $rtalk->store('1:*', '+flags', '\\Deleted');
+    $rtalk->expunge();
+
+    # this will fail
+    eval {
+        $self->run_replication();
+    };
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # sync_client should have logged the failure
+        my @mlines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/IOERROR: user replication failed/, "@mlines");
+        $self->assert_matches(qr/MAILBOX received NO response: IMAP_MAILBOX_MOVED/, "@mlines");
+
+        # sync server should have logged the failure
+        my @rlines = $self->{replica}->getsyslog();
+        $self->assert_matches(qr/SYNCNOTICE: mailbox uniqueid changed - retry/, "@rlines");
+    }
+
+    $rtalk = $replica_store->get_client();
+    $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+    $rid = $rres->{mailboxid}[0];
+
+    $self->assert_str_not_equals($mid, $rid);
+}
+
+1;
+
 1;
