@@ -590,7 +590,7 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 
     if (name) {
       /* copy name */
-        snprintf(mboxname, MAX_MAILBOX_NAME+1, "%.*s",
+        snprintf(mboxname, sizeof(mboxname), "%.*s",
                  (int) (namelen ? namelen : strlen(name)), name);
         mbentry->name = mboxname_from_dbname(mboxname);
     }
