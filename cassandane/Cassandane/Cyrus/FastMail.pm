@@ -1804,4 +1804,36 @@ sub test_relocate_messages_still_exist
     $self->assert_deep_equals($prestatus, $poststatus);
 }
 
+sub test_rename_quotaroot
+    :AllowMoves :Replication :min_version_3_2
+    :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user.newuser@example.com');
+    $admintalk->setacl('user.newuser@example.com', 'admin' => 'lrswipkxtecdan');
+    $admintalk->setacl('user.newuser@example.com', 'newuser@example.com' => 'lrswipkxtecdan');
+    $admintalk->setquota('user.newuser@example.com', [storage => 3000000]);
+
+    my $newtalk = $self->{store}->get_client(username => 'newuser@example.com');
+    $newtalk->create("INBOX.sub");
+    $newtalk->create("INBOX.magic");
+
+    $self->{adminstore}->set_folder('user.newuser.magic@example.com');
+    $self->make_message("Message foo", store => $self->{adminstore});
+
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('newuser@example.com');
+    unlink($synclogfname);
+
+    $admintalk = $self->{adminstore}->get_client();
+    $admintalk->rename('user.newuser@example.com', 'user.del@internal');
+
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('del@internal');
+}
+
 1;
