@@ -7895,9 +7895,13 @@ HIDDEN int mailbox_changequotaroot(struct mailbox *mailbox,
     if (mailbox->quotaroot) {
         quota_t quota_diff[QUOTA_NUMRESOURCES];
 
-        if (root && strlen(mailbox->quotaroot) >= strlen(root)) {
-            /* Part of a child quota root - skip */
-            goto done;
+        if (root) {
+            size_t len = strlen(root);
+            if (strlen(mailbox->quotaroot) >= len && !strncmp(mailbox->quotaroot, root, len) &&
+                (mailbox->quotaroot[len] == '\0' || mailbox->quotaroot[len] == '.')) {
+                    /* Part of a child quota root - skip */
+                    goto done;
+            }
         }
 
         /* remove usage from the old quotaroot */
