@@ -3772,13 +3772,11 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
 
     mbentry_t *mbentry = NULL;
     char *inbox = mboxname_user_mbox(userid, 0);
-    r = mboxlist_lookup_allow_all(inbox, &mbentry, NULL);
+    mboxlist_lookup_allow_all(inbox, &mbentry, NULL);
     free(inbox);
-    if (r) goto done;
 
     strarray_truncate(list, 0);
-    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, 0);
-    if (r) goto done;
+    mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, 0);
 
     /* delete in reverse so INBOX is last */
     int delflags = MBOXLIST_DELETE_FORCE;
@@ -3791,7 +3789,13 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         if (r) goto done;
     }
 
-    if (mbentry) r = user_deletedata(mbentry, 1);
+    if (mbentry && !(mbentry->mbtype & MBTYPE_DELETED)) {
+         r = user_deletedata(mbentry, 1);
+    }
+    else {
+        r = user_deletequotaroots(userid);
+        sync_log_unuser(userid);
+    }
 
  done:
     mboxname_release(&namespacelock);
