@@ -400,6 +400,13 @@ typedef enum _MsgFlags {
     FLAG_SEEN               = (1<<4),
 } MsgFlags;
 
+/* NOTE: you can only use up to 1<<15 for MsgFlags and down to 1<<16 for
+ * InternalFlags unless you change the code in mailbox_buf_to_index_record
+ * which is currently:
+ *     record->system_flags = stored_system_flags & 0x0000ffff;
+ *     record->internal_flags = stored_system_flags & 0xffff0000;
+ */
+
 typedef enum _MsgInternalFlags {
     FLAG_INTERNAL_SNOOZED            = (1<<26),
     FLAG_INTERNAL_SPLITCONVERSATION  = (1<<27),

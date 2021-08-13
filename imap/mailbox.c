@@ -2001,8 +2001,8 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     stored_system_flags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
 
     /* de-serialise system flags and internal flags */
-    record->system_flags = stored_system_flags & 0x000000ff;
-    record->internal_flags = stored_system_flags & 0xff000000;
+    record->system_flags = stored_system_flags & 0x0000ffff;
+    record->internal_flags = stored_system_flags & 0xffff0000;
 
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
         record->user_flags[n] = ntohl(*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)));
