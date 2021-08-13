@@ -172,6 +172,7 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
 
     former_name_t *fname;
     while ((fname = ptrarray_pop(&mbentry->name_history))) {
+        free(fname->name);
         free(fname);
     }
     ptrarray_fini(&mbentry->name_history);
@@ -1061,6 +1062,7 @@ static int mboxlist_update_entry(const char *name,
                     former_name_t *fname = ptrarray_shift(&oldid->name_history);
                     add_former_name(name_history, fname->name,
                                     fname->mtime, fname->foldermodseq);
+                    free(fname->name);
                     free(fname);
                 }
 
