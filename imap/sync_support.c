@@ -6363,6 +6363,7 @@ static int do_folders(struct sync_client_state *sync_cs,
             r = mboxlist_lookup_allow_all(rfolder->name, &tombstone, NULL);
 
             if (r == 0 && (tombstone->mbtype & MBTYPE_DELETED) == MBTYPE_DELETED) {
+                mboxlist_entry_free(&tombstone);
                 r = sync_do_folder_delete(sync_cs, rfolder->name);
                 if (r) {
                     syslog(LOG_ERR, "sync_do_folder_delete(): failed: %s '%s'",
@@ -6371,6 +6372,7 @@ static int do_folders(struct sync_client_state *sync_cs,
                 }
             }
             else {
+                mboxlist_entry_free(&tombstone);
                 syslog(LOG_ERR, "%s: no tombstone for deleted mailbox %s (%s)",
                                 __func__, rfolder->name, error_message(r));
 
