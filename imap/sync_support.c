@@ -3264,12 +3264,10 @@ out:
 
 static int sync_mailbox_byuniqueid(const char *uniqueid, void *rock)
 {
-    char *name = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
     mbentry_t *mbentry = NULL;
-    int r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+    int r = mboxlist_lookup_by_uniqueid(uniqueid, &mbentry, NULL);
     if (!r) r = sync_mailbox_byentry(mbentry, rock);
     mboxlist_entry_free(&mbentry);
-    free(name);
     return r;
 }
 
