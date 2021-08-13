@@ -1338,9 +1338,21 @@ sub _check_sanity
 {
     my ($self) = @_;
     my $basedir = $self->{basedir};
-    $self->run_command({redirects => {stdout => "$basedir/quota.out", stderr => "$basedir/quota.err"}, cyrus => 1}, 'quota', '-f', '-q');
-    $self->run_command({redirects => {stdout => "$basedir/reconstruct.out", stderr => "$basedir/reconstruct.err"}, cyrus => 1}, 'reconstruct', '-q');
     my $found = 0;
+    eval {
+        $self->run_command({redirects => {stdout => "$basedir/quota.out", stderr => "$basedir/quota.err"}, cyrus => 1}, 'quota', '-f', '-q');
+    };
+    if ($@) {
+        xlog "quota -f failed, $@";
+        $found = 1;
+    }
+    eval {
+        $self->run_command({redirects => {stdout => "$basedir/reconstruct.out", stderr => "$basedir/reconstruct.err"}, cyrus => 1}, 'reconstruct', '-q');
+    };
+    if ($@) {
+        xlog "reconstruct failed, $@";
+        $found = 1;
+    }
     for my $file ("quota.out", "quota.err", "reconstruct.out", "reconstruct.err") {
         next unless open(FH, "<$basedir/$file");
         while (<FH>) {
