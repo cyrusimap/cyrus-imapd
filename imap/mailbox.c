@@ -6947,8 +6947,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         record->user_flags[i] &= valid_user_flags[i];
     }
 
-    /* check if the snoozed status matches */
-    if (!!(record->internal_flags & FLAG_INTERNAL_SNOOZED) != !!has_snoozedannot) {
+    /* check if the snoozed status matches (unless expunged, which shouldn't be snoozed) */
+    if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)
+      && !!(record->internal_flags & FLAG_INTERNAL_SNOOZED) != !!has_snoozedannot) {
         printf("%s uid %u snoozed mismatch\n", mailbox_name(mailbox), record->uid);
         syslog(LOG_ERR, "%s uid %u snoozed mismatch", mailbox_name(mailbox), record->uid);
         if (has_snoozedannot) record->internal_flags |= FLAG_INTERNAL_SNOOZED;
