@@ -417,11 +417,6 @@ typedef enum _MsgInternalFlags {
 } MsgInternalFlags;
 
 #define FLAGS_SYSTEM   (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT|FLAG_SEEN)
-#define FLAGS_INTERNAL (FLAG_INTERNAL_SPLITCONVERSATION |       \
-                        FLAG_INTERNAL_NEEDS_CLEANUP |           \
-                        FLAG_INTERNAL_ARCHIVED |                \
-                        FLAG_INTERNAL_UNLINKED |                \
-                        FLAG_INTERNAL_EXPUNGED)
 
 #define OPT_POP3_NEW_UIDL (1<<0)        /* added for Outlook stupidity */
 /* NOTE: not used anymore - but don't reuse it */
