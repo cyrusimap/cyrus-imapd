@@ -519,7 +519,7 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
                 fname->mtime = atoi(d->data);
             }
             else if (!strcmp(key, "N")) {
-                xstrncpy(fname->dbname, d->data, MAX_MAILBOX_NAME);
+                fname->name = mboxname_from_dbname(d->data);
             }
         }
         else {
@@ -1003,16 +1003,19 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
     return r;
 }
 
-static void add_former_name(struct dlist *name_history, const char *dbname,
+static void add_former_name(struct dlist *name_history, const char *name,
                             time_t mtime, modseq_t foldermodseq)
 {
     struct dlist *fname = dlist_newkvlist(NULL, "");
+    char *dbname = mboxname_to_dbname(name);
 
     dlist_setatom(fname, "N", dbname);
     dlist_setnum64(fname, "F", foldermodseq);
     dlist_setdate(fname, "M", mtime);
 
     dlist_push(name_history, fname);
+
+    free(dbname);
 }
 
 static int mboxlist_update_entry(const char *name,
@@ -1056,17 +1059,15 @@ static int mboxlist_update_entry(const char *name,
                 /* Existing mailbox */
                 while (oldid->name_history.count) {
                     former_name_t *fname = ptrarray_shift(&oldid->name_history);
-                    add_former_name(name_history, fname->dbname,
+                    add_former_name(name_history, fname->name,
                                     fname->mtime, fname->foldermodseq);
                     free(fname);
                 }
 
                 if (strcmp(name, oldid->name)) {
                     /* Renamed mailbox */
-                    char *dbname = mboxname_to_dbname(oldid->name);
-                    add_former_name(name_history, dbname,
+                    add_former_name(name_history, oldid->name,
                                     time(NULL), oldid->foldermodseq);
-                    free(dbname);
                 }
                 mboxlist_entry_free(&oldid);
             }

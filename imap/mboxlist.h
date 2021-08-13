@@ -128,7 +128,7 @@ struct mboxlist_entry {
 typedef struct mboxlist_entry mbentry_t;
 
 typedef struct {
-    char dbname[MAX_MAILBOX_NAME+1];
+    char *name;
     modseq_t foldermodseq;
     time_t mtime;
 } former_name_t;
