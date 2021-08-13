@@ -1688,7 +1688,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
 
         AC_ARG_WITH(nghttp3, [AS_HELP_STRING([--without-nghttp3], [disable HTTP/3 support (check)])],,[with_nghttp3="check"])
         AC_ARG_WITH(ngtcp2, [AS_HELP_STRING([--without-ngtcp2], [disable QUIC support (check)])],,[with_ngtcp2="check"])
-        if test "x$with_nghttp3" != "xno" -a "x$with_ngtcp" != "xno"; then
+        if test "x$with_nghttp3" != "xno" -a "x$with_ngtcp2" != "xno"; then
                 PKG_CHECK_MODULES([NGHTTP3], [libnghttp3 libngtcp2 libngtcp2_crypto_openssl], [
                         with_nghttp3=yes
                         with_ngtcp2=yes
@@ -1709,6 +1709,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                         with_ngtcp2=no
                 ])
         else
+                with_nghttp3=no
                 with_ngtcp2=no
         fi
 
