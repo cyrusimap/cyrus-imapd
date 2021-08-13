@@ -456,6 +456,9 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     /* ignore intermediates */
     if ((data->mbentry->mbtype & MBTYPE_INTERMEDIATE))
         return 0;
+    /* ignore remote */
+    if ((data->mbentry->mbtype & MBTYPE_REMOTE))
+        return 0;
 
     signals_poll();
 
