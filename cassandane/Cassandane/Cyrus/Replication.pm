@@ -2123,7 +2123,7 @@ sub test_splitbrain_different_uniqueid_nonempty
 
         # sync server should have logged the failure
         my @rlines = $self->{replica}->getsyslog();
-        $self->assert_matches(qr/SYNCNOTICE: mailbox uniqueid changed - retry/, "@rlines");
+        $self->assert_matches(qr/SYNCERROR: mailbox uniqueid changed - retry/, "@rlines");
     }
 
     $rtalk = $replica_store->get_client();
@@ -2180,7 +2180,7 @@ sub test_splitbrain_different_uniqueid_used
 
         # sync server should have logged the failure
         my @rlines = $self->{replica}->getsyslog();
-        $self->assert_matches(qr/SYNCNOTICE: mailbox uniqueid changed - retry/, "@rlines");
+        $self->assert_matches(qr/SYNCERROR: mailbox uniqueid changed - retry/, "@rlines");
     }
 
     $rtalk = $replica_store->get_client();
