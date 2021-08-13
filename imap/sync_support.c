@@ -7297,6 +7297,19 @@ static void split_user_mailboxes(const char *key __attribute__((unused)),
             continue;
 
         sync_name_list_add(mboxname_list, action->name);
+        mbentry_t *mbentry_byname = NULL;
+        mbentry_t *mbentry_byid = NULL;
+        int r = mboxlist_lookup_allow_all(action->name, &mbentry_byname, NULL);
+        if (!r) r = mboxlist_lookup_by_uniqueid(mbentry_byname->uniqueid, &mbentry_byid, NULL);
+        if (!r) {
+            int i;
+            for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
+                const former_name_t *fname = ptrarray_nth(&mbentry_byid->name_history, i);
+                sync_name_list_add(mboxname_list, fname->name);
+            }
+        }
+        mboxlist_entry_free(&mbentry_byid);
+        mboxlist_entry_free(&mbentry_byname);
     }
 
     if (mboxname_list->count) {
