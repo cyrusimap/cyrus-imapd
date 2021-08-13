@@ -3530,7 +3530,7 @@ EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock,
 
     init_internal();
 
-    if (!prefix) prefix = "";
+    if (!prefix || !*prefix) prefix = "";
     else {
         mbname_t *mbname = mbname_from_intname(prefix);
         if (prefix[strlen(prefix)-1] == '.') {
