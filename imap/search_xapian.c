@@ -1251,6 +1251,13 @@ static int upgrade(const char *userid)
     }
 
 out:
+    strarray_free(active);
+    strarray_free(activedirs);
+    strarray_free(activetiers);
+    if (activefile) {
+        mappedfile_unlock(activefile);
+        mappedfile_close(&activefile);
+    }
     mailbox_close(&inbox);
     free(inboxname);
     buf_free(&buf);
