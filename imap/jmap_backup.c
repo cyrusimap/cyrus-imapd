@@ -1474,7 +1474,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         return r;
     }
 
-    mailbox_user_flag(mailbox, "$restored", &userflag, 0);
+    // if there's a flag named "$restored", we'll remove it from every
+    // message and then from the mailbox itself if not in DRYRUN
+    mailbox_user_flag(mailbox, "$restored", &userflag, /*create*/0);
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
     while ((msg = mailbox_iter_step(iter))) {
