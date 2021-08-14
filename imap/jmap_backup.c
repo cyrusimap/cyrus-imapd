@@ -1474,12 +1474,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         return r;
     }
 
-    if (!(rrock->jrestore->mode & DRY_RUN)) {
-        if (!mailbox_user_flag(mailbox, "$restored", &userflag, 0)) {
-            /* Remove $restored flag from mailbox */
-            mailbox_remove_user_flag(mailbox, userflag);
-        }
-    }
+    mailbox_user_flag(mailbox, "$restored", &userflag, 0);
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
     while ((msg = mailbox_iter_step(iter))) {
@@ -1509,12 +1504,15 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         }
 
         /* Remove $restored flag from message */
-        if (userflag >= 0 &&
-            (record->user_flags[userflag/32] & (1<<userflag%31))) {
-            struct index_record *newrecord = (struct index_record *) record;
-
-            newrecord->user_flags[userflag/32] &= ~(1<<userflag%31);
-            r = mailbox_rewrite_index_record(mailbox, newrecord);
+        if (!(rrock->jrestore->mode & DRY_RUN) && userflag >= 0
+            && (record->user_flags[userflag/32] & (1<<userflag%31))) {
+            syslog(log_level,
+                   "UID %u: removing $restored flag (%d)", record->uid, userflag);
+            struct index_record newrecord;
+            /* copy the existing index_record */
+            memcpy(&newrecord, record, sizeof(struct index_record));
+            newrecord.user_flags[userflag/32] &= ~(1<<userflag%31);
+            r = mailbox_rewrite_index_record(mailbox, &newrecord);
             if (r) {
                 syslog(LOG_ERR,
                        "IOERROR: failed to rewrite index record for %s:%u",
@@ -1624,6 +1622,11 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
             message->ignore = 1;
         }
+    }
+
+    if (!(rrock->jrestore->mode & DRY_RUN) && userflag >= 0) {
+        mailbox_remove_user_flag(mailbox, userflag);
+        mailbox_commit(mailbox);
     }
 
     mailbox_iter_done(&iter);
