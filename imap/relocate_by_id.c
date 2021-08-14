@@ -267,6 +267,7 @@ int main(int argc, char **argv)
                     fprintf(stderr,
                             "Failed to open activefile for %s: %s\n",
                             activefname, error_message(r));
+                    free(activefname);
                     goto cleanup;
                 }
 
@@ -298,7 +299,9 @@ int main(int argc, char **argv)
                 strarray_free(items);
                 buf_free(&buf);
 
+                mappedfile_unlock(activefile);
                 mappedfile_close(&activefile);
+                free(activefname);
             }
 
             extname = mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
@@ -501,16 +504,19 @@ static int relocate(const char *old, const char *new)
  */
 static void get_searchparts(const char *key, const char *val, void *rock)
 {
-    struct search_rock *srock = (struct search_rock *) rock;
-
     const char *p = strstr(key, "searchpartition-");
     if (!p) return;
-    char *tier = xstrndup(key, p - key);
 
-    char *basedir = user_hash_xapian(srock->userid, val);
-    if (!basedir) return;
-
+    struct search_rock *srock = (struct search_rock *) rock;
+    char *tier = NULL;
+    char *basedir = NULL;
     struct buf buf = BUF_INITIALIZER;
+
+    basedir = user_hash_xapian(srock->userid, val);
+    if (!basedir) goto done;
+
+    tier = xstrndup(key, p - key);
+
     int i;
     for (i = 0; i < strarray_size(&srock->tiernames); i++) {
         if (!strcmp(tier, strarray_nth(&srock->tiernames, i))) {
@@ -527,5 +533,9 @@ static void get_searchparts(const char *key, const char *val, void *rock)
             strarray_append(srock->newpaths, buf_cstring(&buf));
         }
     }
+
+done:
+    free(tier);
+    free(basedir);
     buf_free(&buf);
 }
