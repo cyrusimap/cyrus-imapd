@@ -536,15 +536,15 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
 
         if (r) append_abort(&as);
         else {
-            r = append_commit(&as);
             /* If this resource was previously destroyed
                (not replaced by an update) we need to bump the deletedmodseq
                since we will no longer be able to differentiate between
                whether this resource has just been created or updated */
-            if (!r && !is_update && record->modseq > tomailbox->i.deletedmodseq) {
+            if (!is_update && record->modseq > tomailbox->i.deletedmodseq) {
                 tomailbox->i.deletedmodseq = record->modseq;
                 mailbox_index_dirty(tomailbox);
             }
+            r = append_commit(&as);
         }
     }
     append_removestage(stage);
