@@ -83,6 +83,8 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
     const char *userid = addr;
     int i;
 
+    memset(param, 0, sizeof(struct caldav_sched_param));
+
     if (!addr) return HTTP_NOT_FOUND;
 
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
@@ -92,8 +94,6 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
            "caladdress_lookup(userid: '%s', schedule_addresses: '%s')",
            userid, addresses);
     free(addresses);
-
-    memset(param, 0, sizeof(struct caldav_sched_param));
 
     param->userid = xstrdup(userid);
 
@@ -829,6 +829,8 @@ int sched_busytime_query(struct transaction_t *txn,
     else
         org_authstate = auth_newstate(sparam.userid);
 
+    sched_param_fini(&sparam);
+
     /* Start construction of our schedule-response */
     if (!(root =
           init_xml_response("schedule-response",
@@ -1002,6 +1004,8 @@ int sched_busytime_query(struct transaction_t *txn,
 
             icalproperty_free(prop);
         }
+
+        sched_param_fini(&sparam);
     }
 
     buf_reset(&txn->buf);
