@@ -1865,6 +1865,9 @@ sub test_override_multiuser
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event to start in a few seconds
     my $startdt = $now->clone();
