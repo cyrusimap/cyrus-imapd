@@ -5,6 +5,8 @@
 #include <sys/resource.h> /* for rlim_t */
 
 #include "libconfig.h" /* for config_dir and IMAPOPT_SYNC_MACHINEID */
+#include "hash.h"
+#include "ptrarray.h"
 #include "strarray.h"
 
 struct service {
@@ -22,6 +24,10 @@ struct service {
     /* communication info */
     int socket;                 /* client/child communication channel */
     int stat[2];                /* master/child communication channel */
+
+    /* QUIC connection handling */
+    ptrarray_t *quic_ready;     /* list of children ready for service */
+    hash_table *quic_active;    /* table of children with active connections */
 
     /* limits */
     int desired_workers;        /* num child processes to have ready */

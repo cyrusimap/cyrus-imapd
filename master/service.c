@@ -293,6 +293,7 @@ int main(int argc, char **argv, char **envp)
     int debug_stdio = 0;
     int max_use = MAX_USE;
     int reuse_timeout = REUSE_TIMEOUT;
+    int is_quic = 0;
     int soctype;
     socklen_t typelen = sizeof(soctype);
     struct sockaddr socname;
@@ -450,19 +451,32 @@ int main(int argc, char **argv, char **envp)
             return 1;
         }
 
-        /* figure out what sort of socket this is */
-        if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
-                    (char *) &soctype, &typelen) < 0) {
-            syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
+        /* figure out what sort of file descriptor this is */
+        if (fstat(LISTEN_FD, &sbuf) < 0) {
+            syslog(LOG_ERR, "fstat on listener failed: %m");
             if (MESSAGE_MASTER_ON_EXIT)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             return 1;
         }
-        if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
-            syslog(LOG_ERR, "getsockname: failed: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
-                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-            return 1;
+
+        if (S_ISFIFO(sbuf.st_mode)) {
+            is_quic = 1;
+        }
+        else {
+            /* figure out what sort of socket this is */
+            if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
+                           (char *) &soctype, &typelen) < 0) {
+                syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
+                if (MESSAGE_MASTER_ON_EXIT)
+                    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                return 1;
+            }
+            if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
+                syslog(LOG_ERR, "getsockname: failed: %m");
+                if (MESSAGE_MASTER_ON_EXIT)
+                    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                return 1;
+            }
         }
 
         if (service_init(service_argv.count, service_argv.data, envp) != 0) {
@@ -523,7 +537,13 @@ int main(int argc, char **argv, char **envp)
                 break;
             }
 
-            if (soctype == SOCK_STREAM) {
+            if (is_quic) {
+                if (safe_wait_readable(LISTEN_FD) < 0)
+                    continue;
+
+                fd = LISTEN_FD;
+            }
+            else if (soctype == SOCK_STREAM) {
                 /* Wait for the file descriptor to be connected to, in a
                  * signal-safe manner.  This ensures the accept() does
                  * not block and we don't need to make it signal-safe.  */
@@ -589,7 +609,7 @@ int main(int argc, char **argv, char **envp)
 
         if (fd < 0 && (signals_poll() || newfile)) {
             /* timed out (SIGALRM), SIGHUP, or new process file */
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT || is_quic)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             service_abort(0);
         }
@@ -654,6 +674,8 @@ int main(int argc, char **argv, char **envp)
 
         notify_master(STATUS_FD, MASTER_SERVICE_AVAILABLE);
     }
+
+    if (is_quic) notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 
     service_abort(0);
     return 0;

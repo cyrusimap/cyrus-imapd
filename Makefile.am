@@ -791,6 +791,7 @@ include_HEADERS = \
 	lib/nonblock.h \
 	lib/parseaddr.h \
 	lib/procinfo.h \
+	lib/ptrarray.h \
 	lib/retry.h \
 	lib/rfc822tok.h \
 	lib/seqset.h \
@@ -818,7 +819,6 @@ noinst_HEADERS += \
 	lib/libconfig.h \
 	lib/md5.h \
 	lib/prot.h \
-	lib/ptrarray.h \
 	lib/util.h \
 	lib/xsha1.h \
 	lib/xstrlcat.h \
@@ -1517,7 +1517,6 @@ lib_libcyrus_la_SOURCES = \
 	lib/parseaddr.c \
 	lib/procinfo.c \
 	lib/prot.c \
-	lib/ptrarray.c \
 	lib/rfc822tok.c \
 	lib/seqset.c \
 	lib/signals.c \
@@ -1569,6 +1568,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/hashu64.c \
 	lib/libconfig.c \
 	lib/mpool.c \
+	lib/ptrarray.c \
 	lib/retry.c \
 	lib/smallarrayu64.c \
 	lib/strarray.c \

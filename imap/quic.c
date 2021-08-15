@@ -59,10 +59,9 @@
 
 #include <openssl/rand.h>
 
-#define MAX_DATAGRAM_SIZE 1350
-
-static hash_table conn_table = HASH_TABLE_INITIALIZER;
-
+static int send_fd = -1;
+static struct sockaddr_storage local_addr;
+static socklen_t local_addrlen = sizeof(local_addr);
 static SSL_CTX *tls_ctx = NULL;
 
 struct quic_context {
@@ -108,6 +107,8 @@ static int set_encryption_secrets(SSL *ssl, OSSL_ENCRYPTION_LEVEL ossl_level,
     return 1;
 }
 
+#define MAX_CRYPTO_DATA  32768  // XXX  Can we assume <= 32KB ?
+
 static int add_handshake_data(SSL *ssl, OSSL_ENCRYPTION_LEVEL ossl_level,
                               const uint8_t *data, size_t len)
 {
@@ -118,6 +119,12 @@ static int add_handshake_data(SSL *ssl, OSSL_ENCRYPTION_LEVEL ossl_level,
     size_t cur_pos = buf_len(crypto_data);
 
     syslog(LOG_DEBUG, "add_handshake_data(%d, %ld)", level, len);
+
+    if (!buf_base(crypto_data)) {
+        buf_ensure(crypto_data, MAX_CRYPTO_DATA);
+    }
+
+    assert(buf_len(crypto_data) + len <= MAX_CRYPTO_DATA);
 
     buf_appendmap(crypto_data, (const char *) data, len);
     data = (const uint8_t *) buf_base(crypto_data) + cur_pos;
@@ -180,7 +187,8 @@ HIDDEN int quic_init(struct http_connection *conn __attribute__((unused)),
         return HTTP_SERVER_ERROR;
     }
 
-    construct_hash_table(&conn_table, 100, 0);
+    send_fd = atoi(getenv("CYRUS_QUIC_FD"));
+    getsockname(send_fd, (struct sockaddr *) &local_addr, &local_addrlen);
 
     return 0;
 }
@@ -301,6 +309,24 @@ static void log_printf(void *user_data __attribute__((unused)),
     buf_free(&buf);
 }
 
+static void close_connection(struct http_connection *conn)
+{
+    struct quic_context *ctx = (struct quic_context *) conn->sess_ctx;
+
+    syslog(LOG_DEBUG, "close_connection");
+
+    ngtcp2_conn_del(ctx->qconn);
+
+    int i;
+    for (i = 0; i < 3; i++) {
+        buf_free(&ctx->crypto_data[i]);
+    }
+
+    free(ctx);
+
+    conn->sess_ctx = NULL;
+}
+
 static ngtcp2_callbacks callbacks = {
     NULL, // client_initial
     ngtcp2_crypto_recv_client_initial_cb,
@@ -341,43 +367,33 @@ static ngtcp2_callbacks callbacks = {
 
 HIDDEN void quic_input(struct http_connection *conn)
 {
-    static struct sockaddr_storage local_addr;
-    static socklen_t local_addrlen = 0;
-    struct quic_context *ctx = NULL;
-    int r;
-
-    if (!local_addrlen) {
-        local_addrlen = sizeof(local_addr);
-        getsockname(conn->pin->fd,
-                    (struct sockaddr *) &local_addr, &local_addrlen);
-    }
-
+    struct quic_context *ctx = conn->sess_ctx;
     struct sockaddr_storage remote_addr;
-    socklen_t remote_addrlen = sizeof(struct sockaddr_storage);
+    socklen_t remote_addrlen;
     uint8_t data[USHRT_MAX];
-    ssize_t nread, nwrite, sent;
+    ssize_t datalen, nread = 0, nwrite, sent;
+    int n, r;
 
-    memset(&remote_addr, 0, remote_addrlen);
-
-    do {
-        nread = recvfrom(conn->pin->fd, data, sizeof(data), 0,
-                         (struct sockaddr *) &remote_addr, &remote_addrlen);
-    } while (nread < 0 && errno == EINTR);
-
-    syslog(LOG_DEBUG, "quic_input: read %zd bytes", nread);
-
-    if (nread < 0) {
-        if ((errno == EWOULDBLOCK) || (errno == EAGAIN)) {
-            syslog(LOG_DEBUG, "quic_input: would block");
-        }
-        else {
-            syslog(LOG_ERR, "Error reading QUIC datagram: %m");
-        }
-        return;
+    prot_read(conn->pin, (char *) &remote_addrlen, sizeof(remote_addrlen));
+    prot_read(conn->pin, (char *) &remote_addr, remote_addrlen);
+    prot_read(conn->pin, (char *) &datalen, sizeof(datalen));
+    for (; datalen; datalen -= n, nread += n) {
+        n = prot_read(conn->pin, (char *) data + nread, datalen);
     }
+
+    syslog(LOG_DEBUG, "quic_input: read %zd of %zd bytes", nread, datalen);
 
     if (nread == 0) {
-        /* XXX  Is this EOF or just no data? */
+        if (prot_IS_EOF(conn->pin)) {
+            /* Client closed connection */
+            syslog(LOG_DEBUG, "client closed connection");
+        }
+        else if (prot_error(conn->pin)) {
+            /* Client timeout or I/O error */
+            conn->close_str = prot_error(conn->pin);
+        }
+
+        conn->close = 1;
         return;
     }
 
@@ -406,12 +422,6 @@ HIDDEN void quic_input(struct http_connection *conn)
                ngtcp2_strerror(r));
         return;
     }
-
-    /* Lookup connection id */
-    char key[NGTCP2_MAX_CIDLEN * 2 + 1];
-    bin_to_hex(scid, scidlen, key, 0);
-    ctx = hash_lookup(key, &conn_table);
-    syslog(LOG_DEBUG, "scid: 0x%s, found: %d", key, ctx != NULL);
 
     if (!ctx) {
         ngtcp2_cid scid;
@@ -449,7 +459,7 @@ HIDDEN void quic_input(struct http_connection *conn)
 //                                                       token, sizeof(token));
 
                 do {
-                    sent = sendto(conn->pout->fd, data, nwrite, 0,
+                    sent = sendto(send_fd, data, nwrite, 0,
                                   (struct sockaddr *) &remote_addr,
                                   remote_addrlen);
                 } while (sent < 0 && errno == EINTR);
@@ -502,14 +512,16 @@ HIDDEN void quic_input(struct http_connection *conn)
 
         syslog(LOG_DEBUG, "ngtcp2_conn_server_new: %s",  ngtcp2_strerror(r));
 
-        hash_insert(key, ctx, &conn_table);
-
-        SSL *tls = ctx->tls = SSL_new(tls_ctx);
+        SSL *tls = SSL_new(tls_ctx);
         SSL_set_app_data(tls, ctx);
         SSL_set_accept_state(tls);
         SSL_set_quic_early_data_enabled(tls, 0);
 
         ngtcp2_conn_set_tls_native_handle(ctx->qconn, tls);
+
+        ctx->tls = tls;
+        conn->sess_ctx = ctx;
+        ptrarray_add(&conn->reset_callbacks, &close_connection);
     }
 
     ngtcp2_pkt_info pi = { NGTCP2_ECN_NOT_ECT };
@@ -520,7 +532,7 @@ HIDDEN void quic_input(struct http_connection *conn)
     while ((nwrite = ngtcp2_conn_write_pkt(ctx->qconn, &path, &pi,
                                            data, sizeof(data), timestamp())) > 0) {
         do {
-            sent = sendto(conn->pout->fd, data, nwrite, 0,
+            sent = sendto(send_fd, data, nwrite, 0,
                           path.remote.addr, path.remote.addrlen);
         } while (sent < 0 && errno == EINTR);
 
