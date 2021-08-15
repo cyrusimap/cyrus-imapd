@@ -173,17 +173,23 @@ static int begin_headers_cb(nghttp3_conn *conn, int64_t stream_id,
         zstd_init(txn);
     }
 
+    /* Create header cache */
+    if (!(txn->req_hdrs = spool_new_hdrcache())) {
+        syslog(LOG_ERR, "Unable to create header cache");
+        return NGHTTP3_ERR_CALLBACK_FAILURE;
+    }
+
+
     struct http3_stream *strm = xzmalloc(sizeof(struct http3_stream));
 
     strm->id = stream_id;
     txn->strm_ctx = strm;
     ptrarray_add(&txn->done_callbacks, &stream_done);
 
-    /* Create header cache */
-    if (!(txn->req_hdrs = spool_new_hdrcache())) {
-        syslog(LOG_ERR, "Unable to create header cache");
-        return NGHTTP3_ERR_CALLBACK_FAILURE;
-    }
+    /* Tell syslog our stream-id */
+    buf_printf(&txn->buf, "%ld", strm->id);
+    spool_replace_header(xstrdup(":stream-id"),
+                         buf_release(&txn->buf), txn->req_hdrs);
 
     nghttp3_conn_set_stream_user_data(conn, stream_id, txn);
 
