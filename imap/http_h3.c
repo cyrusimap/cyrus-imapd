@@ -304,14 +304,10 @@ static nghttp3_callbacks callbacks = {
     NULL, // begin_trailers
     NULL, // recv_trailer
     NULL, // end_trailers
-    NULL, // begin_push_promise
-    NULL, // recv_push_promise
-    NULL, // end_push_promise
-    NULL, // cancel_push
     NULL, // send_stop_sending
-    NULL, // push_stream
     end_stream_cb,
     NULL, // reset_stream
+    NULL, // shutdown
 };
 
 static void begin_resp_headers(struct transaction_t *txn, long code);
