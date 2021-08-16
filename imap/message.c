@@ -1088,7 +1088,6 @@ EXPORTED void message_parse_charset_params(const struct param *params,
             if (param->value && *param->value) {
                 charset_t cs = charset_lookupname(param->value);
                 if (cs == CHARSET_UNKNOWN_CHARSET) {
-                    errno = 0;
                     xsyslog(LOG_NOTICE, "unknown charset", "charset=<%s>", param->value);
                     continue;
                 }

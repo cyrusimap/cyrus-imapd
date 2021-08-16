@@ -2099,6 +2099,8 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
 {
     static struct buf buf = BUF_INITIALIZER;
     int saved_errno = errno;
+    int want_diag = (LOG_PRI(priority) != LOG_NOTICE
+                     && LOG_PRI(priority) != LOG_INFO);
 
     buf_reset(&buf);
     buf_appendcstr(&buf, description);
@@ -2112,14 +2114,16 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
 
         buf_putc(&buf, ' ');
     }
-    if (saved_errno) {
-        buf_appendmap(&buf, "syserror=<", 10);
-        buf_appendcstr(&buf, strerror(saved_errno));
-        buf_appendmap(&buf, "> ", 2);
+    if (want_diag) {
+        if (saved_errno) {
+            buf_appendmap(&buf, "syserror=<", 10);
+            buf_appendcstr(&buf, strerror(saved_errno));
+            buf_appendmap(&buf, "> ", 2);
+        }
+        buf_appendmap(&buf, "func=<", 6);
+        if (func) buf_appendcstr(&buf, func);
+        buf_putc(&buf, '>');
     }
-    buf_appendmap(&buf, "func=<", 6);
-    if (func) buf_appendcstr(&buf, func);
-    buf_putc(&buf, '>');
 
     syslog(priority, "%s", buf_cstring(&buf));
     buf_free(&buf);
