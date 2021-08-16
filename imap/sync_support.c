@@ -7306,8 +7306,8 @@ static void split_user_mailboxes(const char *key __attribute__((unused)),
         if (!r) {
             int i;
             for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
-                const former_name_t *fname = ptrarray_nth(&mbentry_byid->name_history, i);
-                sync_name_list_add(mboxname_list, fname->name);
+                const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
+                sync_name_list_add(mboxname_list, histitem->name);
             }
         }
         mboxlist_entry_free(&mbentry_byid);

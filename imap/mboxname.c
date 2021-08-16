@@ -2306,8 +2306,8 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
             if (!r) {
                 int i;
                 for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
-                    const former_name_t *fname = ptrarray_nth(&mbentry_byid->name_history, i);
-                    char *olduserid = mboxname_to_userid(fname->name);
+                    const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
+                    char *olduserid = mboxname_to_userid(histitem->name);
                     char *oldinboxname = mboxname_user_mbox(olduserid, NULL);
                     r = mboxlist_lookup_allow_all(oldinboxname, &mbentry, NULL);
                     free(oldinboxname);
