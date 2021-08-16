@@ -1506,6 +1506,13 @@ sub test_quota_f_prefix
                          storage => int($bogus_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
                          storage => int($exp_baseplus/1024));
+
+    xlog $self, "Run a final quota -f to fix up everything";
+    $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
+    $self->_check_usages(quotaroot => 'user.base',
+                         storage => int($exp_base/1024));
+    $self->_check_usages(quotaroot => 'user.baseplus',
+                         storage => int($exp_baseplus/1024));
 }
 
 sub bogus_test_upgrade_v2_4

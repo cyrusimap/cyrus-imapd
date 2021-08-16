@@ -328,7 +328,7 @@ sub test_splitbrain
 # Test replication of mailbox only after a rename
 #
 sub test_splitbrain_mailbox
-    :min_version_3_1 :NoAltNameSpace
+    :min_version_3_1 :max_version_3_4 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -2189,7 +2189,5 @@ sub test_splitbrain_different_uniqueid_used
 
     $self->assert_str_not_equals($mid, $rid);
 }
-
-1;
 
 1;

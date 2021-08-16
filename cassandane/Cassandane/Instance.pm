@@ -1334,6 +1334,36 @@ sub _check_cores
     die "Core files found in $coredir" if $ncores;
 }
 
+sub _check_sanity
+{
+    my ($self) = @_;
+    my $basedir = $self->{basedir};
+    my $found = 0;
+    eval {
+        $self->run_command({redirects => {stdout => "$basedir/quota.out", stderr => "$basedir/quota.err"}, cyrus => 1}, 'quota', '-f', '-q');
+    };
+    if ($@) {
+        xlog "quota -f failed, $@";
+        $found = 1;
+    }
+    eval {
+        $self->run_command({redirects => {stdout => "$basedir/reconstruct.out", stderr => "$basedir/reconstruct.err"}, cyrus => 1}, 'reconstruct', '-q');
+    };
+    if ($@) {
+        xlog "reconstruct failed, $@";
+        $found = 1;
+    }
+    for my $file ("quota.out", "quota.err", "reconstruct.out", "reconstruct.err") {
+        next unless open(FH, "<$basedir/$file");
+        while (<FH>) {
+            next unless $_;
+            $found = 1;
+            xlog "INCONSISTENCY FOUND: $file $_";
+        }
+    }
+    return $found;
+}
+
 sub _check_syslog
 {
     my ($self) = @_;
@@ -1416,6 +1446,8 @@ sub stop
     return if ($self->{_stopped});
     $self->{_stopped} = 1;
 
+    my $sanity_errors = $self->_check_sanity();
+
     xlog "stop $self->{description}: basedir $self->{basedir}";
 
     foreach my $name ($self->_list_pid_files())
@@ -1436,6 +1468,8 @@ sub stop
     $self->_check_valgrind_logs();
     $self->_check_cores();
     $self->_check_syslog();
+
+    die "INCONSISTENCIES FOUND IN SPOOL" if $sanity_errors;
 }
 
 sub cleanup
