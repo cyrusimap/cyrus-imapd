@@ -400,6 +400,13 @@ typedef enum _MsgFlags {
     FLAG_SEEN               = (1<<4),
 } MsgFlags;
 
+/* NOTE: you can only use up to 1<<15 for MsgFlags and down to 1<<16 for
+ * InternalFlags unless you change the code in mailbox_buf_to_index_record
+ * which is currently:
+ *     record->system_flags = stored_system_flags & 0x0000ffff;
+ *     record->internal_flags = stored_system_flags & 0xffff0000;
+ */
+
 typedef enum _MsgInternalFlags {
     FLAG_INTERNAL_SNOOZED            = (1<<26),
     FLAG_INTERNAL_SPLITCONVERSATION  = (1<<27),
@@ -410,11 +417,6 @@ typedef enum _MsgInternalFlags {
 } MsgInternalFlags;
 
 #define FLAGS_SYSTEM   (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT|FLAG_SEEN)
-#define FLAGS_INTERNAL (FLAG_INTERNAL_SPLITCONVERSATION |       \
-                        FLAG_INTERNAL_NEEDS_CLEANUP |           \
-                        FLAG_INTERNAL_ARCHIVED |                \
-                        FLAG_INTERNAL_UNLINKED |                \
-                        FLAG_INTERNAL_EXPUNGED)
 
 #define OPT_POP3_NEW_UIDL (1<<0)        /* added for Outlook stupidity */
 /* NOTE: not used anymore - but don't reuse it */

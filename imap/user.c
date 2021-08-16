@@ -564,7 +564,7 @@ static int find_cb(void *rockp __attribute__((unused)),
     return r;
 }
 
-int user_deletequotaroots(const char *userid)
+EXPORTED int user_deletequotaroots(const char *userid)
 {
     char *inbox = mboxname_user_mbox(userid, NULL);
     int r = quotadb_foreach(inbox, strlen(inbox), &find_p, &find_cb, inbox);

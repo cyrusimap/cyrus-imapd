@@ -7875,6 +7875,13 @@ submboxes:
         r = mboxlist_allmbox(oldmailboxname, renmbox, &rock, MBOXTREE_INTERMEDIATES);
     }
 
+
+    /* take care of deleting old quotas */
+    if (!r && rename_user) {
+        user_deletequotaroots(olduser);
+        sync_log_unuser(olduser);
+    }
+
     /* take care of intermediaries */
     mboxlist_update_intermediaries(oldmailboxname, mbtype, 0);
     mboxlist_update_intermediaries(newmailboxname, mbtype, 0);

@@ -536,15 +536,15 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
 
         if (r) append_abort(&as);
         else {
-            r = append_commit(&as);
             /* If this resource was previously destroyed
                (not replaced by an update) we need to bump the deletedmodseq
                since we will no longer be able to differentiate between
                whether this resource has just been created or updated */
-            if (!r && !is_update && record->modseq > tomailbox->i.deletedmodseq) {
+            if (!is_update && record->modseq > tomailbox->i.deletedmodseq) {
                 tomailbox->i.deletedmodseq = record->modseq;
                 mailbox_index_dirty(tomailbox);
             }
+            r = append_commit(&as);
         }
     }
     append_removestage(stage);
@@ -1474,12 +1474,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         return r;
     }
 
-    if (!(rrock->jrestore->mode & DRY_RUN)) {
-        if (!mailbox_user_flag(mailbox, "$restored", &userflag, 0)) {
-            /* Remove $restored flag from mailbox */
-            mailbox_remove_user_flag(mailbox, userflag);
-        }
-    }
+    // if there's a flag named "$restored", we'll remove it from every
+    // message and then from the mailbox itself if not in DRYRUN
+    mailbox_user_flag(mailbox, "$restored", &userflag, /*create*/0);
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
     while ((msg = mailbox_iter_step(iter))) {
@@ -1509,12 +1506,15 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         }
 
         /* Remove $restored flag from message */
-        if (userflag >= 0 &&
-            (record->user_flags[userflag/32] & (1<<userflag%31))) {
-            struct index_record *newrecord = (struct index_record *) record;
-
-            newrecord->user_flags[userflag/32] &= ~(1<<userflag%31);
-            r = mailbox_rewrite_index_record(mailbox, newrecord);
+        if (!(rrock->jrestore->mode & DRY_RUN) && userflag >= 0
+            && (record->user_flags[userflag/32] & (1<<userflag%31))) {
+            syslog(log_level,
+                   "UID %u: removing $restored flag (%d)", record->uid, userflag);
+            struct index_record newrecord;
+            /* copy the existing index_record */
+            memcpy(&newrecord, record, sizeof(struct index_record));
+            newrecord.user_flags[userflag/32] &= ~(1<<userflag%31);
+            r = mailbox_rewrite_index_record(mailbox, &newrecord);
             if (r) {
                 syslog(LOG_ERR,
                        "IOERROR: failed to rewrite index record for %s:%u",
@@ -1624,6 +1624,11 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
             message->ignore = 1;
         }
+    }
+
+    if (!(rrock->jrestore->mode & DRY_RUN) && userflag >= 0) {
+        mailbox_remove_user_flag(mailbox, userflag);
+        mailbox_commit(mailbox);
     }
 
     mailbox_iter_done(&iter);

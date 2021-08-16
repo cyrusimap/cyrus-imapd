@@ -2001,8 +2001,8 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     stored_system_flags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
 
     /* de-serialise system flags and internal flags */
-    record->system_flags = stored_system_flags & 0x000000ff;
-    record->internal_flags = stored_system_flags & 0xff000000;
+    record->system_flags = stored_system_flags & 0x0000ffff;
+    record->internal_flags = stored_system_flags & 0xffff0000;
 
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
         record->user_flags[n] = ntohl(*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)));
@@ -6947,8 +6947,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         record->user_flags[i] &= valid_user_flags[i];
     }
 
-    /* check if the snoozed status matches */
-    if (!!(record->internal_flags & FLAG_INTERNAL_SNOOZED) != !!has_snoozedannot) {
+    /* check if the snoozed status matches (unless expunged, which shouldn't be snoozed) */
+    if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)
+      && !!(record->internal_flags & FLAG_INTERNAL_SNOOZED) != !!has_snoozedannot) {
         printf("%s uid %u snoozed mismatch\n", mailbox_name(mailbox), record->uid);
         syslog(LOG_ERR, "%s uid %u snoozed mismatch", mailbox_name(mailbox), record->uid);
         if (has_snoozedannot) record->internal_flags |= FLAG_INTERNAL_SNOOZED;
@@ -7895,9 +7896,13 @@ HIDDEN int mailbox_changequotaroot(struct mailbox *mailbox,
     if (mailbox->quotaroot) {
         quota_t quota_diff[QUOTA_NUMRESOURCES];
 
-        if (root && strlen(mailbox->quotaroot) >= strlen(root)) {
-            /* Part of a child quota root - skip */
-            goto done;
+        if (root) {
+            size_t len = strlen(root);
+            if (strlen(mailbox->quotaroot) >= len && !strncmp(mailbox->quotaroot, root, len) &&
+                (mailbox->quotaroot[len] == '\0' || mailbox->quotaroot[len] == '.')) {
+                    /* Part of a child quota root - skip */
+                    goto done;
+            }
         }
 
         /* remove usage from the old quotaroot */

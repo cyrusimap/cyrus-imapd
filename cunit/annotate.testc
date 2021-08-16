@@ -754,43 +754,7 @@ static void test_delete(void)
                mailbox->uniqueid[0], mailbox->uniqueid[1], mailbox->uniqueid);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path)), 0);
     mailbox_close(&mailbox);
-
-    /* delete all the entries associated with the mailbox */
-
-    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
-    CU_ASSERT_EQUAL_FATAL(r, 0);
-
-    r = annotate_delete_mailbox(mailbox);
-    CU_ASSERT_EQUAL(r, 0);
-
-    CU_ASSERT_EQUAL(fexists(buf_cstring(&path)), -ENOENT);
-
-    /* check that the values are gone */
-
-    r = annotatemore_msg_lookup(mailbox, 0, COMMENT, /*userid*/"", &val2);
-    CU_ASSERT_EQUAL_FATAL(r, 0);
-    CU_ASSERT_PTR_NULL_FATAL(val2.s);
-    buf_free(&val2);
-
-    r = annotatemore_msg_lookup(mailbox, 1, COMMENT, /*userid*/"", &val2);
-    CU_ASSERT_EQUAL_FATAL(r, 0);
-    CU_ASSERT_PTR_NULL_FATAL(val2.s);
-    buf_free(&val2);
-
-    r = annotatemore_msg_lookup(mailbox, 3, COMMENT, /*userid*/"", &val2);
-    CU_ASSERT_EQUAL_FATAL(r, 0);
-    CU_ASSERT_PTR_NULL_FATAL(val2.s);
-    buf_free(&val2);
-
-    annotatemore_close();
-
-    CU_ASSERT_EQUAL(fexists(buf_cstring(&path)), -ENOENT);
-    buf_free(&path);
-
-    strarray_fini(&entries);
-    strarray_fini(&attribs);
     buf_free(&val);
-    mailbox_close(&mailbox);
 }
 
 static void test_rename(void)

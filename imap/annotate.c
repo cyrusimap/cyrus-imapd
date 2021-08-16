@@ -4058,18 +4058,9 @@ EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)
                               /*newuid*/0, /*newuserid*/NULL,
                               /*copy*/0);
         if (r && r != IMAP_MAILBOX_NONEXISTENT) goto out;
+
+        r = annotate_commit(d);
     }
-
-    /* remove the entire per-folder database */
-    r = annotate_dbname_mailbox(mailbox, &fname);
-    if (r) goto out;
-
-    /* (gnb)TODO: do we even need to do this?? */
-    if (unlink(fname) < 0 && errno != ENOENT) {
-        syslog(LOG_ERR, "cannot unlink %s: %m", fname);
-    }
-
-    r = annotate_commit(d);
 
 out:
     annotate_putdb(&d);

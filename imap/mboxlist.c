@@ -170,9 +170,10 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
 
     free(mbentry->legacy_specialuse);
 
-    former_name_t *fname;
-    while ((fname = ptrarray_pop(&mbentry->name_history))) {
-        free(fname);
+    former_name_t *histitem;
+    while ((histitem = ptrarray_pop(&mbentry->name_history))) {
+        free(histitem->name);
+        free(histitem);
     }
     ptrarray_fini(&mbentry->name_history);
 
@@ -510,16 +511,16 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             buf_putc(rock->aclbuf, '\t');
         }
         else if (rock->doinghistory) {
-            former_name_t *fname = ptrarray_tail(&rock->mbentry->name_history);
+            former_name_t *histitem = ptrarray_tail(&rock->mbentry->name_history);
 
             if (!strcmp(key, "F")) {
-                fname->foldermodseq = atomodseq_t(d->data);
+                histitem->foldermodseq = atomodseq_t(d->data);
             }
             else if (!strcmp(key, "M")) {
-                fname->mtime = atoi(d->data);
+                histitem->mtime = atoi(d->data);
             }
             else if (!strcmp(key, "N")) {
-                xstrncpy(fname->dbname, d->data, MAX_MAILBOX_NAME);
+                histitem->name = mboxname_from_dbname(d->data);
             }
         }
         else {
@@ -1003,16 +1004,19 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
     return r;
 }
 
-static void add_former_name(struct dlist *name_history, const char *dbname,
+static void add_former_name(struct dlist *name_history, const char *name,
                             time_t mtime, modseq_t foldermodseq)
 {
-    struct dlist *fname = dlist_newkvlist(NULL, "");
+    struct dlist *histitem = dlist_newkvlist(NULL, "");
+    char *dbname = mboxname_to_dbname(name);
 
-    dlist_setatom(fname, "N", dbname);
-    dlist_setnum64(fname, "F", foldermodseq);
-    dlist_setdate(fname, "M", mtime);
+    dlist_setatom(histitem, "N", dbname);
+    dlist_setnum64(histitem, "F", foldermodseq);
+    dlist_setdate(histitem, "M", mtime);
 
-    dlist_push(name_history, fname);
+    dlist_push(name_history, histitem);
+
+    free(dbname);
 }
 
 static int mboxlist_update_entry(const char *name,
@@ -1055,18 +1059,17 @@ static int mboxlist_update_entry(const char *name,
             if (oldid) {
                 /* Existing mailbox */
                 while (oldid->name_history.count) {
-                    former_name_t *fname = ptrarray_shift(&oldid->name_history);
-                    add_former_name(name_history, fname->dbname,
-                                    fname->mtime, fname->foldermodseq);
-                    free(fname);
+                    former_name_t *histitem = ptrarray_shift(&oldid->name_history);
+                    add_former_name(name_history, histitem->name,
+                                    histitem->mtime, histitem->foldermodseq);
+                    free(histitem->name);
+                    free(histitem);
                 }
 
                 if (strcmp(name, oldid->name)) {
                     /* Renamed mailbox */
-                    char *dbname = mboxname_to_dbname(oldid->name);
-                    add_former_name(name_history, dbname,
+                    add_former_name(name_history, oldid->name,
                                     time(NULL), oldid->foldermodseq);
-                    free(dbname);
                 }
                 mboxlist_entry_free(&oldid);
             }
@@ -3527,7 +3530,7 @@ EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock,
 
     init_internal();
 
-    if (!prefix) prefix = "";
+    if (!prefix || !*prefix) prefix = "";
     else {
         mbname_t *mbname = mbname_from_intname(prefix);
         if (prefix[strlen(prefix)-1] == '.') {

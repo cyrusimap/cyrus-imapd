@@ -3264,12 +3264,10 @@ out:
 
 static int sync_mailbox_byuniqueid(const char *uniqueid, void *rock)
 {
-    char *name = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
     mbentry_t *mbentry = NULL;
-    int r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+    int r = mboxlist_lookup_by_uniqueid(uniqueid, &mbentry, NULL);
     if (!r) r = sync_mailbox_byentry(mbentry, rock);
     mboxlist_entry_free(&mbentry);
-    free(name);
     return r;
 }
 
@@ -3774,13 +3772,11 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
 
     mbentry_t *mbentry = NULL;
     char *inbox = mboxname_user_mbox(userid, 0);
-    r = mboxlist_lookup_allow_all(inbox, &mbentry, NULL);
+    mboxlist_lookup_allow_all(inbox, &mbentry, NULL);
     free(inbox);
-    if (r) goto done;
 
     strarray_truncate(list, 0);
-    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, 0);
-    if (r) goto done;
+    mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, 0);
 
     /* delete in reverse so INBOX is last */
     int delflags = MBOXLIST_DELETE_FORCE;
@@ -3793,7 +3789,13 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         if (r) goto done;
     }
 
-    if (mbentry) r = user_deletedata(mbentry, 1);
+    if (mbentry && !(mbentry->mbtype & MBTYPE_DELETED)) {
+         r = user_deletedata(mbentry, 1);
+    }
+    else {
+        r = user_deletequotaroots(userid);
+        sync_log_unuser(userid);
+    }
 
  done:
     mboxname_release(&namespacelock);
@@ -6361,6 +6363,7 @@ static int do_folders(struct sync_client_state *sync_cs,
             r = mboxlist_lookup_allow_all(rfolder->name, &tombstone, NULL);
 
             if (r == 0 && (tombstone->mbtype & MBTYPE_DELETED) == MBTYPE_DELETED) {
+                mboxlist_entry_free(&tombstone);
                 r = sync_do_folder_delete(sync_cs, rfolder->name);
                 if (r) {
                     syslog(LOG_ERR, "sync_do_folder_delete(): failed: %s '%s'",
@@ -6369,6 +6372,7 @@ static int do_folders(struct sync_client_state *sync_cs,
                 }
             }
             else {
+                mboxlist_entry_free(&tombstone);
                 syslog(LOG_ERR, "%s: no tombstone for deleted mailbox %s (%s)",
                                 __func__, rfolder->name, error_message(r));
 
@@ -7295,6 +7299,19 @@ static void split_user_mailboxes(const char *key __attribute__((unused)),
             continue;
 
         sync_name_list_add(mboxname_list, action->name);
+        mbentry_t *mbentry_byname = NULL;
+        mbentry_t *mbentry_byid = NULL;
+        int r = mboxlist_lookup_allow_all(action->name, &mbentry_byname, NULL);
+        if (!r) r = mboxlist_lookup_by_uniqueid(mbentry_byname->uniqueid, &mbentry_byid, NULL);
+        if (!r) {
+            int i;
+            for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
+                const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
+                sync_name_list_add(mboxname_list, histitem->name);
+            }
+        }
+        mboxlist_entry_free(&mbentry_byid);
+        mboxlist_entry_free(&mbentry_byname);
     }
 
     if (mboxname_list->count) {

@@ -460,6 +460,10 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
     int thisquota = -1;
     struct txn *txn = NULL;
 
+    // skip mailbox types that we don't look at
+    if (mbentry->mbtype & MBTYPE_REMOTE) return 0;
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) return 0;
+
     test_sync_wait(mbentry->name);
 
     r = findroot(mbentry->name, &thisquota);

@@ -2292,13 +2292,34 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
     char *fname = NULL;
 
     if (mbname->localpart) {
-        char *mboxname = mboxname_user_mbox(mbname_userid(mbname), NULL);
+        char *inboxname = mboxname_user_mbox(mbname_userid(mbname), NULL);
         mbentry_t *mbentry = NULL;
+        int r = mboxlist_lookup_allow_all(inboxname, &mbentry, NULL);
+        free(inboxname);
 
-        int r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
-        free(mboxname);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            // look for the INBOX of previous names in order to see if we're mid-rename
+            mbentry_t *mbentry_byname = NULL;
+            mbentry_t *mbentry_byid = NULL;
+            int r2 = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry_byname, NULL);
+            if (!r2) r2 = mboxlist_lookup_by_uniqueid(mbentry_byname->uniqueid, &mbentry_byid, NULL);
+            if (!r2) {
+                int i;
+                for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
+                    const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
+                    char *olduserid = mboxname_to_userid(histitem->name);
+                    char *oldinboxname = mboxname_user_mbox(olduserid, NULL);
+                    r = mboxlist_lookup_allow_all(oldinboxname, &mbentry, NULL);
+                    free(oldinboxname);
+                    free(olduserid);
+                    if (r != IMAP_MAILBOX_NONEXISTENT) break;
+                }
+            }
+            mboxlist_entry_free(&mbentry_byid);
+            mboxlist_entry_free(&mbentry_byname);
+        }
 
-        if (!r && !(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
+        if (!r && mbentry && mbentry->uniqueid && !(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
             fname = mboxid_conf_getpath(mbentry->uniqueid, suffix);
         }
 
