@@ -252,7 +252,7 @@ static int handshake_completed_cb(ngtcp2_conn *conn,
 
     return 0;
 }
-
+#if 0
 static int acked_crypto_offset_cb(ngtcp2_conn *conn __attribute__((unused)),
                                   ngtcp2_crypto_level level,
                                   uint64_t offset, uint64_t datalen,
@@ -269,7 +269,7 @@ static int acked_crypto_offset_cb(ngtcp2_conn *conn __attribute__((unused)),
 #endif
     return 0;
 }
-
+#endif
 static int recv_stream_data_cb(ngtcp2_conn *conn,
                                uint32_t flags, int64_t stream_id, uint64_t offset,
                                const uint8_t *data, size_t datalen,
@@ -311,15 +311,12 @@ static int stream_close_cb(ngtcp2_conn *conn __attribute__((unused)),
     return 0;
 }
 
-static int rand_cb(uint8_t *dest, size_t destlen,
-                   const ngtcp2_rand_ctx *rand_ctx __attribute__((unused)),
-                   ngtcp2_rand_usage usage __attribute__((unused)))
+static void rand_cb(uint8_t *dest, size_t destlen,
+                   const ngtcp2_rand_ctx *rand_ctx __attribute__((unused)))
 {
     int r = RAND_bytes(dest, destlen);
 
     syslog(LOG_DEBUG, "rand_cb(%zu): %d", destlen, r);
-
-    return (r == 1 ? 0 : NGTCP2_ERR_CALLBACK_FAILURE);
 }
 
 static int get_new_connection_id_cb(ngtcp2_conn *conn __attribute__((unused)),
@@ -374,14 +371,13 @@ static ngtcp2_callbacks callbacks = {
     ngtcp2_crypto_decrypt_cb,
     ngtcp2_crypto_hp_mask_cb,
     recv_stream_data_cb,
-    acked_crypto_offset_cb,
     NULL, // acked_stream_data_offset
     stream_open_cb,
     stream_close_cb,
     NULL, // recv_stateless_reset
     NULL, // recv_retry
-    NULL, // extend_max_streams_bidi
-    NULL, // extend_max_streams_uni
+    NULL, // extend_max_local_streams_bidi
+    NULL, // extend_max_local_streams_uni
     rand_cb,
     get_new_connection_id_cb,
     NULL, // remove_connection_id
@@ -400,6 +396,8 @@ static ngtcp2_callbacks callbacks = {
     NULL, // recv_datagram
     NULL, // ack_datagram
     NULL, // lost_datagram
+    NULL, // get_path_challenge_data
+    NULL, // stream_stop_sending
 };
 
 static void send_data(int sock, ngtcp2_path *path, uint8_t *data, ssize_t nwrite)
