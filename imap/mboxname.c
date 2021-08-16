@@ -2301,9 +2301,9 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
             // look for the INBOX of previous names in order to see if we're mid-rename
             mbentry_t *mbentry_byname = NULL;
             mbentry_t *mbentry_byid = NULL;
-            r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry_byname, NULL);
-            if (!r) r = mboxlist_lookup_by_uniqueid(mbentry_byname->uniqueid, &mbentry_byid, NULL);
-            if (!r) {
+            int r2 = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry_byname, NULL);
+            if (!r2) r2 = mboxlist_lookup_by_uniqueid(mbentry_byname->uniqueid, &mbentry_byid, NULL);
+            if (!r2) {
                 int i;
                 for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
                     const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
