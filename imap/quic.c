@@ -252,24 +252,7 @@ static int handshake_completed_cb(ngtcp2_conn *conn,
 
     return 0;
 }
-#if 0
-static int acked_crypto_offset_cb(ngtcp2_conn *conn __attribute__((unused)),
-                                  ngtcp2_crypto_level level,
-                                  uint64_t offset, uint64_t datalen,
-                                  void *user_data __attribute__((unused)))
-{
-    struct quic_context *ctx = (struct quic_context *) user_data;
 
-    syslog(LOG_DEBUG, "acked_crypto_offset(%d, %lu, %lu, %lu)",
-           level, offset, datalen, buf_len(&ctx->crypto_data[level]));
-#if 0
-    if (offset + datalen >= buf_len(&ctx->crypto_data[level])) {
-        buf_free(&ctx->crypto_data[level]);
-    }
-#endif
-    return 0;
-}
-#endif
 static int recv_stream_data_cb(ngtcp2_conn *conn,
                                uint32_t flags, int64_t stream_id, uint64_t offset,
                                const uint8_t *data, size_t datalen,
@@ -312,7 +295,7 @@ static int stream_close_cb(ngtcp2_conn *conn __attribute__((unused)),
 }
 
 static void rand_cb(uint8_t *dest, size_t destlen,
-                   const ngtcp2_rand_ctx *rand_ctx __attribute__((unused)))
+                    const ngtcp2_rand_ctx *rand_ctx __attribute__((unused)))
 {
     int r = RAND_bytes(dest, destlen);
 
