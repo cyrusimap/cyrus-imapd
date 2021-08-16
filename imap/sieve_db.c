@@ -913,9 +913,13 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
     else if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Create locally */
         struct mailbox *mailbox = NULL;
+        mbentry_t mbentry = MBENTRY_INITIALIZER;
+        mbentry.name = (char *) mboxname;
+        mbentry.mbtype = MBTYPE_SIEVE;
 
-        r = mboxlist_createmailbox(mboxname, MBTYPE_SIEVE, NULL, 0,
-                                   userid, NULL, 0, 0, 0, 0, &mailbox);
+        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   0/*isadmin*/, userid, NULL/*auth_state*/,
+                                   0/*flags*/, &mailbox);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                    mboxname, error_message(r));
