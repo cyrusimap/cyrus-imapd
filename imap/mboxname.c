@@ -2319,7 +2319,7 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
             mboxlist_entry_free(&mbentry_byname);
         }
 
-        if (!r && !(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
+        if (!r && mbentry && mbentry->uniqueid && !(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
             fname = mboxid_conf_getpath(mbentry->uniqueid, suffix);
         }
 
