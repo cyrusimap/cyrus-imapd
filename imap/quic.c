@@ -67,11 +67,10 @@ struct quic_context {
     struct sockaddr_storage local_addr;
     socklen_t local_addrlen;
     struct buf clientbuf;
-    SSL_CTX *tls_ctx;
 
+    SSL_CTX *tls_ctx;
     SSL *tls;
 
-    struct buf crypto_data[3];
     uint8_t last_tls_alert;
 
     struct quic_app_context *app_ctx;
@@ -112,27 +111,14 @@ static int set_encryption_secrets(SSL *ssl, OSSL_ENCRYPTION_LEVEL ossl_level,
     return 1;
 }
 
-#define MAX_CRYPTO_DATA  32768  // XXX  Can we assume <= 32KB ?
-
 static int add_handshake_data(SSL *ssl, OSSL_ENCRYPTION_LEVEL ossl_level,
                               const uint8_t *data, size_t len)
 {
     struct quic_context *ctx = (struct quic_context *) SSL_get_app_data(ssl);
     ngtcp2_crypto_level level =
         ngtcp2_crypto_openssl_from_ossl_encryption_level(ossl_level);
-    struct buf *crypto_data = &ctx->crypto_data[level];
-    size_t cur_pos = buf_len(crypto_data);
 
     syslog(LOG_DEBUG, "add_handshake_data(%d, %ld)", level, len);
-
-    if (!buf_base(crypto_data)) {
-        buf_ensure(crypto_data, MAX_CRYPTO_DATA);
-    }
-
-    assert(buf_len(crypto_data) + len <= MAX_CRYPTO_DATA);
-
-    buf_appendmap(crypto_data, (const char *) data, len);
-    data = (const uint8_t *) buf_base(crypto_data) + cur_pos;
 
     int r = ngtcp2_conn_submit_crypto_data(ctx->qconn, level, data, len);
     if (r) {
@@ -621,11 +607,6 @@ HIDDEN void quic_close(struct quic_context *ctx)
         ngtcp2_conn_del(ctx->qconn);
         ctx->qconn = NULL;
     }
-
-    int i;
-    for (i = 0; i < 3; i++) {
-        buf_reset(&ctx->crypto_data[i]);
-    }
 }
 
 HIDDEN void quic_shutdown(struct quic_context *ctx)
@@ -636,11 +617,6 @@ HIDDEN void quic_shutdown(struct quic_context *ctx)
 
     if (ctx->qconn) {
         ngtcp2_conn_del(ctx->qconn);
-    }
-
-    int i;
-    for (i = 0; i < 3; i++) {
-        buf_free(&ctx->crypto_data[i]);
     }
 
     free(ctx);
