@@ -53,6 +53,7 @@ struct quic_context;
 
 struct quic_app_context {
     void *conn;
+    unsigned timeout;
     int (*open_conn)(void *conn);
     void (*close_conn)(void *conn);
     ssize_t (*read_stream)(void *conn, int64_t stream_id,

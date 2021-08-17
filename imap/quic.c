@@ -45,7 +45,6 @@
 #include <sysexits.h>
 #include <syslog.h>
 
-#include "httpd.h"
 #include "quic.h"
 #include "xstrlcpy.h"
 
@@ -523,7 +522,7 @@ ioerror:
         params.initial_max_data = 256 * 1024;
         params.initial_max_streams_bidi = 100;
         params.initial_max_streams_uni = 3;
-        params.max_idle_timeout = httpd_timeout;
+        params.max_idle_timeout = ctx->app_ctx->timeout * NGTCP2_SECONDS;
 
         scid.datalen = NGTCP2_MAX_CIDLEN;
         r = RAND_bytes(scid.data, scid.datalen);

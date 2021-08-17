@@ -383,7 +383,8 @@ static ssize_t read_stream(void *conn, int64_t stream_id,
 }
     
 static struct quic_app_context h3 = {
-    NULL,
+    NULL,  // conn
+    0,     // timeout
     open_conn,
     close_conn,
     read_stream,
@@ -405,6 +406,7 @@ HIDDEN int http3_init(struct http_connection *conn, struct buf *serverinfo)
     buf_printf(serverinfo, " Nghttp3/%s %s", NGHTTP3_VERSION, quic_version());
 
     h3.conn = conn;
+    h3.timeout = httpd_timeout;
 
     int r = quic_init(&qctx, &h3);
 
