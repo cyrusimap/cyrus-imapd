@@ -1712,6 +1712,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 with_nghttp3=no
                 with_ngtcp2=no
         fi
+        AM_CONDITIONAL([HTTP3], [test "${with_nghttp3}" != "no"])
 
 
         AC_ARG_WITH(nghttp2, [AS_HELP_STRING([--without-nghttp2], [disable HTTP/2 support (check)])],,[with_nghttp2="check"])
