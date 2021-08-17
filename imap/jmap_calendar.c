@@ -1138,34 +1138,6 @@ static int jmap_calendar_changes(struct jmap_req *req)
     return 0;
 }
 
-static char *_emailalert_defaultrecipient(const char *userid)
-{
-    const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-    char *mailboxname = caldav_mboxname(userid, NULL);
-    struct buf buf = BUF_INITIALIZER;
-    int r = annotatemore_lookupmask(mailboxname, annotname, userid, &buf);
-
-    char *recipient = NULL;
-
-    if (!r && buf_len(&buf)) {
-        strarray_t *values = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
-        const char *item = strarray_nth(values, 0);
-        if (!strncasecmp(item, "mailto:", 7)) item += 7;
-        recipient = strconcat("mailto:", item, NULL);
-        strarray_free(values);
-    }
-    else if (strchr(userid, '@')) {
-        recipient = strconcat("mailto:", userid, NULL);
-    }
-    else {
-        recipient = strconcat("mailto:", userid, "@", config_defdomain, NULL);
-    }
-
-    buf_free(&buf);
-    free(mailboxname);
-    return recipient;
-}
-
 /* jmap calendar APIs */
 
 enum { TRANSP_TRANSPARENT = 0, TRANSP_OPAQUE_ATTENDING, TRANSP_OPAQUE };
@@ -1441,19 +1413,18 @@ static void setcalendar_readprops(jmap_req_t *req,
 
     /* defaultAlertsWithTime */
     /* defaultAlertsWithoutTime */
-    char *emailalert_recipient = _emailalert_defaultrecipient(req->userid);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
     setcalendar_readalerts(parser, "defaultAlertsWithTime", arg,
-            emailalert_recipient, &props->defaultalerts_withtime);
+            jmapctx->emailalert_recipient, &props->defaultalerts_withtime);
     setcalendar_readalerts(parser, "defaultAlertsWithoutTime", arg,
-            emailalert_recipient, &props->defaultalerts_withouttime);
+            jmapctx->emailalert_recipient, &props->defaultalerts_withouttime);
+    jmapical_context_free(&jmapctx);
 
     /* role - just make sure its valid */
     jprop = json_object_get(arg, "role");
     if (JNOTNULL(jprop) && strcmpsafe(json_string_value(jprop), "inbox")) {
         jmap_parser_invalid(parser, "role");
     }
-
-    free(emailalert_recipient);
 }
 
 /* Write  the calendar properties in the calendar mailbox named mboxname.
@@ -2682,7 +2653,7 @@ struct getcalendarevents_rock {
     struct jmapical_datetime overrides_after;
     int reduce_participants;
     const char *sched_userid;
-    struct jmapical_jmapcontext *jmapctx;
+    struct jmapical_ctx *jmapctx;
 };
 
 struct recurid_instanceof_rock {
@@ -3012,220 +2983,6 @@ static icaltimezone *calendarevent_get_floatingtz(const mbentry_t *mbentry,
     return tz;
 }
 
-struct jmapcontext_rock {
-    jmap_req_t *req;
-    /* Fields required for Link.blobId */
-    struct buf davbaseurl;
-    const char *davproto;
-    const char *davhost;
-    struct webdav_db *webdavdb;
-    struct mailbox *attachments;
-    int lock_attachments;
-};
-
-static void jmapcontext_blobid_from_href(struct buf *blobid,
-                                         const char *href,
-                                         const char *managedid,
-                                         void *vrock)
-{
-    struct jmapcontext_rock *rock = vrock;
-    const struct buf *baseurl = &rock->davbaseurl;
-
-    buf_reset(blobid);
-
-    if (strncmpsafe(href, baseurl->s, baseurl->len)) {
-        /* HREF doesn't match base url for DAV attachments */
-        return;
-    }
-    const char *mid = href + baseurl->len;
-
-    if (*mid == '\0' || (managedid && strcmp(managedid, mid))) {
-        /* MANAGED-ID and resource id differ - invalid blobId */
-        return;
-    }
-
-    /* JMAP blob handler expects G blob-ids */
-    buf_putc(blobid, 'G');
-    buf_appendcstr(blobid, mid);
-}
-
-static int copyblob(jmap_req_t *req, const char *blobid, struct mailbox *dstmbox)
-{
-    msgrecord_t *mr = NULL;
-    struct mailbox *srcmbox = NULL;
-    struct body *srcbody = NULL;
-    const struct body *srcpart = NULL;
-    struct body *dstbody = NULL;
-    struct buf blob = BUF_INITIALIZER;
-    struct stagemsg *stage = NULL;
-    time_t internaldate = time(NULL);
-    struct appendstate as;
-
-    /* Lookup blob */
-    int r = jmap_findblob(req, NULL, blobid, &srcmbox, &mr, &srcbody, &srcpart, &blob);
-    if (r) goto done;
-
-    /* Write blob to file */
-    const char *blob_base = srcpart ? blob.s + srcpart->header_offset : blob.s;
-    size_t size = srcpart ? srcpart->header_size + srcpart->content_size : blob.len;
-    FILE *fp = append_newstage(mailbox_name(dstmbox), time(NULL), 0, &stage);
-    if (!fp) {
-        syslog(LOG_ERR, "%s: append_newstage(%s) failed", __func__, mailbox_name(dstmbox));
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-    fwrite(blob_base, size, 1, fp);
-    if (ferror(fp)) {
-        syslog(LOG_ERR, "%s: ferror(%s): %s", __func__,
-                append_stagefname(stage), strerror(errno));
-        r = IMAP_IOERROR;
-        fclose(fp);
-        goto done;
-    }
-    fclose(fp);
-
-    /* Append blob to mailbox */
-    r = append_setup_mbox(&as, dstmbox, req->userid, httpd_authstate, 0, NULL, 0, 0, 0);
-    if (r) goto done;
-
-    strarray_t flags = STRARRAY_INITIALIZER;
-    r = append_fromstage(&as, &dstbody, stage, 0,
-                         internaldate, &flags, 0, NULL);
-	if (r)
-        append_abort(&as);
-    else
-        append_commit(&as);
-
-done:
-    if (stage) append_removestage(stage);
-	if (dstbody) {
-        message_free_body(dstbody);
-        free(dstbody);
-    }
-    if (srcbody) {
-        message_free_body(srcbody);
-        free(srcbody);
-    }
-    jmap_closembox(req, &srcmbox);
-    msgrecord_unref(&mr);
-    buf_free(&blob);
-    return r;
-}
-
-static int jmapcontext_open_attachments(struct jmapcontext_rock *rock)
-{
-    jmap_req_t *req = rock->req;
-
-    if (!rock->attachments) {
-        char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
-        int r = jmap_openmbox(req, mboxname, &rock->attachments,
-                rock->lock_attachments);
-        if (r) {
-            xsyslog(LOG_ERR, "can't open attachments",
-                    "mboxname=<%s> err<%s>", mboxname, error_message(r));
-        }
-        free(mboxname);
-        if (r) return r;
-    }
-    if (!rock->webdavdb) {
-        rock->webdavdb = webdav_open_mailbox(rock->attachments);
-        if (!rock->webdavdb) {
-            xsyslog(LOG_ERR, "mailbox_open_webdav failed",
-                    "attachments=<%s>", mailbox_name(rock->attachments));
-            jmap_closembox(req, &rock->attachments);
-            rock->attachments = NULL;
-            return IMAP_INTERNAL;
-        }
-    }
-
-    return 0;
-}
-
-static void jmapcontext_href_from_blobid(struct buf *href,
-                                         struct buf *managedid,
-                                         const char *blobid,
-                                         void *vrock)
-{
-    struct jmapcontext_rock *rock = vrock;
-    jmap_req_t *req = rock->req;
-    buf_reset(href);
-    buf_reset(managedid);
-
-    int r = jmapcontext_open_attachments(rock);
-    if (r) return;
-
-    // Check if blob exists in WebDAV attachments
-    const char *mid = *blobid == 'G' ? blobid + 1 : blobid;
-    struct webdav_data *wdata;
-    r = webdav_lookup_uid(rock->webdavdb, mid, &wdata);
-    if (r && r != CYRUSDB_NOTFOUND) {
-        syslog(LOG_ERR, "%s: webdav_lookup_uid(%s) failed: %s",
-                __func__, mid, cyrusdb_strerror(r));
-        return;
-    }
-    if (r == CYRUSDB_NOTFOUND) {
-        // Copy blob from JMAP blobs to managed attachments
-        r = copyblob(req, blobid, rock->attachments);
-        if (r) {
-            syslog(LOG_ERR, "jmap: copyblob(%s): %s",
-                    blobid, error_message(r));
-            return;
-        }
-    }
-
-    // Set the blob href and managed-id.
-    caldav_attachment_url(href, req->accountid,
-            rock->davproto, rock->davhost, mid);
-    buf_setcstr(managedid, mid);
-}
-
-static void jmapcontext_init(struct jmapical_jmapcontext *ctx,
-                             jmap_req_t *req,
-                             int lock_attachments)
-{
-    memset(ctx, 0, sizeof(struct jmapical_jmapcontext));
-
-    struct jmapcontext_rock *rock = xzmalloc(sizeof(struct jmapcontext_rock));
-    rock->req = req;
-    rock->lock_attachments = lock_attachments;
-    ctx->rock = rock;
-
-    /* Initialize context for Link.blobId */
-    const char *davproto = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_SCHEME);
-    const char *davhost = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_HOST);
-    if (davproto && davhost) {
-        ctx->blobid_from_href = jmapcontext_blobid_from_href;
-        ctx->href_from_blobid = jmapcontext_href_from_blobid;
-        rock->davproto = davproto;
-        rock->davhost = davhost;
-        caldav_attachment_url(&rock->davbaseurl, req->accountid,
-                rock->davproto, rock->davhost, "");
-    }
-    else {
-        syslog(LOG_ERR, "%s: can't determine base URL for WebDAV attachments."
-                " Disabling support for Link.blobId property. Did you configure"
-                " WebDAV managed attachments in imapd.conf?", __func__);
-    }
-
-    ctx->emailalert_defaultrecipient = _emailalert_defaultrecipient(req->userid);
-}
-
-
-HIDDEN void jmapcontext_fini(struct jmapical_jmapcontext *ctx)
-{
-    struct jmapcontext_rock *rock = ctx->rock;
-    ctx->rock = NULL;
-
-    if (rock->attachments)
-        jmap_closembox(rock->req, &rock->attachments);
-    if (rock->webdavdb)
-        webdav_close(rock->webdavdb);
-    buf_free(&rock->davbaseurl);
-
-    free(ctx->emailalert_defaultrecipient);
-    free(rock);
-}
-
 static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 {
     struct getcalendarevents_rock *rock = vrock;
@@ -3237,7 +2994,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     msgrecord_t *mr = NULL;
     jstimezones_t *jstzones = NULL;
-    struct jmapical_jmapcontext *jmapctx = rock->jmapctx;
+    struct jmapical_ctx *jmapctx = rock->jmapctx;
 
     if (!cdata->dav.alive)
         return 0;
@@ -3810,8 +3567,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     struct caldav_db *db = NULL;
     json_t *err = NULL;
     int r = 0;
-    struct jmapical_jmapcontext jmapctx;
-    jmapcontext_init(&jmapctx, req, 0);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
 
     /* Build callback data */
     int checkacl = strcmp(req->accountid, req->userid);
@@ -3831,7 +3587,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            JMAPICAL_DATETIME_INITIALIZER,
                                            0, /* reduce_participants */
                                            NULL, /* sched_userid */
-                                           &jmapctx
+                                           jmapctx
     };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
@@ -3932,7 +3688,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
-    jmapcontext_fini(&jmapctx);
+    jmapical_context_free(&jmapctx);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
     free(sched_inboxname);
@@ -4707,10 +4463,9 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
 
     /* Convert Event to iCalendar */
-    struct jmapical_jmapcontext jmapctx;
-    jmapcontext_init(&jmapctx, req, 1);
-    ical = jmapical_toical(event, NULL, parser.invalid, &jmapctx);
-    jmapcontext_fini(&jmapctx);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    ical = jmapical_toical(event, NULL, parser.invalid, jmapctx);
+    jmapical_context_free(&jmapctx);
     if (json_array_size(parser.invalid)) {
         r = 0;
         goto done;
@@ -4957,7 +4712,7 @@ static int eventpatch_updates_utctimes(json_t *event_patch)
 }
 
 /* XXX - the argument list of this function is insane */
-static int setcalendarevents_apply_patch(struct jmapical_jmapcontext *jmapctx,
+static int setcalendarevents_apply_patch(struct jmapical_ctx *jmapctx,
                                          json_t *old_event,
                                          json_t *event_patch,
                                          icalcomponent *oldical,
@@ -5466,9 +5221,8 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
 
     /* Apply patch */
-    struct jmapical_jmapcontext jmapctx;
-    jmapcontext_init(&jmapctx, req, 1);
-    old_event = jmapical_tojmap(oldical, NULL, &jmapctx);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    old_event = jmapical_tojmap(oldical, NULL, jmapctx);
     if (!old_event) {
         r = IMAP_INTERNAL;
         goto done;
@@ -5478,13 +5232,13 @@ static int setcalendarevents_update(jmap_req_t *req,
     icaltimezone *floatingtz =
         calendarevent_get_floatingtz(mbentry, req->userid,
                 &floatingtz_is_malloced);
-    r = setcalendarevents_apply_patch(&jmapctx,
+    r = setcalendarevents_apply_patch(jmapctx,
             old_event, event_patch,
             oldical, eid->recurid,
             invalid, &schedule_addresses,
             may_updateprivate_only,
             &ical, floatingtz, update, err);
-    jmapcontext_fini(&jmapctx);
+    jmapical_context_free(&jmapctx);
     if (floatingtz_is_malloced)
         icaltimezone_free(floatingtz, 1);
 
@@ -5737,9 +5491,8 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     }
 
     /* Create notification */
-    struct jmapical_jmapcontext jmapctx;
-    jmapcontext_init(&jmapctx, req, 1);
-    json_t *old_event = jmapical_tojmap(oldical, NULL, &jmapctx);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    json_t *old_event = jmapical_tojmap(oldical, NULL, jmapctx);
     json_object_del(old_event, "updated");
     remove_peruserprops(old_event);
     int r2 = create_eventnotif(req, notifmbox, mailbox_name(mbox), "destroyed", eid->uid,
@@ -5750,7 +5503,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                 "uid=%s error=%s", eid->uid, error_message(r2));
     }
     json_decref(old_event);
-    jmapcontext_fini(&jmapctx);
+    jmapical_context_free(&jmapctx);
 
     /* Create mboxevent */
     mboxevent_extract_record(mboxevent, mbox, &record);
@@ -7120,7 +6873,6 @@ static void _calendarevent_copy(jmap_req_t *req,
     struct mailbox *src_mbox = NULL;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     mbentry_t *mbentry = NULL;
-    struct jmapical_jmapcontext jmapctx;
     int r = 0;
 
     /* Read mandatory properties */
@@ -7179,8 +6931,8 @@ static void _calendarevent_copy(jmap_req_t *req,
     }
 
     /* Patch JMAP event */
-    jmapcontext_init(&jmapctx, req, 1);
-    json_t *src_event = jmapical_tojmap(src_ical, NULL, &jmapctx);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    json_t *src_event = jmapical_tojmap(src_ical, NULL, jmapctx);
     if (src_event) {
         dst_event = jmap_patchobject_apply(src_event, jevent, NULL);
     }
@@ -7190,7 +6942,7 @@ static void _calendarevent_copy(jmap_req_t *req,
         r = IMAP_INTERNAL;
         goto done;
     }
-    jmapcontext_fini(&jmapctx);
+    jmapical_context_free(&jmapctx);
 
     /* Create event */
     json_t *invalid = json_array();
@@ -8451,7 +8203,7 @@ struct principal_getavailability_rock {
     const char *principalid;
     struct dynarray *busyperiods;
     int show_details;
-    struct jmapical_jmapcontext *jmapctx;
+    struct jmapical_ctx *jmapctx;
     hash_table *eventprops;
     int cumulatedrights;
     /* Mailbox-scoped context */
@@ -8731,8 +8483,7 @@ static void principal_getavailability(jmap_req_t *req,
     struct buf buf = BUF_INITIALIZER;
     int checkacl = strcmp(req->userid, principalid);
     struct dynarray *busyperiods = dynarray_new(sizeof(struct busyperiod));
-    struct jmapical_jmapcontext jmapctx;
-    jmapcontext_init(&jmapctx, req, 0);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
 
     /* Lookup busytime across calendars */
     icaltimetype icalstart = jmapical_datetime_to_icaltime(dtstart, utc);
@@ -8747,7 +8498,7 @@ static void principal_getavailability(jmap_req_t *req,
         principalid,
         busyperiods,
         show_details,
-        &jmapctx,
+        jmapctx,
         props,
         0,
         NULL,
@@ -8856,7 +8607,7 @@ done:
         json_decref(bp->jevent);
     }
     dynarray_free(&busyperiods);
-    jmapcontext_fini(&jmapctx);
+    jmapical_context_free(&jmapctx);
 }
 
 static int jmap_principal_getavailability(struct jmap_req *req)
@@ -10870,8 +10621,7 @@ HIDDEN json_t *jmap_calendar_events_from_mime(jmap_req_t *req,
                                               struct buf *mime)
 {
     json_t *jsevents_by_partid = json_object();
-    struct jmapical_jmapcontext jmapctx;
-    jmapcontext_init(&jmapctx, req, 0);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
     struct buf buf = BUF_INITIALIZER;
     struct buf rewritebufs[CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS];
     memset(rewritebufs, 0, sizeof(struct buf) * CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS);
@@ -10910,10 +10660,9 @@ HIDDEN json_t *jmap_calendar_events_from_mime(jmap_req_t *req,
                     if (!attach || icalattach_get_is_url(attach))
                         continue;
 
-                    struct jmapcontext_rock *rock = jmapctx.rock;
-                    if (!jmapcontext_open_attachments(rock)) {
-                        caldav_rewrite_attachprop_to_url(rock->webdavdb,
-                                prop, &rock->davbaseurl, rewritebufs);
+                    if (!jmapical_context_open_attachments(jmapctx)) {
+                        caldav_rewrite_attachprop_to_url(jmapctx->webdavdb,
+                                prop, &jmapctx->davbaseurl, rewritebufs);
                         int j;
                         for (j = 0; j < CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS; j++)
                             buf_reset(&rewritebufs[j]);
@@ -10923,14 +10672,14 @@ HIDDEN json_t *jmap_calendar_events_from_mime(jmap_req_t *req,
         }
 
         /* Convert to Event */
-        json_t *jsevents = jmapical_tojmap_all(ical, NULL, &jmapctx);
+        json_t *jsevents = jmapical_tojmap_all(ical, NULL, jmapctx);
         if (json_array_size(jsevents)) {
             json_object_set_new(jsevents_by_partid, part->part_id, jsevents);
         }
         icalcomponent_free(ical);
     }
 
-    jmapcontext_fini(&jmapctx);
+    jmapical_context_free(&jmapctx);
     if (!json_object_size(jsevents_by_partid)) {
         json_decref(jsevents_by_partid);
         jsevents_by_partid = json_null();
