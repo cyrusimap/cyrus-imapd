@@ -423,26 +423,6 @@ ioerror:
         NULL
     };
 
-    uint32_t version = 0;
-    const uint8_t *dcid, *scid;
-    size_t dcidlen = 0, scidlen = 0;
-    r = ngtcp2_pkt_decode_version_cid(&version, &dcid, &dcidlen,
-                                      &scid, &scidlen, data,
-                                      nread, NGTCP2_MAX_CIDLEN);
-
-    syslog(LOG_DEBUG, "ngtcp2_pkt_decode_version_cid: %s (0x%x %ld %ld)",
-           ngtcp2_strerror(r), version, dcidlen, scidlen);
-
-    if (r == 1) {
-        /* Version negotiation */
-    }
-    else if (r) {
-        syslog(LOG_ERR,
-               "Error decoding version and CID from QUIC packet header: %s",
-               ngtcp2_strerror(r));
-        return 0;
-    }
-
     if (!ctx->qconn) {
         ngtcp2_cid scid;
         ngtcp2_pkt_hd hd;
@@ -458,7 +438,7 @@ ioerror:
             syslog(LOG_ERR,
                    "QUIC packet not acceptable as initial: %s",
                    ngtcp2_strerror(r));
-            return 0;
+            return EOF;
         }
 
         switch (hd.type) {
@@ -525,10 +505,12 @@ ioerror:
         scid.datalen = NGTCP2_MAX_CIDLEN;
         r = RAND_bytes(scid.data, scid.datalen);
 
-        r = ngtcp2_conn_server_new(&ctx->qconn, &hd.scid, &scid, &path, version,
+        r = ngtcp2_conn_server_new(&ctx->qconn, &hd.scid, &scid, &path, hd.version,
                                    &callbacks, &settings, &params, NULL, ctx);
 
         syslog(LOG_DEBUG, "ngtcp2_conn_server_new: %s",  ngtcp2_strerror(r));
+
+        if (r) return EOF;
 
         SSL *tls = ctx->tls = SSL_new(ctx->tls_ctx);
         SSL_set_app_data(tls, ctx);
@@ -543,7 +525,7 @@ ioerror:
 
     syslog(LOG_DEBUG, "ngtcp2_conn_read_pkt: %s", ngtcp2_strerror(r));
 
-    return 0;
+    return (r ? EOF : 0);
 }
 
 HIDDEN int quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
