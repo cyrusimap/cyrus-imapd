@@ -51,8 +51,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 
-#ifdef HAVE_QUIC
-
 #include <ngtcp2/ngtcp2.h>
 #include <ngtcp2/ngtcp2_crypto.h>
 #include <ngtcp2/ngtcp2_crypto_openssl.h>
@@ -651,30 +649,3 @@ HIDDEN const char *quic_version(void)
 {
     return "Ngtcp2/ " NGTCP2_VERSION;
 }
-
-#else /* !HAVE_QUIC */
-
-HIDDEN int quic_init(struct quic_context **ctx __attribute__((unused)),
-                     struct quic_app_context *app __attribute__((unused)))
-{
-    return HTTP_NOT_IMPLEMENTED;
-}
-
-HIDDEN int quic_input(struct quic_context *ctx __attribute__((unused)),
-                      struct protstream *pin  __attribute__((unused)))
-{
-    fatal("quic_input() called, but no Ngtcp2", EX_SOFTWARE);
-}
-
-HIDDEN void quic_close(struct quic_context *ctx __attribute__((unused)))
-{
-    fatal("quic_close() called, but no Ngtcp2", EX_SOFTWARE);
-}
-
-
-HIDDEN void quic_shutdown(struct quic_context *ctx __attribute__((unused)))
-{
-    fatal("quic_shutdown() called, but no Ngtcp2", EX_SOFTWARE);
-}
-
-#endif /* HAVE_QUIC */
