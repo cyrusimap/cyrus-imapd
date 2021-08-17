@@ -51,6 +51,7 @@ extern "C" {
 #include <jansson.h>
 #include <libical/ical.h>
 
+#include "jmap_api.h"
 #include "jmap_util.h"
 
 #define JMAPICAL_ERROR_UNKNOWN  -1
@@ -90,31 +91,35 @@ extern "C" {
 #define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
 #define JMAPICAL_XPARAM_ISDEFAULT     "X-IS-DEFAULT" /* Prop value is default */
 
-struct jmapical_jmapcontext {
-    void (*blobid_from_href)(struct buf *blobid,
-                             const char *href,
-                             const char *managedid,
-                             void *rock);
-    void (*href_from_blobid)(struct buf *href,
-                             struct buf *managedid,
-                             const char *blobid,
-                             void *rock);
-    char *emailalert_defaultrecipient;
-    void *rock;
+struct jmapical_ctx {
+    jmap_req_t *req;
+    /* Link.blobId */
+    struct buf davbaseurl;
+    const char *davproto;
+    const char *davhost;
+    struct webdav_db *webdavdb;
+    struct mailbox *attachments;
+    int lock_attachments;
+    /* Alert */
+    char *emailalert_recipient;
 };
 
+extern struct jmapical_ctx *jmapical_context_new(jmap_req_t *req);
+extern void jmapical_context_free(struct jmapical_ctx**);
+
+extern int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx);
 
 /* Converts the iCalendar component ical to JSCalendar.
  * Returns NULL on error.
  */
 json_t* jmapical_tojmap(icalcomponent *ical, hash_table *props,
-                        struct jmapical_jmapcontext *jmapctx);
+                        struct jmapical_ctx *jmapctx);
 
 /* Converts the iCalendar component ical to an array of JSCalendar objects.
  * Returns NULL on error.
  */
 json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
-                            struct jmapical_jmapcontext *jmapctx);
+                            struct jmapical_ctx *jmapctx);
 
 /* Convert the jsevent to iCalendar.
  * The oldical argument points to the previous VCALENDAR of the event,
@@ -123,7 +128,7 @@ json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
  */
 icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
                                json_t *invalid,
-                               struct jmapical_jmapcontext *jmapctx);
+                               struct jmapical_ctx *jmapctx);
 
 
 /* Convert the iCalendar VALARM to a JSCalendar Alert.
