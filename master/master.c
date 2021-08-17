@@ -2940,6 +2940,8 @@ static void quic_dispatch(struct service *s, int si)
 
     syslog(LOG_DEBUG, "quic_dispatch(): read %zd bytes", nread);
 
+    if (nread < 0) return;
+
     uint32_t version = 0;
     const uint8_t *dcid, *scid;
     size_t dcidlen = 0, scidlen = 0;
@@ -2950,6 +2952,8 @@ static void quic_dispatch(struct service *s, int si)
     syslog(LOG_DEBUG,
            "ngtcp2_pkt_decode_version_cid: %s (0x%x %ld %ld)",
            ngtcp2_strerror(r), version, scidlen, dcidlen);
+
+    if (r < 0) return;
 
     struct centry *centry = NULL;
     char scid_key[NGTCP2_MAX_CIDLEN * 2 + 1] = "";
@@ -3001,10 +3005,10 @@ static void quic_dispatch(struct service *s, int si)
             buf_setcstr(&centry->quic_dcid, dcid_key);
         }
 
-        ssize_t nwrite = writev(centry->quic_fd, iov, 4);
+        ssize_t nwrite = retry_writev(centry->quic_fd, iov, 4);
 
         syslog(LOG_DEBUG, "quic_dispatch(): sent %zd of %zd bytes: %m", nwrite,
-               sizeof(remote_addrlen) + sizeof(nread) + nread);
+               iov[0].iov_len +iov[1].iov_len +iov[2].iov_len +iov[3].iov_len);
     }
 }
 
