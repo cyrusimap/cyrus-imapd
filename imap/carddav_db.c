@@ -688,7 +688,7 @@ static int groupmembers_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
                                       const mbentry_t *mbentry, const char *group,
-                                      mbname_t *othermb)
+                                      const mbentry_t *othermb)
 {
     int r = 0;
     int isshared = 0;
@@ -703,12 +703,17 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
     const char *mailbox = !mbentry ? NULL :
         (carddavdb->db->version >= DB_MBOXID_VERSION) ?
         mbentry->uniqueid : mbentry->name;
+
+    const char *othermailbox = !othermb ? NULL :
+        (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+        othermb->uniqueid : othermb->name;
+
     struct sqldb_bindval bval[] = {
         { ":mailbox",      SQLITE_TEXT,    { .s = mailbox } },
         { ":group",        SQLITE_TEXT,    { .s = group   } },
         { ":kind",         SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
-        { ":otheruser",    SQLITE_TEXT,    { .s = othermb ? mbname_userid(othermb) : NULL } },
-        { ":othermailbox", SQLITE_TEXT,    { .s = othermb ? mbname_intname(othermb) : NULL } },
+        { ":otheruser",    SQLITE_TEXT,    { .s = othermailbox } },
+        { ":othermailbox", SQLITE_TEXT,    { .s = othermailbox } },
         { NULL,            SQLITE_NULL,    { .s = NULL    } }
     };
 
