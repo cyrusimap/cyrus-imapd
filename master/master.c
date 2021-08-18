@@ -2920,6 +2920,7 @@ static void check_undermanned(struct service *s, int si, int wdi)
 }
 
 #ifdef HAVE_QUIC
+#include "imap/quic.h"
 #include <ngtcp2/ngtcp2.h>
 
 /* XXX  Should separate threads be used for each QUIC service? */
@@ -2929,13 +2930,18 @@ static void quic_dispatch(struct service *s, int si)
     socklen_t remote_addrlen = sizeof(remote_addr);
     uint8_t data[USHRT_MAX];
     ssize_t nread;
+    uint8_t msg_count = 0, msg_type[NUM_QUIC_MSG_TYPES];
+    struct iovec iov[3 * NUM_QUIC_MSG_TYPES + 1];
+    int iovcnt = 0;
+
+    /* Always send message count */
+    WRITEV_ADD_TO_IOVEC(iov, iovcnt, &msg_count, 1);
 
     memset(&remote_addr, 0, remote_addrlen);
 
     do {
         nread = recvfrom(s->socket, data, sizeof(data), MSG_DONTWAIT,
-                         (struct sockaddr *) &remote_addr,
-                         &remote_addrlen);
+                         (struct sockaddr *) &remote_addr, &remote_addrlen);
     } while (nread < 0 && errno == EINTR);
 
     syslog(LOG_DEBUG, "quic_dispatch(): read %zd bytes", nread);
@@ -2981,7 +2987,19 @@ static void quic_dispatch(struct service *s, int si)
                 hash_insert(dcid_key, centry, s->quic_active);
                 buf_setcstr(&centry->quic_scid, scid_key);
                 buf_setcstr(&centry->quic_dcid, dcid_key);
+
+                /* Add client address message */
+                msg_type[msg_count] = QUIC_MSG_ADDR;
+                WRITEV_ADD_TO_IOVEC(iov, iovcnt, &msg_type[msg_count++], 1);
+                WRITEV_ADD_TO_IOVEC(iov, iovcnt, &remote_addrlen, sizeof(remote_addrlen));
+                WRITEV_ADD_TO_IOVEC(iov, iovcnt, &remote_addr, remote_addrlen);
             }
+        }
+        else if (strcmp(dcid_key, buf_cstring(&centry->quic_dcid))) {
+            /* DCID has changed */
+            hash_del(buf_cstring(&centry->quic_dcid), s->quic_active);
+            hash_insert(dcid_key, centry, s->quic_active);
+            buf_setcstr(&centry->quic_dcid, dcid_key);
         }
     }
 
@@ -2989,26 +3007,25 @@ static void quic_dispatch(struct service *s, int si)
            scid_key, dcid_key, centry ? centry->pid : -1);
 
     if (centry) {
-        /* Send client address and QUIC data to worker servicing this connection */
-        struct iovec iov[4] = {
-            { &remote_addrlen, sizeof(remote_addrlen) },
-            { &remote_addr, remote_addrlen },
-            { &nread,  sizeof(nread) },
-            { data, nread }
-        };
+        /* Add data message */
+        msg_type[msg_count] = QUIC_MSG_DATA;
+        WRITEV_ADD_TO_IOVEC(iov, iovcnt, &msg_type[msg_count++], 1);
+        WRITEV_ADD_TO_IOVEC(iov, iovcnt, &nread, sizeof(nread));
+        WRITEV_ADD_TO_IOVEC(iov, iovcnt, data, nread);
 
-        if (strcmp(dcid_key, buf_cstring(&centry->quic_dcid))) {
-            /* DCID has changed */
-            hash_del(buf_cstring(&centry->quic_dcid),
-                     s->quic_active);
-            hash_insert(dcid_key, centry, s->quic_active);
-            buf_setcstr(&centry->quic_dcid, dcid_key);
+        /* Send messages to worker servicing this connection */
+        ssize_t nwrite = retry_writev(centry->quic_fd, iov, iovcnt);
+
+        if (config_debug) {
+            size_t total_len = 0;
+
+            while (iovcnt--) {
+                total_len += iov[iovcnt].iov_len;
+            }
+            
+            syslog(LOG_DEBUG,
+                   "quic_dispatch(): sent %zd of %zd bytes: %m", nwrite, total_len);
         }
-
-        ssize_t nwrite = retry_writev(centry->quic_fd, iov, 4);
-
-        syslog(LOG_DEBUG, "quic_dispatch(): sent %zd of %zd bytes: %m", nwrite,
-               iov[0].iov_len +iov[1].iov_len +iov[2].iov_len +iov[3].iov_len);
     }
 }
 

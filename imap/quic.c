@@ -61,8 +61,7 @@ struct quic_context {
     ngtcp2_conn *qconn;
 
     int sock;                            /* Output socket */
-    struct sockaddr_storage local_addr;
-    socklen_t local_addrlen;
+    ngtcp2_path_storage ps;
     struct buf clientbuf;
 
     SSL_CTX *tls_ctx;
@@ -151,6 +150,8 @@ static const SSL_QUIC_METHOD quic_method = {
 HIDDEN int quic_init(struct quic_context **ctx, struct quic_app_context *app)
 {
     SSL_CTX *tls_ctx;
+    struct sockaddr_storage local_addr;
+    socklen_t local_addrlen = sizeof(local_addr);
 
     *ctx = NULL;
 
@@ -181,16 +182,19 @@ HIDDEN int quic_init(struct quic_context **ctx, struct quic_app_context *app)
     (*ctx)->app_ctx = app;
     (*ctx)->tls_ctx = tls_ctx;
     (*ctx)->sock = atoi(getenv("CYRUS_QUIC_FD"));
-    (*ctx)->local_addrlen =  sizeof(struct sockaddr_storage);
-    getsockname((*ctx)->sock,
-                (struct sockaddr *) &(*ctx)->local_addr, &(*ctx)->local_addrlen);
+
+    getsockname((*ctx)->sock, (struct sockaddr *) &local_addr, &local_addrlen);
+
+    ngtcp2_path_storage_zero(&(*ctx)->ps);
+    ngtcp2_addr_copy_byte(&(*ctx)->ps.path.local,
+                          (struct sockaddr *) &local_addr, local_addrlen);
 
     return 0;
 }
 
-static void set_clienthost(ngtcp2_conn *conn, struct quic_context *ctx)
+static void set_clienthost(struct quic_context *ctx)
 {
-    const ngtcp2_path *path = ngtcp2_conn_get_path(conn);
+    const ngtcp2_path *path = &ctx->ps.path;
     char hbuf[NI_MAXHOST];
     int niflags = NI_NUMERICHOST;
 
@@ -225,13 +229,11 @@ static int handshake_completed_cb(ngtcp2_conn *conn,
     SSL_get0_alpn_selected(ssl, &alpn, &alpn_len);
 
     syslog(LOG_NOTICE,
-           "QUIC: %s with cipher %s (%d/%d bits %s); application protocol = %.*s",
+           "%s with cipher %s (%d/%d bits %s); application protocol = %.*s",
            tls_protocol, tls_cipher_name,
            tls_cipher_usebits, tls_cipher_algbits,
            SSL_session_reused(ssl) ? "reused" : "new",
            alpn_len, (const char *) alpn);
-
-    set_clienthost(conn, user_data);
 
     return 0;
 }
@@ -383,26 +385,57 @@ static void send_data(int sock, ngtcp2_path *path, uint8_t *data, ssize_t nwrite
 
 HIDDEN int quic_input(struct quic_context *ctx, struct protstream *pin)
 {
-    struct sockaddr_storage remote_addr;
-    socklen_t remote_addrlen;
-    uint8_t data[USHRT_MAX];
+    uint8_t data[USHRT_MAX], msg_count;
     size_t n, datalen, nread = 0;
-    int r;
+    int r, i;
 
-    n = prot_read(pin, (char *) &remote_addrlen, sizeof(remote_addrlen));
-    if (n < sizeof(remote_addrlen)) goto ioerror;
+    /* Read messages from pipe */
+    n = prot_read(pin, (char *) &msg_count, sizeof(msg_count));
+    if (n < sizeof(msg_count)) goto ioerror;
 
-    n = prot_read(pin, (char *) &remote_addr, remote_addrlen);
-    if (n < remote_addrlen) goto ioerror;
+    for (i = 0; i < msg_count; i++) {
+        struct sockaddr_storage remote_addr;
+        socklen_t remote_addrlen;
+        uint8_t msg_type;
 
-    n = prot_read(pin, (char *) &datalen, sizeof(datalen));
-    if (n < sizeof(datalen)) goto ioerror;
+        n = prot_read(pin, (char *) &msg_type, sizeof(msg_type));
+        if (n < sizeof(msg_type)) goto ioerror;
 
-    for (; n && datalen; datalen -= n, nread += n) {
-        n = prot_read(pin, (char *) data + nread, datalen);
+        switch (msg_type) {
+        case QUIC_MSG_DATA:
+            n = prot_read(pin, (char *) &datalen, sizeof(datalen));
+            if (n < sizeof(datalen)) goto ioerror;
+
+            for (; n && nread < datalen; nread += n) {
+                n = prot_read(pin, (char *) data + nread, datalen - nread);
+            }
+
+            syslog(LOG_DEBUG, "quic_input: read %zd of %zd data bytes",
+                   nread, datalen);
+
+            if (nread < datalen) goto ioerror;
+            break;
+
+        case QUIC_MSG_ADDR:
+            n = prot_read(pin, (char *) &remote_addrlen, sizeof(remote_addrlen));
+            if (n < sizeof(remote_addrlen)) goto ioerror;
+
+            n = prot_read(pin, (char *) &remote_addr, remote_addrlen);
+            if (n < remote_addrlen) goto ioerror;
+
+            syslog(LOG_DEBUG, "quic_input: read %zd of %u address bytes",
+                   n, remote_addrlen);
+
+            ngtcp2_addr_copy_byte(&ctx->ps.path.remote,
+                          (struct sockaddr *) &remote_addr, remote_addrlen);
+
+            set_clienthost(ctx);
+            break;
+
+        default:
+            goto ioerror;
+        }
     }
-
-    syslog(LOG_DEBUG, "quic_input: read %zd bytes", nread);
 
 ioerror:
     if (n == 0) {
@@ -417,28 +450,34 @@ ioerror:
         return EOF;
     }
 
-    ngtcp2_path path = {
-        { ctx->local_addrlen, (struct sockaddr *) &ctx->local_addr },
-        { remote_addrlen, (struct sockaddr *) &remote_addr },
-        NULL
-    };
 
     if (!ctx->qconn) {
         ngtcp2_cid scid;
         ngtcp2_pkt_hd hd;
 
-        r = ngtcp2_accept(&hd, data, nread);
+        r = ngtcp2_accept(&hd, data, datalen);
 
         syslog(LOG_DEBUG, "ngtcp2_accept: %s", ngtcp2_strerror(r));
 
-        if (r == 1) {
-            /* Version negotiation */
-        }
-        else if (r) {
-            syslog(LOG_ERR,
-                   "QUIC packet not acceptable as initial: %s",
-                   ngtcp2_strerror(r));
-            return EOF;
+        if (r) {
+            switch (r) {
+            case NGTCP2_ERR_RETRY:
+                /* Retry */
+                break;
+
+            case NGTCP2_ERR_VERSION_NEGOTIATION:
+                /* Version negotiation */
+                break;
+
+            default:
+                syslog(LOG_ERR,
+                       "QUIC packet not acceptable as initial: %s",
+                       ngtcp2_strerror(r));
+                return EOF;
+            }
+
+            /* send_data() */
+            return 0;
         }
 
         switch (hd.type) {
@@ -505,7 +544,8 @@ ioerror:
         scid.datalen = NGTCP2_MAX_CIDLEN;
         r = RAND_bytes(scid.data, scid.datalen);
 
-        r = ngtcp2_conn_server_new(&ctx->qconn, &hd.scid, &scid, &path, hd.version,
+        r = ngtcp2_conn_server_new(&ctx->qconn, &hd.scid, &scid,
+                                   &ctx->ps.path, hd.version,
                                    &callbacks, &settings, &params, NULL, ctx);
 
         syslog(LOG_DEBUG, "ngtcp2_conn_server_new: %s",  ngtcp2_strerror(r));
@@ -521,7 +561,8 @@ ioerror:
     }
 
     ngtcp2_pkt_info pi = { NGTCP2_ECN_NOT_ECT };
-    r = ngtcp2_conn_read_pkt(ctx->qconn, &path, &pi, data, nread, timestamp());
+    r = ngtcp2_conn_read_pkt(ctx->qconn, &ctx->ps.path,
+                             &pi, data, datalen, timestamp());
 
     syslog(LOG_DEBUG, "ngtcp2_conn_read_pkt: %s", ngtcp2_strerror(r));
 

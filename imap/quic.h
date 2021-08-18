@@ -49,6 +49,13 @@
 #include "tls.h"
 #include "util.h"
 
+enum {
+    QUIC_MSG_DATA = 0,
+    QUIC_MSG_ADDR,
+    QUIC_MSG_SCID,
+    NUM_QUIC_MSG_TYPES  // MUST be last
+};
+
 struct quic_context;
 
 struct quic_app_context {
