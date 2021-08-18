@@ -604,6 +604,7 @@ static xapian_query_t *_email_matchmime_contactgroup(const char *groupid,
                 xq = xapian_query_new_compound(db, /*is_or*/1,
                         (xapian_query_t **) xsubqs.data, xsubqs.count);
             }
+            ptrarray_fini(&xsubqs);
         }
     }
     if (!xq) {
