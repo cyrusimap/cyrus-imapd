@@ -163,6 +163,9 @@ sub test_simple
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event to start in a few seconds
     my $startdt = $now->clone();
@@ -244,6 +247,9 @@ sub test_simple_reconstruct
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event to start in a few seconds
     my $startdt = $now->clone();
@@ -331,6 +337,9 @@ sub test_reschedule_later
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event to start in a few seconds
     my $startdt = $now->clone();
@@ -432,6 +441,9 @@ sub test_override
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define an event that started almost an hour ago and repeats hourly
     my $startdt = $now->clone();
@@ -539,6 +551,9 @@ sub test_override_exception
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define an event that started almost an hour ago and repeats hourly
     my $startdt = $now->clone();
@@ -648,6 +663,9 @@ sub test_floating_notz
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event to start in a few seconds
     my $startdt = $now->clone();
@@ -742,6 +760,9 @@ EOF
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event to start in a few seconds
     my $startdt = $now->clone();
@@ -827,6 +848,9 @@ EOF
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     my $syd = DateTime::TimeZone->new( name => 'Australia/Sydney' );
     my $ny = DateTime::TimeZone->new( name => 'America/New_York' );
@@ -901,6 +925,9 @@ sub test_replication_at1
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define an event that starts now and repeats hourly
     my $startdt = $now->clone();
@@ -1031,6 +1058,9 @@ sub test_override_double
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define an event that started almost an hour ago and repeats hourly
     my $startdt = $now->clone();
@@ -1142,6 +1172,9 @@ sub test_allday_notz
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event to start today
     my $startdt = $now->clone();
@@ -1237,6 +1270,9 @@ EOF
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Brisbane');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event to start in 2 days
     # (need to go 2 days out to account for the timezone of the testing location,
@@ -1301,6 +1337,9 @@ sub test_replication_withalarms_in_tz_with_dst
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event which recurs weekly
     my $startdt = $now->clone();
@@ -1407,6 +1446,9 @@ sub test_replication_withalarms_in_tz_without_dst
 
     my $now = DateTime->now();
     $now->set_time_zone('Asia/Singapore');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event which recurs weekly
     my $startdt = $now->clone();
@@ -1508,6 +1550,9 @@ sub test_reschedule_exception
 
     my $now = DateTime->now();
     $now->set_time_zone('Europe/Vienna');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define an event that started yesterday and repeats daily
     my $startdt = $now->clone();
@@ -1713,6 +1758,9 @@ sub test_simple_multiuser
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event to start in a few seconds
     my $startdt = $now->clone();
@@ -2052,6 +2100,9 @@ sub test_simple_multiuser_sametime
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
 
     # define the event to start in a few seconds
     my $startdt = $now->clone();
