@@ -22311,4 +22311,141 @@ EOF
     $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{hasAttachment});
 }
 
+sub test_email_query_fromanycontact_shared
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog "Create shared addressbook";
+    $admin->create("user.other");
+    my $http = $self->{instance}->get_service("http");
+    my $otherCarddav = Net::CardDAVTalk->new(
+        user => "other",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $otherJmap = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $admin->create("user.other.#addressbooks.Shared", ['TYPE', 'ADDRESSBOOK']);
+    $admin->setacl("user.other.#addressbooks.Shared", "cassandane", "lr") or die;
+    $imap->subscribe("user.other.#addressbooks.Shared");
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/contacts',
+    ];
+
+    xlog "Create contact in shared addressbook";
+    my $res = $otherJmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                sharedContact => {
+                    emails => [{
+                        type => 'personal',
+                        value => 'sharedcontact@local',
+                    }],
+                    addressbookId => 'Shared',
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert_not_null($res->[0][1]{created}{sharedContact}{id});
+
+    xlog "Create contact in own addressbook";
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                ownContact => {
+                    emails => [{
+                        type => 'personal',
+                        value => 'ownContact@local',
+                    }],
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert_not_null($res->[0][1]{created}{ownContact}{id});
+
+    xlog "Create emails";
+    $self->make_message("msg1", from => Cassandane::Address->new(
+        localpart => 'sharedContact', domain => 'local'
+    )) or die;
+    $self->make_message("msg2", from => Cassandane::Address->new(
+        localpart => 'ownContact', domain => 'local'
+    )) or die;
+    $self->make_message("msg3", from => Cassandane::Address->new(
+        localpart => 'noContact', domain => 'local'
+    )) or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{ property => "subject" }],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+    my $emailIds = $res->[0][1]{ids};
+
+    xlog "Assert Email/query";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromAnyContact => JSON::true,
+            },
+            sort => [{ property => "subject" }],
+        }, 'R1']
+    ], $using);
+    $self->assert_deep_equals([$emailIds->[0], $emailIds->[1]], $res->[0][1]{ids});
+
+    xlog "Assert Sieve";
+    $imap->create("INBOX.matches") or die;
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+      "fromAnyContact" : true
+  }
+.
+  )
+{
+  fileinto "INBOX.matches";
+}
+EOF
+    );
+
+    my $rawMessage = <<'EOF';
+From: sharedContact@local
+To: to@local
+Subject: sieve1
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+hello
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $rawMessage);
+    $self->{instance}->deliver($msg);
+    $self->assert_num_equals(1, $imap->message_count('INBOX.matches'));
+}
+
 1;
