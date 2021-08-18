@@ -1634,8 +1634,11 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
 
     /* Run query */
     if (md->content.matchmime)
-        matches = jmap_email_matchmime(md->content.matchmime, jfilter,
-                                       ctx->cstate, userid, time(NULL), &err);
+        matches = jmap_email_matchmime(md->content.matchmime,
+                                       jfilter, ctx->cstate, userid,
+                                       sd->authstate,
+                                       sd->ns,
+                                       time(NULL), &err);
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
