@@ -277,6 +277,7 @@ sub run_test
 
     local $ENV{JMTS_TEST_OUTPUT_TO_STDERR} = 1 if get_verbose;
     local $ENV{JMTS_TELEMETRY} = 1 if get_verbose >= 3;
+    local $ENV{JMTS_USE_WEBSOCKETS} = 0;
 
     # Needed so text based searching works in Email/query, etc...
     my $squatter_pid = $self->{instance}->run_command(
