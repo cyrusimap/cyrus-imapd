@@ -7288,9 +7288,9 @@ static int _email_get_bodies(jmap_req_t *req,
 
     /* calendarEvents -- non-standard */
     if (jmap_wantprop(props, "calendarEvents")) {
-        ptrarray_t icsbodies = PTRARRAY_INITIALIZER;
-        // Google sends the same iTIP message both as a text/calendar
-        // and as a base64-encoded application/ics body
+        hash_table icsbody_by_partid = HASH_TABLE_INITIALIZER;
+        // Some MUAs send the same iTIP message both as a text/calendar
+        // and as a base64-encoded application/ics body. Deduplicate these.
         struct hashset *icsguids = hashset_new(sizeof(struct message_guid));
 
         int i;
@@ -7318,19 +7318,31 @@ static int _email_get_bodies(jmap_req_t *req,
                 }
             }
 
-            if (is_icsbody && hashset_add(icsguids, &part->content_guid))
-                ptrarray_append(&icsbodies, part);
+            if (is_icsbody && hashset_add(icsguids, &part->content_guid)) {
+                if (!icsbody_by_partid.size) {
+                    construct_hash_table(&icsbody_by_partid, 32, 0);
+                }
+                hash_insert(part->part_id, part, &icsbody_by_partid);
+            }
         }
 
         json_t *events = json_null();
-        if (ptrarray_size(&icsbodies)) {
+        if (hash_numrecords(&icsbody_by_partid)) {
             r = _cyrusmsg_need_mime(msg);
             if (r) goto done;
-            events = jmap_calendar_events_from_mime(req, &icsbodies, msg->mime);
+            struct mailbox *mbox = NULL;
+            uint32_t uid = 0;
+            if (msg->mr) {
+                msgrecord_get_mailbox(msg->mr, &mbox);
+                msgrecord_get_uid(msg->mr, &uid);
+            }
+            events = jmap_calendar_events_from_msg(req,
+                    mbox ? mailbox_uniqueid(mbox) : NULL, uid,
+                    &icsbody_by_partid, msg->mime);
         }
         json_object_set_new(email, "calendarEvents", events);
 
-        ptrarray_fini(&icsbodies);
+        if (icsbody_by_partid.size) free_hash_table(&icsbody_by_partid, NULL);
         hashset_free(&icsguids);
     }
 
