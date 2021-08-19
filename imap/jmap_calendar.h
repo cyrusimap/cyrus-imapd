@@ -51,8 +51,9 @@
 #include "ptrarray.h"
 #include "util.h"
 
-extern json_t *jmap_calendar_events_from_mime(jmap_req_t *req,
-                                              const ptrarray_t *parts,
-                                              const struct buf *mime);
+extern json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
+                                             const char *mboxid, uint32_t uid,
+                                             hash_table *icsbody_by_partid,
+                                             const struct buf *mime);
 
 #endif /* JMAP_CALENDAR_H */

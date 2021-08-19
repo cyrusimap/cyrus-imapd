@@ -93,15 +93,23 @@ extern "C" {
 
 struct jmapical_ctx {
     jmap_req_t *req;
-    /* Link.blobId */
-    struct buf davbaseurl;
-    const char *davproto;
-    const char *davhost;
-    struct webdav_db *webdavdb;
-    struct mailbox *attachments;
-    int lock_attachments;
-    /* Alert */
-    char *emailalert_recipient;
+    struct buf buf;
+    struct {
+        const char *mboxid;
+        uint32_t uid;
+        const char *partid;
+    } icalsrc;
+    struct {
+        struct buf davbaseurl;
+        const char *davproto;
+        const char *davhost;
+        struct webdav_db *db;
+        struct mailbox *mbox;
+        int lock;
+    } attachments;
+    struct {
+        char *emailrecipient;
+    } alert;
 };
 
 extern struct jmapical_ctx *jmapical_context_new(jmap_req_t *req);
@@ -128,6 +136,7 @@ json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
  */
 icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
                                json_t *invalid,
+                               json_t *serverset,
                                struct jmapical_ctx *jmapctx);
 
 
