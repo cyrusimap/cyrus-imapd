@@ -50,6 +50,7 @@ use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
 use Cwd qw(abs_path getcwd);
 use URI;
+use URI::Escape;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -23013,6 +23014,79 @@ EOF
     my @linksFromBinary = values %{$res->[1][1]{list}[0]{calendarEvents}{3}[0]{links}};
     $self->assert_num_equals(1, scalar @linksFromBinary);
     $self->assert_str_equals($linksFromUrl[0]->{blobId}, $linksFromBinary[0]->{blobId});
+}
+
+sub test_email_get_calendarevents_links_blobid_attachbinary
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+ATTACH;VALUE=BINARY;ENCODING=BASE64;FMTTYPE=text/plain:aGVsbG8=
+ORGANIZER:cassandane@example.com
+ATTENDEE:attendee@local
+UID:123456789
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+    $rawIcal =~ s/\r?\n/\r\n/gs;
+
+    xlog "Make email";
+    $self->make_message('test',
+        mime_type => 'multipart/related',
+        mime_boundary => 'boundary',
+        body => ""
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "test"
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/calendar;charset=utf-8\r\n"
+          . "\r\n"
+          . $rawIcal
+          . "\r\n--boundary--\r\n"
+    ) || die;
+
+    xlog "Fetch email via JMAP";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['calendarEvents'],
+        }, 'R2' ],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $link = (values %{$res->[1][1]{list}[0]{calendarEvents}{2}[0]{links}})[0];
+    $self->assert_not_null($link);
+    $self->assert_not_null($link->{blobId});
+    $res = $jmap->Download('cassandane', uri_escape($link->{blobId}));
+    $self->assert_str_equals("hello", $res->{content});
 }
 
 sub test_email_get_calendarevents_itip_reply
