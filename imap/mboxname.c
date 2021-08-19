@@ -192,14 +192,18 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
     int nonblock;
     int locktype;
 
+    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+    message_guid_generate(&guid, mboxname, strlen(mboxname));
+    const char *hash = message_guid_encode(&guid);
+
     nonblock = !!(locktype_and_flags & LOCK_NONBLOCK);
     locktype = (locktype_and_flags & ~LOCK_NONBLOCK);
 
-    fname = mboxname_lockpath(mboxname);
+    fname = mboxname_lockpath(hash);
     if (!fname)
         return IMAP_MAILBOX_BADNAME;
 
-    lockitem = find_lockitem(mboxname);
+    lockitem = find_lockitem(hash);
 
     /* already open?  just use this one */
     if (lockitem) {
@@ -211,7 +215,7 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
         goto done;
     }
 
-    lockitem = create_lockitem(mboxname);
+    lockitem = create_lockitem(hash);
 
     /* assume success, and only create directory on failure.
      * More efficient on a common codepath */
@@ -265,7 +269,11 @@ EXPORTED void mboxname_release(struct mboxlock **mboxlockptr)
 
 EXPORTED int mboxname_islocked(const char *mboxname)
 {
-    struct mboxlocklist *lockitem = find_lockitem(mboxname);
+    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+    message_guid_generate(&guid, mboxname, strlen(mboxname));
+    const char *hash = message_guid_encode(&guid);
+
+    struct mboxlocklist *lockitem = find_lockitem(hash);
     if (!lockitem) return 0;
     return lockitem->l.locktype;
 }
