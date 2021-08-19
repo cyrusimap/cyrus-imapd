@@ -14687,18 +14687,72 @@ sub test_calendarevent_get_attachbinary
     :min_version_3_5 :needs_component_jmap
 {
     my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
 
-    my ($id, $ical) = $self->icalfile('attachbinary');
+    xlog "Create event via CalDAV";
+    my $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART:20160928T160000Z
+DTEND:20160928T170000Z
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:test
+ATTACH;VALUE=BINARY;ENCODING=BASE64;FMTTYPE=text/plain:aGVsbG8=
+SEQUENCE:0
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
+        'Content-Type' => 'text/calendar');
 
-    my $event = $self->putandget_vevent($id, $ical);
+    xlog "Fetch with Cyrus extension";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['links'],
+        }, 'R1'],
+    ]);
+    my $event = $res->[0][1]{list}[0];
     $self->assert_not_null($event);
+
     my @links = values %{$event->{links}};
+    $self->assert_num_equals(1, scalar @links);
+    $self->assert_null($links[0]{href});
+    $self->assert_str_equals('text/plain', $links[0]{contentType});
+    my $blobId = $links[0]{blobId};
+    $self->assert_not_null($blobId);
+
+    xlog "Fetch blob";
+    $res = $jmap->Download('cassandane', $blobId);
+    $self->assert_str_equals("hello", $res->{content});
+
+    xlog "Fetch without Cyrus extension";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['links'],
+        }, 'R2'],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+    ]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_not_null($event);
+
+    @links = values %{$event->{links}};
     $self->assert_num_equals(1, scalar @links);
     $self->assert_str_equals('data:text/plain;base64,aGVsbG8=', $links[0]{href});
     $self->assert_str_equals('text/plain', $links[0]{contentType});
 }
 
-sub test_calendarevent_set_attachbinary
+sub test_calendarevent_set_attachbinary_datauri
     :min_version_3_5 :needs_component_jmap
 {
     my ($self) = @_;
@@ -14706,66 +14760,162 @@ sub test_calendarevent_set_attachbinary
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    my @testCases = ({
-        link => {
-            href => 'data:;base64,link1',
-        },
-        wantContentType => undef,
-    }, {
-        link => {
-            '@type' => 'Link',
-            href => 'data:application/vnd.type1;base64,link2',
-        },
-        wantContentType => 'application/vnd.type1',
-    });
-
-    for my $i (0 .. $#testCases) {
-        my $tc = $testCases[$i];
-        my $res = $jmap->CallMethods([
-            ['CalendarEvent/set', {
-                create => {
-                    $i => {
-                        calendarIds => {
-                            Default => JSON::true,
-                        },
-                        title => "event1",
-                        start => "2019-12-10T23:30:00",
-                        duration => "PT1H",
-                        timeZone => "Australia/Melbourne",
-                        links => {
-                            link => $tc->{link},
+    xlog "Create event with data: URI in Link.href";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2019-12-10T23:30:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    links => {
+                        link => {
+                            href =>'data:text/plain;base64,aGVsbG8=',
                         },
                     },
                 },
-            }, 'R1'],
-            ['CalendarEvent/get', {
-                ids => ['#' . $i],
-                properties => ['links', 'x-href'],
-            }, 'R2'],
-        ]);
-        my $eventId = $res->[0][1]{created}{$i}{id};
-        $self->assert_not_null($eventId);
-        my $xhref = $res->[0][1]{created}{$i}{'x-href'};
-        $self->assert_not_null($xhref);
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+            properties => ['links', 'x-href'],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
 
-        my @links = values %{$res->[1][1]{list}[0]{links}};
-        $self->assert_str_equals($tc->{link}{href}, $links[0]->{href});
-        if ($tc->{wantContentType}) {
-            $self->assert_str_equals($tc->{wantContentType},
-                 $links[0]->{contentType});
-         }
+    xlog "Fetch event without Cyrus extension";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+            properties => ['links'],
+        }, 'R1'],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+    ]);
+    my $linkWithoutExt = (values %{$res->[0][1]{list}[0]{links}})[0];
+    $self->assert_str_equals('data:text/plain;base64,aGVsbG8=',
+        $linkWithoutExt->{href});
+    $self->assert_null($linkWithoutExt->{blobId});
+    $self->assert_str_equals('text/plain',
+        $linkWithoutExt->{contentType});
 
-        my $caldavResponse = $caldav->Request('GET', $xhref);
-        my $ical = Data::ICal->new(data => $caldavResponse->{content});
-        my %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
-        my $vevent = $entries{'VEVENT'};
-        $self->assert_not_null($vevent);
+    xlog "Fetch event with Cyrus extension";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+            properties => ['links', 'x-href'],
+        }, 'R1'],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+    my $linkWithExt = (values %{$res->[0][1]{list}[0]{links}})[0];
+    $self->assert_null($linkWithExt->{href});
+    $self->assert_not_null($linkWithExt->{blobId});
+    $self->assert_str_equals('text/plain', $linkWithExt->{contentType});
+    my $xhref = $res->[0][1]{list}[0]{'x-href'};
+    $self->assert_not_null($xhref);
 
-        my $attach = $vevent->property('ATTACH');
-        $self->assert_num_equals(1, scalar @{$attach});
-        $self->assert_str_equals('BINARY', $attach->[0]->parameters()->{VALUE});
+    xlog "Assert ATTACH BINARY in VEVENT";
+    my $caldavResponse = $caldav->Request('GET', $xhref);
+    my $ical = Data::ICal->new(data => $caldavResponse->{content});
+    my %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
+    my $vevent = $entries{'VEVENT'};
+    $self->assert_not_null($vevent);
 
-    }
+    my $attach = $vevent->property('ATTACH');
+    $self->assert_num_equals(1, scalar @{$attach});
+    $self->assert_str_equals('BINARY', $attach->[0]->parameters()->{VALUE});
+}
+
+sub test_calendarevent_set_attachbinary_blobid
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART:20160928T160000Z
+DTEND:20160928T170000Z
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:event1
+ATTACH;VALUE=BINARY;ENCODING=BASE64;FMTTYPE=text/plain:aGVsbG8=
+SEQUENCE:0
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
+        'Content-Type' => 'text/calendar');
+
+    xlog "Fetch Link.blobId";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['links'],
+        }, 'R1'],
+    ]);
+    my $event1 = $res->[0][1]{list}[0];
+    $self->assert_not_null($event1);
+    my $blobId1 = (values %{$event1->{links}})[0]->{blobId};
+    $self->assert_not_null($blobId1);
+
+    xlog "Assert blobId is a smart blob";
+    $self->assert_str_equals("I", substr($blobId1, 0, 1));
+
+    xlog "Create event with same blobId";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event2 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event2",
+                    start => "2021-08-01T23:30:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    links => {
+                        link => {
+                            blobId => $blobId1,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event2'],
+            properties => ['links', 'x-href'],
+        }, 'R2'],
+    ]);
+    my $event2 = $res->[1][1]{list}[0];
+    $self->assert_not_null($event2);
+    my $blobId2 = (values %{$event2->{links}})[0]->{blobId};
+
+    xlog "Assert blobId is a G blob";
+    $self->assert_str_equals("G", substr($blobId2, 0, 1));
+
+    xlog "Assert /set response reported new blobId";
+    $self->assert_str_equals($blobId2,
+        $res->[0][1]{created}{event2}{"links/link/blobId"});
 }
 
 sub test_calendarevent_get_recurrenceid_date_start_datetime
