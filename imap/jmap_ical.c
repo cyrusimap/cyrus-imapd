@@ -273,16 +273,44 @@ static char *_emailalert_recipient(const char *userid)
     return recipient;
 }
 
+static void blobid_from_data(struct jmapical_ctx *jmapctx,
+                             struct buf *blobid,
+                             const char *href)
+{
+    // need a real Cyrus message for ATTACH smart blob ids
+    if (!jmapctx->icalsrc.mboxid) return;
+
+    const char *semcol = strchr(href + 5, ';');
+    if (!semcol || strncasecmp(semcol, ";base64,", 8))
+        return;
+    const char *data = semcol + 8;
+
+    struct buf *buf = &jmapctx->buf;
+    buf_reset(buf);
+    if (charset_decode(buf, data, strlen(data), ENCODING_BASE64))
+        return;
+
+    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+    message_guid_generate(&guid, buf_base(buf), buf_len(buf));
+    jmap_encode_rawdata_blobid('I', jmapctx->icalsrc.mboxid,
+            jmapctx->icalsrc.uid, jmapctx->icalsrc.partid,
+            NULL, "ATTACH", &guid, blobid);
+}
+
 static void blobid_from_href(struct jmapical_ctx *jmapctx,
                              struct buf *blobid,
                              const char *href,
                              const char *managedid)
 {
-    const struct buf *baseurl = &jmapctx->davbaseurl;
-
+    const struct buf *baseurl = &jmapctx->attachments.davbaseurl;
     buf_reset(blobid);
 
-    if (strncmpsafe(href, baseurl->s, baseurl->len)) {
+    if (!strncasecmp(href, "data:", 5)) {
+        blobid_from_data(jmapctx, blobid, href);
+        return;
+    }
+
+    if (strncasecmp(href, baseurl->s, baseurl->len)) {
         /* HREF doesn't match base url for DAV attachments */
         return;
     }
@@ -298,35 +326,54 @@ static void blobid_from_href(struct jmapical_ctx *jmapctx,
     buf_appendcstr(blobid, mid);
 }
 
-static int copyblob(jmap_req_t *req, const char *blobid, struct mailbox *dstmbox)
+static int create_managedattach(struct jmapical_ctx *jmapctx,
+                                const char *blobid,
+                                struct buf *managedid,
+                                struct buf *newblobid)
 {
+    jmap_req_t *req = jmapctx->req;
     msgrecord_t *mr = NULL;
     struct mailbox *srcmbox = NULL;
-    struct body *srcbody = NULL;
-    const struct body *srcpart = NULL;
-    struct body *dstbody = NULL;
-    struct buf blob = BUF_INITIALIZER;
+    struct body *body = NULL;
     struct stagemsg *stage = NULL;
     time_t internaldate = time(NULL);
     struct appendstate as;
+    jmap_getblob_context_t getblobctx;
+    jmap_getblob_ctx_init(&getblobctx, req->accountid, blobid, NULL, 1);
+    struct buf preamble = BUF_INITIALIZER;
 
     /* Lookup blob */
-    int r = jmap_findblob(req, NULL, blobid, &srcmbox, &mr, &srcbody, &srcpart, &blob);
+    int r = jmap_getblob(req, &getblobctx);
     if (r) goto done;
 
     /* Write blob to file */
-    const char *blob_base = srcpart ? blob.s + srcpart->header_offset : blob.s;
-    size_t size = srcpart ? srcpart->header_size + srcpart->content_size : blob.len;
-    FILE *fp = append_newstage(mailbox_name(dstmbox), time(NULL), 0, &stage);
+    FILE *fp = append_newstage(mailbox_name(jmapctx->attachments.mbox),
+            time(NULL), 0, &stage);
     if (!fp) {
-        syslog(LOG_ERR, "%s: append_newstage(%s) failed", __func__, mailbox_name(dstmbox));
+        xsyslog(LOG_ERR, "append_newstage failed", "mboxname=<%s>",
+                mailbox_name(jmapctx->attachments.mbox));
         r = IMAP_INTERNAL;
         goto done;
     }
-    fwrite(blob_base, size, 1, fp);
+
+    char now[RFC822_DATETIME_MAX+1];
+    time_to_rfc822(time(NULL), now, RFC822_DATETIME_MAX);
+    now[RFC822_DATETIME_MAX] = '\0';
+
+    buf_printf(&preamble, "User-Agent: Cyrus-JMAP-Calendars/%s\r\n", CYRUS_VERSION);
+    buf_printf(&preamble, "From: <%s>\r\n", req->userid);
+    buf_printf(&preamble, "Date: %s\r\n", now);
+    buf_appendcstr(&preamble, "Content-Type: application/octet-stream\r\n");
+    buf_printf(&preamble, "Content-Length: %zu\r\n", buf_len(&getblobctx.blob));
+    buf_appendcstr(&preamble, "MIME-Version: 1.0\r\n");
+
+    fwrite(buf_base(&preamble), buf_len(&preamble), 1, fp);
+    if (!ferror(fp))
+        fputs("\r\n", fp);
+    if (!ferror(fp))
+        fwrite(buf_base(&getblobctx.blob), buf_len(&getblobctx.blob), 1, fp);
     if (ferror(fp)) {
-        syslog(LOG_ERR, "%s: ferror(%s): %s", __func__,
-                append_stagefname(stage), strerror(errno));
+        xsyslog(LOG_ERR, "ferror", "fname=<%s>", append_stagefname(stage));
         r = IMAP_IOERROR;
         fclose(fp);
         goto done;
@@ -334,30 +381,35 @@ static int copyblob(jmap_req_t *req, const char *blobid, struct mailbox *dstmbox
     fclose(fp);
 
     /* Append blob to mailbox */
-    r = append_setup_mbox(&as, dstmbox, req->userid, httpd_authstate, 0, NULL, 0, 0, 0);
+    r = append_setup_mbox(&as, jmapctx->attachments.mbox, req->userid,
+            httpd_authstate, 0, NULL, 0, 0, 0);
     if (r) goto done;
 
     strarray_t flags = STRARRAY_INITIALIZER;
-    r = append_fromstage(&as, &dstbody, stage, 0,
+    r = append_fromstage(&as, &body, stage, 0,
                          internaldate, &flags, 0, NULL);
-	if (r)
+	if (r) {
         append_abort(&as);
-    else
-        append_commit(&as);
+        goto done;
+    }
+    append_commit(&as);
+
+    buf_setcstr(managedid, message_guid_encode(&body->content_guid));
+
+    char mynewblobid[JMAP_BLOBID_SIZE];
+    jmap_set_blobid(&body->content_guid, mynewblobid);
+    if (strcmp(mynewblobid, blobid)) buf_setcstr(newblobid, mynewblobid);
 
 done:
+    jmap_getblob_ctx_fini(&getblobctx);
     if (stage) append_removestage(stage);
-	if (dstbody) {
-        message_free_body(dstbody);
-        free(dstbody);
-    }
-    if (srcbody) {
-        message_free_body(srcbody);
-        free(srcbody);
+	if (body) {
+        message_free_body(body);
+        free(body);
     }
     jmap_closembox(req, &srcmbox);
     msgrecord_unref(&mr);
-    buf_free(&blob);
+    buf_free(&preamble);
     return r;
 }
 
@@ -365,10 +417,10 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
 {
     jmap_req_t *req = jmapctx->req;
 
-    if (!jmapctx->attachments) {
+    if (!jmapctx->attachments.mbox) {
         char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
-        int r = jmap_openmbox(req, mboxname, &jmapctx->attachments,
-                jmapctx->lock_attachments);
+        int r = jmap_openmbox(req, mboxname, &jmapctx->attachments.mbox,
+                jmapctx->attachments.lock);
         if (r) {
             xsyslog(LOG_ERR, "can't open attachments",
                     "mboxname=<%s> err<%s>", mboxname, error_message(r));
@@ -376,13 +428,13 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
         free(mboxname);
         if (r) return r;
     }
-    if (!jmapctx->webdavdb) {
-        jmapctx->webdavdb = webdav_open_mailbox(jmapctx->attachments);
-        if (!jmapctx->webdavdb) {
+    if (!jmapctx->attachments.db) {
+        jmapctx->attachments.db = webdav_open_mailbox(jmapctx->attachments.mbox);
+        if (!jmapctx->attachments.db) {
             xsyslog(LOG_ERR, "mailbox_open_webdav failed",
-                    "attachments=<%s>", mailbox_name(jmapctx->attachments));
-            jmap_closembox(req, &jmapctx->attachments);
-            jmapctx->attachments = NULL;
+                    "attachments=<%s>", mailbox_name(jmapctx->attachments.mbox));
+            jmap_closembox(req, &jmapctx->attachments.mbox);
+            jmapctx->attachments.db = NULL;
             return IMAP_INTERNAL;
         }
     }
@@ -390,41 +442,49 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
     return 0;
 }
 
-static void href_from_blobid(struct jmapical_ctx *jmapctx,
-                             struct buf *href,
-                             struct buf *managedid,
-                             const char *blobid)
+static int attachment_from_blobid(struct jmapical_ctx *jmapctx,
+                                  const char *blobid,
+                                  struct buf *href,
+                                  struct buf *managedid,
+                                  struct buf *newblobid)
 {
     jmap_req_t *req = jmapctx->req;
     buf_reset(href);
     buf_reset(managedid);
 
     int r = jmapical_context_open_attachments(jmapctx);
-    if (r) return;
+    if (r) return r;
 
-    // Check if blob exists in WebDAV attachments
-    const char *mid = *blobid == 'G' ? blobid + 1 : blobid;
-    struct webdav_data *wdata;
-    r = webdav_lookup_uid(jmapctx->webdavdb, mid, &wdata);
-    if (r && r != CYRUSDB_NOTFOUND) {
-        syslog(LOG_ERR, "%s: webdav_lookup_uid(%s) failed: %s",
-                __func__, mid, cyrusdb_strerror(r));
-        return;
+    // Check if blob already exists in WebDAV attachments
+    r = CYRUSDB_NOTFOUND;
+    if (*blobid == 'G') {
+        buf_setcstr(managedid, blobid + 1);
+        struct webdav_data *wdata;
+        r = webdav_lookup_uid(jmapctx->attachments.db,
+                buf_cstring(managedid), &wdata);
+        if (r && r != CYRUSDB_NOTFOUND) {
+            xsyslog(LOG_ERR, "webdav_lookup_uid failed",
+                    "managedid=<%s> err=<%s>",
+                    buf_cstring(managedid), cyrusdb_strerror(r));
+            return r;
+        }
     }
     if (r == CYRUSDB_NOTFOUND) {
         // Copy blob from JMAP blobs to managed attachments
-        r = copyblob(req, blobid, jmapctx->attachments);
+        r = create_managedattach(jmapctx, blobid, managedid, newblobid);
         if (r) {
-            syslog(LOG_ERR, "jmap: copyblob(%s): %s",
+            syslog(LOG_ERR, "jmap: create_managedattach(%s): %s",
                     blobid, error_message(r));
-            return;
+            return r;
         }
     }
 
     // Set the blob href and managed-id.
     caldav_attachment_url(href, req->accountid,
-            jmapctx->davproto, jmapctx->davhost, mid);
-    buf_setcstr(managedid, mid);
+            jmapctx->attachments.davproto,
+            jmapctx->attachments.davhost, buf_cstring(managedid));
+
+    return 0;
 }
 
 HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req)
@@ -434,16 +494,17 @@ HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req)
     jmapctx->req = req;
 
     const char *slash = strrchr(req->method, '/');
-    jmapctx->lock_attachments = slash && !strcmp(slash, "/set");
+    jmapctx->attachments.lock = slash && !strcmp(slash, "/set");
 
     /* Initialize context for Link.blobId */
     const char *davproto = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_SCHEME);
     const char *davhost = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_HOST);
     if (davproto && davhost) {
-        jmapctx->davproto = davproto;
-        jmapctx->davhost = davhost;
-        caldav_attachment_url(&jmapctx->davbaseurl, req->accountid,
-                jmapctx->davproto, jmapctx->davhost, "");
+        jmapctx->attachments.davproto = davproto;
+        jmapctx->attachments.davhost = davhost;
+        caldav_attachment_url(&jmapctx->attachments.davbaseurl, req->accountid,
+                jmapctx->attachments.davproto,
+                jmapctx->attachments.davhost, "");
     }
     else {
         syslog(LOG_ERR, "%s: can't determine base URL for WebDAV attachments."
@@ -451,7 +512,7 @@ HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req)
                 " WebDAV managed attachments in imapd.conf?", __func__);
     }
 
-    jmapctx->emailalert_recipient = _emailalert_recipient(req->userid);
+    jmapctx->alert.emailrecipient = _emailalert_recipient(req->userid);
 
     return jmapctx;
 }
@@ -463,21 +524,22 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
     struct jmapical_ctx *jmapctx = *jmapctxp;
     if (!jmapctx) return;
 
-    if (jmapctx->attachments)
-        jmap_closembox(jmapctx->req, &jmapctx->attachments);
-    if (jmapctx->webdavdb)
-        webdav_close(jmapctx->webdavdb);
-    buf_free(&jmapctx->davbaseurl);
+    if (jmapctx->attachments.mbox)
+        jmap_closembox(jmapctx->req, &jmapctx->attachments.mbox);
+    if (jmapctx->attachments.db)
+        webdav_close(jmapctx->attachments.db);
+    buf_free(&jmapctx->attachments.davbaseurl);
 
-    free(jmapctx->emailalert_recipient);
+    free(jmapctx->alert.emailrecipient);
+    buf_free(&jmapctx->buf);
     free(jmapctx);
 
     *jmapctxp = NULL;
 }
 
-#define JMAPICAL_SHA1KEY_LEN (2*SHA1_DIGEST_LENGTH+1)
+#define JMAPICAL_SHA1HEXSTR_LEN (2*SHA1_DIGEST_LENGTH+1)
 
-static const char *sha1key(const char *val, char *keybuf)
+static const char *sha1hexstr(const char *val, char *keybuf)
 {
     if (!val) return NULL;
 
@@ -618,8 +680,8 @@ static const char *xjmapid_from_icalm(struct buf *dst, icalproperty *prop)
     buf_reset(dst);
     const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
     if (!id) {
-        char keybuf[JMAPICAL_SHA1KEY_LEN];
-        id = sha1key(icalproperty_as_ical_string(prop), keybuf);
+        char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+        id = sha1hexstr(icalproperty_as_ical_string(prop), keybuf);
     }
     if (id) buf_setcstr(dst, id);
     return buf_cstring(dst);
@@ -656,9 +718,9 @@ static icalproperty* findprop_byid(icalcomponent *comp, const char *id,
          prop = icalcomponent_get_next_property(comp, kind)) {
 
         const char *oldid = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
-        char keybuf[JMAPICAL_SHA1KEY_LEN];
+        char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
         if (!oldid)
-            oldid = sha1key(icalproperty_get_value_as_string(prop), keybuf);
+            oldid = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
         if (!strcmp(id, oldid)) break;
     }
 
@@ -1858,14 +1920,13 @@ link_from_ical(icalproperty *prop, struct jmapical_ctx *jmapctx)
     const char *s;
 
     /* blobId */
-    if (jmapctx) {
+    if (jmapctx && jmap_is_using(jmapctx->req, JMAP_CALENDARS_EXTENSION)) {
         param = icalproperty_get_managedid_parameter(prop);
         const char *mid = param ? icalparameter_get_managedid(param) : NULL;
         struct buf blobid = BUF_INITIALIZER;
         blobid_from_href(jmapctx, &blobid, href, mid);
         if (buf_len(&blobid)) {
             json_object_set_new(link, "blobId", json_string(buf_cstring(&blobid)));
-            json_object_del(link, "href");
         }
         buf_free(&blobid);
     }
@@ -1953,8 +2014,8 @@ static json_t* linksbyprop_from_ical(icalcomponent *comp,
         }
 
         const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
-        char keybuf[JMAPICAL_SHA1KEY_LEN];
-        if (!id) id = sha1key(icalproperty_get_value_as_string(prop), keybuf);
+        char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+        if (!id) id = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
         json_t *link = link_from_ical(prop, jmapctx);
         if (link) json_object_set_new(jlinks, id, link);
     }
@@ -1983,8 +2044,8 @@ static json_t* linksbyprop_from_ical(icalcomponent *comp,
         }
 
         const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
-        char keybuf[JMAPICAL_SHA1KEY_LEN];
-        if (!id) id = sha1key(icalproperty_get_value_as_string(prop), keybuf);
+        char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+        if (!id) id = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
         json_t *link = link_from_ical(prop, jmapctx);
         if (link) json_object_set_new(jlinks, id, link);
     }
@@ -2217,8 +2278,8 @@ static json_t *participant_from_ical(icalproperty *prop,
 
             char *uri = normalized_uri(icalparameter_get_member(param));
             const char *id = hash_lookup(uri, id_by_uri);
-            char keybuf[JMAPICAL_SHA1KEY_LEN];
-            if (!id) id = sha1key(uri, keybuf);
+            char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+            if (!id) id = sha1hexstr(uri, keybuf);
             json_object_set_new(memberOf, id, json_true());
             free(uri);
         }
@@ -2234,11 +2295,11 @@ static json_t *participant_from_ical(icalproperty *prop,
             const char *dir = icalparameter_get_dir(param);
             if (dir) {
                 const char *linkid = get_icalxparam_value(prop, JMAPICAL_XPARAM_LINKID);
-                char keybuf[JMAPICAL_SHA1KEY_LEN];
+                char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
                 if (!linkid) {
                     /* Generate a link id from the dir value. Note that the
                      * id will stick to this link, even if its href changes. */
-                    linkid = sha1key(dir, keybuf);
+                    linkid = sha1hexstr(dir, keybuf);
                 }
                 if (!links) {
                     links = json_object();
@@ -2363,8 +2424,8 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
 
         /* Map mailto:URI to ID */
         const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
-        char keybuf[JMAPICAL_SHA1KEY_LEN];
-        if (!id) id = sha1key(uri, keybuf);
+        char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+        if (!id) id = sha1hexstr(uri, keybuf);
         hash_insert(uri, xstrdup(id), &id_by_uri);
         free(uri);
     }
@@ -2419,8 +2480,8 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
             if (!hash_lookup(uri, &attendee_by_uri)) {
                 /* Add a default participant for the organizer. */
                 const char *id = get_icalxparam_value(orga, JMAPICAL_XPARAM_ID);
-                char keybuf[JMAPICAL_SHA1KEY_LEN];
-                if (!id) id = sha1key(uri, keybuf);
+                char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+                if (!id) id = sha1hexstr(uri, keybuf);
                 json_t *p = participant_from_ical(orga, &id_by_uri, orga,
                         json_incref(json_object_get(linksbyparticipant, id)));
                 json_object_set_new(participants, id, p);
@@ -2442,8 +2503,8 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
 HIDDEN json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *idbuf)
 {
     const char *id = icalcomponent_get_uid(valarm);
-    char keybuf[JMAPICAL_SHA1KEY_LEN];
-    if (!id) id = sha1key(icalcomponent_as_ical_string(valarm), keybuf);
+    char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+    if (!id) id = sha1hexstr(icalcomponent_as_ical_string(valarm), keybuf);
     buf_setcstr(idbuf, id);
 
     /* Determine TRIGGER and RELATED parameter */
@@ -2694,8 +2755,8 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links,
         const char *altrep = icalparameter_get_altrep(param);
         if (altrep) {
             if (!json_is_object(links)) links = json_object();
-            char keybuf[JMAPICAL_SHA1KEY_LEN];
-            sha1key(altrep, keybuf);
+            char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+            sha1hexstr(altrep, keybuf);
             json_object_set_new(links, keybuf, json_pack("{s:s}", "href", altrep));
         }
     }
@@ -4151,8 +4212,9 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
 {
     icalproperty *prop;
     struct buf buf = BUF_INITIALIZER;
-    struct buf blobhref = BUF_INITIALIZER;
-    struct buf blobmid = BUF_INITIALIZER;
+    struct buf attachhref = BUF_INITIALIZER;
+    struct buf attachmid = BUF_INITIALIZER;
+    struct buf newblobid = BUF_INITIALIZER;
     icalcomponent *oldcomp = oldcomp_of(comp, oldcomps);
 
     jmap_parser_push(parser, "links");
@@ -4160,6 +4222,7 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
     const char *id;
     json_t *link;
     json_object_foreach(links, id, link) {
+        buf_free(&newblobid);
         buf_reset(&buf);
 
         const char *href = NULL;
@@ -4192,12 +4255,18 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
         }
         else if (blobid) {
             if (jmapctx) {
-                href_from_blobid(jmapctx, &blobhref, &blobmid, blobid);
-                if (buf_len(&blobhref)) {
-                    href = buf_cstring(&blobhref);
+                int r = attachment_from_blobid(jmapctx, blobid,
+                        &attachhref, &attachmid, &newblobid);
+                if (!r) {
+                    href = buf_cstring(&attachhref);
+                    if (buf_len(&newblobid)) {
+                        jmap_parser_serverset(parser, "blobId",
+                                json_string(buf_cstring(&newblobid)));
+                    }
                 }
                 else {
-                    xsyslog(LOG_ERR, "can not translate blobId to href", NULL);
+                    xsyslog(LOG_ERR, "can not translate blobId to href", "err=<%s>",
+                            error_message(r));
                     jmap_parser_invalid(parser, "blobId");
                 }
             }
@@ -4334,9 +4403,9 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
                 icalattach *icalatt = icalattach_new_from_url(href);
                 prop = icalproperty_new_attach(icalatt);
                 icalattach_unref(icalatt);
-                if (buf_len(&blobmid)) {
+                if (buf_len(&attachmid)) {
                     icalproperty_add_parameter(prop,
-                            icalparameter_new_managedid(buf_cstring(&blobmid)));
+                            icalparameter_new_managedid(buf_cstring(&attachmid)));
                 }
             }
         }
@@ -4386,8 +4455,9 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
     }
 
     jmap_parser_pop(parser);
-    buf_free(&blobhref);
-    buf_free(&blobmid);
+    buf_free(&attachhref);
+    buf_free(&attachmid);
+    buf_free(&newblobid);
     buf_free(&buf);
 }
 
@@ -4689,9 +4759,9 @@ participant_to_ical(icalcomponent *comp,
         param = icalproperty_get_first_parameter(oldattendee, ICAL_DIR_PARAMETER);
         if (param) {
             const char *linkid = get_icalxparam_value(prop, JMAPICAL_XPARAM_LINKID);
-            char keybuf[JMAPICAL_SHA1KEY_LEN];
+            char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
             if (!linkid) {
-                linkid = sha1key(icalparameter_get_dir(param), keybuf);
+                linkid = sha1hexstr(icalparameter_get_dir(param), keybuf);
             }
             json_t *link = json_object_get(links, linkid);
             const char *href = json_string_value(json_object_get(link, "href"));
@@ -5283,7 +5353,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts,
         alarm = jmapical_alert_to_ical(alert, parser, id,
                 icalcomponent_get_summary(comp),
                 icalcomponent_get_description(comp),
-                jmapctx->emailalert_recipient);
+                jmapctx->alert.emailrecipient);
 
         if (alarm) icalcomponent_add_component(comp, alarm);
         jmap_parser_pop(parser);
@@ -6809,7 +6879,9 @@ static void calendarevent_to_ical(icalcomponent *comp,
 }
 
 icalcomponent*
-jmapical_toical(json_t *jsevent, icalcomponent *oldical, json_t *invalid,
+jmapical_toical(json_t *jsevent, icalcomponent *oldical,
+                json_t *invalid,
+                json_t *serverset,
                 struct jmapical_ctx *jmapctx)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -6853,6 +6925,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical, json_t *invalid,
         ical = NULL;
     }
 
+    json_object_update(serverset, parser.serverset);
     icalcomps_fini(&oldcomps);
     jmap_parser_fini(&parser);
     return ical;
@@ -6919,7 +6992,7 @@ EXPORTED icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf)
         return NULL;
     }
 
-    ical = jmapical_toical(obj, NULL, NULL, NULL);
+    ical = jmapical_toical(obj, NULL, NULL, NULL, NULL);
 
     json_decref(obj);
 
