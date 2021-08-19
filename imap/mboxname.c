@@ -194,14 +194,16 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 
     struct message_guid guid = MESSAGE_GUID_INITIALIZER;
     message_guid_generate(&guid, mboxname, strlen(mboxname));
-    const char *hash = message_guid_encode(&guid);
+    char *hash = xstrdup(message_guid_encode(&guid));
 
     nonblock = !!(locktype_and_flags & LOCK_NONBLOCK);
     locktype = (locktype_and_flags & ~LOCK_NONBLOCK);
 
     fname = mboxname_lockpath(hash);
-    if (!fname)
+    if (!fname) {
+        free(hash);
         return IMAP_MAILBOX_BADNAME;
+    }
 
     lockitem = find_lockitem(hash);
 
@@ -243,6 +245,7 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 done:
     if (r) remove_lockitem(lockitem);
     else *mboxlockptr = &lockitem->l;
+    free(hash);
 
     return r;
 }
@@ -271,9 +274,10 @@ EXPORTED int mboxname_islocked(const char *mboxname)
 {
     struct message_guid guid = MESSAGE_GUID_INITIALIZER;
     message_guid_generate(&guid, mboxname, strlen(mboxname));
-    const char *hash = message_guid_encode(&guid);
+    char *hash = xstrdup(message_guid_encode(&guid));
 
     struct mboxlocklist *lockitem = find_lockitem(hash);
+    free(hash);
     if (!lockitem) return 0;
     return lockitem->l.locktype;
 }
