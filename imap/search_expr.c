@@ -2366,7 +2366,7 @@ static void search_seen_internalise(struct index_state *state,
             int r = seen_open(v->s, SEEN_SILENT, &seendb);
             if (!r) {
                 struct seendata sd = SEENDATA_INITIALIZER;
-                r = seen_read(seendb, state->mailbox->uniqueid, &sd);
+                r = seen_read(seendb, mailbox_uniqueid(state->mailbox), &sd);
                 if (!r) {
                     seen = seqset_parse(sd.seenuids, NULL, sd.lastuid);
                     seen_freedata(&sd);
@@ -2375,7 +2375,7 @@ static void search_seen_internalise(struct index_state *state,
                 else {
                     xsyslog(LOG_WARNING, "can not read seen data",
                             "userid=<%s> mboxid=<%s> err=<%s>",
-                            v->s, state->mailbox->uniqueid, error_message(r));
+                            v->s, mailbox_uniqueid(state->mailbox), error_message(r));
                 }
             }
             else {
