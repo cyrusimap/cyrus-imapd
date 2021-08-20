@@ -2931,11 +2931,12 @@ EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
                             void *rock __attribute__((unused)))
 {
     static char prevroot[MAX_MAILBOX_BUFFER];
-    char foundroot[MAX_MAILBOX_BUFFER], *qr = NULL;
+    char foundroot[MAX_MAILBOX_BUFFER];
+    const char *qr = NULL;
 
     if (fctx->mailbox) {
         /* Use the quotaroot as specified in mailbox header */
-        qr = fctx->mailbox->quotaroot;
+        qr = mailbox_quotaroot(fctx->mailbox);
     }
     else if (fctx->req_tgt->mbentry) {
         /* Find the quotaroot governing this hierarchy */

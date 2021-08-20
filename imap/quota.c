@@ -481,9 +481,9 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
     if (thisquota == -1) {
         /* no matching quotaroot exists, remove from
          * mailbox if present */
-        if (mailbox->quotaroot) {
+        if (mailbox_quotaroot(mailbox)) {
             /* unless it's outside the current prefix of course */
-            if (strlen(mailbox->quotaroot) < prefixlen) goto done;
+            if (strlen(mailbox_quotaroot(mailbox)) < prefixlen) goto done;
             r = fixquota_fixroot(mailbox, NULL);
             if (r) goto done;
         }
@@ -496,8 +496,7 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
 
         /* matching quotaroot exists, ensure mailbox has the
          * correct root */
-        if (!mailbox->quotaroot ||
-            strcmp(mailbox->quotaroot, root) != 0) {
+        if (strcmpsafe(mailbox_quotaroot(mailbox), root)) {
             r = fixquota_fixroot(mailbox, root);
             if (r) goto done;
         }
@@ -539,8 +538,9 @@ int fixquota_fixroot(struct mailbox *mailbox,
 {
     int r;
 
+    const char *oldroot = mailbox_quotaroot(mailbox);
     fprintf(stderr, "%s: quota root %s --> %s\n", mailbox_name(mailbox),
-           mailbox->quotaroot ? mailbox->quotaroot : "(none)",
+           oldroot ? oldroot : "(none)",
            root ? root : "(none)");
 
     r = mailbox_set_quotaroot(mailbox, root);

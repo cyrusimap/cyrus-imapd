@@ -3040,7 +3040,7 @@ index_copy(struct index_state *state,
     int checkquota = !ismove && !config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS);
 
     /* not moving or different quota root - need to check quota */
-    if (checkquota || strcmpsafe(srcmailbox->quotaroot, destmailbox->quotaroot)) {
+    if (checkquota || strcmpsafe(mailbox_quotaroot(srcmailbox), mailbox_quotaroot(destmailbox))) {
         for (i = 0; i < copyargs.nummsg; i++)
             qdiffs[QUOTA_STORAGE] += copyargs.records[i].size;
         qdiffs[QUOTA_MESSAGE] = copyargs.nummsg;

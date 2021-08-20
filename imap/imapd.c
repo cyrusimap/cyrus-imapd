@@ -4494,7 +4494,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (index_hasrights(imapd_index, ACL_EXPUNGE))
-        warn_about_quota(imapd_index->mailbox->quotaroot);
+        warn_about_quota(mailbox_quotaroot(imapd_index->mailbox));
 
     index_select(imapd_index, &init);
 
@@ -8013,8 +8013,8 @@ static void cmd_reconstruct(const char *tag, const char *name, int recursive)
         r = mailbox_open_irl(intname, &mailbox);
 
     if(!r) {
-        if(mailbox->quotaroot) {
-            strcpy(quotaroot, mailbox->quotaroot);
+        if (mailbox_quotaroot(mailbox)) {
+            strcpy(quotaroot, mailbox_quotaroot(mailbox));
         } else {
             strcpy(quotaroot, intname);
         }
@@ -8827,12 +8827,13 @@ static void cmd_getquotaroot(const char *tag, const char *name)
     if (!r) {
         prot_printf(imapd_out, "* QUOTAROOT ");
         prot_printastring(imapd_out, name);
-        if (mailbox->quotaroot) {
+        const char *quotaroot = mailbox_quotaroot(mailbox);
+        if (quotaroot) {
             struct quota q;
-            char *extname = mboxname_to_external(mailbox->quotaroot, &imapd_namespace, imapd_userid);
+            char *extname = mboxname_to_external(quotaroot, &imapd_namespace, imapd_userid);
             prot_printf(imapd_out, " ");
             prot_printastring(imapd_out, extname);
-            quota_init(&q, mailbox->quotaroot);
+            quota_init(&q, quotaroot);
             r = quota_read_withconversations(&q);
             if (!r) {
                 prot_printf(imapd_out, "\r\n* QUOTA ");
@@ -11733,8 +11734,9 @@ static int xfer_finalsync(struct xfer_header *xfer)
                        item->mbentry->name, error_message(r));
             }
             else {
-                if (mailbox->quotaroot)
-                    sync_name_list_add(master_quotaroots, mailbox->quotaroot);
+                const char *quotaroot = mailbox_quotaroot(mailbox);
+                if (quotaroot)
+                    sync_name_list_add(master_quotaroots, quotaroot);
 
                 r = sync_do_annotation(&xfer->sync_cs, mailbox_name(mailbox));
                 if (r) {

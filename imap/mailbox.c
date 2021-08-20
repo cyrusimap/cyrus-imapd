@@ -1167,6 +1167,11 @@ EXPORTED modseq_t mailbox_foldermodseq(const struct mailbox *mailbox)
     return mailbox->foldermodseq;
 }
 
+EXPORTED const char *mailbox_quotaroot(const struct mailbox *mailbox)
+{
+    return mailbox->quotaroot;
+}
+
 EXPORTED void mailbox_index_dirty(struct mailbox *mailbox)
 {
     assert(mailbox_index_islocked(mailbox, 1));
@@ -2870,7 +2875,7 @@ HIDDEN int mailbox_commit_quota(struct mailbox *mailbox)
     mailbox->quota_dirty = 0;
 
     /* no quota root means we don't track quota.  That's OK */
-    if (!mailbox->quotaroot)
+    if (!mailbox_quotaroot(mailbox))
         return 0;
 
     mailbox_get_usage(mailbox, quota_usage);
@@ -2886,7 +2891,7 @@ HIDDEN int mailbox_commit_quota(struct mailbox *mailbox)
 
     assert(mailbox_index_islocked(mailbox, 1));
 
-    quota_update_useds(mailbox->quotaroot, quota_usage,
+    quota_update_useds(mailbox_quotaroot(mailbox), quota_usage,
                        mailbox_name(mailbox), mailbox->silentchanges);
     /* XXX - fail upon issue?  It's tempting */
 

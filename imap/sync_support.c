@@ -2052,8 +2052,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     dlist_setatom(kl, "PARTITION", topart);
     dlist_setatom(kl, "ACL", mailbox_acl(mailbox));
     dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
-    if (mailbox->quotaroot)
-        dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
+    if (mailbox_quotaroot(mailbox))
+        dlist_setatom(kl, "QUOTAROOT", mailbox_quotaroot(mailbox));
 
     if (mailbox->i.createdmodseq)
         dlist_setnum64(kl, "CREATEDMODSEQ", mailbox->i.createdmodseq);
@@ -3276,8 +3276,8 @@ static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
     /* and make it hold a transaction open */
     annotate_state_begin(astate);
 
-    if (qrl && mailbox->quotaroot)
-        sync_name_list_add(qrl, mailbox->quotaroot);
+    if (qrl && mailbox_quotaroot(mailbox))
+        sync_name_list_add(qrl, mailbox_quotaroot(mailbox));
 
     r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 0,
                             /*XXX fullannots*/1, 0);
@@ -6632,9 +6632,8 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
     }
     if (r) goto done;
 
-    if (info->quotalist && mailbox->quotaroot) {
-        sync_name_list_add(info->quotalist, mailbox->quotaroot);
-    }
+    if (info->quotalist && mailbox_quotaroot(mailbox))
+        sync_name_list_add(info->quotalist, mailbox_quotaroot(mailbox));
 
     sync_name_list_add(info->mboxlist, mbentry->name);
 

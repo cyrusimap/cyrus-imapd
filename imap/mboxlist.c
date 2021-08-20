@@ -4554,8 +4554,8 @@ static int mboxlist_rmquota(const mbentry_t *mbentry, void *rock)
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) goto done;
 
-    if (mailbox->quotaroot) {
-        if (strcmp(mailbox->quotaroot, oldroot)) {
+    if (mailbox_quotaroot(mailbox)) {
+        if (strcmp(mailbox_quotaroot(mailbox), oldroot)) {
             /* Part of a different quota root */
             goto done;
         }

@@ -570,6 +570,7 @@ extern const char *mailbox_name(const struct mailbox *mailbox);
 extern const char *mailbox_uniqueid(const struct mailbox *mailbox);
 extern const char *mailbox_partition(const struct mailbox *mailbox);
 extern const char *mailbox_acl(const struct mailbox *mailbox);
+extern const char *mailbox_quotaroot(const struct mailbox *mailbox);
 extern uint32_t mailbox_mbtype(const struct mailbox *mailbox);
 extern modseq_t mailbox_foldermodseq(const struct mailbox *mailbox);
 
@@ -664,7 +665,7 @@ extern int mailbox_setversion(struct mailbox *mailbox, int version);
 extern int mailbox_index_recalc(struct mailbox *mailbox);
 
 #define mailbox_quota_check(mailbox, delta) \
-        (mailbox->quotaroot ? quota_check_useds((mailbox)->quotaroot, delta) : 0)
+        (mailbox_quotaroot(mailbox) ? quota_check_useds(mailbox_quotaroot(mailbox), delta) : 0)
 void mailbox_get_usage(struct mailbox *mailbox,
                         quota_t usage[QUOTA_NUMRESOURCES]);
 void mailbox_annot_changed(struct mailbox *mailbox,
