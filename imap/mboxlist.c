@@ -2556,7 +2556,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
          * codepaths: INBOX -> INBOX.foo, user rename, regular rename
          * and of course this one, partition move */
         newpartition = xstrdup(partition);
-        r = mailbox_copy_files(oldmailbox, newpartition, newname, oldmailbox->mbtype & MBTYPE_LEGACY_DIRS ? NULL : mailbox_uniqueid(oldmailbox));
+        r = mailbox_copy_files(oldmailbox, newpartition, newname, mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS ? NULL : mailbox_uniqueid(oldmailbox));
         if (r) goto done;
         newmbentry = mboxlist_entry_create();
         newmbentry->mbtype = mailbox_mbtype(oldmailbox);
@@ -2862,10 +2862,10 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                     mboxevent_extract_mailbox(mboxevent, oldmailbox);
                 else {
                     /* New maibox is the same as old, except for the name */
-                    oldname = mailbox_name(oldmailbox);
-                    oldmailbox->name = (char *) newname;
+                    char *name = oldmailbox->mbentry->name;
+                    oldmailbox->mbentry->name = (char *) newname;
                     mboxevent_extract_mailbox(mboxevent, oldmailbox);
-                    oldmailbox->name = (char *) oldname;
+                    oldmailbox->mbentry->name = name;
 
                     mboxevent_extract_old_mailbox(mboxevent, oldmailbox);
                 }

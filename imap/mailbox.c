@@ -137,6 +137,7 @@ struct mailbox_iter {
 
 struct mailboxlist {
     struct mailboxlist *next;
+    char *name;
     struct mailbox m;
     struct mboxlock *l;
     int nopen;
@@ -238,7 +239,7 @@ static struct mailboxlist *create_listitem(const char *name)
 
     item->nopen = 1;
     zeromailbox(item->m);
-    item->m.name = xstrdup(name);
+    item->name = xstrdup(name);
     /* ensure we never print insane times */
     gettimeofday(&item->m.starttime, 0);
 
@@ -255,7 +256,7 @@ static struct mailboxlist *find_listitem(const char *name)
     struct mailboxlist *item;
 
     for (item = open_mailboxes; item; item = item->next) {
-        if (!strcmp(name, item->m.name))
+        if (!strcmp(name, item->name))
             return item;
     }
 
@@ -274,6 +275,7 @@ static void remove_listitem(struct mailboxlist *remitem)
                 previtem->next = item->next;
             else
                 open_mailboxes = item->next;
+            free(item->name);
             free(item);
 
 #if defined ENABLE_OBJECTSTORE
@@ -847,8 +849,8 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
 
 EXPORTED void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid)
 {
-    free(mailbox->uniqueid);
-    mailbox->uniqueid = xstrdup(uniqueid);
+    free(mailbox->h.uniqueid);
+    mailbox->h.uniqueid = xstrdup(uniqueid);
     mailbox->header_dirty = 1;
 }
 
@@ -1048,42 +1050,39 @@ static int mailbox_open_advanced(const char *name,
         if (r != IMAP_MAILBOX_LOCKED)
             xsyslog(LOG_ERR, "IOERROR: lock failed",
                              "mailbox=<%s> error=<%s>",
-                             mailbox_name(mailbox), error_message(r));
-        goto done;
+                             name, error_message(r));
+        if (mailbox->local_namespacelock)
+            mboxname_release(&mailbox->local_namespacelock);
+        remove_listitem(listitem);
+        return r;
     }
 
     r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
-    if (r) goto done;
+    if (r) {
+        if (listitem->l) mboxname_release(&listitem->l);
+        if (mailbox->local_namespacelock)
+            mboxname_release(&mailbox->local_namespacelock);
+        remove_listitem(listitem);
+        return r;
+    }
+
+    if (!mbentry->name) mbentry->name = xstrdup(name);
+    mailbox->mbentry = mbentry;
 
     if (mbentry->mbtype & MBTYPE_MOVING) {
-        mboxlist_entry_free(&mbentry);
         r = IMAP_MAILBOX_MOVED;
         goto done;
     }
 
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-        mboxlist_entry_free(&mbentry);
         r = IMAP_MAILBOX_NONEXISTENT;
         goto done;
     }
 
     if (!mbentry->partition) {
-        mboxlist_entry_free(&mbentry);
         r = IMAP_MAILBOX_NONEXISTENT;
         goto done;
     }
-
-    mailbox->part = xstrdup(mbentry->partition);
-
-    /* Note that the header does have the uniqueid and ACL information,
-     * but it is only backup, and the mboxlist data is considered authoritative,
-     * so we will just use what we were passed */
-    mailbox->uniqueid = xstrdup(mbentry->uniqueid);
-    mailbox->acl = xstrdup(mbentry->acl);
-    mailbox->mbtype = mbentry->mbtype;
-    mailbox->foldermodseq = mbentry->foldermodseq;
-
-    mboxlist_entry_free(&mbentry);
 
     if (index_locktype == LOCK_SHARED)
         mailbox->is_readonly = 1;
@@ -1139,37 +1138,37 @@ EXPORTED int mailbox_open_exclusive(const char *name, struct mailbox **mailboxpt
 
 EXPORTED const char *mailbox_name(const struct mailbox *mailbox)
 {
-    return mailbox->name;
+    return mailbox->mbentry->name;
 }
 
 EXPORTED const char *mailbox_uniqueid(const struct mailbox *mailbox)
 {
-    return mailbox->uniqueid;
+    return mailbox->mbentry->uniqueid;
 }
 
 EXPORTED const char *mailbox_partition(const struct mailbox *mailbox)
 {
-    return mailbox->part;
+    return mailbox->mbentry->partition;
 }
 
 EXPORTED const char *mailbox_acl(const struct mailbox *mailbox)
 {
-    return mailbox->acl;
+    return mailbox->mbentry->acl;
 }
 
 EXPORTED uint32_t mailbox_mbtype(const struct mailbox *mailbox)
 {
-    return mailbox->mbtype;
+    return mailbox->mbentry->mbtype;
 }
 
 EXPORTED modseq_t mailbox_foldermodseq(const struct mailbox *mailbox)
 {
-    return mailbox->foldermodseq;
+    return mailbox->mbentry->foldermodseq;
 }
 
 EXPORTED const char *mailbox_quotaroot(const struct mailbox *mailbox)
 {
-    return mailbox->quotaroot;
+    return mailbox->h.quotaroot;
 }
 
 EXPORTED void mailbox_index_dirty(struct mailbox *mailbox)
@@ -1320,14 +1319,13 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
 
     mailbox_release_resources(mailbox);
 
-    free(mailbox->name);
-    free(mailbox->part);
-    free(mailbox->acl);
-    free(mailbox->uniqueid);
-    free(mailbox->quotaroot);
+    mboxlist_entry_free(&mailbox->mbentry);
+    xzfree(mailbox->h.uniqueid);
+    xzfree(mailbox->h.quotaroot);
+    xzfree(mailbox->h.acl);
 
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-        free(mailbox->flagname[flag]);
+        xzfree(mailbox->h.flagname[flag]);
     }
 
     if (listitem->l) mboxname_release(&listitem->l);
@@ -1339,8 +1337,8 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
 }
 
 struct parseentry_rock {
-    struct mailbox *mailbox;
-    struct buf *aclbuf;
+    struct mailbox_header *h;
+    struct buf aclbuf;
     int doingacl;
     int doingflags;
     int nflags;
@@ -1350,20 +1348,25 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
 {
     struct parseentry_rock *rock = (struct parseentry_rock *)d->rock;
 
+    const char *key = buf_cstring(&d->kbuf);
+
     switch(type) {
     case DLISTSAX_KVLISTSTART:
-        if (!strcmp(buf_cstring(&d->kbuf), "A")) {
+        if (!strcmp(key, "A")) {
             rock->doingacl = 1;
         }
         break;
     case DLISTSAX_KVLISTEND:
         if (rock->doingacl) {
+            xzfree(rock->h->acl);
+            rock->h->acl = buf_release(&rock->aclbuf);
             rock->doingacl = 0;
         }
         break;
     case DLISTSAX_LISTSTART:
-        if (!strcmp(buf_cstring(&d->kbuf), "U")) {
+        if (!strcmp(key, "U")) {
             rock->doingflags = 1;
+            rock->nflags = 0;
         }
         break;
     case DLISTSAX_LISTEND:
@@ -1371,41 +1374,37 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             rock->doingflags = 0;
 
             /* zero out the rest */
-            for (; rock->nflags < MAX_USER_FLAGS; rock->nflags++) {
-                free(rock->mailbox->flagname[rock->nflags]);
-                rock->mailbox->flagname[rock->nflags] = NULL;
+            while (rock->nflags < MAX_USER_FLAGS) {
+                xzfree(rock->h->flagname[rock->nflags++]);
             }
         }
         break;
     case DLISTSAX_STRING:
         if (rock->doingacl) {
-            if (rock->aclbuf) {
-                buf_append(rock->aclbuf, &d->kbuf);
-                buf_putc(rock->aclbuf, '\t');
-                buf_appendcstr(rock->aclbuf, d->data);
-                buf_putc(rock->aclbuf, '\t');
-            }
+            buf_append(&rock->aclbuf, &d->kbuf);
+            buf_putc(&rock->aclbuf, '\t');
+            buf_appendcstr(&rock->aclbuf, d->data);
+            buf_putc(&rock->aclbuf, '\t');
         }
         else if (rock->doingflags) {
-            free(rock->mailbox->flagname[rock->nflags]);
-            rock->mailbox->flagname[rock->nflags++] = xstrdupnull(d->data);
+            xzfree(rock->h->flagname[rock->nflags]);
+            rock->h->flagname[rock->nflags++] = xstrdupnull(d->data);
         }
         else {
-            const char *key = buf_cstring(&d->kbuf);
             if (!strcmp(key, "I")) {
-                if (!rock->mailbox->uniqueid)
-                    rock->mailbox->uniqueid = xstrdupnull(d->data);
+                xzfree(rock->h->uniqueid);
+                rock->h->uniqueid = xstrdupnull(d->data);
             }
             else if (!strcmp(key, "N")) {
-                if (!mailbox_name(rock->mailbox))
-                   rock->mailbox->name = xstrdupnull(d->data);
+                xzfree(rock->h->name);
+                rock->h->name = xstrdupnull(d->data);
             }
             else if (!strcmp(key, "T")) {
-                rock->mailbox->mbtype = mboxlist_string_to_mbtype(d->data);
+                rock->h->mbtype = mboxlist_string_to_mbtype(d->data);
             }
             else if (!strcmp(key, "Q")) {
-                free(rock->mailbox->quotaroot);
-                rock->mailbox->quotaroot = xstrdupnull(d->data);
+                xzfree(rock->h->quotaroot);
+                rock->h->quotaroot = xstrdupnull(d->data);
             }
         }
     }
@@ -1424,24 +1423,15 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
  *  T: _t_ype
  *  U: user_f_lags
  */
-static int mailbox_parse_header_data(struct mailbox *mailbox,
-                                     const char *data, size_t datalen,
-                                     char **aclptr)
+static int _parse_header_data(struct mailbox *mailbox,
+                              const char *data, size_t datalen)
 {
-    static struct buf aclbuf;
-
     if (!datalen) return IMAP_MAILBOX_BADFORMAT;
 
-    struct parseentry_rock rock;
-    memset(&rock, 0, sizeof(struct parseentry_rock));
-    rock.mailbox = mailbox;
-    if (aclptr) {
-        rock.aclbuf = &aclbuf;
-        buf_reset(&aclbuf);
-    }
-
+    struct parseentry_rock rock = { &mailbox->h, BUF_INITIALIZER, 0, 0, 0 };
     int r = dlist_parsesax(data, datalen, 0, parseentry_cb, &rock);
-    if (!r && aclptr) *aclptr = buf_newcstring(&aclbuf);
+
+    buf_free(&rock.aclbuf); // should be noop, but cleans up after errors
 
     return r;
 }
@@ -1458,7 +1448,7 @@ static int mailbox_parse_header_data(struct mailbox *mailbox,
  * userflag1 SPACE userflag2 SPACE userflag3 [...] (with no trailing space)
  * user1 TAB user1acl TAB user2 TAB user2acl TAB (with trailing tab!)
  */
-static int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
+static int mailbox_read_header(struct mailbox *mailbox)
 {
     int r = 0;
     int flag;
@@ -1510,14 +1500,12 @@ static int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
         goto done;
     }
 
-    free(mailbox->quotaroot);
-    mailbox->quotaroot = NULL;
-    free(mailbox->uniqueid);
-    mailbox->uniqueid = NULL;
+    xzfree(mailbox->h.quotaroot);
+    xzfree(mailbox->h.uniqueid);
 
     /* check for DLIST mboxlist */
     if (*p == '%') {
-        r = mailbox_parse_header_data(mailbox, p, eol - p, aclptr);
+        r = _parse_header_data(mailbox, p, eol - p);
         goto done;
     }
 
@@ -1528,7 +1516,7 @@ static int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
         tab = eol;
     }
     if (p < tab) {
-        mailbox->quotaroot = xstrndup(p, tab - p);
+        mailbox->h.quotaroot = xstrndup(p, tab - p);
     }
 
     /* read uniqueid (should always exist unless old format) */
@@ -1540,7 +1528,7 @@ static int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
         }
         tab = memchr(p, '\t', sbuf.st_size - (p - base));
         if (!tab || tab > eol) tab = eol;
-        mailbox->uniqueid = xstrndup(p, tab - p);
+        mailbox->h.uniqueid = xstrndup(p, tab - p);
     }
     /* else, uniqueid needs to be generated when we know the uidvalidity */
 
@@ -1554,18 +1542,16 @@ static int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
     name = p;
     /* read the names of flags */
     for (flag = 0; name <= eol && flag < MAX_USER_FLAGS; flag++) {
-        free(mailbox->flagname[flag]);
-        mailbox->flagname[flag] = NULL;
+        xzfree(mailbox->h.flagname[flag]);
         p = memchr(name, ' ', eol-name);
         if (!p) p = eol;
         if (name != p)
-            mailbox->flagname[flag] = xstrndup(name, p-name);
+            mailbox->h.flagname[flag] = xstrndup(name, p-name);
         name = p+1;
     }
     /* zero out the rest */
     for (; flag < MAX_USER_FLAGS; flag++) {
-        free(mailbox->flagname[flag]);
-        mailbox->flagname[flag] = NULL;
+        xzfree(mailbox->h.flagname[flag]);
     }
 
     /* Read ACL */
@@ -1576,8 +1562,7 @@ static int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
         goto done;
     }
 
-    if (aclptr)
-        *aclptr = xstrndup(p, eol-p);
+    mailbox->h.acl = xstrndup(p, eol-p);
 
 done:
     if (base) map_free(&base, &len);
@@ -1585,37 +1570,34 @@ done:
 }
 
 /* set a new ACL - only dirty if changed */
-EXPORTED int mailbox_set_acl(struct mailbox *mailbox, const char *acl)
+EXPORTED void mailbox_set_acl(struct mailbox *mailbox, const char *acl)
 {
-    if (!strcmpsafe(mailbox_acl(mailbox), acl))
-        return 0; /* no change */
-    free(mailbox->acl);
-    mailbox->acl = xstrdup(acl);
+    if (!strcmpsafe(mailbox->h.acl, acl))
+        return; /* no change */
+    free(mailbox->h.acl);
+    mailbox->h.acl = xstrdup(acl);
     mailbox->header_dirty = 1;
-    return 0;
+    return;
 }
 
 /* set a new QUOTAROOT - only dirty if changed */
-EXPORTED int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot)
+EXPORTED void mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot)
 {
-    if (mailbox->quotaroot) {
-        if (quotaroot && !strcmp(mailbox->quotaroot, quotaroot))
-            return 0; /* no change */
-        free(mailbox->quotaroot);
-        mailbox->quotaroot = NULL;
+    if (mailbox->h.quotaroot) {
+        if (quotaroot && !strcmp(mailbox->h.quotaroot, quotaroot))
+            return; /* no change */
+        xzfree(mailbox->h.quotaroot);
     }
     else {
         if (!quotaroot)
-            return 0; /* no change */
+            return; /* no change */
     }
 
     if (quotaroot)
-        mailbox->quotaroot = xstrdup(quotaroot);
+        mailbox->h.quotaroot = xstrdup(quotaroot);
 
     /* either way, it's changed, so dirty */
     mailbox->header_dirty = 1;
-
-    return 0;
 }
 
 static int _too_many_flags(const char *flag, int num)
@@ -1646,13 +1628,16 @@ EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
     int emptyflag = -1;
 
     for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
-        if (mailbox->flagname[userflag]) {
-            if (!strcasecmp(flag, mailbox->flagname[userflag]))
-                break;
+        // keep track of the first empty slot
+        if (!mailbox->h.flagname[userflag]) {
+            if (emptyflag == -1)
+                emptyflag = userflag;
+            continue;
         }
-        else if (emptyflag == -1) {
-            emptyflag = userflag;
-        }
+
+        // name matches?  We've found the flag
+        if (!strcasecmp(flag, mailbox->h.flagname[userflag]))
+            break;
     }
 
     if (userflag == MAX_USER_FLAGS) {
@@ -1679,7 +1664,7 @@ EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 
         /* set the flag and mark the header dirty */
         userflag = emptyflag;
-        mailbox->flagname[userflag] = xstrdup(flag);
+        mailbox->h.flagname[emptyflag] = xstrdup(flag);
         mailbox->header_dirty = 1;
     }
 
@@ -1696,15 +1681,14 @@ EXPORTED int mailbox_remove_user_flag(struct mailbox *mailbox, int flagnum)
     if (flagnum < 0 || flagnum >= MAX_USER_FLAGS)
         return IMAP_INTERNAL;   /* invalid flag number */
 
-    if (!mailbox->flagname[flagnum])
+    if (!mailbox->h.flagname[flagnum])
         return 0;               /* already gone */
 
     /* need to be index locked to make flag changes */
     if (!mailbox_index_islocked(mailbox, 1))
         return IMAP_MAILBOX_LOCKED;
 
-    free(mailbox->flagname[flagnum]);
-    mailbox->flagname[flagnum] = NULL;
+    xzfree(mailbox->h.flagname[flagnum]);
     mailbox->header_dirty = 1;
     return 0;
 }
@@ -1767,9 +1751,9 @@ EXPORTED strarray_t *mailbox_extract_flags(const struct mailbox *mailbox,
         strarray_append(flags, "\\Answered");
 
     for (i = 0 ; i < MAX_USER_FLAGS ; i++) {
-        if (mailbox->flagname[i] &&
+        if (mailbox->h.flagname[i] &&
             (record->user_flags[i/32] & 1<<(i&31)))
-            strarray_append(flags, mailbox->flagname[i]);
+            strarray_append(flags, mailbox->h.flagname[i]);
     }
 
     return flags;
@@ -2541,7 +2525,7 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
 
     /* has the header file changed? */
     if (sbuf.st_ino != mailbox->header_file_ino) {
-        r = mailbox_read_header(mailbox, NULL);
+        r = mailbox_read_header(mailbox);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: read header failed",
                              "mailbox=<%s> error=<%s>",
@@ -2673,27 +2657,33 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 static char *mailbox_header_data_cstring(struct mailbox *mailbox)
 {
     struct buf buf = BUF_INITIALIZER;
-    struct dlist *dl = dlist_newkvlist(NULL, mailbox_name(mailbox));
+    struct dlist *dl = dlist_newkvlist(NULL, NULL);
+    int nflags = 0;
+    int flag;
 
-    dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mailbox_mbtype(mailbox)));
+    dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mailbox->h.mbtype));
 
-    dlist_setatom(dl, "N", mailbox_name(mailbox));
+    dlist_setatom(dl, "N", mailbox->h.name);
 
-    dlist_setatom(dl, "I", mailbox_uniqueid(mailbox));
+    dlist_setatom(dl, "I", mailbox->h.uniqueid);
 
-    if (mailbox->quotaroot)
-        dlist_setatom(dl, "Q", mailbox->quotaroot);
+    if (mailbox->h.quotaroot)
+        dlist_setatom(dl, "Q", mailbox->h.quotaroot);
 
-    if (mailbox->acl)
-        dlist_stitch(dl, mailbox_acl_to_dlist(mailbox->acl));
+    if (mailbox->h.acl)
+        dlist_stitch(dl, mailbox_acl_to_dlist(mailbox->h.acl));
 
-    if (mailbox->flagname[0]) {
-        int flag = 0;
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+        if (mailbox->h.flagname[flag])
+             nflags = flag+1;
+    }
+    if (nflags) {
         struct dlist *fl = dlist_newlist(dl, "U");
 
-        do {
-            dlist_setatom(fl, "U", mailbox->flagname[flag]);
-        } while (++flag < MAX_USER_FLAGS && mailbox->flagname[flag]);
+        // this could be inserting NIL values for removed flags
+        for (flag = 0; flag < nflags; flag++) {
+            dlist_setatom(fl, NULL, mailbox->h.flagname[flag]);
+        }
     }
 
     dlist_printbuf(dl, 0, &buf);
@@ -2761,7 +2751,7 @@ static int mailbox_commit_header(struct mailbox *mailbox)
     mailbox->header_dirty = 0; /* we wrote it out, so not dirty any more */
 
     /* re-read the header */
-    r = mailbox_read_header(mailbox, NULL);
+    r = mailbox_read_header(mailbox);
     if (r) return r;
 
     /* copy the new CRC into the index header */
@@ -2935,7 +2925,7 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
 
     /* we re-read the header and index header to wipe
      * away all the changed values */
-    r = mailbox_read_header(mailbox, NULL);
+    r = mailbox_read_header(mailbox);
     if (r) return r;
 
     r = mailbox_read_index_header(mailbox);
@@ -3202,12 +3192,12 @@ static uint32_t crc_basic(const struct mailbox *mailbox,
         flagcrc ^= crc32_cstring("\\seen");
 
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-        if (!mailbox->flagname[flag])
+        if (!mailbox->h.flagname[flag])
             continue;
         if (!(record->user_flags[flag/32] & (1<<(flag&31))))
             continue;
         /* need to compare without case being significant */
-        strlcpy(buf, mailbox->flagname[flag], 4096);
+        strlcpy(buf, mailbox->h.flagname[flag], 4096);
         lcase(buf);
         flagcrc ^= crc32_cstring(buf);
     }
@@ -5434,16 +5424,36 @@ EXPORTED int mailbox_create(const char *name,
     }
 
     r = mboxname_lock(name, &listitem->l, LOCK_EXCLUSIVE);
-    if (r) goto done;
+    if (r) {
+        if (mailbox->local_namespacelock)
+            mboxname_release(&mailbox->local_namespacelock);
+        remove_listitem(listitem);
+        return r;
+    }
 
-    mailbox->part = xstrdup(part);
-    mailbox->acl = xstrdup(acl);
-    mailbox->mbtype = mbtype;
-    mailbox->uniqueid = xstrdup(uniqueid);
+    // fill out the initial mbentry (XXX: pass it in from mboxlist.c)
+    mailbox->mbentry = mboxlist_entry_create();
+    mailbox->mbentry->name = xstrdup(name);
+    mailbox->mbentry->partition = xstrdup(part);
+    mailbox->mbentry->acl = xstrdup(acl);
+    mailbox->mbentry->mbtype = mbtype;
+    mailbox->mbentry->uniqueid = xstrdup(uniqueid);
+
+    // fill out the header too
+    mailbox->h.name = xstrdup(name);
+    mailbox->h.acl = xstrdup(acl);
+    mailbox->h.mbtype = mbtype;
+    mailbox->h.uniqueid = xstrdup(uniqueid);
+
     // if we've been given a highestmodseq, we don't update it
     if (highestmodseq) mailbox->silentchanges = 1;
 
+    // set the quotaroot if any
     hasquota = quota_findroot(quotaroot, sizeof(quotaroot), name);
+    if (hasquota) {
+        mailbox->h.quotaroot = xstrdup(quotaroot);
+        mailbox->quota_dirty = 1;
+    }
 
     /* ensure all paths exist */
     for (n = 0; createfnames[n]; n++) {
@@ -5528,17 +5538,12 @@ EXPORTED int mailbox_create(const char *name,
     }
     mailbox->index_locktype = LOCK_EXCLUSIVE;
 
-    if (hasquota) {
-        mailbox_set_quotaroot(mailbox, quotaroot);
-        memset(mailbox->quota_previously_used, 0, sizeof(mailbox->quota_previously_used));
-        mailbox->quota_dirty = 1;
-    }
-
     /* ensure a UIDVALIDITY is set */
     if (!uidvalidity)
         uidvalidity = mboxname_nextuidvalidity(name, time(0));
     else
         mboxname_setuidvalidity(mailbox_name(mailbox), uidvalidity);
+    mailbox->mbentry->uidvalidity = uidvalidity;
 
     /* and highest modseq */
     if (!highestmodseq)
@@ -6096,7 +6101,9 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
 
     if (!r) {
         /* copy any mailbox annotations */
-        struct mailbox newmailbox = { .name = (char *) newname,
+        mbentry_t newmbentry = MBENTRY_INITIALIZER;
+        newmbentry.name = (char *) newname;
+        struct mailbox newmailbox = { .mbentry = &newmbentry,
                                       .index_locktype = LOCK_EXCLUSIVE };
         r = annotate_rename_mailbox(oldmailbox, &newmailbox);
     }
@@ -6120,6 +6127,11 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
 
     /* unless on a replica, bump the modseq */
     if (!silent) mailbox_modseq_dirty(oldmailbox);
+
+    /* update the name in the header */
+    xzfree(oldmailbox->h.name);
+    oldmailbox->h.name = xstrdup(newname);
+    oldmailbox->header_dirty = 1;
 
     return r;
 }
@@ -6145,6 +6157,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     char *newuniqueid = NULL;
 
     assert(mailbox_index_islocked(oldmailbox, 1));
+    assert(mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS);
 
     /* we can't rename back from a deleted mailbox, because the conversations
      * information will be wrong.  Ideally we might re-calculate, but for now
@@ -6171,8 +6184,8 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     if (r) return r;
 
     /* Check quota if necessary */
-    if (!ignorequota && newmailbox->quotaroot &&
-        strcmpsafe(oldmailbox->quotaroot, newmailbox->quotaroot)) {
+    if (!ignorequota && newmailbox->h.quotaroot &&
+        strcmpsafe(oldmailbox->h.quotaroot, newmailbox->h.quotaroot)) {
 
         quota_t usage[QUOTA_NUMRESOURCES];
         mailbox_get_usage(oldmailbox, usage);
@@ -6181,7 +6194,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
         if (r)
             goto fail;
     }
-    newquotaroot = xstrdupnull(newmailbox->quotaroot);
+    newquotaroot = xstrdupnull(newmailbox->h.quotaroot);
 
     r = mailbox_copy_files(oldmailbox, newpartition,
                            newname, mailbox_mbtype(newmailbox) & MBTYPE_LEGACY_DIRS ?
@@ -6591,9 +6604,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) goto done;
 
-    mailbox->part = xstrdup(mbentry->partition);
-    mailbox->acl = xstrdup(mbentry->acl);
-    mailbox->mbtype = mbentry->mbtype;
+    mailbox->mbentry = mboxlist_entry_copy(mbentry);
 
     syslog(LOG_NOTICE, "create new mailbox %s", name);
 
@@ -6615,7 +6626,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     mboxlist_entry_free(&mbentry);
 
     /* read header, if it is not there, we need to create it */
-    r = mailbox_read_header(mailbox, NULL);
+    r = mailbox_read_header(mailbox);
     if (r) {
         /* Header failed to read - recreate it */
         printf("%s: failed to read header file\n", mailbox_name(mailbox));
@@ -6645,20 +6656,17 @@ done:
 static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
 {
     int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
-    char *acl = NULL;
     int r;
 
-    r = mailbox_read_header(mailbox, &acl);
+    r = mailbox_read_header(mailbox);
     if (r) return r;
 
-    if (strcmp(mailbox_acl(mailbox), acl)) {
+    if (strcmp(mailbox_acl(mailbox), mailbox->h.acl)) {
         printf("%s: update acl from header %s => %s\n", mailbox_name(mailbox),
-               mailbox_acl(mailbox), acl);
+               mailbox_acl(mailbox), mailbox->h.acl);
         if (make_changes)
-            mailbox_set_acl(mailbox, acl);
+            printf("XXX - this is a noop right now - needs to update mailboxes.db\n");
     }
-
-    free(acl);
 
     return r;
 }
@@ -7374,16 +7382,14 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
         valid_user_flags[i] = 0;
     }
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-        if (!mailbox->flagname[flag]) continue;
-        if ((flag && !mailbox->flagname[flag-1]) ||
-            !imparse_isatom(mailbox->flagname[flag])) {
+        if (!mailbox->h.flagname[flag]) continue;
+        if (!imparse_isatom(mailbox->h.flagname[flag])) {
             printf("%s: bogus flag name %d:%s",
-                   mailbox_name(mailbox), flag, mailbox->flagname[flag]);
+                   mailbox_name(mailbox), flag, mailbox->h.flagname[flag]);
             syslog(LOG_ERR, "%s: bogus flag name %d:%s",
-                   mailbox_name(mailbox), flag, mailbox->flagname[flag]);
+                   mailbox_name(mailbox), flag, mailbox->h.flagname[flag]);
+            xzfree(mailbox->h.flagname[flag]);
             mailbox->header_dirty = 1;
-            free(mailbox->flagname[flag]);
-            mailbox->flagname[flag] = NULL;
             continue;
         }
         valid_user_flags[flag/32] |= 1<<(flag&31);
@@ -7908,13 +7914,13 @@ HIDDEN int mailbox_changequotaroot(struct mailbox *mailbox,
 
     mailbox_get_usage(mailbox, quota_usage);
 
-    if (mailbox->quotaroot) {
+    if (mailbox->h.quotaroot) {
         quota_t quota_diff[QUOTA_NUMRESOURCES];
 
         if (root) {
             size_t len = strlen(root);
-            if (strlen(mailbox->quotaroot) >= len && !strncmp(mailbox->quotaroot, root, len) &&
-                (mailbox->quotaroot[len] == '\0' || mailbox->quotaroot[len] == '.')) {
+            if (strlen(mailbox->h.quotaroot) >= len && !strncmp(mailbox->h.quotaroot, root, len) &&
+                (mailbox->h.quotaroot[len] == '\0' || mailbox->h.quotaroot[len] == '.')) {
                     /* Part of a child quota root - skip */
                     goto done;
             }
@@ -7924,7 +7930,7 @@ HIDDEN int mailbox_changequotaroot(struct mailbox *mailbox,
         for (res = 0; res < QUOTA_NUMRESOURCES ; res++) {
             quota_diff[res] = -quota_usage[res];
         }
-        r = quota_update_useds(mailbox->quotaroot, quota_diff,
+        r = quota_update_useds(mailbox->h.quotaroot, quota_diff,
                                mailbox_name(mailbox), silent);
     }
 
@@ -7933,7 +7939,7 @@ HIDDEN int mailbox_changequotaroot(struct mailbox *mailbox,
 
     if (root) {
         /* update the new quota root */
-      r = quota_update_useds(root, quota_usage, mailbox_name(mailbox), silent);
+        r = quota_update_useds(root, quota_usage, mailbox_name(mailbox), silent);
     }
 
   done:

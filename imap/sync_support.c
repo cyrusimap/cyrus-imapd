@@ -1720,11 +1720,11 @@ void sync_print_flags(struct dlist *kl,
 
     /* print user flags in mailbox order */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-        if (!mailbox->flagname[flag])
+        if (!mailbox->h.flagname[flag])
             continue;
         if (!(record->user_flags[flag/32] & (1<<(flag&31))))
             continue;
-        dlist_setflag(fl, "FLAG", mailbox->flagname[flag]);
+        dlist_setflag(fl, "FLAG", mailbox->h.flagname[flag]);
     }
 }
 
@@ -5322,11 +5322,11 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
 
     /* print user flags in mailbox order */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-        if (!mailbox->flagname[flag])
+        if (!mailbox->h.flagname[flag])
             continue;
         if (!(record->user_flags[flag/32] & (1<<(flag&31))))
             continue;
-        snprintf(buf, 4096, "%s%s", sep, mailbox->flagname[flag]);
+        snprintf(buf, 4096, "%s%s", sep, mailbox->h.flagname[flag]);
         sep = " ";
     }
 
@@ -5991,7 +5991,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     /* bump the foldermodseq if it's higher on the replica */
     if (remote && remote->foldermodseq > mailbox_foldermodseq(mailbox)) {
         mboxlist_sync_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), remote->foldermodseq);
-        mailbox->foldermodseq = remote->foldermodseq;
+        mailbox->mbentry->foldermodseq = remote->foldermodseq;
     }
 
     /* nothing changed - nothing to send */

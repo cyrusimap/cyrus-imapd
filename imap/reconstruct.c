@@ -576,24 +576,6 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         }
     }
 
-    // how can this even happen?  Dunno, but here for completeness
-    if (strcmpsafe(mailbox_partition(mailbox), mbentry_byname->partition)) {
-        if (prefer_mbentry) {
-            printf("Wrong partition in mailbox %s (%s %s)\n",
-                   name, mbentry_byname->partition, mailbox_partition(mailbox));
-            xzfree(mailbox->part);
-            mailbox->part = xstrdupnull(mbentry_byname->partition);
-            mailbox->header_dirty = 1;
-        }
-        else {
-            printf("Wrong partition in mbentry %s (%s %s)\n",
-                   name, mailbox_partition(mailbox), mbentry_byname->partition);
-            xzfree(mbentry_byname->partition);
-            mbentry_byname->partition = xstrdupnull(mailbox_partition(mailbox));
-            mbentry_dirty = 1;
-        }
-    }
-
     if (strcmpsafe(mailbox_acl(mailbox), mbentry_byname->acl)) {
         if (prefer_mbentry) {
             printf("Wrong acl in mbentry %s (%s %s)\n",

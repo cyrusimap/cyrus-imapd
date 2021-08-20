@@ -1381,7 +1381,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
                 if (flagsset == NULL)
                     flagsset = mboxevent_enqueue(EVENT_FLAGS_SET, &mboxevents);
 
-                mboxevent_add_flags(flagsset, mailbox->flagname,
+                mboxevent_add_flags(flagsset, mailbox->h.flagname,
                                     modified_flags.added_system_flags,
                                     modified_flags.added_user_flags);
                 mboxevent_extract_msgrecord(flagsset, msgrec);
@@ -1390,7 +1390,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
                 if (flagsclear == NULL)
                     flagsclear = mboxevent_enqueue(EVENT_FLAGS_CLEAR, &mboxevents);
 
-                mboxevent_add_flags(flagsclear, mailbox->flagname,
+                mboxevent_add_flags(flagsclear, mailbox->h.flagname,
                                     modified_flags.removed_system_flags,
                                     modified_flags.removed_user_flags);
                 mboxevent_extract_msgrecord(flagsclear, msgrec);
@@ -3778,19 +3778,19 @@ EXPORTED void index_checkflags(struct index_state *state, int print, int dirty)
 
     for (i = 0; i < MAX_USER_FLAGS; i++) {
         /* both empty */
-        if (!mailbox->flagname[i] && !state->flagname[i])
+        if (!mailbox->h.flagname[i] && !state->flagname[i])
             continue;
 
         /* both same */
-        if (mailbox->flagname[i] && state->flagname[i] &&
-            !strcmp(mailbox->flagname[i], state->flagname[i]))
+        if (mailbox->h.flagname[i] && state->flagname[i] &&
+            !strcmp(mailbox->h.flagname[i], state->flagname[i]))
             continue;
 
         /* ok, got something to change! */
         if (state->flagname[i])
             free(state->flagname[i]);
-        if (mailbox->flagname[i])
-            state->flagname[i] = xstrdup(mailbox->flagname[i]);
+        if (mailbox->h.flagname[i])
+            state->flagname[i] = xstrdup(mailbox->h.flagname[i]);
         else
             state->flagname[i] = NULL;
 
