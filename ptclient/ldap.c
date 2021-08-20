@@ -1154,7 +1154,7 @@ static int ptsmodule_make_authstate_attribute(
 
             *dsize = sizeof(struct auth_state) +
                 (numvals * sizeof(struct auth_ident));
-            *newstate = xmalloc(*dsize);
+            *newstate = xzmalloc(*dsize);
             if (*newstate == NULL) {
                 *reply = "no memory";
                 rc = PTSM_FAIL;
@@ -1188,7 +1188,7 @@ static int ptsmodule_make_authstate_attribute(
                 if (numvals == 1) {
                     if(!*newstate) {
                         *dsize = sizeof(struct auth_state);
-                        *newstate = xmalloc(*dsize);
+                        *newstate = xzmalloc(*dsize);
 
                         if (*newstate == NULL) {
                             *reply = "no memory";
@@ -1212,7 +1212,7 @@ static int ptsmodule_make_authstate_attribute(
 
     if(!*newstate) {
         *dsize = sizeof(struct auth_state);
-        *newstate = xmalloc(*dsize);
+        *newstate = xzmalloc(*dsize);
         if (*newstate == NULL) {
             *reply = "no memory";
             rc = PTSM_FAIL;
@@ -1306,7 +1306,7 @@ static int ptsmodule_make_authstate_filter(
 
     *dsize = sizeof(struct auth_state) + (n * sizeof(struct auth_ident));
 
-    *newstate = xmalloc(*dsize);
+    *newstate = xzmalloc(*dsize);
 
     if (*newstate == NULL) {
         *reply = "no memory";
@@ -1525,7 +1525,7 @@ static int ptsmodule_make_authstate_group(
 
     *dsize = sizeof(struct auth_state) +
              (n * sizeof(struct auth_ident));
-    *newstate = xmalloc(*dsize);
+    *newstate = xzmalloc(*dsize);
     if (*newstate == NULL) {
         *reply = "no memory";
         rc = PTSM_FAIL;
