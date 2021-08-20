@@ -851,11 +851,7 @@ static int _create_upload_collection(const char *accountid,
                 }
                 else {
                     /* ok, change the backup in cyrus.header */
-                    r = mailbox_set_acl(*mailbox, newacl);
-                    if (r) {
-                        syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
-                               mbentry->name, error_message(r));
-                    }
+                    mailbox_set_acl(*mailbox, newacl);
                 }
                 free(newacl);
             }

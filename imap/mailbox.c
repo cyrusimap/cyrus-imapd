@@ -7929,8 +7929,7 @@ HIDDEN int mailbox_changequotaroot(struct mailbox *mailbox,
     }
 
     /* update (or set) the quotaroot */
-    r = mailbox_set_quotaroot(mailbox, root);
-    if (r) goto done;
+    mailbox_set_quotaroot(mailbox, root);
 
     if (root) {
         /* update the new quota root */

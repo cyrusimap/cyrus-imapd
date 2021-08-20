@@ -536,17 +536,14 @@ done:
 int fixquota_fixroot(struct mailbox *mailbox,
                      const char *root)
 {
-    int r;
-
     const char *oldroot = mailbox_quotaroot(mailbox);
     fprintf(stderr, "%s: quota root %s --> %s\n", mailbox_name(mailbox),
            oldroot ? oldroot : "(none)",
            root ? root : "(none)");
 
-    r = mailbox_set_quotaroot(mailbox, root);
-    if (r) errmsg(r, "failed writing header for mailbox '%s'", mailbox_name(mailbox));
+    mailbox_set_quotaroot(mailbox, root);
 
-    return r;
+    return 0;
 }
 
 /*

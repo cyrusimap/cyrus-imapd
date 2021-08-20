@@ -3084,8 +3084,8 @@ int sync_apply_mailbox(struct dlist *kin,
 
     /* always take the ACL from the master, it's not versioned */
     r = mboxlist_sync_setacls(mboxname, acl, foldermodseq ? foldermodseq : highestmodseq);
-    if (!r) r = mailbox_set_acl(mailbox, acl);
     if (r) goto done;
+    mailbox_set_acl(mailbox, acl);
 
     /* take all mailbox (not message) annotations - aka metadata,
      * they're not versioned either */
