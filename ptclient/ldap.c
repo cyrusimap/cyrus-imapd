@@ -871,7 +871,7 @@ static int ptsmodule_get_dn(
     char domain_filter[1024];
     char *attrs[] = {LDAP_NO_ATTRS,NULL}; //do not return all attrs!
     char *domain_attrs[] = {(char *)ptsm->domain_name_attribute,(char *)ptsm->domain_result_attribute,NULL};
-    LDAPMessage *res;
+    LDAPMessage *res = NULL;
     LDAPMessage *entry;
     char **vals;
     /* unused: BerElement *ber; */
@@ -969,6 +969,8 @@ static int ptsmodule_get_dn(
                             base = temp_base;
                             count_matches++;
                         }
+                        ldap_value_free(vals);
+                        ldap_msgfree(res2);
                     }
                 }
 
@@ -1057,6 +1059,10 @@ static int ptsmodule_get_dn(
                 goto done;
         }
 
+        if (res) {
+            ldap_msgfree(res);
+            res = NULL;
+        }
         rc = ldap_search_st(ptsm->ld, base, ptsm->scope, filter, attrs, 0, &(ptsm->timeout), &res);
 
         if (rc != LDAP_SUCCESS) {
@@ -1073,9 +1079,6 @@ static int ptsmodule_get_dn(
             goto done;
         }
 
-        free(filter);
-        free(base);
-
         /*
          * We don't want to return the *first* entry found, we want to return
          * the *only* entry found.
@@ -1090,18 +1093,18 @@ static int ptsmodule_get_dn(
                 *ret = ldap_get_dn(ptsm->ld, entry);
             }
         }
-
-        ldap_msgfree(res);
-        res = NULL;
     }
 
-    return (*ret ? PTSM_OK : PTSM_FAIL);
+    rc = (*ret ? PTSM_OK : PTSM_FAIL);
 
  done:
     if (filter)
         free(filter);
     if (base)
         free(base);
+    if (res)
+        ldap_msgfree(res);
+
     return rc;
 }
 
@@ -1117,7 +1120,6 @@ static int ptsmodule_make_authstate_attribute(
     LDAPMessage *res = NULL;
     LDAPMessage *entry = NULL;
     char **vals = NULL;
-    char **rdn = NULL;
     int rc;
     char *attrs[] = {(char *)ptsm->member_attribute,(char *)ptsm->user_attribute,NULL};
 
@@ -1165,6 +1167,8 @@ static int ptsmodule_make_authstate_attribute(
             (*newstate)->userid.id[0] = '\0';
             for (i = 0; i < numvals; i++) {
                 unsigned int j;
+                char **rdn = NULL;
+
                 strcpy((*newstate)->groups[i].id, "group:");
                 rdn = ldap_explode_rdn(vals[i],1);
                 for (j = 0; j < strlen(rdn[0]); j++) {
@@ -1173,9 +1177,9 @@ static int ptsmodule_make_authstate_attribute(
                 }
                 strlcat((*newstate)->groups[i].id, rdn[0], sizeof((*newstate)->groups[i].id));
                 (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+                ldap_value_free(rdn);
             }
 
-            ldap_value_free(rdn);
             ldap_value_free(vals);
             vals = NULL;
         }
