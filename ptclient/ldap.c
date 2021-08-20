@@ -1489,20 +1489,16 @@ static int ptsmodule_make_authstate_group(
                 }
             }
         }
-    } else {
-        rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id, NULL, &base);
-        if (rc != PTSM_OK)
-            goto done;
     }
 
-    syslog(LOG_DEBUG, "(groups) about to search %s for %s", base, filter);
-
-
+    /* XXX i guess canon_id+6 skips over leading "group:" */
     rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id+6, NULL, &base);
     if (rc != PTSM_OK) {
         *reply = "ptsmodule_expand_tokens() failed for group search base";
         goto done;
     }
+
+    syslog(LOG_DEBUG, "(groups) about to search %s for %s", base, filter);
 
     rc = ldap_search_st(ptsm->ld, base, ptsm->group_scope, filter, attrs, 0, &(ptsm->timeout), &res);
     if (rc != LDAP_SUCCESS) {
