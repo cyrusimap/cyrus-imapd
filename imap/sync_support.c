@@ -1238,6 +1238,29 @@ struct sync_annot_list *sync_annot_list_create(void)
     return(l);
 }
 
+static int diff_annotation(const struct sync_annot *a,
+                           const struct sync_annot *b,
+                           int diff_value)
+{
+    int diff = 0;
+
+    if (!a && !b) return 0;
+
+    if (a)
+        diff--;
+    if (b)
+        diff++;
+
+    if (!diff)
+        diff = strcmpnull(a->entry, b->entry);
+    if (!diff)
+        diff = strcmpnull(a->userid, b->userid);
+    if (!diff && diff_value)
+        diff = buf_cmp(&a->value, &b->value);
+
+    return diff;
+}
+
 void sync_annot_list_add(struct sync_annot_list *l,
                          const char *entry, const char *userid,
                          const struct buf *value,
@@ -1251,12 +1274,42 @@ void sync_annot_list_add(struct sync_annot_list *l,
     item->mark = 0;
     item->modseq = modseq;
 
-    if (l->tail)
-        l->tail = l->tail->next = item;
-    else
-        l->head = l->tail = item;
-
     l->count++;
+
+    if (!l->head) {
+        // only item!
+        l->head = l->tail = item;
+        return;
+    }
+
+    if (diff_annotation(item, l->tail, 1) > 0) {
+        // it's OK to put this on the end (normal case hopefully)
+        l->tail = l->tail->next = item;
+        return;
+    }
+
+    struct sync_annot **p = NULL;
+    for (p = &l->head; *p; p = &((*p)->next)) {
+        int diff = diff_annotation(item, *p, 1);
+        if (diff < 0) {
+            // stitch in here!
+            item->next = *p;
+            *p = item;
+            return;
+        }
+        if (diff == 0) {
+            // duplicate - just bump the modseq if needed
+            if ((*p)->modseq < modseq)
+                (*p)->modseq = modseq;
+            free(item->entry);
+            free(item->userid);
+            buf_free(&item->value);
+            free(item);
+            return;
+        }
+    }
+
+    abort();
 }
 
 void sync_annot_list_free(struct sync_annot_list **lp)
@@ -1531,29 +1584,6 @@ int decode_annotations(/*const*/struct dlist *annots,
  * Record may be null, to process mailbox annotations.
  */
 
-static int diff_annotation(const struct sync_annot *a,
-                           const struct sync_annot *b,
-                           int diff_value)
-{
-    int diff = 0;
-
-    if (!a && !b) return 0;
-
-    if (a)
-        diff--;
-    if (b)
-        diff++;
-
-    if (!diff)
-        diff = strcmpnull(a->entry, b->entry);
-    if (!diff)
-        diff = strcmpnull(a->userid, b->userid);
-    if (!diff && diff_value)
-        diff = buf_cmp(&a->value, &b->value);
-
-    return diff;
-}
-
 int diff_annotations(const struct sync_annot_list *local_annots,
                      const struct sync_annot_list *remote_annots)
 {
@@ -1594,8 +1624,8 @@ int apply_annotations(struct mailbox *mailbox,
     if (r) goto out;
 
     /*
-     * We rely here on the database scan order resulting in lists
-     * of annotations that are ordered lexically on entry then userid.
+     * We rely on sync_annot_list_add ordering the lists lexically
+     * so that both lists are sorted.
      * We walk over both lists at once, choosing an annotation from
      * either the local list only (diff < 0), the remote list only
      * (diff > 0), or both lists (diff == 0).
