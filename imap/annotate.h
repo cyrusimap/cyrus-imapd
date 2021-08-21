@@ -88,7 +88,6 @@ struct annotate_metadata
 };
 
 typedef struct annotate_state annotate_state_t;
-typedef struct annotate_recalc_state annotate_recalc_state_t;
 
 annotate_state_t *annotate_state_new(void);
 /* either of these close */
@@ -250,15 +249,6 @@ int annotate_msg_cleanup(struct mailbox *mailbox, uint32_t uid);
 /* delete the annotations for 'mailbox'
  * Uses its own transaction. */
 int annotate_delete_mailbox(struct mailbox *mailbox);
-
-/* recalc APIs */
-int annotate_recalc_begin(struct mailbox *mailbox,
-                          annotate_recalc_state_t **arsp,
-                          int reconstruct);
-void annotate_recalc_add(annotate_recalc_state_t *ars,
-                         uint32_t uid);
-int annotate_recalc_commit(annotate_recalc_state_t *ars);
-void annotate_recalc_abort(annotate_recalc_state_t *ars);
 
 /*
  * Annotation DB transactions used to be opened and closed explicitly.
