@@ -329,16 +329,6 @@ EXPORTED void appendattvalue(struct attvaluelist **l,
 }
 
 /*
- * Duplicate the attvaluelist @src to @dst.
- */
-void dupattvalues(struct attvaluelist **dst,
-                  const struct attvaluelist *src)
-{
-    for ( ; src ; src = src->next)
-        appendattvalue(dst, src->attrib, &src->value);
-}
-
-/*
  * Free the attvaluelist 'l'
  */
 EXPORTED void freeattvalues(struct attvaluelist *l)
@@ -454,19 +444,6 @@ EXPORTED void clearentryatt(struct entryattlist **l, const char *entry,
         *pea = ea->next;
         free(ea->entry);
         free(ea);
-    }
-}
-
-/*
- * Duplicate the entryattlist @src to @dst.
- */
-void dupentryatt(struct entryattlist **dst,
-                 const struct entryattlist *src)
-{
-    for ( ; src ; src = src->next) {
-        struct attvaluelist *attvalues = NULL;
-        dupattvalues(&attvalues, src->attvalues);
-        appendentryatt(dst, src->entry, attvalues);
     }
 }
 
