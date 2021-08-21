@@ -59,7 +59,6 @@
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
     char *s;                   /* String */
-    comp_pat *p;               /* Compiled pattern, for search */
     struct strlist *next;
 };
 
@@ -108,7 +107,6 @@ int annotate_state_set_message(annotate_state_t *state,
 
 /* String List Management */
 void appendstrlist(struct strlist **l, char *s);
-void appendstrlistpat(struct strlist **l, char *s);
 void freestrlist(struct strlist *l);
 
 /* Attribute Management (also used by ID) */

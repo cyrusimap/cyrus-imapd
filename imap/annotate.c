@@ -292,23 +292,6 @@ EXPORTED void appendstrlist(struct strlist **l, char *s)
 
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
     (*tail)->s = xstrdup(s);
-    (*tail)->p = 0;
-    (*tail)->next = 0;
-}
-
-/*
- * Append 's' to the strlist 'l', compiling it as a pattern.
- * Caller must pass in memory that is freed when the strlist is freed.
- */
-EXPORTED void appendstrlistpat(struct strlist **l, char *s)
-{
-    struct strlist **tail = l;
-
-    while (*tail) tail = &(*tail)->next;
-
-    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
-    (*tail)->s = s;
-    (*tail)->p = charset_compilepat(s);
     (*tail)->next = 0;
 }
 
@@ -322,7 +305,6 @@ EXPORTED void freestrlist(struct strlist *l)
     while (l) {
         n = l->next;
         free(l->s);
-        if (l->p) charset_freepat(l->p);
         free((char *)l);
         l = n;
     }

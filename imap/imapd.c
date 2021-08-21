@@ -513,7 +513,6 @@ static void appendfieldlist(struct fieldlist **l, char *section,
                      strarray_t *fields, char *trail,
                      void *d, size_t size);
 static void freefieldlist(struct fieldlist *l);
-void freestrlist(struct strlist *l);
 
 static int set_haschildren(const mbentry_t *entry, void *rock);
 static char *canonical_list_pattern(const char *reference,
