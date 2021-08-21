@@ -83,6 +83,9 @@
 
 static char vacation_answer;
 
+/* current namespace */
+static struct namespace test_namespace;
+
 typedef struct {
     char *name;
     FILE *data;
@@ -100,6 +103,8 @@ typedef struct {
     const char *host;
     const char *remotehost;
     const char *remoteip;
+    struct auth_state *authstate;
+    struct namespace *ns;
     int edited_header;
 } script_data_t;
 
@@ -649,7 +654,7 @@ int main(int argc, char *argv[])
     static strarray_t e_from = STRARRAY_INITIALIZER;
     static strarray_t e_to = STRARRAY_INITIALIZER;
     char *alt_config = NULL;
-    script_data_t sd = { NULL, NULL, "", NULL, 0 };
+    script_data_t sd = { NULL, NULL, "", NULL, NULL, NULL, 0 };
     FILE *f;
 
     /* prevent crashes if -e or -t aren't specified */
@@ -706,6 +711,11 @@ int main(int argc, char *argv[])
 
     /* Load configuration file. */
     config_read(alt_config, 0);
+
+    mboxname_init_namespace(&test_namespace, /*isadmin*/0);
+    sd.ns = &test_namespace;
+    // anyone authstate
+    sd.authstate = auth_newstate("anyone");
 
     if (!sd.host) sd.host = config_servername;
 
@@ -859,6 +869,7 @@ int main(int argc, char *argv[])
         free_msg(m);
     strarray_fini(&e_from);
     strarray_fini(&e_to);
+    auth_freestate(sd.authstate);
 
     return 0;
 }
