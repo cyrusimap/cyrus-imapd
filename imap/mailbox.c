@@ -847,13 +847,6 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
     return updatenotifier;
 }
 
-EXPORTED void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid)
-{
-    free(mailbox->h.uniqueid);
-    mailbox->h.uniqueid = xstrdup(uniqueid);
-    mailbox->header_dirty = 1;
-}
-
 /*
  * Create the unique identifier for a mailbox named 'name' with
  * uidvalidity 'uidvalidity'.  We use Ted Ts'o's libuuid if available,
@@ -861,7 +854,9 @@ EXPORTED void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid
  */
 EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
 {
-    mailbox_set_uniqueid(mailbox, makeuuid());
+    free(mailbox->h.uniqueid);
+    mailbox->h.uniqueid = xstrdup(makeuuid());
+    mailbox->header_dirty = 1;
 }
 
 static int _map_local_record(const struct mailbox *mailbox, const char *fname, struct buf *buf)
@@ -6141,6 +6136,7 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
    'user.foo'.*/
 /* requires a write-locked oldmailbox pointer, since we delete it
    immediately afterwards */
+/* This function ONLY WORKS if the type is legacy */
 HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
                         const char *newname,
                         const char *newpartition,
@@ -6213,7 +6209,9 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     r = mailbox_lock_index_internal(newmailbox, LOCK_EXCLUSIVE);
 
     /* Reset new uniqueid */
-    mailbox_set_uniqueid(newmailbox, newuniqueid);
+    free(newmailbox->h.uniqueid);
+    newmailbox->h.uniqueid = xstrdup(newuniqueid);
+    newmailbox->header_dirty = 1;
 
     /* INBOX rename - change uniqueid */
     if (userid) {
