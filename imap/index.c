@@ -290,12 +290,12 @@ EXPORTED void index_close(struct index_state **stateptr)
 
     index_release(state);
 
-    xfree(state->map);
-    xfree(state->mboxname);
-    xfree(state->userid);
+    free(state->map);
+    free(state->mboxname);
+    free(state->userid);
     for (i = 0; i < MAX_USER_FLAGS; i++)
-        xfree(state->flagname[i]);
-    xfree(state);
+        free(state->flagname[i]);
+    free(state);
 
     *stateptr = NULL;
 }
@@ -358,9 +358,9 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     return 0;
 
 fail:
-    xfree(state->mboxname);
-    xfree(state->userid);
-    xfree(state);
+    free(state->mboxname);
+    free(state->userid);
+    free(state);
     return r;
 }
 
@@ -6988,15 +6988,15 @@ void index_msgdata_free(MsgData **msgdata, unsigned int n)
 
         if (!md) continue;
 
-        xfree(md->cc);
-        xfree(md->from);
-        xfree(md->to);
-        xfree(md->displayfrom);
-        xfree(md->displayto);
-        xfree(md->xsubj);
-        xfree(md->msgid);
-        xfree(md->listid);
-        xfree(md->contenttype);
+        free(md->cc);
+        free(md->from);
+        free(md->to);
+        free(md->displayfrom);
+        free(md->displayto);
+        free(md->xsubj);
+        free(md->msgid);
+        free(md->listid);
+        free(md->contenttype);
         strarray_fini(&md->ref);
         strarray_fini(&md->annot);
     }

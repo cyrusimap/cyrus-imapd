@@ -2747,10 +2747,10 @@ EXPORTED void conversation_fini(conversation_t *conv)
     conv_sender_t *sender;
     while ((sender = conv->senders)) {
         conv->senders = sender->next;
-        xfree(sender->name);
-        xfree(sender->route);
-        xfree(sender->mailbox);
-        xfree(sender->domain);
+        free(sender->name);
+        free(sender->route);
+        free(sender->mailbox);
+        free(sender->domain);
         free(sender);
     }
 

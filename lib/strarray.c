@@ -195,7 +195,7 @@ EXPORTED int strarray_appendm(strarray_t *sa, char *s)
 
 static void _strarray_set(strarray_t *sa, int idx, char *s)
 {
-    xfree(sa->data[idx]);
+    free(sa->data[idx]);
     sa->data[idx] = s;
     /* adjust the count if we just sparsely expanded the array */
     if (s && idx >= sa->count)
