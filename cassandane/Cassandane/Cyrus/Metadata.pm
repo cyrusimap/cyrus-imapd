@@ -2888,7 +2888,7 @@ sub test_cvt_cyrusdb
     my $global_db = "$basedir/conf/annotations.db";
     my $global_flat = "$basedir/xann.txt";
     my $format = $self->{instance}->{config}->get('annotation_db');
-    $format = $format // 'skiplist';
+    $format = $format // 'twoskip';
 
     $self->assert(( ! -f $global_flat ));
     $self->{instance}->run_command({ cyrus => 1 },
