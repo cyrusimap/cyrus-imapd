@@ -479,6 +479,11 @@ EXPORTED void dlist_makemap(struct dlist *dl, const char *val, size_t len)
         dl->type = DL_NIL;
 }
 
+EXPORTED void dlist_makebuf(struct dlist *dl, const struct buf *buf)
+{
+    return dlist_makemap(dl, buf_base(buf), buf_len(buf));
+}
+
 EXPORTED struct dlist *dlist_newkvlist(struct dlist *parent, const char *name)
 {
     struct dlist *dl = dlist_child(parent, name);
@@ -548,6 +553,14 @@ EXPORTED struct dlist *dlist_setmap(struct dlist *parent, const char *name,
 {
     struct dlist *dl = dlist_child(parent, name);
     dlist_makemap(dl, val, len);
+    return dl;
+}
+
+EXPORTED struct dlist *dlist_setbuf(struct dlist *parent, const char *name,
+                                    const struct buf *buf)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makebuf(dl, buf);
     return dl;
 }
 
@@ -622,6 +635,14 @@ struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makemap(dl, val, len);
+    return dl;
+}
+
+struct dlist *dlist_updatebuf(struct dlist *parent, const char *name,
+                              const struct buf *buf)
+{
+    struct dlist *dl = dlist_updatechild(parent, name);
+    dlist_makebuf(dl, buf);
     return dl;
 }
 
@@ -1175,7 +1196,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isbackup,
         prot_ungetc(c, in);
         /* could be binary in a literal */
         c = getbastring(in, NULL, &vbuf);
-        dl = dlist_setmap(NULL, kbuf.s, vbuf.s, vbuf.len);
+        dl = dlist_setbuf(NULL, buf_cstring(&kbuf), &vbuf);
     }
     else if (c == '\\') { /* special case for flags */
         prot_ungetc(c, in);
@@ -1185,7 +1206,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isbackup,
     else {
         prot_ungetc(c, in);
         c = getnastring(in, NULL, &vbuf);
-        dl = dlist_setatom(NULL, kbuf.s, vbuf.s);
+        dl = dlist_setbuf(NULL, buf_cstring(&kbuf), &vbuf);
     }
 
     /* success */
@@ -1404,6 +1425,17 @@ HIDDEN int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp)
     if (lenp) *lenp = dl->nval;
 
     return 1;
+}
+
+HIDDEN int dlist_tobuf(struct dlist *dl, struct buf *buf)
+{
+    const char *v = NULL;
+    size_t l = 0;
+    if (dlist_tomap(dl, &v, &l)) {
+        buf_init_ro(buf, v, l);
+        return 1;
+    }
+    return 0;
 }
 
 /* ensure value is exactly one number */
@@ -1667,15 +1699,10 @@ EXPORTED int dlist_getmap(struct dlist *parent, const char *name,
 }
 
 EXPORTED int dlist_getbuf(struct dlist *parent, const char *name,
-                          struct buf *value)
+                          struct buf *buf)
 {
-    const char *v = NULL;
-    size_t l = 0;
-    if (dlist_getmap(parent, name, &v, &l)) {
-        buf_init_ro(value, v, l);
-        return 1;
-    }
-    return 0;
+    struct dlist *child = dlist_getchild(parent, name);
+    return dlist_tobuf(child, buf);
 }
 
 int dlist_getfile(struct dlist *parent, const char *name,
