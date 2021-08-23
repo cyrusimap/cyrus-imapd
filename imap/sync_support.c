@@ -5438,6 +5438,8 @@ static int compare_one_record(struct sync_client_state *sync_cs,
     /* if differences we'll have to rewrite to bump the modseq
      * so that regular replication will cause an update */
 
+    int local_wins = 1;
+
     /* interesting case - expunged locally */
     if (mp->internal_flags & FLAG_INTERNAL_EXPUNGED) {
         /* if expunged, fall through - the rewrite will lift
@@ -5454,6 +5456,7 @@ static int compare_one_record(struct sync_client_state *sync_cs,
         if (rp->modseq > mp->modseq &&
             rp->last_updated >= mp->last_updated) {
             log_mismatch("more recent on replica", mailbox, mp, rp);
+            local_wins = 0;
             /* then copy all the flag data over from the replica */
             mp->system_flags = rp->system_flags;
             mp->internal_flags &= ~FLAG_INTERNAL_EXPUNGED;
@@ -5470,7 +5473,7 @@ static int compare_one_record(struct sync_client_state *sync_cs,
 
     int hadsnoozed = 0;
     /* even expunged messages get annotations synced */
-    r = apply_annotations(mailbox, mp, mannots, rannots, 0, &hadsnoozed);
+    r = apply_annotations(mailbox, mp, mannots, rannots, local_wins, &hadsnoozed);
     if (r) return r;
 
     if (hadsnoozed) mp->internal_flags |= FLAG_INTERNAL_SNOOZED;
