@@ -275,6 +275,7 @@ struct restore_rock {
     int (*restore_cb)(message_t *, message_t *, jmap_req_t *, void *, int);
     void *rock;
     struct mailbox *mailbox;
+    int keep_open;
 };
 
 struct restore_info {
@@ -496,7 +497,8 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     if (mailbox->i.deletedmodseq > rrock->deletedmodseq)
         rrock->deletedmodseq = mailbox->i.deletedmodseq;
 
-    jmap_closembox(rrock->req, &mailbox);
+    if (!rrock->keep_open)
+        jmap_closembox(rrock->req, &mailbox);
 
     return 0;
 }
@@ -775,31 +777,25 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
 {
     struct restore_rock *rrock = (struct restore_rock *) rock;
     struct contact_rock *crock = (struct contact_rock *) rrock->rock;
-    struct mailbox *mailbox = NULL;
+    struct mailbox **mailboxp = &rrock->mailbox;
     int r;
 
     if (mbtype_isa(mbentry->mbtype) != rrock->mbtype) return 0;
 
-    /* Open mailbox here since we need it later and it gets referenced counted */
-    r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
-    if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
-        return r;
-    }
-
     /* Do usual processing of the collection */
+    rrock->keep_open = 1;
     r = restore_collection_cb(mbentry, rock);
 
     if (!r && crock->group_vcard) {
         /* Store the group vCard of recreated contacts */
-        r = carddav_store(mailbox, crock->group_vcard, NULL, 0, NULL, NULL, 
+        r = carddav_store(*mailboxp, crock->group_vcard, NULL, 0, NULL, NULL, 
                           rrock->req->accountid, rrock->req->authstate,
                           /*ignorequota*/ 0);
     }
     vparse_free_card(crock->group_vcard);
     crock->group_vcard = NULL;
 
-    jmap_closembox(rrock->req, &mailbox);
+    jmap_closembox(rrock->req, mailboxp);
 
     return r;
 }
@@ -827,7 +823,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         { carddav_open_userid(req->accountid), BUF_INITIALIZER, NULL };
     struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK, 0,
                                   &contact_resource_name, &restore_contact,
-                                  &crock, NULL };
+                                  &crock, NULL, 0 };
 
     if (restore.mode & DRY_RUN) {
         /* Treat as regular collection since we won't create group vCard */
@@ -1295,7 +1291,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
           caldav_mboxname(req->accountid, SCHED_OUTBOX) };
     struct restore_rock rrock = { req, &restore, MBTYPE_CALENDAR, 0,
                                   &ical_resource_name, &restore_ical,
-                                  &crock, NULL };
+                                  &crock, NULL, 0 };
 
     r = mboxlist_mboxtree(calhomeset, restore_calendar_cb, &rrock,
                           MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
@@ -1384,7 +1380,7 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         char *notes = mboxname_user_mbox(req->accountid, subfolder);
         struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
                                       &note_resource_name, &restore_note,
-                                      NULL, NULL };
+                                      NULL, NULL, 0 };
 
         r = mboxlist_mboxtree(notes, restore_collection_cb,
                               &rrock, MBOXTREE_SKIP_CHILDREN);
@@ -1945,7 +1941,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
         construct_hash_table(&mailboxes, 32, 0),
         BUF_INITIALIZER };
     struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
-                                  NULL, NULL, &mrock, NULL };
+                                  NULL, NULL, &mrock, NULL, 0 };
 
     /* Find all destroyed messages within our window -
        remove $restored flag from all messages as a side-effect */
