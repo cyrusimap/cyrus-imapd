@@ -207,7 +207,7 @@ sub list_uids
         $store->read_begin();
         while (my $msg = $store->read_message())
         {
-        push(@uids, $msg->{uid});
+        push(@uids, $msg->uid);
         }
         $store->read_end();
 
