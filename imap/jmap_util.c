@@ -415,6 +415,7 @@ HIDDEN void jmap_parser_fini(struct jmap_parser *parser)
 {
     strarray_fini(&parser->path);
     json_decref(parser->invalid);
+    json_decref(parser->serverset);
     buf_free(&parser->buf);
 }
 
@@ -478,6 +479,19 @@ HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
 
     json_array_append_new(parser->invalid,
             json_string(jmap_parser_path(parser, &parser->buf)));
+
+    if (prop)
+        jmap_parser_pop(parser);
+}
+
+HIDDEN void jmap_parser_serverset(struct jmap_parser *parser,
+                                  const char *prop, json_t *val)
+{
+    if (prop)
+        jmap_parser_push(parser, prop);
+
+    json_object_set_new(parser->serverset,
+            jmap_parser_path(parser, &parser->buf), val);
 
     if (prop)
         jmap_parser_pop(parser);

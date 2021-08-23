@@ -96,9 +96,15 @@ struct jmap_parser {
     struct buf buf;
     strarray_t path;
     json_t *invalid;
+    json_t *serverset;
 };
 
-#define JMAP_PARSER_INITIALIZER { BUF_INITIALIZER, STRARRAY_INITIALIZER, json_array() }
+#define JMAP_PARSER_INITIALIZER { \
+    BUF_INITIALIZER, \
+    STRARRAY_INITIALIZER, \
+    json_array(), \
+    json_object() \
+}
 
 extern void jmap_parser_fini(struct jmap_parser *parser);
 extern void jmap_parser_push(struct jmap_parser *parser, const char *prop);
@@ -107,6 +113,7 @@ extern void jmap_parser_push_index(struct jmap_parser *parser,
 extern void jmap_parser_pop(struct jmap_parser *parser);
 extern const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf);
 extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
+extern void jmap_parser_serverset(struct jmap_parser *parser, const char *prop, json_t *val);
 
 extern json_t *jmap_server_error(int r);
 
