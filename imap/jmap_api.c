@@ -813,6 +813,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         req.method_calls = &method_calls;
         req.using_capabilities = &using_capabilities;
         req.inmemory_blobs = &inmemory_blobs;
+        req.settings = settings;
 
         if (do_perf) {
             struct rusage usage;
