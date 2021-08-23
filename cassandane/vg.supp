@@ -69,3 +69,14 @@
     fun:getgrgid
     ...
 }
+{
+    # mupdate detaches all its threads, so they're cleaned up at exit.
+    # but valgrind notices beforehand and reports their resources as leaked.
+    mupdate_detached_threads_leak
+    Memcheck:Leak
+    match-leak-kinds: possible
+    ...
+    fun:pthread_create@@GLIBC_2.2.5
+    fun:service_init
+    fun:main
+}
