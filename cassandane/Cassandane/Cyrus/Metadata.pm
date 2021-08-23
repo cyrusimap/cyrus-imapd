@@ -47,6 +47,7 @@ use Config;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cyrus::DList;
 
 sub new
 {
@@ -144,19 +145,30 @@ sub list_annotations
     my $res = $instance->run_dbcommand_cb(sub {
         my ($key, $value) = @_;
         my ($uid, $item, $userid, @rest) = split '\0', $key;
-        my $offset = 0;
-        my $vallen = unpack('N', substr($value, $offset, 4));
-        $offset += 8; # 4 more bytes of rubbish
-        my $val = substr($value, $offset, $vallen);
-        $offset += $vallen + 1; # trailing null
-        my $strend = index($value, "\0", $offset);
-        my $type = substr($value, $offset, ($strend - $offset));
-        $offset = $strend + 1;
-        my $modtime = unpack('N', substr($value, $offset, 4));
-        $offset += 8; # 4 more bytes of rubbish again
-        my $modseq = unpack('x[N]N', substr($value, $offset, 8));
-        $offset += 8;
-        my $flags = unpack('C', substr($value, $offset, 1));
+        my ($data, $modseq, $flags);
+        if (substr($value, 0, 1) eq '%') {
+            my $dlist = Cyrus::DList->parse_string($value, 0);
+            my $hash = $dlist->as_perl;
+            $data = $hash->{V};
+            $modseq = $hash->{M};
+            $flags = $hash->{F} ? 1 : 0;  # XXX - parse more options later
+        }
+        else {
+            my $offset = 0;
+            my $vallen = unpack('N', substr($value, $offset, 4));
+            $offset += 8; # 4 more bytes of rubbish
+            $data = substr($value, $offset, $vallen);
+            $offset += $vallen + 1; # trailing null
+            my $strend = index($value, "\0", $offset);
+            my $type = substr($value, $offset, ($strend - $offset));
+            $offset = $strend + 1;
+            my $modtime = unpack('N', substr($value, $offset, 4));
+            $offset += 8; # 4 more bytes of rubbish again
+            $modseq = unpack('x[N]N', substr($value, $offset, 8));
+            $offset += 8;
+            $flags = unpack('C', substr($value, $offset, 1));
+        }
+
         if ($flags and not $tombstones) {
             return;
         }
@@ -165,7 +177,7 @@ sub list_annotations
             mboxname => ($scope eq 'message' ? $mailbox : $uid),
             entry => $item,
             userid => $userid,
-            data => $val,
+            data => $data,
         };
 
         if ($withmdata) {
