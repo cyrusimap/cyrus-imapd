@@ -25,7 +25,8 @@ enum dlistsax_t {
 
 struct dlistsax_data {
     const struct buf kbuf;
-    const char *data;
+    const struct buf buf;
+    const char *data; // cstring buffer or NULL for NIL
     void *rock;
 };
 
