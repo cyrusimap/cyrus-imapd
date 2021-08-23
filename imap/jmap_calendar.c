@@ -119,7 +119,7 @@ static int jmap_sharenotification_querychanges(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-#define JMAPCACHE_CALVERSION 22
+#define JMAPCACHE_CALVERSION 23
 
 static jmap_method_t jmap_calendar_methods_standard[] = {
     {
@@ -3116,6 +3116,17 @@ gotevent:
         const strarray_t *boxes = mbname_boxes(rock->mbname);
         json_object_set_new(jsevent, "calendarIds", json_pack("{s:b}",
                     strarray_nth(boxes, -1), 1));
+    }
+
+    /* Update event properties based on JMAP request capabilities */
+    const char *linkid;
+    json_t *jlink;
+    json_object_foreach(json_object_get(jsevent, "links"), linkid, jlink) {
+        if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+            if (json_object_get(jlink, "blobId"))
+                json_object_del(jlink, "href");
+        }
+        else json_object_del(jlink, "blobId");
     }
 
     unsigned want_blobId = jmap_wantprop(rock->get->props, "blobId");
