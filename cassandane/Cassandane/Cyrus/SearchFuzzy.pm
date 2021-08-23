@@ -1046,38 +1046,19 @@ sub test_audit_unindexed
     my $xapdir = $data->{xapian}{t1};
 
     xlog $self, "Read current cyrus.indexed.db.";
-    my $result = $self->{instance}->run_command(
-        {
-            cyrus => 1,
-            redirects => { stdout => $outfile },
-        },
-        'cyr_dbtool',
-        "$xapdir/xapian/cyrus.indexed.db",
-        'twoskip',
-        'show'
-    );
-    my @entries = grep { not m/\*V\*/ } _readfile();
-    $self->assert_num_equals(1, scalar @entries);
+    my ($key, $val);
+    my $result = $self->{instance}->run_dbcommand_cb(sub {
+      my ($k, $v) = @_;
+      return if $k =~ m/\*V\*/;
+      $self->assert_null($key);
+      ($key, $val) = ($k, $v);
+    }, "$xapdir/xapian/cyrus.indexed.db", "twoskip", ['SHOW']);
+    $self->assert_str_equals('ok', $result);
+    $self->assert_not_null($key);
+    $self->assert_not_null($val);
 
     xlog $self, "Add UID 2 to sequence set in cyrus.indexed.db";
-    my($key, $val) = split(/\s/, $entries[0], 2);
-    $val =~ s/\s+$//;
-    $result = $self->{instance}->run_command(
-        {
-            cyrus => 1,
-            handlers => {
-                exited_normally => sub { return 'ok'; },
-                exited_abnormally => sub { return 'failure'; },
-            },
-        },
-        'cyr_dbtool',
-        "$xapdir/xapian/cyrus.indexed.db",
-        'twoskip',
-        'set',
-        $key,
-        $val . ':2'
-    );
-    $self->assert_str_equals('ok', $result);
+    $self->{instance}->run_dbcommand("$xapdir/xapian/cyrus.indexed.db", "twoskip", ['SET', $key, $val . ':2']);
 
     xlog $self, "Run squatter audit";
     $result = $self->{instance}->run_command(
