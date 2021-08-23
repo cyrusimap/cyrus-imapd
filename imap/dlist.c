@@ -1180,7 +1180,8 @@ EXPORTED int dlist_parse(struct dlist **dlp, unsigned flags,
     else {
         prot_ungetc(c, in);
         c = getnastring(in, NULL, &vbuf);
-        dl = dlist_setbuf(NULL, buf_cstring(&kbuf), &vbuf);
+        // can't use buf_string for value, it may be NIL => NULL
+        dl = dlist_setatom(NULL, buf_cstring(&kbuf), vbuf.s);
     }
 
     /* success */
