@@ -2164,8 +2164,10 @@ sub test_msg_replication_new_mas_partial_wwd
     $self->run_replication();
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    xlog $self, "Write another annotation";
+    xlog $self, "Write another few annotations";
     $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.priv', 'a1');
+    $self->set_msg_annotation($master_store, 1, '/comment', 'value.shared', 'cs');
+    $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.shared', 'as');
 
     xlog $self, "Run replication";
     $self->run_replication();
@@ -2173,6 +2175,7 @@ sub test_msg_replication_new_mas_partial_wwd
 
     xlog $self, "Delete the first annotation";
     $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', '');
+    $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.shared', '');
 
     xlog $self, "Run replication";
     $self->run_replication();
