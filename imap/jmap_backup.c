@@ -336,6 +336,8 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
     free(restore);
 }
 
+#define BATCH_SIZE  512
+
 static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 {
     struct restore_rock *rrock = (struct restore_rock *) rock;
@@ -355,9 +357,10 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
+    r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/0);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
+        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for reading",
+               mbentry->name);
         return r;
     }
 
@@ -469,7 +472,24 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     message_unref(&msg);
 
     rrock->mailbox = mailbox;
-    hash_enumerate(&resources, restore_resource_cb, rrock);
+
+    unsigned i;
+    hash_iter *iter = hash_table_iter(&resources);
+    for (i = 0; hash_iter_next(iter); i++) {
+        if (i % BATCH_SIZE == 0) {
+            /* Close and re-open mailbox (to avoid deadlocks) */
+            jmap_closembox(rrock->req, &mailbox);
+            r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
+                       mbentry->name);
+                break;
+            }
+        }
+
+        restore_resource_cb(hash_iter_key(iter), hash_iter_val(iter), rrock);
+    }
+    hash_iter_free(&iter);
     free_hash_table(&resources, NULL);
 
     /* Update deletedmodseq for this collection type */
