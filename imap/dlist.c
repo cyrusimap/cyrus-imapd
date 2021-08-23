@@ -877,7 +877,6 @@ struct dlistsax_state {
     dlistsax_cb_t *proc;
     int depth;
     struct dlistsax_data d;
-    struct buf buf;
     struct buf gbuf;
 };
 
@@ -1050,14 +1049,16 @@ static int _parsesax(struct dlistsax_state *s, int parsekey)
         }
     }
     else {
-        r = _parseitem(s, &s->buf);
+
+        backdoor = (struct buf *)(&s->d.buf);
+        r = _parseitem(s, backdoor);
         if (r == IMAP_ZERO_LENGTH_LITERAL)
             s->d.data = NULL; // NIL
         else if (r) return r;
         else
-            s->d.data = buf_cstring(&s->buf);
+            s->d.data = buf_cstring(backdoor);
         r = s->proc(DLISTSAX_STRING, &s->d);
-        s->d.data = NULL; // zero out for next call
+        buf_truncate(backdoor, 0);
         if (r) return r;
     }
 
