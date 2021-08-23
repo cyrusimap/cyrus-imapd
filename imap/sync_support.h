@@ -184,11 +184,6 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
                                        const char *uniqueid);
 
-struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
-                                              const char *name);
-
-int sync_folder_mark(struct sync_folder_list *l, const char *uniqueid);
-
 void sync_folder_list_free(struct sync_folder_list **lp);
 
 /* ====================================================================== */
@@ -398,7 +393,6 @@ struct dlist *sync_parseline(struct protstream *in);
 
 /* ====================================================================== */
 
-int addmbox(char *name, int matchlen, int category, void *rock);
 int addmbox_cb(const mbentry_t *mbentry, void *rock);
 
 int parse_upload(struct dlist *kr, struct mailbox *mailbox,
