@@ -119,6 +119,15 @@ enum {
 #define JACL_ALL            (JACL_READITEMS|JACL_WRITE|JACL_RENAME|JACL_SUBMIT\
                              |JACL_ADMIN|JACL_READFB|JACL_RSVP)
 
+typedef struct {
+    hash_table methods;
+    json_t *server_capabilities;
+    long limits[JMAP_NUM_LIMITS];
+    // internal state
+    ptrarray_t getblob_handlers; // array of jmap_getblob_handler
+    ptrarray_t event_handlers; // array of (malloced) jmap_handlers
+} jmap_settings_t;
+
 typedef struct jmap_req {
     const char           *method;
     const char           *userid;
@@ -130,6 +139,7 @@ typedef struct jmap_req {
     const char           *tag;
     struct transaction_t *txn;
     struct mboxname_counters counters;
+    jmap_settings_t      *settings;
 
     double real_start;
     double user_start;
@@ -187,16 +197,6 @@ void jmap_getblob_ctx_reset(jmap_getblob_context_t *ctx);
 void jmap_getblob_ctx_fini(jmap_getblob_context_t *ctx);
 
 typedef int jmap_getblob_handler(jmap_req_t *req, jmap_getblob_context_t *ctx);
-
-typedef struct {
-    hash_table methods;
-    json_t *server_capabilities;
-    long limits[JMAP_NUM_LIMITS];
-    // internal state
-    ptrarray_t getblob_handlers; // array of jmap_getblob_handler
-    ptrarray_t event_handlers; // array of (malloced) jmap_handlers
-} jmap_settings_t;
-
 
 enum jmap_handler_event {
     JMAP_HANDLE_SHUTDOWN      = (1 << 0), /* executed when httpd is shutdown. req is NULL */
