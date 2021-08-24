@@ -497,7 +497,7 @@ int main(int argc, char **argv, char **envp)
     start_size = sbuf.st_size;
     start_mtime = sbuf.st_mtime;
 
-    getlockfd(service, id);
+    if (!is_quic) getlockfd(service, id);
 
     if (debug_stdio) {
         service_main(service_argv.count, service_argv.data, envp);
