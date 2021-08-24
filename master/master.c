@@ -1099,7 +1099,7 @@ static void spawn_service(struct service *s, int si, int wdi)
         }
     }
 
-    if (s->quic_ready) {
+    if (s->quic) {
         /* Create pipe for sending QUIC data from master to child */
         r = pipe(quic_pipe);
         if (r) {
@@ -1134,7 +1134,7 @@ static void spawn_service(struct service *s, int si, int wdi)
                 syslog(LOG_ERR, "can't duplicate status fd: %m");
                 exit(1);
             }
-            if (s->quic_ready) {
+            if (s->quic) {
                 /* Child will receive QUIC data from master via pipe */
                 if (dup2(quic_pipe[0], LISTEN_FD) < 0) {
                     syslog(LOG_ERR, "can't duplicate QUIC recv fd: %m");
@@ -1244,14 +1244,14 @@ static void spawn_service(struct service *s, int si, int wdi)
         centry_set_state(c, SERVICE_STATE_READY);
         centry_add(c, p);
 
-        if (s->quic_ready) {
+        if (s->quic) {
             /* Master will transfer QUIC data to child via pipe */
             c->quic = xzmalloc(sizeof(struct quic_child));
             c->quic->fd = quic_pipe[1];
             close(quic_pipe[0]);
 
             /* Add child to ready array */
-            ptrarray_push(s->quic_ready, c);
+            ptrarray_push(&s->quic->ready, c);
         }
         break;
     }
@@ -1484,10 +1484,10 @@ static void reap_child(void)
                     break;
                 }
 
-                if (s->quic_ready) {
+                if (s->quic) {
                     /* remove child from ready array */
-                    int idx = ptrarray_find(s->quic_ready, c, 0);
-                    if (idx >= 0) ptrarray_remove(s->quic_ready, idx);
+                    int idx = ptrarray_find(&s->quic->ready, c, 0);
+                    if (idx >= 0) ptrarray_remove(&s->quic->ready, idx);
                 }
             } else if (wd) {
                 /* WaitDaemons are only ever in READY state, there's only one
@@ -1892,11 +1892,11 @@ static void process_msg(int si, struct notify_message *msg)
             centry_set_state(c, SERVICE_STATE_READY);
             s->ready_workers++;
 
-            if (s->quic_ready) {
+            if (s->quic) {
                 /* Move worker from active table to ready array */
-                hash_del(buf_cstring(&c->quic->scid), s->quic_active);
-                hash_del(buf_cstring(&c->quic->dcid), s->quic_active);
-                ptrarray_push(s->quic_ready, c);
+                hash_del(buf_cstring(&c->quic->scid), &s->quic->active);
+                hash_del(buf_cstring(&c->quic->dcid), &s->quic->active);
+                ptrarray_push(&s->quic->ready, c);
             }
             break;
 
@@ -1934,10 +1934,10 @@ static void process_msg(int si, struct notify_message *msg)
             centry_set_state(c, SERVICE_STATE_BUSY);
             s->ready_workers--;
 
-            if (s->quic_ready) {
+            if (s->quic) {
                 /* remove child from ready array */
-                int idx = ptrarray_find(s->quic_ready, c, 0);
-                if (idx >= 0) ptrarray_remove(s->quic_ready, idx);
+                int idx = ptrarray_find(&s->quic->ready, c, 0);
+                if (idx >= 0) ptrarray_remove(&s->quic->ready, idx);
             }
             break;
 
@@ -2397,10 +2397,9 @@ static void add_service(const char *name, struct entry *e, void *rock)
             active_size = Services[i].max_workers;
         }
 
-        /* Create ready worker array and active worker table */
-        Services[i].quic_ready = ptrarray_new();
-        Services[i].quic_active =
-            construct_hash_table(xzmalloc(sizeof(hash_table)), 2*active_size, 0);
+        /* Initializer active worker table */
+        Services[i].quic = xzmalloc(sizeof(struct quic_service));
+        construct_hash_table(&Services[i].quic->active, 2*active_size, 0);
 #else
         fatalf(EX_CONFIG, "no QUIC support for service '%s'", name);
 #endif /* HAVE_QUIC */
@@ -2976,11 +2975,11 @@ static void quic_dispatch(struct service *s, int si)
 
     /* Look for existing connection */
     if (!scidlen) {
-        centry = hash_lookup(dcid_key, s->quic_active);
+        centry = hash_lookup(dcid_key, &s->quic->active);
     }
     else {
         bin_to_hex(scid, scidlen, scid_key, 0);
-        centry = hash_lookup(scid_key, s->quic_active);
+        centry = hash_lookup(scid_key, &s->quic->active);
 
         if (!centry) {
             /* New connection - use a ready worker */
@@ -2988,10 +2987,10 @@ static void quic_dispatch(struct service *s, int si)
                 spawn_service(s, si, SERVICE_NONE);
             }
 
-            centry = ptrarray_pop(s->quic_ready);
+            centry = ptrarray_pop(&s->quic->ready);
             if (centry) {
-                hash_insert(scid_key, centry, s->quic_active);
-                hash_insert(dcid_key, centry, s->quic_active);
+                hash_insert(scid_key, centry, &s->quic->active);
+                hash_insert(dcid_key, centry, &s->quic->active);
                 buf_setcstr(&centry->quic->scid, scid_key);
                 buf_setcstr(&centry->quic->dcid, dcid_key);
 
@@ -3004,8 +3003,8 @@ static void quic_dispatch(struct service *s, int si)
         }
         else if (strcmp(dcid_key, buf_cstring(&centry->quic->dcid))) {
             /* DCID has changed */
-            hash_del(buf_cstring(&centry->quic->dcid), s->quic_active);
-            hash_insert(dcid_key, centry, s->quic_active);
+            hash_del(buf_cstring(&centry->quic->dcid), &s->quic->active);
+            hash_insert(dcid_key, centry, &s->quic->active);
             buf_setcstr(&centry->quic->dcid, dcid_key);
         }
     }
@@ -3422,7 +3421,7 @@ int main(int argc, char **argv)
 
             /* connections */
             if (y >= 0 &&
-                (Services[i].quic_ready ||  // ALWAYS listen on QUIC socket
+                (Services[i].quic ||  // ALWAYS listen on QUIC socket
                  (Services[i].ready_workers == 0 &&
                   Services[i].nactive < Services[i].max_workers &&
                   !service_is_fork_limited(&Services[i])))) {
@@ -3510,7 +3509,7 @@ int main(int argc, char **argv)
                 {
                     /* huh, someone wants to talk to us */
 
-                    if (Services[i].quic_ready) {
+                    if (Services[i].quic) {
                         quic_dispatch(&Services[i], i);
                     }
                     else if (Services[i].nactive < Services[i].max_workers &&

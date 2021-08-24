@@ -9,6 +9,11 @@
 #include "ptrarray.h"
 #include "strarray.h"
 
+struct quic_service {
+    ptrarray_t ready;           /* list of children ready for service */
+    hash_table active;          /* table of children with active connections */
+};
+
 struct service {
     char *name;                 /* name of service */
     char *listen;               /* port/socket to listen to */
@@ -26,8 +31,7 @@ struct service {
     int stat[2];                /* master/child communication channel */
 
     /* QUIC connection handling */
-    ptrarray_t *quic_ready;     /* list of children ready for service */
-    hash_table *quic_active;    /* table of children with active connections */
+    struct quic_service *quic;
 
     /* limits */
     int desired_workers;        /* num child processes to have ready */
