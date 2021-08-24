@@ -117,4 +117,41 @@ sub test_select
     $self->assert(!$imaptalk->get_last_error());
 }
 
+sub test_cmdtimer_sessionid
+    :min_version_3_5 :NoStartInstances
+{
+    my ($self) = @_;
+
+    # log the timing for anything that takes longer than zero seconds
+    $self->{instance}->{config}->set('commandmintimer', '0');
+    $self->_start_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # put a bunch of messages in inbox to make sure fetch isn't instantaneous
+    my %msgs;
+    foreach my $n (1..5) {
+        $msgs{$n} = $self->make_message("message $n");
+    }
+
+    $imaptalk->select("INBOX");
+    $self->assert_str_equals("ok", $imaptalk->get_last_completion_response());
+
+    # discard buffered syslog output from setup
+    $self->{instance}->getsyslog();
+
+    # fetch some things that will take a little while
+    $imaptalk->fetch('1:*', '(uid flags body[])');
+    $self->assert_str_equals("ok", $imaptalk->get_last_completion_response());
+
+    # should have logged some timer output, which should include the sess id
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = grep { m/\bcmdtimer:/ } $self->{instance}->getsyslog();
+        $self->assert_num_gte(1, scalar @lines);
+        foreach my $line (@lines) {
+            $self->assert_matches(qr/sessionid=<[^ >]+>/, $line);
+        }
+    }
+}
+
 1;
