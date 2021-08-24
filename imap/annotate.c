@@ -3053,7 +3053,7 @@ static int write_entry(struct mailbox *mailbox,
 
     if (!maywrite) {
         r = IMAP_PERMISSION_DENIED;
-        if (r) goto out;
+        goto out;
     }
 
     if (mailbox) {
