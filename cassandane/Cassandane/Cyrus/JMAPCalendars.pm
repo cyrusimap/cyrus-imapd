@@ -7517,5 +7517,72 @@ sub test_calendarevent_set_reject_duplicate_uid
         $res->[1][1]{notCreated}{eventB}{properties});
 }
 
+sub test_calendarevent_get_ignore_embedded_ianatz
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create VEVENT with bogus IANA VTIMEZONE";
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//foo//bar//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Europe/Vienna
+LAST-MODIFIED:20210802T073921Z
+X-LIC-LOCATION:Europe/Vienna
+BEGIN:STANDARD
+TZNAME:-05
+TZOFFSETFROM:-054517
+TZOFFSETTO:-054517
+DTSTART:16010101T000000
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20210328T010000
+DTEND;TZID=Europe/Vienna:20210328T040000
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20201231T230000Z
+CREATED:20201231T230000Z
+SUMMARY:test
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    xlog "Assert start and duration";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['start', 'duration', 'timeZone'],
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{list}[0]{id};
+    $self->assert_str_equals('2021-03-28T01:00:00', $res->[0][1]{list}[0]{start});
+    $self->assert_str_equals('PT2H', $res->[0][1]{list}[0]{duration});
+    $self->assert_str_equals('Europe/Vienna', $res->[0][1]{list}[0]{timeZone});
+
+    xlog "Assert timerange query";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            filter => {
+                after =>  '2021-03-27T23:00:00Z',
+                before => '2021-03-28T02:00:00Z'
+            },
+        }, 'R1'],
+        ['CalendarEvent/query', {
+            filter => {
+                after =>  '2021-03-28T02:00:00Z',
+                before => '2021-03-28T23:00:00Z'
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$eventId], $res->[0][1]{ids});
+    $self->assert_deep_equals([], $res->[1][1]{ids});
+
+}
 
 1;
