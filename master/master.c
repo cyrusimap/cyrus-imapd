@@ -154,6 +154,12 @@ enum sstate {
     SERVICE_STATE_DEAD    = 4   /* We received a sigchld from this service */
 };
 
+struct quic_child {
+    int fd;                     /* master -> child data channel */
+    struct buf scid;            /* hex-encoded SCID */
+    struct buf dcid;            /* hex-encoded DCID */
+};
+
 struct centry {
     pid_t pid;
     enum sstate service_state;  /* SERVICE_STATE_* */
@@ -164,9 +170,7 @@ struct centry {
     struct timeval spawntime;   /* when the centry was allocated */
     time_t sighuptime;          /* when did we send a SIGHUP */
 
-    int quic_fd;                /* master -> child QUIC data channel */
-    struct buf quic_scid;       /* hex-encoded QUIC SCID */
-    struct buf quic_dcid;       /* hex-encoded QUIC DCID */
+    struct quic_child *quic;
 
     struct centry *next;
 };
@@ -304,7 +308,6 @@ static struct centry *centry_alloc(void)
     t->wdi = SERVICE_NONE;
     gettimeofday(&t->spawntime, NULL);
     t->sighuptime = (time_t)-1;
-    t->quic_fd = -1;
 
     return t;
 }
@@ -339,9 +342,12 @@ static char *centry_describe(const struct centry *c, pid_t pid)
 /* free a centry */
 static void centry_free(struct centry *c)
 {
-    buf_free(&c->quic_scid);
-    buf_free(&c->quic_dcid);
-    xclose(c->quic_fd);
+    if (c->quic) {
+        buf_free(&c->quic->scid);
+        buf_free(&c->quic->dcid);
+        xclose(c->quic->fd);
+        free(c->quic);
+    }
     free(c->desc);
     free(c);
 }
@@ -1240,7 +1246,8 @@ static void spawn_service(struct service *s, int si, int wdi)
 
         if (s->quic_ready) {
             /* Master will transfer QUIC data to child via pipe */
-            c->quic_fd = quic_pipe[1];
+            c->quic = xzmalloc(sizeof(struct quic_child));
+            c->quic->fd = quic_pipe[1];
             close(quic_pipe[0]);
 
             /* Add child to ready array */
@@ -1887,8 +1894,8 @@ static void process_msg(int si, struct notify_message *msg)
 
             if (s->quic_ready) {
                 /* Move worker from active table to ready array */
-                hash_del(buf_cstring(&c->quic_scid), s->quic_active);
-                hash_del(buf_cstring(&c->quic_dcid), s->quic_active);
+                hash_del(buf_cstring(&c->quic->scid), s->quic_active);
+                hash_del(buf_cstring(&c->quic->dcid), s->quic_active);
                 ptrarray_append(s->quic_ready, c);
             }
             break;
@@ -2985,8 +2992,8 @@ static void quic_dispatch(struct service *s, int si)
             if (centry) {
                 hash_insert(scid_key, centry, s->quic_active);
                 hash_insert(dcid_key, centry, s->quic_active);
-                buf_setcstr(&centry->quic_scid, scid_key);
-                buf_setcstr(&centry->quic_dcid, dcid_key);
+                buf_setcstr(&centry->quic->scid, scid_key);
+                buf_setcstr(&centry->quic->dcid, dcid_key);
 
                 /* Add client address message */
                 msg_type[msg_count] = QUIC_MSG_ADDR;
@@ -2995,11 +3002,11 @@ static void quic_dispatch(struct service *s, int si)
                 WRITEV_ADD_TO_IOVEC(iov, iovcnt, &remote_addr, remote_addrlen);
             }
         }
-        else if (strcmp(dcid_key, buf_cstring(&centry->quic_dcid))) {
+        else if (strcmp(dcid_key, buf_cstring(&centry->quic->dcid))) {
             /* DCID has changed */
-            hash_del(buf_cstring(&centry->quic_dcid), s->quic_active);
+            hash_del(buf_cstring(&centry->quic->dcid), s->quic_active);
             hash_insert(dcid_key, centry, s->quic_active);
-            buf_setcstr(&centry->quic_dcid, dcid_key);
+            buf_setcstr(&centry->quic->dcid, dcid_key);
         }
     }
 
@@ -3014,7 +3021,7 @@ static void quic_dispatch(struct service *s, int si)
         WRITEV_ADD_TO_IOVEC(iov, iovcnt, data, nread);
 
         /* Send messages to worker servicing this connection */
-        ssize_t nwrite = retry_writev(centry->quic_fd, iov, iovcnt);
+        ssize_t nwrite = retry_writev(centry->quic->fd, iov, iovcnt);
 
         if (config_debug) {
             size_t total_len = 0;
