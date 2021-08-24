@@ -1894,8 +1894,11 @@ static void process_msg(int si, struct notify_message *msg)
 
             if (s->quic) {
                 /* Move worker from active table to ready array */
-                hash_del(buf_cstring(&c->quic->scid), &s->quic->active);
-                hash_del(buf_cstring(&c->quic->dcid), &s->quic->active);
+                if (buf_len(&c->quic->scid))
+                    hash_del(buf_cstring(&c->quic->scid), &s->quic->active);
+                if (buf_len(&c->quic->dcid))
+                    hash_del(buf_cstring(&c->quic->dcid), &s->quic->active);
+
                 ptrarray_push(&s->quic->ready, c);
             }
             break;
@@ -2397,7 +2400,7 @@ static void add_service(const char *name, struct entry *e, void *rock)
             active_size = Services[i].max_workers;
         }
 
-        /* Initializer active worker table */
+        /* Initialize active worker table */
         Services[i].quic = xzmalloc(sizeof(struct quic_service));
         construct_hash_table(&Services[i].quic->active, 2*active_size, 0);
 #else
@@ -2976,6 +2979,10 @@ static void quic_dispatch(struct service *s, int si)
     /* Look for existing connection */
     if (!scidlen) {
         centry = hash_lookup(dcid_key, &s->quic->active);
+        if (centry) {
+            hash_del(buf_cstring(&centry->quic->scid), &s->quic->active);
+            buf_reset(&centry->quic->scid);
+        }
     }
     else {
         bin_to_hex(scid, scidlen, scid_key, 0);
@@ -2990,9 +2997,8 @@ static void quic_dispatch(struct service *s, int si)
             centry = ptrarray_pop(&s->quic->ready);
             if (centry) {
                 hash_insert(scid_key, centry, &s->quic->active);
-                hash_insert(dcid_key, centry, &s->quic->active);
                 buf_setcstr(&centry->quic->scid, scid_key);
-                buf_setcstr(&centry->quic->dcid, dcid_key);
+                buf_reset(&centry->quic->dcid);
 
                 /* Add client address message */
                 msg_type[msg_count] = QUIC_MSG_ADDR;
@@ -3001,9 +3007,14 @@ static void quic_dispatch(struct service *s, int si)
                 WRITEV_ADD_TO_IOVEC(iov, iovcnt, &remote_addr, remote_addrlen);
             }
         }
+        else if (strcmp(scid_key, buf_cstring(&centry->quic->scid))) {
+            /* SCID has changed - MUST ignore packet */
+            centry = NULL;
+        }
         else if (strcmp(dcid_key, buf_cstring(&centry->quic->dcid))) {
-            /* DCID has changed */
-            hash_del(buf_cstring(&centry->quic->dcid), &s->quic->active);
+            /* DCID has changed - update entry in active table */
+            if (buf_len(&centry->quic->dcid))
+                hash_del(buf_cstring(&centry->quic->dcid), &s->quic->active);
             hash_insert(dcid_key, centry, &s->quic->active);
             buf_setcstr(&centry->quic->dcid, dcid_key);
         }
