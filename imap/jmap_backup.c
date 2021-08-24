@@ -1749,12 +1749,12 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     jmap_req_t *req = rrock->req;
     mbname_t *mbname = mbname_from_intname(mboxname);
     struct mailbox *newmailbox = NULL, *mailbox = NULL;
+    const char *newmboxname = NULL;
     int r = 0;
     size_t i = 0;
 
     if (!(rrock->jrestore->mode & DRY_RUN) && mbname_isdeleted(mbname)) {
         /* Look for existing mailbox with same (undeleted) name */
-        const char *newmboxname = NULL;
         mbentry_t *mbentry = NULL;
 
         mbname_set_isdeleted(mbname, 0);
@@ -1870,7 +1870,6 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
             }
         }
     }
-    mbname_free(&mbname);
 
     if (!r) {
         r = jmap_openmbox(req, mboxname, &mailbox, /*rw*/newmailbox == NULL);
@@ -1887,6 +1886,29 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     message_t *msg = message_new();
     for (i = 0; i < arrayu64_size(msgnos); i++) {
         uint32_t msgno = arrayu64_nth(msgnos, i);
+
+        if (i+1 % BATCH_SIZE == 0) {
+            /* Close and re-open mailboxes (to avoid deadlocks) */
+            jmap_closembox(req, &mailbox);
+
+            if (newmailbox) {
+                mailbox_close(&newmailbox);
+                r = mailbox_open_iwl(newmboxname, &newmailbox);
+
+                if (r) {
+                    syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
+                           newmboxname, error_message(r));
+                    break;
+                }
+            }
+
+            r = jmap_openmbox(req, mboxname, &mailbox, /*rw*/newmailbox == NULL);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
+                       mboxname, error_message(r));
+                break;
+            }
+        }
 
         message_set_from_mailbox(mailbox, msgno, msg);
         if (!(rrock->jrestore->mode & DRY_RUN)) {
@@ -1910,6 +1932,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 
   done:
     mailbox_close(&newmailbox);
+    mbname_free(&mbname);
 }
 
 static int jmap_backup_restore_mail(jmap_req_t *req)
