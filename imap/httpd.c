@@ -1295,7 +1295,7 @@ static int tls_init(int client_auth, struct buf *serverinfo)
     else if (status < 15) buf_printf(serverinfo, "-beta%u", status);
     else if (patch) buf_putc(serverinfo, patch + 'a' - 1);
 
-#ifdef HAVE_QUIC_TLS
+#ifdef HAVE_QUIC
     buf_appendcstr(serverinfo, "+quic");
 #endif
 

@@ -168,7 +168,7 @@ static json_t *buildinfo()
 #endif
 #ifdef HAVE_SSL
     json_t *openssl = json_object();
-#ifdef HAVE_QUIC_TLS
+#ifdef HAVE_QUIC
     json_object_set_new(openssl, "quic", json_true());
 #else
     json_object_set_new(openssl, "quic", json_false());
