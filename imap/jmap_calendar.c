@@ -6033,7 +6033,26 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
     return 0;
 }
 
-static void eventquery_read_timerange(json_t *filter, time_t *before, time_t *after)
+static inline time_t eventquery_read_datetime(const char *val,
+                                              icaltimezone *zone,
+                                              time_t defaultval)
+{
+    struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+    if (val && jmapical_localdatetime_from_string(val, &dt) >= 0) {
+        icaltimetype icaldt = jmapical_datetime_to_icaltime(&dt, zone);
+        return icaltime_as_timet_with_zone(icaldt, zone);
+    }
+    else return defaultval;
+}
+
+struct eventquery_args {
+    int expandrecur;
+    icaltimezone *zone;
+};
+
+static void eventquery_read_timerange(json_t *filter,
+                                      struct eventquery_args args,
+                                      time_t *before, time_t *after)
 {
     *before = caldav_eternity;
     *after = caldav_epoch;
@@ -6053,7 +6072,7 @@ static void eventquery_read_timerange(json_t *filter, time_t *before, time_t *af
             bf = caldav_eternity;
             af = caldav_epoch;
 
-            eventquery_read_timerange(val, &bf, &af);
+            eventquery_read_timerange(val, args, &bf, &af);
 
             if (bf != caldav_eternity) {
                 if (!strcmp(op, "OR")) {
@@ -6092,15 +6111,11 @@ static void eventquery_read_timerange(json_t *filter, time_t *before, time_t *af
             }
         }
     } else {
-        const char *sb = json_string_value(json_object_get(filter, "before"));
-        const char *sa = json_string_value(json_object_get(filter, "after"));
+        const char *s = json_string_value(json_object_get(filter, "before"));
+        *before = eventquery_read_datetime(s, args.zone, caldav_eternity);
 
-        if (!sb || time_from_iso8601(sb, before) == -1) {
-            *before = caldav_eternity;
-        }
-        if (!sa || time_from_iso8601(sa, after) == -1) {
-            *after = caldav_epoch;
-        }
+        s = json_string_value(json_object_get(filter, "after"));
+        *after = eventquery_read_datetime(s, args.zone, caldav_epoch);
     }
 }
 
@@ -6599,9 +6614,41 @@ static int eventquery_recur_cb(icalcomponent *comp,
     return 1;
 }
 
+#define JMAPICAL_EVENTQUERY_ARGS_INITIALIZER { \
+    0, icaltimezone_get_utc_timezone() \
+}
+
+static int _calendarevent_queryargs_parse(jmap_req_t *req __attribute__((unused)),
+                                          struct jmap_parser *parser __attribute__((unused)),
+                                          const char *argname,
+                                          json_t *argval,
+                                          void *rock)
+{
+    struct eventquery_args *args = rock;
+    int r = 0;
+
+    if (!strcmp(argname, "expandRecurrences")) {
+        if (json_is_boolean(argval)) {
+            args->expandrecur = json_boolean_value(argval);
+        }
+        else jmap_parser_invalid(parser, argname);
+        r = 1;
+    }
+    else if (!strcmp(argname, "timeZone")) {
+        if (json_is_string(argval)) {
+            args->zone = jstimezones_lookup_tzid(NULL, json_string_value(argval));
+        }
+        if (!args->zone)
+            jmap_parser_invalid(parser, argname);
+        r = 1;
+    }
+
+    return r;
+}
+
 static int eventquery_run(jmap_req_t *req,
                           struct jmap_query *query,
-                          int expandrecur,
+                          struct eventquery_args args,
                           json_t **err)
 {
     time_t before = caldav_eternity;
@@ -6613,8 +6660,8 @@ static int eventquery_run(jmap_req_t *req,
     char *sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX);
 
     /* Sanity check arguments */
-    eventquery_read_timerange(query->filter, &before, &after);
-    if (expandrecur && before == caldav_eternity) {
+    eventquery_read_timerange(query->filter, args, &before, &after);
+    if (args.expandrecur && before == caldav_eternity) {
         /* Reject unbounded time-ranges for recurrence expansion */
         *err = json_pack("{s:s s:[s] s:s}", "type", "invalidArguments",
                 "arguments", "expandRecurrences",
@@ -6657,7 +6704,7 @@ static int eventquery_run(jmap_req_t *req,
 
     /* Attempt to fast-path trivial query */
 
-    if (!have_textsearch && !expandrecur && query->position >= 0 && !query->anchor) {
+    if (!have_textsearch && !args.expandrecur && query->position >= 0 && !query->anchor) {
         struct eventquery_fastpath_rock rock = {
             req, query, sched_inboxname, sched_outboxname
         };
@@ -6682,7 +6729,7 @@ static int eventquery_run(jmap_req_t *req,
     if (have_textsearch) {
         /* Query and sort matches in search backend. */
         r = eventquery_search_run(req, query->filter, db, before, after,
-                                  sort, nsort, expandrecur,
+                                  sort, nsort, args.expandrecur,
                                   sched_inboxname, sched_outboxname,
                                   &matches);
         if (r) goto done;
@@ -6690,19 +6737,19 @@ static int eventquery_run(jmap_req_t *req,
     else {
         /* Query and sort matches in Caldav DB. */
         struct eventquery_rock rock = {
-            req, expandrecur, NULL, &matches,
+            req, args.expandrecur, NULL, &matches,
             sched_inboxname, sched_outboxname
         };
 
         enum caldav_sort mboxsort = CAL_SORT_MAILBOX;
         r = caldav_foreach_timerange(db, NULL, after, before,
-                                     expandrecur ? &mboxsort : sort,
-                                     expandrecur ? 1 : nsort,
+                                     args.expandrecur ? &mboxsort : sort,
+                                     args.expandrecur ? 1 : nsort,
                                      eventquery_cb, &rock);
         jmap_closembox(req, &rock.mailbox);
     }
 
-    if (expandrecur) {
+    if (args.expandrecur) {
         /* Expand and sort recurrence instance matches */
         icaltimezone *utc = icaltimezone_get_utc_timezone();
         struct icalperiodtype timerange = {
@@ -6843,17 +6890,10 @@ static void calendarevent_validatefilter(jmap_req_t *req __attribute__((unused))
                  !strcmp(field, "after")) {
             const char *s;
             if ((s = json_string_value(arg))) {
-                int is_valid = 0;
-                size_t len = strlen(s);
-                if (len && s[len-1] == 'Z') {
-                    /* Validate UTCDateTime */
-                    struct tm tm;
-                    memset(&tm, 0, sizeof(struct tm));
-                    tm.tm_isdst = -1;
-                    const char *p = strptime(s, "%Y-%m-%dT%H:%M:%S", &tm);
-                    is_valid = p && *p == 'Z';
+                struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+                if (jmapical_localdatetime_from_string(s, &dt) < 0) {
+                    jmap_parser_invalid(parser, field);
                 }
-                if (!is_valid) jmap_parser_invalid(parser, field);
             }
             else jmap_parser_invalid(parser, field);
         }
@@ -6890,34 +6930,16 @@ static int calendarevent_validatecomparator(jmap_req_t *req __attribute__((unuse
     return 0;
 }
 
-static int _calendarevent_queryargs_parse(jmap_req_t *req __attribute__((unused)),
-                                          struct jmap_parser *parser __attribute__((unused)),
-                                          const char *argname,
-                                          json_t *argval,
-                                          void *rock)
-{
-    if (strcmp(argname, "expandRecurrences")) return 0;
-
-    if (json_is_boolean(argval)) {
-        int *expandrecur = rock;
-        *expandrecur = json_boolean_value(argval);
-    }
-    else {
-        jmap_parser_invalid(parser, argname);
-    }
-    return 1;
-}
-
 static int jmap_calendarevent_query(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
-    int expandrecur = 0;
+    struct eventquery_args args = JMAPICAL_EVENTQUERY_ARGS_INITIALIZER;
 
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req, &parser,
-                     _calendarevent_queryargs_parse, &expandrecur,
+                     _calendarevent_queryargs_parse, &args,
                      calendarevent_validatefilter, NULL,
                      calendarevent_validatecomparator, NULL,
                      &query, &err);
@@ -6932,7 +6954,7 @@ static int jmap_calendarevent_query(struct jmap_req *req)
         goto done;
     }
 
-    int r = eventquery_run(req, &query, expandrecur, &err);
+    int r = eventquery_run(req, &query, args, &err);
     if (r || err) {
         if (!err) err = jmap_server_error(r);
         jmap_error(req, err);
