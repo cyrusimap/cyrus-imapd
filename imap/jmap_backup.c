@@ -1200,12 +1200,31 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
 
     while ((msg = mailbox_iter_step(iter))) {
         /* XXX  Look for existing resource with same UID */
+        const struct index_record *record = msg_record(msg);
 
         if (!(rrock->jrestore->mode & DRY_RUN)) {
             r = recreate_resource((message_t *) msg, newmailbox,
                                   req, 0/*is_update*/, log_level);
         }
         if (!r) rrock->jrestore->num_undone[DESTROYS]++;
+
+        if (record->uid < mailbox->i.last_uid &&
+            record->recno % BATCH_SIZE == 0) {
+            /* Close and re-open mailbox (to avoid deadlocks) */
+            uint32_t nextuid = record->uid+1;
+
+            mailbox_iter_done(&iter);
+            jmap_closembox(req, &mailbox);
+            r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
+                       mbentry->name);
+                break;
+            }
+
+            iter = mailbox_iter_init(mailbox, 0, 0);
+            mailbox_iter_startuid(iter, nextuid);
+        }
     }
     mailbox_iter_done(&iter);
 
@@ -1641,7 +1660,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
             message->ignore = 1;
         }
 
-        if (record->recno % BATCH_SIZE == 0) {
+        if (record->uid < mailbox->i.last_uid &&
+            record->recno % BATCH_SIZE == 0) {
             /* Close and re-open mailbox (to avoid deadlocks) */
             uint32_t nextuid = record->uid+1;
 
