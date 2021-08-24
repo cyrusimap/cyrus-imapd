@@ -2453,12 +2453,17 @@ static void cmdloop(void)
         if (commandmintimer && strcmp("idle", cmdname)) {
             double cmdtime, nettime;
             const char *mboxname = index_mboxname(imapd_index);
-            if (!mboxname) mboxname = "<none>";
             cmdtime_endtimer(&cmdtime, &nettime);
             if (cmdtime >= commandmintimerd) {
-                syslog(LOG_NOTICE, "cmdtimer: '%s' '%s' '%s' '%f' '%f' '%f'",
-                    imapd_userid ? imapd_userid : "<none>", cmdname, mboxname,
-                    cmdtime, nettime, cmdtime + nettime);
+                xsyslog(LOG_NOTICE, "cmdtimer",
+                                    "sessionid=<%s> userid=<%s> command=<%s>"
+                                    " mailbox=<%s> cmdtime=<%f> nettime=<%f>"
+                                    " total=<%f>",
+                                    session_id(),
+                                    imapd_userid ? imapd_userid : "",
+                                    cmdname,
+                                    mboxname ? mboxname : "",
+                                    cmdtime, nettime, cmdtime + nettime);
             }
         }
         continue;

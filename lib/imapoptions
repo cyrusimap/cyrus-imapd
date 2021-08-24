@@ -670,8 +670,8 @@ Blank lines and lines beginning with ``#'' are ignored.
    assumed.  */
 
 { "commandmintimer", NULL, STRING, "2.4.0" }
-/* Time in seconds. Any imap command that takes longer than this
-   time is logged. */
+/* Time in floating point seconds. Any imap command that takes longer than
+   this time is logged. */
 
 { "configdirectory", NULL, STRING, "2.3.17" }
 /* The pathname of the IMAP configuration directory.  This field is
