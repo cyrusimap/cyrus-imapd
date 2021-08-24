@@ -5362,8 +5362,9 @@ static int compare_one_record(struct sync_client_state *sync_cs,
                               struct dlist *kaction,
                               struct sync_msgid_list *part_list)
 {
+    int local_wins = 1;
+    int r = 0;
     int i;
-    int r;
 
     /* if both ends are expunged, then we do no more processing.  This
      * allows a split brain cleanup to not break things forever.  It
@@ -5437,8 +5438,6 @@ static int compare_one_record(struct sync_client_state *sync_cs,
  diff:
     /* if differences we'll have to rewrite to bump the modseq
      * so that regular replication will cause an update */
-
-    int local_wins = 1;
 
     /* interesting case - expunged locally */
     if (mp->internal_flags & FLAG_INTERNAL_EXPUNGED) {
