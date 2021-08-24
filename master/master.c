@@ -1251,7 +1251,7 @@ static void spawn_service(struct service *s, int si, int wdi)
             close(quic_pipe[0]);
 
             /* Add child to ready array */
-            ptrarray_append(s->quic_ready, c);
+            ptrarray_push(s->quic_ready, c);
         }
         break;
     }
@@ -1486,8 +1486,8 @@ static void reap_child(void)
 
                 if (s->quic_ready) {
                     /* remove child from ready array */
-                    ptrarray_remove(s->quic_ready,
-                                    ptrarray_find(s->quic_ready, c, 0));
+                    int idx = ptrarray_find(s->quic_ready, c, 0);
+                    if (idx >= 0) ptrarray_remove(s->quic_ready, idx);
                 }
             } else if (wd) {
                 /* WaitDaemons are only ever in READY state, there's only one
@@ -1896,7 +1896,7 @@ static void process_msg(int si, struct notify_message *msg)
                 /* Move worker from active table to ready array */
                 hash_del(buf_cstring(&c->quic->scid), s->quic_active);
                 hash_del(buf_cstring(&c->quic->dcid), s->quic_active);
-                ptrarray_append(s->quic_ready, c);
+                ptrarray_push(s->quic_ready, c);
             }
             break;
 
@@ -1936,8 +1936,8 @@ static void process_msg(int si, struct notify_message *msg)
 
             if (s->quic_ready) {
                 /* remove child from ready array */
-                ptrarray_remove(s->quic_ready,
-                                ptrarray_find(s->quic_ready, c, 0));
+                int idx = ptrarray_find(s->quic_ready, c, 0);
+                if (idx >= 0) ptrarray_remove(s->quic_ready, idx);
             }
             break;
 
@@ -2988,7 +2988,7 @@ static void quic_dispatch(struct service *s, int si)
                 spawn_service(s, si, SERVICE_NONE);
             }
 
-            centry = ptrarray_remove(s->quic_ready, 0);
+            centry = ptrarray_pop(s->quic_ready);
             if (centry) {
                 hash_insert(scid_key, centry, s->quic_active);
                 hash_insert(dcid_key, centry, s->quic_active);
