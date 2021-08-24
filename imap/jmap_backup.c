@@ -1640,6 +1640,23 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
             message->ignore = 1;
         }
+
+        if (record->recno % BATCH_SIZE == 0) {
+            /* Close and re-open mailbox (to avoid deadlocks) */
+            uint32_t nextuid = record->uid+1;
+
+            mailbox_iter_done(&iter);
+            jmap_closembox(rrock->req, &mailbox);
+            r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
+                       mbentry->name);
+                break;
+            }
+
+            iter = mailbox_iter_init(mailbox, 0, 0);
+            mailbox_iter_startuid(iter, nextuid);
+        }
     }
 
     if (!(rrock->jrestore->mode & DRY_RUN) && userflag >= 0) {
