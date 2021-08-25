@@ -52,7 +52,7 @@ $Data::Dumper::Sortkeys = 1;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ murder => 1, adminstore => 1 }, @_);
+    return $class->SUPER::new({ imapmurder => 1, adminstore => 1 }, @_);
 }
 
 sub set_up
