@@ -758,30 +758,54 @@ static struct icaltimetype dtstart_from_ical(icalcomponent *comp)
     if (!tzid) return dt;
 
     icaltimezone* tz = tz_from_tzid(tzid);
-    if (tz && dt.zone && tz != dt.zone) {
-        dt = icaltime_convert_to_zone(dt, tz);
+    if (tz && tz != dt.zone) {
+        icaltimezone *utc = icaltimezone_get_utc_timezone();
+        if (dt.zone != utc) {
+            // Prefer our IANA timezone definition
+            dt.zone = tz;
+        }
+        else {
+            // Bogus UTC datetime with TZID
+            dt = icaltime_convert_to_zone(dt, tz);
+        }
     }
-    else if (!dt.zone) dt.zone = tz;
 
     return dt;
 }
 
 static struct icaltimetype dtend_from_ical(icalcomponent *comp)
 {
-    struct icaltimetype dtend;
-    icalproperty *prop;
+    struct icaltimetype dtend = icaltime_null_time();
+    icalproperty *end_prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+    icalproperty *dur_prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
     struct icaltimetype dtstart = dtstart_from_ical(comp);
 
-    if ((prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY))) {
-        dtend = icalproperty_get_dtend(prop);
-        const char *tzid = tzid_from_icalprop(prop, 1);
+    if (end_prop) {
+        dtend = icalproperty_get_dtend(end_prop);
+        const char *tzid = tzid_from_icalprop(end_prop, 1);
         icaltimezone* tz = tzid ? tz_from_tzid(tzid) : NULL;
-        if (tz && dtend.zone && tz != dtend.zone) {
-            dtend = icaltime_convert_to_zone(dtend, tz);
+        if (tz && tz != dtend.zone) {
+            icaltimezone *utc = icaltimezone_get_utc_timezone();
+            if (dtend.zone != utc) {
+                // Prefer our IANA timezone definition
+                dtend.zone = tz;
+            }
+            else {
+                // Bogus UTC datetime with TZID
+                dtend = icaltime_convert_to_zone(dtend, tz);
+            }
         }
-        else if (!dtend.zone) dtend.zone = tz;
     }
-    else dtend = icalcomponent_get_dtend(comp);
+    else if (dur_prop) {
+        struct icaldurationtype duration;
+        if (icalproperty_get_value(dur_prop)) {
+            duration = icalproperty_get_duration(dur_prop);
+        } else {
+            duration = icaldurationtype_null_duration();
+        }
+        dtend = icaltime_add(dtstart, duration);
+    }
+    else dtend = dtstart;
 
     /* Normalize floating DTEND to DTSTART time zone, if any */
     if (!dtend.zone) dtend.zone = dtstart.zone;
