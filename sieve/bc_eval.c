@@ -953,7 +953,7 @@ envelope_err:
             res = SIEVE_RUN_ERROR;
             goto body_err;
         }
-	/*
+        /*
           RFC 5173         Sieve Email Filtering: Body Extension        April 2008
 
           6. Interaction with Other Sieve Extensions
@@ -1001,10 +1001,6 @@ envelope_err:
                                         comp, comprock, ctag,
                                         (requires & BFE_VARIABLES) ?
                                         variables : NULL, match_vars);
-                    if (res < 0) {
-                        free(val[y]);
-                        goto body_err;
-                    }
                 }
             }
 
@@ -1014,7 +1010,9 @@ envelope_err:
         } /* For each body part */
 
         /* free the bodypart array */
-        if (val) free(val);
+        free(val);
+        if (res < 0)
+            goto body_err;
 
         if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
