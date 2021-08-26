@@ -62,12 +62,11 @@ struct quic_context {
 
     int sock;                            /* Output socket */
     ngtcp2_path_storage ps;
-    struct buf clientbuf;
+    struct buf clienthost;
 
     SSL_CTX *tls_ctx;
-    SSL *tls;
-
-    uint8_t last_tls_alert;
+    SSL *tls_conn;
+    uint8_t tls_last_alert;
 
     struct quic_app_context *app_ctx;
 };
@@ -135,7 +134,7 @@ static int send_alert(SSL *ssl,
 {
     struct quic_context *ctx = (struct quic_context *) SSL_get_app_data(ssl);
 
-    ctx->last_tls_alert = alert;
+    ctx->tls_last_alert = alert;
 
     return 1;
 }
@@ -200,7 +199,7 @@ static void set_clienthost(struct quic_context *ctx)
 
     if (getnameinfo(path->remote.addr, path->remote.addrlen,
                     hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-        buf_printf(&ctx->clientbuf, "%s ", hbuf);
+        buf_printf(&ctx->clienthost, "%s ", hbuf);
     }
 
 #ifdef NI_WITHSCOPEID
@@ -211,7 +210,7 @@ static void set_clienthost(struct quic_context *ctx)
                     hbuf, sizeof(hbuf), NULL, 0, niflags) != 0) {
         strlcpy(hbuf, "unknown", sizeof(hbuf));
     }
-    buf_printf(&ctx->clientbuf, "[%s]", hbuf);
+    buf_printf(&ctx->clienthost, "[%s]", hbuf);
 }
 
 static int handshake_completed_cb(ngtcp2_conn *conn,
@@ -552,12 +551,12 @@ ioerror:
 
         if (r) return EOF;
 
-        SSL *tls = ctx->tls = SSL_new(ctx->tls_ctx);
-        SSL_set_app_data(tls, ctx);
-        SSL_set_accept_state(tls);
-        SSL_set_quic_early_data_enabled(tls, 0);
+        SSL *tls_conn = ctx->tls_conn = SSL_new(ctx->tls_ctx);
+        SSL_set_app_data(tls_conn, ctx);
+        SSL_set_accept_state(tls_conn);
+        SSL_set_quic_early_data_enabled(tls_conn, 0);
 
-        ngtcp2_conn_set_tls_native_handle(ctx->qconn, tls);
+        ngtcp2_conn_set_tls_native_handle(ctx->qconn, tls_conn);
     }
 
     ngtcp2_pkt_info pi = { NGTCP2_ECN_NOT_ECT };
@@ -618,9 +617,9 @@ HIDDEN void quic_close(struct quic_context *ctx)
         send_data(ctx->sock, &ps.path, data, nwrite);
     }
 
-    if (ctx->tls) {
-        tls_reset_servertls(&ctx->tls);
-        ctx->tls = NULL;
+    if (ctx->tls_conn) {
+        tls_reset_servertls(&ctx->tls_conn);
+        ctx->tls_conn = NULL;
     }
 
     if (ctx->qconn) {
@@ -665,7 +664,7 @@ HIDDEN const char *quic_get_clienthost(void *conn)
 {
     struct quic_context *ctx = conn;
 
-    return buf_cstring(&ctx->clientbuf);
+    return buf_cstring(&ctx->clienthost);
 }
 
 HIDDEN const char *quic_version(void)
