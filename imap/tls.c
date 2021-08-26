@@ -1368,7 +1368,7 @@ EXPORTED int tls_reset_servertls(SSL **conn)
         if (TLS_FAST_SHUTDOWN) {
             /*
              * Don't bother spending time closing the TLS session,
-             * but make sure its available for reuse.
+             * but make sure it is available for reuse.
              */
             SSL_set_shutdown(*conn,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
         }

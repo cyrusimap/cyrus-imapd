@@ -6150,7 +6150,7 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
             xmlChar *name;
             const struct cal_comp_t *comp;
 
-            /* Make sure its a "comp" element with a "name" */
+            /* Make sure it is a "comp" element with a "name" */
             if (cur->type != XML_ELEMENT_NODE) continue;
             if (xmlStrcmp(cur->name, BAD_CAST "comp") ||
                 !(name = xmlGetProp(cur, BAD_CAST "name"))) break;
@@ -6458,7 +6458,7 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
                 strarray_t addr = STRARRAY_INITIALIZER;
 
                 for (; node; node = xmlNextElementSibling(node)) {
-                    /* Make sure its a value we understand */
+                    /* Make sure it is a value we understand */
                     if (!xmlStrcmp(node->name, BAD_CAST "href")) {
                         /* because clients look for the last item, we put the default last,
                          * but we want it first in the internal data structure because that
@@ -6550,7 +6550,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
             /* Find the value */
             for (cur = prop->children; cur; cur = cur->next) {
 
-                /* Make sure its a value we understand */
+                /* Make sure it is a value we understand */
                 if (cur->type != XML_ELEMENT_NODE) continue;
                 if ((!xmlStrcmp(cur->name, BAD_CAST "opaque") ||
                      !xmlStrcmp(cur->name, BAD_CAST "transparent")) &&

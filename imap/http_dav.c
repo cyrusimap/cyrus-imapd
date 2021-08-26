@@ -3406,7 +3406,7 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
     xmlNsPtr ns;
     xmlNodePtr node;
 
-    /* Make sure its a shared entry or the user's private one */
+    /* Make sure it is a shared entry or the user's private one */
     if (userid && *userid && strcmp(userid, arock->fctx->userid)) return 0;
 
     /* Split entry into namespace href and name ( <href>name ) */
@@ -3893,7 +3893,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     indoc = root->doc;
 
-    /* Make sure its an DAV:acl element */
+    /* Make sure it is a DAV:acl element */
     if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
         xmlStrcmp(root->name, BAD_CAST "acl")) {
         txn->error.desc = "Missing DAV:acl element in ACL request";
@@ -5538,7 +5538,7 @@ int meth_lock(struct transaction_t *txn, void *params)
         }
         if (ret) goto done;
 
-        /* Make sure its a DAV:lockinfo element */
+        /* Make sure it is a DAV:lockinfo element */
         indoc = root->doc;
         if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
             xmlStrcmp(root->name, BAD_CAST "lockinfo")) {
@@ -5555,7 +5555,7 @@ int meth_lock(struct transaction_t *txn, void *params)
                 /* Find child element of lockscope */
                 for (sub = node->children;
                      sub && sub->type != XML_ELEMENT_NODE; sub = sub->next);
-                /* Make sure its an exclusive element */
+                /* Make sure it is an exclusive element */
                 if (!sub || xmlStrcmp(sub->name, BAD_CAST "exclusive")) {
                     txn->error.desc = "Only exclusive locks are supported";
                     ret = HTTP_BAD_REQUEST;
@@ -5566,7 +5566,7 @@ int meth_lock(struct transaction_t *txn, void *params)
                 /* Find child element of locktype */
                 for (sub = node->children;
                      sub && sub->type != XML_ELEMENT_NODE; sub = sub->next);
-                /* Make sure its a write element */
+                /* Make sure it is a write element */
                 if (!sub || xmlStrcmp(sub->name, BAD_CAST "write")) {
                     txn->error.desc = "Only write locks are supported";
                     ret = HTTP_BAD_REQUEST;
@@ -5581,7 +5581,7 @@ int meth_lock(struct transaction_t *txn, void *params)
                 if (!sub) {
                     xmlNodeBufGetContent(owner, node);
                 }
-                /* Make sure its a href element */
+                /* Make sure it is a href element */
                 else if (xmlStrcmp(sub->name, BAD_CAST "href")) {
                     ret = HTTP_BAD_REQUEST;
                     goto done;
@@ -6219,7 +6219,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     else {
         indoc = root->doc;
 
-        /* Make sure its a DAV:propfind element */
+        /* Make sure it is a DAV:propfind element */
         if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
             xmlStrcmp(root->name, BAD_CAST "propfind")) {
             txn->error.desc = "Missing DAV:propfind element in PROPFIND request";
@@ -6241,7 +6241,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
         spool_cache_header(xstrdup(":type"), xstrdup((const char *) cur->name),
                            txn->req_hdrs);
 
-        /* Make sure its a known element */
+        /* Make sure it is a known element */
         if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
             fctx.mode = PROPFIND_ALL;
         }
@@ -6537,7 +6537,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
     indoc = root->doc;
 
-    /* Make sure its a DAV:propertyupdate element */
+    /* Make sure it is a DAV:propertyupdate element */
     if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
         xmlStrcmp(root->name, BAD_CAST "propertyupdate")) {
         txn->error.desc =
