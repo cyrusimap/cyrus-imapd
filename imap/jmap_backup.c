@@ -478,9 +478,11 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     hash_iter *iter = hash_table_iter(&resources);
     for (i = 0; hash_iter_next(iter); i++) {
         if (i % BATCH_SIZE == 0) {
-            /* Close and re-open mailbox (to avoid deadlocks) */
-            jmap_closembox(rrock->req, &mailbox);
-            r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
+            /* Close and re-open mailbox (to avoid deadlocks).
+               We also do this on initial entry into the loop
+               to switch from a read lock to a write lock. */
+            jmap_closembox(rrock->req, &rrock->mailbox);
+            r = jmap_openmbox(rrock->req, mbentry->name, &rrock->mailbox, /*rw*/1);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
                        mbentry->name);
@@ -498,7 +500,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         rrock->deletedmodseq = mailbox->i.deletedmodseq;
 
     if (!rrock->keep_open)
-        jmap_closembox(rrock->req, &mailbox);
+        jmap_closembox(rrock->req, &rrock->mailbox);
 
     return 0;
 }
