@@ -124,12 +124,14 @@ struct matchmime {
     xapian_dbw_t *dbw;
     message_t *m;
     const struct buf *mime;
+    void *convmatch;
 };
 typedef struct matchmime matchmime_t;
 extern matchmime_t *jmap_email_matchmime_init(const struct buf *buf, json_t **err);
 extern void jmap_email_matchmime_free(matchmime_t **matchmimep);
 extern int jmap_email_matchmime(matchmime_t *matchmime,
                                 json_t *jfilter,
+                                struct conversations_state *cstate,
                                 const char *accountid,
                                 time_t internaldate,
                                 json_t **err);

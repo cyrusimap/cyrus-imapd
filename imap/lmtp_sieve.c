@@ -1826,8 +1826,6 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
     json_t *jfilter, *err = NULL;
     int matches = 0;
 
-    (void) ctx->cstate;  // silence compiler until we actually use cstate
-
     /* Create filter from json */
     jfilter = json_loads(json, 0, &jerr);
     if (!jfilter) return 0;
@@ -1848,7 +1846,8 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
 
     /* Run query */
     if (content->matchmime && !err)
-        matches = jmap_email_matchmime(content->matchmime, jfilter, userid, time(NULL), &err);
+        matches = jmap_email_matchmime(content->matchmime, jfilter,
+                ctx->cstate, userid, time(NULL), &err);
 
     if (err) {
         const char *type = json_string_value(json_object_get(err, "type"));
