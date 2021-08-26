@@ -1841,7 +1841,7 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
             }
         }
         /* build the query filter */
-        content->matchmime = jmap_email_matchmime_init(&content->map, &err);
+        content->matchmime = jmap_email_matchmime_new(&content->map, &err);
     }
 
     /* Run query */

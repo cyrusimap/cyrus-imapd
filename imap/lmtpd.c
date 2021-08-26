@@ -814,7 +814,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 #if defined(USE_SIEVE) && defined(WITH_JMAP)
         /* build the query filter */
-        content.matchmime = jmap_email_matchmime_init(&content.map, &jerr);
+        content.matchmime = jmap_email_matchmime_new(&content.map, &jerr);
 #endif
     }
 

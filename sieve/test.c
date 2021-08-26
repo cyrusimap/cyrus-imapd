@@ -593,7 +593,7 @@ static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const
     }
 
     if (!md->content.matchmime)
-        md->content.matchmime = jmap_email_matchmime_init(&md->content.map, &err);
+        md->content.matchmime = jmap_email_matchmime_new(&md->content.map, &err);
 
     /* Run query */
     if (md->content.matchmime)

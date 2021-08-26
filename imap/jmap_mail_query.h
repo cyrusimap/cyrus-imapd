@@ -127,7 +127,7 @@ struct matchmime {
     void *convmatch;
 };
 typedef struct matchmime matchmime_t;
-extern matchmime_t *jmap_email_matchmime_init(const struct buf *buf, json_t **err);
+extern matchmime_t *jmap_email_matchmime_new(const struct buf *buf, json_t **err);
 extern void jmap_email_matchmime_free(matchmime_t **matchmimep);
 extern int jmap_email_matchmime(matchmime_t *matchmime,
                                 json_t *jfilter,

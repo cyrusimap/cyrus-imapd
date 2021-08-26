@@ -1158,7 +1158,7 @@ HIDDEN void jmap_email_filtercondition_validate(const char *field, json_t *arg,
     }
 }
 
-HIDDEN matchmime_t *jmap_email_matchmime_init(const struct buf *mime, json_t **err)
+HIDDEN matchmime_t *jmap_email_matchmime_new(const struct buf *mime, json_t **err)
 {
     matchmime_t *matchmime = xzmalloc(sizeof(matchmime_t));
     int r = 0;
