@@ -577,6 +577,11 @@ HIDDEN int quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
         (fin ? NGTCP2_WRITE_STREAM_FLAG_FIN : 0);
     ngtcp2_path_storage ps;
 
+    if (!ctx->qconn) {
+        *datalen = -1;
+        return 0;
+    }
+
     ngtcp2_path_storage_zero(&ps);
 
     while ((nwrite = ngtcp2_conn_writev_stream(ctx->qconn, &ps.path, NULL,
@@ -594,7 +599,7 @@ HIDDEN int quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
     syslog(LOG_DEBUG, "ngtcp2_conn_writev_stream(%ld, %d, %d): %ld, %ld",
            stream_id, iovcnt, fin, nwrite, *datalen);
 
-    return nwrite == NGTCP2_ERR_WRITE_MORE;
+    return (nwrite == NGTCP2_ERR_WRITE_MORE);
 }
 
 HIDDEN void quic_close(struct quic_context *ctx)
