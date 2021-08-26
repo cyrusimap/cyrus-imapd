@@ -7986,8 +7986,10 @@ static int report_prin_prop_search(struct transaction_t *txn,
 
                                     for (entry = prin_search_props;
                                          entry->name &&
+                                            (xmlStrcmp(fctx->ns[entry->ns]->href,
+                                                       prop->ns->href) ||
                                              xmlStrcmp(prop->name,
-                                                       BAD_CAST entry->name);
+                                                       BAD_CAST entry->name));
                                          entry++);
 
                                     if (!entry->name) {
