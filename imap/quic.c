@@ -599,32 +599,32 @@ HIDDEN int quic_output(struct quic_context *ctx, int64_t stream_id, int fin,
 
 HIDDEN void quic_close(struct quic_context *ctx)
 {
-    uint8_t data[USHRT_MAX];
-    ssize_t nwrite;
-    ngtcp2_path_storage ps;
+    if (ctx->qconn) {
+        uint8_t data[USHRT_MAX];
+        ssize_t nwrite;
+        ngtcp2_path_storage ps;
 
-    ngtcp2_path_storage_zero(&ps);
+        ngtcp2_path_storage_zero(&ps);
 
-    nwrite = ngtcp2_conn_write_connection_close(ctx->qconn,
-                                                &ps.path, NULL,
-                                                data, sizeof(data),
-                                                NGTCP2_APPLICATION_ERROR,
-                                                timestamp());
+        nwrite = ngtcp2_conn_write_connection_close(ctx->qconn,
+                                                    &ps.path, NULL,
+                                                    data, sizeof(data),
+                                                    NGTCP2_APPLICATION_ERROR,
+                                                    timestamp());
 
-    syslog(LOG_DEBUG, "ngtcp2_conn_write_connection_close(): %zd", nwrite);
+        syslog(LOG_DEBUG, "ngtcp2_conn_write_connection_close(): %zd", nwrite);
 
-    if (nwrite > 0) {
-        send_data(ctx->sock, &ps.path, data, nwrite);
+        if (nwrite > 0) {
+            send_data(ctx->sock, &ps.path, data, nwrite);
+        }
+
+        ngtcp2_conn_del(ctx->qconn);
+        ctx->qconn = NULL;
     }
 
     if (ctx->tls_conn) {
         tls_reset_servertls(&ctx->tls_conn);
         ctx->tls_conn = NULL;
-    }
-
-    if (ctx->qconn) {
-        ngtcp2_conn_del(ctx->qconn);
-        ctx->qconn = NULL;
     }
 }
 
