@@ -687,9 +687,132 @@ static xapian_query_t *build_type_query(xapian_db_t *db, const char *type)
     return xq;
 }
 
+enum convmatch_op {
+    MATCHMIME_CONVKEYWORDS_ALL,
+    MATCHMIME_CONVKEYWORDS_SOME,
+    MATCHMIME_CONVKEYWORDS_NONE
+};
+
+struct convmatch {
+    struct conversations_state *cstate;
+    arrayu64_t cids;
+    dynarray_t convs;
+    int in_state; // -1: error, 0: need to load cids, 1: cids loaded
+};
+
+static void convmatch_reset(struct convmatch *convmatch,
+                            struct conversations_state *cstate)
+{
+    if (!convmatch) return;
+
+    int i;
+    for (i = 0; i < dynarray_size(&convmatch->convs); i++) {
+        conversation_t *conv = dynarray_nth(&convmatch->convs, i);
+        conversation_fini(conv);
+    }
+    dynarray_fini(&convmatch->convs);
+    arrayu64_fini(&convmatch->cids);
+    convmatch->in_state = 0;
+
+    convmatch->cstate = cstate;
+    dynarray_init(&convmatch->convs, sizeof(conversation_t));
+}
+
+static int _email_matchmime_convkeyword(struct convmatch *convmatch,
+                                        message_t *m,
+                                        const char *keyword,
+                                        enum convmatch_op op)
+{
+    const char *flag = jmap_keyword_to_imap(keyword);
+    int num;
+    if (!strcasecmp(flag, "\\Seen")) {
+        num = 0;
+    }
+    else if (!convmatch->cstate->counted_flags) {
+        num = -1;
+    }
+    else {
+        num = strarray_find_case(convmatch->cstate->counted_flags, flag, 0);
+        /* num might be -1 invalid */
+        if (num >= 0)
+            num++;
+    }
+    if (num < 0)
+        return 0;
+
+    if (convmatch->in_state == 0) {
+        /* First conv keyword to match, initialize matcher */
+        int r = message_extract_cids(m, convmatch->cstate, &convmatch->cids);
+        if (r) {
+            xsyslog(LOG_ERR, "message_extract_cids", "err=<%s>",
+                    error_message(r));
+            convmatch->in_state = -1;
+            return 0;
+        }
+        uint64_t i;
+        for (i = 0; i < arrayu64_size(&convmatch->cids); i++) {
+            conversation_id_t cid = arrayu64_nth(&convmatch->cids, i);
+            conversation_t conv = CONVERSATION_INIT;
+            r = conversation_load_advanced(convmatch->cstate, cid, &conv, 0);
+            if (r) {
+                xsyslog(LOG_ERR, "conversation_load_advanced",
+                        "cid=<%s> err=<%s>",
+                        conversation_id_encode(cid), error_message(r));
+                convmatch->in_state = -1;
+                return 0;
+            }
+            dynarray_append(&convmatch->convs, &conv);
+        }
+        convmatch->in_state = 1;
+    }
+
+    if (!arrayu64_size(&convmatch->cids)) {
+        return op == MATCHMIME_CONVKEYWORDS_NONE ? 1 : 0;
+    }
+
+    int matches = op == MATCHMIME_CONVKEYWORDS_NONE ? 1 : 0;
+    int i;
+    for (i = 0; i < dynarray_size(&convmatch->convs); i++) {
+        conversation_t *conv = dynarray_nth(&convmatch->convs, i);
+        /*
+         * 0: no message has flag set
+         * 1: some, but not all, messages have flag set
+         * 2: all messages have flag set
+         */
+        int flagmatch = 0;
+        if (num == 0 && conv->unseen != conv->exists)
+            flagmatch = conv->unseen > 0 ? 1 : 2;
+        else if (num > 0 && conv->counts[num-1])
+            flagmatch = conv->exists > conv->counts[num-1] ? 1 : 2;
+
+        if (flagmatch && op == MATCHMIME_CONVKEYWORDS_SOME) {
+            matches = 1;
+            break;
+        }
+        if (flagmatch && op == MATCHMIME_CONVKEYWORDS_NONE) {
+            matches = 0;
+            break;
+        }
+        if (op == MATCHMIME_CONVKEYWORDS_ALL) {
+            if (flagmatch < 2) {
+                matches = 0;
+                break;
+            }
+            else {
+                matches = 1; // may get reset in next iteration
+            }
+        }
+    }
+
+    return matches;
+}
+
+
+
 static int _email_matchmime_evaluate(json_t *filter,
                                      message_t *m,
                                      xapian_db_t *db,
+                                     struct convmatch *convmatch,
                                      struct email_contactfilter *cfilter,
                                      time_t internaldate)
 {
@@ -724,7 +847,8 @@ static int _email_matchmime_evaluate(json_t *filter,
         json_t *condition;
         size_t i;
         json_array_foreach(conditions, i, condition) {
-            int cond_matches = _email_matchmime_evaluate(condition, m, db, cfilter, internaldate);
+            int cond_matches = _email_matchmime_evaluate(condition, m, db,
+                    convmatch, cfilter, internaldate);
             if (op == SEOP_AND && !cond_matches) {
                 return 0;
             }
@@ -945,6 +1069,24 @@ static int _email_matchmime_evaluate(json_t *filter,
         } else return 0;
     }
 
+    /* allInThreadHaveKeyword */
+    if (JNOTNULL(jval = json_object_get(filter, "allInThreadHaveKeyword"))) {
+        have_matches += _email_matchmime_convkeyword(convmatch, m,
+                json_string_value(jval), MATCHMIME_CONVKEYWORDS_ALL);
+    }
+
+    /* someInThreadHaveKeyword */
+    if (JNOTNULL(jval = json_object_get(filter, "someInThreadHaveKeyword"))) {
+        have_matches += _email_matchmime_convkeyword(convmatch, m,
+                json_string_value(jval), MATCHMIME_CONVKEYWORDS_SOME);
+    }
+
+    /* noneInThreadHaveKeyword */
+    if (JNOTNULL(jval = json_object_get(filter, "noneInThreadHaveKeyword"))) {
+        have_matches += _email_matchmime_convkeyword(convmatch, m,
+                json_string_value(jval), MATCHMIME_CONVKEYWORDS_NONE);
+    }
+
     return need_matches == have_matches;
 }
 
@@ -1016,7 +1158,7 @@ HIDDEN void jmap_email_filtercondition_validate(const char *field, json_t *arg,
     }
 }
 
-HIDDEN matchmime_t *jmap_email_matchmime_init(const struct buf *mime, json_t **err)
+HIDDEN matchmime_t *jmap_email_matchmime_new(const struct buf *mime, json_t **err)
 {
     matchmime_t *matchmime = xzmalloc(sizeof(matchmime_t));
     int r = 0;
@@ -1085,6 +1227,8 @@ HIDDEN matchmime_t *jmap_email_matchmime_init(const struct buf *mime, json_t **e
         return NULL;
     }
 
+    matchmime->convmatch = xzmalloc(sizeof(struct convmatch));
+
     return matchmime;
 }
 
@@ -1098,12 +1242,17 @@ HIDDEN void jmap_email_matchmime_free(matchmime_t **matchmimep)
     if (matchmime->dbpath) removedir(matchmime->dbpath);
     free(matchmime->dbpath);
 
+    struct convmatch *convmatch = matchmime->convmatch;
+    convmatch_reset(convmatch, NULL);
+    free(convmatch);
+
     free(matchmime);
     *matchmimep = NULL;
 }
 
 HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
                                 json_t *jfilter,
+                                struct conversations_state *cstate,
                                 const char *accountid,
                                 time_t internaldate,
                                 json_t **err)
@@ -1172,8 +1321,15 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
         *err = jmap_server_error(r);
         goto done;
     }
-    matches = _email_matchmime_evaluate(jfilter, matchmime->m, db, &cfilter, internaldate);
+
+    struct convmatch *convmatch = matchmime->convmatch;
+    if (!convmatch->cstate || convmatch->cstate != cstate || convmatch->in_state < 0) {
+        convmatch_reset(convmatch, cstate);
+    }
+    matches = _email_matchmime_evaluate(jfilter, matchmime->m, db,
+            convmatch, &cfilter, internaldate);
     xapian_db_close(db);
+
 
 done:
     jmap_email_contactfilter_fini(&cfilter);

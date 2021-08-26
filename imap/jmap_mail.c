@@ -13463,8 +13463,9 @@ static int jmap_email_matchmime_method(jmap_req_t *req)
 
     struct buf mime = BUF_INITIALIZER;
     buf_setcstr(&mime, json_string_value(jmime));
-    matchmime_t *matchmime = jmap_email_matchmime_init(&mime, &err);
-    int matches = matchmime ? jmap_email_matchmime(matchmime, jfilter, req->accountid, time(NULL), &err) : 0;
+    matchmime_t *matchmime = jmap_email_matchmime_new(&mime, &err);
+    int matches = matchmime ? jmap_email_matchmime(matchmime, jfilter,
+            req->cstate, req->accountid, time(NULL), &err) : 0;
     jmap_email_matchmime_free(&matchmime);
     buf_free(&mime);
     if (!err) {

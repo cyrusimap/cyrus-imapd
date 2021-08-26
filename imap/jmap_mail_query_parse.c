@@ -188,7 +188,33 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
             ctx->validate_field(field, arg, ctx->rock);
         }
         else {
-            ctx->invalid_field(field, ctx->rock);
+            // can just check for syntactical correctness
+            if (!strcmp(field, "inMailbox")) {
+                if (!json_is_string(arg)) {
+                    ctx->invalid_field(field, ctx->rock);
+                }
+            }
+            else if (!strcmp(field, "inMailboxOtherThan")) {
+                if (!json_is_array(arg)) {
+                    ctx->invalid_field(field, ctx->rock);
+                }
+            }
+            else if (!strcmp(field, "allInThreadHaveKeyword") ||
+                    !strcmp(field, "someInThreadHaveKeyword") ||
+                    !strcmp(field, "noneInThreadHaveKeyword")) {
+                if (!json_string_value(arg)) {
+                    ctx->invalid_field(field, ctx->rock);
+                }
+            }
+            else if (!strcmp(field, "hasKeyword") ||
+                    !strcmp(field, "notKeyword")) {
+                if (!json_string_value(arg)) {
+                    ctx->invalid_field(field, ctx->rock);
+                }
+            }
+            else {
+                ctx->invalid_field(field, ctx->rock);
+            }
         }
     }
 }

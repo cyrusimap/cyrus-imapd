@@ -567,7 +567,7 @@ static int send_response(void *ac, void *ic, void *sc,
 }
 
 #ifdef WITH_JMAP
-static int jmapquery(void *sc, void *mc, const char *json)
+static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const char *json)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
@@ -593,11 +593,12 @@ static int jmapquery(void *sc, void *mc, const char *json)
     }
 
     if (!md->content.matchmime)
-        md->content.matchmime = jmap_email_matchmime_init(&md->content.map, &err);
+        md->content.matchmime = jmap_email_matchmime_new(&md->content.map, &err);
 
     /* Run query */
     if (md->content.matchmime)
-        matches = jmap_email_matchmime(md->content.matchmime, jfilter, userid, time(NULL), &err);
+        matches = jmap_email_matchmime(md->content.matchmime, jfilter,
+                NULL, userid, time(NULL), &err);
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
