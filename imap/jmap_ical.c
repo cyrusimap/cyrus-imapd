@@ -221,10 +221,15 @@ static ptrarray_t *icalcomps_by_uid(struct icalcomps *comps, const char *uid)
     return hash_lookup(uid, &comps->by_uid);
 }
 
+typedef struct jstimezones_entry {
+    icaltimezone *tz;
+    int is_custom;
+} jstimezones_entry_t;
+
 typedef struct jstimezones {
     hash_table bytzid;
     hash_table byjstzid;
-    ptrarray_t tzs;
+    ptrarray_t entries;
 } jstimezones_t;
 
 #define JSTIMEZONES_INITIALIZER { \
@@ -727,6 +732,41 @@ static icalproperty* findprop_byid(icalcomponent *comp, const char *id,
     return prop;
 }
 
+static int jstimezones_add_timezone(jstimezones_t *jstzones,
+                                    icaltimezone *tz,
+                                    const char *tzid,
+                                    const char *jstzid,
+                                    int is_custom)
+{
+    if (!jstzones->entries.count) {
+        /* First time we add any timezone */
+        // XXX stupid fixed-size hash table API
+        construct_hash_table(&jstzones->bytzid, 32, 0);
+        construct_hash_table(&jstzones->byjstzid, 32, 0);
+    }
+
+    if (hash_lookup(tzid, &jstzones->bytzid) ||
+            hash_lookup(jstzid, &jstzones->byjstzid)) {
+        return 0;
+    }
+
+    jstimezones_entry_t *jstz = xzmalloc(sizeof(jstimezones_entry_t));
+    jstz->tz = tz;
+    jstz->is_custom = is_custom;
+    hash_insert(tzid, jstz, &jstzones->bytzid);
+    hash_insert(jstzid, jstz, &jstzones->byjstzid);
+    ptrarray_append(&jstzones->entries, jstz);
+    return 1;
+}
+
+static int jstimezones_add_standard_timezone(jstimezones_t *jstzones, icaltimezone *tz)
+{
+    const char *tzid = icaltimezone_get_location(tz);
+    if (!tzid) tzid = icaltimezone_get_tzid(tz);
+    if (!tzid) return 0;
+    return jstimezones_add_timezone(jstzones, tz, tzid, tzid, 0);
+}
+
 HIDDEN icaltimezone *jstimezones_lookup_tzid(jstimezones_t *jstzones, const char *tzid)
 {
     if (!tzid) return NULL;
@@ -736,14 +776,18 @@ HIDDEN icaltimezone *jstimezones_lookup_tzid(jstimezones_t *jstzones, const char
         tzid = "Etc/UTC";
     }
 
-    /* Lookup in custom timezones */
-    if (jstzones && jstzones->tzs.count) {
-        icaltimezone *tz = hash_lookup(tzid, &jstzones->bytzid);
-        if (tz) return tz;
+    /* Lookup in cached timezones */
+    if (jstzones && jstzones->entries.count) {
+        jstimezones_entry_t *jstz = hash_lookup(tzid, &jstzones->bytzid);
+        if (jstz) return jstz->tz;
     }
 
     /* Lookup in standard timezones */
-    return icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+    icaltimezone *stdtz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+    if (jstzones && stdtz) {
+        jstimezones_add_standard_timezone(jstzones, stdtz);
+    }
+    return stdtz;
 }
 
 static icaltimezone *jstimezones_lookup_jstzid(jstimezones_t *jstzones, const char *jstzid)
@@ -751,13 +795,15 @@ static icaltimezone *jstimezones_lookup_jstzid(jstimezones_t *jstzones, const ch
     if (!jstzid) return NULL;
 
     if (*jstzid == '/') {
-        if (jstzones && jstzones->tzs.count) {
-            return hash_lookup(jstzid, &jstzones->byjstzid);
+        // custom timezone embedded in event
+        jstimezones_entry_t *jstz = NULL;
+        if (jstzones && jstzones->entries.count) {
+            jstz = hash_lookup(jstzid, &jstzones->byjstzid);
         }
-        else return NULL;
+        return jstz && jstz->is_custom ? jstz->tz : NULL;
     }
     else {
-        // matches tzid: lookup in standard timezones only
+        // standard timezone have same jstzid and tzid
         return jstimezones_lookup_tzid(NULL, jstzid);
     }
 }
@@ -774,23 +820,33 @@ static const char *jstimezones_get_jstzid(jstimezones_t *jstzones, const char *t
         return "Etc/UTC";
     }
 
-    if (jstzones && jstzones->tzs.count) {
-        icaltimezone *tz = hash_lookup(tzid, &jstzones->bytzid);
-        if (tz) {
-            icalcomponent *tzcomp = icaltimezone_get_component(tz);
-            if (tzcomp) {
-                const char *jstzid = get_icalxprop_value(tzcomp, JMAPICAL_XPROP_ID);
-                if (jstzid) return jstzid;
+    icaltimezone *stdtz = NULL;
+    if (jstzones) {
+        if (jstzones->entries.count) {
+            jstimezones_entry_t *jstz = hash_lookup(tzid, &jstzones->bytzid);
+            if (jstz) {
+                if (jstz->is_custom) {
+                    icalcomponent *tzcomp = icaltimezone_get_component(jstz->tz);
+                    if (tzcomp) {
+                        const char *jstzid = get_icalxprop_value(tzcomp, JMAPICAL_XPROP_ID);
+                        if (jstzid) return jstzid;
+                    }
+                    return NULL;
+                }
+                else stdtz = jstz->tz;
             }
         }
     }
-
-    const char *jstzid = NULL;
-    icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
-    if (tz) {
-        jstzid = icaltimezone_get_location(tz);
-        if (!jstzid) icaltimezone_get_tzid(tz);
+    if (!stdtz) {
+        stdtz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+        if (jstzones && stdtz) {
+            jstimezones_add_standard_timezone(jstzones, stdtz);
+        }
     }
+    if (!stdtz) return NULL;
+
+    const char *jstzid = icaltimezone_get_location(stdtz);
+    if (!jstzid) jstzid = icaltimezone_get_tzid(stdtz);
     return jstzid;
 }
 
@@ -809,10 +865,14 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
         prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
         if (!prop) continue;
         const char *tzid = icalproperty_get_tzid(prop);
-        if (!tzid || !*tzid || icaltimezone_get_cyrus_timezone_from_tzid(tzid)) {
+        if (!tzid || !*tzid) continue;
+        icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+        if (tz) {
+            // cache standard timezone
+            jstimezones_add_standard_timezone(jstzones, tz);
             continue;
         }
-
+        // found a custom timezone
         count++;
     }
     if (!count) return;
@@ -861,10 +921,6 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
         }
 
         /* Need to keep track of this timezone */
-        if (!jstzones->tzs.count) {
-            construct_hash_table(&jstzones->bytzid, count, 0);
-            construct_hash_table(&jstzones->byjstzid, count, 0);
-        }
 
         /* Make sure it returns tzid for timezone_get_location */
         icalcomponent *myvtz = icalcomponent_clone(vtz);
@@ -895,9 +951,9 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
         icaltimezone_set_component(tz, myvtz);
 
         /* Add the custom timezone for lookup */
-        hash_insert(tzid, tz, &jstzones->bytzid);
-        hash_insert(jstzid, tz, &jstzones->byjstzid);
-        ptrarray_append(&jstzones->tzs, tz);
+        if (!jstimezones_add_timezone(jstzones, tz, tzid, jstzid, 1)) {
+            icaltimezone_free(tz, 1);
+        }
     }
 
 #ifdef HAVE_GUESSTZ
@@ -915,11 +971,13 @@ static void jstimezones_fini(jstimezones_t *jstzones)
         free_hash_table(&jstzones->bytzid, NULL);
     }
 
-    icaltimezone *tz;
-    while ((tz = ptrarray_pop(&jstzones->tzs))) {
-        icaltimezone_free(tz, 1);
+    jstimezones_entry_t *jstz;
+    while ((jstz = ptrarray_pop(&jstzones->entries))) {
+        if (jstz->is_custom)
+            icaltimezone_free(jstz->tz, 1);
+        free(jstz);
     }
-    ptrarray_fini(&jstzones->tzs);
+    ptrarray_fini(&jstzones->entries);
 }
 
 HIDDEN jstimezones_t *jstimezones_new(icalcomponent *ical)
@@ -3130,7 +3188,7 @@ static void read_custom_jstzids(json_t *jsevent, strarray_t *tzids)
 
 static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
 {
-    if (!jstzones || !jstzones->tzs.count) return NULL;
+    if (!jstzones || !jstzones->entries.count) return NULL;
 
     strarray_t want_tzids = STRARRAY_INITIALIZER;
     read_custom_jstzids(jsevent, &want_tzids);
@@ -3144,7 +3202,8 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
         buf_reset(&buf);
 
         const char *jstzid = hash_iter_key(iter);
-        icaltimezone *tz = hash_iter_val(iter);
+        jstimezones_entry_t *jstz = hash_iter_val(iter);
+        if (!jstz->is_custom) continue;
 
         /* Skip orphaned timezones */
         if (strarray_find(&want_tzids, jstzid, 0) < 0) {
@@ -3157,7 +3216,7 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
         json_object_set_new(jtimezones, jstzid, jtimezone);
         /* Populate timezone properties */
 
-        icalcomponent *tzcomp = icaltimezone_get_component(tz);
+        icalcomponent *tzcomp = icaltimezone_get_component(jstz->tz);
         icalproperty *prop;
 
         prop = icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
