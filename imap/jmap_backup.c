@@ -80,30 +80,34 @@ jmap_method_t jmap_backup_methods_standard[] = {
     { NULL, NULL, NULL, 0}
 };
 
+/* NOTE: we don't set flags to require CSTATE, because that holds
+ * a user lock (exclusive if READ_WRITE is requested) for the entire
+ * time the method is running.  Backup restores can be quite slow,
+ * and we release locks in batches so that the user can keep working */
 jmap_method_t jmap_backup_methods_nonstandard[] = {
     {
         "Backup/restoreContacts",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_contacts,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        /*flags*/0
     },
     {
         "Backup/restoreCalendars",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_calendars,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        /*flags*/0
     },
     {
         "Backup/restoreNotes",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_notes,
-        JMAP_READ_WRITE
+        /*flags*/0
     },
     {
         "Backup/restoreMail",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_mail,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        /*flags*/0
     },
     { NULL, NULL, NULL, 0}
 };
