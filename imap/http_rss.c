@@ -170,7 +170,7 @@ static int meth_get(struct transaction_t *txn,
     /* If no mailboxname, list all available feeds */
     if (!txn->req_tgt.mbentry) return list_feeds(txn);
 
-    /* Make sure its a mailbox that we are treating as an RSS feed */
+    /* Make sure it is a mailbox that we are treating as an RSS feed */
     if (!is_feed(txn->req_tgt.mbentry->name)) return HTTP_NOT_FOUND;
 
     /* Check ACL for current user */
@@ -438,7 +438,7 @@ static int do_list(const char *name, void *rock)
         /* Don't list deleted mailboxes */
         if (mboxname_isdeletedmailbox(name, NULL)) return 0;
 
-        /* Lookup the mailbox and make sure its readable */
+        /* Lookup the mailbox and make sure it is readable */
         r = proxy_mlookup(name, &mbentry, NULL, NULL);
         if (r) return 0;
 

@@ -1621,7 +1621,7 @@ static int _annotate_may_fetch(annotate_state_t *state,
     else if (state->which == ANNOTATION_SCOPE_MAILBOX) {
         assert(state->mailbox || state->mbentry);
 
-        /* Make sure its a local mailbox annotation */
+        /* Make sure it is a local mailbox annotation */
         if (state->mbentry && state->mbentry->server)
             return 0;
 
@@ -1718,7 +1718,7 @@ static void annotation_get_server(annotate_state_t *state,
     r = annotate_state_need_mbentry(state);
     assert(r == 0);
 
-    /* Make sure its a remote mailbox */
+    /* Make sure it is a remote mailbox */
     if (!state->mbentry->server) goto out;
 
     /* Check ACL */
@@ -1748,7 +1748,7 @@ static void annotation_get_partition(annotate_state_t *state,
     r = annotate_state_need_mbentry(state);
     assert(r == 0);
 
-    /* Make sure its a local mailbox */
+    /* Make sure it is a local mailbox */
     if (state->mbentry->server) goto out;
 
     /* Check ACL */
@@ -3273,7 +3273,7 @@ static int annotate_canon_value(struct buf *value, int type)
         break;
 
     case ATTRIB_TYPE_BOOLEAN:
-        /* make sure its "true" or "false" */
+        /* make sure it is "true" or "false" */
         if (value->len == 4 && !strncasecmp(value->s, "true", 4)) {
             buf_reset(value);
             buf_appendcstr(value, "true");
@@ -3288,7 +3288,7 @@ static int annotate_canon_value(struct buf *value, int type)
         break;
 
     case ATTRIB_TYPE_UINT:
-        /* make sure its a valid ulong ( >= 0 ) */
+        /* make sure it is a valid ulong ( >= 0 ) */
         errno = 0;
         buf_cstring(value);
         uwhatever = strtoul(value->s, &p, 10);
@@ -3303,7 +3303,7 @@ static int annotate_canon_value(struct buf *value, int type)
         break;
 
     case ATTRIB_TYPE_INT:
-        /* make sure its a valid long */
+        /* make sure it is a valid long */
         errno = 0;
         buf_cstring(value);
         whatever = strtol(value->s, &p, 10);
@@ -3401,7 +3401,7 @@ static int _annotate_may_store(annotate_state_t *state,
     else if (state->which == ANNOTATION_SCOPE_MAILBOX) {
         assert(state->mailbox);
 
-        /* Make sure its a local mailbox annotation */
+        /* Make sure it is a local mailbox annotation */
         if (state->mbentry && state->mbentry->server)
             return 0;
 

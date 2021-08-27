@@ -255,7 +255,7 @@ static int find_cb(void *rock, const char *key, size_t keylen,
     r = split_key(key, keylen, &dkey);
     if (r) return 0;    /* ignore broken records */
 
-    /* make sure its a mailbox */
+    /* make sure it is a mailbox */
     if (dkey.to[0] == '.') return 0;
 
     /* grab the mark and uid */
@@ -307,7 +307,7 @@ static int prune_p(void *rock,
     r = split_key(key, keylen, &dkey);
     if (r) return 1;    /* broken record, want to prune it */
 
-    /* grab the rcpt, make sure its a mailbox and lookup its expire time */
+    /* grab the rcpt, make sure it is a mailbox and lookup its expire time */
     if (prock->expire_table && dkey.to[0] && dkey.to[0] != '.') {
         expmark = (time_t *) hash_lookup(dkey.to, prock->expire_table);
     }
