@@ -2831,29 +2831,17 @@ static void getcalendarevents_get_utctimes_internal(json_t *jsevent,
     icaltimetype startical = jmapical_datetime_to_icaltime(&startdt, tz);
     struct icaldurationtype durical = jmapical_duration_to_icalduration(&dur);
     icaltimetype endical = icaltime_add(startical, durical);
-    if (startdt.nano + dur.nanos >= 1000000000) {
-        endical = icaltime_add(endical, icaldurationtype_from_int(1));
-        jmapical_datetime_from_icaltime(endical, &enddt);
-        enddt.nano = (startdt.nano + dur.nanos) - 1000000000;
-    }
-    else {
-        jmapical_datetime_from_icaltime(endical, &enddt);
-        enddt.nano = startdt.nano + dur.nanos;
-    }
+    jmapical_datetime_from_icaltime(endical, &enddt);
 
     /* Convert start and end to UTC */
     if (tz != utc) {
         icaltimetype icalloc = jmapical_datetime_to_icaltime(&startdt, tz);
         icaltimetype icalutc = icaltime_convert_to_zone(icalloc, utc);
-        bit64 nano = startdt.nano;
         jmapical_datetime_from_icaltime(icalutc, &startdt);
-        startdt.nano = nano;
 
         icalloc = jmapical_datetime_to_icaltime(&enddt, tz);
         icalutc = icaltime_convert_to_zone(icalloc, utc);
-        nano = enddt.nano;
         jmapical_datetime_from_icaltime(icalutc, &enddt);
-        enddt.nano = nano;
     }
 
     /* Set utcStart, utcEnd */
@@ -3269,9 +3257,7 @@ gotevent:
                     /* Convert recurid to UTC */
                     icaltimetype icalrid = jmapical_datetime_to_icaltime(&ridt, tz);
                     icalrid = icaltime_convert_to_zone(icalrid, utc);
-                    bit64 nano = ridt.nano;
                     jmapical_datetime_from_icaltime(icalrid, &ridt);
-                    ridt.nano = nano;
                 }
                 if (!jmapical_datetime_has_zero_time(&rock->overrides_before) &&
                         jmapical_datetime_compare(&ridt, &rock->overrides_before) >= 0) {
@@ -3952,10 +3938,8 @@ static void setcalendarevents_set_utctimes(json_t *event,
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     if (tz != utc) {
         icaltimetype startical = jmapical_datetime_to_icaltime(&startdt, utc);
-        bit64 nano = startdt.nano;
         startical = icaltime_convert_to_zone(startical, tz);
         jmapical_datetime_from_icaltime(startical, &startdt);
-        startdt.nano = nano;
     }
 
     /* Set start */
@@ -6564,27 +6548,7 @@ static const char *eventquery_recur_make_recurid(icalcomponent *comp,
     }
     else {
         /* RDATE or regular reccurence instance */
-        for (prop = icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY);
-             prop;
-             prop = icalcomponent_get_next_property(comp, ICAL_RDATE_PROPERTY)) {
-            /* Read subseconds from RDATE */
-            struct icaldatetimeperiodtype tval = icalproperty_get_rdate(prop);
-            if (icaltime_compare(tval.time, start)) {
-                /* XXX - could handle PERIOD type here */
-                struct jmapical_datetime tmpdt = JMAPICAL_DATETIME_INITIALIZER;
-                jmapical_datetime_from_icalprop(prop, &tmpdt);
-                recuriddt.nano = tmpdt.nano;
-                break;
-            }
-        }
-        if (!recuriddt.nano) {
-            /* Read subseconds from DTSTART */
-            jmapical_datetime_from_icaltime(start, &recuriddt);
-            prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-            struct jmapical_datetime tmpdt = JMAPICAL_DATETIME_INITIALIZER;
-            if (prop) jmapical_datetime_from_icalprop(prop, &tmpdt);
-            recuriddt.nano = tmpdt.nano;
-        }
+        jmapical_datetime_from_icaltime(start, &recuriddt);
     }
 
     buf_reset(buf);
@@ -8368,37 +8332,9 @@ static int principal_getavailability_ical_cb(icalcomponent *comp,
     icaltimetype utcstart = icaltime_convert_to_zone(start, utc);
     icaltimetype utcend = icaltime_convert_to_zone(end, utc);
 
-    /* Handle fractional seconds */
-    bit64 startnano = 0;
-    bit64 endnano = 0;
-    prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-    if (prop) {
-        jmapical_datetime_from_icalprop(prop, &dt);
-        startnano = dt.nano;
-    }
-    prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
-    if (prop) {
-        struct jmapical_duration dur = JMAPICAL_DURATION_INITIALIZER;
-        jmapical_duration_from_icalprop(prop,  &dur);
-        endnano = startnano + dur.nanos;
-        if (endnano > 1000000000) {
-            icaltime_adjust(&utcend, 0, 0, 0, endnano / 1000000000);
-            endnano %= 1000000000;
-        }
-    }
-    else {
-        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-        if (prop) {
-            jmapical_datetime_from_icalprop(prop, &dt);
-            endnano = dt.nano;
-        }
-    }
-
     /* utcStart and utcEnd */
     jmapical_datetime_from_icaltime(utcstart, &bp.utcstart);
-    bp.utcstart.nano = startnano;
     jmapical_datetime_from_icaltime(utcend, &bp.utcend);
-    bp.utcend.nano = endnano;
 
     /* busyStatus */
     bp.status = ICAL_STATUS_NONE;
@@ -8439,7 +8375,6 @@ static int principal_getavailability_ical_cb(icalcomponent *comp,
 
         /* Set start */
         jmapical_datetime_from_icaltime(start, &dt);
-        dt.nano = startnano;
         jmapical_localdatetime_as_string(&dt, rock->buf);
         json_object_set_new(jevent, "start", json_string(buf_cstring(rock->buf)));
         buf_reset(rock->buf);
