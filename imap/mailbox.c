@@ -1236,6 +1236,32 @@ EXPORTED int mailbox_setversion(struct mailbox *mailbox, int version)
     return r;
 }
 
+static void _delayed_cleanup(void *rock)
+{
+    const char *mboxname = (const char *)rock;
+    struct mailbox *mailbox = NULL;
+
+    /* don't do the potentially expensive work of repacking mailboxes
+     * if we are in the middle of a shutdown */
+    if (in_shutdown) goto done;
+
+    int r = mailbox_open_exclusive(mboxname, &mailbox);
+    if (r) goto done;
+
+    if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK) {
+        mailbox_index_repack(mailbox, mailbox->i.minor_version);
+        // clear the flags here too so we don't try to repack again
+        mailbox->i.options &= ~(OPT_MAILBOX_NEEDS_REPACK|OPT_MAILBOX_NEEDS_UNLINK);
+    }
+    else if (mailbox->i.options & OPT_MAILBOX_NEEDS_UNLINK) {
+        mailbox_index_unlink(mailbox);
+    }
+    /* or we missed out - someone else beat us to it, all good */
+
+ done:
+    mailbox_close(&mailbox);
+}
+
 /*
  * Close the mailbox 'mailbox', freeing all associated resources.
  */
@@ -1260,56 +1286,31 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
         return;
     }
 
-    int was_ro = !mailbox_index_islocked(mailbox, /*write*/1);
-
-    /* get a re-read of the options field for cleanup purposes */
     if (mailbox->index_fd != -1) {
         /* drop the index lock here because we'll lose our right to it
          * when try to upgrade the mboxlock anyway. */
         mailbox_unlock_index(mailbox, NULL);
     }
 
-    int need_cleanup = 0;
     if (mailbox->i.options & OPT_MAILBOX_DELETED) {
-        // we ALWAYS cleanup deleted
-        need_cleanup = 1;
-    }
-    else if (!was_ro && !in_shutdown && (mailbox->i.options & MAILBOX_CLEANUP_MASK)) {
-        need_cleanup = 1;
-    }
-
-    /* do we need to try and clean up? (not if doing a shutdown,
-     * speed is probably more important!) */
-    if (need_cleanup) {
-        int locktype = LOCK_NONBLOCKING;
-        /* if we deleted the mailbox we MUST clean it up or the files will leak,
-         * so wait until the other locks are cleared */
-        if (mailbox->i.options & OPT_MAILBOX_DELETED) locktype = LOCK_EXCLUSIVE;
-        int r = mailbox_mboxlock_reopen(listitem, locktype, LOCK_EXCLUSIVE);
-        /* we need to re-open the index because we dropped the mboxname lock,
-         * so the file may have changed */
+        int r = mailbox_mboxlock_reopen(listitem, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE);
         if (!r) r = mailbox_open_index(mailbox);
         /* lock_internal so DELETED doesn't cause it to appear to be
          * NONEXISTENT - but we still need conversations so we can write changes! */
         if (!r) r = mailbox_lock_index_internal(mailbox, LOCK_EXCLUSIVE);
-        if (!r) {
-            /* finish cleaning up */
-            if (mailbox->i.options & OPT_MAILBOX_DELETED)
-                mailbox_delete_cleanup(mailbox, mailbox_partition(mailbox), mailbox_name(mailbox),
-                                       (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) ?
-                                       NULL : mailbox_uniqueid(mailbox));
-            else if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK)
-                return mailbox_index_repack(mailbox->i.minor_version, &mailbox);
-            else if (mailbox->i.options & OPT_MAILBOX_NEEDS_UNLINK)
-                mailbox_index_unlink(mailbox);
-            /* or we missed out - someone else beat us to it */
-
-            /* anyway, unlock again */
-            mailbox_unlock_index(mailbox, NULL);
+        /* double check just in case a new mailbox with the same name got created
+         * in a race condition and isn't deleted! */
+        if (!r && (mailbox->i.options & OPT_MAILBOX_DELETED)) {
+            mailbox_delete_cleanup(mailbox, mailbox_partition(mailbox), mailbox_name(mailbox),
+                                   (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) ?
+                                   NULL : mailbox_uniqueid(mailbox));
         }
-        /* otherwise someone else has the mailbox locked
-         * already, so they can handle the cleanup in
-         * THEIR mailbox_close call */
+        mailbox_unlock_index(mailbox, NULL);
+    }
+    else if (!in_shutdown && (mailbox->i.options & MAILBOX_CLEANUP_MASK)) {
+        // there's cleanup to do!  Schedule it for after we've replied to the user
+        libcyrus_delayed_action(mailbox_meta_fname(mailbox, META_HEADER),
+                                _delayed_cleanup, free, xstrdup(mailbox->name));
     }
 
     mailbox_release_resources(mailbox);
