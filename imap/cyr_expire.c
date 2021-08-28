@@ -408,6 +408,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
 
 done:
     mailbox_close(&mailbox);
+    libcyrus_run_delayed();
 
     /* move on to the next mailbox regardless of errors */
     return 0;
@@ -534,6 +535,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
 
 done:
     mailbox_close(&mailbox);
+    libcyrus_run_delayed();
     /* Even if we had a problem with one mailbox, continue with the others */
     return 0;
 }
@@ -544,7 +546,7 @@ static int delete(const mbentry_t *mbentry, void *rock)
     time_t timestamp;
     int delete_seconds = -1;
 
-    if (sigquit)
+    if (in_shutdown)
         return 1;
 
     if (mbentry->mbtype & MBTYPE_DELETED)
@@ -609,6 +611,7 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
     if (!conversations_open_mbox(mbentry->name, 0/*shared*/, &state)) {
         conversations_prune(state, crock->expire_mark, &nseen, &ndeleted);
         conversations_commit(&state);
+        libcyrus_run_delayed();
     }
 
     hash_insert(filename, (void *)1, &crock->seen);
@@ -764,6 +767,7 @@ static int do_delete(struct cyr_expire_ctx *ctx)
 
             ret = mboxlist_deletemailboxlock(name, 1, NULL, NULL, NULL,
                                              MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
+            libcyrus_run_delayed();
             /* XXX: Ignoring the return from mboxlist_deletemailbox() ??? */
             count++;
         }

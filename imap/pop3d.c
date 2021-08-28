@@ -603,6 +603,8 @@ void shut_down(int code)
 
     in_shutdown = 1;
 
+    libcyrus_run_delayed();
+
     proc_cleanup();
 
     /* close local mailbox */
@@ -859,6 +861,8 @@ static void cmdloop(void)
 
         /* register process */
         proc_register(config_ident, popd_clienthost, popd_userid, popd_mailbox ? mailbox_name(popd_mailbox) : NULL, NULL);
+
+        libcyrus_run_delayed();
 
         if (backend) {
             /* create a pipe from client to backend */

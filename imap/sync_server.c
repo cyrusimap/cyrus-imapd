@@ -395,6 +395,9 @@ static void usage(void)
  */
 void shut_down(int code)
 {
+    /* run any delayed commands before we go into shutdown */
+    libcyrus_run_delayed();
+
     in_shutdown = 1;
 
     proc_cleanup();
@@ -499,6 +502,8 @@ static void cmdloop(void)
 
     for (;;) {
         prot_flush(sync_out);
+
+        libcyrus_run_delayed();
 
         /* Parse command name */
         if ((c = getword(sync_in, &cmd)) == EOF)

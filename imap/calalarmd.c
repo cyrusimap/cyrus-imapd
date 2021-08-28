@@ -159,6 +159,7 @@ int main(int argc, char **argv)
 
         gettimeofday(&start, 0);
         caldav_alarm_process(0, &interval, /*dryrun*/0);
+        libcyrus_run_delayed();
         gettimeofday(&end, 0);
 
         signals_poll();
