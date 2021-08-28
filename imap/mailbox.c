@@ -1299,8 +1299,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
                                        (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) ?
                                        NULL : mailbox_uniqueid(mailbox));
             else if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK)
-
-                mailbox_index_repack(mailbox, mailbox->i.minor_version);
+                return mailbox_index_repack(mailbox->i.minor_version, &mailbox);
             else if (mailbox->i.options & OPT_MAILBOX_NEEDS_UNLINK)
                 mailbox_index_unlink(mailbox);
             /* or we missed out - someone else beat us to it */

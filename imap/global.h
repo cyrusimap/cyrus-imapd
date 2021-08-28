@@ -50,6 +50,7 @@
 #include "mboxname.h"
 #include "signals.h"
 #include "imapparse.h"
+#include "libcyr_cfg.h"
 #include "util.h"
 
 #ifdef HAVE_SSL
