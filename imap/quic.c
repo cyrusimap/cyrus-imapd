@@ -57,11 +57,18 @@
 
 #include <openssl/rand.h>
 
+#define RESET_TOKEN_MAGIC  '\r'
+#define NEW_TOKEN_MAGIC    '\n'
+
 struct quic_context {
     ngtcp2_conn *qconn;
 
     int sock;                            /* Output socket */
     ngtcp2_path_storage ps;
+    ngtcp2_settings settings;
+    ngtcp2_transport_params params;
+    uint8_t token[NGTCP2_STATELESS_RESET_TOKENLEN];
+
     struct buf clienthost;
 
     SSL_CTX *tls_ctx;
@@ -139,6 +146,21 @@ static int send_alert(SSL *ssl,
     return 1;
 }
 
+static void log_printf(void *user_data __attribute__((unused)),
+                       const char *fmt, ...)
+{
+    struct buf buf = BUF_INITIALIZER;
+    va_list args;
+
+    va_start(args, fmt);
+    buf_vprintf(&buf, fmt, args);
+    va_end(args);
+
+    syslog(LOG_DEBUG, buf_cstring(&buf));
+
+    buf_free(&buf);
+}
+
 static const SSL_QUIC_METHOD quic_method = {
     set_encryption_secrets,
     add_handshake_data,
@@ -184,9 +206,26 @@ HIDDEN int quic_init(struct quic_context **ctx, struct quic_app_context *app)
 
     getsockname((*ctx)->sock, (struct sockaddr *) &local_addr, &local_addrlen);
 
-    ngtcp2_path_storage_zero(&(*ctx)->ps);
-    ngtcp2_addr_copy_byte(&(*ctx)->ps.path.local,
+    ngtcp2_path_storage *ps = &(*ctx)->ps;
+    ngtcp2_path_storage_zero(ps);
+    ngtcp2_addr_copy_byte(&ps->path.local,
                           (struct sockaddr *) &local_addr, local_addrlen);
+
+    ngtcp2_settings *settings = &(*ctx)->settings;
+    ngtcp2_settings_default(settings);
+    if (config_getswitch(IMAPOPT_DEBUG)) {
+        settings->log_printf = &log_printf;
+    }
+
+    ngtcp2_transport_params *params = &(*ctx)->params;
+    ngtcp2_transport_params_default(params);
+    params->initial_max_stream_data_bidi_local = 256 * 1024;
+    params->initial_max_stream_data_bidi_remote = 256 * 1024;
+    params->initial_max_stream_data_uni = 256 * 1024;
+    params->initial_max_data = 256 * 1024;
+    params->initial_max_streams_bidi = 100;
+    params->initial_max_streams_uni = 3;
+    params->max_idle_timeout = app->timeout * NGTCP2_SECONDS;
 
     return 0;
 }
@@ -311,21 +350,6 @@ static ngtcp2_tstamp timestamp(void)
     gettimeofday(&now, 0);
 
     return now.tv_sec * NGTCP2_SECONDS + now.tv_usec * NGTCP2_MICROSECONDS;
-}
-
-static void log_printf(void *user_data __attribute__((unused)),
-                       const char *fmt, ...)
-{
-    struct buf buf = BUF_INITIALIZER;
-    va_list args;
-
-    va_start(args, fmt);
-    buf_vprintf(&buf, fmt, args);
-    va_end(args);
-
-    syslog(LOG_DEBUG, buf_cstring(&buf));
-
-    buf_free(&buf);
 }
 
 static ngtcp2_callbacks callbacks = {
@@ -453,6 +477,7 @@ ioerror:
     if (!ctx->qconn) {
         ngtcp2_cid scid;
         ngtcp2_pkt_hd hd;
+        ssize_t nwrite;
 
         r = ngtcp2_accept(&hd, data, datalen);
 
@@ -483,34 +508,52 @@ ioerror:
         case NGTCP2_PKT_INITIAL:
             syslog(LOG_DEBUG,
                    "initial packet; token len = %lu", hd.token.len);
-#if 0
-            if (hd.token.len == 0) {
-                uint8_t token[NGTCP2_STATELESS_RESET_TOKENLEN];
 
-                r = get_new_connection_id_cb(NULL, &scid, token,
-                                             NGTCP2_MAX_CIDLEN, NULL);
+            if (hd.token.len == 0) {
+                ngtcp2_cid_init(&ctx->params.original_dcid,
+                                hd.dcid.data, hd.dcid.datalen);
+#if 0
+                ctx->token[0] = RESET_TOKEN_MAGIC;
+                r = RAND_bytes(ctx->token+1, sizeof(ctx->token)-1);
+
+                ctx->params.retry_scid.datalen = NGTCP2_MAX_CIDLEN;
+                r = RAND_bytes(ctx->params.retry_scid.data, NGTCP2_MAX_CIDLEN);
+                ctx->params.retry_scid_present = 1;
 
                 nwrite = ngtcp2_crypto_write_retry(data, sizeof(data),
-                                                   hd.version,
-                                                   &hd.scid, &scid, &hd.dcid,
-                                                   hd.dcid.data, hd.dcid.datalen);
-//                                                       token, sizeof(token));
+                                                   hd.version, &hd.scid,
+                                                   &ctx->params.retry_scid,
+                                                   &hd.dcid,
+                                                   ctx->token, sizeof(ctx->token));
 
-                do {
-                    sent = sendto(ctx->sock, data, nwrite, 0,
-                                  (struct sockaddr *) &remote_addr,
-                                  remote_addrlen);
-                } while (sent < 0 && errno == EINTR);
+                syslog(LOG_DEBUG, "ngtcp2_crypto_write_retry(): %ld", nwrite);
 
-                syslog(LOG_DEBUG,
-                       "write retry: sent %zd of %zd bytes\n", sent, nwrite);
-
-                if (sent != nwrite) {
-                }
+                send_data(ctx->sock, &ctx->ps.path, data, nwrite);
 
                 return 0;
-            }
 #endif
+            }
+            else if (hd.token.len != sizeof(ctx->token) ||
+                     memcmp(hd.token.base, ctx->token, sizeof(ctx->token))) {
+                syslog(LOG_DEBUG, "retry token mismatch");
+
+                nwrite = ngtcp2_crypto_write_connection_close(data, sizeof(data),
+                                                              hd.version,
+                                                              &hd.scid, &hd.dcid,
+                                                              NGTCP2_INVALID_TOKEN);
+
+                syslog(LOG_DEBUG, "ngtcp2_crypto_write_connection_close(): %ld",
+                       nwrite);
+
+                send_data(ctx->sock, &ctx->ps.path, data, nwrite);
+
+                return EOF;
+            }
+            else {
+                ctx->settings.token.base = hd.token.base;
+                ctx->settings.token.len  = hd.token.len;
+            }
+
             break;
 
         case NGTCP2_PKT_0RTT:
@@ -518,34 +561,15 @@ ioerror:
             break;
         }
 
-        ngtcp2_settings settings;
-        ngtcp2_settings_default(&settings);
-        settings.initial_ts = timestamp();
-        if (config_getswitch(IMAPOPT_DEBUG)) {
-            settings.log_printf = &log_printf;
-        }
-        if (hd.token.len) {
-            settings.token.base = hd.token.base;
-            settings.token.len  = hd.token.len;
-        }
 
-        ngtcp2_transport_params params;
-        ngtcp2_transport_params_default(&params);
-        memcpy(&params.original_dcid, &hd.dcid, sizeof(ngtcp2_cid));
-        params.initial_max_stream_data_bidi_local = 256 * 1024;
-        params.initial_max_stream_data_bidi_remote = 256 * 1024;
-        params.initial_max_stream_data_uni = 256 * 1024;
-        params.initial_max_data = 256 * 1024;
-        params.initial_max_streams_bidi = 100;
-        params.initial_max_streams_uni = 3;
-        params.max_idle_timeout = ctx->app_ctx->timeout * NGTCP2_SECONDS;
+        ctx->settings.initial_ts = timestamp();
 
         scid.datalen = NGTCP2_MAX_CIDLEN;
         r = RAND_bytes(scid.data, scid.datalen);
 
         r = ngtcp2_conn_server_new(&ctx->qconn, &hd.scid, &scid,
-                                   &ctx->ps.path, hd.version,
-                                   &callbacks, &settings, &params, NULL, ctx);
+                                   &ctx->ps.path, hd.version, &callbacks,
+                                   &ctx->settings, &ctx->params, NULL, ctx);
 
         syslog(LOG_DEBUG, "ngtcp2_conn_server_new: %s",  ngtcp2_strerror(r));
 
