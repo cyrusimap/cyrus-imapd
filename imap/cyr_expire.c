@@ -87,7 +87,6 @@
 #define SECS_IN_A_DAY (24 * SECS_IN_AN_HR)
 
 /* global state */
-static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
 static const char *progname = NULL;
 static struct namespace expire_namespace; /* current namespace */
@@ -380,7 +379,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     int archive_seconds = -1;
 
-    if (sigquit)
+    if (in_shutdown)
         return 1;
 
     if (mbentry->mbtype & MBTYPE_DELETED)
@@ -452,7 +451,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
     int expire_seconds = 0;
     int did_expunge = 0;
 
-    if (sigquit) {
+    if (in_shutdown) {
         /* don't care if we leak some memory, we are shutting down */
         return 1;
     }
@@ -587,7 +586,7 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
     unsigned int nseen = 0, ndeleted = 0;
     char *filename = NULL;
 
-    if (sigquit)
+    if (in_shutdown)
         return 1;
 
     if (mbentry->mbtype & MBTYPE_DELETED)
@@ -627,7 +626,7 @@ done:
 
 static void sighandler(int sig __attribute((unused)))
 {
-    sigquit = 1;
+    in_shutdown = 1;
     return;
 }
 
@@ -760,7 +759,7 @@ static int do_delete(struct cyr_expire_ctx *ctx)
         for (i = 0 ; i < ctx->drock.to_delete.count ; i++) {
             char *name = ctx->drock.to_delete.data[i];
 
-            if (sigquit)
+            if (in_shutdown)
                 return ret;         /* return from here, will quit in main. */
 
             verbosep("Removing: %s\n", name);
@@ -874,7 +873,6 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
         return -EINVAL;
     }
 
-
     return 0;
 }
 
@@ -917,22 +915,22 @@ int main(int argc, char *argv[])
 
     r = do_archive(&ctx);
 
-    if (sigquit)
+    if (in_shutdown)
         goto finish;
 
     r = do_expunge(&ctx);
 
-    if (sigquit)
+    if (in_shutdown)
         goto finish;
 
     r = do_cid_expire(&ctx);
 
-    if (sigquit)
+    if (in_shutdown)
         goto finish;
 
     r = do_delete(&ctx);
 
-    if (sigquit)
+    if (in_shutdown)
         goto finish;
 
     /* purge deliver.db entries of expired messages */
