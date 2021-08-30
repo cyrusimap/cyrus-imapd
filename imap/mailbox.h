@@ -717,9 +717,11 @@ extern int mailbox_cid_rename(struct mailbox *mailbox,
 extern int mailbox_add_conversations(struct mailbox *mailbox, int silent);
 extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
 extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t, int force);
-extern int mailbox_has_conversations(struct mailbox *mailbox);
+#define mailbox_has_conversations(m) mailbox_has_conversations_full(m, 0)
+extern int mailbox_has_conversations_full(struct mailbox *mailbox, int allow_deleted);
 
-extern struct conversations_state *mailbox_get_cstate(struct mailbox *mailbox);
+#define mailbox_get_cstate(m) mailbox_get_cstate_full(m, 0)
+extern struct conversations_state *mailbox_get_cstate_full(struct mailbox *mailbox, int allow_deleted);
 
 typedef void mailbox_wait_cb_t(void *rock);
 extern void mailbox_set_wait_cb(mailbox_wait_cb_t *cb, void *rock);
