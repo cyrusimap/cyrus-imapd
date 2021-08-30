@@ -1337,6 +1337,15 @@ sub _check_cores
 sub _check_sanity
 {
     my ($self) = @_;
+
+    # We added this check during 3.5 development... older versions
+    # probably fail these checks.  If we backport fixes we can decrement
+    # this version check.
+    my ($maj, $min) = Cassandane::Instance->get_version($self->{installation});
+    if ($maj < 3 || ($maj == 3 && $min < 5)) {
+        return 0;
+    }
+
     my $basedir = $self->{basedir};
     my $found = 0;
     eval {
