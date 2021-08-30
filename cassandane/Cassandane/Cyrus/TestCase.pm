@@ -835,36 +835,41 @@ sub tear_down
     $self->{backend1_store} = undef;
     $self->{backend1_adminstore} = undef;
 
+    my $sanity_errors = 0;
+
     if (defined $self->{instance})
     {
-        $self->{instance}->stop();
+        $sanity_errors += $self->{instance}->stop();
         $self->{instance}->cleanup();
         $self->{instance} = undef;
     }
     if (defined $self->{backups})
     {
-        $self->{backups}->stop();
+        $sanity_errors += $self->{backups}->stop();
         $self->{backups}->cleanup();
         $self->{backups} = undef;
     }
     if (defined $self->{backend2})
     {
-        $self->{backend2}->stop();
+        $sanity_errors += $self->{backend2}->stop();
         $self->{backend2}->cleanup();
         $self->{backend2} = undef;
     }
     if (defined $self->{replica})
     {
-        $self->{replica}->stop();
+        $sanity_errors += $self->{replica}->stop();
         $self->{replica}->cleanup();
         $self->{replica} = undef;
     }
     if (defined $self->{frontend})
     {
-        $self->{frontend}->stop();
+        $sanity_errors += $self->{frontend}->stop();
         $self->{frontend}->cleanup();
         $self->{frontend} = undef;
     }
+
+    die "INCONSISTENCIES FOUND IN SPOOL" if $sanity_errors;
+
     xlog "---------- END $self->{_name} ----------";
 }
 

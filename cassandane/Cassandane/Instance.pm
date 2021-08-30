@@ -1469,7 +1469,9 @@ sub stop
     $self->_check_cores();
     $self->_check_syslog();
 
-    die "INCONSISTENCIES FOUND IN SPOOL" if $sanity_errors;
+    xlog "$self->{description}: INCONSISTENCIES FOUND IN SPOOL"
+        if $sanity_errors;
+    return $sanity_errors;
 }
 
 sub cleanup
