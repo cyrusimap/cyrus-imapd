@@ -36,6 +36,6 @@ the user exists and is set up correctly:
 
 ::
 
-    testsaslauthd -u imapuser -p secret
+    testsaslauthd -u imapuser -p secret -f /var/run/saslauthd/mux
 
 You should get an ``0: OK "Success."`` message.
