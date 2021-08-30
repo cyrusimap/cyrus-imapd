@@ -471,7 +471,6 @@ EXPORTED int conversations_open_mbox(const char *mboxname, int shared, struct co
     free(userid);
     free(path);
     return r;
-    return 0;
 }
 
 EXPORTED struct conversations_state *conversations_get_path(const char *fname)
