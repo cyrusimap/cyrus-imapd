@@ -2316,7 +2316,7 @@ sub get_servername
 sub run_mbpath
 {
     my ($self, @args) = @_;
-    my ($maj, $min) = Cassandane::Instance->get_version();
+    my ($maj, $min) = Cassandane::Instance->get_version($self->{installation});
     my $basedir = $self->get_basedir();
     if ($maj < 3 || $maj == 3 && $min <= 4) {
         my $folder = pop @args;
