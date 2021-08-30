@@ -1537,8 +1537,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         if (rrock->jrestore->mode & UNDO_DRAFTS) {
             /* XXX  conversation ID is faster to lookup than Message-ID
                     so use it to make sure the message has a Message-ID */
-            struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-            // cstate won't exists for DELETED mailboxes
+            struct conversations_state *cstate = mailbox_get_cstate_full(mailbox, /*allow_deleted*/1);
+            // if we still fail to get cstate, then we need to look up the msgid for sure
             if ((!cstate || conversations_guid_cid_lookup(cstate, guid)) &&
                 !message_get_messageid((message_t *) msg, &mrock->buf)) {
                 msgid = buf_cstring(&mrock->buf);
