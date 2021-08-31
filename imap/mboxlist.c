@@ -1687,7 +1687,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
                                     unsigned flags, struct mailbox **mboxptr)
 {
     const char *mboxname = mbentry->name;
-    const char *uniqueid = mbentry->uniqueid;
+    char *uniqueid = xstrdupnull(mbentry->uniqueid);
     uint32_t mbtype = mbentry->mbtype;
     uint32_t uidvalidity = mbentry->uidvalidity;
     modseq_t createdmodseq = mbentry->createdmodseq;
@@ -1723,7 +1723,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
             }
             else if (oldmbentry->mbtype & MBTYPE_INTERMEDIATE) {
                 /* then use the existing mailbox ID and createdmodseq */
-                if (!uniqueid) uniqueid = oldmbentry->uniqueid;
+                if (!uniqueid) uniqueid = xstrdupnull(oldmbentry->uniqueid);
                 createdmodseq = oldmbentry->createdmodseq;
             }
         }
@@ -1819,6 +1819,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
 
     free(acl);
     free(newpartition);
+    free(uniqueid);
     mboxlist_entry_free(&newmbentry);
     mboxlist_entry_free(&usermbentry);
 
