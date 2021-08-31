@@ -1508,6 +1508,10 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
     char *partition = NULL;
     int r = 0;
 
+    /* not for deleted namespace */
+    if (mbname_isdeleted(mbname))
+        goto out;
+
     /* only use intermediates for user mailboxes */
     if (!mbname_userid(mbname))
         goto out;
