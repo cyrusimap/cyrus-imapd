@@ -1536,7 +1536,7 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         if (r) goto out;
 
         /* we don't remove parents any more, so skip out immediately if we find an entry */
-        if (mbentry) continue;
+        if (mbentry && !(mbentry->mbtype & MBTYPE_DELETED)) continue;
 
         /* if there's no children, there's no need for intermediates */
         if (!mboxlist_haschildren(mboxname))
