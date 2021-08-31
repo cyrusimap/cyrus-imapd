@@ -284,8 +284,8 @@ struct restore_rock {
 
 struct restore_info {
     unsigned char type;
-    unsigned int msgno_todestroy;
-    unsigned int msgno_torecreate;
+    uint32_t uid_todestroy;
+    uint32_t uid_torecreate;
 };
 
 static void restore_resource_cb(const char *resource __attribute__((unused)),
@@ -321,12 +321,16 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
         goto done;
     }
 
-    if (restore->msgno_torecreate) {
-        recreatemsg = message_new_from_mailbox(mailbox, restore->msgno_torecreate);
+    if (restore->uid_torecreate) {
+        struct index_record record;
+        mailbox_find_index_record(mailbox, restore->uid_torecreate, &record);
+        recreatemsg = message_new_from_record(mailbox, &record);
     }
 
-    if (restore->msgno_todestroy) {
-        destroymsg = message_new_from_mailbox(mailbox, restore->msgno_todestroy);
+    if (restore->uid_todestroy) {
+        struct index_record record;
+        mailbox_find_index_record(mailbox, restore->uid_todestroy, &record);
+        destroymsg = message_new_from_record(mailbox, &record);
     }
 
     if (!(rrock->jrestore->mode & DRY_RUN))
@@ -405,7 +409,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             /* Tombstone - resource has been destroyed or updated */
             restore = hash_lookup(resource, &resources);
 
-            if (restore && restore->msgno_torecreate) {
+            if (restore && restore->uid_torecreate) {
                 syslog(log_level, "skipping UID %u: found a newer version",
                        record->uid);
 
@@ -434,7 +438,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 
             if (restore) {
                 /* Recreate this version of the resource */
-                restore->msgno_torecreate = recno;
+                restore->uid_torecreate = record->uid;
 
                 if (restore->type == CREATES) {
                     /* Tombstone is before cutoff so this is an update */
@@ -461,7 +465,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             restore = xzmalloc(sizeof(struct restore_info));
             hash_insert(resource, restore, &resources);
             restore->type = CREATES;
-            restore->msgno_todestroy = recno;
+            restore->uid_todestroy = record->uid;
 
             syslog(log_level, "UID %u: created/updated after cutoff",
                    record->uid);
@@ -1444,7 +1448,7 @@ struct removed_mail {
     char *mboxname;
     char *guid;
     time_t removed;
-    uint32_t msgno;
+    uint32_t uid;
     uint32_t size;
 };
 
@@ -1573,8 +1577,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 hash_insert(mailbox->name, plan, mrock->mailboxes);
             }
 
-            /* Add this msgno to the unflag array */
-            arrayu64_append(&plan->unflag, record->recno);
+            /* Add this UID to the unflag array */
+            arrayu64_append(&plan->unflag, record->uid);
         }
 
         /* See if we already have this message GUID */
@@ -1650,7 +1654,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                     (record->system_flags & FLAG_DRAFT) ? xstrdup(guid) : NULL;
                 rmail->removed =
                     isdestroyed_mbox ? timestamp : record->last_updated;
-                rmail->msgno = record->recno;
+                rmail->uid = record->uid;
                 rmail->size = record->size;
                 ptrarray_append(&message->deleted, rmail);
             }
@@ -1721,8 +1725,8 @@ static void restore_mailbox_plan_cb(const char *guid __attribute__((unused)),
                     hash_insert(rmail->mboxname, plan, mailboxes);
                 }
 
-                /* Add this msgno to the restore array */
-                arrayu64_append(&plan->restore, rmail->msgno);
+                /* Add this UID to the restore array */
+                arrayu64_append(&plan->restore, rmail->uid);
             }
         }
     }
@@ -1769,8 +1773,8 @@ static void restore_choose_draft_cb(const char *msgid __attribute__((unused)),
             hash_insert(maxdraft->mboxname, plan, mailboxes);
         }
 
-        /* Add this msgno to the restore array */
-        arrayu64_append(&plan->restore, maxdraft->msgno);
+        /* Add this UID to the restore array */
+        arrayu64_append(&plan->restore, maxdraft->uid);
     }
 }
 
@@ -1915,7 +1919,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     }
     if (r) goto done;
 
-    /* Restore messages in msgno/UID order */
+    /* Restore messages in UID order */
     arrayu64_sort(&plan->restore, NULL/*ascending*/);
 
     if (num_unflag) {
@@ -1928,17 +1932,17 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     uint32_t next_remove = arrayu64_nth(&plan->unflag, j);
     while (next_restore || next_remove) {
         int restore = 0;
-        uint32_t msgno;
+        uint32_t uid;
 
         if (next_restore && (!next_remove || next_restore <= next_remove)) {
             restore = 1;
-            msgno = next_restore;
+            uid = next_restore;
             next_restore = arrayu64_nth(&plan->restore, ++i);
             if (next_restore == next_remove)
                 next_remove = arrayu64_nth(&plan->unflag, ++j);
         }
         else {
-            msgno = next_remove;
+            uid = next_remove;
             next_remove = arrayu64_nth(&plan->unflag, ++j);
         }
 
@@ -1966,22 +1970,22 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
             }
         }
 
-        message_set_from_mailbox(mailbox, msgno, msg);
+        struct index_record record;
+        mailbox_find_index_record(mailbox, uid, &record);
+        message_set_from_record(mailbox, &record, msg);
         if (!(rrock->jrestore->mode & DRY_RUN)) {
-            const struct index_record *record = msg_record(msg);
-
-            if (record->user_flags[userflag/32] & (1<<userflag%31)) {
+            if (record.user_flags[userflag/32] & (1<<userflag%31)) {
                 syslog(log_level,
-                       "UID %u: removing $restored flag (%d)", record->uid, userflag);
+                       "UID %u: removing $restored flag (%d)", record.uid, userflag);
                 struct index_record newrecord;
                 /* copy the existing index_record */
-                memcpy(&newrecord, record, sizeof(struct index_record));
+                memcpy(&newrecord, &record, sizeof(struct index_record));
                 newrecord.user_flags[userflag/32] &= ~(1<<userflag%31);
                 r = mailbox_rewrite_index_record(mailbox, &newrecord);
                 if (r) {
                     syslog(LOG_ERR,
                            "IOERROR: failed to rewrite index record for %s:%u",
-                           mailbox->name, record->uid);
+                           mailbox->name, record.uid);
                 }
             }
             if (restore) {
@@ -1989,9 +1993,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
             }
         }
         if (!r && restore) {
-            const struct index_record *record = msg_record(msg);
             int restore_type =
-                (record->system_flags & FLAG_DRAFT) ? DRAFT_DESTROYS : DESTROYS;
+                (record.system_flags & FLAG_DRAFT) ? DRAFT_DESTROYS : DESTROYS;
 
             rrock->jrestore->num_undone[restore_type]++;
         }
