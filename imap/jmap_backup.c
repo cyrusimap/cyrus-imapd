@@ -321,23 +321,29 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
         goto done;
     }
 
-    if (restore->uid_torecreate) {
-        struct index_record record;
-        mailbox_find_index_record(mailbox, restore->uid_torecreate, &record);
-        recreatemsg = message_new_from_record(mailbox, &record);
-    }
+    if (!(rrock->jrestore->mode & DRY_RUN)) {
+        if (restore->uid_torecreate) {
+            struct index_record record;
+            if (mailbox_find_index_record(mailbox, restore->uid_torecreate, &record)) {
+                goto done;
+            }
+            recreatemsg = message_new_from_record(mailbox, &record);
+        }
 
-    if (restore->uid_todestroy) {
-        struct index_record record;
-        mailbox_find_index_record(mailbox, restore->uid_todestroy, &record);
-        destroymsg = message_new_from_record(mailbox, &record);
-    }
+        if (restore->uid_todestroy) {
+            struct index_record record;
+            if (mailbox_find_index_record(mailbox, restore->uid_todestroy, &record)) {
+                message_unref(&recreatemsg);
+                goto done;
+            }
+            destroymsg = message_new_from_record(mailbox, &record);
+        }
 
-    if (!(rrock->jrestore->mode & DRY_RUN))
         r = rrock->restore_cb(recreatemsg, destroymsg, req, rrock->rock, log_level);
 
-    message_unref(&recreatemsg);
-    message_unref(&destroymsg);
+        message_unref(&recreatemsg);
+        message_unref(&destroymsg);
+    }
 
     if (!r) rrock->jrestore->num_undone[restore->type]++;
 
@@ -1971,7 +1977,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
         }
 
         struct index_record record;
-        mailbox_find_index_record(mailbox, uid, &record);
+        if (mailbox_find_index_record(mailbox, uid, &record)) continue;
         message_set_from_record(mailbox, &record, msg);
         if (!(rrock->jrestore->mode & DRY_RUN)) {
             if (record.user_flags[userflag/32] & (1<<userflag%31)) {
