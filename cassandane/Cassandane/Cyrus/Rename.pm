@@ -703,7 +703,7 @@ sub _dbset
         'twoskip',
         defined($value)
           ? ['SET', $key => $value]
-          : ['delete', $key],
+          : ['DELETE', $key],
     ));
 }
 
