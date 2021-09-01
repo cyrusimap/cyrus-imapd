@@ -651,12 +651,9 @@ sub _generate_imapd_conf
         event_notifier => 'pusher',
     );
     if ($cyrus_major_version >= 3) {
-        my $event_groups = $self->{config}->get('event_groups') || '';
-        $event_groups .= ' mailbox message flags calendar';
-        $self->{config}->set(
-            imipnotifier => 'imip',
-            event_groups => $event_groups,
-        );
+        $self->{config}->set(imipnotifier => 'imip');
+        $self->{config}->set_bits('event_groups',
+                                  'mailbox message flags calendar');
 
         if ($cyrus_major_version > 3 || $cyrus_minor_version >= 1) {
             $self->{config}->set(
@@ -666,11 +663,7 @@ sub _generate_imapd_conf
         }
     }
     else {
-        my $event_groups = $self->{config}->get('event_groups') || '';
-        $event_groups .= ' mailbox message flags';
-        $self->{config}->set(
-            event_groups => 'mailbox message flags',
-        );
+        $self->{config}->set_bits('event_groups', 'mailbox message flags');
     }
     if ($self->{buildinfo}->get('search', 'xapian')) {
         my %xapian_defaults = (
