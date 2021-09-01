@@ -2334,7 +2334,7 @@ EXPORTED int mailbox_read_basecid(struct mailbox *mailbox, const struct index_re
     return 0;
 }
 
-EXPORTED int mailbox_has_conversations(struct mailbox *mailbox)
+EXPORTED int mailbox_has_conversations_full(struct mailbox *mailbox, int allow_deleted)
 {
     char *path;
 
@@ -2343,7 +2343,7 @@ EXPORTED int mailbox_has_conversations(struct mailbox *mailbox)
         return 0;
 
     /* we never store data about deleted mailboxes */
-    if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL))
+    if (!allow_deleted && mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL))
         return 0;
 
     /* we never store data about submission mailboxes */
@@ -3924,9 +3924,9 @@ EXPORTED int mailbox_add_email_alarms(struct mailbox *mailbox)
 }
 #endif // WITH_JMAP
 
-EXPORTED struct conversations_state *mailbox_get_cstate(struct mailbox *mailbox)
+EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mailbox, int allow_deleted)
 {
-    if (!mailbox_has_conversations(mailbox))
+    if (!mailbox_has_conversations_full(mailbox, allow_deleted))
         return NULL;
 
     /* we already own it? */
