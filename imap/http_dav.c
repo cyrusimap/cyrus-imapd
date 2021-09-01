@@ -6142,7 +6142,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, cur = NULL, props = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
-    struct hash_table ns_table = { 0, NULL, NULL };
+    struct hash_table ns_table = HASH_TABLE_INITIALIZER;
     struct propfind_ctx fctx;
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
@@ -8119,7 +8119,7 @@ int meth_report(struct transaction_t *txn, void *params)
     xmlNodePtr inroot = NULL, outroot = NULL, cur, prop = NULL, props = NULL;
     const struct report_type_t *report = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
-    struct hash_table ns_table = { 0, NULL, NULL };
+    struct hash_table ns_table = HASH_TABLE_INITIALIZER;
     struct propfind_ctx fctx;
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
