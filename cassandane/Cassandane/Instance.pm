@@ -1337,6 +1337,15 @@ sub _check_cores
 sub _check_sanity
 {
     my ($self) = @_;
+
+    # We added this check during 3.5 development... older versions
+    # probably fail these checks.  If we backport fixes we can decrement
+    # this version check.
+    my ($maj, $min) = Cassandane::Instance->get_version($self->{installation});
+    if ($maj < 3 || ($maj == 3 && $min < 5)) {
+        return 0;
+    }
+
     my $basedir = $self->{basedir};
     my $found = 0;
     eval {
@@ -1469,7 +1478,9 @@ sub stop
     $self->_check_cores();
     $self->_check_syslog();
 
-    die "INCONSISTENCIES FOUND IN SPOOL" if $sanity_errors;
+    xlog "$self->{description}: INCONSISTENCIES FOUND IN SPOOL"
+        if $sanity_errors;
+    return $sanity_errors;
 }
 
 sub cleanup
@@ -2316,7 +2327,7 @@ sub get_servername
 sub run_mbpath
 {
     my ($self, @args) = @_;
-    my ($maj, $min) = Cassandane::Instance->get_version();
+    my ($maj, $min) = Cassandane::Instance->get_version($self->{installation});
     my $basedir = $self->get_basedir();
     if ($maj < 3 || $maj == 3 && $min <= 4) {
         my $folder = pop @args;
