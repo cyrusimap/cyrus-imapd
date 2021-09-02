@@ -682,7 +682,7 @@ static void test_delete(void)
 
     memset(&mbentry, 0, sizeof(mbentry));
     mbentry.name = MBOXNAME1_INT;
-    mbentry.uniqueid = mailbox->uniqueid;
+    mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
     mbentry.mbtype = 0;
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
@@ -751,7 +751,7 @@ static void test_delete(void)
     buf_free(&val2);
 
     buf_printf(&path, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
-               mailbox->uniqueid[0], mailbox->uniqueid[1], mailbox->uniqueid);
+               mailbox_uniqueid(mailbox)[0], mailbox_uniqueid(mailbox)[1], mailbox_uniqueid(mailbox));
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path)), 0);
     mailbox_close(&mailbox);
     buf_free(&val);
@@ -848,10 +848,12 @@ static void test_rename(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
+    const char *u1 = mailbox_uniqueid(mailbox1);
     buf_printf(&path1, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
-               mailbox1->uniqueid[0], mailbox1->uniqueid[1], mailbox1->uniqueid);
+               u1[0], u1[1], u1);
+    const char *u3 = mailbox_uniqueid(mailbox3);
     buf_printf(&path3, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
-               mailbox3->uniqueid[0], mailbox3->uniqueid[1], mailbox3->uniqueid);
+               u3[0], u3[1], u3);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), 0);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path3)), -ENOENT);
 
@@ -859,7 +861,7 @@ static void test_rename(void)
 
     r = annotate_rename_mailbox(mailbox1, mailbox3);
     CU_ASSERT_EQUAL(r, 0);
-    r = mailbox_copy_files(mailbox1, PARTITION, MBOXNAME3_INT, mailbox3->uniqueid);
+    r = mailbox_copy_files(mailbox1, PARTITION, MBOXNAME3_INT, mailbox_uniqueid(mailbox3));
     CU_ASSERT_EQUAL(r, 0);
     r = mailbox_rename_cleanup(&mailbox1, 0);
     CU_ASSERT_EQUAL(r, 0);
@@ -1139,10 +1141,12 @@ static void test_msg_copy(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
 
+    const char *u1 = mailbox_uniqueid(mailbox1);
     buf_printf(&path1, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
-               mailbox1->uniqueid[0], mailbox1->uniqueid[1], mailbox1->uniqueid);
+               u1[0], u1[1], u1);
+    const char *u2 = mailbox_uniqueid(mailbox2);
     buf_printf(&path2, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
-               mailbox2->uniqueid[0], mailbox2->uniqueid[1], mailbox2->uniqueid);
+               u2[0], u2[1], u2);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), 0);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path2)), 0);
     mailbox_close(&mailbox1);
@@ -2005,11 +2009,11 @@ static int create_messages(struct mailbox *mailbox, int count)
         struct buf buf = BUF_INITIALIZER;
 
         /* Write the message to the filesystem */
-        if (!(fp = append_newstage(mailbox->name, internaldate, 0, &stage))) {
-            fprintf(stderr, "append_newstage(%s) failed", mailbox->name);
+        if (!(fp = append_newstage(mailbox_name(mailbox), internaldate, 0, &stage))) {
+            fprintf(stderr, "append_newstage(%s) failed", mailbox_name(mailbox));
             return r;
         }
-        buf_printf(&buf, msgtmpl, i, mailbox->name, i, i, mailbox->name);
+        buf_printf(&buf, msgtmpl, i, mailbox_name(mailbox), i, i, mailbox_name(mailbox));
         fwrite(buf_base(&buf), 1, buf_len(&buf), fp);
         buf_free(&buf);
         if (fclose(fp)) {
@@ -2022,13 +2026,13 @@ static int create_messages(struct mailbox *mailbox, int count)
         r = append_setup_mbox(&as, mailbox, userid, auth_state,
                 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
         if (r) {
-            fprintf(stderr, "append_setup_mbox(%s) failed: %s", mailbox->name,
+            fprintf(stderr, "append_setup_mbox(%s) failed: %s", mailbox_name(mailbox),
                     strerror(errno));
             return r;
         }
         r = append_fromstage(&as, &body, stage, internaldate, 0, NULL, 0, NULL);
         if (r) {
-            fprintf(stderr, "append_fromstage(%s) failed: %s", mailbox->name,
+            fprintf(stderr, "append_fromstage(%s) failed: %s", mailbox_name(mailbox),
                     error_message(r));
             append_abort(&as);
             return r;
@@ -2039,7 +2043,7 @@ static int create_messages(struct mailbox *mailbox, int count)
         append_removestage(stage);
         r = append_commit(&as);
         if (r) {
-            fprintf(stderr, "append_commit(%s) failed: %s", mailbox->name,
+            fprintf(stderr, "append_commit(%s) failed: %s", mailbox_name(mailbox),
                     error_message(r));
             return r;
         }
@@ -2111,7 +2115,7 @@ static int set_up(void)
 
     memset(&mbentry, 0, sizeof(mbentry));
     mbentry.name = MBOXNAME1_INT;
-    mbentry.uniqueid = mailbox->uniqueid;
+    mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
     mbentry.mbtype = 0;
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
@@ -2134,7 +2138,7 @@ static int set_up(void)
 
     memset(&mbentry, 0, sizeof(mbentry));
     mbentry.name = MBOXNAME2_INT;
-    mbentry.uniqueid = mailbox->uniqueid;
+    mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
     mbentry.mbtype = 0;
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
@@ -2157,7 +2161,7 @@ static int set_up(void)
 
     memset(&mbentry, 0, sizeof(mbentry));
     mbentry.name = MBOXNAME3_INT;
-    mbentry.uniqueid = mailbox->uniqueid;
+    mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
     mbentry.mbtype = 0;
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
