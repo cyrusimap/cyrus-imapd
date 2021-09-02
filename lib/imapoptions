@@ -560,6 +560,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    layers of MIME structure.  The default of 1000 is much higher
    than any sane message should have. */
 
+{ "caldav_accept_invalid_rrules", 0, SWITCH, "UNRELEASED" }
+/* Accept invalid RRULEs (e.g. FREQ=WEEKLY;BYMONTHDAY=15)
+  rather than rejecting them as errors. */
+
 { "caldav_allowattach", 1, SWITCH, "3.0.0" }
 /* Enable managed attachments support on the CalDAV server. */
 

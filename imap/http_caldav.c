@@ -719,6 +719,15 @@ static void my_caldav_init(struct buf *serverinfo)
     if (config_getswitch(IMAPOPT_CALDAV_ALLOWATTACH))
         namespace_calendar.allow |= ALLOW_CAL_ATTACH;
 
+    if (config_getswitch(IMAPOPT_CALDAV_ACCEPT_INVALID_RRULES)) {
+#ifdef HAVE_INVALID_RRULE_HANDLING
+        ical_set_invalid_rrule_handling_setting(ICAL_RRULE_IGNORE_INVALID);
+#else
+        syslog(LOG_WARNING,
+               "Your version of libical can not accept invalid RRULEs");
+#endif
+    }
+
     if (namespace_tzdist.enabled) {
         namespace_calendar.allow |= ALLOW_CAL_NOTZ;
     }

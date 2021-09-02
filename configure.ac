@@ -1638,6 +1638,11 @@ dnl
                 AC_DEFINE(HAVE_NEW_CLONE_API,[],
                         [Do we have support for new clone API?]))
 
+        dnl ical_set_invalid_rrule_handling_setting, was added in libical 3.0.9
+        AC_CHECK_LIB(ical, ical_set_invalid_rrule_handling_setting,
+                AC_DEFINE(HAVE_INVALID_RRULE_HANDLING,[],
+                        [Do we have support for controlling invalid RRULE handline?]))
+
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
 dnl                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
