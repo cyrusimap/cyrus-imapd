@@ -1349,7 +1349,7 @@ sub _check_sanity
         $found = 1;
     }
     eval {
-        $self->run_command({redirects => {stdout => "$basedir/reconstruct.out", stderr => "$basedir/reconstruct.err"}, cyrus => 1}, 'reconstruct', '-q');
+        $self->run_command({redirects => {stdout => "$basedir/reconstruct.out", stderr => "$basedir/reconstruct.err"}, cyrus => 1}, 'reconstruct', '-q', '-G');
     };
     if ($@) {
         xlog "reconstruct failed, $@";
