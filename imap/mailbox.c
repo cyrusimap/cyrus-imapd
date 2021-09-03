@@ -1310,7 +1310,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
     else if (!in_shutdown && (mailbox->i.options & MAILBOX_CLEANUP_MASK)) {
         // there's cleanup to do!  Schedule it for after we've replied to the user
         libcyrus_delayed_action(mailbox_meta_fname(mailbox, META_HEADER),
-                                _delayed_cleanup, free, xstrdup(mailbox->name));
+                                _delayed_cleanup, free, xstrdup(mailbox_name(mailbox)));
     }
 
     mailbox_release_resources(mailbox);
