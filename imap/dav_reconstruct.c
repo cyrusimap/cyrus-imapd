@@ -120,6 +120,7 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "dav_reconstruct", 0, 0);
+    global_sasl_init(1,0,NULL);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
@@ -146,6 +147,10 @@ int main(int argc, char **argv)
             do_user(argv[i], (void *)audit_tool);
     }
 
+    libcyrus_run_delayed();
+    sqldb_done();
+    cyrus_done();
+
     exit(code);
 }
 
@@ -164,6 +169,8 @@ void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     in_shutdown = 1;
+
+    libcyrus_run_delayed();
 
     mboxlist_close();
     mboxlist_done();

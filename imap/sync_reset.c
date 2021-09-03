@@ -95,10 +95,14 @@ static void shut_down(int code)
 {
     in_shutdown = 1;
 
+    libcyrus_run_delayed();
+
     if (sync_userid)    free(sync_userid);
     if (sync_authstate) auth_freestate(sync_authstate);
 
     seen_done();
+
+    cyrus_done();
 
     exit(code);
 }
@@ -235,6 +239,8 @@ main(int argc, char **argv)
             break;
         }
     }
+
+    libcyrus_run_delayed();
 
     shut_down(0);
 }

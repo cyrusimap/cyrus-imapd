@@ -760,6 +760,8 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
     char *fname;
     int r = 0;
 
+    signals_poll();
+
     fname = conversations_getuserpath(userid);
     if (fname == NULL) {
         fprintf(stderr, "Unable to get conversations database "
@@ -814,12 +816,23 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
     return r;
 }
 
+static void shut_down(int code) __attribute__((noreturn));
+static void shut_down(int code)
+{
+    in_shutdown = 1;
+
+    libcyrus_run_delayed();
+
+    cyrus_done();
+
+    exit(code);
+}
+
 int main(int argc, char **argv)
 {
     int c;
     const char *alt_config = NULL;
     const char *userid = NULL;
-    int r = 0;
     int recursive = 0;
 
     while ((c = getopt(argc, argv, "durzSAbvRFC:T:")) != EOF) {
@@ -904,15 +917,17 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_conversationsdb", 0, 0);
 
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers(0);
+
     if (recursive) {
         mboxlist_alluser(do_user, NULL);
     }
-    else
+    else {
         do_user(userid, NULL);
+    }
 
-    cyrus_done();
-
-    return r;
+    shut_down(0);
 }
 
 static int usage(const char *name)

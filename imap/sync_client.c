@@ -117,6 +117,8 @@ static void shut_down(int code)
 {
     in_shutdown = 1;
 
+    libcyrus_run_delayed();
+
     seen_done();
     cyrus_done();
     exit(code);
@@ -333,6 +335,7 @@ static void do_daemon(const char *sync_shutdown_file,
             if (!backend_ping(sync_cs.backend, NULL)) restart = 1;
         }
         replica_disconnect();
+        libcyrus_run_delayed();
     }
 }
 
@@ -741,6 +744,8 @@ int main(int argc, char **argv)
     }
 
     buf_free(&tagbuf);
+
+    libcyrus_run_delayed();
 
     shut_down(exit_rc);
 }
