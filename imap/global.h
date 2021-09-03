@@ -161,7 +161,7 @@ extern int saslprops_set_tls(struct saslprops_t *saslprops,
                              sasl_conn_t *saslconn);
 
 /* Misc globals */
-extern int in_shutdown;
+extern volatile sig_atomic_t in_shutdown;
 extern int config_fulldirhash;
 extern int config_implicitrights;
 extern unsigned long config_metapartition_files;

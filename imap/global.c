@@ -93,7 +93,7 @@ static enum {
 
 static int cyrus_init_nodb = 0;
 
-EXPORTED int in_shutdown = 0;
+EXPORTED volatile sig_atomic_t in_shutdown = 0;
 
 EXPORTED int config_fulldirhash;                                /* 0 */
 EXPORTED int config_implicitrights;                     /* "lkxa" */
