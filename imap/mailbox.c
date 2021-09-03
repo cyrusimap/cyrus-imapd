@@ -6920,6 +6920,16 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         else
             record->internaldate = time(NULL);
     }
+    if (!record->gmtime)
+        record->gmtime = record->internaldate;
+    if (!record->sentdate) {
+        struct tm *tm = localtime(&record->internaldate);
+        /* truncate to the day */
+        tm->tm_sec = 0;
+        tm->tm_min = 0;
+        tm->tm_hour = 0;
+        record->sentdate = mktime(tm);
+    }
 
     /* XXX - conditions under which modseq or uid or internaldate could be bogus? */
     if (record->modseq > mailbox->i.highestmodseq) {
