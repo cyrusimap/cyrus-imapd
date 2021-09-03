@@ -97,4 +97,49 @@ sub bogustest_aaa_imapjmap_setup
     $self->assert(1);
 }
 
+sub test_frontend_commands
+    :needs_component_jmap :min_version_3_5
+{
+    my ($self) = @_;
+    my $result;
+
+    my $frontend_svc = $self->{frontend}->get_service("http");
+    my $frontend_host = $frontend_svc->host();
+    my $frontend_port = $frontend_svc->port();
+    my $proxy_re = qr{
+        \b
+        ( localhost | $frontend_host )
+        : $frontend_port
+        \b
+    }x;
+
+    my $frontend_jmap = Mail::JMAPTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $frontend_host,
+        port => $frontend_port,
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
+    # upload a blob
+    my ($resp, $data) = $frontend_jmap->Upload("some test", "text/plain");
+
+    # request should have been proxied
+    $self->assert_matches($proxy_re, $resp->{headers}{via});
+
+    # download the same blob
+    $resp = $frontend_jmap->Download({ accept => 'text/plain' },
+                                     'cassandane', $data->{blobId});
+
+    # request should have been proxied
+    $self->assert_matches($proxy_re, $resp->{headers}{via});
+
+    # content should match
+    $self->assert_str_equals('text/plain', $resp->{headers}{'content-type'});
+    $self->assert_str_equals('some test', $resp->{content});
+
+    # XXX test other commands
+}
+
 1;
