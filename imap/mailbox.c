@@ -1569,10 +1569,16 @@ EXPORTED void mailbox_set_acl(struct mailbox *mailbox, const char *acl)
 {
     if (!strcmpsafe(mailbox->h.acl, acl))
         return; /* no change */
+
+    /* patch our mbentry copy: XXX: this really should be the other way
+     * around that we update and then WRITE our entry! */
+    free(mailbox->mbentry->acl);
+    mailbox->mbentry->acl = xstrdup(acl);
+
+    /* update the copy in the header and mark the header dirty */
     free(mailbox->h.acl);
     mailbox->h.acl = xstrdup(acl);
     mailbox->header_dirty = 1;
-    return;
 }
 
 /* set a new QUOTAROOT - only dirty if changed */
