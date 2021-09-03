@@ -2247,7 +2247,8 @@ static int emailsearch_normalise(search_expr_t **rootp, int *is_imapfolderptr)
 static void _email_contactfilter_initreq(jmap_req_t *req, struct email_contactfilter *cfilter)
 {
     const char *addressbookid = json_string_value(json_object_get(req->args, "addressbookId"));
-    jmap_email_contactfilter_init(req->accountid, addressbookid, cfilter);
+    jmap_email_contactfilter_init(req->accountid, req->authstate,
+            &jmap_namespace, addressbookid, cfilter);
 }
 
 static void _email_parse_filter_cb(jmap_req_t *req,
@@ -13464,8 +13465,9 @@ static int jmap_email_matchmime_method(jmap_req_t *req)
     struct buf mime = BUF_INITIALIZER;
     buf_setcstr(&mime, json_string_value(jmime));
     matchmime_t *matchmime = jmap_email_matchmime_new(&mime, &err);
-    int matches = matchmime ? jmap_email_matchmime(matchmime, jfilter,
-            req->cstate, req->accountid, time(NULL), &err) : 0;
+    int matches = matchmime ? jmap_email_matchmime(matchmime, jfilter, 
+            req->cstate, req->accountid,
+            req->authstate, &jmap_namespace, time(NULL), &err) : 0;
     jmap_email_matchmime_free(&matchmime);
     buf_free(&mime);
     if (!err) {

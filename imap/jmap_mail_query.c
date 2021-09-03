@@ -106,11 +106,15 @@ static int _email_threadkeyword_is_valid(const char *keyword)
 #include "times.h"
 
 HIDDEN void jmap_email_contactfilter_init(const char *accountid,
+                                          const struct auth_state *authstate,
+                                          const struct namespace *namespace,
                                           const char *addressbookid,
                                           struct email_contactfilter *cfilter)
 {
     memset(cfilter, 0, sizeof(struct email_contactfilter));
     cfilter->accountid = accountid;
+    cfilter->authstate = authstate;
+    cfilter->namespace = namespace;
     if (addressbookid) {
         cfilter->addrbook = carddav_mboxname(accountid, addressbookid);
     }
@@ -126,33 +130,37 @@ HIDDEN void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter)
 }
 
 
-static int _get_sharedaddressbook_cb(const mbentry_t *mbentry, void *rock)
+static int _get_sharedaddressbook_cb(struct findall_data *data, void *rock)
 {
-    mbname_t **mbnamep = rock;
-    if (!mbentry) return 0;
-    if (!(mbentry->mbtype & MBTYPE_ADDRESSBOOK)) return 0;
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
-    if (!strcmpsafe(strarray_nth(mbname_boxes(mbname), -1), "Shared")) {
-        *mbnamep = mbname;
-        return CYRUSDB_DONE;
-    }
-    mbname_free(&mbname);
-    return 0;
+    mbentry_t **mbentryp = rock;
+    if (!data || !data->mbentry) return 0;
+    *mbentryp = mboxlist_entry_copy(data->mbentry);
+    return CYRUSDB_DONE;
 }
 
-
-static mbname_t *_get_sharedaddressbookuser(const char *userid)
+static mbentry_t *_get_sharedaddressbook(const char *userid,
+                                         const struct auth_state *authstate,
+                                         const struct namespace *namespace)
 {
-    mbname_t *res = NULL;
-    int flags = MBOXTREE_PLUS_RACL|MBOXTREE_SKIP_ROOT|MBOXTREE_SKIP_CHILDREN;
-    // XXX - do we need to pass req->authstate right through??
-    int r = mboxlist_usermboxtree(userid, NULL, _get_sharedaddressbook_cb, &res, flags);
-    if (r == CYRUSDB_DONE)
-        return res;
-    mbname_free(&res);
-    return NULL;
-}
+    mbentry_t *res = NULL;
 
+    strarray_t patterns = STRARRAY_INITIALIZER;
+    struct buf pattern = BUF_INITIALIZER;
+    buf_setcstr(&pattern, "user");
+    buf_putc(&pattern, namespace->hier_sep);
+    buf_putc(&pattern, '*');
+    buf_putc(&pattern, namespace->hier_sep);
+    buf_appendcstr(&pattern, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    buf_putc(&pattern, namespace->hier_sep);
+    buf_appendcstr(&pattern, "Shared");
+    buf_cstring(&pattern);
+    strarray_appendm(&patterns, buf_release(&pattern));
+    mboxlist_findallmulti((struct namespace*)namespace, &patterns, 0, userid,
+            authstate, _get_sharedaddressbook_cb, &res);
+    strarray_fini(&patterns);
+
+    return res;
+}
 
 static const struct contactfilters_t {
     const char *field;
@@ -175,7 +183,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
 {
     int havefield = 0;
     const struct contactfilters_t *c;
-    mbname_t *othermb = NULL;
+    mbentry_t *othermb = NULL;
     int r = 0;
 
     /* prefilter to see if there are any fields that we will need to look up */
@@ -206,11 +214,13 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         }
     }
 
-    othermb = _get_sharedaddressbookuser(cfilter->accountid);
+    othermb = _get_sharedaddressbook(cfilter->accountid, cfilter->authstate, cfilter->namespace);
     if (othermb) {
-        int r2 = carddav_set_otheruser(cfilter->carddavdb, mbname_userid(othermb));
+        mbname_t *mbname = mbname_from_intname(othermb->name);
+        int r2 = carddav_set_otheruser(cfilter->carddavdb, mbname_userid(mbname));
         if (r2) syslog(LOG_NOTICE, "DBNOTICE: failed to open otheruser %s contacts for %s",
-                 mbname_userid(othermb), cfilter->accountid);
+                 mbname_userid(mbname), cfilter->accountid);
+        mbname_free(&mbname);
     }
 
     /* fetch members for each filter referenced */
@@ -239,7 +249,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
     }
 
 done:
-    mbname_free(&othermb);
+    mboxlist_entry_free(&othermb);
     return r;
 }
 
@@ -604,6 +614,7 @@ static xapian_query_t *_email_matchmime_contactgroup(const char *groupid,
                 xq = xapian_query_new_compound(db, /*is_or*/1,
                         (xapian_query_t **) xsubqs.data, xsubqs.count);
             }
+            ptrarray_fini(&xsubqs);
         }
     }
     if (!xq) {
@@ -1254,6 +1265,8 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
                                 json_t *jfilter,
                                 struct conversations_state *cstate,
                                 const char *accountid,
+                                const struct auth_state *authstate,
+                                const struct namespace *namespace,
                                 time_t internaldate,
                                 json_t **err)
 {
@@ -1280,7 +1293,7 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
     jmap_email_filter_parse(jfilter, &parse_ctx);
 
     /* Gather contactgroup ids */
-    jmap_email_contactfilter_init(accountid, /*addressbookid*/NULL, &cfilter);
+    jmap_email_contactfilter_init(accountid, authstate, namespace, NULL, &cfilter);
     ptrarray_t work = PTRARRAY_INITIALIZER;
     ptrarray_push(&work, jfilter);
     json_t *jf;

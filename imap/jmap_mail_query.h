@@ -55,6 +55,7 @@
 
 #include <time.h>
 
+#include "auth.h"
 #include "hash.h"
 #include "ptrarray.h"
 
@@ -64,12 +65,16 @@
 
 struct email_contactfilter {
     const char *accountid;
+    const struct auth_state *authstate;
+    const struct namespace *namespace;
     struct carddav_db *carddavdb;
     char *addrbook;
     hash_table contactgroups; /* maps groupid to emails (strarray) */
 };
 
 extern void jmap_email_contactfilter_init(const char *accountid,
+                                          const struct auth_state *authstate,
+                                          const struct namespace *namespace,
                                           const char *addressbookid,
                                           struct email_contactfilter *cfilter);
 extern void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter);
@@ -133,6 +138,8 @@ extern int jmap_email_matchmime(matchmime_t *matchmime,
                                 json_t *jfilter,
                                 struct conversations_state *cstate,
                                 const char *accountid,
+                                const struct auth_state *authstate,
+                                const struct namespace *ns,
                                 time_t internaldate,
                                 json_t **err);
 

@@ -130,7 +130,7 @@ strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *key,
    returns emails of its members (if any) */
 strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
                              const mbentry_t *mbentry, const char *group,
-                             mbname_t *othermb);
+                             const mbentry_t *othermb);
 
 /* get a list of groups the given uid is a member of */
 strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
