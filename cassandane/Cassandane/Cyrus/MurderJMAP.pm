@@ -142,4 +142,43 @@ sub test_frontend_commands
     # XXX test other commands
 }
 
+sub test_backend1_commands
+    :needs_component_jmap :min_version_3_5
+{
+    my ($self) = @_;
+    my $result;
+
+    my $backend1_svc = $self->{instance}->get_service("http");
+    my $backend1_host = $backend1_svc->host();
+    my $backend1_port = $backend1_svc->port();
+
+    my $backend1_jmap = Mail::JMAPTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $backend1_host,
+        port => $backend1_port,
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
+    # upload a blob
+    my ($resp, $data) = $backend1_jmap->Upload("some test", "text/plain");
+
+    # request should not have been proxied
+    $self->assert_null($resp->{headers}{via});
+
+    # download the same blob
+    $resp = $backend1_jmap->Download({ accept => 'text/plain' },
+                                     'cassandane', $data->{blobId});
+
+    # request should not have been proxied
+    $self->assert_null($resp->{headers}{via});
+
+    # content should match
+    $self->assert_str_equals('text/plain', $resp->{headers}{'content-type'});
+    $self->assert_str_equals('some test', $resp->{content});
+
+    # XXX test other commands
+}
+
 1;
