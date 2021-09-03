@@ -181,4 +181,35 @@ sub test_backend1_commands
     # XXX test other commands
 }
 
+sub test_backend2_commands
+    :needs_component_jmap :min_version_3_5
+{
+    my ($self) = @_;
+    my $result;
+
+    my $backend2_svc = $self->{backend2}->get_service("http");
+    my $backend2_host = $backend2_svc->host();
+    my $backend2_port = $backend2_svc->port();
+
+    my $backend2_jmap = Mail::JMAPTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $backend2_host,
+        port => $backend2_port,
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
+    # try to upload a blob
+    my ($resp, $data) = $backend2_jmap->Upload("some test", "text/plain");
+
+    # user doesn't exist on this backend, so upload url should not exist
+    $self->assert_num_equals(404, $resp->{status});
+    $self->assert_str_equals('Not Found', $resp->{reason});
+
+    $self->assert_null($data);
+
+#    # XXX test other commands
+}
+
 1;
