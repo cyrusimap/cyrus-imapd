@@ -4082,6 +4082,10 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
                 r = message_parse_binary_file(curstage->f, &body, NULL);
                 fclose(curstage->f);
                 curstage->f = NULL;
+                /* free this up again - that way we re-parse the fixed up file */
+                message_free_body(body);
+                free(body);
+                body = NULL;
             }
             if (!r) {
                 r = append_fromstage(&appendstate, &body, curstage->stage,
@@ -4090,8 +4094,6 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
                                      &curstage->annotations);
             }
             if (body) {
-                /* Note: either the calls to message_parse_binary_file()
-                 * or append_fromstage() above, may create a body.  */
                 message_free_body(body);
                 free(body);
                 body = NULL;
