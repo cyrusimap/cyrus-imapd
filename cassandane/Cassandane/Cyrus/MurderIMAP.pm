@@ -37,7 +37,7 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Cyrus::Murder;
+package Cassandane::Cyrus::MurderIMAP;
 use strict;
 use warnings;
 use Data::Dumper;
