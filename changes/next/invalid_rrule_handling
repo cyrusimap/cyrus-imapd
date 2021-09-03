@@ -1,0 +1,13 @@
+Description:
+
+Adds a setting to accept invalid RRULEs rather than rejecting them.
+
+
+Config changes:
+
+Adds 'caldav_accept_invalid_rrules' option.
+
+
+Upgrade instructions:
+
+None.
