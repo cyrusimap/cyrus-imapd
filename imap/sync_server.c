@@ -395,10 +395,9 @@ static void usage(void)
  */
 void shut_down(int code)
 {
-    /* run any delayed commands before we go into shutdown */
-    libcyrus_run_delayed();
-
     in_shutdown = 1;
+
+    libcyrus_run_delayed();
 
     proc_cleanup();
 
