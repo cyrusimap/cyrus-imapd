@@ -555,7 +555,7 @@ sub test_require_conversations
     $instance->{config}->set(conversations => 'no');
 
     $self->_start_instances();
-    $self->_jmap_setup();
+    $self->_setup_http_service_objects();
 
     my $jmap = $self->{jmap};
     my $JMAPRequest = {
