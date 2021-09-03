@@ -7738,7 +7738,42 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 
     /* if this is my inbox, don't do recursive renames */
     if (!strcasecmp(oldname, "inbox")) {
-        recursive_rename = 0;
+        /* create the destination mailbox first - if it exists, then that's a reason to error */
+        mbentry_t newmbentry = MBENTRY_INITIALIZER;
+        newmbentry.name = (char *) newmailboxname;
+        newmbentry.partition = mbentry->partition;
+        newmbentry.mbtype = mbentry->mbtype;
+
+        unsigned flags = MBOXLIST_CREATE_NOTIFY;
+        r = mboxlist_createmailbox(&newmbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   imapd_userisadmin || imapd_userisproxyadmin,
+                                   imapd_userid, imapd_authstate,
+                                   flags, NULL/*mailboxptr*/);
+
+        if (r) goto respond;
+
+        /* existing imapd index, or open one to copy from */
+        struct index_state *state = NULL;
+        if (!strcmpnull(index_mboxname(imapd_index), oldmailboxname)) {
+            state = imapd_index;
+        }
+        else {
+            r = index_open(oldmailboxname, NULL, &state);
+        }
+
+        /* move all the emails to the new folder */
+        char *copyuid = NULL;
+        if (!r) r = index_copy(state, "1:*", 1 /*usinguid*/, newmailboxname,
+                               &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
+                               &imapd_namespace,
+                               (imapd_userisadmin || imapd_userisproxyadmin), 1/*ismove*/,
+                               1/*ignorequota*/);
+        free(copyuid); // we don't care, but the API requires it
+
+        if (state != imapd_index)
+            index_close(&state);
+
+        goto respond;
     }
     /* check if we're an admin renaming a user */
     else if (config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
@@ -7892,6 +7927,8 @@ submboxes:
     /* take care of intermediaries */
     mboxlist_update_intermediaries(oldmailboxname, mbtype, 0);
     mboxlist_update_intermediaries(newmailboxname, mbtype, 0);
+
+respond:
 
     imapd_check(NULL, 0);
 
