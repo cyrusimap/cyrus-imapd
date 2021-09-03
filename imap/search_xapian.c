@@ -2657,7 +2657,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
         if (!cstate) {
             xsyslog(LOG_INFO, "can't open conversations", "mailbox=<%s>",
-                    mailbox->name);
+                    mailbox_name(mailbox));
             r = IMAP_MAILBOX_NOTSUPPORTED;
             goto out;
         }
