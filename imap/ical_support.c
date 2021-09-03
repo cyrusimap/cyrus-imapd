@@ -47,11 +47,11 @@
 #include <sysexits.h>
 #include <syslog.h>
 
+
 #include "assert.h"
 #include "caldav_db.h"
 #include "global.h"
 #include "ical_support.h"
-#include "icu_wrap.h"
 #include "message.h"
 #include "strhash.h"
 #include "stristr.h"
@@ -226,81 +226,23 @@ static struct icaltimetype icalcomponent_get_mydatetime(icalcomponent *comp, ica
 
     if ((param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER)) != NULL) {
         const char *tzid = icalparameter_get_tzid(param);
-        if (!strcmpsafe(tzid, "Etc/UTC") || !strcmpsafe(tzid, "UTC")) {
-            /* Use UTC singleton for Etc/UTC */
-            ret = icaltime_set_timezone(&ret, icaltimezone_get_utc_timezone());
+        icaltimezone *tz = NULL;
+
+        for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
+            tz = icalcomponent_get_timezone(c, tzid);
+            if (tz != NULL)
+                break;
         }
-        else {
-            /* Use Cyrus-internal timezone */
-            icaltimezone *mytz = icaltimezone_get_builtin_timezone(tzid);
-            if (mytz == NULL)
-                mytz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
-            if (mytz == NULL) {
-                /* see if its a MS Windows TZID */
-                char *icutzid = icu_getIDForWindowsID(tzid);
-                if (icutzid)
-                    mytz = icaltimezone_get_builtin_timezone_from_tzid(icutzid);
-                free(icutzid);
-            }
-            if (mytz != NULL) {
-                ret = icaltime_set_timezone(&ret, mytz);
-            }
-            else {
-                /* Use embedded VTIMEZONE */
-                icaltimezone *tz = NULL;
-                for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
-                    tz = icalcomponent_get_timezone(c, tzid);
-                    if (tz != NULL)
-                        break;
-                }
-                if (tz != NULL)
-                    ret =icaltime_set_timezone(&ret, tz);
-            }
-        }
+
+        if (tz == NULL)
+            tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+
+        if (tz != NULL)
+            ret = icaltime_set_timezone(&ret, tz);
     }
 
     return ret;
 }
-
-static icaltimetype icalcomponent_get_mydtstart(icalcomponent *comp)
-{
-    icalproperty *prop =
-        icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-    return prop ?
-        icalcomponent_get_mydatetime(comp, prop) :
-        icaltime_null_time();
-}
-
-static icaltimetype icalcomponent_get_mydtend(icalcomponent *comp)
-{
-    struct icaltimetype dtstart = icalcomponent_get_mydtstart(comp);
-    struct icaltimetype dtend = icaltime_null_time();
-
-    icalproperty *end_prop =
-        icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-    icalproperty *dur_prop =
-        icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
-
-    if (end_prop) {
-        dtend = icalcomponent_get_mydatetime(comp, end_prop);
-        if (!dtend.zone)
-            dtend.zone = dtstart.zone;
-    }
-    else if (dur_prop) {
-        dtend.zone = dtstart.zone;
-        struct icaldurationtype duration;
-        if (icalproperty_get_value(dur_prop)) {
-            duration = icalproperty_get_duration(dur_prop);
-        } else {
-            duration = icaldurationtype_null_duration();
-        }
-        dtend = icaltime_add(dtstart, duration);
-    }
-    else dtend = dtstart;
-
-    return dtend;
-}
-
 
 
 
@@ -425,7 +367,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
 
     /* find event length first, we'll need it for overrides */
     if (mastercomp) {
-        dtstart = icalcomponent_get_mydtstart(mastercomp);
+        dtstart = icalcomponent_get_dtstart(mastercomp);
         event_length = icalcomponent_get_duration(mastercomp);
         if (icaldurationtype_is_null_duration(event_length) &&
             icaltime_is_date(dtstart)) {
@@ -482,8 +424,8 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
         if (icaltime_is_null_time(recur)) continue;
 
         /* this is definitely a recurrence override */
-        struct icaltimetype mystart = icalcomponent_get_mydtstart(comp);
-        struct icaltimetype myend = icalcomponent_get_mydtend(comp);
+        struct icaltimetype mystart = icalcomponent_get_dtstart(comp);
+        struct icaltimetype myend = icalcomponent_get_dtend(comp);
 
         if (icaltime_compare(mystart, recur)) {
             /* DTSTART has changed: add an exception for RECURRENCE-ID */
@@ -855,9 +797,9 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
 {
     struct icalperiodtype period;
 
-    period.start = icaltime_convert_to_utc(icalcomponent_get_mydtstart(comp),
+    period.start = icaltime_convert_to_utc(icalcomponent_get_dtstart(comp),
                                            floating_tz);
-    period.end   = icaltime_convert_to_utc(icalcomponent_get_mydtend(comp),
+    period.end   = icaltime_convert_to_utc(icalcomponent_get_dtend(comp),
                                            floating_tz);
     period.duration = icaldurationtype_null_duration();
 
@@ -880,7 +822,7 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
     case ICAL_VPOLL_COMPONENT:
     case ICAL_VTODO_COMPONENT: {
         struct icaltimetype due = (kind == ICAL_VPOLL_COMPONENT) ?
-            icalcomponent_get_mydtend(comp) : icalcomponent_get_due(comp);
+            icalcomponent_get_dtend(comp) : icalcomponent_get_due(comp);
 
         if (!icaltime_is_null_time(period.start)) {
             /* Has DTSTART */
@@ -1002,7 +944,7 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
 static void utc_timespan_cb(icalcomponent *comp, struct icaltime_span *span, void *rock)
 {
     struct icalperiodtype *period = (struct icalperiodtype *) rock;
-    int is_date = icaltime_is_date(icalcomponent_get_mydtstart(comp));
+    int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct icaltimetype start =
         icaltime_from_timet_with_zone(span->start, is_date, utc);
