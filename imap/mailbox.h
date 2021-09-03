@@ -654,10 +654,9 @@ extern int mailbox_rename_nocopy(struct mailbox *oldmailbox,
 extern int mailbox_rename_copy(struct mailbox *oldmailbox,
                                const char *newname, const char *newpart,
                                unsigned uidvalidity,
-                               const char *userid, int ignorequota,
-                               int silent,
+                               int ignorequota, int silent,
                                struct mailbox **newmailboxptr);
-extern int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox);
+extern int mailbox_rename_cleanup(struct mailbox **mailboxptr);
 
 
 extern int mailbox_copyfile(const char *from, const char *to, int nolink);
