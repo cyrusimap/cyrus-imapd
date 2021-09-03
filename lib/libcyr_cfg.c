@@ -243,7 +243,7 @@ EXPORTED void libcyrus_delayed_action(const char *key, void (*cb)(void *),
         // check if we already have this event on our list
         for (action = delayed_actions; action; action = action->next) {
             if (!strcmpsafe(key, action->key)) {
-                myfree(rock);
+                if (myfree) myfree(rock);
                 return;
             }
         }
@@ -263,7 +263,7 @@ EXPORTED void libcyrus_run_delayed(void)
         struct delayed_action *action = delayed_actions;
         delayed_actions = action->next;
         action->cb(action->rock);
-        action->myfree(action->rock);
+        if (action->myfree) action->myfree(action->rock);
         free(action);
     }
 }
