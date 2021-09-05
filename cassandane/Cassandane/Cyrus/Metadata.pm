@@ -47,6 +47,7 @@ use Config;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cyrus::DList;
 
 sub new
 {
@@ -104,40 +105,6 @@ sub make_message_pair
     return ($msg0, $msg1);
 }
 
-# Undo the binary escaping used by cvt_cyrusdb, which uses \xff as the
-# escape character and escapes \0 \t \r \n and \xff.  We need to do this
-# because both the key and value in the annotations DB use \0 as field
-# separators and we need to parse them correctly.
-sub unescape
-{
-    my ($s) = @_;
-    my $r = '';
-
-    for (;;)
-    {
-        my  ($pre, $byte, $post) =
-                ($s =~ m/^([\0-\xfe]*)\xff([\x80-\xff])(.*)$/);
-        last if !defined $byte;
-
-        $r .= $pre;
-        if ($byte eq '\xff')
-        {
-            $r .= '\xff';
-        }
-        else
-        {
-            $r .= chr(ord($byte) & ~0x80);
-        }
-
-        last if !defined $post;
-        $s = $post;
-    }
-
-    $r .= $s;
-
-    return $r;
-}
-
 # List annotations actually stored in the database.
 sub list_annotations
 {
@@ -170,68 +137,67 @@ sub list_annotations
         die "Unknown scope: $scope";
     }
 
-    my $tmpfile = tmpnam();
     my $format = $instance->{config}->get('annotation_db');
-    $format = $format // 'skiplist';
-
-    $instance->run_command({ cyrus => 1 },
-                        'cvt_cyrusdb',
-                        $mailbox_db, $format,
-                        $tmpfile, 'flat');
+    $format = $format // 'twoskip';
 
     my @annots;
-    open TMP, '<', $tmpfile
-        or die "Cannot open $tmpfile for reading: $!";
-    while (<TMP>)
-    {
-        chomp;
-        my ($key, $value) = split(/\t/, $_, 2);
-        my @f = split(/\0/, unescape($key), 4);
-        $value = unescape($value);
 
-        # Damn stupid database format has sizeof(long) bytes of length.
-        my ($length) = unpack("N", $value);
+    my $res = $instance->run_dbcommand_cb(sub {
+        my ($key, $value) = @_;
+        my ($uid, $item, $userid, @rest) = split '\0', $key;
+        my ($data, $modseq, $flags);
+        if (substr($value, 0, 1) eq '%') {
+            my $dlist = Cyrus::DList->parse_string($value, 0);
+            my $hash = $dlist->as_perl;
+            $data = $hash->{V};
+            $modseq = $hash->{M};
+            $flags = $hash->{F} ? 1 : 0;  # XXX - parse more options later
+        }
+        else {
+            my $offset = 0;
+            my $vallen = unpack('N', substr($value, $offset, 4));
+            $offset += 8; # 4 more bytes of rubbish
+            $data = substr($value, $offset, $vallen);
+            $offset += $vallen + 1; # trailing null
+            my $strend = index($value, "\0", $offset);
+            my $type = substr($value, $offset, ($strend - $offset));
+            $offset = $strend + 1;
+            my $modtime = unpack('N', substr($value, $offset, 4));
+            $offset += 8; # 4 more bytes of rubbish again
+            $modseq = unpack('x[N]N', substr($value, $offset, 8));
+            $offset += 8;
+            $flags = unpack('C', substr($value, $offset, 1));
+        }
 
-    # In records written by older versions of Cyrus, there will be
-    # binary encoded content-type and modifiedsince values after the
-    # data. We don't care about those anymore, but need to skip past
-    # them the entry metadata.
-    my @entry = split(/\0/, substr($value, $Config{longsize}), 3);
-    my $annot = {
-            uid => ($scope eq 'message' ? $f[0] : 0),
-            mboxname => ($scope eq 'message' ? $mailbox : $f[0]),
-            entry => $f[1],
-            userid => $f[2],
-            data => $entry[0],
+        if ($flags and not $tombstones) {
+            return;
+        }
+        my $annot = {
+            uid => ($scope eq 'message' ? $uid : 0),
+            mboxname => ($scope eq 'message' ? $mailbox : $uid),
+            entry => $item,
+            userid => $userid,
+            data => $data,
         };
 
-    if ($entry[2]) {
-        my ($modseq, $flags) =
-            unpack("Q>C", bytes::substr($entry[2], $Config{longsize}));
-        if ($flags and not $tombstones) {
-            next;
-        }
         if ($withmdata) {
             $annot->{modseq} = $modseq;
             $annot->{flags} = $flags;
         }
-    }
 
-    if ($uids) {
-        my %wantuids = map { $_ => 1 } $uids;
-        if ($uids and not exists($wantuids{$annot->{uid}})) {
-            next;
+        if ($uids) {
+            my %wantuids = map { $_ => 1 } $uids;
+            if ($uids and not exists($wantuids{$annot->{uid}})) {
+                return;
+            }
         }
-    }
 
         if ($annot->{userid} eq '[.OwNeR.]') {
             $annot->{userid} = 'cassandane'; # XXX - strip owner from $mailbox?
         }
 
         push(@annots, $annot);
-    }
-    close(TMP);
-    unlink($tmpfile);
+    }, $mailbox_db, $format, ['SHOW']);
 
     # enforce a stable order so we have some chance of
     # comparing the results
@@ -253,7 +219,7 @@ sub list_uids
         $store->read_begin();
         while (my $msg = $store->read_message())
         {
-        push(@uids, $msg->{uid});
+        push(@uids, $msg->uid);
         }
         $store->read_end();
 
@@ -2210,8 +2176,10 @@ sub test_msg_replication_new_mas_partial_wwd
     $self->run_replication();
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    xlog $self, "Write another annotation";
+    xlog $self, "Write another few annotations";
     $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.priv', 'a1');
+    $self->set_msg_annotation($master_store, 1, '/comment', 'value.shared', 'cs');
+    $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.shared', 'as');
 
     xlog $self, "Run replication";
     $self->run_replication();
@@ -2219,6 +2187,7 @@ sub test_msg_replication_new_mas_partial_wwd
 
     xlog $self, "Delete the first annotation";
     $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', '');
+    $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.shared', '');
 
     xlog $self, "Run replication";
     $self->run_replication();
@@ -2934,7 +2903,7 @@ sub test_cvt_cyrusdb
     my $global_db = "$basedir/conf/annotations.db";
     my $global_flat = "$basedir/xann.txt";
     my $format = $self->{instance}->{config}->get('annotation_db');
-    $format = $format // 'skiplist';
+    $format = $format // 'twoskip';
 
     $self->assert(( ! -f $global_flat ));
     $self->{instance}->run_command({ cyrus => 1 },

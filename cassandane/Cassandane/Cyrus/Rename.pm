@@ -697,15 +697,14 @@ sub _match_intermediates
 sub _dbset
 {
     my ($self, $key, $value) = @_;
-    $self->{instance}->run_command(
-        { cyrus => 1 },
-        'cyr_dbtool',
+    $self->assert_str_eq('ok', $self->{instance}->run_dbcommand_cb(
+        sub { die "got a response!" },
         "$self->{instance}->{basedir}/conf/mailboxes.db",
         'twoskip',
         defined($value)
-          ? ('set', $key => $value)
-          : ('delete', $key),
-    );
+          ? ['SET', $key => $value]
+          : ['DELETE', $key],
+    ));
 }
 
 sub test_intermediate_cleanup
