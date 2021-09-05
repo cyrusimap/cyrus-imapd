@@ -38,147 +38,45 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 {
-   bdb_environment_leak
-   Memcheck:Leak
-   fun:malloc
-   ...
-   fun:__env_config
-   fun:__env_open
-   ...
-   fun:init
-   fun:cyrusdb_init
-   ...
-}
-{
-   getpwnam_leak
-   Memcheck:Leak
-   fun:malloc
-   ...
-   fun:__nss_database_lookup
-   ...
-   fun:getpwnam
-   ...
-}
-{
-   getgrouplist_leak
-   Memcheck:Leak
-   fun:malloc
-   ...
-   fun:__nss_database_lookup
-   ...
-   fun:getgrouplist
-   ...
-}
-{
-   getpwuid_leak
-   Memcheck:Leak
-   fun:malloc
-   ...
-   fun:__nss_database_lookup
-   ...
-   fun:getpwuid
-   ...
-}
-{
-   getgrgid_leak
-   Memcheck:Leak
-   fun:malloc
-   ...
-   fun:__nss_database_lookup
-   ...
-   fun:getgrgid
-   ...
-}
-{
-   zlib_inflateInit2_cond
-   Memcheck:Cond
-   fun:inflateReset2
-   fun:inflateInit2_
-   fun:prot_setcompress
-   ...
-}
-{
-    zlib_deflate_cond
-    Memcheck:Cond
-    fun:memcpy
+    getpwnam_leak
+    Memcheck:Leak
+    fun:malloc
     ...
-    fun:deflate
-    fun:prot_flush_encode
+    fun:getpwnam
     ...
 }
 {
-    zlib_deflate_data4
-    Memcheck:Value4
-    fun:memcpy
+    getgrouplist_leak
+    Memcheck:Leak
+    fun:malloc
     ...
-    fun:deflate
-    fun:prot_flush_encode
-    ...
-}
-{
-    zlib_deflate_data8
-    Memcheck:Value8
-    fun:memcpy
-    ...
-    fun:deflate
-    fun:prot_flush_encode
+    fun:getgrouplist
     ...
 }
 {
-   xapian_init
-   Memcheck:Leak
-   ...
-   fun:_ZNSsC1EmcRKSaIcE
-   ...
-   obj:/usr/lib/libxapian.so.22.5.0
-   ...
+    getpwuid_leak
+    Memcheck:Leak
+    fun:malloc
+    ...
+    fun:getpwuid
+    ...
 }
 {
-   icu_timezone
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:malloc
-   ...
-   fun:_ZN6icu_558TimeZone18detectHostTimeZoneEv
-   fun:_ZN6icu_558TimeZone13createDefaultEv
-   ...
+    getgrgid_leak
+    Memcheck:Leak
+    fun:malloc
+    ...
+    fun:getgrgid
+    ...
 }
 {
-   sasl_initleak
-   Memcheck:Leak
-   match-leak-kinds: definite
-   fun:malloc
-   ...
-   fun:sasl_client_add_plugin
-   ...
-   fun:sasl_client_init
-   fun:global_sasl_init
-   fun:main
+    # mupdate detaches all its threads, so they're cleaned up at exit.
+    # but valgrind notices beforehand and reports their resources as leaked.
+    mupdate_detached_threads_leak
+    Memcheck:Leak
+    match-leak-kinds: possible
+    ...
+    fun:pthread_create@@GLIBC_2.2.5
+    fun:service_init
+    fun:main
 }
-{
-   sasl_checkleak
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:malloc
-   ...
-   fun:getgrouplist
-   ...
-}
-
-{
-   sessionid_leak
-   Memcheck:Cond
-   ...
-   fun:session_new_id
-   ...
-}
-
-{
-   sessionid_check
-   Memcheck:Value8
-   ...
-   fun:session_new_id
-   ...
-}
-
-
