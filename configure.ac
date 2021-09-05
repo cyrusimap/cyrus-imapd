@@ -1502,12 +1502,12 @@ AC_ARG_WITH([chardet],
     [],
     [with_chardet=yes])
 AS_IF([test "x$with_chardet" = "xyes"],
-	[ PKG_CHECK_MODULES([LIBCHARDET], [chardet],
+	[ PKG_CHECK_MODULES([LIBCHARDET], [chardet >= 1.0.5],
 		[ AC_DEFINE(HAVE_LIBCHARDET, [], [Build with chardet library support])
 		  with_chardet=yes ],
 		with_chardet=no)])
 AS_IF([test "x$with_chardet" != "xyes"],
-      [AC_MSG_NOTICE([JMAP will not have character set detection support.  Consider installing chardet])])
+      [AC_MSG_NOTICE([JMAP will not have character set detection support.  Consider installing chardet >= 1.0.5])])
 AC_SUBST([LIBCHARDET_LIBS])
 AC_SUBST([LIBCHARDET_CFLAGS])
 AM_CONDITIONAL([USE_LIBCHARDET], [test "x$with_chardet" = xyes])
