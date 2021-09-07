@@ -3168,9 +3168,12 @@ EXPORTED int mboxlist_updateacl_raw(const char *name, const char *newacl)
 {
     struct mailbox *mailbox = NULL;
     int r = mailbox_open_iwl(name, &mailbox);
-    if (!r) r = mboxlist_sync_setacls(name, newacl, mailbox_modseq_dirty(mailbox));
-    if (!r) mailbox_set_acl(mailbox, newacl);
-    if (!r) r = mailbox_commit(mailbox);
+    if (!r)
+        r = mboxlist_sync_setacls(name, newacl, mailbox_modseq_dirty(mailbox));
+    if (!r) {
+        mailbox_set_acl(mailbox, newacl);
+        r = mailbox_commit(mailbox);
+    }
     mailbox_close(&mailbox);
     return r;
 }
