@@ -1836,4 +1836,53 @@ sub test_rename_quotaroot
     $self->check_replication('del@internal');
 }
 
+sub test_search_deleted_folder
+    :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    my $res = $self->_fmjmap_ok('Mailbox/get');
+    my %m = map { $_->{name} => $_ } @{$res->{list}};
+    my $inboxid = $m{"Inbox"}{id};
+    $self->assert_not_null($inboxid);
+
+    xlog $self, "Create the sub folders and emails";
+    $talk->create("INBOX.sub");
+    $talk->create("INBOX.extra");
+    $self->make_message("Email abcd xyz hello 1") or die;
+    $self->{store}->set_folder("INBOX.sub");
+    $self->make_message("Email abcd xyz hello 2") or die;
+    $self->{store}->set_folder("INBOX.extra");
+    $self->make_message("Email abcd xyz hello 3") or die;
+
+    # Create the search database.
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $self->_fmjmap_ok('Email/query',
+       filter => { text => "abcd", inMailboxOtherThan => [$inboxid] },
+    );
+    $self->assert_num_equals(2, scalar @{$res->{ids}});
+
+    xlog $self, "Delete the sub folder";
+    $talk->delete("INBOX.sub");
+
+    xlog $self, "check that email can't be found";
+    $res = $self->_fmjmap_ok('Email/query',
+       filter => { text => "xyz", inMailboxOtherThan => [$inboxid] },
+    );
+    $self->assert_num_equals(1, scalar @{$res->{ids}});
+
+    xlog $self, "use cyr_expire to clean up the deleted folder";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
+
+    xlog $self, "check that email can't be found after folder deleted";
+    $res = $self->_fmjmap_ok('Email/query',
+       filter => { text => "hello", inMailboxOtherThan => [$inboxid] },
+    );
+    $self->assert_num_equals(1, scalar @{$res->{ids}});
+}
+
 1;
