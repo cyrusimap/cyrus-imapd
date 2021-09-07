@@ -1368,7 +1368,8 @@ EXPORTED int time_from_rfc5322(const char *s, time_t *date,
     else
         tmp_time = mkgmtime(&tm);
 
-    if (tmp_time == -1)
+    /* -1 is an error, but anything else below zero is also a negative time which we can't handle */
+    if (tmp_time < 0)
         goto baddate;
 
     *date = tmp_time - tzone_offset;
