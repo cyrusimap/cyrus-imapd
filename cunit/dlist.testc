@@ -42,9 +42,10 @@ static void test_nil(void)
     dlist_setatom(dl, "STRING", "NIL");
     dlist_setatom(dl, "EMPTY", NULL);
     dlist_setatom(dl, "DOUBLEWHAMMY", "\"NIL\"");
+    dlist_setmap(dl, "BINARY", "\0NIL\0", 5);
     dlist_printbuf(dl, 0, &b);
 
-    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "(\"NIL\" NIL {5+}\r\n\"NIL\")");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "(\"NIL\" NIL {5+}\r\n\"NIL\" {5+}\r\n\0NIL\0)");
     dlist_free(&dl);
 
     r = dlist_parsemap(&dl, 0, 0, b.s, b.len);
@@ -65,6 +66,12 @@ static void test_nil(void)
     CU_ASSERT_PTR_NOT_NULL(item);
     CU_ASSERT_EQUAL(item->type, DL_BUF);
     CU_ASSERT_STRING_EQUAL(item->sval, "\"NIL\"");
+
+    item = dlist_getchildn(dl, 3);
+    CU_ASSERT_PTR_NOT_NULL(item);
+    CU_ASSERT_EQUAL(item->type, DL_BUF);
+    CU_ASSERT_EQUAL(item->nval, 5);
+    CU_ASSERT_STRING_EQUAL(item->sval, "\0NIL\0");
 
     dlist_free(&dl);
     buf_free(&b);

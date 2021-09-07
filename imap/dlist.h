@@ -66,7 +66,8 @@ enum dlistsax_t {
 
 struct dlistsax_data {
     const struct buf kbuf;
-    const char *data;
+    const struct buf buf;
+    const char *data; // cstring buffer or NULL for NIL
     void *rock;
 };
 
@@ -107,6 +108,7 @@ void dlist_makenum64(struct dlist *dl, bit64 val);
 void dlist_makedate(struct dlist *dl, time_t val);
 void dlist_makehex64(struct dlist *dl, bit64 val);
 void dlist_makemap(struct dlist *dl, const char *val, size_t len);
+void dlist_makebuf(struct dlist *dl, const struct buf *buf);
 void dlist_makeguid(struct dlist *dl, const struct message_guid *guid);
 void dlist_makefile(struct dlist *dl,
                     const char *part, const struct message_guid *guid,
@@ -121,6 +123,8 @@ int dlist_todate(struct dlist *dl, time_t *valp);
 int dlist_tohex32(struct dlist *dl, uint32_t *valp);
 int dlist_tohex(struct dlist *dl, bit64 *valp);
 int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp);
+int dlist_tobuf(struct dlist *dl, struct buf *buf);
+
 /* these two don't actually do anything except check type */
 int dlist_tolist(struct dlist *dl, struct dlist **valp);
 int dlist_tokvlist(struct dlist *dl, struct dlist **valp);
@@ -160,6 +164,8 @@ struct dlist *dlist_sethex64(struct dlist *parent, const char *name,
                              bit64 val);
 struct dlist *dlist_setmap(struct dlist *parent, const char *name,
                            const char *val, size_t len);
+struct dlist *dlist_setbuf(struct dlist *parent, const char *name,
+                           const struct buf *buf);
 struct dlist *dlist_setguid(struct dlist *parent, const char *name,
                             const struct message_guid *guid);
 struct dlist *dlist_setfile(struct dlist *parent, const char *name,
@@ -180,6 +186,8 @@ struct dlist *dlist_updatehex64(struct dlist *parent, const char *name,
                                 bit64 val);
 struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
                               const char *val, size_t len);
+struct dlist *dlist_updatebuf(struct dlist *parent, const char *name,
+                              const struct buf *buf);
 struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
                                const struct message_guid *guid);
 struct dlist *dlist_updatefile(struct dlist *parent, const char *name,

@@ -990,6 +990,55 @@ static const char *key_as_string(const annotate_db_t *d,
 }
 #endif
 
+struct annotate_rock {
+    struct buf *value;
+    struct annotate_metadata *mdata;
+};
+
+static int _flags_from_str(const char *data)
+{
+    int val = 0;
+    int i = 0;
+
+    for (i = 0; data[i]; i++) {
+        if (data[i] == 'd')
+            val |= ANNOTATE_FLAG_DELETED;
+    }
+
+    return val;
+}
+
+static const char *_flags_to_str(int flags)
+{
+    static char val[2];
+    int i = 0;
+
+    if (flags & ANNOTATE_FLAG_DELETED)
+        val[i++] = 'd';
+
+    // terminate the string
+    val[i++] = '\0';
+
+    return val;
+}
+
+static int parsedlist_cb(int type, struct dlistsax_data *d)
+{
+    struct annotate_rock *rock = (struct annotate_rock *)d->rock;
+    const char *key = buf_cstring(&d->kbuf);
+
+    if (type != DLISTSAX_STRING) return 0;
+
+    if (!strcmp(key, "F"))
+        rock->mdata->flags = _flags_from_str(d->data);
+    else if (!strcmp(key, "M"))
+        rock->mdata->modseq = atomodseq_t(d->data);
+    else if (!strcmp(key, "V"))
+        buf_copy(rock->value, &d->buf);
+
+    return 0;
+}
+
 static int split_attribs(const char *data, int datalen,
                          struct buf *value, struct annotate_metadata *mdata)
 {
@@ -998,11 +1047,18 @@ static int split_attribs(const char *data, int datalen,
     const char *end = data + datalen;
 
     /* initialize metadata */
+    buf_reset(value);
     memset(mdata, 0, sizeof(struct annotate_metadata));
 
     /* xxx sanity check the data? */
     if (datalen <= 0)
             return 1;
+
+    if (*data == '%') {
+        struct annotate_rock rock = { value, mdata };
+        return dlist_parsesax(data, datalen, 0, parsedlist_cb, &rock);
+    }
+
     /*
      * Sigh...this is dumb.  We take care to be machine independent by
      * storing the length in network byte order...but the size of the
@@ -2980,38 +3036,15 @@ static int make_entry(struct buf *data,
                       modseq_t modseq,
                       unsigned char flags)
 {
-    unsigned long l;
-    static const char contenttype[] = "text/plain"; /* fake */
-    unsigned long long nmodseq;
-
-    /* Make sure that native types are wide enough */
-    assert(sizeof(modseq_t) <= sizeof(unsigned long long));
-    nmodseq = htonll((unsigned long long) modseq);
-
-    l = htonl(value->len);
-    buf_appendmap(data, (const char *)&l, sizeof(l));
-
-    buf_appendmap(data, value->s ? value->s : "", value->len);
-    buf_putc(data, '\0');
-
-    /*
-     * Older versions of Cyrus expected content-type and
-     * modifiedsince fields after the value.  We don't support those
-     * but we write out default values just in case the database
-     * needs to be read by older versions of Cyrus
-     */
-    buf_appendcstr(data, contenttype);
-    buf_putc(data, '\0');
-
-    l = 0;  /* fake modifiedsince */
-    buf_appendmap(data, (const char *)&l, sizeof(l));
-
-    /* Append modseq at the end */
-    buf_appendmap(data, (const char *)&nmodseq, sizeof(nmodseq));
-
-    /* Append flags */
-    buf_putc(data, flags);
-
+    struct dlist *dl = dlist_newkvlist(NULL, "");
+    if (flags)
+        dlist_setatom(dl, "F", _flags_to_str(flags));
+    if (modseq)
+        dlist_setnum64(dl, "M", modseq);
+    if (buf_len(value))
+        dlist_setbuf(dl, "V", value);
+    dlist_printbuf(dl, 0, data);
+    dlist_free(&dl);
     return 0;
 }
 
