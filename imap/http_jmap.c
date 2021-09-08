@@ -786,6 +786,10 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentryp)
     return r;
 }
 
+/* this takes a namespace lock and tries to either create or
+ * grant access to the target upload collection.  You can only
+ * write to somebody's upload collection if you have write access
+ * to something else in their account */
 static int _create_upload_collection(const char *accountid,
                                      struct mailbox **mailboxp)
 {
@@ -880,6 +884,10 @@ HIDDEN int jmap_open_upload_collection(const char *accountid,
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         mboxlist_entry_free(&mbentry);
         return _create_upload_collection(accountid, mailboxp);
+    }
+    else if (r) {
+        mboxlist_entry_free(&mbentry);
+        return r;
     }
 
     int rights = httpd_myrights(httpd_authstate, mbentry);
