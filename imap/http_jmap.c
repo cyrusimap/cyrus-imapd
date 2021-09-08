@@ -725,7 +725,9 @@ static int has_shared_rw_rights(const char *accountid)
     return rights;
 }
 
-static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
+/* NOTE: This function can fill a synthetic mbentry with just a name and mbtype
+ * if it returns IMAP_MAILBOX_NONEXISTENT */
+static int lookup_upload_collection(const char *accountid, mbentry_t **mbentryp)
 {
     mbname_t *mbname;
     const char *uploadname;
@@ -748,37 +750,35 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
 
     /* Locate the mailbox */
     uploadname = mbname_intname(mbname);
-    r = proxy_mlookup(uploadname, mbentry, NULL, NULL);
+    r = proxy_mlookup(uploadname, mbentryp, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mboxlist_entry_free(mbentryp);
+
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(accountid, NULL);
+        mbentry_t *inboxentry = NULL;
 
-        int r1 = proxy_mlookup(inboxname, mbentry, NULL, NULL);
-        free(inboxname);
+        int r1 = proxy_mlookup(inboxname, &inboxentry, NULL, NULL);
         if (r1 == IMAP_MAILBOX_NONEXISTENT) {
+            mboxlist_entry_free(&inboxentry);
             r = IMAP_INVALID_USER;
-            goto done;
         }
 
         if (!strcmp(accountid, httpd_userid)) {
-            int rights = httpd_myrights(httpd_authstate, *mbentry);
+            int rights = httpd_myrights(httpd_authstate, inboxentry);
             if (!(rights & ACL_CREATE)) {
                 r = IMAP_PERMISSION_DENIED;
-                goto done;
             }
         }
 
-        mboxlist_entry_free(mbentry);
-        *mbentry = mboxlist_entry_create();
-        (*mbentry)->name = xstrdup(uploadname);
-        (*mbentry)->mbtype = MBTYPE_COLLECTION;
-    }
-    else if (!r) {
-        int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_INSERT)) {
-            r = IMAP_PERMISSION_DENIED;
-            goto done;
-        }
+        free(inboxname);
+        mboxlist_entry_free(&inboxentry);
+
+        if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
+        /* create the synthetic entry for with the mailbox name inside */
+        *mbentryp = mboxlist_entry_create();
+        (*mbentryp)->name = xstrdup(uploadname);
+        (*mbentryp)->mbtype = MBTYPE_COLLECTION;
     }
 
   done:
@@ -786,87 +786,86 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
     return r;
 }
 
+/* this takes a namespace lock and tries to either create or
+ * grant access to the target upload collection.  You can only
+ * write to somebody's upload collection if you have write access
+ * to something else in their account */
 static int _create_upload_collection(const char *accountid,
-                                     struct mailbox **mailbox)
+                                     struct mailbox **mailboxp)
 {
     /* upload collection */
     struct mboxlock *namespacelock = user_namespacelock(accountid);
     mbentry_t *mbentry = NULL;
     int r = lookup_upload_collection(accountid, &mbentry);
+    int need_setacl = 0;
 
-    if (r == IMAP_INVALID_USER) {
-        goto done;
-    }
-    else if (r == IMAP_PERMISSION_DENIED) {
-        if (has_shared_rw_rights(accountid)) {
-            /* add rights for the sharee */
-            char rightstr[100];
-            cyrus_acl_masktostr(JACL_READITEMS | JACL_WRITE, rightstr);
-            r = mboxlist_setacl(&jmap_namespace, mbentry->name, httpd_userid,
-                                rightstr, 1, httpd_userid, httpd_authstate);
+    if (!r) {
+        int rights = httpd_myrights(httpd_authstate, mbentry);
+        if (!(rights & ACL_INSERT)) {
+            if (!has_shared_rw_rights(accountid)) {
+                r = IMAP_PERMISSION_DENIED;
+                goto done;
+            }
+            need_setacl = 1;
         }
-        if (r) goto done;
+
+        /* Open mailbox for writing */
+        r = mailbox_open_iwl(mbentry->name, mailboxp);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                   mbentry->name, error_message(r));
+            goto done;
+        }
     }
     else if (r == IMAP_MAILBOX_NONEXISTENT) {
-        if (!mbentry) goto done;
-        else if (mbentry->server) {
+        if (mbentry->server) {
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
                              &backend_cached, NULL, NULL, httpd_in);
             goto done;
         }
 
-        int is_shared = 0;
         if (strcmp(accountid, httpd_userid)) {
             if (!(has_shared_rw_rights(accountid))) {
                 r = IMAP_PERMISSION_DENIED;
                 goto done;
             }
-
-            is_shared = 1;
+            need_setacl = 1;
         }
 
+        /* create the mailbox and keep it open for writing */
         r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
                                    1/*isadmin*/, accountid, httpd_authstate,
-                                   0/*flags*/, mailbox);
-        /* we lost the race, that's OK */
-        if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        else {
-            if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                        mbentry->name, error_message(r));
-            }
-            else if (is_shared) {
-                /* add rights for the sharee */
-                char *newacl = xstrdupnull(mailbox_acl(*mailbox));
-
-                cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
-                              JACL_READITEMS | JACL_WRITE, NULL, NULL);
-
-                /* ok, change the mailboxes database */
-                r = mboxlist_sync_setacls(mbentry->name, newacl,
-                                          mailbox_modseq_dirty(*mailbox));
-                if (r) {
-                    syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
-                           mbentry->name, error_message(r));
-                }
-                else {
-                    /* ok, change the backup in cyrus.header */
-                    mailbox_set_acl(*mailbox, newacl);
-                }
-                free(newacl);
-            }
+                                   0/*flags*/, mailboxp);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                   mbentry->name, error_message(r));
             goto done;
         }
     }
-    else if (r) goto done;
+    else {
+        // got an error looking up mailbox, we're definitely out of here
+        goto done;
+    }
 
-    if (mailbox) {
-        /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailbox);
+    if (need_setacl) {
+        /* add rights for the sharee */
+        char *newacl = xstrdupnull(mailbox_acl(*mailboxp));
+
+        cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
+                      JACL_READITEMS | JACL_WRITE, NULL, NULL);
+
+        /* ok, change the mailboxes database */
+        r = mboxlist_sync_setacls(mbentry->name, newacl,
+                                  mailbox_modseq_dirty(*mailboxp));
         if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+            syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
                    mbentry->name, error_message(r));
         }
+        else {
+            /* ok, change the backup in cyrus.header */
+            mailbox_set_acl(*mailboxp, newacl);
+        }
+        free(newacl);
     }
 
  done:
@@ -876,23 +875,32 @@ static int _create_upload_collection(const char *accountid,
 }
 
 HIDDEN int jmap_open_upload_collection(const char *accountid,
-                                       struct mailbox **mailbox)
+                                       struct mailbox **mailboxp)
 {
     /* upload collection */
     mbentry_t *mbentry = NULL;
     int r = lookup_upload_collection(accountid, &mbentry);
-    if (r) {
+
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
         mboxlist_entry_free(&mbentry);
-        return _create_upload_collection(accountid, mailbox);
+        return _create_upload_collection(accountid, mailboxp);
+    }
+    else if (r) {
+        mboxlist_entry_free(&mbentry);
+        return r;
     }
 
-    if (mailbox) {
-        /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailbox);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mbentry->name, error_message(r));
-        }
+    int rights = httpd_myrights(httpd_authstate, mbentry);
+    if (!(rights & ACL_INSERT)) {
+        mboxlist_entry_free(&mbentry);
+        return _create_upload_collection(accountid, mailboxp);
+    }
+
+    /* Open mailbox for writing */
+    r = mailbox_open_iwl(mbentry->name, mailboxp);
+    if (r) {
+        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+               mbentry->name, error_message(r));
     }
 
     mboxlist_entry_free(&mbentry);

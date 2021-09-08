@@ -1569,10 +1569,16 @@ EXPORTED void mailbox_set_acl(struct mailbox *mailbox, const char *acl)
 {
     if (!strcmpsafe(mailbox->h.acl, acl))
         return; /* no change */
+
+    /* patch our mbentry copy: XXX: this really should be the other way
+     * around that we update and then WRITE our entry! */
+    free(mailbox->mbentry->acl);
+    mailbox->mbentry->acl = xstrdup(acl);
+
+    /* update the copy in the header and mark the header dirty */
     free(mailbox->h.acl);
     mailbox->h.acl = xstrdup(acl);
     mailbox->header_dirty = 1;
-    return;
 }
 
 /* set a new QUOTAROOT - only dirty if changed */
@@ -4948,16 +4954,6 @@ done:
 }
 
 /*
- * Used by mailbox_rename() to expunge all messages in INBOX
- */
-static unsigned expungeall(struct mailbox *mailbox __attribute__((unused)),
-                           const struct index_record *record __attribute__((unused)),
-                           void *rock __attribute__((unused)))
-{
-    return 1;
-}
-
-/*
  * Expunge decision proc used by mailbox_expunge()
  * to expunge \Deleted messages.
  */
@@ -6141,8 +6137,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
                         const char *newname,
                         const char *newpartition,
                         unsigned uidvalidity,
-                        const char *userid, int ignorequota,
-                        int silent,
+                        int ignorequota, int silent,
                         struct mailbox **newmailboxptr)
 {
     int r;
@@ -6172,7 +6167,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     /* Create new mailbox */
     r = mailbox_create(newname, mailbox_mbtype(oldmailbox), newpartition,
-                       mailbox_acl(oldmailbox), (userid ? NULL : mailbox_uniqueid(oldmailbox)),
+                       mailbox_acl(oldmailbox), mailbox_uniqueid(oldmailbox),
                        oldmailbox->i.options, uidvalidity,
                        oldmailbox->i.createdmodseq,
                        highestmodseq, &newmailbox);
@@ -6212,12 +6207,6 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     free(newmailbox->h.uniqueid);
     newmailbox->h.uniqueid = xstrdup(newuniqueid);
     newmailbox->header_dirty = 1;
-
-    /* INBOX rename - change uniqueid */
-    if (userid) {
-        r = seen_copy(userid, oldmailbox, newmailbox);
-        if (r) goto fail;
-    }
 
     /* copy any mailbox annotations (but keep the known quota
      * amount, because we already counted that usage.  XXX horrible
@@ -6302,21 +6291,14 @@ fail:
     return r;
 }
 
-EXPORTED int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox)
+EXPORTED int mailbox_rename_cleanup(struct mailbox **mailboxptr)
 {
 
     int r = 0;
     struct mailbox *oldmailbox = *mailboxptr;
     char *name = xstrdup(mailbox_name(oldmailbox));
 
-    if (isinbox) {
-        /* Expunge old mailbox */
-        r = mailbox_expunge(oldmailbox, expungeall, (char *)0, NULL, 0);
-        if (!r) r = mailbox_commit(oldmailbox);
-        mailbox_close(mailboxptr);
-    } else {
-        r = mailbox_delete_internal(mailboxptr);
-    }
+    r = mailbox_delete_internal(mailboxptr);
 
     if (r) {
         syslog(LOG_CRIT,
