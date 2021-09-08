@@ -5453,13 +5453,17 @@ static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, stru
     size_t keylen = strlen(DB_VERSION_KEY);
     const char *data = NULL;
     size_t datalen = 0;
+    struct mboxlock *upgradelock = NULL;
+    int r = 0;
+
     int db_r = cyrusdb_fetch(*subs, key, keylen, &data, &datalen, NULL);
     // XXX: check version?
     if (db_r == CYRUSDB_OK) return 0;
-    int r = 0;
 
-    // lock the user namespace - we'll hold this lock while we upgrade.
-    struct mboxlock *namespacelock = user_namespacelock(userid);
+    // lock the subs namespace - we'll hold this lock while we upgrade.
+    char *lockname = strconcat("$SUBS_UPGRADE$", userid, (char *)NULL);
+    r = mboxname_lock(lockname, &upgradelock, LOCK_EXCLUSIVE);
+    if (r) goto done;
 
     /* if we find it this time, we lost the race and someone else already
      * upgraded the DB.  Bonus. */
@@ -5469,7 +5473,9 @@ static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, stru
         r = mboxlist_upgrade_subs_work(userid, subsfname, subs);
     }
 
-    mboxname_release(&namespacelock);
+ done:
+    mboxname_release(&upgradelock);
+    free(lockname);
 
     return r;
 }
