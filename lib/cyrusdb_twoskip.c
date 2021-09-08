@@ -1757,7 +1757,11 @@ static void _delayed_checkpoint(void *rock)
     struct dbengine *db = NULL;
     struct txn *txn = NULL;
     int r = myopen(drock->fname, drock->flags, &db, &txn);
-    if (r) {
+    if (r == CYRUSDB_NOTFOUND) {
+        syslog(LOG_INFO, "twoskip: no file to delayed checkpoint for %s",
+               drock->fname);
+    }
+    else if (r) {
         syslog(LOG_ERR, "DBERROR: opening %s for checkpoint: %s",
                drock->fname, cyrusdb_strerror(r));
     }
@@ -1770,7 +1774,7 @@ static void _delayed_checkpoint(void *rock)
                drock->fname, (LLU)db->header.repack_size, (LLU)db->header.current_size);
         myabort(db, txn);
     }
-    myclose(db);
+    if (db) myclose(db);
 }
 
 static int mycommit(struct dbengine *db, struct txn *tid)
