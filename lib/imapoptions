@@ -1053,7 +1053,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    at compile time due to missing dependencies (e.g. libical).
 .PP
    Note that "domainkey" depends on "ischedule" being enabled, and
-   that both "freebusy" and "ischedule" depend on "caldav" being
+   that "carddav", "freebusy", and "ischedule" depend on "caldav" being
    enabled. */
 
 { "httpprettytelemetry", 0, SWITCH, "2.5.0" }
