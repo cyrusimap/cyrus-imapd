@@ -348,6 +348,9 @@ sub test_rename_inbox
 
     $self->check_conversations();
 
+    my $res = $imaptalk->status("INBOX", ['mailboxid']);
+    my $oldInboxId = $res->{mailboxid}[0];
+
     $imaptalk->rename("INBOX", "INBOX.dst") || die;
 
     $imaptalk->select("INBOX") || die;
@@ -359,6 +362,19 @@ sub test_rename_inbox
     $self->assert_num_equals(1, scalar @postdata);
 
     $self->check_conversations();
+
+    # older cyrus may not support mailboxid, we don't need to test
+    # for ID change in that case
+    if ($oldInboxId) {
+        $res = $imaptalk->status("INBOX", ['mailboxid']);
+        my $newInboxId = $res->{mailboxid}[0];
+
+        $res = $imaptalk->status("INBOX.dst", ['mailboxid']);
+        my $dstId = $res->{mailboxid}[0];
+
+        $self->assert_str_equals($oldInboxId, $newInboxId);
+        $self->assert_str_not_equals($oldInboxId, $dstId);
+    }
 }
 
 #
