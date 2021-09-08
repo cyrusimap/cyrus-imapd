@@ -67,7 +67,6 @@
 #include "annotate.h"
 #include "acl.h"
 #include "append.h"
-#include "caldav_db.h"
 #include "dlist.h"
 #include "global.h"
 #include "http_dav.h"
@@ -582,11 +581,9 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
     }
 
   mailbox:
-    /* Create mailbox name from the parsed path */
-
     if (tgt->userid) {
-        /* Locate the mailbox */
-        char *mboxname = caldav_mboxname(tgt->userid, NULL);
+        /* Locate the INBOX */
+        char *mboxname = mboxname_user_mbox(tgt->userid, NULL);
         int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
 
         if (r) {
