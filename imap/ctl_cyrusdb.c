@@ -166,13 +166,6 @@ static int fixmbox(const mbentry_t *mbentry,
         mboxlist_entry_free(&copy);
     }
 
-    r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype, /*modseq*/0);
-    if (r) {
-        syslog(LOG_ERR,
-               "failed to update intermediaries to mailboxes list for %s: %s",
-               mbentry->name, cyrusdb_strerror(r));
-    }
-
     return 0;
 }
 

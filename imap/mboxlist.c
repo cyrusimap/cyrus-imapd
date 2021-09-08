@@ -1508,6 +1508,10 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
     char *partition = NULL;
     int r = 0;
 
+    /* not for deleted namespace */
+    if (mbname_isdeleted(mbname))
+        goto out;
+
     /* only use intermediates for user mailboxes */
     if (!mbname_userid(mbname))
         goto out;
@@ -1531,51 +1535,14 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
         if (r) goto out;
 
-        if (mbentry) {
-            if (mbentry->mbtype & MBTYPE_DELETED) {
-                /* fall through to create a new intermediate */
-            }
-            else if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                /* existing intermediate - delete unless it still has children */
-                if (mboxlist_haschildren(mboxname))
-                    continue;
-
-                /* bump modseq, we're removing a thing that can be seen */
-                if (!modseq)
-                    modseq = mboxname_nextmodseq(mboxname, mbentry->foldermodseq,
-                                                 mbtype, MBOXMODSEQ_ISFOLDER);
-
-                mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
-                newmbentry->mbtype &= ~MBTYPE_INTERMEDIATE;
-                newmbentry->mbtype |= MBTYPE_DELETED;
-                newmbentry->foldermodseq = modseq;
-
-                syslog(LOG_NOTICE,
-                       "mboxlist: deleting intermediate with no children: %s (%s)",
-                       mboxname, mbentry->uniqueid);
-                r = mboxlist_update_entry(mboxname, newmbentry, NULL);
-                mboxlist_entry_free(&newmbentry);
-                if (r) goto out;
-                sync_log_mailbox(mboxname);
-
-                /* we've changed the type, we're done at this level */
-                continue;
-            }
-            else {
-                /* real mailbox, we're done at this level */
-                continue;
-            }
-        }
+        /* we don't remove parents any more, so skip out immediately if we find an entry */
+        if (mbentry && !(mbentry->mbtype & MBTYPE_DELETED)) continue;
 
         /* if there's no children, there's no need for intermediates */
         if (!mboxlist_haschildren(mboxname))
             continue;
 
-        /* bump modseq, we're adding a thing that can be seen */
-        if (!modseq)
-            modseq = mboxname_nextmodseq(mboxname,
-                                         mbentry ? mbentry->foldermodseq : 0,
-                                         mbtype, MBOXMODSEQ_ISFOLDER);
+        syslog(LOG_NOTICE, "mboxlist: intermediate fill-in mailbox: %s", mboxname);
 
         if (!partition) {
             mboxlist_entry_free(&mbentry);
@@ -1583,29 +1550,17 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
             partition = xstrdupnull(mbentry->partition);
         }
 
-        mbentry_t *newmbentry = mboxlist_entry_create();
-        newmbentry->name = xstrdupnull(mboxname);
-        newmbentry->uniqueid = xstrdupnull(makeuuid());
-        newmbentry->partition = xstrdupnull(partition);
-        newmbentry->createdmodseq = modseq;
-        newmbentry->foldermodseq = modseq;
-        newmbentry->mbtype |= MBTYPE_INTERMEDIATE;
-        newmbentry->foldermodseq = modseq;
-
-        syslog(LOG_NOTICE,
-               "mboxlist: creating intermediate with children: %s (%s)",
-               mboxname, newmbentry->uniqueid);
-        r = mboxlist_update_entry(mboxname, newmbentry, NULL);
-        if (!r) {
-            /* create [meta]data directories for mbpath-by-id */
-            const char *path = mbentry_datapath(newmbentry, 1);
-            if (path) cyrus_mkdir(path, 0755);
-            path = mbentry_metapath(newmbentry, META_HEADER, 0);
-            if (path) cyrus_mkdir(path, 0755);
-        }
-        mboxlist_entry_free(&newmbentry);
+        mbentry_t newmbentry = MBENTRY_INITIALIZER;
+        newmbentry.name = (char *)mboxname;
+        newmbentry.partition = partition;
+        newmbentry.mbtype = mbtype;
+        newmbentry.createdmodseq = modseq;
+        newmbentry.foldermodseq = modseq;
+        int flags = MBOXLIST_CREATE_KEEP_INTERMEDIARIES; // avoid infinite looping!
+        r = mboxlist_createmailbox(&newmbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, NULL/*userid*/, NULL/*authstate*/,
+                                   flags, NULL/*mailboxptr*/);
         if (r) goto out;
-        sync_log_mailbox(mboxname);
     }
 
 out:
@@ -1687,7 +1642,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
                                     unsigned flags, struct mailbox **mboxptr)
 {
     const char *mboxname = mbentry->name;
-    const char *uniqueid = mbentry->uniqueid;
+    char *uniqueid = xstrdupnull(mbentry->uniqueid);
     uint32_t mbtype = mbentry->mbtype;
     uint32_t uidvalidity = mbentry->uidvalidity;
     modseq_t createdmodseq = mbentry->createdmodseq;
@@ -1723,7 +1678,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
             }
             else if (oldmbentry->mbtype & MBTYPE_INTERMEDIATE) {
                 /* then use the existing mailbox ID and createdmodseq */
-                if (!uniqueid) uniqueid = oldmbentry->uniqueid;
+                if (!uniqueid) uniqueid = xstrdupnull(oldmbentry->uniqueid);
                 createdmodseq = oldmbentry->createdmodseq;
             }
         }
@@ -1819,6 +1774,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
 
     free(acl);
     free(newpartition);
+    free(uniqueid);
     mboxlist_entry_free(&newmbentry);
     mboxlist_entry_free(&usermbentry);
 
