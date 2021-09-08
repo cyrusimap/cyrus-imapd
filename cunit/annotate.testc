@@ -863,7 +863,7 @@ static void test_rename(void)
     CU_ASSERT_EQUAL(r, 0);
     r = mailbox_copy_files(mailbox1, PARTITION, MBOXNAME3_INT, mailbox_uniqueid(mailbox3));
     CU_ASSERT_EQUAL(r, 0);
-    r = mailbox_rename_cleanup(&mailbox1, 0);
+    r = mailbox_rename_cleanup(&mailbox1);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(mailbox1);
 
