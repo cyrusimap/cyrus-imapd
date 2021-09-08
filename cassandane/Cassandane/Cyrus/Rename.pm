@@ -713,7 +713,7 @@ sub _match_intermediates
 sub _dbset
 {
     my ($self, $key, $value) = @_;
-    $self->assert_str_eq('ok', $self->{instance}->run_dbcommand_cb(
+    $self->assert_str_equals('ok', $self->{instance}->run_dbcommand_cb(
         sub { die "got a response!" },
         "$self->{instance}->{basedir}/conf/mailboxes.db",
         'twoskip',
