@@ -1720,11 +1720,11 @@ void sync_print_flags(struct dlist *kl,
 
     /* print user flags in mailbox order */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-        if (!mailbox->flagname[flag])
+        if (!mailbox->h.flagname[flag])
             continue;
         if (!(record->user_flags[flag/32] & (1<<(flag&31))))
             continue;
-        dlist_setflag(fl, "FLAG", mailbox->flagname[flag]);
+        dlist_setflag(fl, "FLAG", mailbox->h.flagname[flag]);
     }
 }
 
@@ -2052,8 +2052,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     dlist_setatom(kl, "PARTITION", topart);
     dlist_setatom(kl, "ACL", mailbox_acl(mailbox));
     dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
-    if (mailbox->quotaroot)
-        dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
+    if (mailbox_quotaroot(mailbox))
+        dlist_setatom(kl, "QUOTAROOT", mailbox_quotaroot(mailbox));
 
     if (mailbox->i.createdmodseq)
         dlist_setnum64(kl, "CREATEDMODSEQ", mailbox->i.createdmodseq);
@@ -3084,8 +3084,8 @@ int sync_apply_mailbox(struct dlist *kin,
 
     /* always take the ACL from the master, it's not versioned */
     r = mboxlist_sync_setacls(mboxname, acl, foldermodseq ? foldermodseq : highestmodseq);
-    if (!r) r = mailbox_set_acl(mailbox, acl);
     if (r) goto done;
+    mailbox_set_acl(mailbox, acl);
 
     /* take all mailbox (not message) annotations - aka metadata,
      * they're not versioned either */
@@ -3276,8 +3276,8 @@ static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
     /* and make it hold a transaction open */
     annotate_state_begin(astate);
 
-    if (qrl && mailbox->quotaroot)
-        sync_name_list_add(qrl, mailbox->quotaroot);
+    if (qrl && mailbox_quotaroot(mailbox))
+        sync_name_list_add(qrl, mailbox_quotaroot(mailbox));
 
     r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 0,
                             /*XXX fullannots*/1, 0);
@@ -5322,11 +5322,11 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
 
     /* print user flags in mailbox order */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-        if (!mailbox->flagname[flag])
+        if (!mailbox->h.flagname[flag])
             continue;
         if (!(record->user_flags[flag/32] & (1<<(flag&31))))
             continue;
-        snprintf(buf, 4096, "%s%s", sep, mailbox->flagname[flag]);
+        snprintf(buf, 4096, "%s%s", sep, mailbox->h.flagname[flag]);
         sep = " ";
     }
 
@@ -5991,7 +5991,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     /* bump the foldermodseq if it's higher on the replica */
     if (remote && remote->foldermodseq > mailbox_foldermodseq(mailbox)) {
         mboxlist_sync_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), remote->foldermodseq);
-        mailbox->foldermodseq = remote->foldermodseq;
+        mailbox->mbentry->foldermodseq = remote->foldermodseq;
     }
 
     /* nothing changed - nothing to send */
@@ -6632,9 +6632,8 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
     }
     if (r) goto done;
 
-    if (info->quotalist && mailbox->quotaroot) {
-        sync_name_list_add(info->quotalist, mailbox->quotaroot);
-    }
+    if (info->quotalist && mailbox_quotaroot(mailbox))
+        sync_name_list_add(info->quotalist, mailbox_quotaroot(mailbox));
 
     sync_name_list_add(info->mboxlist, mbentry->name);
 

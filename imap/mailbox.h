@@ -240,6 +240,15 @@ struct index_change {
 
 #define INDEX_MAP_SIZE 65536
 
+struct mailbox_header {
+    char *name;
+    char *acl;
+    char *uniqueid;
+    char *quotaroot;
+    char *flagname[MAX_USER_FLAGS];
+    int mbtype;
+};
+
 struct mailbox {
     int index_fd;
     int header_fd;
@@ -259,19 +268,14 @@ struct mailbox {
     size_t index_size;
 
     /* Information in mailbox list */
-    char *name;
-    uint32_t mbtype;
-    char *part;
-    char *acl;
-    modseq_t foldermodseq;
+    struct mboxlist_entry *mbentry;
 
     struct index_header i;
 
     /* Information in header */
-    char *uniqueid;
-    char *quotaroot;
-    char *flagname[MAX_USER_FLAGS];
+    struct mailbox_header h;
 
+    /* track open time */
     struct timeval starttime;
 
     /* annotations */
@@ -570,6 +574,7 @@ extern const char *mailbox_name(const struct mailbox *mailbox);
 extern const char *mailbox_uniqueid(const struct mailbox *mailbox);
 extern const char *mailbox_partition(const struct mailbox *mailbox);
 extern const char *mailbox_acl(const struct mailbox *mailbox);
+extern const char *mailbox_quotaroot(const struct mailbox *mailbox);
 extern uint32_t mailbox_mbtype(const struct mailbox *mailbox);
 extern modseq_t mailbox_foldermodseq(const struct mailbox *mailbox);
 
@@ -595,9 +600,10 @@ extern int mailbox_read_basecid(struct mailbox *mailbox,
                                 const struct index_record *record);
 
 
-extern void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid);
-extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl);
-extern int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot);
+// header updates
+extern void mailbox_set_acl(struct mailbox *mailbox, const char *acl);
+extern void mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot);
+
 extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
                              int *flagnum, int create);
 extern int mailbox_remove_user_flag(struct mailbox *mailbox, int flagnum);
@@ -664,7 +670,7 @@ extern int mailbox_setversion(struct mailbox *mailbox, int version);
 extern int mailbox_index_recalc(struct mailbox *mailbox);
 
 #define mailbox_quota_check(mailbox, delta) \
-        (mailbox->quotaroot ? quota_check_useds((mailbox)->quotaroot, delta) : 0)
+        (mailbox_quotaroot(mailbox) ? quota_check_useds(mailbox_quotaroot(mailbox), delta) : 0)
 void mailbox_get_usage(struct mailbox *mailbox,
                         quota_t usage[QUOTA_NUMRESOURCES]);
 void mailbox_annot_changed(struct mailbox *mailbox,

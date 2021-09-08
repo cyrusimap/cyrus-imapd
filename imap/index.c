@@ -290,12 +290,12 @@ EXPORTED void index_close(struct index_state **stateptr)
 
     index_release(state);
 
-    xfree(state->map);
-    xfree(state->mboxname);
-    xfree(state->userid);
+    free(state->map);
+    free(state->mboxname);
+    free(state->userid);
     for (i = 0; i < MAX_USER_FLAGS; i++)
-        xfree(state->flagname[i]);
-    xfree(state);
+        free(state->flagname[i]);
+    free(state);
 
     *stateptr = NULL;
 }
@@ -358,9 +358,9 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     return 0;
 
 fail:
-    xfree(state->mboxname);
-    xfree(state->userid);
-    xfree(state);
+    free(state->mboxname);
+    free(state->userid);
+    free(state);
     return r;
 }
 
@@ -1381,7 +1381,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
                 if (flagsset == NULL)
                     flagsset = mboxevent_enqueue(EVENT_FLAGS_SET, &mboxevents);
 
-                mboxevent_add_flags(flagsset, mailbox->flagname,
+                mboxevent_add_flags(flagsset, mailbox->h.flagname,
                                     modified_flags.added_system_flags,
                                     modified_flags.added_user_flags);
                 mboxevent_extract_msgrecord(flagsset, msgrec);
@@ -1390,7 +1390,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
                 if (flagsclear == NULL)
                     flagsclear = mboxevent_enqueue(EVENT_FLAGS_CLEAR, &mboxevents);
 
-                mboxevent_add_flags(flagsclear, mailbox->flagname,
+                mboxevent_add_flags(flagsclear, mailbox->h.flagname,
                                     modified_flags.removed_system_flags,
                                     modified_flags.removed_user_flags);
                 mboxevent_extract_msgrecord(flagsclear, msgrec);
@@ -3040,7 +3040,7 @@ index_copy(struct index_state *state,
     int checkquota = !ismove && !config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS);
 
     /* not moving or different quota root - need to check quota */
-    if (checkquota || strcmpsafe(srcmailbox->quotaroot, destmailbox->quotaroot)) {
+    if (checkquota || strcmpsafe(mailbox_quotaroot(srcmailbox), mailbox_quotaroot(destmailbox))) {
         for (i = 0; i < copyargs.nummsg; i++)
             qdiffs[QUOTA_STORAGE] += copyargs.records[i].size;
         qdiffs[QUOTA_MESSAGE] = copyargs.nummsg;
@@ -3778,19 +3778,19 @@ EXPORTED void index_checkflags(struct index_state *state, int print, int dirty)
 
     for (i = 0; i < MAX_USER_FLAGS; i++) {
         /* both empty */
-        if (!mailbox->flagname[i] && !state->flagname[i])
+        if (!mailbox->h.flagname[i] && !state->flagname[i])
             continue;
 
         /* both same */
-        if (mailbox->flagname[i] && state->flagname[i] &&
-            !strcmp(mailbox->flagname[i], state->flagname[i]))
+        if (mailbox->h.flagname[i] && state->flagname[i] &&
+            !strcmp(mailbox->h.flagname[i], state->flagname[i]))
             continue;
 
         /* ok, got something to change! */
         if (state->flagname[i])
             free(state->flagname[i]);
-        if (mailbox->flagname[i])
-            state->flagname[i] = xstrdup(mailbox->flagname[i]);
+        if (mailbox->h.flagname[i])
+            state->flagname[i] = xstrdup(mailbox->h.flagname[i]);
         else
             state->flagname[i] = NULL;
 
@@ -6988,15 +6988,15 @@ void index_msgdata_free(MsgData **msgdata, unsigned int n)
 
         if (!md) continue;
 
-        xfree(md->cc);
-        xfree(md->from);
-        xfree(md->to);
-        xfree(md->displayfrom);
-        xfree(md->displayto);
-        xfree(md->xsubj);
-        xfree(md->msgid);
-        xfree(md->listid);
-        xfree(md->contenttype);
+        free(md->cc);
+        free(md->from);
+        free(md->to);
+        free(md->displayfrom);
+        free(md->displayto);
+        free(md->xsubj);
+        free(md->msgid);
+        free(md->listid);
+        free(md->contenttype);
         strarray_fini(&md->ref);
         strarray_fini(&md->annot);
     }

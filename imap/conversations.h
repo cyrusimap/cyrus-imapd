@@ -279,8 +279,8 @@ extern conversation_id_t conversations_guid_cid_lookup(struct conversations_stat
  )
 #define conv_guidrec_mboxcmp(rec, mbox) ( \
   ((rec)->version > CONV_GUIDREC_BYNAME_VERSION) ? \
-   strcmpsafe(conv_guidrec_uniqueid(rec), (mbox)->uniqueid) : \
-   strcmpsafe(conv_guidrec_mboxname(rec), (mbox)->name) \
+   strcmpsafe(conv_guidrec_uniqueid(rec), mailbox_uniqueid(mbox)) : \
+   strcmpsafe(conv_guidrec_mboxname(rec), mailbox_name(mbox)) \
  )
 /* F record items */
 extern int conversation_getstatus(struct conversations_state *state,

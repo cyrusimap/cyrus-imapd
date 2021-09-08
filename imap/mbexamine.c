@@ -216,8 +216,8 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
     printf("  User Flags: ");
 
     for (i = 0; i < MAX_USER_FLAGS; i++) {
-        if (!mailbox->flagname[i]) break;
-        printf("%s ", mailbox->flagname[i]);
+        if (!mailbox->h.flagname[i]) break;
+        printf("%s ", mailbox->h.flagname[i]);
     }
 
     if (!i) printf("[none]");

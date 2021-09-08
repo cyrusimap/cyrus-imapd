@@ -1632,12 +1632,12 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
 
     mbentry->mbtype |= (parent->mbtype & MBTYPE_LEGACY_DIRS);
 
-    xfree(mbentry->partition);
+    xzfree(mbentry->partition);
     r = mboxlist_create_partition(mboxname, parent->partition,
                                   &mbentry->partition);
     if (r) goto done;
     mbentry->mbtype &= ~MBTYPE_INTERMEDIATE;
-    xfree(mbentry->acl);
+    xzfree(mbentry->acl);
     mbentry->acl = xstrdupnull(parent->acl);
 
     r = mailbox_create(mboxname, mbentry->mbtype,
@@ -1652,7 +1652,7 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
     if (r) goto done;
 
     // make sure all the fields are up-to-date
-    xfree(mbentry->uniqueid);
+    xzfree(mbentry->uniqueid);
     mbentry->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
     mbentry->uidvalidity = mailbox->i.uidvalidity;
     mbentry->createdmodseq = mailbox->i.createdmodseq;
@@ -2556,7 +2556,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
          * codepaths: INBOX -> INBOX.foo, user rename, regular rename
          * and of course this one, partition move */
         newpartition = xstrdup(partition);
-        r = mailbox_copy_files(oldmailbox, newpartition, newname, oldmailbox->mbtype & MBTYPE_LEGACY_DIRS ? NULL : mailbox_uniqueid(oldmailbox));
+        r = mailbox_copy_files(oldmailbox, newpartition, newname, mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS ? NULL : mailbox_uniqueid(oldmailbox));
         if (r) goto done;
         newmbentry = mboxlist_entry_create();
         newmbentry->mbtype = mailbox_mbtype(oldmailbox);
@@ -2862,10 +2862,10 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                     mboxevent_extract_mailbox(mboxevent, oldmailbox);
                 else {
                     /* New maibox is the same as old, except for the name */
-                    oldname = mailbox_name(oldmailbox);
-                    oldmailbox->name = (char *) newname;
+                    char *name = oldmailbox->mbentry->name;
+                    oldmailbox->mbentry->name = (char *) newname;
                     mboxevent_extract_mailbox(mboxevent, oldmailbox);
-                    oldmailbox->name = (char *) oldname;
+                    oldmailbox->mbentry->name = name;
 
                     mboxevent_extract_old_mailbox(mboxevent, oldmailbox);
                 }
@@ -3168,9 +3168,12 @@ EXPORTED int mboxlist_updateacl_raw(const char *name, const char *newacl)
 {
     struct mailbox *mailbox = NULL;
     int r = mailbox_open_iwl(name, &mailbox);
-    if (!r) r = mboxlist_sync_setacls(name, newacl, mailbox_modseq_dirty(mailbox));
-    if (!r) r = mailbox_set_acl(mailbox, newacl);
-    if (!r) r = mailbox_commit(mailbox);
+    if (!r)
+        r = mboxlist_sync_setacls(name, newacl, mailbox_modseq_dirty(mailbox));
+    if (!r) {
+        mailbox_set_acl(mailbox, newacl);
+        r = mailbox_commit(mailbox);
+    }
     mailbox_close(&mailbox);
     return r;
 }
@@ -4554,13 +4557,13 @@ static int mboxlist_rmquota(const mbentry_t *mbentry, void *rock)
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) goto done;
 
-    if (mailbox->quotaroot) {
-        if (strcmp(mailbox->quotaroot, oldroot)) {
+    if (mailbox_quotaroot(mailbox)) {
+        if (strcmp(mailbox_quotaroot(mailbox), oldroot)) {
             /* Part of a different quota root */
             goto done;
         }
 
-        r = mailbox_set_quotaroot(mailbox, NULL);
+        mailbox_set_quotaroot(mailbox, NULL);
     }
 
  done:

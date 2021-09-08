@@ -327,7 +327,9 @@ EXPORTED void jmap_emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv,
 EXPORTED json_t *jmap_fetch_snoozed(const char *mbox, uint32_t uid)
 {
     /* get the snoozed annotation */
-    struct mailbox mailbox = { .name = (char *) mbox, .uniqueid = NULL };
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    mbentry.name = (char *)mbox;
+    struct mailbox mailbox = { .mbentry = &mbentry };
     const char *annot = IMAP_ANNOT_NS "snoozed";
     struct buf value = BUF_INITIALIZER;
     json_t *snooze = NULL;

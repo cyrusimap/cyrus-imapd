@@ -1494,14 +1494,14 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
             for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
                 bit32 flagmask = src_user_flags[userflag/32];
-                if (mailbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
+                if (mailbox->h.flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
                     int num;
-                    r = mailbox_user_flag(as->mailbox, mailbox->flagname[userflag], &num, 1);
+                    r = mailbox_user_flag(as->mailbox, mailbox->h.flagname[userflag], &num, 1);
                     if (r)
                         xsyslog(LOG_ERR, "IOERROR: unable to copy flag",
                                          "flag=<%s> src_mailbox=<%s> dest_mailbox=<%s>"
                                          " uid=<%u> error=<%s>",
-                                         mailbox->flagname[userflag],
+                                         mailbox->h.flagname[userflag],
                                          mailbox_name(mailbox),
                                          mailbox_name(as->mailbox),
                                          src_uid,

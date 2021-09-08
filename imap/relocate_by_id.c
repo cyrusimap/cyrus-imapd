@@ -351,7 +351,7 @@ int main(int argc, char **argv)
 
                     r = mailbox_open_iwl(mbentry->name, &mailbox);
                     if (!r) {
-                        mailbox->mbtype = mbentry->mbtype;
+                        mailbox->h.mbtype = mbentry->mbtype;
                         mailbox->header_dirty = 1;
                         mailbox_close(&mailbox);
                     }

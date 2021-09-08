@@ -499,7 +499,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     if (strcmpsafe(mailbox_uniqueid(mailbox), mbentry_byname->uniqueid)) {
         printf("Wrong uniqueid in mbentry, fixing %s (%s -> %s)\n",
                name, mbentry_byname->uniqueid, mailbox_uniqueid(mailbox));
-        xfree(mbentry_byname->uniqueid);
+        xzfree(mbentry_byname->uniqueid);
         mbentry_byname->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
         mbentry_dirty = 1;
     }
@@ -519,7 +519,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         printf("Wrong uniqueid! %s (should be %s)\n", mbentry_byid->name, name);
         if (updateuniqueids) {
             mailbox_make_uniqueid(mailbox);
-            xfree(mbentry_byname->uniqueid);
+            xzfree(mbentry_byname->uniqueid);
             mbentry_byname->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
             mbentry_dirty = 1;
             syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
@@ -576,24 +576,6 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         }
     }
 
-    // how can this even happen?  Dunno, but here for completeness
-    if (strcmpsafe(mailbox_partition(mailbox), mbentry_byname->partition)) {
-        if (prefer_mbentry) {
-            printf("Wrong partition in mailbox %s (%s %s)\n",
-                   name, mbentry_byname->partition, mailbox_partition(mailbox));
-            xfree(mailbox->part);
-            mailbox->part = xstrdupnull(mbentry_byname->partition);
-            mailbox->header_dirty = 1;
-        }
-        else {
-            printf("Wrong partition in mbentry %s (%s %s)\n",
-                   name, mailbox_partition(mailbox), mbentry_byname->partition);
-            xfree(mbentry_byname->partition);
-            mbentry_byname->partition = xstrdupnull(mailbox_partition(mailbox));
-            mbentry_dirty = 1;
-        }
-    }
-
     if (strcmpsafe(mailbox_acl(mailbox), mbentry_byname->acl)) {
         if (prefer_mbentry) {
             printf("Wrong acl in mbentry %s (%s %s)\n",
@@ -604,7 +586,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         else {
             printf("Wrong acl in mbentry %s (%s %s)\n",
                    name, mbentry_byname->acl, mailbox_acl(mailbox));
-            xfree(mbentry_byname->acl);
+            xzfree(mbentry_byname->acl);
             mbentry_byname->acl = xstrdupnull(mailbox_acl(mailbox));
             mbentry_dirty = 1;
         }

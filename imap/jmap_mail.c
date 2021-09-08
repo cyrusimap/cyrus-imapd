@@ -5830,8 +5830,8 @@ static int _email_keywords_add_msgrecord(struct email_keywords *keywords,
     struct buf buf = BUF_INITIALIZER;
     int i;
     for (i = 0 ; i < MAX_USER_FLAGS ; i++) {
-        if (mbox->flagname[i] && (user_flags[i/32] & 1<<(i&31))) {
-            buf_setcstr(&buf, mbox->flagname[i]);
+        if (mbox->h.flagname[i] && (user_flags[i/32] & 1<<(i&31))) {
+            buf_setcstr(&buf, mbox->h.flagname[i]);
             _email_keywords_add_keyword(keywords, buf_lcase(&buf));
         }
     }
@@ -12082,14 +12082,14 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
                                     add_seenseq, del_seenseq, &modflags);
             if (!r) {
                 if (modflags.added_flags) {
-                    mboxevent_add_flags(flagsset, plan->mbox->flagname,
+                    mboxevent_add_flags(flagsset, plan->mbox->h.flagname,
                                         modflags.added_system_flags,
                                         modflags.added_user_flags);
                     mboxevent_extract_msgrecord(flagsset, mrw);
                     notify_flagsset = 1;
                 }
                 if (modflags.removed_flags) {
-                    mboxevent_add_flags(flagsclear, plan->mbox->flagname,
+                    mboxevent_add_flags(flagsclear, plan->mbox->h.flagname,
                                         modflags.removed_system_flags,
                                         modflags.removed_user_flags);
                     mboxevent_extract_msgrecord(flagsclear, mrw);
@@ -12950,14 +12950,14 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
         if (!r) {
             if (modflags.added_flags) {
                 mboxevent_extract_msgrecord(flagsset, mr);
-                mboxevent_add_flags(flagsset, mbox->flagname,
+                mboxevent_add_flags(flagsset, mbox->h.flagname,
                                     modflags.added_system_flags,
                                     modflags.added_user_flags);
                 notify_flagsset = 1;
             }
             if (modflags.removed_flags) {
                 mboxevent_extract_msgrecord(flagsclear, mr);
-                mboxevent_add_flags(flagsclear, mbox->flagname,
+                mboxevent_add_flags(flagsclear, mbox->h.flagname,
                                     modflags.removed_system_flags,
                                     modflags.removed_user_flags);
                 notify_flagsclear = 1;

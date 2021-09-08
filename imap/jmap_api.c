@@ -3013,11 +3013,7 @@ static int set_upload_rights(const char *accountid)
     }
     else {
         /* ok, change the backup in cyrus.header */
-        r = mailbox_set_acl(mbox, newacl);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
-                   mailbox_name(mbox), error_message(r));
-        }
+        mailbox_set_acl(mbox, newacl);
     }
 
     mailbox_close(&mbox);
@@ -3150,14 +3146,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     }
     else {
         /* ok, change the backup in cyrus.header */
-        r = mailbox_set_acl(mbox, newacl);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
-                   mailbox_name(mbox), error_message(r));
-        }
-    }
-
-    if (!r) {
+        mailbox_set_acl(mbox, newacl);
         /* Set proper access rights on JMAP upload folder */
         r = set_upload_rights(owner);
     }

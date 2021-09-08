@@ -1579,11 +1579,11 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         if (!(rrock->jrestore->mode & DRY_RUN) && userflag >= 0
             && (record->user_flags[userflag/32] & (1<<userflag%31))) {
             struct mailbox_plan *plan =
-                hash_lookup(mailbox->name, mrock->mailboxes);
+                hash_lookup(mailbox_name(mailbox), mrock->mailboxes);
             if (!plan) {
                 /* Create a plan for this mailbox */
                 plan = xzmalloc(sizeof(struct mailbox_plan));
-                hash_insert(mailbox->name, plan, mrock->mailboxes);
+                hash_insert(mailbox_name(mailbox), plan, mrock->mailboxes);
             }
 
             /* Add this UID to the unflag array */
@@ -1996,7 +1996,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                 if (r) {
                     syslog(LOG_ERR,
                            "IOERROR: failed to rewrite index record for %s:%u",
-                           mailbox->name, record.uid);
+                           mailbox_name(mailbox), record.uid);
                 }
             }
             if (restore) {
