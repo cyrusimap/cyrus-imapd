@@ -49,6 +49,8 @@
 #include "assert.h"
 #include "libcyr_cfg.h"
 #include "cyrusdb.h"
+#include "xmalloc.h"
+#include "util.h"
 
 #if defined(__GNUC__) && __GNUC__ > 1
 /* We can use the GCC union constructor extension */
@@ -56,6 +58,16 @@
 #else
 #define CFGVAL(t,v)     {(void *)(v)}
 #endif
+
+struct delayed_action {
+    struct delayed_action *next;
+    char *key;
+    void (*cb)(void *rock);
+    void (*myfree)(void *rock);
+    void *rock;
+};
+
+static struct delayed_action *delayed_actions;
 
 static struct cyrusopt_s cyrus_options[] = {
     { CYRUSOPT_ZERO, { NULL }, CYRUS_OPT_NOTOPT },
@@ -213,6 +225,49 @@ EXPORTED void libcyrus_config_setswitch(enum cyrus_opt opt, int val)
     cyrus_options[opt].val.b = val;
 }
 
+/* This keeps a list of functions to call at an opportune time when the
+ * user is not waiting.
+ * Arguments:
+ *  dedup key: if provided, don't add this callback again if there's
+ *             already one for this key.
+ *  cb:        callback to call with rock passed
+ *  free:      function to call with rock after the callback to free it,
+               if NULL there is nothing to free.
+ *  rock:      arguments for the callback
+ */
+EXPORTED void libcyrus_delayed_action(const char *key, void (*cb)(void *),
+                                      void (*myfree)(void *), void *rock)
+{
+    struct delayed_action *action;
+    if (key) {
+        // check if we already have this event on our list
+        for (action = delayed_actions; action; action = action->next) {
+            if (!strcmpsafe(key, action->key)) {
+                if (myfree) myfree(rock);
+                return;
+            }
+        }
+    }
+    action = xzmalloc(sizeof(struct delayed_action));
+    action->key = xstrdupnull(key);
+    action->cb = cb;
+    action->myfree = myfree;
+    action->rock = rock;
+    action->next = delayed_actions;
+    delayed_actions = action;
+}
+
+EXPORTED void libcyrus_run_delayed(void)
+{
+    while (delayed_actions) {
+        struct delayed_action *action = delayed_actions;
+        delayed_actions = action->next;
+        action->cb(action->rock);
+        if (action->myfree) action->myfree(action->rock);
+        free(action);
+    }
+}
+
 EXPORTED void libcyrus_init(void)
 {
     cyrusdb_init();
@@ -220,5 +275,6 @@ EXPORTED void libcyrus_init(void)
 
 EXPORTED void libcyrus_done(void)
 {
+    libcyrus_run_delayed();
     cyrusdb_done();
 }

@@ -744,6 +744,9 @@ static void imapd_reset(void)
     int bytes_in = 0;
     int bytes_out = 0;
 
+    /* run delayed commands first before closing anything */
+    libcyrus_run_delayed();
+
     proc_cleanup();
 
     /* close backend connections */
@@ -1083,6 +1086,9 @@ void shut_down(int code)
 
     in_shutdown = 1;
 
+    /* run delayed commands before we take away all the environment */
+    libcyrus_run_delayed();
+
     proc_cleanup();
 
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
@@ -1279,6 +1285,9 @@ static void cmdloop(void)
 
         /* command no longer running */
         proc_register(config_ident, imapd_clienthost, imapd_userid, index_mboxname(imapd_index), NULL);
+
+        /* run any delayed cleanup while a user isn't waiting on a reply */
+        libcyrus_run_delayed();
 
         /* Check for shutdown file */
         if ( !imapd_userisadmin && imapd_userid &&

@@ -286,6 +286,7 @@ int service_main(int argc, char **argv,
     prometheus_increment(CYRUS_LMTP_CONNECTIONS_TOTAL);
 
     lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
+    libcyrus_run_delayed();
 
     prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
 
@@ -1007,6 +1008,8 @@ void shut_down(int code)
 
     /* set flag */
     in_shutdown = 1;
+
+    libcyrus_run_delayed();
 
     /* close backend connections */
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {

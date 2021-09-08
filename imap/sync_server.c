@@ -397,6 +397,8 @@ void shut_down(int code)
 {
     in_shutdown = 1;
 
+    libcyrus_run_delayed();
+
     proc_cleanup();
 
     seen_done();
@@ -499,6 +501,8 @@ static void cmdloop(void)
 
     for (;;) {
         prot_flush(sync_out);
+
+        libcyrus_run_delayed();
 
         /* Parse command name */
         if ((c = getword(sync_in, &cmd)) == EOF)

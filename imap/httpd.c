@@ -683,6 +683,9 @@ static void httpd_reset(struct http_connection *conn)
     int bytes_in = 0;
     int bytes_out = 0;
 
+    /* run any delayed actions */
+    libcyrus_run_delayed();
+
     /* Do any namespace specific cleanup */
     for (i = 0; http_namespaces[i]; i++) {
         if (http_namespaces[i]->enabled && http_namespaces[i]->reset)
@@ -1097,6 +1100,8 @@ void shut_down(int code)
     int bytes_out = 0;
 
     in_shutdown = 1;
+
+    libcyrus_run_delayed();
 
     if (allow_cors) free_wildmats(allow_cors);
 
@@ -2137,6 +2142,9 @@ static void cmdloop(struct http_connection *conn)
             /* Flush any buffered output */
             prot_flush(httpd_out);
             if (backend_current) prot_flush(backend_current->out);
+
+            /* Run delayed actions from this command */
+            libcyrus_run_delayed();
 
             /* Check for shutdown file */
             if (shutdown_file(txn.buf.s, txn.buf.alloc) ||

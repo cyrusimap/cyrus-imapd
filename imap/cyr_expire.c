@@ -60,7 +60,6 @@
 #include <sys/stat.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <signal.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <libgen.h>
@@ -87,10 +86,10 @@
 #define SECS_IN_A_DAY (24 * SECS_IN_AN_HR)
 
 /* global state */
-static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
 static const char *progname = NULL;
 static struct namespace expire_namespace; /* current namespace */
+static struct cyr_expire_ctx ctx;
 
 /* command line arguments */
 struct arguments {
@@ -157,10 +156,6 @@ struct cyr_expire_ctx {
     struct expire_rock erock;
 };
 
-static const struct cyr_expire_ctx zero_ctx;
-
-static void sighandler(int sig);
-
 /* verbosep - a wrapper to print if the 'verbose' option is
    turned on.
  */
@@ -180,18 +175,7 @@ static inline void verbosep(const char *fmt, ...)
 
 static void cyr_expire_init(const char *progname, struct cyr_expire_ctx *ctx)
 {
-    struct sigaction action;
-
-    /* Initialise signal handlers */
-    sigemptyset(&action.sa_mask);
-    action.sa_flags = 0;
-    action.sa_handler = sighandler;
-    if (sigaction(SIGQUIT, &action, NULL) < 0)
-        fatal("unable to install signal handler for SIGQUIT", EX_TEMPFAIL);
-    if (sigaction(SIGINT, &action, NULL) < 0)
-        fatal("unable to install signal handler for SIGINT", EX_TEMPFAIL);
-    if (sigaction(SIGTERM, &action, NULL) < 0)
-        fatal("unable to install signal handler for SIGTERM", EX_TEMPFAIL);
+    signals_add_handlers(0);
 
     construct_hash_table(&ctx->erock.table, 10000, 1);
     strarray_init(&ctx->drock.to_delete);
@@ -380,8 +364,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     int archive_seconds = -1;
 
-    if (sigquit)
-        return 1;
+    signals_poll();
 
     if (mbentry->mbtype & MBTYPE_DELETED)
         goto done;
@@ -408,6 +391,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
 
 done:
     mailbox_close(&mailbox);
+    libcyrus_run_delayed();
 
     /* move on to the next mailbox regardless of errors */
     return 0;
@@ -451,10 +435,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
     int expire_seconds = 0;
     int did_expunge = 0;
 
-    if (sigquit) {
-        /* don't care if we leak some memory, we are shutting down */
-        return 1;
-    }
+    signals_poll();
 
     /* Skip remote mailboxes */
     if (mbentry->mbtype & MBTYPE_REMOTE)
@@ -534,6 +515,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
 
 done:
     mailbox_close(&mailbox);
+    libcyrus_run_delayed();
     /* Even if we had a problem with one mailbox, continue with the others */
     return 0;
 }
@@ -544,8 +526,7 @@ static int delete(const mbentry_t *mbentry, void *rock)
     time_t timestamp;
     int delete_seconds = -1;
 
-    if (sigquit)
-        return 1;
+    signals_poll();
 
     if (mbentry->mbtype & MBTYPE_DELETED)
         goto done;
@@ -585,8 +566,7 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
     unsigned int nseen = 0, ndeleted = 0;
     char *filename = NULL;
 
-    if (sigquit)
-        return 1;
+    signals_poll();
 
     if (mbentry->mbtype & MBTYPE_DELETED)
         goto done;
@@ -609,6 +589,7 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
     if (!conversations_open_mbox(mbentry->name, 0/*shared*/, &state)) {
         conversations_prune(state, crock->expire_mark, &nseen, &ndeleted);
         conversations_commit(&state);
+        libcyrus_run_delayed();
     }
 
     hash_insert(filename, (void *)1, &crock->seen);
@@ -620,12 +601,6 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
 done:
     free(filename);
     return 0;
-}
-
-static void sighandler(int sig __attribute((unused)))
-{
-    sigquit = 1;
-    return;
 }
 
 static int do_archive(struct cyr_expire_ctx *ctx)
@@ -757,13 +732,13 @@ static int do_delete(struct cyr_expire_ctx *ctx)
         for (i = 0 ; i < ctx->drock.to_delete.count ; i++) {
             char *name = ctx->drock.to_delete.data[i];
 
-            if (sigquit)
-                return ret;         /* return from here, will quit in main. */
+            signals_poll();
 
             verbosep("Removing: %s\n", name);
 
             ret = mboxlist_deletemailboxlock(name, 1, NULL, NULL, NULL,
                                              MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
+            libcyrus_run_delayed();
             /* XXX: Ignoring the return from mboxlist_deletemailbox() ??? */
             count++;
         }
@@ -870,14 +845,23 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
         return -EINVAL;
     }
 
-
     return 0;
 }
+
+static void shut_down(int code) __attribute__((noreturn));
+static void shut_down(int code)
+{
+    in_shutdown = 1;
+
+    cyr_expire_cleanup(&ctx);
+
+    exit(code);
+}
+
 
 int main(int argc, char *argv[])
 {
     int r = 0;
-    struct cyr_expire_ctx ctx = zero_ctx;
 
     progname = basename(argv[0]);
 
@@ -911,30 +895,16 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    r = do_archive(&ctx);
+    do_archive(&ctx);
 
-    if (sigquit)
-        goto finish;
+    do_expunge(&ctx);
 
-    r = do_expunge(&ctx);
+    do_cid_expire(&ctx);
 
-    if (sigquit)
-        goto finish;
-
-    r = do_cid_expire(&ctx);
-
-    if (sigquit)
-        goto finish;
-
-    r = do_delete(&ctx);
-
-    if (sigquit)
-        goto finish;
+    do_delete(&ctx);
 
     /* purge deliver.db entries of expired messages */
-    r = do_duplicate_prune(&ctx);
+    do_duplicate_prune(&ctx);
 
- finish:
-    cyr_expire_cleanup(&ctx);
-    exit(r);
+    shut_down(0);
 }

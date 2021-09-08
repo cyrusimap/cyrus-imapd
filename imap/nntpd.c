@@ -572,6 +572,8 @@ void shut_down(int code)
 
     in_shutdown = 1;
 
+    libcyrus_run_delayed();
+
     proc_cleanup();
 
     /* close local mailbox */
@@ -728,6 +730,8 @@ static void cmdloop(void)
         signals_poll();
 
         proc_register(config_ident, nntp_clienthost, nntp_userid, index_mboxname(group_state), NULL);
+
+        libcyrus_run_delayed();
 
         if (!proxy_check_input(protin, nntp_in, nntp_out,
                                backend_current ? backend_current->in : NULL,

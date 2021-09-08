@@ -137,6 +137,8 @@ static void smmapd_reset(void)
     map_in = map_out = NULL;
 
     cyrus_reset_stdio();
+
+    libcyrus_run_delayed();
 }
 
 void shut_down(int code) __attribute__((noreturn));

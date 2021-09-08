@@ -127,6 +127,20 @@ static int reconstruct_flags = RECONSTRUCT_MAKE_CHANGES | RECONSTRUCT_DO_STAT;
 static int setversion = 0;
 static int updateuniqueids = 0;
 
+static void shut_down(int code) __attribute__((noreturn));
+static void shut_down(int code)
+{
+    in_shutdown = 1;
+
+    libcyrus_run_delayed();
+
+    seen_done();
+
+    cyrus_done();
+
+    exit(code);
+}
+
 int main(int argc, char **argv)
 {
     int opt, i, r;
@@ -240,6 +254,9 @@ int main(int argc, char **argv)
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
+
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers(0);
 
     if (mflag) {
         if (rflag || fflag || optind != argc) {
@@ -387,9 +404,9 @@ int main(int argc, char **argv)
 
     partlist_local_done();
 
-    cyrus_done();
+    libcyrus_run_delayed();
 
-    return 0;
+    shut_down(0);
 }
 
 static void usage(void)
