@@ -20,8 +20,6 @@ Man pages
 
     systemcommands/*
 
-
-
 (1) User Commands
 =================
 
