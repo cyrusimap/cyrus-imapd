@@ -454,7 +454,7 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
         string--;
         break;
     }
-            
+
     for (; *string; string++) {
         /* mailbox flags */
         switch (*string) {
@@ -950,14 +950,14 @@ static int user_can_read(const strarray_t *aclbits, const char *user)
 
 static int mboxlist_update_raclmodseq(const char *acluser)
 {
-    char *aclusermbox = mboxname_user_mbox(acluser, NULL);
+    char *acluserinbox = mboxname_user_mbox(acluser, NULL);
     mbentry_t *raclmbentry = NULL;
-    if (mboxlist_lookup(aclusermbox, &raclmbentry, NULL) == 0) {
-        mboxname_nextraclmodseq(aclusermbox, 0);
-        sync_log_mailbox(aclusermbox);
+    if (mboxlist_lookup(acluserinbox, &raclmbentry, NULL) == 0) {
+        mboxname_nextraclmodseq(acluserinbox, 0);
+        sync_log_mailbox(acluserinbox);
     }
     mboxlist_entry_free(&raclmbentry);
-    free(aclusermbox);
+    free(acluserinbox);
     return 0;
 }
 
