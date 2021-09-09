@@ -1034,6 +1034,13 @@ static void add_former_name(struct dlist *name_history, const char *name,
     free(dbname);
 }
 
+static void assert_namespacelocked(const char *mboxname)
+{
+    char *userid = mboxname_to_userid(mboxname);
+    assert(user_isnamespacelocked(userid));
+    free(userid);
+}
+
 static int mboxlist_update_entry(const char *name,
                                  const mbentry_t *mbentry, struct txn **txn)
 {
@@ -1043,6 +1050,8 @@ static int mboxlist_update_entry(const char *name,
     int r = 0;
     struct txn *mytid = NULL;
     if (!txn) txn = &mytid;
+
+    assert_namespacelocked(name);
 
     mboxlist_mylookup(dbname, &old, txn, 0, 1); // ignore errors, it will be NULL
 
@@ -1203,13 +1212,6 @@ EXPORTED int mboxlist_update(const mbentry_t *mbentry, int localonly)
     }
 
     return r;
-}
-
-static void assert_namespacelocked(const char *mboxname)
-{
-    char *userid = mboxname_to_userid(mboxname);
-    assert(user_isnamespacelocked(userid));
-    free(userid);
 }
 
 static int _findparent(mbname_t *mbname, mbentry_t **mbentryp, int allow_all)
