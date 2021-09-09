@@ -1041,6 +1041,8 @@ static int mboxlist_update_entry(const char *name,
     struct buf key = BUF_INITIALIZER;
     mbentry_t *old = NULL;
     int r = 0;
+    struct txn *mytid = NULL;
+    if (!txn) txn = &mytid;
 
     mboxlist_mylookup(dbname, &old, txn, 0, 1); // ignore errors, it will be NULL
 
@@ -1127,6 +1129,10 @@ static int mboxlist_update_entry(const char *name,
     }
 
  done:
+    if (mytid) {
+        if (r) cyrusdb_abort(mbdb, mytid);
+        else cyrusdb_commit(mbdb, mytid);
+    }
     mboxlist_entry_free(&old);
     buf_free(&key);
     free(dbname);
