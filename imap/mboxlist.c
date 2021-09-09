@@ -150,6 +150,21 @@ EXPORTED mbentry_t *mboxlist_entry_copy(const mbentry_t *src)
 
     copy->legacy_specialuse = xstrdupnull(src->legacy_specialuse);
 
+    size_t numhistory = ptrarray_size(&src->name_history);
+    size_t i;
+    // this is kind of pointless, but we know the target size so may as
+    // well ensure all the space even though it'll only be one alloc
+    // normally anyway
+    ptrarray_truncate(&copy->name_history, numhistory);
+    for (i = 0; i < numhistory; i++) {
+        const former_name_t *item = ptrarray_nth(&src->name_history, i);
+        former_name_t *tgt = xzmalloc(sizeof(former_name_t));
+        tgt->foldermodseq = item->foldermodseq;
+        tgt->mtime = item->mtime;
+        tgt->name = xstrdupnull(item->name);
+        ptrarray_set(&copy->name_history, i, tgt);
+    }
+
     return copy;
 }
 
