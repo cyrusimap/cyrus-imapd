@@ -14,7 +14,6 @@ _git_checkout_commit
 _autoreconf
 
 ./configure \
-    --enable-autocreate \
     --enable-calalarmd \
     --enable-coverage \
     --enable-gssapi \

@@ -302,7 +302,7 @@ Compile
     autoreconf -i -s   # generates a configure script, and its various dependencies
 
     ./configure CFLAGS="-W -Wno-unused-parameter -g -O0 -Wall -Wextra -Werror -fPIC" \
-    --enable-coverage --enable-calalarmd --enable-autocreate \
+    --enable-coverage --enable-calalarmd \
     --enable-nntp --enable-http --enable-unit-tests \
     --enable-replication --with-openssl=yes --enable-murder \
     --enable-idled --prefix=/usr/cyrus

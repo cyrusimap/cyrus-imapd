@@ -147,7 +147,7 @@ Configure the environment.
 .. code-block:: bash
 
     ./configure --prefix=/usr/cyrus --with-cyrus-prefix=/usr/cyrus \
-    --enable-autocreate --enable-http --enable-unit-tests \
+    --enable-http --enable-unit-tests \
     --enable-replication --enable-nntp --enable-murder \
     --enable-idled --enable-xapian --enable-calalarmd \
     --enable-backup

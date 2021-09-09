@@ -957,6 +957,8 @@ imap_calalarmd_SOURCES = imap/calalarmd.c imap/mutex_fake.c
 imap_calalarmd_LDADD = $(LD_SERVER_ADD)
 
 imap_imapd_SOURCES = \
+	imap/autocreate.h \
+	imap/autocreate.c \
 	imap/imap_proxy.c \
 	imap/imap_proxy.h \
 	imap/imapd.c \
@@ -967,12 +969,6 @@ imap_imapd_SOURCES = \
 	imap/sync_support.c \
 	imap/sync_support.h \
 	master/service.c
-
-if AUTOCREATE
-imap_imapd_SOURCES += \
-	imap/autocreate.h \
-	imap/autocreate.c
-endif
 
 imap_imapd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
@@ -1171,6 +1167,8 @@ endif
 endif
 
 imap_lmtpd_SOURCES = \
+	imap/autocreate.c \
+	imap/autocreate.h \
 	imap/lmtpd.c \
 	imap/lmtpd.h \
 	imap/lmtpengine.c \
@@ -1183,12 +1181,6 @@ imap_lmtpd_SOURCES = \
 	master/service.c
 
 nodist_imap_lmtpd_SOURCES = imap/lmtp_err.c
-
-if AUTOCREATE
-imap_lmtpd_SOURCES += \
-	imap/autocreate.c \
-	imap/autocreate.h
-endif # AUTOCREATE
 
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
@@ -1351,18 +1343,14 @@ endif # CUNIT
 endif # JMAP
 
 imap_pop3d_SOURCES = \
+	imap/autocreate.c \
+	imap/autocreate.h \
 	imap/mutex_fake.c \
 	imap/pop3d.c \
 	imap/proxy.c \
 	imap/sync_support.c \
 	imap/sync_support.h \
 	master/service.c
-
-if AUTOCREATE
-imap_pop3d_SOURCES += \
-	imap/autocreate.c \
-	imap/autocreate.h
-endif # AUTOCREATE
 
 imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 

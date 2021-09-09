@@ -99,11 +99,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "gssapi", json_false());
 #endif
-#ifdef USE_AUTOCREATE
-    json_object_set_new(component, "autocreate", json_true());
-#else
-    json_object_set_new(component, "autocreate", json_false());
-#endif
 #ifdef USE_IDLED
     json_object_set_new(component, "idled", json_true());
 #else
