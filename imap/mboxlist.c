@@ -1857,7 +1857,9 @@ EXPORTED int mboxlist_insertremote(mbentry_t *mbentry,
     }
 
     /* database put */
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
     r = mboxlist_update_entry(mbentry->name, mbentry, txn);
+    mboxname_release(&namespacelock);
 
     switch (r) {
     case CYRUSDB_OK:
@@ -1886,6 +1888,7 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     struct txn *lcl_tid = NULL;
     mbentry_t *mbentry = NULL;
     char *dbname = mboxname_to_dbname(name);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
 
     if(in_tid) {
         tid = in_tid;
@@ -1945,6 +1948,7 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
         cyrusdb_abort(mbdb, *tid);
     }
     mboxlist_entry_free(&mbentry);
+    mboxname_release(&namespacelock);
 
     return r;
 }
@@ -5296,9 +5300,12 @@ static void _upgrade_cb(const char *key __attribute__((unused)),
 
     for (idx = 0; idx < n; idx++) {
         mbentry_t *mbentry = (mbentry_t *) ptrarray_nth(pa, idx);
-   
-        if (!*urock->r)
+
+        if (!*urock->r) {
+            struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
             *urock->r = mboxlist_update_entry(mbentry->name, mbentry, urock->tid);
+            mboxname_release(&namespacelock);
+        }
 
         mboxlist_entry_free(&mbentry);
     }
@@ -5335,7 +5342,7 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     r = rename(fname, buf_cstring(&buf));
     free(fname);
     if (r) goto done;
-    
+
     /* open backup db file */
     r = cyrusdb_open(DB, buf_cstring(&buf), 0, &backup);
 

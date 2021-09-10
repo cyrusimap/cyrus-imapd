@@ -8662,9 +8662,11 @@ static void cmd_setacl(char *tag, const char *name,
             }
         }
 
+        struct mboxlock *namespacelock = mboxname_usernamespacelock(intname);
         r = mboxlist_setacl(&imapd_namespace, intname, identifier, rights,
                             imapd_userisadmin || imapd_userisproxyadmin,
                             proxy_userid, imapd_authstate);
+        mboxname_release(&namespacelock);
     }
 
     imapd_check(NULL, 0);

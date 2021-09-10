@@ -1913,6 +1913,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     }
 
     /* Local mailbox */
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(txn->req_tgt.mbentry->name);
 
     /* Read body */
     ret = parse_xml_body(txn, &root, DAVSHARING_CONTENT_TYPE);
@@ -2074,6 +2075,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     if (root) xmlFreeDoc(root->doc);
     if (notify) xmlFreeDoc(notify->doc);
     buf_free(&resource);
+    mboxname_release(&namespacelock);
 
     return ret;
 }
