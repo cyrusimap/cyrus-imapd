@@ -58,6 +58,7 @@ extern struct pts_module *pts_modules[];
 
 /* Note that some of these may be undefined symbols
  * if libcyrus was not built with support for them */
+extern struct pts_module pts_http;
 extern struct pts_module pts_ldap;
 extern struct pts_module pts_afskrb;
 

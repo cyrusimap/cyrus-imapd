@@ -65,6 +65,9 @@
 #include "ptloader.h"
 
 struct pts_module *pts_modules[] = {
+#ifdef USE_HTTPPTS
+    &pts_http,
+#endif
 #ifdef HAVE_LDAP
     &pts_ldap,
 #endif
