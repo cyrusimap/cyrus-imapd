@@ -4491,6 +4491,8 @@ EXPORTED int mboxlist_update_foldermodseq(const char *name, modseq_t foldermodse
 
     init_internal();
 
+    assert_namespacelocked(name);
+
     int r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) return r;
 
