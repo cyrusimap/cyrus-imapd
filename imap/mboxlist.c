@@ -1148,6 +1148,14 @@ static int mboxlist_update_entry(const char *name,
     return r;
 }
 
+EXPORTED int mboxlist_deletelock(const char *name)
+{
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
+    int r = mboxlist_update_entry(name, NULL, NULL);
+    mboxname_release(&namespacelock);
+    return r;
+}
+
 EXPORTED int mboxlist_delete(const char *name)
 {
     return mboxlist_update_entry(name, NULL, NULL);
