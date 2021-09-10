@@ -168,6 +168,12 @@ EXPORTED struct backend * proxy_findserver(const char *server,          /* hostn
                 /* ping/noop the server */
                 if ((ret->sock != -1) && backend_ping(ret, userid)) {
                     backend_disconnect(ret);
+
+                    /* remove the timeout */
+                    if (ret->timeout)
+                        prot_removewaitevent(ret->clientin, ret->timeout);
+                    ret->timeout = NULL;
+                    ret->clientin = NULL;
                 }
                 break;
             }
