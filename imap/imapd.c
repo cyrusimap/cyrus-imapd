@@ -11432,7 +11432,7 @@ static int xfer_undump(struct xfer_header *xfer)
         newentry->server = xstrdupnull(xfer->toserver);
         newentry->partition = xstrdupnull(xfer->topart);
         newentry->mbtype = item->mbentry->mbtype|MBTYPE_MOVING;
-        r = mboxlist_update(newentry, 1);
+        r = mboxlist_updatelock(newentry, 1);
         mboxlist_entry_free(&newentry);
 
         if (r) {
@@ -11877,7 +11877,7 @@ static int xfer_delete(struct xfer_header *xfer)
         newentry->server = xstrdupnull(item->mbentry->server);
         newentry->partition = xstrdupnull(item->mbentry->partition);
         newentry->mbtype |= MBTYPE_DELETED;
-        r = mboxlist_update(newentry, 1);
+        r = mboxlist_updatelock(newentry, 1);
         mboxlist_entry_free(&newentry);
 
         if (r) {
@@ -11918,7 +11918,7 @@ static void xfer_recover(struct xfer_header *xfer)
         case XFER_UNDUMPED:
         case XFER_LOCAL_MOVING:
             /* Unset mailbox as MOVING on local server */
-            r = mboxlist_update(item->mbentry, 1);
+            r = mboxlist_updatelock(item->mbentry, 1);
 
             if (r) {
                 syslog(LOG_ERR,
