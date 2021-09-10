@@ -253,6 +253,7 @@ char *mboxname_user_mbox(const char *userid, const char *subfolder);
 char *mboxname_user_mbox_external(const char *userid, const char *extsubfolder);
 char *mboxname_abook(const char *userid, const char *collection);
 char *mboxname_cal(const char *userid, const char *collection);
+char *mboxname_drive(const char *userid, const char *collection);
 
 /*
  * Check whether two mboxnames have the same userid.
