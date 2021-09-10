@@ -582,10 +582,17 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 
   mailbox:
     if (tgt->userid) {
-        /* Locate the INBOX */
-        char *mboxname = mboxname_user_mbox(tgt->userid, NULL);
-        int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
+        /* Locate the home-set mailbox */
+        char *mboxname = NULL;
 
+        if (tgt->allow & ALLOW_CAL)
+            mboxname = mboxname_cal(tgt->userid, NULL);
+        else if (tgt->allow & ALLOW_CARD)
+            mboxname = mboxname_abook(tgt->userid, NULL);
+        else
+            mboxname = mboxname_drive(tgt->userid, NULL);
+
+        int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
         if (r) {
             *resultstr = error_message(r);
             syslog(LOG_ERR, "mlookup(%s) failed: %s", mboxname, *resultstr);
