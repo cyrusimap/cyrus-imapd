@@ -5819,7 +5819,6 @@ int meth_mkcol(struct transaction_t *txn, void *params)
             goto done;
         }
     }
-    mboxname_release(&namespacelock);
 
     if (!r) {
         if (mparams->mkcol.proc) r = mparams->mkcol.proc(mailbox);
@@ -5842,6 +5841,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
   done:
     buf_free(&pctx.buf);
     mailbox_close(&mailbox);
+    mboxname_release(&namespacelock);
 
     sync_checkpoint(txn->conn->pin);
 
