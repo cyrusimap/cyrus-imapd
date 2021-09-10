@@ -109,7 +109,7 @@ static int verbose = 0;
 static int listen_queue_backlog = 32;
 static int pidfd = -1;
 
-static int in_shutdown = 0;
+static volatile sig_atomic_t in_shutdown = 0;
 
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
