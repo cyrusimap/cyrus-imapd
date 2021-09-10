@@ -1686,13 +1686,13 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     int isremote = mbtype & MBTYPE_REMOTE;
     mbentry_t *usermbentry = NULL, *newmbentry = NULL;
 
+    init_internal();
+
     r = mboxlist_create_namecheck(mboxname, userid, auth_state,
                                   isadmin, (flags & MBOXLIST_CREATE_FORCEUSER));
     if (r) goto done;
 
     assert_namespacelocked(mboxname);
-
-    init_internal();
 
     if (!(flags & MBOXLIST_CREATE_SYNC)) {
         options |= config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
