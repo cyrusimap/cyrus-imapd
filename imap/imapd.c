@@ -6981,6 +6981,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
                         }
                     }
 
+                    // don't hold the lock locally, we're proxying
+                    mboxname_release(&namespacelock);
+
                     struct backend *s_conn = NULL;
 
                     s_conn = proxy_findserver(
@@ -7292,12 +7295,17 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
     int delete_user = 0;
 
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
+
     r = mlookup(NULL, NULL, mbname_intname(mbname), &mbentry);
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
         struct backend *s = NULL;
         int res;
+
+        // don't hold the lock locally, we're proxying
+        mboxname_release(&namespacelock);
 
         if (supports_referrals) {
             imapd_refer(tag, mbentry->server, name);
@@ -7339,8 +7347,6 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         mbname_free(&mbname);
         return;
     }
-
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
 
     mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
@@ -7628,6 +7634,10 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         /* remote mailbox */
         struct backend *s = NULL;
         int res;
+
+        // don't hold the locks locally, we're proxying
+        mboxname_release(&oldnamespacelock);
+        mboxname_release(&newnamespacelock);
 
         s = proxy_findserver(mbentry->server, &imap_protocol,
                              proxy_userid, &backend_cached,
