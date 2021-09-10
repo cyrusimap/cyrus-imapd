@@ -183,7 +183,7 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
             if (mbentry->server) printf("%s!", mbentry->server);
             printf("%s %s\n", mbentry->partition, mbentry->acl);
             if (d->purge) {
-                mboxlist_delete(mbentry->name);
+                mboxlist_deletelock(mbentry->name);
             }
         }
         break;
