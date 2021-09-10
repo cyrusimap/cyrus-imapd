@@ -100,6 +100,7 @@
 #include "md5.h"
 
 /* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 #include "imap/http_err.h"
 
 #ifdef WITH_DAV
@@ -414,7 +415,6 @@ int httpd_userisanonymous = 1;
 const char *httpd_localip = NULL, *httpd_remoteip = NULL;
 struct protstream *httpd_out = NULL;
 struct protstream *httpd_in = NULL;
-struct protgroup *protin = NULL;
 strarray_t *httpd_log_headers = NULL;
 char *httpd_altsvc = NULL;
 static struct http_connection http_conn;
@@ -429,7 +429,7 @@ int config_httpprettytelemetry;
 
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
-
+static ptrarray_t httpd_pipes = PTRARRAY_INITIALIZER;
 static int http2_enabled = 0;
 
 int ignorequota = 0;
@@ -472,9 +472,6 @@ HIDDEN struct namespace httpd_namespace;
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
    currently piping */
-
-/* the current server most commands go to */
-struct backend *backend_current = NULL;
 
 /* our cached connections */
 ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
@@ -705,7 +702,6 @@ static void httpd_reset(struct http_connection *conn)
         free(be);
     }
     ptrarray_fini(&backend_cached);
-    backend_current = NULL;
 
     index_text_extractor_destroy();
 
@@ -730,7 +726,7 @@ static void httpd_reset(struct http_connection *conn)
 
     httpd_in = httpd_out = NULL;
 
-    if (protin) protgroup_reset(protin);
+    ptrarray_fini(&httpd_pipes);
 
     /* Reset auxiliary connection contexts */
     conn_reset_t proc;
@@ -800,6 +796,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* Initialize HTTP connection */
     memset(&http_conn, 0, sizeof(struct http_connection));
+    http_conn.pgin = protgroup_new(0);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -840,9 +837,6 @@ int service_init(int argc __attribute__((unused)),
             usage();
         }
     }
-
-    /* Create a protgroup for input from the client and selected backend */
-    protin = protgroup_new(2);
 
     config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
 
@@ -941,7 +935,6 @@ int service_main(int argc __attribute__((unused)),
 
     httpd_in = prot_new(0, 0);
     httpd_out = prot_new(1, 1);
-    protgroup_insert(protin, httpd_in);
 
     /* Setup HTTP connection */
     http_conn.pin = httpd_in;
@@ -1115,6 +1108,7 @@ void shut_down(int code)
     ptrarray_fini(&http_conn.shutdown_callbacks);
     ptrarray_fini(&http_conn.reset_callbacks);
 
+    protgroup_free(http_conn.pgin);
     buf_free(&http_conn.logbuf);
 
     /* Do any namespace specific cleanup */
@@ -1162,8 +1156,6 @@ void shut_down(int code)
 
     prometheus_increment(code ? CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_ERROR
                               : CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_OK);
-
-    if (protin) protgroup_free(protin);
 
     if (config_auditlog)
         syslog(LOG_NOTICE,
@@ -2027,6 +2019,12 @@ EXPORTED void transaction_free(struct transaction_t *txn)
 
     transaction_reset(txn);
 
+    if (txn->be) {
+        proxy_downserver(txn->be);
+        free(txn->be->context);
+        free(txn->be);
+    }
+
     buf_free(&txn->req_body.payload);
     buf_free(&txn->resp_body.payload);
     buf_free(&txn->zbuf);
@@ -2044,7 +2042,7 @@ static int http1_input(struct transaction_t *txn)
 
     do {
         /* Read request-line */
-        syslog(LOG_DEBUG, "read & parse request-line");
+        syslog(LOG_DEBUG, "read request-line");
         if (!prot_fgets(req_line->buf, MAX_REQ_LINE+1, httpd_in)) {
             txn->error.desc = prot_error(httpd_in);
             if (txn->error.desc && strcmp(txn->error.desc, PROT_EOF_STRING)) {
@@ -2065,10 +2063,12 @@ static int http1_input(struct transaction_t *txn)
 
 
     /* Parse request-line = method SP request-target SP HTTP-version CRLF */
+    syslog(LOG_DEBUG, "parse request-line");
     ret = parse_request_line(txn);
 
     /* Parse headers */
     if (!ret) {
+        syslog(LOG_DEBUG, "read headers");
         ret = http_read_headers(httpd_in, 1 /* read_sep */,
                                 &txn->req_hdrs, &txn->error.desc);
     }
@@ -2079,6 +2079,7 @@ static int http1_input(struct transaction_t *txn)
     }
 
     /* Examine request */
+    syslog(LOG_DEBUG, "examine request");
     ret = examine_request(txn, NULL);
     if (ret) goto done;
 
@@ -2086,11 +2087,21 @@ static int http1_input(struct transaction_t *txn)
     if (txn->flags.ver == VER_1_1) alarm(httpd_keepalive);
 
     /* Process the requested method */
+    syslog(LOG_DEBUG, "process request");
     ret = process_request(txn);
 
   done:
     /* Handle errors (success responses handled by method functions) */
     if (ret) error_response(ret, txn);
+
+    else if (txn->be) {
+        /* Add this backend to list of current pipes */
+        ptrarray_append(&httpd_pipes, txn);
+
+        /* Remove this backend from cache as it can't be reused (for now) */
+        ptrarray_remove(&backend_cached,
+                        ptrarray_find(&backend_cached, txn->be, 0));
+    }
 
     /* Read and discard any unread request body */
     if (!(txn->flags.conn & CONN_CLOSE)) {
@@ -2141,7 +2152,7 @@ static void cmdloop(struct http_connection *conn)
         do {
             /* Flush any buffered output */
             prot_flush(httpd_out);
-            if (backend_current) prot_flush(backend_current->out);
+            if (txn.be) prot_flush(txn.be->out);
 
             /* Run delayed actions from this command */
             libcyrus_run_delayed();
@@ -2158,11 +2169,10 @@ static void cmdloop(struct http_connection *conn)
 
             signals_poll();
 
-            syslog(LOG_DEBUG, "proxy_check_input()");
+            syslog(LOG_DEBUG, "http_proxy_check_input()");
 
-        } while (!proxy_check_input(protin, httpd_in, httpd_out,
-                                    backend_current ? backend_current->in : NULL,
-                                    NULL, 0));
+        } while (!http_proxy_check_input(conn, &httpd_pipes,
+                                         0 /* timeout */));
 
         
         /* Start command timer */
@@ -2171,6 +2181,11 @@ static void cmdloop(struct http_connection *conn)
         if (conn->sess_ctx) {
             /* HTTP/2 input */
             http2_input(conn);
+        }
+        else if (txn.be) {
+            /* HTTP/1.1 tunnel */
+            txn.conn->close = 1;
+            txn.conn->close_str = "Backend disconnect";
         }
         else {
             if (txn.ws_ctx) {
@@ -4707,6 +4722,34 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
         return HTTP_BAD_REQUEST;
     }
 
+    if (txn->req_tgt.mbentry && txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        ret = http_proxy_h2_connect(be, txn);
+        if (!ret) {
+            txn->be = be;
+            txn->flags.te = TE_CHUNKED;  /* Keep H2 stream open */
+
+            /* Add this backend to list of current pipes */
+            ptrarray_append(&httpd_pipes, txn);
+
+            /* Remove this backend from cache as it can't be reused (for now) */
+            ptrarray_remove(&backend_cached,
+                            ptrarray_find(&backend_cached, be, 0));
+
+            /* Adjust inactivity timer */
+            prot_settimeout(httpd_in,
+                            2 + config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm'));
+        }
+        return ret;
+    }
+    
     ret = ws_start_channel(txn, cparams->ws.subprotocol, cparams->ws.data_cb);
 
     return (ret == HTTP_UPGRADE) ? HTTP_BAD_REQUEST : ret;

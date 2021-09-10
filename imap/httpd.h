@@ -335,6 +335,7 @@ struct txn_flags_t {
 struct http_connection {
     struct protstream *pin;             /* Input protstream */
     struct protstream *pout;            /* Output protstream */
+    struct protgroup *pgin;             /* Streams to watch for input */
     const char *clienthost;             /* Name of client host */
     int logfd;                          /* Telemetry log file */
     struct buf logbuf;                  /* Telemetry log buffer */
@@ -401,6 +402,8 @@ struct transaction_t {
                                            http_ischedule:
                                              - error desc string
                                         */
+
+    struct backend *be;                 /* Connection to backend server */
 
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */

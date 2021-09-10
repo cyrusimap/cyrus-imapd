@@ -48,12 +48,15 @@
 #endif
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
 #include "httpd.h"
 #include "http_proxy.h"
+#include "http_ws.h"
 #include "iptostring.h"
 #include "mupdate-client.h"
 #include "prot.h"
@@ -599,6 +602,10 @@ static void write_cachehdr(const char *name, const char *contents,
     /* Ignore private headers in our cache */
     if (name[0] == ':') return;
 
+    /* Ignore HTTP/1.1 specific hop-by-hop header when proxying to HTTP/2 */
+    if (txn->meth == METH_CONNECT && !strcasecmp(name, "Sec-WebSocket-Accept"))
+        return;
+
     for (hdr = hop_by_hop; *hdr && strcasecmp(name, *hdr); hdr++);
 
     if (!*hdr) {
@@ -614,6 +621,10 @@ static void write_cachehdr(const char *name, const char *contents,
     }
 }
 
+
+static const char *upgrade_tokens[] = {
+    TLS_VERSION, HTTP2_CLEARTEXT_ID, WS_TOKEN, NULL
+};
 
 /* Send a cached response to the client */
 static void send_response(struct transaction_t *txn, long code,
@@ -872,6 +883,10 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     prot_printf(be->out, "Host: %s\r\n", be->hostname);
     write_forwarding_hdrs(&be_txn, txn->req_hdrs, txn->req_line.ver,
                           https ? "https" : "http");
+    if (txn->flags.upgrade) {
+        prot_puts(be->out, "Connection: Upgrade\r\n");
+        comma_list_hdr(&be_txn, "Upgrade", upgrade_tokens, txn->flags.upgrade);
+    }
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, &be_txn);
     if ((hdr = spool_getheader(txn->req_hdrs, "TE"))) {
         for (; *hdr; hdr++) prot_printf(be->out, "TE: %s\r\n", *hdr);
@@ -924,6 +939,9 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
                 txn->conn->end_resp_headers(txn, http_err);
             }
         }
+        else if (code == 101) { /* Switching Protocols */
+            break;
+        }
     } while (code < 200);
 
     if (r) proxy_downserver(be);
@@ -941,6 +959,7 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 
         /* Not expecting a body for 204/304 response or any HEAD response */
         switch (code) {
+        case 101: /* Switching Protocols */
         case 204: /* No Content */
         case 304: /* Not Modified */
             break;
@@ -1242,4 +1261,213 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
     return r;
+}
+
+/* Proxy an Extended HTTP/2 CONNECT client-request to/from a backend. */
+EXPORTED int http_proxy_h2_connect(struct backend *be, struct transaction_t *txn)
+{
+    int r = 0;
+    unsigned code;
+    long http_err;
+    const char **hdr;
+    hdrcache_t resp_hdrs = NULL;
+    struct body_t resp_body;
+    struct http_connection be_conn;
+    struct transaction_t be_txn;
+
+    memset(&be_conn, 0, sizeof(struct http_connection));
+    be_conn.pin = be->in;
+    be_conn.pout = be->out;
+    be_conn.begin_resp_headers = &http1_begin_resp_headers;
+    be_conn.add_resp_header = &http1_add_resp_header;
+    be_conn.end_resp_headers = &http1_end_resp_headers;
+    be_conn.resp_body_chunk = &http1_resp_body_chunk;
+
+    memset(&be_txn, 0, sizeof(struct transaction_t));
+    be_txn.flags.ver = VER_1_1;
+    be_txn.conn = &be_conn;
+
+    /*
+     * Send client request to backend:
+     *
+     * - Change CONNECT to HTTP/1.1 Upgrade
+     * - Add/append-to Via: header
+     * - Use all cached end-to-end headers from client
+     */
+    prot_printf(be->out, "GET %s %s\r\n"
+                         "Host: %s\r\n"
+                         "User-Agent: Cyrus/%s\r\n",
+                txn->req_uri->path, HTTP_VERSION,
+                be->hostname, CYRUS_VERSION);
+    write_forwarding_hdrs(&be_txn, txn->req_hdrs, txn->req_line.ver,
+                          https ? "https" : "http");
+    prot_puts(be->out, "Connection: Upgrade\r\n");
+    hdr = spool_getheader(txn->req_hdrs, ":protocol");
+    if (hdr && *hdr) {
+        prot_printf(be->out, "Upgrade: %s\r\n", *hdr);
+    }
+    prot_printf(be->out, "Sec-WebSocket-Key: %s\r\n",
+                "Q3lydXMgSFRUUCBQcm94eQ==");  // "Cyrus HTTP Proxy" b64-encoded
+    spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, &be_txn);
+    prot_puts(be->out, "\r\n");
+    prot_flush(be->out);
+    buf_free(&be_txn.buf);
+
+    /* Read response from backend */
+    resp_body.flags = 0;
+
+    r = http_read_response(be, METH_GET, &code,
+                           &resp_hdrs, &resp_body, &txn->error.desc);
+    if (r || (resp_body.flags & BODY_CLOSE)) {
+        proxy_downserver(be);
+        goto done;
+    }
+
+    /* Send response to client */
+    if (code == 101) {
+        code = 200;
+        txn->flags.te = TE_CHUNKED;
+    }
+    http_err = http_status_to_code(code);
+    send_response(txn, http_err, resp_hdrs, &resp_body.payload);
+
+    log_proxy_request(http_err, txn, resp_hdrs, &resp_body);
+
+ done:
+    buf_free(&resp_body.payload);
+    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
+
+    return r;
+}
+
+/*
+ * Check an array of streams for input.
+ *
+ * Input from serverin is sent to clientout.
+ * If serverout is non-NULL:
+ *   - input from clientin is sent to serverout.
+ *   - returns -1 if clientin or serverin closed, otherwise returns 0.
+ * If serverout is NULL:
+ *   - returns 1 if input from clientin is pending, otherwise returns 0.
+ */
+EXPORTED int http_proxy_check_input(struct http_connection *conn,
+                                    ptrarray_t *pipes,
+                                    unsigned long timeout_sec)
+{
+    struct protgroup *protin = conn->pgin;
+    struct protgroup *protout = NULL;
+    struct timeval timeout = { timeout_sec, 0 };
+    struct protstream *clientin = conn->pin;
+    struct protstream *clientout = conn->pout;
+    struct protstream *serverout = NULL;
+    struct transaction_t *txn = NULL;
+    int n, ret = 0;
+
+    protgroup_reset(protin);
+    protgroup_insert(protin, clientin);
+
+    for (n = 0; n < ptrarray_size(pipes); n++) {
+        txn = ptrarray_nth(pipes, n);
+        protgroup_insert(protin, txn->be->in);
+
+        if (txn->flags.ver < VER_2) {
+            /* stream client input directly to server */
+            serverout = txn->be->out;
+        }
+    }
+
+    n = prot_select(protin, PROT_NO_FD, &protout, NULL,
+                    timeout_sec ? &timeout : NULL);
+    if (n == -1 && errno != EINTR) {
+        syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
+        fatal("prot_select() failed in proxy_check_input()", EX_TEMPFAIL);
+    }
+
+    if (n && protout) {
+        /* see who has input */
+        for (; n; n--) {
+            struct protstream *pin = protgroup_getelement(protout, n-1);
+            struct protstream *pout = NULL;
+            int idx = -1;
+
+            if (pin == clientin) {
+                /* input from client */
+                if (serverout) {
+                    /* stream it to server */
+                    pout = serverout;
+                } else {
+                    /* notify the caller */
+                    ret = 1;
+                }
+            }
+            else {
+                /* input from server, stream it to client */
+                pout = clientout;
+
+                /* find the txn that this input belongs to */
+                for (idx = 0; idx < ptrarray_size(pipes); idx++) {
+                    txn = ptrarray_nth(pipes, idx);
+                    if (pin == txn->be->in) break;
+                }
+
+                if (pin != txn->be->in) {
+                    /* XXX shouldn't get here !!! */
+                    fatal("unknown protstream returned"
+                          " by prot_select() in http_proxy_check_input()",
+                          EX_SOFTWARE);
+                }
+            }
+
+            if (pout) {
+                const char *err;
+
+                do {
+                    char buf[4096];
+                    int c = prot_read(pin, buf, sizeof(buf));
+
+                    if (c == 0 || c < 0) break;
+                    if (pout == clientout)
+                        txn->conn->resp_body_chunk(txn, buf, c, 0, NULL);
+                    else
+                        prot_write(serverout, buf, c);
+                } while (pin->cnt > 0);
+
+                if ((err = prot_error(pin)) != NULL) {
+                    if (pin != clientin) {
+                        /* we're pipelining, and the server connection closed */
+                        ptrarray_remove(pipes, idx);
+
+                        /* send a "final" chunk to close the stream */
+                        txn->conn->resp_body_chunk(txn, NULL, 0, 1, NULL);
+
+                        if (serverout) {
+                            /* HTTP/1.x */
+                            ret = -1;
+                        }
+                        else {
+                            /* HTTP/2+ */
+                            transaction_free(txn);
+                            free(txn);
+                        }
+                    }
+                    else if (serverout && prot_IS_EOF(pin)) {
+                        /* we're pipelining, and the connection closed */
+                        ret = -1;
+                    }
+                    else {
+                        /* uh oh, we're not happy */
+                        fatal("Lost connection to input stream",
+                              EX_UNAVAILABLE);
+                    }
+                }
+                else {
+                    return 0;
+                }
+            }
+        }
+
+        protgroup_free(protout);
+    }
+
+    return ret;
 }
