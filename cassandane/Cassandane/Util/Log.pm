@@ -64,7 +64,11 @@ sub xlog
         $id = $obj->id();
     }
 
-    my (undef, undef, $line, $sub) = caller(1);
+    # the current line number is in this frame
+    my (undef, undef, $line) = caller();
+    # but the current subroutine name is in the parent frame,
+    # as the function-the-caller-called
+    my (undef, undef, undef, $sub) = caller(1);
     $sub =~ s/^Cassandane:://;
     my $msg = "[$$] =====> $sub\[$line] ";
     $msg .= "($id) " if $id;
