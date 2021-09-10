@@ -2392,12 +2392,15 @@ static int parse_connection(struct transaction_t *txn)
                 if (!strcasecmp(token, "upgrade")) {
                     /* Client wants to upgrade */
                     parse_upgrade(txn);
+                    break;
                 }
                 else if (!strcasecmp(token, "close")) {
                     /* Non-persistent connection */
                     txn->flags.conn |= CONN_CLOSE;
+                    break;
                 }
-                break;
+
+                GCC_FALLTHROUGH
 
             case VER_1_0:
                 if (httpd_timeout && !strcasecmp(token, "keep-alive")) {
