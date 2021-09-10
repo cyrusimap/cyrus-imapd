@@ -171,7 +171,7 @@ sub new
 
     my $buildinfo = Cassandane::BuildInfo->new();
 
-    if (not $buildinfo->get('component', 'httpd')) {
+    if (not defined $basedir or not $buildinfo->get('component', 'httpd')) {
         # don't bother setting up, we're not running tests anyway
         return $class->SUPER::new({}, @_);
     }
@@ -194,7 +194,9 @@ sub set_up
     my ($self) = @_;
     $self->SUPER::set_up();
 
-    if (not $self->{instance}->{buildinfo}->get('component', 'httpd')) {
+    if (not defined $basedir
+        or not $self->{instance}->{buildinfo}->get('component', 'httpd'))
+    {
         # don't bother setting up further, we're not running tests anyway
         return;
     }

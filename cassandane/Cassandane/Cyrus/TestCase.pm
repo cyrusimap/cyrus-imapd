@@ -87,7 +87,8 @@ sub new
     my $want = {
         instance => 1,
         replica => 0,
-        murder => 0,
+        imapmurder => 0,
+        httpmurder => 0,
         backups => 0,
         start_instances => 1,
         services => [ 'imap' ],
@@ -201,7 +202,8 @@ magic(CSyncReplication => sub {
     $self->want('csyncreplica');
     $self->config_set('sync_try_imap' => 0);
 });
-magic(Murder => sub { shift->want('murder'); });
+magic(IMAPMurder => sub { shift->want('imapmurder'); });
+magic(HTTPMurder => sub { shift->want('httpmurder'); });
 magic(Backups => sub { shift->want('backups'); });
 magic(AnnotationAllowUndefined => sub {
     shift->config_set(annotation_allow_undefined => 1);
@@ -272,8 +274,8 @@ magic(DisconnectOnVanished => sub {
     shift->config_set('disconnect_on_vanished_mailbox' => 'yes');
 });
 magic(NoStartInstances => sub {
-    # If you use this magic, you must call
-    # $self->_start_instances() and optionally $self->_jmap_setup()
+    # If you use this magic, you must call $self->_start_instances()
+    # and optionally $self->_setup_http_service_objects()
     # yourself from your test function once you're ready for Cyrus
     # to be started!
     # If any test function in your suite uses this magic, then
@@ -411,9 +413,9 @@ sub _create_instances
     my ($self) = @_;
     my $sync_port;
     my $mupdate_port;
-    my $frontend_imapd_port;
-    my $backend1_imapd_port;
-    my $backend2_imapd_port;
+    my $frontend_service_port;
+    my $backend1_service_port;
+    my $backend2_service_port;
     my $backupd_port;
 
     $self->{_config} = $self->{_instance_params}->{config} || Cassandane::Config->default();
@@ -425,6 +427,16 @@ sub _create_instances
     my %instance_params = %{$self->{_instance_params}};
 
     my $cassini = Cassandane::Cassini->instance();
+
+    if ($want->{imapmurder} && $want->{httpmurder}) {
+        # XXX Murder is implemented assuming that everything is on standard
+        # XXX ports, but Cassandane needs to use high port numbers.
+        # XXX We fudge a workaround here by embedding the service port
+        # XXX number in the server name, which tricks Murder into using
+        # XXX that port number instead of the standard one, but that means
+        # XXX we can only have one proxied service per instance.
+        die "Cannot enable murder for both IMAP and JMAP at the same time";
+    }
 
     if ($want->{instance})
     {
@@ -443,13 +455,13 @@ sub _create_instances
             );
         }
 
-        if ($want->{murder})
+        if ($want->{imapmurder} || $want->{httpmurder})
         {
             $mupdate_port = Cassandane::PortManager::alloc();
-            $backend1_imapd_port = Cassandane::PortManager::alloc();
+            $backend1_service_port = Cassandane::PortManager::alloc();
 
             $conf->set(
-                servername => "localhost:$backend1_imapd_port",
+                servername => "localhost:$backend1_service_port",
                 mupdate_server => "localhost:$mupdate_port",
                 # XXX documentation says to use mupdate_port, but
                 # XXX this doesn't work -- need to embed port number in
@@ -521,15 +533,15 @@ sub _create_instances
                 if ($want->{deliver});
         }
 
-        if ($want->{murder})
+        if ($want->{imapmurder} || $want->{httpmurder})
         {
-            $frontend_imapd_port = Cassandane::PortManager::alloc();
-            $backend2_imapd_port = Cassandane::PortManager::alloc();
+            $frontend_service_port = Cassandane::PortManager::alloc();
+            $backend2_service_port = Cassandane::PortManager::alloc();
 
             # set up a front end on which we also run the mupdate master
             my $frontend_conf = $self->{_config}->clone();
             $frontend_conf->set(
-                servername => "localhost:$frontend_imapd_port",
+                servername => "localhost:$frontend_service_port",
                 mupdate_server => "localhost:$mupdate_port",
                 # XXX documentation says to use mupdate_port, but
                 # XXX this doesn't work -- need to embed port number in
@@ -539,7 +551,7 @@ sub _create_instances
                 mupdate_authname => 'mupduser',
                 mupdate_password => 'mupdpass',
                 serverlist =>
-                    "localhost:$backend1_imapd_port localhost:$backend2_imapd_port",
+                    "localhost:$backend1_service_port localhost:$backend2_service_port",
                 proxy_authname => 'mailproxy',
                 proxy_password => 'mailproxy',
             );
@@ -562,25 +574,44 @@ sub _create_instances
             $self->{frontend}->_setup_for_deliver()
                 if ($want->{deliver});
 
-            # arrange for frontend imapd to run on a known port
-            $self->{frontend}->remove_service('imap');
-            $self->{frontend}->add_service(name => 'imap',
-                                           port => $frontend_imapd_port);
+            # arrange for frontend service to run on a known port
+            if ($want->{imapmurder}) {
+                $self->{frontend}->remove_service('imap');
+                $self->{frontend}->add_service(name => 'imap',
+                                               port => $frontend_service_port);
+            }
+            elsif ($want->{httpmurder}) {
+                $self->{frontend}->remove_service('http');
+                $self->{frontend}->add_service(name => 'http',
+                                               port => $frontend_service_port);
+            }
+            else {
+                die "shouldn't get here!";
+            }
 
             # arrange for backend1 to push to mupdate on startup
             $self->{instance}->add_start(name => 'mupdatepush',
                                          argv => ['ctl_mboxlist', '-m']);
 
-            # arrange for backend1 imapd to run on a known port
-            $self->{instance}->remove_service('imap');
-            $self->{instance}->add_service(name => 'imap',
-                                           port => $backend1_imapd_port);
-
+            # arrange for backend1 service to run on a known port
+            if ($want->{imapmurder}) {
+                $self->{instance}->remove_service('imap');
+                $self->{instance}->add_service(name => 'imap',
+                                               port => $backend1_service_port);
+            }
+            elsif ($want->{httpmurder}) {
+                $self->{instance}->remove_service('http');
+                $self->{instance}->add_service(name => 'http',
+                                               port => $backend1_service_port);
+            }
+            else {
+                die "shouldn't get here!";
+            }
 
             # set up a second backend
             my $backend2_conf = $self->{_config}->clone();
             $backend2_conf->set(
-                servername => "localhost:$backend2_imapd_port",
+                servername => "localhost:$backend2_service_port",
                 mupdate_server => "localhost:$mupdate_port",
                 # XXX documentation says to use mupdate_port, but
                 # XXX this doesn't work -- need to embed port number in
@@ -606,10 +637,20 @@ sub _create_instances
             $self->{backend2}->add_start(name => 'mupdatepush',
                                          argv => ['ctl_mboxlist', '-m']);
 
-            # arrange for backend2 imap to run on a known port
-            $self->{backend2}->remove_service('imap');
-            $self->{backend2}->add_service(name => 'imap',
-                                           port => $backend2_imapd_port);
+            # arrange for backend2 service to run on a known port
+            if ($want->{imapmurder}) {
+                $self->{backend2}->remove_service('imap');
+                $self->{backend2}->add_service(name => 'imap',
+                                               port => $backend2_service_port);
+            }
+            elsif ($want->{httpmurder}) {
+                $self->{backend2}->remove_service('http');
+                $self->{backend2}->add_service(name => 'http',
+                                               port => $backend2_service_port);
+            }
+            else {
+                die "shouldn't get here!";
+            }
 
             $self->{backend2}->_setup_for_deliver()
                 if ($want->{deliver});
@@ -648,44 +689,52 @@ sub _create_instances
     }
 }
 
-sub _jmap_setup
+sub _setup_http_service_objects
 {
     my ($self) = @_;
 
-    require Mail::JMAPTalk;
-    require Net::CalDAVTalk;
-    require Net::CardDAVTalk;
-
+    # nothing to do if no http service
     my $service = $self->{instance}->get_service("http");
-    $ENV{DEBUGJMAP} = 1;
+    return if !$service;
+
     eval {
-        $self->{carddav} = Net::CardDAVTalk->new(
-            user => 'cassandane',
-            password => 'pass',
-            host => $service->host(),
-            port => $service->port(),
-            scheme => 'http',
-            url => '/',
-            expandurl => 1,
-        );
-        $self->{caldav} = Net::CalDAVTalk->new(
-            user => 'cassandane',
-            password => 'pass',
-            host => $service->host(),
-            port => $service->port(),
-            scheme => 'http',
-            url => '/',
-            expandurl => 1,
-        );
-        $self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
-        $self->{jmap} = Mail::JMAPTalk->new(
-            user => 'cassandane',
-            password => 'pass',
-            host => $service->host(),
-            port => $service->port(),
-            scheme => 'http',
-            url => '/jmap/',
-        );
+        if ($self->{instance}->{config}->get_bit('httpmodules', 'carddav')) {
+            require Net::CardDAVTalk;
+            $self->{carddav} = Net::CardDAVTalk->new(
+                user => 'cassandane',
+                password => 'pass',
+                host => $service->host(),
+                port => $service->port(),
+                scheme => 'http',
+                url => '/',
+                expandurl => 1,
+            );
+        }
+        if ($self->{instance}->{config}->get_bit('httpmodules', 'caldav')) {
+            require Net::CalDAVTalk;
+            $self->{caldav} = Net::CalDAVTalk->new(
+                user => 'cassandane',
+                password => 'pass',
+                host => $service->host(),
+                port => $service->port(),
+                scheme => 'http',
+                url => '/',
+                expandurl => 1,
+            );
+            $self->{caldav}->UpdateAddressSet("Test User",
+                                              "cassandane\@example.com");
+        }
+        if ($self->{instance}->{config}->get_bit('httpmodules', 'jmap')) {
+            require Mail::JMAPTalk;
+            $self->{jmap} = Mail::JMAPTalk->new(
+                user => 'cassandane',
+                password => 'pass',
+                host => $service->host(),
+                port => $service->port(),
+                scheme => 'http',
+                url => '/jmap/',
+            );
+        }
     };
     if ($@) {
         my $e = $@;
@@ -693,7 +742,7 @@ sub _jmap_setup
         die $e;
     }
 
-    xlog $self, "JMAP setup complete!";
+    xlog $self, "http service objects setup complete!";
 }
 
 sub set_up
@@ -705,13 +754,12 @@ sub set_up
     $self->_create_instances();
     if ($self->{_want}->{start_instances}) {
         $self->_start_instances();
-        $self->_jmap_setup()
-            if $self->{_want}->{jmap};
+        $self->_setup_http_service_objects() if defined $self->{instance};
     }
     else {
         xlog $self, "Instances not started due to :NoStartInstances magic!";
-        xlog $self, "JMAP not setup due to :NoStartInstances magic!"
-            if $self->{_want}->{jmap};
+        xlog $self, "HTTP service objects not setup due to :NoStartInstances"
+                    . " magic!";
     }
     xlog $self, "Calling test function";
 }
