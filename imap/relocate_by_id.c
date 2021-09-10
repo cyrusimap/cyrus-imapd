@@ -191,6 +191,20 @@ int main(int argc, char **argv)
                 continue;
             }
 
+            extname = mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
+
+            if (!quiet) printf("\nRelocating: %s\n", extname);
+
+            struct mboxlock *namespacelock = NULL;
+            namespacelock = mboxname_usernamespacelock(mbentry->name);
+            if (!namespacelock) {
+                fprintf(stderr,
+                        "Failed to create namespacelock for %s: %s\n",
+                        extname, error_message(r));
+                mboxlist_entry_free(&mbentry);
+                goto cleanup;
+            }
+
             /* If we're missing a partition, use the partition of child */
             if (!partition || !*partition) partition = buf_cstring(&part_buf);
             else buf_setcstr(&part_buf, partition);
@@ -304,22 +318,6 @@ int main(int argc, char **argv)
                 free(activefname);
             }
 
-            extname = mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
-
-            if (!quiet) printf("\nRelocating: %s\n", extname);
-
-            struct mboxlock *namelock = NULL;
-            if (!nochanges) {
-                r = mboxname_lock(mbentry->name, &namelock, LOCK_EXCLUSIVE);
-                if (r) {
-                    fprintf(stderr,
-                            "Failed to create namelock for %s: %s\n",
-                            extname, error_message(r));
-                    mboxlist_entry_free(&mbentry);
-                    goto cleanup;
-                }
-            }
-
             /* Relocate our list of paths */
             for (j = 0; j < strarray_size(oldpaths); j++) {
                 r = relocate(strarray_nth(oldpaths, j),
@@ -332,13 +330,11 @@ int main(int argc, char **argv)
                     r = relocate(strarray_nth(newpaths, j),
                                  strarray_nth(oldpaths, j));
                 }
-                if (namelock) mboxname_release(&namelock);
             }
             else if (!nochanges) {
                 /* Rewrite mbentry */
                 mbentry->mbtype &= ~MBTYPE_LEGACY_DIRS;
                 r = mboxlist_update(mbentry, 1 /*localonly*/);
-                if (namelock) mboxname_release(&namelock);
 
                 if (r) {
                     fprintf(stderr,
@@ -383,6 +379,7 @@ int main(int argc, char **argv)
             }
 
           cleanup:
+            if (namespacelock) mboxname_release(&namespacelock);
             mboxlist_entry_free(&mbentry);
             strarray_free(oldpaths);
             strarray_free(newpaths);
