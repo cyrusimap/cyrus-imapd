@@ -1315,6 +1315,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
     mailbox_release_resources(mailbox);
 
     mboxlist_entry_free(&mailbox->mbentry);
+    xzfree(mailbox->h.name);
     xzfree(mailbox->h.uniqueid);
     xzfree(mailbox->h.quotaroot);
     xzfree(mailbox->h.acl);
