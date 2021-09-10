@@ -2119,7 +2119,7 @@ static int set_up(void)
     mbentry.mbtype = 0;
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
-    r = mboxlist_update(&mbentry, /*localonly*/1);
+    r = mboxlist_updatelock(&mbentry, /*localonly*/1);
     if (r)
         return r;
 
@@ -2142,7 +2142,7 @@ static int set_up(void)
     mbentry.mbtype = 0;
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
-    r = mboxlist_update(&mbentry, /*localonly*/1);
+    r = mboxlist_updatelock(&mbentry, /*localonly*/1);
     if (r)
         return r;
 
@@ -2165,7 +2165,7 @@ static int set_up(void)
     mbentry.mbtype = 0;
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
-    r = mboxlist_update(&mbentry, /*localonly*/1);
+    r = mboxlist_updatelock(&mbentry, /*localonly*/1);
     if (r)
         return r;
 
