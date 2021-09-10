@@ -167,6 +167,8 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid);
 
 /* Update a mailbox's entry */
 int mboxlist_update(const mbentry_t *mbentry, int localonly);
+/* Update but take the usernamespace lock first */
+int mboxlist_updatelock(const mbentry_t *mbentry, int localonly);
 
 /* check user's ability to create mailbox */
 int mboxlist_createmailboxcheck(const char *name, int mbtype,
