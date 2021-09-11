@@ -264,6 +264,7 @@ EXPORTED void libcyrus_run_delayed(void)
         delayed_actions = action->next;
         action->cb(action->rock);
         if (action->myfree) action->myfree(action->rock);
+        free(action->key);
         free(action);
     }
 }
