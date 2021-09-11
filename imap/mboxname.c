@@ -1713,6 +1713,19 @@ EXPORTED char *mboxname_cal(const char *userid, const char *collection)
     return res;
 }
 
+EXPORTED char *mboxname_drive(const char *userid, const char *collection)
+{
+    mbname_t *mbname = mbname_from_userid(userid);
+
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
+    if (collection) mbname_push_boxes(mbname, collection);
+
+    char *res = xstrdup(mbname_intname(mbname));
+    mbname_free(&mbname);
+
+    return res;
+}
+
 /*
  * Check whether two parts have the same userid.
  * Returns: 1 if the userids are the same, 0 if not.
