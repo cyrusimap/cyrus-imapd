@@ -1064,14 +1064,6 @@ if test "x$enable_afs" = "xyes"; then
 fi
 AM_CONDITIONAL([USE_AFSKRB], [grep HAVE_AFSKRB confdefs.h >/dev/null])
 
-AC_ARG_ENABLE(httppts,
-        [AS_HELP_STRING([--enable-httppts], [enable HTTP PTS support])],, [enable_httppts=no])
-AM_CONDITIONAL([USE_HTTPPTS], [test "${enable_httppts}" != "no"])
-if test "x$enable_httppts" != xno; then
-    enable_httppts=yes
-    AC_DEFINE(USE_HTTPPTS,[],[Build PTS with HTTP functionality])
-fi
-
 have_ldap=no
 LDAP_CPPFLAGS=
 LDAP_LDFLAGS=
@@ -1122,8 +1114,6 @@ AC_SUBST(LDAP_CPPFLAGS)
 AC_SUBST(LDAP_LDFLAGS)
 AC_SUBST(LDAP_LIBS)
 AM_CONDITIONAL([HAVE_LDAP], [test "$have_ldap" = "yes"])
-
-AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "$have_ldap" = "yes" -o "$enable_httppts" = "yes"])
 
 AC_ARG_WITH([clamav],
 	AS_HELP_STRING([--without-clamav], [ignore presence of ClamAV and disable it]))

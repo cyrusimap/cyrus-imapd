@@ -171,7 +171,8 @@ libexec_PROGRAMS += \
 	imap/lmtpd \
 	imap/pop3d \
 	imap/promstatsd \
-	imap/smmapd
+	imap/smmapd \
+	ptclient/ptloader
 
 sbin_PROGRAMS += \
 	imap/arbitron \
@@ -201,7 +202,9 @@ sbin_PROGRAMS += \
 	imap/quota \
 	imap/reconstruct \
 	imap/relocate_by_id \
-	imap/cvt_xlist_specialuse
+	imap/cvt_xlist_specialuse \
+	ptclient/ptdump \
+	ptclient/ptexpire
 
 dist_sbin_SCRIPTS += \
 	imap/cyr_cd.sh
@@ -286,12 +289,6 @@ if CMULOCAL
 dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
 sbin_PROGRAMS += netnews/remotepurge
 endif # CMULOCAL
-
-if PTCLIENT
-sbin_PROGRAMS += ptclient/ptdump ptclient/ptexpire
-libexec_PROGRAMS += \
-	ptclient/ptloader
-endif # PTCLIENT
 
 if PERL
 SUBDIRS += perl/annotator perl/imap
@@ -1786,6 +1783,7 @@ ptclient_ptexpire_LDADD = $(LD_UTILITY_ADD)
 
 ptclient_ptloader_SOURCES = \
 	imap/mutex_fake.c \
+	ptclient/http.c \
 	ptclient/ptloader.c \
 	ptclient/ptloader.h \
 	master/service-thread.c
@@ -1802,10 +1800,6 @@ if USE_AFSKRB
 ptclient_ptloader_SOURCES += ptclient/afskrb.c
 ptclient_ptloader_LDADD += $(AFS_LIBS)
 ptclient_ptloader_LDFLAGS += $(AFS_LDFLAGS)
-endif
-
-if USE_HTTPPTS
-ptclient_ptloader_SOURCES += ptclient/http.c
 endif
 
 # Each new version of flex seems to generate new sign-comparison
