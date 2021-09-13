@@ -7396,22 +7396,27 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             const char *userid;
             struct sync_action_list *mailbox_list;
 
-            userid = freeme = mboxname_to_userid(args[1]);
-            if (!userid) userid = ""; /* treat non-user mboxes as a single cohort */
+            if (args[1]) {
+                userid = freeme = mboxname_to_userid(args[1]);
+                if (!userid) userid = ""; /* treat non-user mboxes as a single cohort */
 
-            mailbox_list = hash_lookup(userid, &user_mailboxes);
-            if (!mailbox_list) {
-                mailbox_list = sync_action_list_create();
-                hash_insert(userid, mailbox_list, &user_mailboxes);
+                mailbox_list = hash_lookup(userid, &user_mailboxes);
+                if (!mailbox_list) {
+                    mailbox_list = sync_action_list_create();
+                    hash_insert(userid, mailbox_list, &user_mailboxes);
+                }
+                sync_action_list_add(mailbox_list, args[1], NULL);
+
+                if (args[2]) {
+                    /* if there's a second MAILBOX recorded (i.e. a copy or move), add
+                    * it to the same user's mailbox_list (even if it's a diff user),
+                    * so that the order doesn't get lost.
+                    */
+                    sync_action_list_add(mailbox_list, args[2], NULL);
+                }
             }
-            sync_action_list_add(mailbox_list, args[1], NULL);
-
-            if (args[2]) {
-                /* if there's a second MAILBOX recorded (i.e. a copy or move), add
-                 * it to the same user's mailbox_list (even if it's a diff user),
-                 * so that the order doesn't get lost.
-                 */
-                sync_action_list_add(mailbox_list, args[2], NULL);
+            else {
+                syslog(LOG_ERR, "Missing mailbox name: %s", args[0]);
             }
 
             free(freeme);
