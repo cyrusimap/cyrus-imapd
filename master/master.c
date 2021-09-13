@@ -1694,6 +1694,8 @@ static void sighandler_setup(void)
     struct sigaction action;
     sigset_t siglist;
 
+    signal(SIGPIPE, SIG_IGN);
+
     memset(&siglist, 0, sizeof(siglist));
     sigemptyset(&siglist);
     sigaddset(&siglist, SIGHUP);
