@@ -7524,8 +7524,11 @@ sub test_calendarevent_get_ignore_embedded_ianatz
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
+    # clean notification cache
+    $self->{instance}->getnotify();
+
     xlog "Create VEVENT with bogus IANA VTIMEZONE";
-    my $ical = <<EOF;
+    my $ical = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//foo//bar//EN
@@ -7547,6 +7550,8 @@ DTEND;TZID=Europe/Vienna:20210328T040000
 UID:2a358cee-6489-4f14-a57f-c104db4dc357
 DTSTAMP:20201231T230000Z
 CREATED:20201231T230000Z
+ORGANIZER:mailto:cassandane@example.com
+ATTENDEE:mailto:attendee@local
 SUMMARY:test
 END:VEVENT
 END:VCALENDAR
@@ -7560,6 +7565,7 @@ EOF
             properties => ['start', 'duration', 'timeZone'],
         }, 'R1'],
     ]);
+
     my $eventId = $res->[0][1]{list}[0]{id};
     $self->assert_str_equals('2021-03-28T01:00:00', $res->[0][1]{list}[0]{start});
     $self->assert_str_equals('PT2H', $res->[0][1]{list}[0]{duration});
@@ -7583,6 +7589,13 @@ EOF
     $self->assert_deep_equals([$eventId], $res->[0][1]{ids});
     $self->assert_deep_equals([], $res->[1][1]{ids});
 
+    my @notifs = grep($_->{CLASS} eq 'IMIP', @{$self->{instance}->getnotify()});
+    $self->assert_num_equals(1, scalar @notifs);
+    my $message = decode_json($notifs[0]->{MESSAGE});
+    my $event = $message->{patch};
+    $self->assert_str_equals('2021-03-28T01:00:00', $event->{start});
+    $self->assert_str_equals('PT2H', $event->{duration});
+    $self->assert_str_equals('Europe/Vienna', $event->{timeZone});
 }
 
 1;
