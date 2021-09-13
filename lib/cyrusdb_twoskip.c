@@ -1768,6 +1768,7 @@ static void _delayed_checkpoint(void *rock)
     else if (db->header.current_size > MINREWRITE
              && db->header.current_size > 2 * db->header.repack_size) {
         mycheckpoint(db);
+        free(txn);
     }
     else {
         syslog(LOG_INFO, "twoskip: delayed checkpoint not needed for %s (%llu %llu)",
