@@ -159,10 +159,8 @@ static int fixmbox(const mbentry_t *mbentry,
             free(userid);
         }
         mbentry_t *copy = mboxlist_entry_copy(mbentry);
-        /* XXX - const correctness */
-        free(copy->legacy_specialuse);
-        copy->legacy_specialuse = NULL;
-        mboxlist_update(copy, /*localonly*/1);
+        xzfree(copy->legacy_specialuse);
+        mboxlist_updatelock(copy, /*localonly*/1);
         mboxlist_entry_free(&copy);
     }
 

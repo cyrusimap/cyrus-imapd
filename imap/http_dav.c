@@ -4881,9 +4881,11 @@ static int meth_delete_collection(struct transaction_t *txn,
     /* if FastMail sharing, we need to remove ACLs */
     if (config_getswitch(IMAPOPT_FASTMAILSHARING) &&
         !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name)) {
+        struct mboxlock *namespacelock = mboxname_usernamespacelock(txn->req_tgt.mbentry->name);
         r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mbentry->name,
                             httpd_userid, /*rights*/NULL, /*isadmin*/1,
                             httpd_userid, httpd_authstate);
+        mboxname_release(&namespacelock);
         if (r) {
             syslog(LOG_ERR, "meth_delete(%s) failed to remove acl: %s",
                    txn->req_tgt.mbentry->name, error_message(r));
@@ -5824,7 +5826,6 @@ int meth_mkcol(struct transaction_t *txn, void *params)
             goto done;
         }
     }
-    mboxname_release(&namespacelock);
 
     if (!r) {
         if (mparams->mkcol.proc) r = mparams->mkcol.proc(mailbox);
@@ -5847,6 +5848,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
   done:
     buf_free(&pctx.buf);
     mailbox_close(&mailbox);
+    mboxname_release(&namespacelock);
 
     sync_checkpoint(txn->conn->pin);
 

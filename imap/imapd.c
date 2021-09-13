@@ -6982,6 +6982,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
                         }
                     }
 
+                    // don't hold the lock locally, we're proxying
+                    mboxname_release(&namespacelock);
+
                     struct backend *s_conn = NULL;
 
                     s_conn = proxy_findserver(
@@ -7293,12 +7296,17 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
     int delete_user = 0;
 
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
+
     r = mlookup(NULL, NULL, mbname_intname(mbname), &mbentry);
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
         struct backend *s = NULL;
         int res;
+
+        // don't hold the lock locally, we're proxying
+        mboxname_release(&namespacelock);
 
         if (supports_referrals) {
             imapd_refer(tag, mbentry->server, name);
@@ -7340,8 +7348,6 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         mbname_free(&mbname);
         return;
     }
-
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
 
     mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
@@ -7629,6 +7635,10 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         /* remote mailbox */
         struct backend *s = NULL;
         int res;
+
+        // don't hold the locks locally, we're proxying
+        mboxname_release(&oldnamespacelock);
+        mboxname_release(&newnamespacelock);
 
         s = proxy_findserver(mbentry->server, &imap_protocol,
                              proxy_userid, &backend_cached,
@@ -8663,9 +8673,11 @@ static void cmd_setacl(char *tag, const char *name,
             }
         }
 
+        struct mboxlock *namespacelock = mboxname_usernamespacelock(intname);
         r = mboxlist_setacl(&imapd_namespace, intname, identifier, rights,
                             imapd_userisadmin || imapd_userisproxyadmin,
                             proxy_userid, imapd_authstate);
+        mboxname_release(&namespacelock);
     }
 
     imapd_check(NULL, 0);
@@ -11433,7 +11445,7 @@ static int xfer_undump(struct xfer_header *xfer)
         newentry->server = xstrdupnull(xfer->toserver);
         newentry->partition = xstrdupnull(xfer->topart);
         newentry->mbtype = item->mbentry->mbtype|MBTYPE_MOVING;
-        r = mboxlist_update(newentry, 1);
+        r = mboxlist_updatelock(newentry, 1);
         mboxlist_entry_free(&newentry);
 
         if (r) {
@@ -11878,7 +11890,7 @@ static int xfer_delete(struct xfer_header *xfer)
         newentry->server = xstrdupnull(item->mbentry->server);
         newentry->partition = xstrdupnull(item->mbentry->partition);
         newentry->mbtype |= MBTYPE_DELETED;
-        r = mboxlist_update(newentry, 1);
+        r = mboxlist_updatelock(newentry, 1);
         mboxlist_entry_free(&newentry);
 
         if (r) {
@@ -11919,7 +11931,7 @@ static void xfer_recover(struct xfer_header *xfer)
         case XFER_UNDUMPED:
         case XFER_LOCAL_MOVING:
             /* Unset mailbox as MOVING on local server */
-            r = mboxlist_update(item->mbentry, 1);
+            r = mboxlist_updatelock(item->mbentry, 1);
 
             if (r) {
                 syslog(LOG_ERR,

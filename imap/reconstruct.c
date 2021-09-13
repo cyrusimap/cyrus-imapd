@@ -484,10 +484,13 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     /* don't repeat */
     if (hash_lookup(name, &rrock->visited)) return 0;
 
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
+
     if (setversion) {
         r = mailbox_open_iwl(name, &mailbox);
         if (r) {
             com_err(name, r, "Failed to open mailbox to set version");
+            mboxname_release(&namespacelock);
             return 0;
         }
     }
@@ -496,6 +499,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         if (r) {
             com_err(name, r, "%s",
                     (r == IMAP_IOERROR) ? error_message(errno) : "Failed to reconstruct mailbox");
+            mboxname_release(&namespacelock);
             return 0;
         }
     }
@@ -641,6 +645,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     }
     mailbox_close(&mailbox);
     free(extname);
+    mboxname_release(&namespacelock);
 
     if (rrock->discovered) {
         char fnamebuf[MAX_MAILBOX_PATH];

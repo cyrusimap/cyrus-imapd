@@ -2797,7 +2797,7 @@ int sync_apply_mailbox(struct dlist *kin,
         newmbentry->foldermodseq = highestmodseq;
         newmbentry->createdmodseq = createdmodseq;
 
-        r = mboxlist_update(newmbentry, /*localonly*/1);
+        r = mboxlist_updatelock(newmbentry, /*localonly*/1);
         mboxlist_entry_free(&newmbentry);
 
         return r;
@@ -2842,55 +2842,50 @@ int sync_apply_mailbox(struct dlist *kin,
 
     options = sync_parse_options(options_str);
 
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
+    if (!namespacelock) {
+        r = IMAP_MAILBOX_LOCKED;
+        xsyslog(LOG_ERR, "IOERROR: failed to usernamespacelock",
+                         "mailbox=<%s> uniqueid=<%s>",
+                         mboxname, uniqueid);
+        goto done;
+    }
+
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
-        if (!namespacelock) {
-            r = IMAP_MAILBOX_LOCKED;
-            xsyslog(LOG_ERR, "IOERROR: failed to usernamespacelock",
-                             "mailbox=<%s> uniqueid=<%s>",
-                             mboxname, uniqueid);
-            goto done;
+        char *oldname = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
+        // if they have the same name it's probably an intermediate being
+        // promoted.  Intermediates, the gift that keeps on giving.
+        if (oldname && strcmp(oldname, mboxname)) {
+            xsyslog(LOG_ERR, "SYNCNOTICE: mailbox uniqueid already in use",
+                             "mailbox=<%s> uniqueid=<%s> usedby=<%s>",
+                             mboxname, uniqueid, oldname);
+            free(oldname);
+            r = IMAP_MAILBOX_MOVED;
         }
-        // try again under lock
-        r = mailbox_open_iwl(mboxname, &mailbox);
-        if (!r) r = sync_mailbox_version_check(&mailbox);
-        if (r == IMAP_MAILBOX_NONEXISTENT) { // did we win a race?
-            char *oldname = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
-            // if they have the same name it's probably an intermediate being
-            // promoted.  Intermediates, the gift that keeps on giving.
-            if (oldname && strcmp(oldname, mboxname)) {
-                xsyslog(LOG_ERR, "SYNCNOTICE: mailbox uniqueid already in use",
-                                 "mailbox=<%s> uniqueid=<%s> usedby=<%s>",
-                                 mboxname, uniqueid, oldname);
-                free(oldname);
-                r = IMAP_MAILBOX_MOVED;
-            }
-            else {
-                mbentry_t mbentry = MBENTRY_INITIALIZER;
-                mbentry.name = (char *) mboxname;
-                mbentry.partition = (char *) partition;
-                mbentry.uniqueid = (char *) uniqueid;
-                mbentry.acl = (char *) acl;
-                mbentry.mbtype = mbtype;
-                mbentry.uidvalidity = uidvalidity;
-                mbentry.createdmodseq = createdmodseq;
-                mbentry.foldermodseq = foldermodseq;
+        else {
+            mbentry_t mbentry = MBENTRY_INITIALIZER;
+            mbentry.name = (char *) mboxname;
+            mbentry.partition = (char *) partition;
+            mbentry.uniqueid = (char *) uniqueid;
+            mbentry.acl = (char *) acl;
+            mbentry.mbtype = mbtype;
+            mbentry.uidvalidity = uidvalidity;
+            mbentry.createdmodseq = createdmodseq;
+            mbentry.foldermodseq = foldermodseq;
 
-                unsigned flags = MBOXLIST_CREATE_SYNC;
-                if (sstate->local_only) flags |= MBOXLIST_CREATE_LOCALONLY;
+            unsigned flags = MBOXLIST_CREATE_SYNC;
+            if (sstate->local_only) flags |= MBOXLIST_CREATE_LOCALONLY;
 
-                r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
-                                           1/*isadmin*/,
-                                           sstate->userid, sstate->authstate,
-                                           flags, &mailbox);
-            }
-            /* set a highestmodseq of 0 so ALL changes are future
-             * changes and get applied */
-            if (!r) mailbox->i.highestmodseq = 0;
+            r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
+                                       1/*isadmin*/,
+                                       sstate->userid, sstate->authstate,
+                                       flags, &mailbox);
         }
-        mboxname_release(&namespacelock);
+        /* set a highestmodseq of 0 so ALL changes are future
+         * changes and get applied */
+        if (!r) mailbox->i.highestmodseq = 0;
     }
 
     if (!r && strcmp(mailbox_uniqueid(mailbox), uniqueid)) {
@@ -2898,28 +2893,13 @@ int sync_apply_mailbox(struct dlist *kin,
             xsyslog(LOG_NOTICE, "SYNCNOTICE: mailbox uniqueid changed - replacing",
                                 "mailbox=<%s> origuniqueid=<%s> newuniqueid=<%s>",
                                 mboxname, mailbox_uniqueid(mailbox), uniqueid);
-            // close first, because we'll be taking the lock and comparing and then away we go
-            mailbox_close(&mailbox);
-            struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
-            if (!namespacelock) {
-                r = IMAP_MAILBOX_LOCKED;
-                xsyslog(LOG_ERR, "IOERROR: failed to usernamespacelock",
-                                 "mailbox=<%s> uniqueid=<%s>",
-                                 mboxname, uniqueid);
-                goto done;
-            }
-            r = mailbox_open_iwl(mboxname, &mailbox);
-            if (r) goto unlock;
-            // lost the race?  Keep this mailbox
-            if (!strcmp(mailbox_uniqueid(mailbox), uniqueid)) goto unlock;
-            // we need to create a new mailbox!
             mailbox_close(&mailbox);
             int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT;
             if (sstate->local_only) delflags |= MBOXLIST_DELETE_LOCALONLY;
             r = mboxlist_deletemailbox(mboxname, sstate->userisadmin,
                                        sstate->userid, sstate->authstate,
                                        NULL, delflags);
-            if (r) goto unlock;  // kinda bad, we've failed to nuke the old one
+            if (r) goto done;  // kinda bad, we've failed to nuke the old one
             mbentry_t mbentry = MBENTRY_INITIALIZER;
             mbentry.name = (char *) mboxname;
             mbentry.partition = (char *) partition;
@@ -2940,8 +2920,6 @@ int sync_apply_mailbox(struct dlist *kin,
             /* set a highestmodseq of 0 so ALL changes are future
              * changes and get applied */
             if (!r) mailbox->i.highestmodseq = 0;
-   unlock:
-            mboxname_release(&namespacelock);
         }
         else {
             xsyslog(LOG_ERR, "SYNCERROR: mailbox uniqueid changed - retry",
@@ -3153,6 +3131,7 @@ done:
     }
 
     mailbox_close(&mailbox);
+    mboxname_release(&namespacelock);
 
     return r;
 }

@@ -183,7 +183,7 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
             if (mbentry->server) printf("%s!", mbentry->server);
             printf("%s %s\n", mbentry->partition, mbentry->acl);
             if (d->purge) {
-                mboxlist_delete(mbentry->name);
+                mboxlist_deletelock(mbentry->name);
             }
         }
         break;
@@ -485,7 +485,7 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
             free(mbentry->server);
             mbentry->server = NULL;
             mbentry->mbtype &= ~(MBTYPE_MOVING|MBTYPE_REMOTE);
-            ret = mboxlist_update(mbentry, 1);
+            ret = mboxlist_updatelock(mbentry, 1);
             if (ret) {
                 fprintf(stderr,
                         "couldn't perform update to un-remote-flag %s\n",
@@ -626,7 +626,7 @@ static void do_undump(void)
         newmbentry->acl = xstrdupnull(acl);
         /* XXX - still missing all the new fields */
 
-        r = mboxlist_update(newmbentry, /*localonly*/1);
+        r = mboxlist_updatelock(newmbentry, /*localonly*/1);
         mboxlist_entry_free(&newmbentry);
 
         if (r) break;

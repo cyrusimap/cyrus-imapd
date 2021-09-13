@@ -150,6 +150,21 @@ EXPORTED mbentry_t *mboxlist_entry_copy(const mbentry_t *src)
 
     copy->legacy_specialuse = xstrdupnull(src->legacy_specialuse);
 
+    size_t numhistory = ptrarray_size(&src->name_history);
+    size_t i;
+    // this is kind of pointless, but we know the target size so may as
+    // well ensure all the space even though it'll only be one alloc
+    // normally anyway
+    ptrarray_truncate(&copy->name_history, numhistory);
+    for (i = 0; i < numhistory; i++) {
+        const former_name_t *item = ptrarray_nth(&src->name_history, i);
+        former_name_t *tgt = xzmalloc(sizeof(former_name_t));
+        tgt->foldermodseq = item->foldermodseq;
+        tgt->mtime = item->mtime;
+        tgt->name = xstrdupnull(item->name);
+        ptrarray_set(&copy->name_history, i, tgt);
+    }
+
     return copy;
 }
 
@@ -439,7 +454,7 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
         string--;
         break;
     }
-            
+
     for (; *string; string++) {
         /* mailbox flags */
         switch (*string) {
@@ -935,14 +950,14 @@ static int user_can_read(const strarray_t *aclbits, const char *user)
 
 static int mboxlist_update_raclmodseq(const char *acluser)
 {
-    char *aclusermbox = mboxname_user_mbox(acluser, NULL);
+    char *acluserinbox = mboxname_user_mbox(acluser, NULL);
     mbentry_t *raclmbentry = NULL;
-    if (mboxlist_lookup(aclusermbox, &raclmbentry, NULL) == 0) {
-        mboxname_nextraclmodseq(aclusermbox, 0);
-        sync_log_mailbox(aclusermbox);
+    if (mboxlist_lookup(acluserinbox, &raclmbentry, NULL) == 0) {
+        mboxname_nextraclmodseq(acluserinbox, 0);
+        sync_log_mailbox(acluserinbox);
     }
     mboxlist_entry_free(&raclmbentry);
-    free(aclusermbox);
+    free(acluserinbox);
     return 0;
 }
 
@@ -1019,6 +1034,13 @@ static void add_former_name(struct dlist *name_history, const char *name,
     free(dbname);
 }
 
+static void assert_namespacelocked(const char *mboxname)
+{
+    char *userid = mboxname_to_userid(mboxname);
+    assert(user_isnamespacelocked(userid));
+    free(userid);
+}
+
 static int mboxlist_update_entry(const char *name,
                                  const mbentry_t *mbentry, struct txn **txn)
 {
@@ -1026,6 +1048,10 @@ static int mboxlist_update_entry(const char *name,
     struct buf key = BUF_INITIALIZER;
     mbentry_t *old = NULL;
     int r = 0;
+    struct txn *mytid = NULL;
+    if (!txn) txn = &mytid;
+
+    assert_namespacelocked(name);
 
     mboxlist_mylookup(dbname, &old, txn, 0, 1); // ignore errors, it will be NULL
 
@@ -1112,15 +1138,35 @@ static int mboxlist_update_entry(const char *name,
     }
 
  done:
+    if (mytid) {
+        if (r) cyrusdb_abort(mbdb, mytid);
+        else cyrusdb_commit(mbdb, mytid);
+    }
     mboxlist_entry_free(&old);
     buf_free(&key);
     free(dbname);
     return r;
 }
 
+EXPORTED int mboxlist_deletelock(const char *name)
+{
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
+    int r = mboxlist_update_entry(name, NULL, NULL);
+    mboxname_release(&namespacelock);
+    return r;
+}
+
 EXPORTED int mboxlist_delete(const char *name)
 {
     return mboxlist_update_entry(name, NULL, NULL);
+}
+
+EXPORTED int mboxlist_updatelock(const mbentry_t *mbentry, int localonly)
+{
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
+    int r = mboxlist_update(mbentry, localonly);
+    mboxname_release(&namespacelock);
+    return r;
 }
 
 EXPORTED int mboxlist_update(const mbentry_t *mbentry, int localonly)
@@ -1174,13 +1220,6 @@ EXPORTED int mboxlist_update(const mbentry_t *mbentry, int localonly)
     }
 
     return r;
-}
-
-static void assert_namespacelocked(const char *mboxname)
-{
-    char *userid = mboxname_to_userid(mboxname);
-    assert(user_isnamespacelocked(userid));
-    free(userid);
 }
 
 static int _findparent(mbname_t *mbname, mbentry_t **mbentryp, int allow_all)
@@ -1655,13 +1694,13 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     int isremote = mbtype & MBTYPE_REMOTE;
     mbentry_t *usermbentry = NULL, *newmbentry = NULL;
 
+    init_internal();
+
     r = mboxlist_create_namecheck(mboxname, userid, auth_state,
                                   isadmin, (flags & MBOXLIST_CREATE_FORCEUSER));
     if (r) goto done;
 
     assert_namespacelocked(mboxname);
-
-    init_internal();
 
     if (!(flags & MBOXLIST_CREATE_SYNC)) {
         options |= config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
@@ -1818,7 +1857,9 @@ EXPORTED int mboxlist_insertremote(mbentry_t *mbentry,
     }
 
     /* database put */
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
     r = mboxlist_update_entry(mbentry->name, mbentry, txn);
+    mboxname_release(&namespacelock);
 
     switch (r) {
     case CYRUSDB_OK:
@@ -1847,6 +1888,7 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     struct txn *lcl_tid = NULL;
     mbentry_t *mbentry = NULL;
     char *dbname = mboxname_to_dbname(name);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
 
     if(in_tid) {
         tid = in_tid;
@@ -1906,6 +1948,7 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
         cyrusdb_abort(mbdb, *tid);
     }
     mboxlist_entry_free(&mbentry);
+    mboxname_release(&namespacelock);
 
     return r;
 }
@@ -4460,6 +4503,8 @@ EXPORTED int mboxlist_update_foldermodseq(const char *name, modseq_t foldermodse
 
     init_internal();
 
+    assert_namespacelocked(name);
+
     int r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) return r;
 
@@ -5255,9 +5300,12 @@ static void _upgrade_cb(const char *key __attribute__((unused)),
 
     for (idx = 0; idx < n; idx++) {
         mbentry_t *mbentry = (mbentry_t *) ptrarray_nth(pa, idx);
-   
-        if (!*urock->r)
+
+        if (!*urock->r) {
+            struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
             *urock->r = mboxlist_update_entry(mbentry->name, mbentry, urock->tid);
+            mboxname_release(&namespacelock);
+        }
 
         mboxlist_entry_free(&mbentry);
     }
@@ -5294,7 +5342,7 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     r = rename(fname, buf_cstring(&buf));
     free(fname);
     if (r) goto done;
-    
+
     /* open backup db file */
     r = cyrusdb_open(DB, buf_cstring(&buf), 0, &backup);
 

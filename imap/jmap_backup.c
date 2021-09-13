@@ -1141,7 +1141,6 @@ static int recreate_calendar(const mbentry_t *mbentry,
     if (!r && !*newmailbox) {
         /* Create the calendar */
         char *newmboxname = caldav_mboxname(req->accountid, makeuuid());
-        struct mboxlock *namespacelock = user_namespacelock(req->accountid);
         mbentry_t newmbentry = MBENTRY_INITIALIZER;
         newmbentry.name = newmboxname;
         newmbentry.mbtype = MBTYPE_CALENDAR;
@@ -1149,7 +1148,6 @@ static int recreate_calendar(const mbentry_t *mbentry,
         r = mboxlist_createmailbox(&newmbentry, 0/*options*/, 0/*highestmodseq*/,
                                    0/*isadmin*/, req->accountid, req->authstate,
                                    0/*flags*/, newmailbox);
-        mboxname_release(&namespacelock);
 
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create mailbox %s: %s",
@@ -1273,6 +1271,7 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
             /* Calendar was destroyed after cutoff -
                restore calendar and resources */
             struct mailbox *newmailbox = NULL;
+            struct mboxlock *namespacelock = user_namespacelock(req->accountid);
 
             if (!(rrock->jrestore->mode & DRY_RUN)) {
                 r = recreate_calendar(mbentry, rrock, &newmailbox);
@@ -1285,10 +1284,11 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
 
             if (!r && !(rrock->jrestore->mode & DRY_RUN)) {
                 /* XXX  Do we want to do this? */
-                r = mboxlist_deletemailboxlock(mbentry->name, /*isadmin*/0,
-                                               req->accountid, req->authstate,
-                                               /*mboxevent*/NULL, /*flags*/0);
+                r = mboxlist_deletemailbox(mbentry->name, /*isadmin*/0,
+                                           req->accountid, req->authstate,
+                                           /*mboxevent*/NULL, /*flags*/0);
             }
+            mboxname_release(&namespacelock);
         }
         else {
             /* Calendar was destroyed before cutoff - not interested */

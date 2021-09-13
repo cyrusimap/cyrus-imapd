@@ -147,6 +147,7 @@ const char *mboxlist_mbtype_to_string(uint32_t mbtype);
 uint32_t mboxlist_string_to_mbtype(const char *string);
 
 int mboxlist_delete(const char *name);
+int mboxlist_deletelock(const char *name);
 /* Lookup 'name' in the mailbox list. */
 int mboxlist_lookup(const char *name, mbentry_t **mbentryptr,
                     struct txn **tid);
@@ -167,6 +168,8 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid);
 
 /* Update a mailbox's entry */
 int mboxlist_update(const mbentry_t *mbentry, int localonly);
+/* Update but take the usernamespace lock first */
+int mboxlist_updatelock(const mbentry_t *mbentry, int localonly);
 
 /* check user's ability to create mailbox */
 int mboxlist_createmailboxcheck(const char *name, int mbtype,
