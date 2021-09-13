@@ -360,7 +360,6 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     struct restore_rock *rrock = (struct restore_rock *) rock;
     int log_level = rrock->jrestore->log_level;
     hash_table resources = HASH_TABLE_INITIALIZER;
-    struct mailbox *mailbox = NULL;
     char *resource = NULL;
     int recno, r;
 
@@ -374,7 +373,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/0);
+    r = jmap_openmbox(rrock->req, mbentry->name, &rrock->mailbox, /*rw*/0);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for reading",
                mbentry->name);
@@ -382,20 +381,21 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     }
 
     if ((rrock->jrestore->mode & UNDO_ALL) &&
-        rrock->jrestore->cutoff < mailbox->i.changes_epoch) {
+        rrock->jrestore->cutoff < rrock->mailbox->i.changes_epoch) {
         syslog(log_level,
                "skipping '%s': cutoff (%ld) prior to mailbox history (%ld)",
-               mailbox_name(mailbox), rrock->jrestore->cutoff, mailbox->i.changes_epoch);
+               mailbox_name(rrock->mailbox), rrock->jrestore->cutoff,
+               rrock->mailbox->i.changes_epoch);
 
-        jmap_closembox(rrock->req, &mailbox);
+        jmap_closembox(rrock->req, &rrock->mailbox);
         return HTTP_UNPROCESSABLE;
     }
 
     construct_hash_table(&resources, 64, 0);
 
     message_t *msg = message_new();
-    for (recno = mailbox->i.num_records; recno > 0; recno--) {
-        message_set_from_mailbox(mailbox, recno, msg);
+    for (recno = rrock->mailbox->i.num_records; recno > 0; recno--) {
+        message_set_from_mailbox(rrock->mailbox, recno, msg);
 
         const struct index_record *record = msg_record(msg);
 
@@ -488,8 +488,6 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     }
     message_unref(&msg);
 
-    rrock->mailbox = mailbox;
-
     unsigned i;
     hash_iter *iter = hash_table_iter(&resources);
     for (i = 0; hash_iter_next(iter); i++) {
@@ -513,8 +511,8 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     free_hash_table(&resources, NULL);
 
     /* Update deletedmodseq for this collection type */
-    if (mailbox->i.deletedmodseq > rrock->deletedmodseq)
-        rrock->deletedmodseq = mailbox->i.deletedmodseq;
+    if (rrock->mailbox->i.deletedmodseq > rrock->deletedmodseq)
+        rrock->deletedmodseq = rrock->mailbox->i.deletedmodseq;
 
     if (!rrock->keep_open)
         jmap_closembox(rrock->req, &rrock->mailbox);
