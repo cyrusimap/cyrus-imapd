@@ -3141,7 +3141,7 @@ sub test_snooze_tzid
     my $snoozed = "INBOX.snoozed";
     my $awakened = "INBOX.awakened";
 
-    my $localtz = DateTime::TimeZone->new( name => 'local' );
+    my $localtz = DateTime::TimeZone->new( name => 'Australia/Melbourne' );
     xlog $self, "using local timezone: " . $localtz->name();
     my $maildate = DateTime->now(time_zone => $localtz);
     $maildate->add(DateTime::Duration->new(minutes => 1));
