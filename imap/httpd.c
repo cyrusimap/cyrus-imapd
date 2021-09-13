@@ -1419,6 +1419,8 @@ static int parse_request_line(struct transaction_t *txn)
 }
 
 
+static void parse_upgrade(struct transaction_t *txn);
+
 static int client_need_auth(struct transaction_t *txn, int sasl_result)
 {
     if (httpd_tls_required) {
@@ -1426,12 +1428,12 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
         const char **hdr;
 
         /* Check which response is required */
-        if ((hdr = spool_getheader(txn->req_hdrs, "Upgrade")) &&
-            stristr(hdr[0], TLS_VERSION)) {
-            /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
+        if (!(txn->flags.conn & CONN_CLOSE)) {
+            parse_upgrade(txn);
+        }
 
-            txn->flags.conn |= CONN_UPGRADE;
-            txn->flags.upgrade = UPGRADE_TLS;
+        if (txn->flags.upgrade & UPGRADE_TLS) {
+            /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
             return HTTP_UPGRADE;
         }
         else {
@@ -1586,7 +1588,8 @@ static int preauth_check_hdrs(struct transaction_t *txn)
             txn->flags.upgrade = 0;
         }
     }
-    else if (!txn->conn->tls_ctx && txn->flags.ver == VER_1_1) {
+    else if (txn->flags.ver == VER_1_1 &&
+             !(txn->conn->tls_ctx || (txn->flags.conn & CONN_CLOSE))) {
         /* Advertise available upgrade protocols */
         if (httpd_tls_enabled &&
             config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
@@ -2389,18 +2392,23 @@ static int parse_connection(struct transaction_t *txn)
         while ((token = tok_next(&tok))) {
             switch (txn->flags.ver) {
             case VER_1_1:
-                if (!strcasecmp(token, "upgrade")) {
-                    /* Client wants to upgrade */
-                    parse_upgrade(txn);
-                    break;
+                if (!(txn->flags.conn & CONN_CLOSE)) {
+                    /* Only persistent connections can uitilize these options */
+                    if (!strcasecmp(token, "upgrade")) {
+                        /* Client wants to upgrade */
+                        parse_upgrade(txn);
+                    }
+                    else if (!strcasecmp(token, "close")) {
+                        /* Non-persistent connection -- supersedes other options */
+                        txn->flags.conn = CONN_CLOSE;
+                        txn->flags.upgrade = 0;
+                    }
+                    else if (!strcasecmp(token, "keep-alive")) {
+                        /* Client wants our timeout value */
+                        txn->flags.conn |= CONN_KEEPALIVE;
+                    }
                 }
-                else if (!strcasecmp(token, "close")) {
-                    /* Non-persistent connection */
-                    txn->flags.conn |= CONN_CLOSE;
-                    break;
-                }
-
-                GCC_FALLTHROUGH
+                break;
 
             case VER_1_0:
                 if (httpd_timeout && !strcasecmp(token, "keep-alive")) {
