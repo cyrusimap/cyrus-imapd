@@ -927,7 +927,7 @@ int sync_sieve_upload(const char *userid, const char *name,
         goto done;
     }
 
-    r = sievedb_lookup_name(db, mailbox->name, newname, &sdata, 0);
+    r = sievedb_lookup_name(db, mailbox_name(mailbox), newname, &sdata, 0);
     if (!r || r == CYRUSDB_NOTFOUND) {
         struct buf buf = BUF_INITIALIZER;
 

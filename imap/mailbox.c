@@ -3951,7 +3951,7 @@ EXPORTED int mailbox_add_email_alarms(struct mailbox *mailbox)
 static struct sieve_db *mailbox_open_sieve(struct mailbox *mailbox)
 {
     if (!mailbox->sievedir) {
-        char *userid = mboxname_to_userid(mailbox->name);
+        char *userid = mboxname_to_userid(mailbox_name(mailbox));
         mailbox->sievedir = xstrdup(user_sieve_path(userid));
         free(userid);
     }
@@ -3982,10 +3982,10 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
     int isactive = (new->system_flags & FLAG_FLAGGED ? 1 : 0);
     int r = 0;
 
-    if (mbtype_isa(mailbox->mbtype) != MBTYPE_SIEVE) return 0;
+    if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_SIEVE) return 0;
 
     /* never have Sieve on deleted mailboxes */
-    if (mboxname_isdeletedmailbox(mailbox->name, NULL)) return 0;
+    if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL)) return 0;
 
     /* conditions in which there's nothing to do */
     if (!new) return 0;
@@ -4072,7 +4072,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
         }
 
         sdata->lastupdated = new->internaldate;
-        sdata->mailbox = mailbox->name;
+        sdata->mailbox = mailbox_name(mailbox);
         sdata->imap_uid = new->uid;
         sdata->modseq = new->modseq;
         sdata->createdmodseq = new->createdmodseq;
@@ -4104,11 +4104,11 @@ static int mailbox_delete_sieve(struct mailbox *mailbox)
 {
     struct sieve_db *sievedb = NULL;
 
-    if (mbtype_isa(mailbox->mbtype) != MBTYPE_SIEVE) return 0;
+    if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_SIEVE) return 0;
 
     sievedb = sievedb_open_mailbox(mailbox);
     if (sievedb) {
-        int r = sievedb_delmbox(sievedb, mailbox->name);
+        int r = sievedb_delmbox(sievedb, mailbox_name(mailbox));
         sievedb_close(sievedb);
         if (r) return r;
     }
@@ -4155,10 +4155,10 @@ EXPORTED int mailbox_add_sieve(struct mailbox *mailbox)
     const message_t *msg;
     int r = 0;
 
-    if (mbtype_isa(mailbox->mbtype) != MBTYPE_SIEVE)
+    if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_SIEVE)
         return 0;
 
-    if (mboxname_isdeletedmailbox(mailbox->name, NULL))
+    if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL))
         return 0;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);

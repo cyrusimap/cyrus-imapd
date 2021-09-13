@@ -141,7 +141,7 @@ EXPORTED struct sieve_db *sievedb_open_userid(const char *userid)
 EXPORTED struct sieve_db *sievedb_open_mailbox(struct mailbox *mailbox)
 {
     struct sieve_db *sievedb = NULL;
-    char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
 
     init_internal();
 
@@ -535,7 +535,7 @@ static int lock_and_execute(struct mailbox *mailbox,
 
         if (r) {
             syslog(LOG_ERR, "locking mailbox %s failed: %s",
-                   mailbox->name, error_message(r));
+                   mailbox_name(mailbox), error_message(r));
             return r;
         }
 
@@ -563,7 +563,7 @@ static int remove_uid(struct mailbox *mailbox, uint32_t uid)
 
     if (r) {
         syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
-               mailbox->name, uid, error_message(r));
+               mailbox_name(mailbox), uid, error_message(r));
     }
 
     return r;
@@ -587,13 +587,13 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata)
     init_internal();
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+    if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
+      syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         return CYRUSDB_IOERROR;
     }
 
     /* Create RFC 5322 header for script */
-    char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
     if (strchr(userid, '@')) {
         buf_printf(&buf, "<%s>", userid);
     }
@@ -641,7 +641,7 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata)
     if ((r = append_setup_mbox(&as, mailbox, userid, authstate,
                                0, NULL, NULL, 0, 0))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
     }
     else {
         struct body *body = NULL;
@@ -700,7 +700,7 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata)
         r = mailbox_find_index_record(mailbox, sdata->imap_uid, &record);
         if (r) {
             syslog(LOG_ERR, "fetching record (%s:%u) failed: %s",
-                   mailbox->name, sdata->imap_uid, error_message(r));
+                   mailbox_name(mailbox), sdata->imap_uid, error_message(r));
             return r;
         }
     }
@@ -708,7 +708,7 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata)
     struct sieve_db *sievedb = sievedb_open_mailbox(mailbox);
 
     if (!sievedb) {
-        syslog(LOG_ERR, "opening sieve_db for %s failed", mailbox->name);
+      syslog(LOG_ERR, "opening sieve_db for %s failed", mailbox_name(mailbox));
         return CYRUSDB_IOERROR;
     }
         
@@ -725,7 +725,7 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata)
         r = mailbox_find_index_record(mailbox, mydata->imap_uid, &oldactive);
         if (r) {
             syslog(LOG_ERR, "fetching record (%s:%u) failed: %s",
-                   mailbox->name, mydata->imap_uid, error_message(r));
+                   mailbox_name(mailbox), mydata->imap_uid, error_message(r));
         }
         else {
             oldactive.system_flags &= ~FLAG_FLAGGED;
@@ -733,7 +733,7 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata)
 
             if (r) {
                 syslog(LOG_ERR, "unflagging record (%s:%u) failed: %s",
-                       mailbox->name, oldactive.uid, error_message(r));
+                       mailbox_name(mailbox), oldactive.uid, error_message(r));
             }
         }
     }
@@ -745,7 +745,7 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata)
 
         if (r) {
             syslog(LOG_ERR, "flagging record (%s:%u) failed: %s",
-                   mailbox->name, record.uid, error_message(r));
+                   mailbox_name(mailbox), record.uid, error_message(r));
         }
     }
 
@@ -804,7 +804,7 @@ EXPORTED struct buf *sieve_script_fetch(struct mailbox *mailbox,
 
     if (r) {
         syslog(LOG_ERR, "fetching message (%s:%u) failed: %s",
-               mailbox->name, sdata->imap_uid, error_message(r));
+               mailbox_name(mailbox), sdata->imap_uid, error_message(r));
     }
 
     return data;

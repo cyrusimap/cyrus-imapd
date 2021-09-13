@@ -223,7 +223,7 @@ int getscript(struct protstream *conn, const struct buf *name)
         return TIMSIEVE_FAIL;
     }
 
-    result = sievedb_lookup_name(sievedb, sieve_mailbox->name,
+    result = sievedb_lookup_name(sievedb, mailbox_name(sieve_mailbox),
                                  buf_cstring(name), &sdata, 0);
     if (result == CYRUSDB_NOTFOUND) {
         prot_printf(conn, "NO (NONEXISTENT) \"Script does not exist\"\r\n");
@@ -283,7 +283,7 @@ int putscript(struct protstream *conn, const struct buf *name,
     if (!verify_only) {
         struct sieve_data *sdata = NULL;
 
-        result = sievedb_lookup_name(sievedb, sieve_mailbox->name,
+        result = sievedb_lookup_name(sievedb, mailbox_name(sieve_mailbox),
                                      buf_cstring(name), &sdata, 0);
         if (!result || result == CYRUSDB_NOTFOUND) {
             sdata->name = buf_cstring(name);
@@ -313,7 +313,7 @@ int deletescript(struct protstream *conn, const struct buf *name)
         return TIMSIEVE_FAIL;
     }
 
-    result = sievedb_lookup_name(sievedb, sieve_mailbox->name,
+    result = sievedb_lookup_name(sievedb, mailbox_name(sieve_mailbox),
                                  buf_cstring(name), &sdata, 0);
     if (result == CYRUSDB_NOTFOUND) {
         prot_printf(conn, "NO (NONEXISTENT) \"Script does not exist\"\r\n");
@@ -373,7 +373,7 @@ int setactive(struct protstream *conn, const struct buf *name)
             return TIMSIEVE_FAIL;
         }
 
-        result = sievedb_lookup_name(sievedb, sieve_mailbox->name,
+        result = sievedb_lookup_name(sievedb, mailbox_name(sieve_mailbox),
                                      buf_cstring(name), &sdata, 0);
         if (result == CYRUSDB_NOTFOUND) {
             prot_printf(conn,"NO (NONEXISTENT) \"Script does not exist\"\r\n");
@@ -408,7 +408,7 @@ int renamescript(struct protstream *conn,
             return TIMSIEVE_FAIL;
     }
 
-    result = sievedb_lookup_name(sievedb, sieve_mailbox->name,
+    result = sievedb_lookup_name(sievedb, mailbox_name(sieve_mailbox),
                                  buf_cstring(newname), &sdata, 0);
     if (!result) {
         prot_printf(conn, "NO (ALREADYEXISTS) \"Script %s already exists.\"\r\n",
@@ -417,7 +417,7 @@ int renamescript(struct protstream *conn,
     }
 
     if (result == CYRUSDB_NOTFOUND) {
-        result = sievedb_lookup_name(sievedb, sieve_mailbox->name,
+        result = sievedb_lookup_name(sievedb, mailbox_name(sieve_mailbox),
                                      buf_cstring(oldname), &sdata, 0);
         if (result == CYRUSDB_NOTFOUND) {
             prot_printf(conn,"NO (NONEXISTENT) \"Script %s does not exist\"\r\n",

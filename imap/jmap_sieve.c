@@ -410,7 +410,7 @@ static const char *set_create(struct jmap_req *req,
             json_array_append_new(invalid, json_string("name"));
         }
         else {
-            r = sievedb_lookup_name(db, mailbox->name, name, &exists, 0);
+          r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &exists, 0);
             if (!r)  {
                 err = json_pack("{s:s}", "type", "alreadyExists");
                 goto done;
@@ -504,7 +504,7 @@ static void set_update(struct jmap_req *req,
                 goto done;
             }
             else {
-                r = sievedb_lookup_name(db, mailbox->name, name, &sdata, 0);
+              r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
                 if (!r && strcmp(id, sdata->id))  {
                     err = json_pack("{s:s}", "type", "alreadyExists");
                     r = 0;
