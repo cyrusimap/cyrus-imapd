@@ -3279,6 +3279,7 @@ static void cmd_idle(char *tag)
         idling = 1;
 
         index_release(imapd_index);
+        prot_flush(imapd_out);
         while ((flags = idle_wait(imapd_in->fd))) {
             if (deadline_exceeded(&deadline)) {
                 syslog(LOG_DEBUG, "timeout for user '%s' while idling",
