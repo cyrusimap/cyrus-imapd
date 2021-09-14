@@ -726,6 +726,7 @@ sub _setup_http_service_objects
         }
         if ($self->{instance}->{config}->get_bit('httpmodules', 'jmap')) {
             require Mail::JMAPTalk;
+            $ENV{DEBUGJMAP} = 1;
             $self->{jmap} = Mail::JMAPTalk->new(
                 user => 'cassandane',
                 password => 'pass',
