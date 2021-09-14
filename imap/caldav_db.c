@@ -725,8 +725,8 @@ static void check_mattach_cb(icalcomponent *comp, void *rock)
     }
 }
 
-EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *cdata,
-                               icalcomponent *ical)
+EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cdata,
+                              icalcomponent *ical)
 {
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind;
