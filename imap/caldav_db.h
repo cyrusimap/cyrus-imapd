@@ -170,8 +170,8 @@ int caldav_foreach_timerange(struct caldav_db *caldavdb,
 
 /* write an entry to 'caldavdb' */
 int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata);
-int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *cdata,
-                      icalcomponent *ical);
+int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cdata,
+                     icalcomponent *ical);
 
 /* delete an entry from 'caldavdb' */
 int caldav_delete(struct caldav_db *caldavdb, unsigned rowid);
