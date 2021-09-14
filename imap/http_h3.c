@@ -46,6 +46,7 @@
 
 #include "httpd.h"
 #include "http_h3.h"
+#include "http_ws.h"
 #include "quic.h"
 #include "retry.h"
 
@@ -232,12 +233,10 @@ static int recv_header_cb(nghttp3_conn *conn __attribute__((unused)),
 
         case 'p': /* :path, :protocol */
             if (!strcmp("ath", my_name+2)) txn->req_line.uri = my_value;
-#if 0
             else if (!strcmp("rotocol", my_name+2) &&
                      !strcmp(my_value, WS_TOKEN)) {
                 txn->flags.upgrade |= UPGRADE_WS;
             }
-#endif
             break;
         }
     }
@@ -339,6 +338,7 @@ static int open_conn(void *conn)
     http_conn->resp_body_chunk = &resp_body_chunk;
 
     nghttp3_settings_default(&settings);
+    if (ws_enabled) settings.enable_connect_protocol = 1;
 
     r = nghttp3_conn_server_new(&h3_conn, &callbacks, &settings,
                                 nghttp3_mem_default(), conn);
