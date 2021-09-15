@@ -319,6 +319,11 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         capability = "vnd.cyrus.snooze";
         supported = parse_script->support & SIEVE_CAPA_SNOOZE;
         break;
+
+    case B_PROCESSIMIP:
+        capability = "vnd.cyrus.imip";
+        supported = parse_script->support & SIEVE_CAPA_IMIP;
+        break;
     }
 
     if (!supported) {

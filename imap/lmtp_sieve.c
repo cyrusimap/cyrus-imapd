@@ -1905,6 +1905,51 @@ void sieve_log(void *sc, void *mc, const char *text)
            mbname_userid(sd->mbname), md->id ? md->id : "(null)", text);
 }
 
+static int sieve_imip(void *ac __attribute__((unused)),
+                      void *ic __attribute__((unused)),
+                      void *sc __attribute__((unused)),
+                      void *mc,
+                      const char **errmsg __attribute__((unused)))
+{
+    deliver_data_t *mydata = (deliver_data_t *) mc;
+    message_data_t *m = mydata->m;
+
+    prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
+
+    if (!mydata->content->body) {
+        /* parse the message body if we haven't already */
+        int r = message_parse_file_buf(m->f, &mydata->content->map,
+                                   &mydata->content->body, NULL);
+        if (r) return SIEVE_OK;
+    }
+
+    /* XXX currently struct bodypart as defined in message.h is the same as
+       sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
+    struct bodypart **parts = NULL;
+    const char *content_types[] = { "text/calendar", NULL };
+
+    message_fetch_part(mydata->content, content_types, &parts);
+    if (parts && parts[0]) {
+        int i = 0;
+
+        syslog(LOG_INFO, "XXXXXXXX  '%s'", parts[0]->decoded_body);
+
+        syslog(LOG_INFO, "sieve iMIP processed: %s",
+               m->id ? m->id : "<nomsgid>");
+        if (config_auditlog)
+            syslog(LOG_NOTICE,
+                   "auditlog: processed iMIP sessionid=<%s> message-id=%s",
+                   session_id(), m->id ? m->id : "<nomsgid>");
+
+        do {
+            free(parts[i]);
+        } while (parts[++i]);
+    }
+    free(parts);
+
+    return SIEVE_OK;
+}
+
 sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 {
     sieve_interp_t *interp = NULL;
@@ -1970,6 +2015,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 
 #ifdef WITH_DAV
     sieve_register_extlists(interp, &listvalidator, &listcompare);
+    sieve_register_imip(interp, &sieve_imip);
 #endif
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interp, &jmapquery);

@@ -214,6 +214,7 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
     sieve_register_extlists(interpreter,
                             (sieve_list_validator *) &stub_generic,
                             (sieve_list_comparator *) &stub_generic);
+    sieve_register_imip(interpreter, (sieve_callback *) &stub_generic);
 #endif
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interpreter, (sieve_jmapquery *) &stub_generic);
@@ -844,6 +845,19 @@ static int do_action_list(sieve_interp_t *interp,
                 snprintf(actions_string+strlen(actions_string),
                          ACTIONS_STRING_LEN-strlen(actions_string),
                          "Discarded\n");
+            break;
+        case ACTION_IMIP:
+            if (interp->imip)
+                ret = interp->imip(NULL, interp->interp_context,
+                                   script_context,
+                                   message_context,
+                                   &errmsg);
+            free(interp->lastitem);
+            interp->lastitem = NULL;
+            if (ret == SIEVE_OK)
+                snprintf(actions_string+strlen(actions_string),
+                         ACTIONS_STRING_LEN-strlen(actions_string),
+                         "Processed iMIP\n");
             break;
 
         case ACTION_VACATION:
