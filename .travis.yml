@@ -9,8 +9,8 @@ before_install:
 - sudo service docker restart
 - docker pull cyrusimapdocker/cyrus-jessie
 script:
-- docker run --env TRAVIS_BRANCH --env TRAVIS_PULL_REQUEST --env TRAVIS_PULL_REQUEST_BRANCH --ulimit core=-1 -it cyrusimapdocker/cyrus-jessie /bin/sh -c "cd / &&
-  ./entrypoint.sh"
+- docker run --env TRAVIS_BRANCH --env TRAVIS_PULL_REQUEST --env TRAVIS_PULL_REQUEST_BRANCH
+  --ulimit core=-1 -it cyrusimapdocker/cyrus-jessie /bin/sh -c "cd / && ./entrypoint.sh"
 branches:
   only:
   - master
@@ -28,4 +28,4 @@ notifications:
     on_success: always
     on_failure: always
     rooms:
-      - secure: bh4PiwcHYwn2qjKgidSKX6Ibq/Gt8+q6IL7YDWlfpDPYCuzdzSHBpm8qMpmBIjTemnsragJeR4pO9XEX20nhE9Lr7915wiBmYWqcmvcJGpJ1/nJz2lJYtBKl/dKZguQn3g4A+JgjUuXgzllI4ZsbbRkzL8dBC+py34p4ANtMKycXeGCwysnPfHav5VxQQnOsJUbIKDJiJPON2cR7e8quE6WpS1mEzUD+kaRWMUImKktMX1hrQH/71tNNMTqv0eHewci1akaZecFtXQi8D9Yfh1YBm8yxdLI9EgnglonEgbBCGG6WRODcxu/gEJlvXFMN+c4ojoyq4lNGnEqzLjDDVI1LoCNUcWbMFFhIGAA1SE+71fwDlKjLxUzodgJPb/yrWy4uwx8eBM3W8PIhFgZyo0irlV/0U3zNFWjjNPTRXUNNIZQu2XDLAhpiRZbMn4zsvydq2ngWnTdJfgpycYiBfL5zNdwdPpAQomQLl1JakWqyMSBZtz3Hbv3vRmb4rIogh5AHuwxKQrK5JNI9eZ5yPI7eUEpTq1nYD7syZPDj3gddjdteBx8ShjHH6ddteQX2OSUXwtiF90cEgYq0z8j2HxaNRIVrkeUNyeRTZXZ0wxWM7Fcz0Z7fRzsv1CXZwjDPmxARiIhbVhXxTgbED9+i2aCH9aZNrMTqoRUQWjLzgXw=
+      secure: Hr1H/7wbYq9HXnV9pW6sDrbafIwgAVx2Uk5sIHZL2rCt9Wl2rbSB7I/PA6ds4JSha9W23GV4MngSuFPEvL0sJ7MPyEGY+Ts0MnaYfChATNqFMM16lzbf7HvwXe81ubhJ/j4ZFcaXiVO+6qTvrKx8Ml9aVPENXld9ScqVgFo1h9UA059HikrdMbyO2lvBBCXcXZyv9XFK3AODGCvPEAKkmaD7Wa0G6lht9rhrHNxcTdZfAjE9M2WCmK1XimoHYUwgQqK7zXKamX7RU9QyhG4p7t/TFXJJz+Qh1T/iKd2hRpuTl6U8YVGSPLmsUSTKCUcDzXavN92ImEqnx3dWEXRl9g8bpZGoDyx/bi55WBQVeF54iCr+zwnRj8k71tZyYYkj/6xK/mvM+TMgEkw4mPdXJUJxoMuQVEZU0f0q1fqDaPFGVg3wEq1ES3gCadeehvib/7tHE0YmWeuhUCdBfuF1G+OUN/Ce4Q5NvvcsHUHhBqMEJpglPLJLElcxD9WNK1XdNCVwFl3PvPkLXcCBoshQ3TWB/vatkKy7N+8ADbzNJA8/djNcijtk8c7dNfNO3RKTixRwe/WgLcVsFe6kkLg5HnQw3uAk204F8mzJU1bgtknoIpgcHdVR608I/4cOnPNZWBQAGEHdle/EzWK/MF4mzPbHNaS8qfPtd2lyFgBJyOI=
