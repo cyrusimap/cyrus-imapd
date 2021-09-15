@@ -1502,7 +1502,7 @@ static void create_override(icalcomponent *master, struct icaltime_span *span,
 
             /* Add RECURRENCE-ID for this recurrence */
             prop = icalproperty_new_recurrenceid(dtstart);
-            tzid = icaltimezone_get_tzid((icaltimezone *) tz);
+            tzid = icaltimezone_get_location_tzid((icaltimezone *) tz);
             if (tzid) {
                 icalproperty_add_parameter(prop, icalparameter_new_tzid(tzid));
             }
@@ -1955,5 +1955,17 @@ EXPORTED icalproperty *icalproperty_new_color(const char *v)
 }
 
 #endif /* HAVE_RFC7986_COLOR */
+
+EXPORTED const char *icaltimezone_get_location_tzid(const icaltimezone *zone)
+{
+    const char *v = icaltimezone_get_location((icaltimezone*) zone);
+    if (!v) v = icaltimezone_get_tzid((icaltimezone*) zone);
+    return v;
+}
+
+EXPORTED const char *icaltime_get_location_tzid(icaltimetype t)
+{
+    return icaltimezone_get_location_tzid(t.zone);
+}
 
 #endif /* HAVE_ICAL */
