@@ -281,6 +281,7 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.v.handle),
         offsetof(struct Commandlist, u.v.fcc)
       } },
+    { B_PROCESSIMIP,             "", { 0 } },                            /* 46 */
 };
 
 static const struct args_t test_args_table[] = {

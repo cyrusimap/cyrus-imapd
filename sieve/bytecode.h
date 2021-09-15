@@ -143,8 +143,9 @@ typedef union
  * version 0x1D scripts re-implemented Snooze per draft-ietf-extra-sieve-snooze-00
  *                      and Fcc per draft-ietf-extra-sieve-mailboxid-01
  * version 0x1E scripts store [current]date :zone argument as a string
+ * version 0x1F scripts implemented vnd.cyrus.imip
  */
-#define BYTECODE_VERSION 0x1E
+#define BYTECODE_VERSION 0x1F
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -422,6 +423,10 @@ enum bytecode {
                                    IF (fcc-mailbox != NIL):
                                      <create: int> <flag-list: string-list>
                                      <special-use: string> <mailboxid: string> */
+
+    B_PROCESSIMIP,              /* require "vnd.cyrus.imip"
+
+                                 */
 
     /*****  insert new actions above this line  *****/
     B_ILLEGAL_VALUE             /* any value >= this code is illegal */

@@ -136,6 +136,9 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (i->snooze &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))
             buf_appendcstr(&buf, " vnd.cyrus.snooze");
+        if (i->imip &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMIP))
+            buf_appendcstr(&buf, " vnd.cyrus.imip");
 
         /* add tests */
         if (i->getenvelope &&
@@ -249,6 +252,11 @@ EXPORTED void sieve_register_snooze(sieve_interp_t *interp, sieve_callback *f)
 EXPORTED void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->keep = f;
+}
+
+EXPORTED void sieve_register_imip(sieve_interp_t *interp, sieve_callback *f)
+{
+    interp->imip = f;
 }
 
 EXPORTED void sieve_register_notify(sieve_interp_t *interp,
@@ -546,6 +554,9 @@ static const struct sieve_capa_t {
     { "vnd.cyrus.snooze", SIEVE_CAPA_SNOOZE },        // legacy capability
     { "x-cyrus-snooze",   SIEVE_CAPA_SNOOZE },        // legacy capability
 
+    /* iMIP - vnd.cyrus.imip */
+    { "vnd.cyrus.imip", SIEVE_CAPA_IMIP },
+
     { NULL, 0 }
 };
     
@@ -743,6 +754,11 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
     case SIEVE_CAPA_SNOOZE:
         if (!(interp->snooze &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_IMIP:
+        if (!(interp->imip &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMIP))) capa = 0;
         break;
 
     default:
