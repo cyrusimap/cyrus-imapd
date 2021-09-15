@@ -232,7 +232,7 @@ EOF
 
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
-    $self->assert_alarms({summary => 'Simple', start => $start});
+    $self->assert_alarms({summary => 'Simple', start => $start, timezone => 'Australia/Sydney'});
 }
 
 sub test_simple_reconstruct
