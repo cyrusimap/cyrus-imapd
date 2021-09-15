@@ -392,6 +392,9 @@ ws              [ \t]+
     /* vnd.cyrus.jmapquery */
 <INITIAL>jmapquery             return JMAPQUERY;
 
+    /* vnd.cyrus.imip */
+<INITIAL>process_imip          return PROCESSIMIP;
+
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
 <INITIAL>[ \t\n\r] ;          /* ignore whitespace */

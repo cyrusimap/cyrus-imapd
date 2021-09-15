@@ -837,6 +837,11 @@ static void dump2(bytecode_input_t *d, int bc_len)
         }
 
 
+        case B_PROCESSIMIP:
+            printf("PROCESS_IMIP");
+            break;
+
+
         default:
             printf("%d (NOT AN OP)\n", cmd.type);
             exit(1);
@@ -1622,6 +1627,10 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             }
             generate_string(":tzid", cmd.u.sn.tzid, buf);
             generate_valuelist(NULL, cmd.u.sn.times, &generate_time, buf);
+            break;
+
+        case B_PROCESSIMIP:
+            generate_token("process_imip", indent, buf);
             break;
 
         default:

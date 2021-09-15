@@ -347,6 +347,9 @@ extern void sieverestart(FILE *f);
 /* vnd.cyrus.jmapquery */
 %token JMAPQUERY
 
+/* vnd.cyrus.imip */
+%token PROCESSIMIP
+
 
 %%
 
@@ -529,6 +532,7 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
         | LOG string             { $$ = build_log(sscript, $2); }
         | SNOOZE sntags timelist { $$ = build_snooze(sscript, $2, $3); }
+        | PROCESSIMIP            { $$ = new_command(B_PROCESSIMIP, sscript); }
         ;
 
 
