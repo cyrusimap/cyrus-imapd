@@ -49,7 +49,7 @@
 struct sieve_interp {
     /* standard callbacks for actions */
     sieve_callback *redirect, *discard, *reject, *fileinto, *snooze, *keep;
-  sieve_callback *notify, *imip;
+    sieve_callback *notify, *imip;
     sieve_vacation_t *vacation;
 
     sieve_get_size *getsize;
