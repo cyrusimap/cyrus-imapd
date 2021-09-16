@@ -255,13 +255,16 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
 }
 
 static struct dlist *mboxlist_entry_dlist(const char *dbname,
-                                          const mbentry_t *mbentry)
+                                          const mbentry_t *mbentry, int for_ikey)
 {
-    struct dlist *dl = dlist_newkvlist(NULL, dbname);
+    struct dlist *dl = dlist_newkvlist(NULL, for_ikey ? mbentry->uniqueid : dbname);
 
     dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mbentry->mbtype));
 
-    if (mbentry->uniqueid)
+    if (for_ikey) {
+        dlist_setatom(dl, "N", dbname);
+    }
+    else if (mbentry->uniqueid)
         dlist_setatom(dl, "I", mbentry->uniqueid);
 
     if (mbentry->partition)
@@ -283,6 +286,20 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
 
     if (mbentry->acl)
         dlist_stitch(dl, mailbox_acl_to_dlist(mbentry->acl));
+
+    if (for_ikey) {
+        struct dlist *hl = dlist_newlist(dl, "H");
+        int i;
+        for (i = 0; i < mbentry->name_history.count; i++) {
+            former_name_t *histitem = ptrarray_nth(&mbentry->name_history, i);
+            struct dlist *item = dlist_newkvlist(hl, NULL);
+            char *idbname = mboxname_to_dbname(item->name);
+            dlist_setatom(item, "N", idbname);
+            free(idbname);
+            dlist_setnum64(item, "F", histitem->foldermodseq);
+            dlist_setnum64(item, "M", histitem->mtime);
+        }
+    }
 
     return dl;
 }
@@ -1025,21 +1042,6 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
     return r;
 }
 
-static void add_former_name(struct dlist *name_history, const char *name,
-                            time_t mtime, modseq_t foldermodseq)
-{
-    struct dlist *histitem = dlist_newkvlist(NULL, "");
-    char *dbname = mboxname_to_dbname(name);
-
-    dlist_setatom(histitem, "N", dbname);
-    dlist_setnum64(histitem, "F", foldermodseq);
-    dlist_setdate(histitem, "M", mtime);
-
-    dlist_push(name_history, histitem);
-
-    free(dbname);
-}
-
 static void assert_namespacelocked(const char *mboxname)
 {
     char *userid = mboxname_to_userid(mboxname);
@@ -1047,78 +1049,171 @@ static void assert_namespacelocked(const char *mboxname)
     free(userid);
 }
 
+/*
+ * NOTE: these transitions are only on backends in a murder - obviously an
+   mupdate master could get all sorts of "missed some intermediate steps and
+   now we're resyncing".  Which probably argues for having asserts handled
+   out in a wrapper function.
+
+   ALSO: mupdate masters don't have uniqueids, so the 'I' keys won't exist
+   at all.  We also have to handle that, w00t
+
+   The full set of transitions for a name are:
+ * {NULL} --> RESERVE : Create (setup)
+    - I key MUST NOT exist in advance
+ * INTERMEDIATE -> RESERVE : Legacy -> start creation over an intermediate
+    - I key MUST exist and be INTERMEDIATE
+    - I/N name MUST match
+    - uniqueid MUST NOT change
+    - type MUST NOT change
+ * RESERVE --> ACTIVE : Create (finish)
+    - I key MUST exist
+      -- could be RESERVE or MOVING
+    - I/N name MUST match
+    - type MUST NOT change
+    - uniqueid MUST NOT change
+ * ACTIVE --> ACTIVE : Changes to ACL, modseqs etc
+    - I key MUST exist
+    - I/N name MUST match
+    - type MUST NOT change
+    - uniqueid MUST NOT change
+ * ACTIVE --> MOVING : Rename (setup)
+    - I key MUST exist
+    - I/N name MUST match
+    - type MUST NOT change
+    - uniqueid MUST NOT change
+ * ACTIVE --> DELETED : Delete
+    - type MUST NOT change
+    - uniqueid MUST NOT change
+ * ACTIVE --> {NULL}
+    - sync_reset case
+ * DELETED --> RESERVE : Create (over tombstone, new UNIQUEID, new type)
+    - type MAY change
+    - uniqueid MUST change
+ * DELETED --> {NULL} : Tombstone expiry
+
+   For a uniqueid, the transitions are:
+ * {NULL} --> RESERVE : Create (setup)
+ * RESERVE --> ACTIVE : Create (finish)
+    - name MUST NOT change
+ * ACTIVE --> ACTIVE : Updates (same as N)
+    - name MUST NOT change
+ * ACTIVE --> MOVING : Rename (setup)
+    - name MUST change
+    - oldname entry MUST be added to the H key as the first item
+ * MOVING --> ACTIVE
+    - name MUST NOT change
+ * ACTIVE --> DELETED
+    - name MUST NOT change
+ * DELETED --> {NULL} : Expire
+ * DELETED --> RESERVE : Create again (should never happen ideally, but undo/restore)
+ */
 static int mboxlist_update_entry(const char *name,
                                  const mbentry_t *mbentry, struct txn **txn)
 {
     char *dbname = mboxname_to_dbname(name);
     struct buf key = BUF_INITIALIZER;
     mbentry_t *old = NULL;
+    mbentry_t *oldi = NULL;
     int r = 0;
     struct txn *mytid = NULL;
-    if (!txn) txn = &mytid;
 
+    /* make sure the name is locked first - NOTE, this doesn't guarantee ordering
+     * on the I key since we can't tell to lock that (and may be accessing two) so
+     * make sure you have all the related name keys locked before entering this
+     * function if renaming */
     assert_namespacelocked(name);
 
-    mboxlist_mylookup(dbname, &old, txn, 0, 1); // ignore errors, it will be NULL
+    /* take a local transaction if there isn't one already - we definitely
+     * want all these updates in a single transaction so the mboxlist is
+     * always consistent */
+    if (!txn) txn = &mytid;
 
+    /* get old name record */
+    r = mboxlist_mylookup(dbname, &old, txn, /*wrlock*/1, /*allow_all*/1);
+    if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+    if (r) goto done;
+
+    // if we have RACLs, let's update them first
     if (have_racl) {
         r = mboxlist_update_racl(dbname, old, mbentry, txn);
         if (r) goto done;
     }
 
-    mboxlist_dbname_to_key(dbname, strlen(dbname), NULL, &key);
+    /* if the existing uniqueid doesn't match the new record's uniqueid,
+     * then we need to check if we need to wipe the old I record (only if
+     * it has the same name, otherwise we're already history and the history
+     * cleaner will remove the entry) */
+    if (old && mbentry && old->uniqueid && strcmpsafe(old->uniqueid, mbentry->uniqueid)) {
+        r = mboxlist_lookup_by_uniqueid(old->uniqueid, &oldi, txn);
+
+        /* if the name was already different for the uniqueid then we
+         * don't need to do anything, otherwise we need to nuke the I
+         * key so that we don't leave an unliked record */
+        if (!r && !strcmp(name, oldi->name)) {
+            mboxlist_id_to_key(old->uniqueid, &key);
+            r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
+        }
+        else if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+
+        /* release this entry, it's for the wrong uniqueid, so we'll be
+         * reading again with the right uniqueid later */
+        mboxlist_entry_free(&oldi);
+
+        if (r) goto done;
+    }
 
     if (mbentry) {
-        /* Create N record value */
-        struct dlist *dl = mboxlist_entry_dlist(dbname, mbentry);
+        /* Create new N record value */
         struct buf mboxent = BUF_INITIALIZER;
-
+        struct dlist *dl = mboxlist_entry_dlist(dbname, mbentry, /*for_ikey*/0);
         dlist_printbuf(dl, 0, &mboxent);
+        mboxlist_dbname_to_key(dbname, strlen(dbname), NULL, &key);
         r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
                           buf_cstring(&mboxent), buf_len(&mboxent), txn);
-        if (!r && mbentry->uniqueid &&
-            !(old && (old->mbtype & mbentry->mbtype & MBTYPE_DELETED))) {
-            mbentry_t *oldid = NULL;
-            struct dlist *name_history = dlist_newlist(NULL, "H");
+        dlist_free(&dl);
+        buf_free(&mboxent);
+        if (r) goto done;
 
-            /* Rebrand I field as N field for I record value */
-            struct dlist *c = dlist_getchild(dl, "I");
-            dlist_rename(c, "N");
-            dlist_makeatom(c, dbname);
+        /* If there's an uniqueid, update the I key too */
+        if (mbentry->uniqueid) {
+            /* Fetch the existing value, if any */
+            r = mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &oldi, txn);
+            if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+            else if (r) goto done;
 
-            mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &oldid, txn);
+            /* Create a new I key value from the mbentry */
+            mbentry_t *newi = mboxlist_entry_copy(mbentry);
 
-            if (oldid) {
-                /* Existing mailbox */
-                while (oldid->name_history.count) {
-                    former_name_t *histitem = ptrarray_shift(&oldid->name_history);
-                    add_former_name(name_history, histitem->name,
-                                    histitem->mtime, histitem->foldermodseq);
-                    free(histitem->name);
-                    free(histitem);
+            /* copy history from the old I key record */
+            if (oldi) {
+                // create a new history item for the old name if renaming
+                if (strcmp(name, oldi->name)) {
+                    former_name_t *item = xzmalloc(sizeof(former_name_t));
+                    item->name = xstrdup(oldi->name);
+                    item->mtime = oldi->mtime;
+                    item->foldermodseq = oldi->foldermodseq;
+                    ptrarray_append(&newi->name_history, item);
                 }
-
-                if (strcmp(name, oldid->name)) {
-                    /* Renamed mailbox */
-                    add_former_name(name_history, oldid->name,
-                                    time(NULL), oldid->foldermodseq);
+                // copy the remaining items
+                while (ptrarray_size(&oldi->name_history)) {
+                    ptrarray_append(&newi->name_history, ptrarray_shift(&oldi->name_history));
                 }
-                mboxlist_entry_free(&oldid);
             }
 
-            /* Add H field for I record value */
-            dlist_stitch(dl, name_history);
-
-            buf_reset(&mboxent);
+            /* And finally write the new entry */
+            dl = mboxlist_entry_dlist(dbname, newi, /*for_ikey*/1);
             dlist_printbuf(dl, 0, &mboxent);
             mboxlist_id_to_key(mbentry->uniqueid, &key);
             r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
-                              buf_cstring(&mboxent), buf_len(&mboxent), txn);
+                            buf_cstring(&mboxent), buf_len(&mboxent), txn);
+            dlist_free(&dl);
+            buf_free(&mboxent);
+            mboxlist_entry_free(&newi);
+            if (r) goto done;
         }
-        dlist_free(&dl);
-        buf_free(&mboxent);
 
-        if (!r && config_auditlog && (!old || strcmpsafe(old->acl, mbentry->acl))) {
+        if (config_auditlog && (!old || strcmpsafe(old->acl, mbentry->acl))) {
             /* XXX is there a difference between "" and NULL? */
             xsyslog(LOG_NOTICE, "auditlog: acl",
                                 "sessionid=<%s> "
@@ -1129,17 +1224,25 @@ static int mboxlist_update_entry(const char *name,
                     old ? old->acl : "NONE", mbentry->acl, mbentry->foldermodseq);
         }
     }
-    else {
+    else if (old) {
+        /* Delete the existing N record value */
+        mboxlist_dbname_to_key(dbname, strlen(dbname), NULL, &key);
         r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
-        if (!r && old && old->uniqueid) {
-            mbentry_t *mbentry = NULL;
-            int r1 = mboxlist_lookup_by_uniqueid(old->uniqueid, &mbentry, txn);
-            if (!r1 && !strcmp(old->name, mbentry->name)) {
+        goto done;
+
+        if (old->uniqueid) {
+            /* Get the existing I key if any */
+            r = mboxlist_lookup_by_uniqueid(old->uniqueid, &oldi, txn);
+            if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+            else if (r) goto done;
+
+            /* only if the name matches, then we will also delete the old I key,
+            * otherwise another record is responsible. */
+            if (oldi && !strcmp(oldi->name, name)) {
                 mboxlist_id_to_key(old->uniqueid, &key);
-                r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key),
-                                   txn, /*force*/1);
+                r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
+                goto done;
             }
-            mboxlist_entry_free(&mbentry);
         }
     }
 
@@ -1149,6 +1252,7 @@ static int mboxlist_update_entry(const char *name,
         else cyrusdb_commit(mbdb, mytid);
     }
     mboxlist_entry_free(&old);
+    mboxlist_entry_free(&oldi);
     buf_free(&key);
     free(dbname);
     return r;
