@@ -9474,8 +9474,7 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
             }
             if (xhref) {
                 const char *href = (const char *) xhref;
-                struct request_target_t tgt = { 0 };
-                tgt.allow = ALLOW_CAL;
+                struct request_target_t tgt = { .allow = ALLOW_CAL };
                 const char *errstr = NULL;
                 if (principal_parse_path(href, &tgt, &errstr) == 0) {
                     json_object_set_new(changedby, "principalId",
