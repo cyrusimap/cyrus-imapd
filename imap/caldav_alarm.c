@@ -377,7 +377,7 @@ static int send_alarm(struct get_alarm_rock *rock,
     else
         timezone = "[floating]";
     FILL_STRING_PARAM(event, EVENT_CALENDAR_TIMEZONE,
-                      xstrdup(timezone));
+                      xstrdupsafe(timezone));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_START,
                       xstrdup(icaltime_as_ical_string(start)));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_END,
