@@ -2157,4 +2157,67 @@ sub test_lookup_only_own_racl
         $imaptalk->get_last_completion_response());
 }
 
+sub test_no_tombstones
+    :UnixHierarchySep :ReverseACLs
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( INBOX/Tombstone )] ],
+        [ 'subscribe' => [qw( INBOX/Tombstone )] ],
+        [ 'delete' => 'INBOX/Tombstone' ],
+    ]);
+
+    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
+
+    my $mbtype_deleted = 1 << 7;
+    my $tombstone_name = 'user.cassandane.INBOX.Tombstone';
+
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3) {
+        $tombstone_name = 'user.cassandane.Tombstone';
+    }
+    if ($maj < 3 || ($maj == 3 && $min < 5)) {
+        $mbtype_deleted = 1 << 4;
+    }
+
+    $self->assert_num_equals($mbtype_deleted,
+                             $mailboxesdb->{$tombstone_name}->{mbtype});
+
+    # basic list
+    my $data = $imaptalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    # basic xlist
+    $data = $imaptalk->xlist("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    # partial match list
+    $data = $imaptalk->list("", "INB*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    # partial match xlist
+    $data = $imaptalk->xlist("", "INB*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    # direct list
+    $data = $imaptalk->list("", "INBOX/Tombstone");
+    $self->assert_mailbox_structure($data, '/', {});
+
+    # direct xlist
+    $data = $imaptalk->xlist("", "INBOX/Tombstone");
+    $self->assert_str_equals('ok', $data); # no mailboxes listed
+}
+
 1;
