@@ -981,7 +981,7 @@ static int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype, i
         free(userid);
     }
 
-    r = mboxname_lock(mailbox_name(mailbox), &listitem->l, locktype);
+    r = mboxname_lock(mailbox_uniqueid(mailbox), &listitem->l, locktype);
     if (r) return r;
 
     return r;
@@ -1039,7 +1039,15 @@ static int mailbox_open_advanced(const char *name,
         free(userid);
     }
 
-    r = mboxname_lock(name, &listitem->l, locktype);
+    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+    if (r) {
+        if (mailbox->local_namespacelock)
+            mboxname_release(&mailbox->local_namespacelock);
+        remove_listitem(listitem);
+        return r;
+    }
+
+    r = mboxname_lock(mbentry->uniqueid, &listitem->l, locktype);
     if (r) {
         /* locked is not an error - just means we asked for NONBLOCKING */
         if (r != IMAP_MAILBOX_LOCKED)
@@ -1048,15 +1056,7 @@ static int mailbox_open_advanced(const char *name,
                              name, error_message(r));
         if (mailbox->local_namespacelock)
             mboxname_release(&mailbox->local_namespacelock);
-        remove_listitem(listitem);
-        return r;
-    }
-
-    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
-    if (r) {
-        if (listitem->l) mboxname_release(&listitem->l);
-        if (mailbox->local_namespacelock)
-            mboxname_release(&mailbox->local_namespacelock);
+        mboxlist_entry_free(&mbentry);
         remove_listitem(listitem);
         return r;
     }
@@ -5415,7 +5415,7 @@ EXPORTED int mailbox_create(const char *name,
         free(userid);
     }
 
-    r = mboxname_lock(name, &listitem->l, LOCK_EXCLUSIVE);
+    r = mboxname_lock(uniqueid, &listitem->l, LOCK_EXCLUSIVE);
     if (r) {
         if (mailbox->local_namespacelock)
             mboxname_release(&mailbox->local_namespacelock);
@@ -6575,14 +6575,14 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
         free(userid);
     }
 
-    /* if we can't get an exclusive lock first try, there's something
-     * racy going on! */
-    r = mboxname_lock(name, &listitem->l, LOCK_EXCLUSIVE);
-    if (r) goto done;
-
     /* Start by looking up current data in mailbox list */
     /* XXX - no mboxlist entry?  Can we recover? */
     r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) goto done;
+
+    /* if we can't get an exclusive lock first try, there's something
+     * racy going on! */
+    r = mboxname_lock(mbentry->uniqueid, &listitem->l, LOCK_EXCLUSIVE);
     if (r) goto done;
 
     mailbox->mbentry = mboxlist_entry_copy(mbentry);
