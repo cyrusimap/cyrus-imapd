@@ -2220,4 +2220,53 @@ sub test_no_tombstones
     $self->assert_str_equals('ok', $data); # no mailboxes listed
 }
 
+sub test_no_inbox_tombstone
+    :UnixHierarchySep :ReverseACLs :AllowMoves
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->rename("user/cassandane", "user/cassandane-old");
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+
+    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
+    my $mbtype_deleted = 1 << 7;
+    my $tombstone_name = 'user.cassandane';
+
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj == 3 && $min < 5)) {
+        $mbtype_deleted = 1 << 4;
+    }
+
+    $self->assert_num_equals($mbtype_deleted,
+                             $mailboxesdb->{$tombstone_name}->{mbtype});
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # basic list
+    my $data = $imaptalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {});
+
+    # basic xlist
+    $data = $imaptalk->xlist("", "*");
+    $self->assert_str_equals('ok', $data); # no mailboxes listed
+
+    # partial match list
+    $data = $imaptalk->list("", "INB*");
+    $self->assert_mailbox_structure($data, '/', {});
+
+    # partial match xlist
+    $data = $imaptalk->xlist("", "INB*");
+    $self->assert_str_equals('ok', $data); # no mailboxes listed
+
+    # direct list
+    $data = $imaptalk->list("", "INBOX");
+    $self->assert_mailbox_structure($data, '/', {});
+
+    # direct xlist
+    $data = $imaptalk->xlist("", "INBOX");
+    $self->assert_str_equals('ok', $data); # no mailboxes listed
+}
+
 1;
