@@ -306,7 +306,10 @@ static int do_recalc(const char *userid)
     r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 
-    r = conversations_zero_counts(state);
+    // wipe if it's currently folders_byname, will recreate with byid
+    int wipe = state->folders_byname;
+
+    r = conversations_zero_counts(state, wipe);
     if (r) goto err;
 
     r = mboxlist_usermboxtree(userid, NULL, recalc_counts_cb, NULL, 0);
@@ -671,7 +674,7 @@ static int do_audit(const char *userid)
         goto out;
     }
 
-    r = conversations_zero_counts(state_temp);
+    r = conversations_zero_counts(state_temp, /*wipe*/0);
     if (r) {
         fprintf(stderr, "Failed to zero counts in %s: %s\n",
                 filename_temp, error_message(r));
