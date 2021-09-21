@@ -952,10 +952,26 @@ int service_main(int argc __attribute__((unused)),
 
     /* Find out name of client host */
     http_conn.clienthost = get_clienthost(0, &httpd_localip, &httpd_remoteip);
+    if (!strcmp(http_conn.clienthost, UNIX_SOCKET)) {
+        /* we're not connected to an internet socket! */
+        extprops_ssf = 2;
+        httpd_authid = xstrdup(cyrus_user());
+        httpd_userid = xstrdup(cyrus_user());
+        httpd_userisadmin = 1;
+        http_conn.logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
+    }
+    else if (httpd_remoteip) {
+        char hbuf[NI_MAXHOST], *p;
 
-    if (httpd_localip && httpd_remoteip) {
-        buf_setcstr(&saslprops.ipremoteport, httpd_remoteip);
-        buf_setcstr(&saslprops.iplocalport, httpd_localip);
+        /* Create pre-authentication telemetry log based on client IP */
+        strlcpy(hbuf, httpd_remoteip, NI_MAXHOST);
+        if ((p = strchr(hbuf, ';'))) *p = '\0';
+        http_conn.logfd = telemetry_log(hbuf, httpd_in, httpd_out, 0);
+
+        if (httpd_localip) {
+            buf_setcstr(&saslprops.ipremoteport, httpd_remoteip);
+            buf_setcstr(&saslprops.iplocalport, httpd_localip);
+        }
     }
 
     /* other params should be filled in */
@@ -976,15 +992,6 @@ int service_main(int argc __attribute__((unused)),
     if (sasl_setprop(httpd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
         fatal("Failed to set SASL property", EX_TEMPFAIL);
 
-    if (httpd_remoteip) {
-        char hbuf[NI_MAXHOST], *p;
-
-        /* Create pre-authentication telemetry log based on client IP */
-        strlcpy(hbuf, httpd_remoteip, NI_MAXHOST);
-        if ((p = strchr(hbuf, ';'))) *p = '\0';
-        http_conn.logfd = telemetry_log(hbuf, httpd_in, httpd_out, 0);
-    }
-
     /* See which auth schemes are available to us */
     avail_auth_schemes = 0; /* Reset auth schemes for each connection */
     if ((extprops_ssf >= 2) || config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
@@ -1002,7 +1009,7 @@ int service_main(int argc __attribute__((unused)),
         }
     }
     httpd_tls_required =
-        config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
+            config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
 
     proc_register(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
@@ -1731,8 +1738,8 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
         txn->auth_chal.scheme = NULL;
     }
 
-    /* Drop auth credentials, if not a backend in a Murder */
-    else if (!config_mupdate_server || !config_getstring(IMAPOPT_PROXYSERVERS)) {
+    /* Drop auth credentials, if not an admin */
+    else if (!(httpd_userisadmin || httpd_userisproxyadmin)) {
         syslog(LOG_DEBUG, "drop auth creds");
 
         free(httpd_userid);
@@ -3883,8 +3890,8 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
         httpd_authstate = NULL;
     }
 
-    if (!(config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS))) {
-        /* Not a backend in a Murder - proxy authz is not allowed */
+    if (!(httpd_userisadmin || httpd_userisproxyadmin)) {
+        /* Not an admin - proxy authz is not allowed */
         syslog(LOG_NOTICE, "badlogin: %s %s %s %s",
                txn->conn->clienthost, txn->auth_chal.scheme->name, httpd_authid,
                "proxy authz attempted on non-Murder backend");
@@ -3954,9 +3961,9 @@ static int auth_success(struct transaction_t *txn, const char *userid)
     httpd_userid = xstrdup(userid);
     httpd_userisanonymous = is_userid_anonymous(httpd_userid);
 
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s SESSIONID=<%s>",
-           txn->conn->clienthost, httpd_userid, scheme->name,
-           txn->conn->tls_ctx ? "+TLS" : "", "User logged in",
+    syslog(LOG_NOTICE, "login: %s %s %s%s User logged in SESSIONID=<%s>",
+           txn->conn->clienthost, httpd_userid,
+           scheme ? scheme->name : "", txn->conn->tls_ctx ? "+TLS" : "",
            session_id());
 
 
