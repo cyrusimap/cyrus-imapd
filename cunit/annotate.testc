@@ -2105,6 +2105,8 @@ static int set_up(void)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(MBOXNAME1_INT);
+
     r = mailbox_create(MBOXNAME1_INT, /*mbtype*/0, PARTITION, ACL,
                        /*uniqueid*/NULL,
                        /*options*/0, /*uidvalidity*/0,
@@ -2127,6 +2129,10 @@ static int set_up(void)
     if (r)
         return r;
     mailbox_close(&mailbox);
+
+    mboxname_release(&namespacelock);
+
+    namespacelock = mboxname_usernamespacelock(MBOXNAME2_INT);
 
     r = mailbox_create(MBOXNAME2_INT, /*mbtype*/0, PARTITION, ACL,
                        /*uniqueid*/NULL,
@@ -2151,6 +2157,10 @@ static int set_up(void)
         return r;
     mailbox_close(&mailbox);
 
+    mboxname_release(&namespacelock);
+
+    namespacelock = mboxname_usernamespacelock(MBOXNAME3_INT);
+
     r = mailbox_create(MBOXNAME3_INT, /*mbtype*/0, PARTITION, ACL,
                        /*uniqueid*/NULL,
                        /*options*/0, /*uidvalidity*/0,
@@ -2170,6 +2180,8 @@ static int set_up(void)
         return r;
 
     mailbox_close(&mailbox);
+
+    mboxname_release(&namespacelock);
 
     old_annotation_definitions =
         imapopts[IMAPOPT_ANNOTATION_DEFINITIONS].val.s;

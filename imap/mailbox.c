@@ -962,6 +962,7 @@ static int mailbox_open_index(struct mailbox *mailbox)
 static int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype, int index_locktype)
 {
     struct mailbox *mailbox = &listitem->m;
+    uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
     int r;
 
     mailbox_release_resources(mailbox);
@@ -981,7 +982,7 @@ static int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype, i
         free(userid);
     }
 
-    r = mboxname_lock(mailbox_uniqueid(mailbox), &listitem->l, locktype);
+    r = mboxname_lock(legacy_dirs ? mailbox_name(mailbox) : mailbox_uniqueid(mailbox), &listitem->l, locktype);
     if (r) return r;
 
     return r;
@@ -1047,7 +1048,8 @@ static int mailbox_open_advanced(const char *name,
         return r;
     }
 
-    r = mboxname_lock(mbentry->uniqueid, &listitem->l, locktype);
+    uint32_t legacy_dirs = (mbentry->mbtype & MBTYPE_LEGACY_DIRS);
+    r = mboxname_lock(legacy_dirs ? name : mbentry->uniqueid, &listitem->l, locktype);
     if (r) {
         /* locked is not an error - just means we asked for NONBLOCKING */
         if (r != IMAP_MAILBOX_LOCKED)
@@ -5406,16 +5408,12 @@ EXPORTED int mailbox_create(const char *name,
     char *userid = mboxname_to_userid(name);
     if (userid) {
         int haslock = user_isnamespacelocked(userid);
-        if (haslock) {
-            assert(haslock != LOCK_SHARED);
-        }
-        else {
-            mailbox->local_namespacelock = user_namespacelock_full(userid, LOCK_EXCLUSIVE);
-        }
+        assert(haslock == LOCK_EXCLUSIVE);
         free(userid);
     }
 
-    r = mboxname_lock(uniqueid, &listitem->l, LOCK_EXCLUSIVE);
+    uint32_t legacy_dirs = (mbtype & MBTYPE_LEGACY_DIRS);
+    r = mboxname_lock(legacy_dirs ? name : uniqueid, &listitem->l, LOCK_EXCLUSIVE);
     if (r) {
         if (mailbox->local_namespacelock)
             mboxname_release(&mailbox->local_namespacelock);
@@ -6582,7 +6580,8 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
 
     /* if we can't get an exclusive lock first try, there's something
      * racy going on! */
-    r = mboxname_lock(mbentry->uniqueid, &listitem->l, LOCK_EXCLUSIVE);
+    uint32_t legacy_dirs = (mbentry->mbtype & MBTYPE_LEGACY_DIRS);
+    r = mboxname_lock(legacy_dirs ? name : mbentry->uniqueid, &listitem->l, LOCK_EXCLUSIVE);
     if (r) goto done;
 
     mailbox->mbentry = mboxlist_entry_copy(mbentry);
