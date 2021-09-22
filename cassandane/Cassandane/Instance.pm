@@ -2487,7 +2487,7 @@ sub run_dbcommand_cb
             if ($chr eq '{') {
                 my $end = index($buf, '}', $pos);
                 die "Missing }" if $end < 0;
-                my $len = substr($buf, $pos + 1, $end - $pos - 2);
+                my $len = substr($buf, $pos + 1, $end - $pos - 1);
                 $len =~ s/\+//;
                 $pos = $end+1;
                 my $chr = substr($buf, $pos++, 1);
