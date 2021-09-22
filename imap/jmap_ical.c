@@ -241,13 +241,23 @@ static const char *sha1key(const char *val, char *keybuf)
 
 static char *normalized_uri(const char *uri)
 {
-    const char *col = strchr(uri, ':');
-    if (!col) return xstrdupnull(uri);
+    if (!uri) return NULL;
 
     struct buf buf = BUF_INITIALIZER;
-    buf_setmap(&buf, uri, col - uri);
-    buf_lcase(&buf);
-    buf_appendcstr(&buf, col);
+    const char *col = strchr(uri, ':');
+    if (col) {
+        /* Normalize URI scheme to lower case */
+        buf_setmap(&buf, uri, col - uri);
+        buf_lcase(&buf);
+        buf_appendcstr(&buf, col);
+    }
+    else buf_setcstr(&buf, uri);
+
+    buf_trim(&buf);
+    if (!buf_len(&buf)) {
+        buf_free(&buf);
+        return NULL;
+    }
     return buf_release(&buf);
 }
 
@@ -1291,8 +1301,13 @@ rsvpto_from_ical(icalproperty *prop)
     /* Read URI from property value and check if this URI already is defined.
      * If it isn't, this could be because an iCalendar client updated the
      * property value, but kept the RSVP x-params. */
-    const char *caladdress = icalproperty_get_value_as_string(prop);
-    if (!caladdress) goto done;
+    const char *val = icalproperty_get_value_as_string(prop);
+    if (!val) goto done;
+    buf_setcstr(&buf, val);
+    buf_trim(&buf);
+    if (!buf_len(&buf)) goto done;
+
+    const char *caladdress = buf_cstring(&buf);
     int caladdress_is_defined = 0;
     json_t *jval;
     const char *key;
@@ -1672,8 +1687,8 @@ participants_from_ical(icalcomponent *comp)
 
     if (orga) {
         const char *caladdress = icalproperty_get_value_as_string(orga);
-        if (caladdress) {
-            char *uri = normalized_uri(caladdress);
+        char *uri = normalized_uri(caladdress);
+        if (uri) {
             if (!hash_lookup(uri, &attendee_by_uri)) {
                 /* Add a default participant for the organizer. */
                 const char *id = get_icalxparam_value(orga, JMAPICAL_XPARAM_ID);
@@ -2494,13 +2509,19 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     /* replyTo */
     if (jmap_wantprop(props, "replyTo") && !is_override) {
         if ((prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY))) {
-            json_object_set_new(event, "replyTo",rsvpto_from_ical(prop));
+            json_t *jreplyto = rsvpto_from_ical(prop);
+            if (jreplyto) {
+                json_object_set_new(event, "replyTo", jreplyto);
+            }
         }
     }
 
     /* participants */
     if (jmap_wantprop(props, "participants")) {
-        json_object_set_new(event, "participants", participants_from_ical(comp));
+        json_t *jparticipants = participants_from_ical(comp);
+        if (jparticipants) {
+            json_object_set_new(event, "participants", jparticipants);
+        }
     }
 
     /* useDefaultAlerts */
@@ -3356,11 +3377,21 @@ participants_to_ical(icalcomponent *comp,
             int i;
             for (i = 0; i < ptrarray_size(complist); i++) {
                 icalcomponent *tmp = ptrarray_nth(complist, i);
-                if ((icalcomponent_get_first_property(tmp, ICAL_ORGANIZER_PROPERTY) == NULL) !=
-                     (icalcomponent_get_first_property(tmp, ICAL_ATTENDEE_PROPERTY) == NULL)) {
-                    allow_organizer_attendee_only = 1;
-                    break;
+                icalproperty *orga = icalcomponent_get_first_property(tmp, ICAL_ORGANIZER_PROPERTY);
+                icalproperty *attd = icalcomponent_get_first_property(tmp, ICAL_ATTENDEE_PROPERTY);
+                allow_organizer_attendee_only = (orga == NULL) != (attd == NULL);
+
+                if (!allow_organizer_attendee_only) {
+                    /* Treat empty-valued caladdress properties as non-existent */
+                    char *orgauri = normalized_uri(icalproperty_get_value_as_string(orga));
+                    char *attduri = normalized_uri(icalproperty_get_value_as_string(attd));
+                    allow_organizer_attendee_only = (orgauri == NULL) != (attduri == NULL);
+                    free(orgauri);
+                    free(attduri);
                 }
+
+                if (allow_organizer_attendee_only)
+                    break;
             }
         }
     }
