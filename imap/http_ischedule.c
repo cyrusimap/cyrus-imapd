@@ -574,6 +574,7 @@ static int meth_post_isched(struct transaction_t *txn,
             }
 
             xml_response(HTTP_OK, txn, root->doc);
+            xmlFreeDoc(root->doc);
 
             auth_freestate(authstate);
         }
