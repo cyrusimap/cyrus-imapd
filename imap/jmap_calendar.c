@@ -2714,7 +2714,7 @@ struct getcalendarevents_rock {
     struct jmapical_datetime overrides_before;
     struct jmapical_datetime overrides_after;
     int reduce_participants;
-    const char *sched_userid;
+    strarray_t schedule_addresses;
     struct jmapical_ctx *jmapctx;
 };
 
@@ -3058,7 +3058,6 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     json_t *jsevent = NULL;
     jmap_req_t *req = rock->req;
     hash_table *props = rock->get->props;
-    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     msgrecord_t *mr = NULL;
     jstimezones_t *jstzones = NULL;
     struct jmapical_ctx *jmapctx = rock->jmapctx;
@@ -3087,8 +3086,11 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
         mbname_free(&rock->mbname);
         rock->mbname = mbname_from_intname(rock->mbentry->name);
 
-        rock->sched_userid = caldav_is_secretarymode(rock->mbentry->name) ?
+        const char *sched_userid = caldav_is_secretarymode(rock->mbentry->name) ?
             req->accountid : req->userid;
+        strarray_truncate(&rock->schedule_addresses, 0);
+        get_schedule_addresses(NULL, rock->mbentry->name, sched_userid,
+                &rock->schedule_addresses);
     }
 
     /* Check mailbox ACL rights */
@@ -3131,7 +3133,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Load message containing the resource and parse iCal data */
-    ical = caldav_record_to_ical(rock->mailbox, cdata, req->userid, &schedule_addresses);
+    ical = caldav_record_to_ical(rock->mailbox, cdata, req->userid, NULL);
     if (!ical) {
         syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
                 cdata->dav.imap_uid, mailbox_name(rock->mailbox));
@@ -3280,10 +3282,6 @@ gotevent:
 
     /* reduceParticipants */
     if (rock->reduce_participants) {
-        if (strarray_size(&schedule_addresses) == 0) {
-            get_schedule_addresses(NULL, rock->mbentry->name, rock->sched_userid,
-                                   &schedule_addresses);
-        }
         json_t *jparticipants = json_object_get(jsevent, "participants");
         const char *participant_id;
         json_t *jparticipant;
@@ -3301,7 +3299,7 @@ gotevent:
                 if (!strcasecmp(req->userid, uri + 7)) {
                     continue;
                 }
-                if (strarray_find_case(&schedule_addresses, uri + 7, 0) >= 0) {
+                if (strarray_find_case(&rock->schedule_addresses, uri + 7, 0) >= 0) {
                     continue;
                 }
             }
@@ -3340,7 +3338,6 @@ gotevent:
 
 done:
     jstimezones_free(&jstzones);
-    strarray_fini(&schedule_addresses);
     if (ical) icalcomponent_free(ical);
     msgrecord_unref(&mr);
     return r;
@@ -3664,7 +3661,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            JMAPICAL_DATETIME_INITIALIZER,
                                            JMAPICAL_DATETIME_INITIALIZER,
                                            0, /* reduce_participants */
-                                           NULL, /* sched_userid */
+                                           STRARRAY_INITIALIZER,
                                            jmapctx
     };
 
@@ -3784,6 +3781,7 @@ done:
         }
         ptrarray_fini(&rock.malloced_fallbacktzs);
     }
+    strarray_fini(&rock.schedule_addresses);
     return r;
 }
 
