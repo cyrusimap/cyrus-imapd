@@ -137,6 +137,10 @@ extern int icalcomponent_apply_vpatch(icalcomponent *ical,
                                       icalcomponent *vpatch,
                                       int *num_changes, const char **errstr);
 
+/* Functions to work around libical TZID prefixes */
+extern const char *icaltimezone_get_location_tzid(const icaltimezone *zone);
+extern const char *icaltime_get_location_tzid(icaltimetype t);
+
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory
 

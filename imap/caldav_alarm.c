@@ -371,13 +371,13 @@ static int send_alarm(struct get_alarm_rock *rock,
     if (!icaltime_is_date(start) && icaltime_is_utc(start))
         timezone = "UTC";
     else if (icaltime_get_timezone(start))
-        timezone = icaltime_get_tzid(start);
+        timezone = icaltime_get_location_tzid(start);
     else if (rock->floatingtz)
-        timezone = icaltimezone_get_tzid(rock->floatingtz);
+        timezone = icaltimezone_get_location_tzid(rock->floatingtz);
     else
         timezone = "[floating]";
     FILL_STRING_PARAM(event, EVENT_CALENDAR_TIMEZONE,
-                      xstrdup(timezone));
+                      xstrdupsafe(timezone));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_START,
                       xstrdup(icaltime_as_ical_string(start)));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_END,
