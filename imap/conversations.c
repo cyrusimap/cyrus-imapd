@@ -3030,29 +3030,44 @@ static int zero_g_cb(void *rock,
     return r;
 }
 
-EXPORTED int conversations_zero_counts(struct conversations_state *state)
+EXPORTED int conversations_zero_counts(struct conversations_state *state, int wipe)
 {
     int r = 0;
 
-    /* wipe B counts */
-    r = cyrusdb_foreach(state->db, "B", 1, NULL, zero_b_cb,
-                        state, &state->txn);
-    if (r) return r;
+    if (wipe) {
+        /* wipe the lot and start over, this loses all highestmodseqs */
+        r = cyrusdb_foreach(state->db, "", 0, NULL, zero_g_cb,
+                            state, &state->txn);
 
-    /* wipe F counts */
-    r = cyrusdb_foreach(state->db, "F", 1, NULL, zero_f_cb,
-                        state, &state->txn);
-    if (r) return r;
+        if (r) return r;
 
-    /* wipe G keys (there's no modseq kept, so we can just wipe them) */
-    r = cyrusdb_foreach(state->db, "G", 1, NULL, zero_g_cb,
-                        state, &state->txn);
-    if (r) return r;
+        /* wipe our internal state too */
+        state->folders_byname = 0;
+        if (state->folders) strarray_truncate(state->folders, 0);
+        if (state->altrep) strarray_truncate(state->altrep, 0);
+        state->trashfolder = -1;
+    }
+    else {
+        /* wipe B counts */
+        r = cyrusdb_foreach(state->db, "B", 1, NULL, zero_b_cb,
+                            state, &state->txn);
+        if (r) return r;
 
-    /* wipe quota (it's actually just one key) */
-    r = cyrusdb_foreach(state->db, "Q", 1, NULL, zero_g_cb,
-                        state, &state->txn);
-    if (r) return r;
+        /* wipe F counts */
+        r = cyrusdb_foreach(state->db, "F", 1, NULL, zero_f_cb,
+                            state, &state->txn);
+        if (r) return r;
+
+        /* wipe G keys (there's no modseq kept, so we can just wipe them) */
+        r = cyrusdb_foreach(state->db, "G", 1, NULL, zero_g_cb,
+                            state, &state->txn);
+        if (r) return r;
+
+        /* wipe quota (it's actually just one key) */
+        r = cyrusdb_foreach(state->db, "Q", 1, NULL, zero_g_cb,
+                            state, &state->txn);
+        if (r) return r;
+    }
 
     /* re-init the counted flags */
     r = _init_counted(state, NULL, 0);
