@@ -462,9 +462,8 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Check authorization */
-    if (httpd_userid &&
-        config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
-        /* Allow frontends to HTTP auth to backends and use iSchedule */
+    if (httpd_userid) {
+        /* Prefer HTTP auth over DKIM */
         authd = 1;
     }
     else if (!spool_getheader(txn->req_hdrs, "DKIM-Signature")) {
