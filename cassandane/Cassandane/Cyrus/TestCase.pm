@@ -98,6 +98,7 @@ sub new
         adminstore => 0,
         gen => 1,
         deliver => 0,
+        imip => 0,
         jmap => 0,
         install_certificates => 0,
     };
@@ -511,6 +512,8 @@ sub _create_instances
         $self->{instance}->add_services(@{$want->{services}});
         $self->{instance}->_setup_for_deliver()
             if ($want->{deliver});
+        $self->{instance}->_setup_for_imip()
+            if ($want->{imip});
 
         if ($want->{replica} || $want->{csyncreplica})
         {

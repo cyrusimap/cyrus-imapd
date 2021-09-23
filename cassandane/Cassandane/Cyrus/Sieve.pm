@@ -38,6 +38,7 @@
 #
 
 package Cassandane::Cyrus::Sieve;
+use Net::CalDAVTalk 0.12;
 use strict;
 use warnings;
 use IO::File;
@@ -72,11 +73,20 @@ sub new
             "imap4flags body");
     }
     $config->set(sievenotifier => 'mailto');
+    $config->set(caldav_realm => 'Cassandane');
+    $config->set(httpmodules => 'caldav ischedule');
+    $config->set(httpsocket => '@basedir@/conf/socket/http');
+    $config->set(calendar_user_address_set => 'example.com');
+    $config->set(httpallowcompress => 'no');
+    $config->set(caldav_historical_age => -1);
+    $config->set(icalendar_max_size => 100000);
+    $config->set(virtdomains => 'no');
 
     return $class->SUPER::new({
             config => $config,
             deliver => 1,
-            services => [ 'imap', 'sieve' ],
+            imip => 1,
+            services => [ 'imap', 'sieve', 'http' ],
             adminstore => 1,
     }, @_);
 }
@@ -3701,6 +3711,83 @@ EOF
     $msg1->set_attribute(uid => 1);
     $msg1->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2', 'Test3', 'Test4' ]);
     $self->check_messages({ 1 => $msg1 }, keyed_on => 'uid', check_guid => 0);
+}
+
+sub test_process_imip
+    :needs_component_sieve :min_version_3_5 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    xlog $self, "Create calendar user";
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $CalDAV = Net::CalDAVTalk->new(
+        user => "cassandane",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $CalendarId = 'Default';
+    my $Cal = $CalDAV->GetCalendar($CalendarId);
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "vnd.cyrus.imip"];
+process_imip;
+EOF
+    );
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+
+    my $itip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+    xlog $self, "Deliver iMIP message";
+    my $msg = Cassandane::Message->new(raw => $itip);
+    $self->{instance}->deliver($msg);
+
+    sleep 1;
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Check that the event made it to calendar";
+    my ($adds, $removes, $errors) =
+        $CalDAV->SyncEvents($CalendarId, syncToken => $Cal->{syncToken});
+
+    $self->assert_equals(scalar @$adds, 1);
+    $self->assert_str_equals($adds->[0]{uid}, $uuid);
+    $self->assert_deep_equals($removes, []);
+    $self->assert_deep_equals($errors, []);
 }
 
 1;

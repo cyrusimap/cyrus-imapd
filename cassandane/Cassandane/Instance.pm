@@ -1568,6 +1568,15 @@ sub is_running
     return kill(0, $pid);
 }
 
+sub _setup_for_imip
+{
+    my ($self) = @_;
+
+    $self->add_service(name => 'httpunix',
+                       argv => ['httpd'],
+                       port => '@basedir@/conf/socket/http');
+}
+
 sub _setup_for_deliver
 {
     my ($self) = @_;
