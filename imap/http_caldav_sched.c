@@ -1975,7 +1975,7 @@ static void sched_deliver_local(const char *userid,
     strarray_append(&recipient_addresses, recipient);
     if (!r) r = caldav_store_resource(&txn, ical, mailbox,
                                       buf_cstring(&resource), cdata->dav.createdmodseq,
-                                      caldavdb, NEW_STAG, recipient, &recipient_addresses);
+                                      caldavdb, NEW_STAG, sparam->userid, &recipient_addresses);
     strarray_fini(&recipient_addresses);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
