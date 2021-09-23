@@ -117,9 +117,6 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "calalarmd", 0, 0);
 
-    /* Initialize libical */
-    ical_support_init();
-
     mboxname_init_namespace(&calalarmd_namespace, /*isadmin*/1);
     mboxevent_setnamespace(&calalarmd_namespace);
 

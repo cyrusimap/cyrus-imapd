@@ -68,6 +68,7 @@
 #include "gmtoff.h"
 #include "iptostring.h"
 #include "global.h"
+#include "ical_support.h"
 #include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
@@ -395,6 +396,11 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     if (locktime) {
         debug_locks_longer_than = atof(locktime);
     }
+
+#ifdef HAVE_ICAL
+    /* Initialize libical */
+    ical_support_init();
+#endif
 
     return 0;
 }

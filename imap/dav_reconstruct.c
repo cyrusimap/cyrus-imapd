@@ -132,9 +132,6 @@ int main(int argc, char **argv)
     signals_add_handlers(0);
     sqldb_init();
 
-    /* Initialize libical */
-    ical_support_init();
-
     if (allusers) {
         mboxlist_alluser(do_user, (void *)audit_tool);
     }
