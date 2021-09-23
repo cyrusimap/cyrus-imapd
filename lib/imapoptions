@@ -1063,6 +1063,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that enabling this option will increase the amount of data
    sent across the wire. */
 
+{ "httpsocket", "{configdirectory}/socket/http", STRING, "UNRELEASED" }
+/* Unix domain socket that httpd listens on, used by Sieve to process
+   iMIP messages.  This should match the path specified in cyrus.conf(5). */
+
 { "httptimeout", "5m", DURATION, "3.1.8" }
 /* Set the length of the HTTP server's inactivity autologout timer.
    The default is 5 minutes.  The minimum value is 0, which will

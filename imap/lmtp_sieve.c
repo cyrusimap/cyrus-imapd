@@ -1176,7 +1176,7 @@ done:
     return ret;
 }
 
-#if defined(HAVE_JANSSON) && defined(HAVE_ICAL)
+#ifdef HAVE_ICAL
 #include <jansson.h>
 #include "ical_support.h"
 
@@ -1389,7 +1389,198 @@ done:
 
     return ret;
 }
-#endif /* HAVE_JANSSON && HAVE_ICAL */
+
+#ifdef WITH_DAV
+#include <sys/socket.h>
+#include <sys/un.h>
+
+#include "http_client.h"
+
+static const char *sockaddr = NULL;
+
+static int sieve_imip(void *ac __attribute__((unused)), void *ic,
+                      void *sc __attribute__((unused)), void *mc,
+                      const char **errmsg __attribute__((unused)))
+{
+    struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
+    deliver_data_t *mydata = (deliver_data_t *) mc;
+    message_data_t *m = mydata->m;
+    icalcomponent *itip = NULL, *comp;
+    icalcomponent_kind kind = 0;
+    icalproperty_method meth = 0;
+    icalproperty *prop = NULL;
+    const char *uid = NULL, *organizer = NULL;
+    const char *originator = NULL, *recipient = NULL;
+    strarray_t sched_addresses = STRARRAY_INITIALIZER;
+
+    prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
+
+    /* parse the message body if we haven't already */
+    if (!mydata->content->body &&
+        message_parse_file_buf(m->f, &mydata->content->map,
+                               &mydata->content->body, NULL)) {
+        goto done;
+    }
+
+    /* XXX currently struct bodypart as defined in message.h is the same as
+       sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
+    struct bodypart **parts = NULL;
+    const char *content_types[] = { "text/calendar", NULL };
+    message_fetch_part(mydata->content, content_types, &parts);
+    if (parts && parts[0]) {
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_init_ro_cstr(&buf, parts[0]->decoded_body);
+        itip = ical_string_as_icalcomponent(&buf);
+        buf_free(&buf);
+    }
+
+    if (!itip) goto done;
+
+    icalrestriction_check(itip);
+    if (get_icalcomponent_errstr(itip)) goto done;
+
+    meth = icalcomponent_get_method(itip);
+    comp = icalcomponent_get_first_real_component(itip);
+    if (comp) {
+        kind = icalcomponent_isa(comp);
+        uid = icalcomponent_get_uid(comp);
+        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+        if (prop) organizer = icalproperty_get_organizer(prop);
+    }
+    if (!uid || !organizer) goto done;
+
+    if (strchr(ctx->userid, '@')) {
+        strarray_add(&sched_addresses, ctx->userid);
+    }
+    else {
+        const char *domains;
+        char *domain;
+        tok_t tok;
+
+        domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
+        if (!domains) domains = config_defdomain;
+        if (!domains) domains = config_servername;
+
+        tok_init(&tok, domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        while ((domain = tok_next(&tok))) {
+            strarray_appendm(&sched_addresses,
+                             strconcat(ctx->userid, "@", domain, NULL));
+        }
+        tok_fini(&tok);
+    }
+
+    switch (kind) {
+    case ICAL_VEVENT_COMPONENT:
+    case ICAL_VTODO_COMPONENT:
+    case ICAL_VPOLL_COMPONENT:
+        switch (meth) {
+        case ICAL_METHOD_POLLSTATUS:
+            if (kind != ICAL_VPOLL_COMPONENT) break;
+
+            GCC_FALLTHROUGH
+
+        case ICAL_METHOD_REQUEST:
+        case ICAL_METHOD_CANCEL:
+            originator = organizer;
+
+            /* Find invitee that matches owner of script */
+            for (prop = icalcomponent_get_first_invitee(comp); prop;
+                 prop = icalcomponent_get_next_invitee(comp)) {
+                const char *invitee = icalproperty_get_invitee(prop);
+                if (!strncasecmp(invitee, "mailto:", 7)) invitee += 7;
+                int n = strarray_find(&sched_addresses, invitee, 0);
+                if (n >= 0) {
+                    recipient = strarray_nth(&sched_addresses, n);
+                    break;
+                }
+            }
+            break;
+
+        case ICAL_METHOD_REPLY:
+            /* Organizer better match owner of script */
+            recipient = organizer;
+            prop = icalcomponent_get_first_invitee(comp);
+            if (prop) originator = icalproperty_get_invitee(prop);
+            break;
+
+        default:
+            /* Unsupported method */
+            break;
+        }
+        break;
+
+    default:
+        /* Unsupported component */
+        break;
+    }
+
+    if (!originator || !recipient) goto done;
+
+    int httpsock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (httpsock < 0) {
+        syslog(LOG_ERR, "socket failed");
+        goto done;
+    }
+
+    struct sockaddr_un addr;
+    addr.sun_family = AF_UNIX;
+    strlcpy(addr.sun_path, sockaddr, sizeof(addr.sun_path));
+
+    if (connect(httpsock, (struct sockaddr *) &addr,
+                sizeof(addr.sun_family) + strlen(addr.sun_path) + 1) < 0) {
+        syslog(LOG_ERR, "connect failed");
+        goto done;
+    }
+
+    struct protstream *pin = prot_new(httpsock, 0);
+    struct protstream *pout = prot_new(httpsock, 1);
+    size_t len = strlen(parts[0]->decoded_body);
+
+    prot_printf(pout, "POST /ischedule %s\r\n", HTTP_VERSION);
+    prot_printf(pout, "Host: %s\r\n", config_servername);
+    prot_puts(pout, "Connection: close\r\n");
+    prot_printf(pout, "User-Agent: Cyrus-Sieve/%s\r\n", CYRUS_VERSION);
+    prot_puts(pout, "Cache-Control: no-cache, no-transform\r\n");
+    prot_puts(pout, "iSchedule-Version: 1.0\r\n");
+    prot_printf(pout, "Originator: %s\r\n", originator);
+    prot_printf(pout, "Recipient: %s\r\n", recipient);
+    prot_printf(pout, "Content-Type: text/calendar; component=%s; method=%s\r\n",
+                icalcomponent_kind_to_string(kind),
+                icalproperty_method_to_string(meth));
+    prot_printf(pout, "Content-Length: %zd\r\n", len);
+    prot_puts(pout, "\r\n");
+
+    prot_write(pout, parts[0]->decoded_body, len);
+    prot_flush(pout);
+
+    cyrus_close_sock(httpsock);
+    prot_free(pin);
+    prot_free(pout);
+
+    syslog(LOG_INFO, "sieve iMIP processed: %s", m->id ? m->id : "<nomsgid>");
+    if (config_auditlog)
+        syslog(LOG_NOTICE,
+               "auditlog: processed iMIP sessionid=<%s> message-id=%s",
+               session_id(), m->id ? m->id : "<nomsgid>");
+
+  done:
+    strarray_fini(&sched_addresses);
+    if (parts) {
+        struct bodypart **part;
+
+        for (part = parts; *part; part++) {
+            free(*part);
+        }
+        free(parts);
+
+        if (itip) icalcomponent_free(itip);
+    }
+
+    return SIEVE_OK;
+}
+#endif /* WITH_DAV */
+#endif /* HAVE_ICAL */
 
 static int sieve_keep(void *ac,
                       void *ic __attribute__((unused)),
@@ -1868,7 +2059,7 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
 
     return matches;
 }
-#endif
+#endif /* WITH_JMAP */
 
 static int sieve_parse_error_handler(int lineno, const char *msg,
                                      void *ic __attribute__((unused)),
@@ -1902,51 +2093,6 @@ void sieve_log(void *sc, void *mc, const char *text)
 
     syslog(LOG_INFO, "sieve log: userid=%s messageid=%s text=%s",
            mbname_userid(sd->mbname), md->id ? md->id : "(null)", text);
-}
-
-static int sieve_imip(void *ac __attribute__((unused)),
-                      void *ic __attribute__((unused)),
-                      void *sc __attribute__((unused)),
-                      void *mc,
-                      const char **errmsg __attribute__((unused)))
-{
-    deliver_data_t *mydata = (deliver_data_t *) mc;
-    message_data_t *m = mydata->m;
-
-    prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
-
-    if (!mydata->content->body) {
-        /* parse the message body if we haven't already */
-        int r = message_parse_file_buf(m->f, &mydata->content->map,
-                                   &mydata->content->body, NULL);
-        if (r) return SIEVE_OK;
-    }
-
-    /* XXX currently struct bodypart as defined in message.h is the same as
-       sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
-    struct bodypart **parts = NULL;
-    const char *content_types[] = { "text/calendar", NULL };
-
-    message_fetch_part(mydata->content, content_types, &parts);
-    if (parts && parts[0]) {
-        int i = 0;
-
-        syslog(LOG_INFO, "XXXXXXXX  '%s'", parts[0]->decoded_body);
-
-        syslog(LOG_INFO, "sieve iMIP processed: %s",
-               m->id ? m->id : "<nomsgid>");
-        if (config_auditlog)
-            syslog(LOG_NOTICE,
-                   "auditlog: processed iMIP sessionid=<%s> message-id=%s",
-                   session_id(), m->id ? m->id : "<nomsgid>");
-
-        do {
-            free(parts[i]);
-        } while (parts[++i]);
-    }
-    free(parts);
-
-    return SIEVE_OK;
 }
 
 sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
@@ -2014,16 +2160,20 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 
 #ifdef WITH_DAV
     sieve_register_extlists(interp, &listvalidator, &listcompare);
-    sieve_register_imip(interp, &sieve_imip);
 #endif
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interp, &jmapquery);
 #endif
-#if defined(HAVE_JANSSON) && defined(HAVE_ICAL)
+#ifdef HAVE_ICAL
     /* need timezones for sieve snooze */
     ical_support_init();
     sieve_register_snooze(interp, &sieve_snooze);
+#ifdef WITH_DAV
+    sockaddr = config_getstring(IMAPOPT_HTTPSOCKET);
+    if (sockaddr) sieve_register_imip(interp, &sieve_imip);
 #endif
+#endif /* HAVE_ICAL */
+
     sieve_register_parse_error(interp, &sieve_parse_error_handler);
     sieve_register_execute_error(interp, &sieve_execute_error_handler);
 
