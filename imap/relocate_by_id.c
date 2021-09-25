@@ -144,11 +144,6 @@ int main(int argc, char **argv)
 
 #ifdef WITH_DAV
     sqldb_init();
-
-#ifdef HAVE_ICAL
-    /* Initialize libical */
-    ical_support_init();
-#endif
 #endif
 
     /* Normal Operation */
