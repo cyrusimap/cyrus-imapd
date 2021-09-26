@@ -50,6 +50,8 @@
 
 #include "acl.h"
 #include "append.h"
+#include "caldav_db.h"
+#include "carddav_db.h"
 #include "http_jmap.h"
 #include "times.h"
 
@@ -65,6 +67,8 @@ static int jmap_core_echo(jmap_req_t *req);
 
 /* JMAP extension methods */
 static int jmap_blob_get(jmap_req_t *req);
+static int jmap_blob_xget(jmap_req_t *req);
+static int jmap_blob_lookup(jmap_req_t *req);
 static int jmap_blob_set(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
 static int jmap_usercounters_get(jmap_req_t *req);
@@ -90,6 +94,18 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
         "Blob/get",
         JMAP_BLOB_EXTENSION,
         &jmap_blob_get,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Blob/xget",
+        JMAP_BLOB_EXTENSION,
+        &jmap_blob_xget,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Blob/lookup",
+        JMAP_BLOB_EXTENSION,
+        &jmap_blob_lookup,
         JMAP_NEED_CSTATE
     },
     {
@@ -399,6 +415,178 @@ static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
     return 0;
 }
 
+static const jmap_property_t blob_xprops[] = {
+    {
+        "data:asText",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+    },
+    {
+        "data:asHex",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+    },
+    {
+        "data:asBase64",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+    },
+    {
+        "data",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "size",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    { NULL, NULL, 0 }
+};
+
+struct blob_xrange {
+    size_t offset;
+    size_t length;
+};
+
+static int _parse_xrange(jmap_req_t *req __attribute__((unused)),
+                         struct jmap_parser *parser,
+                         const char *key,
+                         json_t *arg,
+                         void *rock)
+{
+    struct blob_xrange *rangep = rock;
+
+    if (!strcmp(key, "offset")) {
+        long long val = -1;
+        if (json_is_integer(arg)) val = json_integer_value(arg);
+
+        if (val <= 0) jmap_parser_invalid(parser, "offset");
+        else rangep->offset = val;
+
+        return 1;
+    }
+
+    if (!strcmp(key, "length")) {
+        long long val = -1;
+        if (json_is_integer(arg)) val = json_integer_value(arg);
+
+        if (val <= 0) jmap_parser_invalid(parser, "length");
+        else rangep->length = val;
+
+        return 1;
+    }
+
+    return 0;
+}
+
+static int jmap_blob_xget(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
+    json_t *jval;
+    size_t i;
+
+    /* Parse request */
+    struct blob_xrange range = { 0, 0 };
+    jmap_get_parse(req, &parser, blob_xprops, /*allow_null_ids*/0,
+                   &_parse_xrange, &range, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Lookup the content for each blob */
+    json_array_foreach(get.ids, i, jval) {
+        const char *blob_id = json_string_value(jval);
+        jmap_getblob_context_t ctx;
+        jmap_getblob_ctx_init(&ctx, req->accountid, blob_id, NULL, 1);
+        int r = jmap_getblob(req, &ctx);
+        if (r) {
+            json_array_append_new(get.not_found, json_string(blob_id));
+        }
+        else {
+            const char *base = buf_base(&ctx.blob);
+            size_t len = buf_len(&ctx.blob);
+
+            if (range.offset <= len) {
+                base += range.offset;
+                len -= range.offset;
+            }
+            if (range.length && len > range.length)
+                len = range.length;
+
+            json_t *item = json_object();
+            json_array_append_new(get.list, item);
+            json_object_set_new(item, "id", json_string(blob_id));
+
+            // the various data types, only output them if there's data to send
+            int want_text = 0;
+            int want_base64 = 0;
+            if (jmap_wantprop(get.props, "data:asText")) {
+                want_text = 1;
+            }
+            if (jmap_wantprop(get.props, "data:asBase64")) {
+                want_base64 = 1;
+            }
+            if (jmap_wantprop(get.props, "data")) {
+                struct char_counts guess_counts = charset_count_validutf8(base, len);
+                if (!guess_counts.invalid && !guess_counts.replacement)
+                    want_text = 1;
+                else
+                    want_base64 = 1;
+            }
+            if (want_text && len > 0) {
+                if (len) {
+                    json_object_set_new(item, "data:asText", json_stringn(base, len));
+                }
+                else {
+                    json_object_set_new(item, "data:asText", json_string(""));
+                }
+            }
+            if (want_base64) {
+                if (len) {
+                    size_t len64 = 0;
+                    charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
+                    char *encbuf = xzmalloc(len64+1);
+                    charset_encode_mimebody(base, len, encbuf, &len64, NULL, 0 /* no wrap */);
+                    json_object_set_new(item, "data:asBase64", json_stringn(encbuf, len64));
+                    free(encbuf);
+                }
+                else {
+                    json_object_set_new(item, "data:asBase64", json_string(""));
+                }
+            }
+            if (jmap_wantprop(get.props, "data:asHex")) {
+                if (len) {
+                    char *encbuf = xzmalloc(len*2);
+                    bin_to_lchex(base, len, encbuf);
+                    json_object_set_new(item, "data:asHex", json_stringn(encbuf, len*2));
+                    free(encbuf);
+                }
+                else {
+                    json_object_set_new(item, "data:asHex", json_string(""));
+                }
+            }
+
+            // always the size of the full blob
+            if (jmap_wantprop(get.props, "size")) {
+                json_object_set_new(item, "size", json_integer(buf_len(&ctx.blob)));
+            }
+        }
+        jmap_getblob_ctx_fini(&ctx);
+    }
+
+    /* Reply */
+    jmap_ok(req, jmap_get_reply(&get));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    return 0;
+}
+
 static const jmap_property_t blob_props[] = {
     {
         "mailboxIds",
@@ -571,6 +759,325 @@ done:
     return 0;
 }
 
+#define DATATYPE_MAILBOX         (1<<0)
+#define DATATYPE_THREAD          (1<<1)
+#define DATATYPE_EMAIL           (1<<2)
+#define DATATYPE_ADDRESSBOOK     (1<<3)
+#define DATATYPE_CONTACT         (1<<4)
+#define DATATYPE_CALENDAR        (1<<5)
+#define DATATYPE_CALENDAREVENT   (1<<6)
+
+#define NUM_DATATYPES 7
+
+struct datatype_name {
+    const char *name;
+    uint32_t typenum;
+    uint32_t mbtype;
+};
+
+struct datatype_name known_datatypes[] = {
+    { "Mailbox", DATATYPE_MAILBOX, MBTYPE_EMAIL },
+    { "Thread", DATATYPE_THREAD, MBTYPE_EMAIL },
+    { "Email", DATATYPE_EMAIL, MBTYPE_EMAIL },
+    { "Addressbook", DATATYPE_ADDRESSBOOK, MBTYPE_ADDRESSBOOK },
+    { "Contact", DATATYPE_CONTACT, MBTYPE_ADDRESSBOOK },
+    { "Calendar", DATATYPE_CALENDAR, MBTYPE_CALENDAR },
+    { "CalendarEvent", DATATYPE_CALENDAREVENT, MBTYPE_CALENDAR },
+    { NULL, 0, 0 }
+};
+
+static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
+                            struct jmap_parser *parser,
+                            const char *key,
+                            json_t *arg,
+                            void *rock)
+{
+    int32_t *datatypesp = rock;
+
+    if (!strcmp(key, "types")) {
+        if (!json_is_array(arg)) {
+            jmap_parser_invalid(parser, "types");
+            // field known, type wrong
+            return 1;
+        }
+
+        size_t i;
+        json_t *v;
+        json_array_foreach(arg, i, v) {
+            const char *val = json_string_value(v);
+            const struct datatype_name *item;
+            int typenum = 0;
+            for (item = known_datatypes; item->name; item++) {
+                if (strcmpsafe(val, item->name))
+                    continue;
+                typenum = item->typenum;
+                break;
+            }
+
+            if (typenum) {
+                *datatypesp |= typenum;
+            }
+            else {
+                jmap_parser_push_index(parser, "types", i, NULL);
+                jmap_parser_invalid(parser, NULL);
+                jmap_parser_pop(parser);
+            }
+        }
+
+        return 1;
+    }
+
+    return 0;
+}
+
+static void _free_found(void *data)
+{
+    int i;
+    strarray_t *values = data;
+    for (i = 0; i < NUM_DATATYPES; i++) {
+        strarray_t *ids = values + i;
+        strarray_fini(ids);
+    }
+    free(values);
+}
+
+static int jmap_blob_lookup(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    int32_t datatypes = 0;
+    json_t *err = NULL;
+    json_t *jval;
+    size_t i;
+
+    /* Parse request */
+    jmap_get_parse(req, &parser, NULL, /*allow_null_ids*/0,
+                   _parse_datatypes, &datatypes, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    if (!datatypes) {
+        err = json_pack("{s:s s:[s]}", "type", "invalidArguments", "arguments", "types");
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Sort blob lookups by mailbox */
+    hash_table getblobs_by_uniqueid = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&getblobs_by_uniqueid, 128, 0);
+    json_array_foreach(get.ids, i, jval) {
+        const char *blob_id = json_string_value(jval);
+        if (*blob_id == 'G') {
+            struct getblob_cb_rock rock = { req, blob_id, &getblobs_by_uniqueid };
+            int r = conversations_guid_foreach(req->cstate, blob_id + 1, getblob_cb, &rock);
+            if (r) {
+                syslog(LOG_ERR, "jmap_blob_get: can't lookup guid %s: %s",
+                        blob_id, error_message(r));
+            }
+        }
+        else if (*blob_id == 'I' || *blob_id == 'V') {
+            char *uniqueid = NULL;
+            uint32_t uid;
+            if (jmap_decode_rawdata_blobid(blob_id, &uniqueid, &uid, NULL, NULL, NULL)) {
+                struct getblob_rec *getblob = xzmalloc(sizeof(struct getblob_rec));
+                getblob->blob_id = blob_id;
+                getblob->uid = uid;
+                ptrarray_t *getblobs = hash_lookup(uniqueid, &getblobs_by_uniqueid);
+                if (!getblobs) {
+                    getblobs = ptrarray_new();
+                    hash_insert(uniqueid, getblobs, &getblobs_by_uniqueid);
+                }
+                ptrarray_append(getblobs, getblob);
+            }
+            free(uniqueid);
+        }
+        else {
+            // we don't know how to parse other blob types yet, e.g. sieve has no mailbox
+        }
+    }
+
+    hash_table found = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&found, json_array_size(get.ids), 0);
+
+    /* Lookup blobs by mailbox */
+    hash_iter *iter = hash_table_iter(&getblobs_by_uniqueid);
+    while (hash_iter_next(iter)) {
+        const char *uniqueid = hash_iter_key(iter);
+        ptrarray_t *getblobs = hash_iter_val(iter);
+        struct mailbox *mbox = NULL;
+        const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, uniqueid);
+        int r = 0;
+
+        /* Open mailbox */
+        if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+            r = IMAP_PERMISSION_DENIED;
+        }
+        else {
+            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+            if (r) {
+                syslog(LOG_ERR, "jmap_blob_get: can't open mailbox %s: %s",
+                       mbentry->name, error_message(r));
+            }
+        }
+        if (r) continue;
+
+        // these types both want to know the last item of the name
+        mbname_t *mbname = NULL;
+        const strarray_t *boxes = NULL;
+        if (datatypes & (DATATYPE_ADDRESSBOOK|DATATYPE_CALENDAR)) {
+            mbname = mbname_from_intname(mbentry->name);
+            boxes = mbname_boxes(mbname);
+        }
+
+        // XXX: cache if userid is unchanged?  Should be always
+        struct caldav_db *caldav_db = NULL;
+        if (datatypes & DATATYPE_CALENDAREVENT)
+            caldav_db = caldav_open_mailbox(mbox);
+
+        struct carddav_db *carddav_db = NULL;
+        if (datatypes & DATATYPE_CONTACT)
+            carddav_db = carddav_open_mailbox(mbox);
+
+        int j;
+        for (j = 0; j < ptrarray_size(getblobs); j++) {
+            struct getblob_rec *getblob = ptrarray_nth(getblobs, j);
+
+            /* Read message record */
+            struct message_guid guid;
+            bit64 cid;
+            msgrecord_t *mr = NULL;
+            r = msgrecord_find(mbox, getblob->uid, &mr);
+            if (!r) r = msgrecord_get_guid(mr, &guid);
+            if (!r) r = msgrecord_get_cid(mr, &cid);
+            msgrecord_unref(&mr);
+            if (r) {
+                syslog(LOG_ERR, "jmap_blob_get: can't read msgrecord %s:%d: %s",
+                        mailbox_name(mbox), getblob->uid, error_message(r));
+                continue;
+            }
+
+            const struct datatype_name *item;
+            int i = 0;
+            for (item = known_datatypes; item->name; item++) {
+                i++;
+                // if we don't want this datatype, skip
+                if (!(datatypes & item->typenum)) continue;
+                // if this isn't the right type, skip
+                if (mbtype_isa(mailbox_mbtype(mbox)) != item->mbtype) continue;
+
+                /* only create the values store if we have found at least
+                 * one item for this blobid */
+                strarray_t *values = hash_lookup(getblob->blob_id, &found);
+                if (!values) {
+                    values = xzmalloc(sizeof(strarray_t) * NUM_DATATYPES);
+                    hash_insert(getblob->blob_id, values, &found);
+                }
+                strarray_t *ids = values + i;
+
+                switch (item->typenum) {
+                case DATATYPE_MAILBOX:
+                    strarray_add(ids, uniqueid);
+                    break;
+
+                case DATATYPE_THREAD: {
+                    char threadid[JMAP_THREADID_SIZE];
+                    jmap_set_threadid(cid, threadid);
+                    strarray_add(ids, threadid);
+                    break;
+                    }
+
+                case DATATYPE_EMAIL: {
+                    char emailid[JMAP_EMAILID_SIZE];
+                    jmap_set_emailid(&guid, emailid);
+                    strarray_add(ids, emailid);
+                    break;
+                    }
+
+                case DATATYPE_ADDRESSBOOK:
+                    strarray_add(ids, strarray_nth(boxes, -1));
+                    break;
+
+                case DATATYPE_CONTACT: {
+                    struct carddav_data *cdata = NULL;
+                    carddav_lookup_imapuid(carddav_db, mbentry, getblob->uid, &cdata, 0);
+                    if (cdata) strarray_add(ids, cdata->vcard_uid);
+                    break;
+                    }
+
+                case DATATYPE_CALENDAR:
+                    strarray_add(ids, strarray_nth(boxes, -1));
+                    break;
+
+                case DATATYPE_CALENDAREVENT: {
+                    struct caldav_data *cdata = NULL;
+                    caldav_lookup_imapuid(caldav_db, mbentry, getblob->uid, &cdata, 0);
+                    if (cdata) strarray_add(ids, cdata->ical_uid);
+                    break;
+                    }
+                }
+            }
+        }
+
+        if (caldav_db) caldav_close(caldav_db);
+        if (carddav_db) carddav_close(carddav_db);
+        mbname_free(&mbname);
+        jmap_closembox(req, &mbox);
+    }
+
+    /* Clean up memory */
+    hash_iter_reset(iter);
+    while (hash_iter_next(iter)) {
+        ptrarray_t *getblobs = hash_iter_val(iter);
+        struct getblob_rec *getblob;
+        while ((getblob = ptrarray_pop(getblobs))) {
+            free(getblob->part);
+            free(getblob);
+        }
+        ptrarray_free(getblobs);
+    }
+    hash_iter_free(&iter);
+    free_hash_table(&getblobs_by_uniqueid, NULL);
+
+    /* Report out blobs */
+    json_array_foreach(get.ids, i, jval) {
+        const char *blob_id = json_string_value(jval);
+        strarray_t *values = hash_lookup(blob_id, &found);
+        if (values) {
+            json_t *dtvalue = json_object();
+            const struct datatype_name *item;
+            int j = 0;
+            for (item = known_datatypes; item->name; item++) {
+                j++;
+                // if we don't want this datatype, skip
+                if (!(datatypes & item->typenum)) continue;
+                strarray_t *ids = values + j;
+                json_t *list = json_array();
+                int k = 0;
+                for (k = 0; k < strarray_size(ids); k++)
+                    json_array_append_new(list, json_string(strarray_nth(ids, k)));
+                json_object_set_new(dtvalue, item->name, list);
+            }
+            json_array_append_new(get.list, json_pack("{s:s, s:o}", "id", blob_id, "types", dtvalue));
+        }
+        else {
+            json_array_append_new(get.not_found, json_string(blob_id));
+        }
+    }
+
+    // now clean all the found things!
+    free_hash_table(&found, _free_found);
+
+    /* Reply */
+    jmap_ok(req, jmap_get_reply(&get));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    return 0;
+}
+
 static const jmap_property_t blob_set_props[] = {
     {
         "id",
@@ -596,6 +1103,90 @@ static const jmap_property_t blob_set_props[] = {
     { NULL, NULL, 0 }
 };
 
+static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, int recurse)
+{
+    json_t *jitem;
+
+    // plain text only
+    jitem = json_object_get(arg, "data:asText");
+    if (!jitem) jitem = json_object_get(arg, "content"); // legacy
+    if (JNOTNULL(jitem) && json_is_string(jitem)) {
+        buf_init_ro(buf, json_string_value(jitem), json_string_length(jitem));
+        return 0;
+    }
+
+    // base64 text
+    jitem = json_object_get(arg, "data:asBase64");
+    if (!jitem) jitem = json_object_get(arg, "content64");
+    if (JNOTNULL(jitem) && json_is_string(jitem)) {
+        return charset_decode(buf, json_string_value(jitem),
+                              json_string_length(jitem), ENCODING_BASE64);
+    }
+
+    // hex text
+    jitem = json_object_get(arg, "data:asHex");
+    if (JNOTNULL(jitem) && json_is_string(jitem)) {
+        char *out = xzmalloc(json_string_length(jitem)/2);
+        int done = hex_to_bin(json_string_value(jitem), json_string_length(jitem), out);
+        buf_initm(buf, out, json_string_length(jitem)/2);
+        return done < 0 ? done : 0;
+    }
+
+    if (recurse) {
+        jitem = json_object_get(arg, "blobId");
+        if (JNOTNULL(jitem) && json_is_string(jitem)) {
+            const char *blobid = json_string_value(jitem);
+            // map in the existing blob, if there is one
+            jmap_getblob_context_t ctx;
+            jmap_getblob_ctx_init(&ctx, req->accountid, blobid, NULL, 1);
+            int r = jmap_getblob(req, &ctx);
+            if (!r) {
+                const char *base = buf_base(&ctx.blob);
+                size_t len = buf_len(&ctx.blob);
+                json_t *joffset = json_object_get(arg, "offset");
+                if (JNOTNULL(joffset) && json_is_integer(joffset)) {
+                    size_t add = json_integer_value(joffset);
+                    if (add <= len) {
+                        base += add;
+                        len -= add;
+                    }
+                    else {
+                        r = -1;
+                    }
+                }
+                json_t *jlength = json_object_get(arg, "length");
+                if (JNOTNULL(jlength) && json_is_integer(jlength)) {
+                    size_t limit = json_integer_value(jlength);
+                    if (limit <= len) {
+                        len = limit;
+                    }
+                    else {
+                        r = -1;
+                    }
+                }
+                if (!r) buf_appendmap(buf, base, len);
+            }
+            jmap_getblob_ctx_fini(&ctx);
+            return r;
+        }
+    }
+    else {
+        jitem = json_object_get(arg, "catenate");
+        if (JNOTNULL(jitem) && json_is_array(jitem)) {
+            size_t i;
+            json_t *val;
+            json_array_foreach(jitem, i, val) {
+                struct buf subbuf = BUF_INITIALIZER;
+                int r = _set_arg_to_buf(req, &subbuf, val, 1);
+                buf_appendmap(buf, buf_base(&subbuf), buf_len(&subbuf));
+                buf_free(&subbuf);
+                if (r) return r;
+            }
+        }
+    }
+
+    return 0;
+}
 
 static int jmap_blob_set(struct jmap_req *req)
 {
@@ -621,20 +1212,9 @@ static int jmap_blob_set(struct jmap_req *req)
         char datestr[RFC3339_DATETIME_MAX];
         char blob_id[JMAP_BLOBID_SIZE];
 
-        json_t *jitem = json_object_get(arg, "content");
-        if (JNOTNULL(jitem) && json_is_string(jitem)) {
-            buf_init_ro(buf, json_string_value(jitem), json_string_length(jitem));
-        }
-        else {
-            json_t *jitem64 = json_object_get(arg, "content64");
-            if (JNOTNULL(jitem64) && json_is_string(jitem64)) {
-                int r = charset_decode(buf, json_string_value(jitem64),
-                                       json_string_length(jitem64), ENCODING_BASE64);
-                if (r) buf_free(buf);
-            }
-        }
+        int r = _set_arg_to_buf(req, buf, arg, 0);
 
-        if (!buf_base(buf)) {
+        if (r || !buf_base(buf)) {
             jerr = json_pack("{s:s}", "type", "invalidProperties");
             json_object_set_new(set.not_updated, key, jerr);
             buf_destroy(buf);
