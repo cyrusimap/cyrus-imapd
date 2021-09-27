@@ -12247,7 +12247,7 @@ static void cmd_xfer(const char *tag, const char *name,
         next = item->next;
         free(item);
 
-        if (xfer->userid || mbox_count > 1000) {
+        if (xfer->use_replication && (xfer->userid || mbox_count > 1000)) {
             /* RESTART after each user or after every 1000 mailboxes */
             mbox_count = 0;
 
