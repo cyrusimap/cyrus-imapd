@@ -371,4 +371,41 @@ sub test_rename_with_location
     $self->assert_str_equals('ok', $backend2_store->get_last_completion_response());
 }
 
+sub test_xfer_nonexistent_unixhs
+    :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{backend1_adminstore}->get_client();
+    my $backend2_servername = $self->{backend2}->get_servername();
+
+    # xfer a user that doesn't exist
+    $admintalk->_imap_cmd('xfer', 0, {},
+                          'user/nonexistent', $backend2_servername);
+    $self->assert_str_equals(
+        'no', $admintalk->get_last_completion_response()
+    );
+
+    # xfer a mailbox that doesn't exist
+    $admintalk->_imap_cmd('xfer', 0, {},
+                          'user/cassandane/nonexistent', $backend2_servername);
+    $self->assert_str_equals(
+        'no', $admintalk->get_last_completion_response()
+    );
+
+    # xfer a pattern that doesn't match anything
+    $admintalk->_imap_cmd('xfer', 0, {},
+                          'user/cassandane/non%', $backend2_servername);
+    $self->assert_str_equals(
+        'no', $admintalk->get_last_completion_response()
+    );
+
+    # xfer a partition that doesn't exist
+    $admintalk->_imap_cmd('xfer', 0, {},
+                          'nonexistent', $backend2_servername);
+    $self->assert_str_equals(
+        'no', $admintalk->get_last_completion_response()
+    );
+}
+
 1;
