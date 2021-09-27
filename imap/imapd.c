@@ -11735,6 +11735,12 @@ static void cmd_xfer(const char *tag, const char *name,
         free(intname);
     }
 
+    /* bail out if we didn't find anything to do */
+    if (!list.mboxes) {
+        r = IMAP_MAILBOX_NONEXISTENT;
+        goto done;
+    }
+
     r = xfer_init(toserver, &xfer);
     if (r) goto done;
 
