@@ -1395,6 +1395,7 @@ done:
 #include <sys/un.h>
 
 #include "http_client.h"
+#include "xml_support.h"
 
 static const char *sockaddr = NULL;
 
@@ -1412,6 +1413,7 @@ static int sieve_imip(void *ac __attribute__((unused)), void *ic,
     const char *uid = NULL, *organizer = NULL;
     const char *originator = NULL, *recipient = NULL;
     strarray_t sched_addresses = STRARRAY_INITIALIZER;
+    unsigned result = 0;
 
     prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
 
@@ -1517,8 +1519,12 @@ static int sieve_imip(void *ac __attribute__((unused)), void *ic,
 
     if (!originator || !recipient) goto done;
 
-    int httpsock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (httpsock < 0) {
+    struct backend be;
+
+    memset(&be, 0, sizeof(struct backend));
+
+    be.sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (be.sock < 0) {
         syslog(LOG_ERR, "socket failed");
         goto done;
     }
@@ -1527,42 +1533,114 @@ static int sieve_imip(void *ac __attribute__((unused)), void *ic,
     addr.sun_family = AF_UNIX;
     strlcpy(addr.sun_path, sockaddr, sizeof(addr.sun_path));
 
-    if (connect(httpsock, (struct sockaddr *) &addr,
+    if (connect(be.sock, (struct sockaddr *) &addr,
                 sizeof(addr.sun_family) + strlen(addr.sun_path) + 1) < 0) {
         syslog(LOG_ERR, "connect failed");
         goto done;
     }
 
-    struct protstream *pin = prot_new(httpsock, 0);
-    struct protstream *pout = prot_new(httpsock, 1);
+    be.in = prot_new(be.sock, 0);
+    be.out = prot_new(be.sock, 1);
+    prot_setflushonread(be.in, be.out);
+
+    /* Send iSchedule request */
     size_t len = strlen(parts[0]->decoded_body);
 
-    prot_printf(pout, "POST /ischedule %s\r\n", HTTP_VERSION);
-    prot_printf(pout, "Host: %s\r\n", config_servername);
-    prot_puts(pout, "Connection: close\r\n");
-    prot_printf(pout, "User-Agent: Cyrus-Sieve/%s\r\n", CYRUS_VERSION);
-    prot_puts(pout, "Cache-Control: no-cache, no-transform\r\n");
-    prot_puts(pout, "iSchedule-Version: 1.0\r\n");
-    prot_printf(pout, "Originator: %s\r\n", originator);
-    prot_printf(pout, "Recipient: %s\r\n", recipient);
-    prot_printf(pout, "Content-Type: text/calendar; component=%s; method=%s\r\n",
+    prot_printf(be.out, "POST /ischedule %s\r\n", HTTP_VERSION);
+    prot_printf(be.out, "Host: %s\r\n", config_servername);
+    prot_puts(be.out, "Connection: close\r\n");
+    prot_printf(be.out, "User-Agent: Cyrus-Sieve/%s\r\n", CYRUS_VERSION);
+    prot_puts(be.out, "Cache-Control: no-cache, no-transform\r\n");
+    prot_puts(be.out, "iSchedule-Version: 1.0\r\n");
+    prot_printf(be.out, "Originator: %s\r\n", originator);
+    prot_printf(be.out, "Recipient: %s\r\n", recipient);
+    prot_printf(be.out, "Content-Type: text/calendar; component=%s; method=%s\r\n",
                 icalcomponent_kind_to_string(kind),
                 icalproperty_method_to_string(meth));
-    prot_printf(pout, "Content-Length: %zd\r\n", len);
-    prot_puts(pout, "\r\n");
+    prot_printf(be.out, "Content-Length: %zd\r\n", len);
+    prot_puts(be.out, "\r\n");
 
-    prot_write(pout, parts[0]->decoded_body, len);
-    prot_flush(pout);
+    prot_write(be.out, parts[0]->decoded_body, len);
+    prot_flush(be.out);
+#if 0
+    /* Read iSchedule response */
+    hdrcache_t resp_hdrs = NULL;
+    struct body_t resp_body;
+    const char *errstr = NULL;
+    xmlDocPtr doc = NULL;
+    unsigned code;
 
-    cyrus_close_sock(httpsock);
-    prot_free(pin);
-    prot_free(pout);
+    memset(&resp_body, 0, sizeof(struct body_t));
+    resp_body.flags = BODY_DECODE;
 
-    syslog(LOG_INFO, "sieve iMIP processed: %s", m->id ? m->id : "<nomsgid>");
+    sleep(2);
+
+    do {
+        int r = http_read_response(&be, METH_POST, &code,
+                                   &resp_hdrs, &resp_body, &errstr);
+        if (r || (resp_body.flags & BODY_CLOSE)) {
+            code = 500;
+            break;
+        }
+    } while (code < 200);
+
+    cyrus_close_sock(be.sock);
+    prot_free(be.in);
+    prot_free(be.out);
+
+    if (!(code == 200 && buf_len(&resp_body.payload))) goto processed;
+
+    const char **hdr = spool_getheader(resp_hdrs, "Content-Type");
+    if (!(hdr && hdr[0] &&
+          (is_mediatype("text/xml", hdr[0]) ||
+           is_mediatype("application/xml", hdr[0])))) goto processed;
+
+    doc = xmlReadMemory(buf_cstring(&resp_body.payload),
+                        buf_len(&resp_body.payload), NULL, NULL,
+                        XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
+    if (!doc) goto processed;
+
+    xmlNodePtr root = xmlDocGetRootElement(doc);
+    if (!root || !root->ns ||
+        xmlStrcmp(root->ns->href, BAD_CAST "urn:ietf:params:xml:ns:ischedule") ||
+        xmlStrcmp(root->name, BAD_CAST "schedule-response")) {
+        goto processed;
+    }
+
+    xmlNodePtr node = xmlFirstElementChild(root);
+    if (!node || xmlStrcmp(node->name, BAD_CAST "response")) {
+        goto processed;
+    }
+
+    xmlChar *resp_recip = NULL, *resp_status = NULL;
+    for (node = node->children; node; node = node->next) {
+        if (node->type == XML_ELEMENT_NODE) {
+            if (!xmlStrcmp(node->name, BAD_CAST "recipient")) {
+                resp_recip = xmlNodeListGetString(doc, node->children, 1);
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "request-status")) {
+                resp_status = xmlNodeListGetString(doc, node->children, 1);
+            }
+        }
+    }
+
+    if (resp_recip && resp_status &&
+        !xmlStrcasecmp(resp_recip, BAD_CAST recipient) &&
+        !xmlStrcasecmp(resp_status, BAD_CAST "2.0;Success")) {
+        result = 1;
+    }
+
+  processed:
+    if (doc) xmlFreeDoc(doc);
+    buf_free(&resp_body.payload);
+#endif
+    syslog(LOG_INFO, "sieve iMIP processed: %s; %s",
+           m->id ? m->id : "<nomsgid>", result == 1 ? "success" : "fail");
     if (config_auditlog)
         syslog(LOG_NOTICE,
-               "auditlog: processed iMIP sessionid=<%s> message-id=%s",
-               session_id(), m->id ? m->id : "<nomsgid>");
+               "auditlog: processed iMIP sessionid=<%s> message-id=%s result=%s",
+               session_id(), m->id ? m->id : "<nomsgid>",
+               result == 1 ? "success" : "fail");
 
   done:
     strarray_fini(&sched_addresses);
