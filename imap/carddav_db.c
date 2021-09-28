@@ -708,14 +708,23 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
         (carddavdb->db->version >= DB_MBOXID_VERSION) ?
         othermb->uniqueid : othermb->name;
 
+    const char *otheruser = NULL;
+    mbname_t *othermbname = NULL;
+    if (othermb) {
+        othermbname = mbname_from_intname(othermb->name);
+        otheruser = mbname_userid(othermbname);
+    }
+
     struct sqldb_bindval bval[] = {
         { ":mailbox",      SQLITE_TEXT,    { .s = mailbox } },
         { ":group",        SQLITE_TEXT,    { .s = group   } },
         { ":kind",         SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
-        { ":otheruser",    SQLITE_TEXT,    { .s = othermailbox } },
+        { ":otheruser",    SQLITE_TEXT,    { .s = otheruser } },
         { ":othermailbox", SQLITE_TEXT,    { .s = othermailbox } },
         { NULL,            SQLITE_NULL,    { .s = NULL    } }
     };
+
+    strarray_t *members = NULL;
 
     if (*group) {
         // first check that the group exists
@@ -725,14 +734,11 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
         r = sqldb_exec(carddavdb->db, existsql, bval, &groupexists_cb, &exists);
         if (r) {
             /* XXX syslog */
-            return NULL;
+            goto done;
         }
 
-        if (!exists)
-            return NULL;
+        if (!exists) goto done;
     }
-
-    strarray_t *members = strarray_new();
 
     // pick which filter to use!
     const char *membersql = GETGROUP_MEMBERS;
@@ -743,11 +749,14 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
     }
     else if (!*group) membersql = GETALL_MEMBERS;
 
+    members = strarray_new();
     r = sqldb_exec(carddavdb->db, membersql, bval, &groupmembers_cb, members);
     if (r) {
         /* XXX syslog */
     }
 
+done:
+    mbname_free(&othermbname);
     return members;
 }
 
