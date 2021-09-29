@@ -2487,7 +2487,7 @@ sub run_dbcommand_cb
             if ($chr eq '{') {
                 my $end = index($buf, '}', $pos);
                 die "Missing }" if $end < 0;
-                my $len = substr($buf, $pos + 1, $end - $pos - 2);
+                my $len = substr($buf, $pos + 1, $end - $pos - 1);
                 $len =~ s/\+//;
                 $pos = $end+1;
                 my $chr = substr($buf, $pos++, 1);
@@ -2551,6 +2551,61 @@ sub run_dbcommand
     my @array;
     $self->run_dbcommand_cb(sub { push @array, @_ }, $dbname, $engine, @items);
     return @array;
+}
+
+sub read_mailboxes_db
+{
+    my ($self) = @_;
+
+    # run ctl_mboxlist -d to dump mailboxes.db to a file
+    my $outfile = $self->get_basedir() . "/$$-ctl_mboxlist.out";
+    $self->run_command({
+        cyrus => 1,
+        redirects => {
+            stdout => $outfile,
+        },
+    }, 'ctl_mboxlist', '-d');
+
+    my $records = {};
+
+    open my $fh, '<', $outfile or die "$outfile: $!";
+    foreach my $line (<$fh>) {
+        if ($line =~ m {
+                ^
+                ([^\t]*)                # mailbox
+                \t                      # one tab
+                (\d+)                   # mbtype
+                \x20                    # one space
+                ([^\x20]+)              # (server!)partition
+                \x20                    # one space
+                (.*)                    # acl
+                $
+            }x)
+        {
+            my ($server, $partition);
+
+            if (index($3, '!') != -1) {
+                ($server, $partition) = split /!/, $3;
+            }
+            else {
+                $partition = $3;
+            }
+
+            $records->{$1} = {
+                mbtype => $2,
+                server => $server,
+                partition => $partition,
+                acl => { split /\t/, $4 },
+            };
+        }
+        else {
+            xlog "failed to parse ctl_mboxlist -d output: <$line>";
+            die "failed to parse ctl_mboxlist -d output";
+        }
+    }
+    close $fh;
+
+    return $records;
 }
 
 1;

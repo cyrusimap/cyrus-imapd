@@ -1245,4 +1245,131 @@ sub check_conversations
     $self->assert_does_not_match(qr/is BROKEN/, $str);
 }
 
+# Set up a mailbox structure from data
+# See List.pm tests for examples of how to drive this
+sub setup_mailbox_structure
+{
+    my ($self, $client, $test_data) = @_;
+
+    foreach my $row (@{$test_data}) {
+        my ($cmd, $arg) = @{$row};
+        if (ref $arg) {
+            foreach (@{$arg}) {
+                $client->$cmd($_) || die "$cmd '$_': $@";
+            }
+        }
+        else {
+            $client->$cmd($arg) || die "$cmd '$_': $@";
+        }
+    }
+}
+
+# Assert that the provided LIST response match the expected data
+# See List.pm tests for examples of how to drive this
+sub assert_mailbox_structure
+{
+    my ($self, $actual, $expected_hiersep, $expected_mailbox_flags,
+        $strict, $msg) = @_;
+
+    # rearrange list output into order-agnostic format
+    my %actual_hash;
+    foreach my $row (@{$actual}) {
+        my ($flags, $hiersep, $mailbox) = @{$row};
+
+        $actual_hash{$mailbox} = {
+            flags => { map { (lc($_) => 1) } @{$flags} },
+            hiersep => $hiersep,
+            mailbox => $mailbox,
+        }
+    }
+
+    # check that expected data exists
+    foreach my $mailbox (sort keys %{$expected_mailbox_flags}) {
+        xlog $self, "expect mailbox: $mailbox";
+        $self->assert(
+            exists $actual_hash{$mailbox},
+            "'$mailbox': mailbox not found"
+        );
+
+        $self->assert_str_equals(
+            $actual_hash{$mailbox}->{hiersep},
+            $expected_hiersep,
+            "'$mailbox': got hierarchy separator '"
+                . $actual_hash{$mailbox}->{hiersep}
+                . "', expected '$expected_hiersep'"
+        );
+
+        my %expected_flags;
+        if (ref $expected_mailbox_flags->{$mailbox}) {
+            %expected_flags = map { (lc($_) => 1) }
+                                  @{$expected_mailbox_flags->{$mailbox}};
+        }
+        else {
+            %expected_flags = map { (lc($_) => 1) }
+                                  split / /, $expected_mailbox_flags->{$mailbox};
+        }
+
+        # look for expected flags
+        foreach my $flag (sort keys %expected_flags) {
+            # https://tools.ietf.org/html/rfc5258#section-3.4:
+            #    \NoInferiors implies \HasNoChildren
+            #    \NonExistent implies \NoSelect
+            if ($flag eq "\\hasnochildren") {
+                $self->assert(
+                    (exists $actual_hash{$mailbox}->{flags}->{$flag}
+                     || exists $actual_hash{$mailbox}->{flags}->{"\\noinferiors"}),
+                    "'$mailbox': missing flag '$flag'"
+                );
+            }
+            elsif ($flag eq "\\noselect") {
+                $self->assert(
+                    (exists $actual_hash{$mailbox}->{flags}->{$flag}
+                     || exists $actual_hash{$mailbox}->{flags}->{"\\nonexistent"}),
+                    "'$mailbox': missing flag '$flag'"
+                );
+            }
+            else {
+                $self->assert(
+                    exists $actual_hash{$mailbox}->{flags}->{$flag},
+                    "'$mailbox': missing flag '$flag'"
+                );
+            }
+        }
+
+        next if not $strict;
+
+        # look for unexpected flags
+        foreach my $flag (sort keys %{$actual_hash{$mailbox}->{flags}}) {
+            if ($flag eq "\\noinferiors") {
+                $self->assert(
+                    (exists $actual_hash{$mailbox}->{flags}->{$flag}
+                     || exists $actual_hash{$mailbox}->{flags}->{"\\hasnochildren"}),
+                    "'$mailbox': found unexpected flag '$flag'"
+                );
+            }
+            elsif ($flag eq "\\nonexistent") {
+                $self->assert(
+                    (exists $actual_hash{$mailbox}->{flags}->{$flag}
+                     || exists $actual_hash{$mailbox}->{flags}->{"\\noselect"}),
+                    "'$mailbox': found unexpected flag '$flag'"
+                );
+            }
+            else {
+                $self->assert(
+                    exists $expected_flags{$flag},
+                    "'$mailbox': found unexected flag '$flag'"
+                );
+            }
+        }
+    }
+
+    # check that unexpected data does not exist
+    foreach my $mailbox (sort keys %actual_hash) {
+        $self->assert(
+            exists $expected_mailbox_flags->{$mailbox},
+            "'$mailbox': found unexpected extra mailbox"
+        );
+    }
+}
+
 1;
