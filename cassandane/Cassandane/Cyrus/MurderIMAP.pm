@@ -511,77 +511,43 @@ sub test_xfer_nonexistent_unixhs
 
 sub test_xfer_user_altns_unixhs
     :AllowMoves :AltNamespace :UnixHierarchySep
+    :min_version_3_2
 {
     my ($self) = @_;
 
-    # XXX need a function to fill an account with stuff!
+    # set up some data for cassandane on backend1
+    my $expected = $self->populate_user($self->{backend1_store},
+                                        [qw(INBOX Drafts)]);
 
-    # send cassandane a bunch of messages on the original backend
-    my %msgs;
-    my $n_msgs = 30;
-    foreach my $n (1..$n_msgs) {
-        $msgs{$n} = $self->{gen}->generate(subject => "Message $n");
-        $msgs{$n}->set_attribute(uid => $n);
-        $self->{instance}->deliver($msgs{$n}, user => 'cassandane');
-    }
-
-    # fizzbuzz some details
     my $imaptalk = $self->{backend1_store}->get_client();
-    $imaptalk->select('INBOX');
-    foreach my $n (1..$n_msgs) {
-        my @flags;
-
-        if ($n % 3 == 0) {
-            # fizz
-            $imaptalk->store("$n", '+flags', '(\\Flagged)');
-            $self->assert_str_equals(
-                'ok', $imaptalk->get_last_completion_response()
-            );
-            push @flags, '\\Flagged';
-        }
-        if ($n % 5 == 0) {
-            # buzz
-            $imaptalk->store("$n", '+flags', '(\\Deleted)');
-            $self->assert_str_equals(
-                'ok', $imaptalk->get_last_completion_response()
-            );
-            push @flags, '\\Deleted';
-        }
-
-        $msgs{$n}->set_attribute('flags', \@flags) if scalar @flags;
-    }
-
-    # make sure they're all there before we proceed
-    $self->{store}->set_fetch_attributes('uid', 'flags');
-    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
-
     my $admintalk = $self->{backend1_adminstore}->get_client();
     my $backend2_servername = $self->{backend2}->get_servername();
 
     # what's the frontend mailboxes.db say before we move?
     my $mailboxes_db = $self->{frontend}->read_mailboxes_db();
-    xlog "XXX: " . Dumper $mailboxes_db;
+    xlog "XXX before move, frontend mailboxes.db:" . Dumper $mailboxes_db;
 
-    # what's imap LIST/XLIST say before we move?
+    # what's imap LIST say before we move?
+    # original backend:
     my $data = $imaptalk->list("", "*");
     $self->assert_mailbox_structure($data, '/', {
         'INBOX' => [qw( \\HasNoChildren )],
+        'Drafts' => [qw( \\HasNoChildren \\Drafts )],
     });
 
-    $data = $imaptalk->xlist("", "*");
-    $self->assert_mailbox_structure($data, '/', {
-        'INBOX' => [qw( \\HasNoChildren )],
-    });
-
+    # frontend doesn't know about annotations
     my $frontendtalk = $self->{frontend_store}->get_client();
     $data = $frontendtalk->list("", "*");
     $self->assert_mailbox_structure($data, '/', {
         'INBOX' => [qw( \\HasNoChildren )],
+        'Drafts' => [qw( \\HasNoChildren )],
     });
 
-    $data = $frontendtalk->xlist("", "*");
+    # ... but if we ask for them it'll proxy the request and find them
+    $data = $frontendtalk->list("", "*", 'RETURN', [ 'SPECIAL-USE' ]);
     $self->assert_mailbox_structure($data, '/', {
         'INBOX' => [qw( \\HasNoChildren )],
+        'Drafts' => [qw( \\HasNoChildren \\Drafts )],
     });
 
     # now xfer the cassandane user to backend2
@@ -595,127 +561,95 @@ sub test_xfer_user_altns_unixhs
         'ok', $admintalk->get_last_completion_response()
     );
 
-    # messages should be on the other store now
-    $self->{backend2_store}->set_fetch_attributes('uid', 'flags');
-    $self->check_messages(\%msgs, store => $self->{backend2_store},
-                          check_guid => 0, keyed_on => 'uid');
+    # account contents should be on the other store now
+    $self->check_user($self->{backend2_store}, $expected);
 
     # frontend should now say the user is on the other store
     # XXX is there a better way to discover this?
     $mailboxes_db = $self->{frontend}->read_mailboxes_db();
-    xlog "XXX: " . Dumper $mailboxes_db;
+    xlog "XXX after move, frontend mailboxes.db: " . Dumper $mailboxes_db;
     # XXX 3.0 with 2.5 frontend fails here: server field is blank
-    $self->assert_str_equals($backend2_servername,
-                             $mailboxes_db->{'user.cassandane'}->{server});
+    $self->assert_str_equals(
+        $backend2_servername,
+        $mailboxes_db->{'user.cassandane'}->{server}
+    );
+    $self->assert_str_equals(
+        $backend2_servername,
+        $mailboxes_db->{'user.cassandane.Drafts'}->{server}
+    );
 
-    # what's imap LIST/XLIST say after the move?
+    # what's imap LIST say after the move?
     undef $imaptalk;
     $self->{store}->disconnect();
     $imaptalk = $self->{store}->get_client();
-    xlog "checking LIST/XLIST on old backend";
+    xlog "checking LIST on old backend";
     $data = $imaptalk->list("", "*");
     $self->assert_mailbox_structure($data, '/', {});
-    $data = $imaptalk->xlist("", "*");
-    $self->assert_str_equals("ok", $data);
 
     my $backend2talk = $self->{backend2_store}->get_client();
-    xlog "checking LIST/XLIST on new backend";
+    xlog "checking LIST on new backend";
     $data = $backend2talk->list("", "*");
     $self->assert_mailbox_structure($data, '/', {
         'INBOX' => [qw( \\HasNoChildren )],
+        'Drafts' => [qw( \\HasNoChildren \\Drafts )],
     });
 
-    $data = $backend2talk->xlist("", "*");
-    $self->assert_mailbox_structure($data, '/', {
-        'INBOX' => [qw( \\HasNoChildren )],
-    });
-
+    # frontend doesn't know about annotations
     $frontendtalk = $self->{frontend_store}->get_client();
-    xlog "checking LIST/XLIST on frontend";
+    xlog "checking LIST on frontend";
     $data = $frontendtalk->list("", "*");
     $self->assert_mailbox_structure($data, '/', {
         'INBOX' => [qw( \\HasNoChildren )],
+        'Drafts' => [qw( \\HasNoChildren )],
     });
 
-    $data = $frontendtalk->xlist("", "*");
+    # ... but if we ask for them it'll proxy the request and find them
+    $data = $frontendtalk->list("", "*", 'RETURN', [ 'SPECIAL-USE' ]);
     $self->assert_mailbox_structure($data, '/', {
         'INBOX' => [qw( \\HasNoChildren )],
+        'Drafts' => [qw( \\HasNoChildren \\Drafts )],
     });
 }
 
 sub test_xfer_user_noaltns_nounixhs
     :AllowMoves :NoAltNamespace
+    :min_version_3_2
 {
     my ($self) = @_;
 
-    # XXX need a function to fill an account with stuff!
+    # set up some data for cassandane on backend1
+    my $expected = $self->populate_user($self->{backend1_store},
+                                        [qw(INBOX INBOX.Drafts)]);
 
-    # send cassandane a bunch of messages on the original backend
-    my %msgs;
-    my $n_msgs = 30;
-    foreach my $n (1..$n_msgs) {
-        $msgs{$n} = $self->{gen}->generate(subject => "Message $n");
-        $msgs{$n}->set_attribute(uid => $n);
-        $self->{instance}->deliver($msgs{$n}, user => 'cassandane');
-    }
-
-    # fizzbuzz some details
     my $imaptalk = $self->{backend1_store}->get_client();
-    $imaptalk->select('INBOX');
-    foreach my $n (1..$n_msgs) {
-        my @flags;
-
-        if ($n % 3 == 0) {
-            # fizz
-            $imaptalk->store("$n", '+flags', '(\\Flagged)');
-            $self->assert_str_equals(
-                'ok', $imaptalk->get_last_completion_response()
-            );
-            push @flags, '\\Flagged';
-        }
-        if ($n % 5 == 0) {
-            # buzz
-            $imaptalk->store("$n", '+flags', '(\\Deleted)');
-            $self->assert_str_equals(
-                'ok', $imaptalk->get_last_completion_response()
-            );
-            push @flags, '\\Deleted';
-        }
-
-        $msgs{$n}->set_attribute('flags', \@flags) if scalar @flags;
-    }
-
-    # make sure they're all there before we proceed
-    $self->{store}->set_fetch_attributes('uid', 'flags');
-    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
-
     my $admintalk = $self->{backend1_adminstore}->get_client();
     my $backend2_servername = $self->{backend2}->get_servername();
 
     # what's the frontend mailboxes.db say before we move?
     my $mailboxes_db = $self->{frontend}->read_mailboxes_db();
-    xlog "XXX: " . Dumper $mailboxes_db;
+    xlog "XXX before move, frontend mailboxes.db:" . Dumper $mailboxes_db;
 
-    # what's imap LIST/XLIST say before we move?
+    # what's imap LIST say before we move?
+    # original backend:
     my $data = $imaptalk->list("", "*");
     $self->assert_mailbox_structure($data, '.', {
-        'INBOX' => [qw( \\HasNoChildren )],
+        'INBOX' => [qw( \\HasChildren )],
+        'INBOX.Drafts' => [qw( \\HasNoChildren \\Drafts )],
     });
 
-    $data = $imaptalk->xlist("", "*");
-    $self->assert_mailbox_structure($data, '.', {
-        'INBOX' => [qw( \\HasNoChildren )],
-    });
-
+    # frontend doesn't know about annotations
     my $frontendtalk = $self->{frontend_store}->get_client();
     $data = $frontendtalk->list("", "*");
     $self->assert_mailbox_structure($data, '.', {
-        'INBOX' => [qw( \\HasNoChildren )],
+        'INBOX' => [qw( \\HasChildren )],
+        'INBOX.Drafts' => [qw( \\HasNoChildren )],
     });
 
-    $data = $frontendtalk->xlist("", "*");
+    # ... but if we ask for them it'll proxy the request and find them
+    $data = $frontendtalk->list("", "*", 'RETURN', [ 'SPECIAL-USE' ]);
     $self->assert_mailbox_structure($data, '.', {
-        'INBOX' => [qw( \\HasNoChildren )],
+        'INBOX' => [qw( \\HasChildren )],
+        'INBOX.Drafts' => [qw( \\HasNoChildren \\Drafts )],
     });
 
     # now xfer the cassandane user to backend2
@@ -729,51 +663,53 @@ sub test_xfer_user_noaltns_nounixhs
         'ok', $admintalk->get_last_completion_response()
     );
 
-    # messages should be on the other store now
-    $self->{backend2_store}->set_fetch_attributes('uid', 'flags');
-    $self->check_messages(\%msgs, store => $self->{backend2_store},
-                          check_guid => 0, keyed_on => 'uid');
+    # account contents should be on the other store now
+    $self->check_user($self->{backend2_store}, $expected);
 
     # frontend should now say the user is on the other store
     # XXX is there a better way to discover this?
     $mailboxes_db = $self->{frontend}->read_mailboxes_db();
-    xlog "XXX: " . Dumper $mailboxes_db;
+    xlog "XXX after move, frontend mailboxes.db: " . Dumper $mailboxes_db;
     # XXX 3.0 with 2.5 frontend fails here: server field is blank
-    $self->assert_str_equals($backend2_servername,
-                             $mailboxes_db->{'user.cassandane'}->{server});
+    $self->assert_str_equals(
+        $backend2_servername,
+        $mailboxes_db->{'user.cassandane'}->{server}
+    );
+    $self->assert_str_equals(
+        $backend2_servername,
+        $mailboxes_db->{'user.cassandane.Drafts'}->{server}
+    );
 
-    # what's imap LIST/XLIST say after the move?
+    # what's imap LIST say after the move?
     undef $imaptalk;
     $self->{store}->disconnect();
     $imaptalk = $self->{store}->get_client();
-    xlog "checking LIST/XLIST on old backend";
+    xlog "checking LIST on old backend";
     $data = $imaptalk->list("", "*");
     $self->assert_mailbox_structure($data, '.', {});
-    $data = $imaptalk->xlist("", "*");
-    $self->assert_str_equals("ok", $data);
 
     my $backend2talk = $self->{backend2_store}->get_client();
-    xlog "checking LIST/XLIST on new backend";
+    xlog "checking LIST on new backend";
     $data = $backend2talk->list("", "*");
     $self->assert_mailbox_structure($data, '.', {
-        'INBOX' => [qw( \\HasNoChildren )],
+        'INBOX' => [qw( \\HasChildren )],
+        'INBOX.Drafts' => [qw( \\HasNoChildren \\Drafts )],
     });
 
-    $data = $backend2talk->xlist("", "*");
-    $self->assert_mailbox_structure($data, '.', {
-        'INBOX' => [qw( \\HasNoChildren )],
-    });
-
+    # frontend doesn't know about annotations
     $frontendtalk = $self->{frontend_store}->get_client();
-    xlog "checking LIST/XLIST on frontend";
+    xlog "checking LIST on frontend";
     $data = $frontendtalk->list("", "*");
     $self->assert_mailbox_structure($data, '.', {
-        'INBOX' => [qw( \\HasNoChildren )],
+        'INBOX' => [qw( \\HasChildren )],
+        'INBOX.Drafts' => [qw( \\HasNoChildren )],
     });
 
-    $data = $frontendtalk->xlist("", "*");
+    # ... but if we ask for them it'll proxy the request and find them
+    $data = $frontendtalk->list("", "*", 'RETURN', [ 'SPECIAL-USE' ]);
     $self->assert_mailbox_structure($data, '.', {
-        'INBOX' => [qw( \\HasNoChildren )],
+        'INBOX' => [qw( \\HasChildren )],
+        'INBOX.Drafts' => [qw( \\HasNoChildren \\Drafts )],
     });
 }
 
