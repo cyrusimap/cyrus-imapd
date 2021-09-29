@@ -942,8 +942,118 @@ sub test_xfer_user_noaltns_nounixhs_virtdom
     });
 }
 
+sub test_xfer_mailbox_altns_unixhs
+    :AllowMoves :AltNamespace :UnixHierarchySep
+    :min_version_3_2 :max_version_3_4
+{
+    my ($self) = @_;
+
+    # set up some data for cassandane on backend1
+    my $expected_stay = $self->populate_user(
+        $self->{backend1_store},
+        [qw(INBOX Big Big/Red Big/Red/Dog)]
+    );
+
+    # we're planning to only XFER "Big/Red" (but not the others!)
+    my $expected_move->{'Big/Red'} = $expected_stay->{'Big/Red'};
+    delete $expected_stay->{'Big/Red'};
+
+    my $imaptalk = $self->{backend1_store}->get_client();
+    my $admintalk = $self->{backend1_adminstore}->get_client();
+    my $backend1_servername = $self->{instance}->get_servername();
+    my $backend2_servername = $self->{backend2}->get_servername();
+
+    # what's the frontend mailboxes.db say before we move?
+    my $mailboxes_db = $self->{frontend}->read_mailboxes_db();
+    xlog "XXX before move, frontend mailboxes.db:" . Dumper $mailboxes_db;
+
+    # what's imap LIST say before we move?
+    # original backend:
+    my $data = $imaptalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'Big' => [qw( \\HasChildren )],
+        'Big/Red' => [qw( \\HasChildren )],
+        'Big/Red/Dog' => [qw( \\HasNoChildren )],
+    });
+
+    my $frontendtalk = $self->{frontend_store}->get_client();
+    $data = $frontendtalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'Big' => [qw( \\HasChildren )],
+        'Big/Red' => [qw( \\HasChildren )],
+        'Big/Red/Dog' => [qw( \\HasNoChildren )],
+    });
+
+    # now xfer the BigRed folder (only) to backend2
+    my $ret = $admintalk->_imap_cmd('xfer', 0, {},
+                                    'user/cassandane/Big/Red',
+                                    $backend2_servername);
+    xlog "XXX xfer returned: " . Dumper $ret;
+    $self->assert_str_equals('ok', $ret);
+    $self->assert_str_equals(
+        'ok', $admintalk->get_last_completion_response()
+    );
+
+    # most of the account should have remained on the original backend
+    $self->check_user($self->{backend1_store}, $expected_stay);
+    # but Big/Red should have been moved
+    $self->check_user($self->{backend2_store}, $expected_move);
+
+    # frontend should now say the new mailbox locations
+    # XXX is there a better way to discover this?
+    $mailboxes_db = $self->{frontend}->read_mailboxes_db();
+    xlog "XXX after move, frontend mailboxes.db: " . Dumper $mailboxes_db;
+    # XXX 3.0 with 2.5 frontend fails here: server field is blank
+    $self->assert_str_equals(
+        $backend1_servername,
+        $mailboxes_db->{'user.cassandane'}->{server}
+    );
+    $self->assert_str_equals(
+        $backend1_servername,
+        $mailboxes_db->{'user.cassandane.Big'}->{server}
+    );
+    $self->assert_str_equals(
+        $backend2_servername,
+        $mailboxes_db->{'user.cassandane.Big.Red'}->{server}
+    );
+    $self->assert_str_equals(
+        $backend1_servername,
+        $mailboxes_db->{'user.cassandane.Big.Red.Dog'}->{server}
+    );
+
+    # what's imap LIST say after the move?
+    undef $imaptalk;
+    $self->{store}->disconnect();
+    $imaptalk = $self->{store}->get_client();
+    xlog "checking LIST on old backend";
+    $data = $imaptalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'Big' => [qw( \\HasChildren )],
+        'Big/Red/Dog' => [qw( \\HasNoChildren )],
+    });
+
+    my $backend2talk = $self->{backend2_store}->get_client();
+    xlog "checking LIST on new backend";
+    $data = $backend2talk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'Big/Red' => [qw( \\HasNoChildren )],
+    });
+
+    $frontendtalk = $self->{frontend_store}->get_client();
+    xlog "checking LIST on frontend";
+    $data = $frontendtalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+        'Big' => [qw( \\HasChildren )],
+        'Big/Red' => [qw( \\HasChildren )],
+        'Big/Red/Dog' => [qw( \\HasNoChildren )],
+    });
+}
+
 # XXX test_xfer_partition
-# XXX test_xfer_mailbox
 # XXX test_xfer_mboxpattern
 
 1;
