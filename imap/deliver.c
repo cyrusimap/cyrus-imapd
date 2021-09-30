@@ -240,6 +240,7 @@ int main(int argc, char **argv)
     prot_settimeout(deliver_in, 300);
 
     cyrus_init(alt_config, "deliver", CYRUSINIT_NODB, CONFIG_NEED_PARTITION_DATA);
+    global_sasl_init(1, 0, NULL);
 
     sockaddr = config_getstring(IMAPOPT_LMTPSOCKET);
     if (!sockaddr) {
