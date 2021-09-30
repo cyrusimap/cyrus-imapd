@@ -1355,10 +1355,10 @@ imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 PROMDATAGEN = $(abs_top_srcdir)/imap/promdatagen
 
 imap/promdata.c: imap/promdata.p $(PROMDATAGEN)
-	$(AM_V_GEN)$(PROMDATAGEN) -c $@.NEW $< && mv $@.NEW $@
+	$(PERL) $(AM_V_GEN)$(PROMDATAGEN) -c $@.NEW $< && mv $@.NEW $@
 
 imap/promdata.h: imap/promdata.p $(PROMDATAGEN)
-	$(AM_V_GEN)$(PROMDATAGEN) -h $@.NEW $< && mv $@.NEW $@
+	$(PERL) $(AM_V_GEN)$(PROMDATAGEN) -h $@.NEW $< && mv $@.NEW $@
 
 imap_promstatsd_SOURCES = imap/promstatsd.c imap/mutex_fake.c
 imap_promstatsd_LDADD = $(LD_UTILITY_ADD)
@@ -1568,7 +1568,7 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 lib/imapopts.h: lib/imapopts.c
 
 lib/imapopts.c: lib/imapoptions tools/config2header
-	$(AM_V_GEN)$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
+	$(PERL) $(AM_V_GEN)$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
 
 imap_cvt_xlist_specialuse_SOURCES = imap/mutex_fake.c imap/cvt_xlist_specialuse.c
 imap_cvt_xlist_specialuse_LDADD = $(LD_UTILITY_ADD)
