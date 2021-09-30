@@ -60,6 +60,14 @@ while ($#ARGV >= 0) {
 
 my $use_gcc_extension = ($CC and $CC eq 'gcc');
 
+#
+# Skip any CC options such as -pipe
+# The last two parameters are the .c and .h files
+#
+while ($#ARGV > 1) {
+	shift @ARGV;
+}
+
 die "wrong number of arguments" if ($#ARGV != 1);
 my ($cfile, $hfile) = @ARGV;
 
