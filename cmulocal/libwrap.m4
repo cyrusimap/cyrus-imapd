@@ -1,5 +1,11 @@
 dnl libwrap.m4 --- do we have libwrap, the access control library?
 
+dnl ld: /usr/lib/libwrap.so: undefined reference to `deny_severity'
+dnl ld: /usr/lib/libwrap.so: undefined reference to `allow_severity'
+dnl
+dnl	int allow_severity;
+dnl	int deny_severity;
+
 AC_DEFUN([CMU_LIBWRAP], [
   AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
   AC_REQUIRE([CMU_SOCKETS])
