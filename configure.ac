@@ -2460,6 +2460,7 @@ External dependencies:
    ldap:               $have_ldap
    openssl:            $with_ssl
    zlib:               $with_zlib
+   libwrap:            $with_libwrap
    jansson:            $with_jansson
    pcre:               $cyrus_cv_pcre_utf8
    clamav:             $with_clamav
