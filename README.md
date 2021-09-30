@@ -92,8 +92,8 @@ Unlike releases, the git repository doesn't have a pre-built
 
     $ autoreconf -i
     $ ./configure
-    $ make
-    $ sudo make install
+    $ gmake
+    $ sudo gmake install
 
 If you need to build a local copy of the docs current to the version of the code, these need to be built: see doc/README.docs
 
@@ -101,6 +101,7 @@ Read through doc/html/imap/developer.html for more detailed instructions on buil
 
 How to install Cyrus libraries from git source
 ==============================================
+
 For version 3.0 or later, it is recommended to also build the main
 dependencies from source.
 
