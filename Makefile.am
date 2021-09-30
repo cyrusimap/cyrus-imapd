@@ -526,13 +526,13 @@ noinst_TEXINFOS = com_err/et/com_err.texinfo
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libcyrus_min.pc libcyrus.pc libcyrus_sieve.pc libcyrus_imap.pc
 
+# 	com_err/et/init_et.c  (XXX example only? never used?)
 com_err_et_libcyrus_com_err_la_SOURCES = \
 	com_err/et/com_err.c \
 	com_err/et/com_err.h \
 	com_err/et/error_message.c \
 	com_err/et/error_table.h \
 	com_err/et/et_name.c \
-	com_err/et/init_et.c \
 	com_err/et/internal.h \
 	com_err/et/mit-sipb-copyright.h
 com_err_et_libcyrus_com_err_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
