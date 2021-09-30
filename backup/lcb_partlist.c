@@ -71,6 +71,11 @@ static void partlist_backup_init(void)
 }
 
 
+/* XXX the following should be in a shared header!!! (currently in lcb_internal.h) */
+const char *partlist_backup_select(void);
+int partlist_backup_foreach(partlist_foreach_cb proc, void *rock);
+void partlist_backup_done(void);
+
 HIDDEN const char *partlist_backup_select(void)
 {
     /* lazy loading */

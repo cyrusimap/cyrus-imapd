@@ -251,6 +251,7 @@ int main(int argc, char **argv)
     enum { SEARCH, SERIALISE } mode = SEARCH;
     int multiple = 0;
     int r = 0;
+    char *freeme = NULL;
 
     while ((c = getopt(argc, argv, "C:LMSm:u:v")) != EOF) {
         switch (c) {
@@ -296,8 +297,6 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "search_test",
                CYRUSINIT_PERROR, CONFIG_NEED_PARTITION_DATA);
-
-    char *freeme = NULL;
 
     switch (mode) {
 

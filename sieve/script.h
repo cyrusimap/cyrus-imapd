@@ -85,4 +85,12 @@ struct sieve_execute {
 
 int script_require(sieve_script_t *s, const char *req);
 
+#include "message.h"
+#include "varlist.h"
+
+int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
+                  void *sc, void *m, variable_list_t *variables,
+                  action_list_t *actions, notify_list_t *notify_list,
+                  duptrack_list_t *duptrack_list, const char **errmsg);
+
 #endif /*  SIEVE_SCRIPT_H */

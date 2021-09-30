@@ -1008,6 +1008,9 @@ static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
     static deliver_data_t dd;
     static message_data_t md;
     static struct message_content mc;
+    const mbname_t *origmbname;
+    mbname_t *mbname;
+    const char *intname;
 
     memcpy(&dd, mydata, sizeof(deliver_data_t));
     dd.m = memcpy(&md, mydata->m, sizeof(message_data_t));
@@ -1015,15 +1018,15 @@ static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
     memset(&mc, 0, sizeof(struct message_content));
 
     /* build the mailboxname from the recipient address */
-    const mbname_t *origmbname = msg_getrcpt(mydata->m, mydata->cur_rcpt);
+    origmbname = msg_getrcpt(mydata->m, mydata->cur_rcpt);
 
     /* do the userid */
-    mbname_t *mbname = mbname_dup(origmbname);
+    mbname = mbname_dup(origmbname);
     if (mbname_userid(mbname)) {
         mbname_truncate_boxes(mbname, 0);
     }
 
-    const char *intname = mbname_intname(mbname);
+    intname = mbname_intname(mbname);
     md.f = append_newstage(intname, time(0),
                            strhash(intname) /* unique msgnum for modified msg */,
                            &dd.stage);
@@ -1079,6 +1082,8 @@ static int sieve_fileinto(void *ac,
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mdata = (deliver_data_t *) mc;
     int ret = IMAP_MAILBOX_NONEXISTENT;
+    message_data_t *md;
+    int quotaoverride;
 
     const char *userid = mbname_userid(sd->mbname);
     char *intname = NULL;
@@ -1119,8 +1124,10 @@ static int sieve_fileinto(void *ac,
     }
 
 
-    message_data_t *md = mdata->m;
-    int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
+    md = mdata->m;
+    quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
+    /*  */ {
+	    
     struct imap4flags imap4flags = { fc->imapflags, sd->authstate };
 
     if (fc->headers) {
@@ -1161,6 +1168,8 @@ static int sieve_fileinto(void *ac,
                                   userid, mdata->notifyheader,
                                   intname, md->date, 0 /*savedate*/, quotaoverride, 0);
         }
+    }
+    
     }
 
     if (fc->headers) cleanup_special_delivery(mdata);
@@ -1448,7 +1457,8 @@ static int sieve_keep(void *ac,
         return SIEVE_OK;
     }
 
-
+    /*  */ {
+	    
     message_data_t *md = mydata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
     struct imap4flags imap4flags = { kc->imapflags, sd->authstate };
@@ -1478,6 +1488,8 @@ static int sieve_keep(void *ac,
                           0 /*savedate*/, quotaoverride, acloverride);
 
     if (freeme) auth_freestate(freeme);
+    
+    }
 
     if (kc->headers) cleanup_special_delivery(mydata);
  
@@ -1773,7 +1785,7 @@ static int sieve_duplicate_check(void *dc,
 {
     sieve_duplicate_context_t *dtc = (sieve_duplicate_context_t *) dc;
     script_data_t *sd = (script_data_t *) sc;
-    time_t t, now = time(NULL);;
+    time_t t, now = time(NULL);
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
 
     dkey.id = dtc->id;
@@ -1898,7 +1910,7 @@ static int sieve_execute_error_handler(const char *msg,
     return SIEVE_OK;
 }
 
-void sieve_log(void *sc, void *mc, const char *text)
+static void sieve_log(void *sc, void *mc, const char *text)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((deliver_data_t *) mc)->m;
@@ -2123,6 +2135,7 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     const char *subf ;
     int r = 0;
     int n;
+    struct mboxlock *namespacelock;
 
     /* Check if internalname or userid are NULL */
     if (userid == NULL || internalname == NULL)
@@ -2155,7 +2168,7 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     if (!createsievefolder) return IMAP_MAILBOX_NONEXISTENT;
 
     // lock the namespace and check again before trying to create
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(internalname);
+    namespacelock = mboxname_usernamespacelock(internalname);
 
     // did we lose the race?
     r = mboxlist_lookup(internalname, 0, 0);

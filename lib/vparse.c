@@ -568,6 +568,8 @@ static int _parse_vcard(struct vparse_state *state, struct vparse_card *card, in
         if (r) return r;
 
         if (!strcasecmp(state->entry->name, "begin")) {
+            struct vparse_entry *version;
+
             /* shouldn't be any params */
             if (state->entry->params) {
                 state->itemstart = entrystart;
@@ -590,7 +592,7 @@ static int _parse_vcard(struct vparse_state *state, struct vparse_card *card, in
             r = _parse_vcard(state, sub, /*only_one*/0);
 
             /* repair critical property values */
-            struct vparse_entry *version = vparse_get_entry(sub, NULL, "version");
+            version = vparse_get_entry(sub, NULL, "version");
             if (version) {
                 const char *val;
                 for (val = version->v.value; *val; val++) {
@@ -991,8 +993,9 @@ EXPORTED struct vparse_card *vparse_new_card(const char *type)
 EXPORTED struct vparse_entry *vparse_add_entry(struct vparse_card *card, const char *group, const char *name, const char *value)
 {
     struct vparse_entry **entryp = &card->properties;
-    while (*entryp) entryp = &((*entryp)->next);
     struct vparse_entry *entry = xzmalloc(sizeof(struct vparse_entry));
+
+    while (*entryp) entryp = &((*entryp)->next);
     entry->group = xstrdupnull(group);
     entry->name = xstrdupnull(name);
     entry->v.value = xstrdupnull(value);
@@ -1061,8 +1064,9 @@ EXPORTED struct vparse_param *vparse_get_param(struct vparse_entry *entry, const
 EXPORTED struct vparse_param *vparse_add_param(struct vparse_entry *entry, const char *name, const char *value)
 {
     struct vparse_param **paramp = &entry->params;
-    while (*paramp) paramp = &((*paramp)->next);
     struct vparse_param *param = xzmalloc(sizeof(struct vparse_param));
+
+    while (*paramp) paramp = &((*paramp)->next);
     param->name = xstrdupnull(name);
     param->value = xstrdupnull(value);
     *paramp = param;

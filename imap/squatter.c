@@ -197,15 +197,18 @@ static void become_daemon(void)
 
 static int should_index(const char *name)
 {
+    int ret = 1;
+    int r;
+    mbentry_t *mbentry = NULL;
+    mbname_t *mbname;
+
     // skip early users
     if (strcmpsafe(name, name_starts_from) < 0)
         return 0;
 
-    int ret = 1;
-    mbentry_t *mbentry = NULL;
-    mbname_t *mbname = mbname_from_intname(name);
+    mbname = mbname_from_intname(name);
     /* Skip remote mailboxes */
-    int r = mboxlist_lookup(name, &mbentry, NULL);
+    r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
         /* Convert internal name to external */
         char *extname = mboxname_to_external(name, &squat_namespace, NULL);
@@ -273,6 +276,7 @@ static int index_one(const char *name, int blocking)
     struct mailbox *mailbox = NULL;
     int r;
     int flags = SEARCH_UPDATE_BATCH;
+    char *extname;
 
     if (incremental_mode)
         flags |= SEARCH_UPDATE_INCREMENTAL;
@@ -286,7 +290,7 @@ static int index_one(const char *name, int blocking)
         flags |= SEARCH_UPDATE_ALLOW_DUPPARTS;
 
     /* Convert internal name to external */
-    char *extname = mboxname_to_external(name, &squat_namespace, NULL);
+    extname = mboxname_to_external(name, &squat_namespace, NULL);
 
     /* make sure the mailbox (or an ancestor) has
        /vendor/cmu/cyrus-imapd/squat set to "true" */
@@ -551,6 +555,8 @@ static int do_list(const strarray_t *mboxnames)
     for (i = 0; i < strarray_size(mboxnames); i++) {
         const char *mboxname = strarray_nth(mboxnames, i);
         char *userid = mboxname_to_userid(mboxname);
+        int j;
+
         if (!userid) continue;
 
         if (!strcmpsafe(prev_userid, userid)) {
@@ -561,7 +567,6 @@ static int do_list(const strarray_t *mboxnames)
         r = search_list_files(userid, &files);
         if (r) break;
 
-        int j;
         for (j = 0; j < strarray_size(&files); j++) {
             printf("%s\n", strarray_nth(&files, j));
         }
@@ -596,8 +601,11 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *reindextier
 
     for (i = 0; i < strarray_size(mboxnames); i++) {
         const char *mboxname = strarray_nth(mboxnames, i);
+	char *userid;
+        int retry;
+
         if (!should_index(mboxname)) continue;
-        char *userid = mboxname_to_userid(mboxname);
+        userid = mboxname_to_userid(mboxname);
         if (!userid) continue;
 
         if (!strcmpsafe(prev_userid, userid)) {
@@ -605,7 +613,6 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *reindextier
             continue;
         }
 
-        int retry;
         for (retry = 1; retry <= 3; retry++) {
             int r = compact_mbox(userid, reindextiers, srctiers, desttier, flags);
             if (!r) break;
@@ -845,19 +852,20 @@ done:
 
 static int do_audit(const strarray_t *mboxnames)
 {
+    int r = 0;
+    bitvector_t unindexed = BV_INITIALIZER;
+    int i;
+
     rx = search_begin_update(verbose);
     if (rx == NULL)
         return 0;       /* no indexer defined */
 
-    int r = 0;
     if (!rx->audit_mailbox) {
         syslog(LOG_ERR, "squatter: indexer does not support audits");
         r = IMAP_INTERNAL;
         goto done;
     }
 
-    bitvector_t unindexed = BV_INITIALIZER;
-    int i;
     for (i = 0 ; i < mboxnames->count ; i++) {
         const char *mboxname = strarray_nth(mboxnames, i);
         if (!should_index(mboxname)) continue;
@@ -871,8 +879,9 @@ static int do_audit(const strarray_t *mboxnames)
             usleep(sleepmicroseconds);
 
         if (bv_count(&unindexed)) {
-            printf("Unindexed message(s) in %s: ", mboxname);
             int uid;
+
+            printf("Unindexed message(s) in %s: ", mboxname);
             for (uid = bv_next_set(&unindexed, 0);
                  uid != -1;
                  uid = bv_next_set(&unindexed, uid+1)) {
@@ -918,10 +927,9 @@ int main(int argc, char **argv)
     strarray_t *reindextiers = NULL;
     const char *desttier = NULL;
     char *errstr = NULL;
+    const char *conf;
     enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
            COMPACT, AUDIT, LIST } mode = UNKNOWN;
-
-    setbuf(stdout, NULL);
 
     /* Keep these in alphabetic order */
     static const char *short_options = "ABC:DFL:N:PRS:T:UXZade:f:hilmn:oprs:t:uvz:";
@@ -980,6 +988,8 @@ int main(int argc, char **argv)
 
         {0, 0, 0, 0 }
     };
+
+    setbuf(stdout, NULL);
 
     while ((opt = getopt_long(argc, argv, short_options, long_options, NULL)) != EOF) {
         switch (opt) {
@@ -1186,7 +1196,6 @@ int main(int argc, char **argv)
 
     index_text_extractor_init(NULL);
 
-    const char *conf;
     conf = config_getstring(IMAPOPT_SEARCH_INDEX_SKIP_DOMAINS);
     if (conf) skip_domains = strarray_split(conf, " ", STRARRAY_TRIM);
     conf = config_getstring(IMAPOPT_SEARCH_INDEX_SKIP_USERS);

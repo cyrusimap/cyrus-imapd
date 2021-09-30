@@ -97,6 +97,8 @@ static int setproctitle_enable = 0;
 static char             **Argv = NULL;          /* pointer to argument vector */
 static char             *LastArgv = NULL;       /* end of argv */
 
+extern void setproctitle_init(int argc, char **argv, char **envp); /* XXX WTF!?!?!? no header? */
+
 /*
  * Sets up a process to be able to use setproctitle()
  */

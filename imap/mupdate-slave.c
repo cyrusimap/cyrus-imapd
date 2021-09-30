@@ -68,6 +68,7 @@
 #include "global.h"
 #include "mpool.h"
 #include "mupdate.h"
+#include "mupdate-client.h"
 
 /* Returns file descriptor of kick socket (or does not return) */
 static int open_kick_socket(void)

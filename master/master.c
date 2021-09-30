@@ -255,20 +255,20 @@ static void get_statsock(int filedes[2])
 
     r = pipe(filedes);
     if (r != 0)
-        fatalf(1, "couldn't create status socket: %m");
+        fatalf(1, "couldn't create status socket: %s", strerror(errno));
 
     /* we don't want the master blocking on reads */
     fdflags = fcntl(filedes[0], F_GETFL, 0);
     if (fdflags != -1) fdflags = fcntl(filedes[0], F_SETFL,
                                        fdflags | O_NONBLOCK);
     if (fdflags == -1)
-        fatalf(1, "unable to set non-blocking: %m");
+        fatalf(1, "unable to set non-blocking: %s", strerror(errno));
     /* we don't want the services to be able to read from it */
     fdflags = fcntl(filedes[0], F_GETFD, 0);
     if (fdflags != -1) fdflags = fcntl(filedes[0], F_SETFD,
                                        fdflags | FD_CLOEXEC);
     if (fdflags == -1)
-        fatalf(1, "unable to set close-on-exec: %m");
+        fatalf(1, "unable to set close-on-exec: %s", strerror(errno));
 }
 
 static int cyrus_cap_bind(int socket, struct sockaddr *addr, socklen_t length)
@@ -506,7 +506,7 @@ static void service_create(struct service *s, int is_startup)
 #endif
         sunsock.sun_family = AF_UNIX;
 
-        int r = snprintf(sunsock.sun_path, sizeof(sunsock.sun_path), "%s", s->listen);
+        r = snprintf(sunsock.sun_path, sizeof(sunsock.sun_path), "%s", s->listen);
         if (r < 0 || (size_t) r >= sizeof(sunsock.sun_path)) {
             /* belt and suspenders */
             fatal("Serious software bug found: "
@@ -748,7 +748,7 @@ static void run_startup(const char *name, const strarray_t *cmd)
 
     switch (pid = fork()) {
     case -1:
-        fatalf(1, "can't fork process to run startup: %m");
+        fatalf(1, "can't fork process to run startup: %s", strerror(errno));
         break;
 
     case 0:
@@ -761,7 +761,7 @@ static void run_startup(const char *name, const strarray_t *cmd)
 
         syslog(LOG_DEBUG, "about to exec %s", path);
         execv(path, cmd->data);
-        fatalf(EX_OSERR, "can't exec %s for startup: %m", path);
+        fatalf(EX_OSERR, "can't exec %s for startup: %s", path, strerror(errno));
 
     default: /* parent */
         if (waitpid(pid, &status, 0) < 0) {
@@ -904,7 +904,8 @@ static void spawn_service(int si)
             xclose(Services[i].stat[1]);
         }
 
-        syslog(LOG_DEBUG, "about to exec %s", path);
+	if (verbose > 2)
+            syslog(LOG_DEBUG, "about to exec %s", path);
 
         /* add service name to environment */
         snprintf(name_env, sizeof(name_env), "CYRUS_SERVICE=%s", s->name);
@@ -1316,25 +1317,25 @@ static void sighandler_setup(void)
     action.sa_flags |= SA_RESTART;
 #endif
     if (sigaction(SIGHUP, &action, NULL) < 0)
-        fatalf(1, "unable to install signal handler for SIGHUP: %m");
+        fatalf(1, "unable to install signal handler for SIGHUP: %s", strerror(errno));
 
     action.sa_handler = sigalrm_handler;
     if (sigaction(SIGALRM, &action, NULL) < 0)
-        fatalf(1, "unable to install signal handler for SIGALRM: %m");
+        fatalf(1, "unable to install signal handler for SIGALRM: %s", strerror(errno));
 
     /* Allow a clean shutdown on any of SIGQUIT, SIGINT or SIGTERM */
     action.sa_handler = sigquit_handler;
     if (sigaction(SIGQUIT, &action, NULL) < 0)
-        fatalf(1, "unable to install signal handler for SIGQUIT: %m");
+        fatalf(1, "unable to install signal handler for SIGQUIT: %s", strerror(errno));
     if (sigaction(SIGTERM, &action, NULL) < 0)
-        fatalf(1, "unable to install signal handler for SIGTERM: %m");
+        fatalf(1, "unable to install signal handler for SIGTERM: %s", strerror(errno));
     if (sigaction(SIGINT, &action, NULL) < 0)
-        fatalf(1, "unable to install signal handler for SIGINT: %m");
+        fatalf(1, "unable to install signal handler for SIGINT: %s", strerror(errno));
 
     action.sa_flags |= SA_NOCLDSTOP;
     action.sa_handler = sigchld_handler;
     if (sigaction(SIGCHLD, &action, NULL) < 0)
-        fatalf(1, "unable to install signal handler for SIGCHLD: %m");
+        fatalf(1, "unable to install signal handler for SIGCHLD: %s", strerror(errno));
 
 #if HAVE_PSELECT
     /* block SIGCHLD, and set up pselect_sigmask so SIGCHLD
@@ -1732,7 +1733,7 @@ done:
     return;
 }
 
-static void add_service(const char *name, struct entry *e, void *rock)
+static void add_service(const char *name, struct entry *e, void *rock) /* XXX using a pointer for "rock" is extremely stupid! */
 {
     int ignore_err = rock ? 1 : 0;
     char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
@@ -1865,7 +1866,7 @@ done:
     return;
 }
 
-static void add_event(const char *name, struct entry *e, void *rock)
+static void add_event(const char *name, struct entry *e, void *rock) /* XXX using a pointer for "rock" is extremely stupid! */
 {
     int ignore_err = rock ? 1 : 0;
     /* Note: masterconf_getstring() shares a static buffer with
@@ -2316,7 +2317,7 @@ int main(int argc, char **argv)
        better be available. */
     for (fd = STATUS_FD; fd <= LISTEN_FD; fd++) {
         close(fd);
-        if (dup(0) != fd) fatalf(2, "couldn't dup fd 0: %m");
+        if (dup(0) != fd) fatalf(2, "couldn't dup fd 0: %s", strerror(errno));
     }
 
     masterconf_init("master", alt_config);
@@ -2330,7 +2331,7 @@ int main(int argc, char **argv)
                        (error_log && fd > 0 ? O_CREAT|O_APPEND : 0);
             close(fd);
             if (open(file, mode, 0666) != fd)
-                fatalf(2, "couldn't open %s: %m", file);
+                fatalf(2, "couldn't open %s: %s", file, strerror(errno));
         }
     }
 
@@ -2350,6 +2351,7 @@ int main(int argc, char **argv)
      *
      */
     if(daemon_mode) {
+        const char *path = config_getstring(IMAPOPT_CONFIGDIRECTORY);
         /* Daemonize */
         pid_t pid = -1;
 
@@ -2373,14 +2375,13 @@ int main(int argc, char **argv)
         }
 
         /* Set the current working directory where cores can go to die. */
-        const char *path = config_getstring(IMAPOPT_CONFIGDIRECTORY);
         if (path == NULL) {
                 path = getenv("TMPDIR");
                 if (path == NULL)
                         path = "/tmp";
         }
         if (chdir(path))
-            fatalf(2, "couldn't chdir to %s: %m", path);
+            fatalf(2, "couldn't chdir to %s: %s", path, strerror(errno));
         r = chdir("cores");
 
         do {
@@ -2489,7 +2490,7 @@ int main(int argc, char **argv)
                 fatalf(EX_OSERR, "unable to write to pidfile (see syslog for details)");
             }
             if (fsync(pidfd))
-                fatalf(EX_OSERR, "unable to sync pidfile: %m");
+                fatalf(EX_OSERR, "unable to sync pidfile: %s", strerror(errno));
         }
     }
 
@@ -2499,7 +2500,7 @@ int main(int argc, char **argv)
         /* success! */
         if (write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1)
             fatalf(EX_OSERR,
-                   "could not write success result to startup pipe (%m)");
+                   "could not write success result to startup pipe (%s)", strerror(errno));
 
         close(startup_pipe[1]);
         xclose(pidlock_fd);
@@ -2550,9 +2551,10 @@ int main(int argc, char **argv)
     syslog(LOG_DEBUG, "ready for work");
 
     for (;;) {
-        int i, maxfd, ready_fds, total_children = 0;
+        int maxfd, ready_fds, total_children = 0;
         struct timeval tv, *tvptr;
         struct notify_message msg;
+        int interrupted = 0;
 
         if (gotsigquit) {
             gotsigquit = 0;
@@ -2667,7 +2669,6 @@ int main(int argc, char **argv)
         }
         maxfd++;                /* need 1 greater than maxfd */
 
-        int interrupted = 0;
         do {
             /* how long to wait? - do now so that any scheduled wakeup
             * calls get accounted for*/
@@ -2705,7 +2706,7 @@ int main(int argc, char **argv)
                     break;
                 default:
                     /* uh oh */
-                    fatalf(1, "select failed: %m");
+                    fatalf(1, "select failed: %s", strerror(errno));
                 }
             }
         } while (!in_shutdown && ready_fds < 0);

@@ -158,12 +158,14 @@ EXPORTED int smtpclient_open(smtpclient_t **smp)
 
 EXPORTED int smtpclient_close(smtpclient_t **smp)
 {
+    int r = 0;
+    smtpclient_t *sm;
+
     if (!smp || !*smp) {
         return 0;
     }
 
-    int r = 0;
-    smtpclient_t *sm = *smp;
+    sm = *smp;
 
     /* Close backend */
     backend_disconnect(sm->backend);
@@ -276,6 +278,8 @@ static int smtpclient_read(smtpclient_t *sm, smtp_readcb_t *cb, void *rock)
     int r = IMAP_IOERROR;
 
     do {
+        char *p;
+
         /* Read next reply line. */
         if (!prot_fgets(buf, 513, sm->backend->in)) {
             r = IMAP_IOERROR;
@@ -290,7 +294,7 @@ static int smtpclient_read(smtpclient_t *sm, smtp_readcb_t *cb, void *rock)
         if (buf[3] != '-' && !isspace(buf[3])) {
             return IMAP_PROTOCOL_ERROR;
         }
-        char *p = memchr(buf + 4, '\n', 508);
+        p = memchr(buf + 4, '\n', 508);
         if (p == NULL) {
             return IMAP_PROTOCOL_ERROR;
         }
@@ -312,6 +316,8 @@ static int smtpclient_read(smtpclient_t *sm, smtp_readcb_t *cb, void *rock)
 static int ehlo_cb(smtpclient_t *sm, void *rock __attribute__((unused)))
 {
     smtp_resp_t *resp = &sm->resp;
+    const char *p;
+    const char *args;
 
     /* Is this the first response line? */
     if (sm->have_exts == NULL) {
@@ -321,11 +327,11 @@ static int ehlo_cb(smtpclient_t *sm, void *rock __attribute__((unused)))
     }
 
     /* Add the extension */
-    const char *p = buf_cstring(&resp->text);
+    p = buf_cstring(&resp->text);
     while (*p && !isspace(*p)) {
         p++;
     }
-    const char *args = isspace(*p) ? p + 1 : "";
+    args = isspace(*p) ? p + 1 : "";
     buf_truncate(&resp->text, p - buf_base(&resp->text));
     hash_insert(buf_cstring(&resp->text), xstrdup(args), sm->have_exts);
 
@@ -378,6 +384,7 @@ done:
 static int smtpclient_rset(smtpclient_t *sm)
 {
     int r = 0;
+    struct expect_code_rock rock = { "RSET", "2" };
 
     /* Say RSET */
     buf_setcstr(&sm->buf, "RSET\r\n");
@@ -386,7 +393,6 @@ static int smtpclient_rset(smtpclient_t *sm)
     buf_reset(&sm->buf);
 
     /* Process response */
-    struct expect_code_rock rock = { "RSET", "2" };
     r = smtpclient_read(sm, expect_code_cb, &rock);
 
 done:
@@ -397,6 +403,7 @@ done:
 static int smtpclient_schk(smtpclient_t *sm)
 {
     int r = 0;
+    struct expect_code_rock rock = { "SCHK", "2" };
 
     /* Say SCHK */
     buf_setcstr(&sm->buf, "SCHK\r\n");
@@ -405,7 +412,6 @@ static int smtpclient_schk(smtpclient_t *sm)
     buf_reset(&sm->buf);
 
     /* Process response */
-    struct expect_code_rock rock = { "SCHK", "2" };
     r = smtpclient_read(sm, expect_code_cb, &rock);
 
 done:
@@ -416,6 +422,7 @@ done:
 __attribute__((unused)) static int smtpclient_quit(smtpclient_t *sm)
 {
     int r = 0;
+    struct expect_code_rock rock = { "QUIT", "2" };
 
     /* Say QUIT */
     buf_setcstr(&sm->buf, "QUIT\r\n");
@@ -423,7 +430,6 @@ __attribute__((unused)) static int smtpclient_quit(smtpclient_t *sm)
     if (r) goto done;
 
     /* Don't insist on an answer */
-    struct expect_code_rock rock = { "QUIT", "2" };
     r = smtpclient_read(sm, expect_code_cb, &rock);
     if (r) {
         syslog(LOG_INFO, "smtpclient: QUIT without reply: %s", error_message(r));
@@ -441,6 +447,7 @@ static int write_addr(smtpclient_t *sm,
                       const ptrarray_t *extra_params)
 {
     int i, r = 0;
+    struct expect_code_rock rock = { cmd, "2" };
 
     buf_reset(&sm->buf);
     buf_printf(&sm->buf, "%s:<%s>", cmd, addr->addr);
@@ -469,7 +476,6 @@ static int write_addr(smtpclient_t *sm,
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
 
-    struct expect_code_rock rock = { cmd, "2" };
     r = smtpclient_read(sm, expect_code_cb, &rock);
     if (r) goto done;
 
@@ -514,6 +520,8 @@ static void smtp_params_fini(ptrarray_t *params)
 static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
 {
     ptrarray_t extra_params = PTRARRAY_INITIALIZER;
+    int r;
+
     if (sm->authid && CAPA(sm->backend, CAPA_AUTH)) {
         smtp_params_set_extra(&addr->params, &extra_params, "AUTH", sm->authid);
     }
@@ -528,7 +536,7 @@ static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
         snprintf(szbuf, sizeof(szbuf), "%lu", sm->msgsize);
         smtp_params_set_extra(&addr->params, &extra_params, "SIZE", szbuf);
     }
-    int r = write_addr(sm, "MAIL FROM", addr, &extra_params);
+    r = write_addr(sm, "MAIL FROM", addr, &extra_params);
     if (r) smtpclient_logerror(sm, "MAIL FROM", r);
     smtp_params_fini(&extra_params);
     return r;
@@ -542,10 +550,12 @@ static int smtpclient_rcpt_to(smtpclient_t *sm, ptrarray_t *rcpts)
     for (i = 0; i < rcpts->count; i++) {
         smtp_addr_t *addr = ptrarray_nth(rcpts, i);
         ptrarray_t extra_params = PTRARRAY_INITIALIZER;
+	int r1;
+
         if (sm->notify && CAPA(sm->backend, SMTPCLIENT_CAPA_DSN)) {
             smtp_params_set_extra(&addr->params, &extra_params, "NOTIFY", sm->notify);
         }
-        int r1 = write_addr(sm, "RCPT TO", addr, &extra_params);
+        r1 = write_addr(sm, "RCPT TO", addr, &extra_params);
         smtp_params_fini(&extra_params);
         if (!r1) addr->completed = 1;
         else if (!r) r = r1;
@@ -560,6 +570,11 @@ static int smtpclient_rcpt_to(smtpclient_t *sm, ptrarray_t *rcpts)
 static int smtpclient_data(smtpclient_t *sm, struct protstream *data)
 {
     int r = 0;
+    struct expect_code_rock rock = { "DATA", "3" };
+    int c;
+    int prev1 = 256, prev2 = 256;
+    int at_start = 1;
+    const char *eot = "\r\n.\r\n";
 
     /* Write DATA */
     buf_setcstr(&sm->buf, "DATA\r\n");
@@ -568,16 +583,11 @@ static int smtpclient_data(smtpclient_t *sm, struct protstream *data)
     buf_reset(&sm->buf);
 
     /* Expect Start Input */
-    struct expect_code_rock rock = { "DATA", "3" };
     r = smtpclient_read(sm, expect_code_cb, &rock);
     if (r) goto done;
 
     /* Write message, escaping dot characters. */
     buf_ensure(&sm->buf, 4096);
-    int c;
-    int prev1 = 256, prev2 = 256;
-    int at_start = 1;
-    const char *eot = "\r\n.\r\n";
     while ((c = prot_getc(data)) != EOF) {
         if (c == '.' && at_start) {
             prot_ungetc(c, data);
@@ -622,9 +632,10 @@ done:
 
 static int validate_envelope_params(ptrarray_t *params)
 {
+    int i;
+
     if (!params) return 0;
 
-    int i;
     for (i = 0; i < ptrarray_size(params); i++) {
         smtp_param_t *param = ptrarray_nth(params, i);
         if (!smtp_is_valid_esmtp_keyword(param->key)) {
@@ -716,8 +727,10 @@ done:
 EXPORTED int smtpclient_send(smtpclient_t *sm, smtp_envelope_t *env, struct buf *data)
 {
     struct protstream *p = prot_readmap(buf_base(data), buf_len(data));
+    int r;
+
     smtpclient_set_size(sm, buf_len(data));
-    int r = smtpclient_sendprot(sm, env, p);
+    r = smtpclient_sendprot(sm, env, p);
     prot_free(p);
     return r;
 }
@@ -807,6 +820,7 @@ EXPORTED int smtpclient_open_host(const char *addr, smtpclient_t **smp)
     int r = 0;
     char *myaddr = NULL;
     int logfd = -1;
+    const char *host;
 
     /* Setup SASL for authentication, if any */
     sasl_callback_t *sasl_cb = NULL;
@@ -822,7 +836,7 @@ EXPORTED int smtpclient_open_host(const char *addr, smtpclient_t **smp)
     logfd = telemetry_log("smtpclient.host", NULL, NULL, 0);
 
     /* Connect to backend */
-    const char *host = myaddr ? myaddr : addr;
+    host = myaddr ? myaddr : addr;
     syslog(LOG_DEBUG, "smtpclient_open: connecting to host: %s", host);
     bk = backend_connect(NULL, host, &smtp_protocol, NULL, sasl_cb, NULL, logfd);
     if (sasl_cb) free_callbacks(sasl_cb);
@@ -882,10 +896,11 @@ EXPORTED smtp_addr_t *smtp_envelope_add_rcpt(smtp_envelope_t *env, const char *a
 
 EXPORTED void smtp_envelope_fini(smtp_envelope_t *env)
 {
+    smtp_addr_t *a;
+
     smtp_params_fini(&env->from.params);
     free(env->from.addr);
 
-    smtp_addr_t *a;
     while ((a = ptrarray_pop(&env->rcpts))) {
         smtp_params_fini(&a->params);
         free(a->addr);
@@ -927,6 +942,8 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
     int p_child[2];
     int p_parent[2];
     int logfd = -1;
+    pid_t pid;
+    smtpclient_sendmail_ctx_t *ctx;
 
     /* Create the pipes and fork */
     r = pipe(p_child);
@@ -938,7 +955,7 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
         r = IMAP_SYS_ERROR;
         goto done;
     }
-    pid_t pid = fork();
+    pid = fork();
     if (pid < 0) {
         syslog(LOG_ERR, "smtpclient_open: can't fork: %m");
         r = IMAP_SYS_ERROR;
@@ -966,7 +983,7 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
     close(p_parent[1]);
     p_parent[1] = -1;
 
-    smtpclient_sendmail_ctx_t *ctx = xmalloc(sizeof(smtpclient_sendmail_ctx_t));
+    ctx = xmalloc(sizeof(smtpclient_sendmail_ctx_t));
     ctx->infd  = p_parent[0]; /* reader */
     ctx->outfd = p_child[1];  /* writer */
     ctx->pid   = pid;

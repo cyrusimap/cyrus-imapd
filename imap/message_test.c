@@ -273,11 +273,11 @@ int main(int argc, char **argv)
     }
     else {
         message_t *message = NULL;
-        int c;
+        int ch;
         struct buf buf = BUF_INITIALIZER;
 
-        while ((c = fgetc(stdin)) != EOF)
-            buf_putc(&buf, c);
+        while ((ch = fgetc(stdin)) != EOF)
+            buf_putc(&buf, ch);
         message = message_new_from_data(buf.s, buf.len);
         dump_message(message);
         if (r) {

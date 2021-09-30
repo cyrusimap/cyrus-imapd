@@ -96,10 +96,12 @@ EXPORTED void backup_cleanup_staging_path(void)
     if ((dirp = opendir(name))) {
         struct dirent *d;
         while ((d = readdir(dirp))) {
+            char *tmp;
+
             if (!strcmp(d->d_name, ".") || !strcmp(d->d_name, ".."))
                 continue;
 
-            char *tmp = strconcat(name, "/", d->d_name, NULL);
+            tmp = strconcat(name, "/", d->d_name, NULL);
             syslog(LOG_INFO, "%s: unlinking leftover stage file: %s", __func__, tmp);
             unlink(tmp);
             free(tmp);
@@ -130,13 +132,13 @@ HIDDEN int backup_real_open(struct backup **backupp,
 {
     struct backup *backup = xzmalloc(sizeof *backup);
     int r;
+    int open_flags = O_RDWR | O_APPEND;
 
     backup->fd = -1;
 
     backup->data_fname = xstrdup(data_fname);
     backup->index_fname = xstrdup(index_fname);
 
-    int open_flags = O_RDWR | O_APPEND;
 
     switch (create) {
     case BACKUP_OPEN_CREATE_EXCL:   open_flags |= O_EXCL;  /* fall thru */
@@ -300,6 +302,10 @@ static const char *_make_path(const mbname_t *mbname, int *out_fd)
     const char *userid = mbname_userid(mbname);
     const char *partition = partlist_backup_select();
     const char *ret = NULL;
+    char hash_buf[2];
+    char *template;
+    int fd;
+    int r;
 
     if (!userid) userid = NOUSERID;
 
@@ -311,8 +317,7 @@ static const char *_make_path(const mbname_t *mbname, int *out_fd)
         return NULL;
     }
 
-    char hash_buf[2];
-    char *template = strconcat(partition,
+    template = strconcat(partition,
                                "/", dir_hash_b(userid, config_fulldirhash, hash_buf),
                                "/", userid, "_XXXXXX",
                                NULL);
@@ -320,14 +325,14 @@ static const char *_make_path(const mbname_t *mbname, int *out_fd)
     /* make sure the destination directory exists */
     cyrus_mkdir(template, 0755);
 
-    int fd = mkstemp(template);
+    fd = mkstemp(template);
     if (fd < 0) {
         syslog(LOG_ERR, "unable to make backup path for %s: %m", userid);
         goto error;
     }
 
     /* lock it -- even if we're just going to immediately unlock it */
-    int r = lock_setlock(fd, /*excl*/ 1, /*nb*/ 0, template);
+    r = lock_setlock(fd, /*excl*/ 1, /*nb*/ 0, template);
     if (r) {
         syslog(LOG_ERR,
                "unable to obtain exclusive lock on just-created file %s: %m",
@@ -367,13 +372,12 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
 {
     struct db *backups_db = NULL;
     struct txn *tid = NULL;
-
-    int r = backupdb_open(&backups_db, &tid);
-    if (r) return r;
-
     const char *userid = mbname_userid(mbname);
     const char *backup_path = NULL;
     size_t path_len = 0;
+
+    int r = backupdb_open(&backups_db, &tid);
+    if (r) return r;
 
     if (!userid) userid = NOUSERID;
 
@@ -440,12 +444,15 @@ EXPORTED int backup_open_paths(struct backup **backupp,
                                enum backup_open_nonblock nonblock,
                                enum backup_open_create create)
 {
+    char *tmp;
+    int r;
+
     if (index_fname)
         return backup_real_open(backupp, data_fname, index_fname,
                                 BACKUP_OPEN_NOREINDEX, nonblock, create);
 
-    char *tmp = strconcat(data_fname, ".index", NULL);
-    int r = backup_real_open(backupp, data_fname, tmp,
+    tmp = strconcat(data_fname, ".index", NULL);
+    r = backup_real_open(backupp, data_fname, tmp,
                              BACKUP_OPEN_NOREINDEX, nonblock, create);
     free(tmp);
 
@@ -455,10 +462,10 @@ EXPORTED int backup_open_paths(struct backup **backupp,
 EXPORTED int backup_close(struct backup **backupp)
 {
     struct backup *backup = *backupp;
-    *backupp = NULL;
-
     gzFile gzfile = NULL;
     int r1 = 0, r2 = 0;
+
+    *backupp = NULL;
 
     if (!backup) return 0;
 
@@ -570,6 +577,9 @@ EXPORTED int backup_reindex(const char *name,
     struct buf index_fname = BUF_INITIALIZER;
     struct backup *backup = NULL;
     int r;
+    struct gzuncat *gzuc;
+    time_t prev_member_ts = -1;
+    struct buf cmd = BUF_INITIALIZER;
 
     buf_printf(&data_fname, "%s", name);
     buf_printf(&index_fname, "%s.index", name);
@@ -582,25 +592,24 @@ EXPORTED int backup_reindex(const char *name,
     buf_free(&data_fname);
     if (r) return r;
 
-    struct gzuncat *gzuc = gzuc_new(backup->fd);
+    gzuc = gzuc_new(backup->fd);
 
-    time_t prev_member_ts = -1;
-
-    struct buf cmd = BUF_INITIALIZER;
     while (gzuc && !gzuc_eof(gzuc)) {
-        gzuc_member_start(gzuc);
-        off_t member_offset = gzuc_member_offset(gzuc);
-
-        if (verbose)
-            fprintf(out, "\nfound chunk at offset " OFF_T_FMT "\n\n", member_offset);
-
-        struct protstream *member = prot_readcb(_prot_fill_cb, gzuc);
-        prot_setisclient(member, 1); /* don't sync literals */
-
+        off_t member_offset;
+	struct protstream *member;
         // FIXME stricter timestamp sequence checks
         time_t member_start_ts = -1;
         time_t member_end_ts = -1;
         time_t ts = -1;
+
+        gzuc_member_start(gzuc);
+        member_offset = gzuc_member_offset(gzuc);
+
+        if (verbose)
+            fprintf(out, "\nfound chunk at offset " OFF_T_FMT "\n\n", member_offset);
+
+        member = prot_readcb(_prot_fill_cb, gzuc);
+        prot_setisclient(member, 1); /* don't sync literals */
 
         while (1) {
             struct dlist *dl = NULL;
@@ -624,11 +633,12 @@ EXPORTED int backup_reindex(const char *name,
             }
 
             if (member_start_ts == -1) {
+                char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
+
                 if (prev_member_ts != -1 && prev_member_ts > ts) {
                     fatal("member timestamp older than previous", EX_DATAERR);
                 }
                 member_start_ts = ts;
-                char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
                 sha1_file(backup->fd, backup->data_fname, member_offset, file_sha1);
                 backup_real_append_start(backup, member_start_ts,
                                          member_offset, file_sha1, 1, 0);
@@ -703,11 +713,12 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
     struct txn *tid = NULL;
     struct _rename_meta old = RENAME_META_INITIALIZER;
     struct _rename_meta new = RENAME_META_INITIALIZER;
-    old.userid = mbname_userid(old_mbname);
-    new.userid = mbname_userid(new_mbname);
     const char *path;
     size_t path_len;
     int r;
+
+    old.userid = mbname_userid(old_mbname);
+    new.userid = mbname_userid(new_mbname);
 
     if (!old.userid) old.userid = NOUSERID;
     if (!new.userid) new.userid = NOUSERID;

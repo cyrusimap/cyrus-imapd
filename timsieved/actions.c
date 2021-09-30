@@ -105,6 +105,7 @@ int actions_setuser(const char *userid)
   char *domain = NULL;
   struct buf buf = BUF_INITIALIZER;
   int result, ret = TIMSIEVE_OK;
+  struct stat sbuf;
 
   free(sieved_userid);
   sieved_userid = xstrdup(userid);
@@ -134,7 +135,6 @@ int actions_setuser(const char *userid)
   if (sieve_dir) free(sieve_dir);
   sieve_dir = buf_release(&buf);
 
-  struct stat sbuf;
   result = stat(sieve_dir, &sbuf);
   if (result && errno == ENOENT) {
       result = cyrus_mkdir(sieve_dir, 0755);
@@ -154,6 +154,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
 {
     const char *sasllist;
     int mechcount, i;
+    const strarray_t *extensions;
 
     /* implementation */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
@@ -181,7 +182,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     }
 
     /* Sieve capabilities */
-    const strarray_t *extensions = sieve_listextensions(interp);
+    extensions = sieve_listextensions(interp);
     for (i = 0; i < strarray_size(extensions); i += 2) {
         /* capability/value pairs */
         prot_printf(conn,"\"%s\" \"%s\"\r\n",

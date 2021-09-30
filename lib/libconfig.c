@@ -190,12 +190,12 @@ EXPORTED unsigned long config_getbitfield(enum imapopt opt)
  */
 EXPORTED int config_parseduration(const char *str, int defunit, int *out_duration)
 {
-    assert(strchr("dhms", defunit) != NULL); /* n.b. also permits \0 */
-
     const size_t len = strlen(str);
     const char *p;
     int accum = 0, duration = 0, neg = 0, sawdigit = 0, r = 0;
     char *copy = NULL;
+
+    assert(strchr("dhms", defunit) != NULL); /* n.b. also permits \0 */
 
     /* the default default unit is seconds */
     if (!defunit) defunit = 's';
@@ -324,13 +324,14 @@ EXPORTED void config_foreachoverflowstring(void (*func)(const char *, const char
 EXPORTED const char *config_partitiondir(const char *partition)
 {
     char buf[80];
+    const char *dir;
 
     if (strlcpy(buf, "partition-", sizeof(buf)) >= sizeof(buf))
         return 0;
     if (strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
         return 0;
 
-    const char *dir = config_getoverflowstring(buf, NULL);
+    dir = config_getoverflowstring(buf, NULL);
     if (!dir)
         syslog(LOG_WARNING, "requested partition directory for unknown partition '%s'",
                             partition);
@@ -341,13 +342,14 @@ EXPORTED const char *config_partitiondir(const char *partition)
 EXPORTED const char *config_metapartitiondir(const char *partition)
 {
     char buf[80];
+    const char *dir;
 
     if (strlcpy(buf, "metapartition-", sizeof(buf)) >= sizeof(buf))
         return 0;
     if (strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
         return 0;
 
-    const char *dir = config_getoverflowstring(buf, NULL);
+    dir = config_getoverflowstring(buf, NULL);
     if (!dir)
         syslog(LOG_DEBUG, "requested meta partition directory for unknown partition '%s'",
                           partition);
@@ -358,6 +360,7 @@ EXPORTED const char *config_metapartitiondir(const char *partition)
 EXPORTED const char *config_archivepartitiondir(const char *partition)
 {
     char buf[80];
+    const char *dir;
 
     if (!config_getswitch(IMAPOPT_ARCHIVE_ENABLED))
         return NULL;
@@ -367,7 +370,7 @@ EXPORTED const char *config_archivepartitiondir(const char *partition)
     if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
         return NULL;
 
-    const char *dir = config_getoverflowstring(buf, NULL);
+    dir = config_getoverflowstring(buf, NULL);
     if (!dir)
         syslog(LOG_DEBUG, "requested archive partition directory for unknown partition '%s'",
                           partition);
@@ -737,7 +740,7 @@ static void config_read_file(const char *filename)
         fatal(buf, EX_CONFIG);
     }
     else {
-        hash_insert(filename, (void*) 0xDEADBEEF, &includehash);
+        hash_insert(filename, (void*) 0xDEADBEEFU, &includehash);
     }
 
     len = 0;
@@ -945,10 +948,10 @@ static void config_read_file(const char *filename)
                     /* normalize on/off values */
                     if (!strcmp(p, "1") || !strcmp(p, "yes") ||
                         !strcmp(p, "t") || !strcmp(p, "true")) {
-                        p = "on";
+                        p = "on";	/* XXX copy it in! */
                     } else if (!strcmp(p, "0") || !strcmp(p, "no") ||
                                !strcmp(p, "f") || !strcmp(p, "false")) {
-                        p = "off";
+                        p = "off";	/* XXX copy it in! */
                     }
                 } else if (imapopts[opt].t == OPT_BITFIELD) {
                     /* split the string into separate values */

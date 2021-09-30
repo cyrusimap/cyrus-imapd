@@ -151,6 +151,8 @@ static int fixmbox(const mbentry_t *mbentry,
     /* clean out any legacy specialuse */
     if (mbentry->legacy_specialuse) {
         char *userid = mboxname_to_userid(mbentry->name);
+	mbentry_t *copy;
+
         if (userid) {
             struct buf buf = BUF_INITIALIZER;
             buf_setcstr(&buf, mbentry->legacy_specialuse);
@@ -158,7 +160,7 @@ static int fixmbox(const mbentry_t *mbentry,
             buf_free(&buf);
             free(userid);
         }
-        mbentry_t *copy = mboxlist_entry_copy(mbentry);
+        copy = mboxlist_entry_copy(mbentry);
         /* XXX - const correctness */
         free(copy->legacy_specialuse);
         copy->legacy_specialuse = NULL;
@@ -256,7 +258,7 @@ int main(int argc, char *argv[])
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
     char *dirname = NULL, *backup1 = NULL, *backup2 = NULL;
     strarray_t files = STRARRAY_INITIALIZER;
-    char *msg = "";
+    const char *msg = "";
     int i, rotated = 0;
 
     r = r2 = 0;

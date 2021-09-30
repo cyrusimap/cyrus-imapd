@@ -112,10 +112,12 @@ static int bc_string_emit(int fd, int *codep, bytecode_info_t *bc)
         (*codep)++;
     }
     else {
+        int ret;
+
         /* Write string */
         if (write(fd, bc->data[(*codep)++].u.str, len) == -1) return -1;
 
-        int ret = align_string(fd, len);
+        ret = align_string(fd, len);
         if (ret < 0) return -1;
 
         wrote += len + ret;
@@ -256,13 +258,13 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc);
  * return # of bytes written on success and -1 on error */
 static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
 {
-    assert(bc->data[*codep].type == BT_STRLISTLEN);
-
     int len = bc->data[(*codep)++].u.listlen;
     int i;
     int ret;
     int begin, end;
     int wrote = 2*sizeof(int);
+
+    assert(bc->data[*codep].type == BT_STRLISTLEN);
 
     /* Write out number of items in the list */
     if (write_int(fd, len)== -1) return -1;
@@ -274,9 +276,9 @@ static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
     /* Loop through all the items of the list, writing out each
      * test as we reach it in sequence. */
     for (i = 0; i < len; i++) {
-        assert(bc->data[*codep].type == BT_JUMP);
-
         int nextcodep = bc->data[(*codep)++].u.jump;
+
+        assert(bc->data[*codep].type == BT_JUMP);
 
         ret = bc_test_emit(fd, codep, nextcodep, bc);
         if (ret < 0 ) return -1;

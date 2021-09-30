@@ -70,6 +70,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+#include "autocreate.h"
+
 #ifdef USE_SIEVE
 
 #include "sieve/sieve_interface.h"
@@ -106,7 +108,7 @@ enum SieveFileType {
 };
 static struct sieve_scripts_info {
     enum SieveFileType stype;
-    char *ext;
+    const char *ext;
 } sieve_names[] = {
     {SIEVE_TMP_1, ".script.NEW"},
     {SIEVE_TMP_2, ".NEW"},
@@ -516,14 +518,16 @@ struct changesub_rock_st {
  */
 static int autochangesub(struct findall_data *data, void *rock)
 {
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
     struct changesub_rock_st *crock = (struct changesub_rock_st *)rock;
     const char *userid = crock->userid;
     struct auth_state *auth_state = crock->auth_state;
     int was_explicit = crock->was_explicit;
-    const char *name = mbname_intname(data->mbname);
+    const char *name;
     int r;
+
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
+    name = mbname_intname(data->mbname);
 
     /* ignore all user mailboxes, we only want shared */
     if (mboxname_isusermailbox(name, 0)) return 0;
@@ -609,15 +613,18 @@ struct autocreate_specialuse_rock {
 static void autocreate_specialuse_cb(const char *key, const char *val, void *rock)
 {
     struct autocreate_specialuse_rock *ar = (struct autocreate_specialuse_rock *)rock;
+    struct buf usebuf = BUF_INITIALIZER;
+    char *existing;
+    int r;
+
     if (strncmp(key, "xlist-", 6)) return;
     if (strcmp(val, ar->name)) return;
 
-    struct buf usebuf = BUF_INITIALIZER;
     buf_putc(&usebuf, '\\');
     buf_appendcstr(&usebuf, key + 6);
 
     /* we've got an XLIST key that matches the autocreated name */
-    char *existing = mboxlist_find_specialuse(buf_cstring(&usebuf), ar->userid);
+    existing = mboxlist_find_specialuse(buf_cstring(&usebuf), ar->userid);
     if (existing) {
         syslog(LOG_NOTICE, "autocreate: not setting specialuse %s for %s, already exists as %s",
                buf_cstring(&usebuf), ar->intname, existing);
@@ -625,7 +632,7 @@ static void autocreate_specialuse_cb(const char *key, const char *val, void *roc
         goto done;
     }
 
-    int r = annotatemore_write(ar->intname, "/specialuse", ar->userid, &usebuf);
+    r = annotatemore_write(ar->intname, "/specialuse", ar->userid, &usebuf);
     if (r) {
         syslog(LOG_WARNING, "autocreate: failed to set specialuse %s for %s",
                buf_cstring(&usebuf), ar->intname);
@@ -708,6 +715,7 @@ int autocreate_user(struct namespace *namespace, const char *userid)
     int numcrt = 0;
     int numsub = 0;
     struct mboxlock *namespacelock = user_namespacelock(userid);
+    char *inboxname;
 #ifdef USE_SIEVE
     const char *source_script;
 #endif
@@ -716,7 +724,7 @@ int autocreate_user(struct namespace *namespace, const char *userid)
     if (!strcmp(userid, "anonymous"))
         return IMAP_MAILBOX_NONEXISTENT;
 
-    char *inboxname = mboxname_user_mbox(userid, NULL);
+    inboxname = mboxname_user_mbox(userid, NULL);
 
     auth_state = auth_newstate(userid);
 

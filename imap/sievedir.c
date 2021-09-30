@@ -179,10 +179,12 @@ EXPORTED struct buf *sievedir_get_script(const char *sievedir,
                                          const char *script)
 {
     struct buf buf = BUF_INITIALIZER;
+    int fd;
+    struct buf *ret;
 
     buf_printf(&buf, "%s/%s", sievedir, script);
 
-    int fd = open(buf_cstring(&buf), 0);
+    fd = open(buf_cstring(&buf), 0);
     buf_free(&buf);
     if (fd < 0) return NULL;
 
@@ -190,7 +192,7 @@ EXPORTED struct buf *sievedir_get_script(const char *sievedir,
 
     close(fd);
 
-    struct buf *ret = buf_new();
+    ret = buf_new();
 
     buf_move(ret, &buf);
 
@@ -373,9 +375,17 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
 {
     char new_path[PATH_MAX];
     FILE *f;
+    size_t i, content_len;
+    int saw_cr = 0;
+    bytecode_info_t *bc = NULL;
+    char new_bcpath[PATH_MAX];
+    int fd;
+    char path[PATH_MAX];
+    int r;
 
     /* parse the script */
     sieve_script_t *s = NULL;
+
     (void) sieve_script_parse_string(NULL, content, errors, &s);
     if (!s) return SIEVEDIR_INVALID;
 
@@ -392,8 +402,7 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
         return SIEVEDIR_IOERROR;
     }
 
-    size_t i, content_len = strlen(content);
-    int saw_cr = 0;
+    content_len = strlen(content);
 
     /* copy data to file - replacing any lone CR or LF with the
      * CRLF pair so notify messages are SMTP compatible */
@@ -413,7 +422,6 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     fclose(f);
 
     /* generate the bytecode */
-    bytecode_info_t *bc = NULL;
     if (sieve_generate_bytecode(&bc, s) == -1) {
         unlink(new_path);
         sieve_script_free(&s);
@@ -421,10 +429,9 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     }
 
     /* open the new bytecode file */
-    char new_bcpath[PATH_MAX];
     snprintf(new_bcpath, sizeof(new_bcpath),
              "%s/%s%s.NEW", sievedir, name, BYTECODE_SUFFIX);
-    int fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+    fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
     if (fd < 0) {
         xsyslog(LOG_ERR, "IOERROR: failed to open new bytecode file",
                 "newpath=<%s>", new_bcpath);
@@ -450,9 +457,8 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     close(fd);
 
     /* rename */
-    char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
-    int r = rename(new_path, path);
+    r = rename(new_path, path);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: failed to rename script file",
                 "oldpath=<%s> newpath=<%s>", new_path, path);

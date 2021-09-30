@@ -73,6 +73,7 @@ int main(int argc, char *argv[])
     int i;
     int opt;
     char *alt_config = NULL;
+    int r;
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
         switch (opt) {
@@ -122,7 +123,7 @@ int main(int argc, char *argv[])
     printf("Converting from %s (%s) to %s (%s)\n", old_db, OLDDB,
            new_db, NEWDB);
 
-    int r = cyrusdb_convert(old_db, new_db, OLDDB, NEWDB);
+    r = cyrusdb_convert(old_db, new_db, OLDDB, NEWDB);
     if (r) {
         printf("\nDBERROR: Conversion failed (r was %d)."
                " Check syslog for details.\n", r);

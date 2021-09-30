@@ -89,7 +89,8 @@ extern void addr_delete_buffer(YY_BUFFER_STATE);
 
 extern int sievelineno;
 
-void sieveerror_c(sieve_script_t*, int code, ...);
+void sieveerror_f(sieve_script_t *sscript, const char *fmt, ...); /* XXX gak! public! */
+void sieveerror_c(sieve_script_t*, int code, ...);		  /* XXX gak! public! */
 
 static int check_reqs(sieve_script_t*, strarray_t *sl);
 static int chk_match_vars(sieve_script_t*, char *s);
@@ -694,10 +695,14 @@ delbytags: BYTIMEREL NUMBER      {
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":bytime*");
                                      }                                         
+				     /*  */ {
+					     
+				     struct buf buf = BUF_INITIALIZER;
 
-                                     struct buf buf = BUF_INITIALIZER;
                                      buf_printf(&buf, "+%d", $2);
                                      c->u.r.bytime = buf_release(&buf);
+				     
+				     }
                                  }
         | BYTIMEABS string       {
                                      /* $0 refers to rtags */
@@ -2125,10 +2130,13 @@ static int verify_patternlist(sieve_script_t *sscript,
 
 static int verify_address(sieve_script_t *sscript, char *s)
 {
+    YY_BUFFER_STATE buffer;
+    int r;
+
     if (contains_variable(sscript, s)) return 1;
 
-    YY_BUFFER_STATE buffer = addr_scan_string(s);
-    int r = 1;
+    buffer = addr_scan_string(s);
+    r = 1;
 
     sscript->addrerr[0] = '\0';    /* paranoia */
     if (addrparse(sscript)) {
@@ -2518,16 +2526,16 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
 }
 
 static commandlist_t *build_flag(sieve_script_t *sscript,
-                                 commandlist_t *c, strarray_t *flags)
+                                 commandlist_t *c, strarray_t *cflags)
 {
     assert(c && (c->type == B_SETFLAG ||
                  c->type == B_ADDFLAG ||
                  c->type == B_REMOVEFLAG));
 
-    if (!_verify_flaglist(flags)) {
-        strarray_add(flags, "");
+    if (!_verify_flaglist(cflags)) {
+        strarray_add(cflags, "");
     }
-    c->u.fl.flags = flags;
+    c->u.fl.flags = cflags;
 
     if (!c->u.fl.variable) c->u.fl.variable = xstrdup("");
     else if (!is_identifier(c->u.fl.variable)) {

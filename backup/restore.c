@@ -172,7 +172,6 @@ static struct sync_folder_list *restore_make_reserve_folder_list(
 
 int main(int argc, char **argv)
 {
-    save_argv0(argv[0]);
 
     const char *alt_config = NULL;
     const char *input_file = NULL;
@@ -185,8 +184,6 @@ int main(int argc, char **argv)
     int do_all_mailboxes = 0;
 
     struct restore_options options = {0};
-    options.expunged_mode = RESTORE_EXPUNGED_OKAY;
-    options.trim_deletedprefix = 1;
 
     struct backup *backup = NULL;
     mbname_t *mbname = NULL;
@@ -196,6 +193,14 @@ int main(int argc, char **argv)
     struct sync_client_state sync_cs = SYNC_CLIENT_STATE_INITIALIZER;
     struct dlist *upload = NULL;
     int opt, r = 0;
+
+    struct sync_reserve *reserve;
+    struct backup_mailbox *mailbox;
+
+    options.expunged_mode = RESTORE_EXPUNGED_OKAY;
+    options.trim_deletedprefix = 1;
+
+    save_argv0(argv[0]);
 
     while ((opt = getopt(argc, argv, ":A:C:DF:LM:P:UXaf:m:nru:vw:xz")) != EOF) {
         switch (opt) {
@@ -385,13 +390,13 @@ int main(int argc, char **argv)
     }
     else if (do_all_mailboxes) {
         struct backup_mailbox_list *all_mailboxes;
-        struct backup_mailbox *mailbox;
+        struct backup_mailbox *mailbox2;
 
         all_mailboxes = backup_get_mailboxes(backup, 0,
                                              BACKUP_MAILBOX_ALL_RECORDS);
 
-        for (mailbox = all_mailboxes->head; mailbox; mailbox = mailbox->next) {
-            restore_add_mailbox(mailbox, &options, mailbox_list,
+        for (mailbox2 = all_mailboxes->head; mailbox2; mailbox2 = mailbox2->next) {
+            restore_add_mailbox(mailbox2, &options, mailbox_list,
                                 reserve_folder_list, reserve_list);
         }
 
@@ -427,7 +432,6 @@ int main(int argc, char **argv)
     }
 
     /* do the restore */
-    struct sync_reserve *reserve;
     for (reserve = reserve_list->head; reserve; reserve = reserve->next) {
         /* send APPLY RESERVE and parse missing lists */
         r = sync_reserve_partition(&sync_cs, reserve->part,
@@ -465,7 +469,6 @@ int main(int argc, char **argv)
      */
 
     /* send RESTORE MAILBOXes */
-    struct backup_mailbox *mailbox;
     for (mailbox = mailbox_list->head; mailbox; mailbox = mailbox->next) {
         /* XXX filter the mailbox records based on reserve/missing/upload */
 
@@ -742,13 +745,14 @@ static int restore_add_message(const struct backup_message *message,
     if (options->override_mboxname) {
         /* create a mailbox... */
         struct backup_mailbox *mailbox = xzmalloc(sizeof *mailbox);
-        apply_mailbox_options(mailbox, options);
-        if (!mailbox->partition)
-            mailbox->partition = xstrdup(message->partition);
-
         /* ... containing this message */
         struct backup_mailbox_message *mailbox_message =
             xzmalloc(sizeof *mailbox_message);
+        const struct synccrcs synccrcs = {0, 0};
+
+        apply_mailbox_options(mailbox, options);
+        if (!mailbox->partition)
+            mailbox->partition = xstrdup(message->partition);
 
         mailbox_message->guid = *message->guid;
         mailbox_message->size = message->length;
@@ -762,7 +766,6 @@ static int restore_add_message(const struct backup_message *message,
         sync_msgid_insert(msgid_list, message->guid);
 
         /* add to reserve folder list */
-        const struct synccrcs synccrcs = {0, 0};
         sync_folder_list_add(reserve_folder_list, NULL, mailbox->mboxname,
                              0, NULL, NULL, 0, 0, 0, 0, synccrcs,
                              0, 0, 0, 0, NULL, 0, 0, 0, 0);
@@ -866,12 +869,12 @@ static int restore_add_object(const char *object_name,
 
         if (!r && options->do_submailboxes) {
             char prefix[MAX_MAILBOX_NAME + 1];
-            int len;
+            int len2;
 
-            len = snprintf(prefix, sizeof(prefix), "%s.", mailbox->mboxname);
+            len2 = snprintf(prefix, sizeof(prefix), "%s.", mailbox->mboxname);
 
             /* can only be submailboxes if parent's name is short enough... */
-            if (len < MAX_MAILBOX_NAME) {
+            if (len2 < MAX_MAILBOX_NAME) {
                 struct submailbox_rock rock = {
                     prefix,
                     strlen(prefix),

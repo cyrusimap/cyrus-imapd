@@ -97,6 +97,13 @@ HIDDEN int backup_real_append_start(struct backup *backup,
                                     enum backup_append_flush flush)
 {
     int r;
+    char header[80];
+    struct sqldb_bindval bval[] = {
+        { ":ts_start",  SQLITE_INTEGER, { .i = ts           } },
+        { ":offset",    SQLITE_INTEGER, { .i = offset       } },
+        { ":file_sha1", SQLITE_TEXT,    { .s = file_sha1    } },
+        { NULL,         SQLITE_NULL,    { .s = NULL         } },
+    };
 
     if (backup->append_state != NULL
         && backup->append_state->mode != BACKUP_APPEND_INACTIVE) {
@@ -111,7 +118,6 @@ HIDDEN int backup_real_append_start(struct backup *backup,
     backup->append_state->wrote = 0;
     SHA1_Init(&backup->append_state->sha_ctx);
 
-    char header[80];
     snprintf(header, sizeof(header), "# cyrus backup: chunk start\r\n");
 
     if (!index_only) {
@@ -135,12 +141,6 @@ HIDDEN int backup_real_append_start(struct backup *backup,
     SHA1_Update(&backup->append_state->sha_ctx, header, strlen(header));
     backup->append_state->wrote += strlen(header);
 
-    struct sqldb_bindval bval[] = {
-        { ":ts_start",  SQLITE_INTEGER, { .i = ts           } },
-        { ":offset",    SQLITE_INTEGER, { .i = offset       } },
-        { ":file_sha1", SQLITE_TEXT,    { .s = file_sha1    } },
-        { NULL,         SQLITE_NULL,    { .s = NULL         } },
-    };
 
     r = sqldb_begin(backup->db, "backup_append");
     if (r) goto error;
@@ -180,9 +180,6 @@ EXPORTED int backup_append(struct backup *backup,
                            const time_t *tsp,
                            enum backup_append_flush flush)
 {
-    if (!backup->append_state || backup->append_state->mode == BACKUP_APPEND_INACTIVE)
-        fatal("backup append not started", EX_SOFTWARE);
-
     off_t start = backup->append_state->wrote;
     size_t len = 0;
     time_t ts = tsp ? *tsp : time(NULL);
@@ -190,6 +187,9 @@ EXPORTED int backup_append(struct backup *backup,
     struct dlist_print_iter *iter = NULL;
     const int index_only = backup->append_state->mode & BACKUP_APPEND_INDEXONLY;
     int r;
+
+    if (!backup->append_state || backup->append_state->mode == BACKUP_APPEND_INACTIVE)
+        fatal("backup append not started", EX_SOFTWARE);
 
     /* preload buffer with timestamp preamble */
     buf_printf(&buf, INT64_FMT " APPLY ", (int64_t) ts);
@@ -248,6 +248,8 @@ error:
 HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
 {
     int r;
+    unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
+    char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
 
     if (!backup->append_state)
         fatal("backup append not started", EX_SOFTWARE);
@@ -264,12 +266,12 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
         }
     }
 
-    unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
-    char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
     SHA1_Final(sha1_raw, &backup->append_state->sha_ctx);
     r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, data_sha1, BH_LOWER);
     assert(r == 2 * SHA1_DIGEST_LENGTH);
 
+    /*  */ {
+	    
     struct sqldb_bindval bval[] = {
         { ":id",        SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
         { ":ts_end",    SQLITE_INTEGER, { .i = ts                             } },
@@ -279,6 +281,8 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
     };
 
     r = sqldb_exec(backup->db, backup_index_end_sql, bval, NULL, NULL);
+    }
+    
     if (r) {
         syslog(LOG_ERR, "%s: something went wrong: %i\n", __func__, r);
         sqldb_rollback(backup->db, "backup_append");

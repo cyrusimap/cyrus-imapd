@@ -286,13 +286,14 @@ static void print_status(const char *cmd,
     }
 
     if (options->jsonout) {
+        const size_t flags = JSON_INDENT(2) | JSON_PRESERVE_ORDER;
         json_t *out = json_object();
+
         json_object_set_new(out, "command", json_string(cmd));
         json_object_set_new(out, "userid", json_string(userid));
         json_object_set_new(out, "fname", json_string(fname));
         json_object_set_new(out, "status", json_string(status));
 
-        const size_t flags = JSON_INDENT(2) | JSON_PRESERVE_ORDER;
         json_dumpf(out, stdout, flags);
         puts("");
         json_decref(out);
@@ -344,13 +345,14 @@ static void save_argv0(const char *s)
 
 int main(int argc, char **argv)
 {
-    save_argv0(argv[0]);
-
     int opt, r = 0;
     const char *alt_config = NULL;
     enum ctlbu_cmd cmd = CTLBU_CMD_UNSPECIFIED;
     struct ctlbu_cmd_options options = {0};
+
     options.wait = BACKUP_OPEN_NONBLOCK;
+
+    save_argv0(argv[0]);
 
     while ((opt = getopt(argc, argv, ":AC:DFPSVcfjmpst:x:uvw")) != EOF) {
         switch (opt) {
@@ -543,9 +545,10 @@ int main(int argc, char **argv)
         int i;
 
         for (i = optind; i < argc; i++) {
+            mbname_t *mbname = NULL;
+
             buf_reset(&userid);
             buf_reset(&fname);
-            mbname_t *mbname = NULL;
 
             if (options.mode == CTLBU_MODE_USERNAME)
                 mbname = mbname_from_userid(argv[i]);
@@ -677,13 +680,14 @@ static int cmd_list_one(void *rock,
     }
 
     if (options->jsonout) {
+        const size_t flags = JSON_INDENT(2) | JSON_PRESERVE_ORDER;
         json_t *out = json_object();
+
         json_object_set_new(out, "timestamp", json_string(timestamp));
         json_object_set_new(out, "compressed", json_integer(data_stat_buf.st_size));
         json_object_set_new(out, "userid", json_string(userid));
         json_object_set_new(out, "fname", json_string(fname));
 
-        const size_t flags = JSON_INDENT(2) | JSON_PRESERVE_ORDER;
         json_dumpf(out, stdout, flags);
         puts("");
         json_decref(out);
@@ -810,6 +814,7 @@ static int cmd_stat_one(void *rock,
     char start_time[32] = "[unknown]";
     char end_time[32] = "[unknown]";
     int r;
+    const int retention = config_getduration(IMAPOPT_BACKUP_RETENTION, 'd');
 
     /* input args might not be 0-terminated, so make a safe copy */
     if (key_len)
@@ -826,7 +831,6 @@ static int cmd_stat_one(void *rock,
         if (r) goto done;
     }
 
-    const int retention = config_getduration(IMAPOPT_BACKUP_RETENTION, 'd');
     if (retention > 0) {
         since = time(0) - retention;
     }
@@ -872,7 +876,9 @@ static int cmd_stat_one(void *rock,
     }
 
     if (options->jsonout) {
+        const size_t flags = JSON_INDENT(2) | JSON_PRESERVE_ORDER;
         json_t *out = json_object();
+
         json_object_set_new(out, "userid", json_string(userid));
         json_object_set_new(out, "fname", json_string(fname));
         json_object_set_new(out, "compressed", json_integer(data_stat.st_size));
@@ -883,7 +889,6 @@ static int cmd_stat_one(void *rock,
         json_object_set_new(out, "last_start_time", json_string(start_time));
         json_object_set_new(out, "last_end_time", json_string(end_time));
 
-        const size_t flags = JSON_INDENT(2) | JSON_PRESERVE_ORDER;
         json_dumpf(out, stdout, flags);
         puts("");
         json_decref(out);
@@ -952,10 +957,11 @@ static int lock_run_pipe(const char *userid, const char *fname,
                          enum backup_open_nonblock nonblock,
                          enum backup_open_create create)
 {
-    printf("* Trying to obtain lock on %s...\n", userid ? userid : fname);
-
     struct backup *backup = NULL;
     int r;
+    char buf[PROT_BUFSIZE] = {0};
+
+    printf("* Trying to obtain lock on %s...\n", userid ? userid : fname);
 
     r = backup_open_paths(&backup, fname, NULL, nonblock, create);
 
@@ -971,7 +977,6 @@ static int lock_run_pipe(const char *userid, const char *fname,
     printf("OK locked\n");
 
     /* wait until stdin closes */
-    char buf[PROT_BUFSIZE] = {0};
     while (!feof(stdin)) {
         if (!fgets(buf, sizeof(buf), stdin))
             break;
@@ -987,12 +992,12 @@ static int lock_run_sqlite(const char *userid, const char *fname,
                            enum backup_open_nonblock nonblock,
                            enum backup_open_create create)
 {
-    fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
-
     struct backup *backup = NULL;
     const char *index_fname = NULL;
     int r, status;
     pid_t pid;
+
+    fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
 
     r = backup_open_paths(&backup, fname, NULL, nonblock, create);
 
@@ -1050,10 +1055,10 @@ static int lock_run_exec(const char *userid, const char *fname,
                          enum backup_open_nonblock nonblock,
                          enum backup_open_create create)
 {
-    fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
-
     struct backup *backup = NULL;
     int r;
+
+    fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
 
     r = backup_open_paths(&backup, fname, NULL, nonblock, create);
 

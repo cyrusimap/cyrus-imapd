@@ -217,6 +217,8 @@ static int want_combine(size_t length, const struct backup_chunk *next_chunk)
  */
 static int want_split(const struct backup_chunk *chunk, const size_t *wrotep)
 {
+    size_t new_chunk_size;
+
     /* don't split if there's no maximum size */
     if (!compact_maxsize)
         return 0;
@@ -235,7 +237,7 @@ static int want_split(const struct backup_chunk *chunk, const size_t *wrotep)
 
     /* we might have written past the desirable split boundary due to a big
      * dlist, so check whether the remainder is worth splitting for */
-    size_t new_chunk_size = chunk->length - *wrotep;
+    new_chunk_size = chunk->length - *wrotep;
 
     /* split if what's left is big enough to be its own chunk */
     if (new_chunk_size > compact_minsize)
@@ -453,6 +455,9 @@ EXPORTED int backup_compact(const char *name,
     struct protstream *in = NULL;
     time_t since, chunk_start_time, ts;
     int r;
+    const time_t now = time(NULL);
+    struct buf cmd = BUF_INITIALIZER;
+    int retention = config_getduration(IMAPOPT_BACKUP_RETENTION, 'd');
 
     compact_readconfig();
 
@@ -460,9 +465,6 @@ EXPORTED int backup_compact(const char *name,
     if (r) return r;
 
     /* calculate current time after obtaining locks, in case of a wait */
-    const time_t now = time(NULL);
-
-    const int retention = config_getduration(IMAPOPT_BACKUP_RETENTION, 'd');
     if (retention > 0) {
         since = now - retention;
     }
@@ -501,7 +503,6 @@ EXPORTED int backup_compact(const char *name,
 
     chunk_start_time = -1;
     ts = 0;
-    struct buf cmd = BUF_INITIALIZER;
     for (chunk = keep_chunks->head; chunk; chunk = chunk->next) {
         keep_message_guids = sync_msgid_list_create(0);
         r = backup_message_foreach(original, chunk->id, &since,

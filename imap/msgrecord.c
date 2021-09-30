@@ -190,10 +190,10 @@ EXPORTED msgrecord_t *msgrecord_from_recno(struct mailbox *mbox, uint32_t recno)
 EXPORTED msgrecord_t *msgrecord_from_index_record(struct mailbox *mbox,
                                                   const struct index_record *record)
 {
+    msgrecord_t *mr = xzmalloc(sizeof(struct msgrecord));
+
     assert(record->recno);
     assert(record->uid);
-
-    msgrecord_t *mr = xzmalloc(sizeof(struct msgrecord));
 
     mr->mbox = mbox;
     mr->record = *record; // copy all the fields
@@ -207,10 +207,11 @@ EXPORTED msgrecord_t *msgrecord_from_index_record(struct mailbox *mbox,
 EXPORTED msgrecord_t *msgrecord_copy_msgrecord(struct mailbox *mbox,
                                                msgrecord_t *mr)
 {
+    msgrecord_t *res = msgrecord_from_index_record(mbox ? mbox : mr->mbox, &mr->record);
+
     /* need to have record, annotations and cache read in before we copy */
     assert(!msgrecord_need(mr, M_RECORD|M_CACHE|M_ANNOTATIONS));
 
-    msgrecord_t *res = msgrecord_from_index_record(mbox ? mbox : mr->mbox, &mr->record);
     /* new records are appends */
     res->isappend = 1;
 
@@ -541,12 +542,13 @@ EXPORTED int msgrecord_annot_write(msgrecord_t *mr,
 
 EXPORTED int msgrecord_annot_writeall(msgrecord_t *mr, struct entryattlist *l)
 {
+    struct entryattlist *e;
+    struct attvaluelist *av;
     int r = msgrecord_need(mr, M_ANNOTATIONS);
+
     if (r) return r;
     annotate_state_begin(mr->annot_state);
 
-    struct entryattlist *e;
-    struct attvaluelist *av;
     for (e = l; e; e = e->next) {
         if (strcmp(e->entry, IMAP_ANNOT_NS "snoozed")) continue;
         for (av = e->attvalues; av; av = av->next) {
@@ -607,8 +609,10 @@ EXPORTED int msgrecord_add_internalflags(msgrecord_t *mr, uint32_t internal_flag
 
 EXPORTED int msgrecord_set_uid(msgrecord_t *mr, uint32_t uid)
 {
-    assert(mr->isappend);
     int r = msgrecord_need(mr, M_MAILBOX);
+
+    assert(mr->isappend);
+
     if (r) return r;
     assert(mailbox_index_islocked(mr->mbox, 1));
     assert(mr->mbox->i.last_uid < uid);
@@ -758,11 +762,13 @@ EXPORTED int msgrecord_find(struct mailbox *mbox,
     return msgrecord_find_internal(mbox, uid, /*recno*/0, mrp);
 }
 
+#if 0
 EXPORTED int msgrecord_find_latest(struct mailbox *mbox, msgrecord_t **mr)
 {
 
    return msgrecord_find_internal(mbox, mbox->i.last_uid, /*recno*/0, mr);
 }
+#endif
 
 EXPORTED int msgrecord_find_index_record(struct mailbox *mbox,
                                          struct index_record record,

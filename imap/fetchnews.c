@@ -131,7 +131,7 @@ static void usage(void)
     exit(-1);
 }
 
-int init_net(const char *host, char *port,
+static int init_net(const char *host, const char *port,
              struct protstream **in, struct protstream **out)
 {
     int sock = -1, err;
@@ -253,7 +253,8 @@ int main(int argc, char *argv[])
 {
     extern char *optarg;
     int opt;
-    char *alt_config = NULL, *port = "119";
+    char *alt_config = NULL;
+    /*const*/ char *port = "119";  /* xxx may point into server! */
     const char *peer = NULL, *server = "localhost", *wildmat = "*";
     char *authname = NULL, *password = NULL;
     int psock = -1, ssock = -1;
@@ -415,7 +416,7 @@ int main(int argc, char *argv[])
 
         /* ask for new articles */
         if (stamp) stamp -= 180; /* adjust back 3 minutes */
-        ptime = gmtime(&stamp);
+        ptime = gmtime(&stamp);	 /* xxx should use gmtime_r()? */
         ptime->tm_isdst = -1;
 
         if (y2k_compliant_date_format) {

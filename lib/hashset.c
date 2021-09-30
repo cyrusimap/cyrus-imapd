@@ -54,9 +54,9 @@
 
 EXPORTED struct hashset *hashset_new(size_t bytesize)
 {
+    struct hashset *hs = xzmalloc(sizeof(struct hashset));
     assert(bytesize > 2);
     assert(bytesize <= 128);
-    struct hashset *hs = xzmalloc(sizeof(struct hashset));
     hs->recsize = bytesize + 4;
     hs->bytesize = bytesize;
     return hs;
@@ -65,10 +65,10 @@ EXPORTED struct hashset *hashset_new(size_t bytesize)
 // returns 1 if added, 0 if already there
 EXPORTED int hashset_add(struct hashset *hs, const void *value)
 {
-    assert(hs);
     uint32_t *pos = &hs->starts[*((uint16_t *)value)];
     uint32_t *base = pos;
     size_t offset = 0;
+    assert(hs);
     while (*pos) {
         offset = hs->recsize * (*pos - 1);
         if (!memcmp(hs->data+offset, value, hs->bytesize))
@@ -107,9 +107,12 @@ EXPORTED int hashset_add(struct hashset *hs, const void *value)
 // returns 1 if present, 0 if not
 EXPORTED int hashset_exists(struct hashset *hs, const void *data)
 {
+    uint32_t pos;
+
     if (!hs) return 0;
 
-    uint32_t pos = hs->starts[*((uint16_t *)data)];
+    pos = hs->starts[*((uint16_t *)data)];
+
     while (pos) {
         size_t offset = hs->recsize * (pos - 1);
         if (!memcmp(hs->data+offset, data, hs->bytesize))

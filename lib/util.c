@@ -735,11 +735,10 @@ EXPORTED int become_cyrus(int is_master)
     gid_t newgid;
     int result;
     static uid_t uid = 0;
-
-    if (uid) return cyrus_cap_setuid(uid, is_master);
-
     const char *cyrus = cyrus_user();
     const char *mail = cyrus_group();
+
+    if (uid) return cyrus_cap_setuid(uid, is_master);
 
     p = getpwnam(cyrus);
     if (p == NULL) {
@@ -847,10 +846,10 @@ EXPORTED int64_t now_ms(void)
 
 EXPORTED void cmdtime_settimer(int enable)
 {
+    const char *maxtime = config_getstring(IMAPOPT_SEARCH_MAXTIME);
     cmdtime_enabled = enable;
 
     /* always enable cmdtimer if MAXTIME set */
-    const char *maxtime = config_getstring(IMAPOPT_SEARCH_MAXTIME);
     if (maxtime) {
         cmdtime_enabled = 1;
         search_maxtime = atof(maxtime);
@@ -1966,13 +1965,15 @@ EXPORTED int warmup_file(const char *filename,
     return r;
 }
 
-EXPORTED const char *makeuuid()
+EXPORTED const char *makeuuid(void)
 {
     /* 36 bytes of uuid plus \0 */
     static char res[UUID_STR_LEN];
-    memset(res, 0, UUID_STR_LEN);
 #ifdef HAVE_LIBUUID
     uuid_t uu;
+#endif
+    memset(res, 0, UUID_STR_LEN);
+#ifdef HAVE_LIBUUID
     uuid_clear(uu); /* Just In Case */
     uuid_generate(uu);
     /* Solaris has an older libuuid which has uuid_unparse() but not
@@ -2070,15 +2071,17 @@ EXPORTED void tcp_enable_keepalive(int fd)
  */
 EXPORTED void tcp_disable_nagle(int fd)
 {
+    struct protoent *proto;
+    int on = 1;
+
     if (!is_tcp_socket(fd)) return;
 
-    struct protoent *proto = getprotobyname("tcp");
+    proto = getprotobyname("tcp");
     if (!proto) {
         syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
         return;
     }
 
-    int on = 1;
     if (setsockopt(fd, proto->p_proto, TCP_NODELAY, &on, sizeof(on)) != 0) {
         syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
     }

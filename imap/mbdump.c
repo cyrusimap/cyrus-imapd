@@ -193,6 +193,8 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
     int header_size;
     int record_size;
     int n, r;
+    struct mailbox_iter *iter;
+    const message_t *msg;
 
     if (oldversion == 6) {
         header_size = 76;
@@ -231,8 +233,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
     n = retry_write(oldindex_fd, hbuf, header_size);
     if (n == -1) goto fail;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    const message_t *msg;
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* we have to make sure expunged records don't get the
@@ -451,7 +452,7 @@ static int dump_file(int first, int sync,
 
 struct data_file {
     int metaname;
-    char *fname;
+    const char *fname;
 };
 
 /* even though 2.4.x doesn't use cyrus.expunge, we need to be aware
@@ -615,9 +616,11 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 
     /* Dump user files if this is an inbox */
     if (mboxname_isusermailbox(mailbox->name, 1)) {
-        userid = mboxname_to_userid(mailbox->name);
         int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
-        char *fname = NULL, *ftag = NULL;
+        char *ufname = NULL;
+	const char *ftag = NULL;
+
+        userid = mboxname_to_userid(mailbox->name);
 
         /* Dump seen and subs files */
         for (i = 0; i< NUM_USER_DATA_FILES; i++) {
@@ -625,15 +628,15 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
             /* construct path/filename */
             switch (i) {
             case SEEN_DB:
-                fname = seen_getpath(userid);
+                ufname = seen_getpath(userid);
                 ftag = "SEEN";
                 break;
             case SUBS_DB:
-                fname = user_hash_subs(userid);
+                ufname = user_hash_subs(userid);
                 ftag = "SUBS";
                 break;
             case MBOXKEY_DB:
-                fname = mboxkey_getpath(userid);
+                ufname = mboxkey_getpath(userid);
                 ftag = "MBOXKEY";
                 break;
             case DAV_DB: {
@@ -641,7 +644,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
                 struct buf dav_file = BUF_INITIALIZER;
 
                 dav_getpath_byuserid(&dav_file, userid);
-                fname = (char *) buf_cstring(&dav_file);
+                ufname = (char *) buf_cstring(&dav_file);
                 ftag = "DAV";
 #else
                 continue;
@@ -652,8 +655,8 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
                 fatal("unknown user data file", EX_OSFILE);
             }
 
-            r = dump_file(0, !tag, pin, pout, fname, ftag, NULL, 0);
-            free(fname);
+            r = dump_file(0, !tag, pin, pout, ufname, ftag, NULL, 0);
+            free(ufname);
             if (r) goto done;
         }
 
@@ -763,6 +766,7 @@ static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     const message_t *msg;
     struct seendata sd = SEENDATA_INITIALIZER;
+    struct mailbox_iter *iter;
 
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) goto done;
@@ -775,14 +779,16 @@ static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
     seen_freedata(&sd);
 
     /* update all the seen records */
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
+	struct index_record copy;
+
         if (record->system_flags & FLAG_SEEN)
             continue; /* no need to rewrite */
         if (!seqset_ismember(seq, record->uid))
             continue;
-        struct index_record copy = *record;
+        copy = *record;
         copy.system_flags |= FLAG_SEEN;
         r = mailbox_rewrite_index_record(mailbox, &copy);
         if (r) break;
@@ -1273,6 +1279,8 @@ EXPORTED int undump_mailbox(const char *mbname,
     if (!r) {
         struct utimbuf settime;
         const char *fname;
+	struct mailbox_iter *iter;
+        const message_t *msg;
 
         /* cheeky - we're not actually changing anything real */
         r = mailbox_open_irl(mbname, &mailbox);
@@ -1284,13 +1292,13 @@ EXPORTED int undump_mailbox(const char *mbname,
         /* update the quota if necessary */
         if (mailbox->quotaroot) {
             quota_t quota_usage[QUOTA_NUMRESOURCES];
-            int res;
+            int res2;
             int changed = 0;
 
             mailbox_get_usage(mailbox, quota_usage);
-            for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-                quota_usage[res] -= old_quota_usage[res];
-                if (quota_usage[res] != 0) {
+            for (res2 = 0; res2 < QUOTA_NUMRESOURCES; res2++) {
+                quota_usage[res2] -= old_quota_usage[res2];
+                if (quota_usage[res2] != 0) {
                     changed++;
                 }
             }
@@ -1301,8 +1309,7 @@ EXPORTED int undump_mailbox(const char *mbname,
             }
         }
 
-        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-        const message_t *msg;
+        iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
             fname = mailbox_record_fname(mailbox, record);

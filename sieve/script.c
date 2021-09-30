@@ -91,19 +91,21 @@ int script_require(sieve_script_t *s, const char *req)
 static int _sieve_script_parse(sieve_interp_t *interp,
                                void *script_context, sieve_script_t **ret)
 {
+    sieve_script_t *s;
+    extern int sievelineno;
+
     int res = interp_verify(interp);
     if (res != SIEVE_OK) {
         return res;
     }
 
-    sieve_script_t *s = (sieve_script_t *) xzmalloc(sizeof(sieve_script_t));
+    s = (sieve_script_t *) xzmalloc(sizeof(sieve_script_t));
     s->interp = *interp;
     s->script_context = script_context;
 
     /* initialize support bits */
     s->support = SIEVE_CAPA_BASE;
 
-    extern int sievelineno;
     sievelineno = 1;            /* reset line number */
     if (sieveparse(s)) {
         free_tree(s->cmds);
@@ -163,7 +165,7 @@ static int stub_parse_error(int lineno, const char *msg,
     return SIEVE_OK;
 }
 
-EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
+EXPORTED sieve_interp_t *sieve_build_nonexec_interp(void)
 {
     sieve_interp_t *interpreter = NULL;
     int res;
@@ -272,10 +274,12 @@ static int _sieve_script_parse_only(sieve_interp_t *interp, char **out_errors,
 EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
                                      sieve_script_t **out_script)
 {
+    int r;
+
     rewind(stream);
     sieverestart(stream);
 
-    int r = _sieve_script_parse_only(NULL, out_errors, out_script);
+    r = _sieve_script_parse_only(NULL, out_errors, out_script);
 
     if (r && *out_errors) {
         /* XXX  This is simply to replicate behavior before
@@ -313,7 +317,7 @@ EXPORTED void sieve_script_free(sieve_script_t **s)
     }
 }
 
-static void add_header(sieve_interp_t *i, int isenv, char *header,
+static void add_header(sieve_interp_t *i, int isenv, const char *header,
                        void *message_context, struct buf *out)
 {
     const char **h;
@@ -452,7 +456,7 @@ static int send_notify_callback(sieve_interp_t *interp,
     return ret;
 }
 
-static char *action_to_string(action_t action)
+static const char *action_to_string(action_t action)
 {
     switch(action)
         {
@@ -479,7 +483,7 @@ static char *action_to_string(action_t action)
     /* never reached */
 }
 
-static char *sieve_errstr(int code)
+static const char *sieve_errstr(int code)
 {
     switch (code)
         {
@@ -907,11 +911,6 @@ static int do_action_list(sieve_interp_t *interp,
 
 
 /* execute some bytecode */
-int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
-                  void *sc, void *m, variable_list_t *variables,
-                  action_list_t *actions, notify_list_t *notify_list,
-                  duptrack_list_t *duptrack_list, const char **errmsg);
-
 EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
                            void *script_context, void *message_context)
 {

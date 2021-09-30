@@ -51,6 +51,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "com_err.h"
 #include "error_table.h"
 #include "mit-sipb-copyright.h"
 #include "internal.h"

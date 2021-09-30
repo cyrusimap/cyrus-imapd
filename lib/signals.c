@@ -225,11 +225,7 @@ EXPORTED int signals_poll(void)
 EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
                             fd_set *efds, struct timeval *tout)
 {
-    if (nfds > 0.9 * FD_SETSIZE) {
-        syslog(LOG_WARNING, "signals_select: nfds = %d/%d", nfds, FD_SETSIZE);
-        assert(nfds < FD_SETSIZE);
-    }
-
+    int r;
 #if HAVE_PSELECT
     /* pselect() closes the race between SIGCHLD arriving
     * and select() sleeping for up to 10 seconds. */
@@ -237,8 +233,14 @@ EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
     sigset_t blocked;
     sigset_t oldmask;
     int saved_errno;
-    int r;
+#endif
 
+    if (nfds > 0.9 * FD_SETSIZE) {
+        syslog(LOG_WARNING, "signals_select: nfds = %d/%d", nfds, FD_SETSIZE);
+        assert(nfds < FD_SETSIZE);
+    }
+
+#if HAVE_PSELECT
     /* temporarily block all the signals we want
      * to be caught reliably */
     sigemptyset(&blocked);
@@ -272,8 +274,6 @@ EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
 
     return r;
 #else
-    int r;
-
     r = select(nfds, rfds, wfds, efds, tout);
     if (r < 0 && (errno == EAGAIN || errno == EINTR))
         signals_poll();
@@ -288,7 +288,7 @@ EXPORTED void signals_clear(int sig)
         gotsignal[sig] = 0;
 }
 
-EXPORTED int signals_cancelled()
+EXPORTED int signals_cancelled(void)
 {
     if (gotsignal[SIGUSR2]) {
         gotsignal[SIGUSR2] = 0;

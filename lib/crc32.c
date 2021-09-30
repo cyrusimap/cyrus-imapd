@@ -641,6 +641,8 @@ static uint32_t crc32(uint32_t prev, const void *data, size_t length)
     unsigned unaligned;
     const uint8_t *current_char;
     const uint32_t *current;
+    const size_t unroll = 4;
+    const size_t bytes_at_once = 16 * unroll;
 
     unaligned = ALIGNOF_UINT32_T - ((uintptr_t) data % ALIGNOF_UINT32_T);
     if (unaligned == ALIGNOF_UINT32_T) unaligned = 0;
@@ -655,8 +657,6 @@ static uint32_t crc32(uint32_t prev, const void *data, size_t length)
     /* process 64 bytes at once (Slicing-by-16) */
 
     /* enabling optimization (at least -O2) automatically unrolls the inner for-loop */
-    const size_t unroll = 4;
-    const size_t bytes_at_once = 16 * unroll;
 
     while (length >= bytes_at_once) {
         size_t unrolling;

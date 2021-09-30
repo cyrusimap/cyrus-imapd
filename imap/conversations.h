@@ -306,7 +306,7 @@ extern int conversation_update(struct conversations_state *state,
 extern conv_folder_t *conversation_find_folder(struct conversations_state *state,
                                                conversation_t *,
                                                const char *mboxname);
-extern conversation_t *conversation_new();
+extern conversation_t *conversation_new(void);
 extern void conversation_fini(conversation_t *);
 extern void conversation_free(conversation_t *);
 

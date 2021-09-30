@@ -289,13 +289,14 @@ static struct header_t *__spool_cache_header(char *name, char *body, char *raw,
 {
     ptrarray_t *contents;
     struct header_t *hdr = xzmalloc(sizeof(struct header_t));
+    char *lcname;
 
     hdr->name = name;
     hdr->body = body;
     hdr->raw = raw;
 
     /* add header to hash table */
-    char *lcname = lcase(xstrdup(name));
+    lcname = lcase(xstrdup(name));
     contents = (ptrarray_t *) hash_lookup(lcname, table);
 
     if (!contents) contents = hash_insert(lcname, ptrarray_new(), table);

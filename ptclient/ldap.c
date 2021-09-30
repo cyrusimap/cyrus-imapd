@@ -1321,6 +1321,7 @@ static int ptsmodule_make_authstate_filter(
 
     for (i = 0, entry = ldap_first_entry(ptsm->ld, res); entry != NULL;
          i++, entry = ldap_next_entry(ptsm->ld, entry)) {
+        unsigned int j;
 
         if (errdn) ldap_memfree(errdn);
         errdn = ldap_get_dn(ptsm->ld, entry);
@@ -1355,7 +1356,6 @@ static int ptsmodule_make_authstate_filter(
 
         strcpy((*newstate)->groups[i].id, "group:");
 
-        unsigned int j;
         for (j =0; j < strlen(vals[0]); j++) {
             if(Uisupper(vals[0][j]))
                 vals[0][j]=tolower(vals[0][j]);

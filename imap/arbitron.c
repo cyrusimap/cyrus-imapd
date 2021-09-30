@@ -241,17 +241,20 @@ static void usage(void)
 
 static int do_mailbox(struct findall_data *data, void *rock __attribute__((unused)))
 {
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
     int r;
     struct mailbox *mailbox = NULL;
-    const char *name = mbname_intname(data->mbname);
+    const char *name;
+    struct arb_mailbox_data *d;
+
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
+
+    name = mbname_intname(data->mbname);
 
     r = mailbox_open_irl(name, &mailbox);
     if (r) return 0;
 
-    struct arb_mailbox_data *d = mpool_malloc(arb_pool,
-                                              sizeof(struct arb_mailbox_data));
+    d = mpool_malloc(arb_pool, sizeof(struct arb_mailbox_data));
 
     d->nreaders = 0;
     d->nsubscribers = 0;
@@ -498,12 +501,13 @@ static void long_report_users(struct user_list *u, const char *mbox, char type)
 static void make_report(const char *key, void *data, void *rock __attribute__((unused)))
 {
     struct arb_mailbox_data *mbox = (struct arb_mailbox_data *)data;
+    char *extname;
 
     /* Skip underread user mailboxes */
     if(!strncasecmp(key, "user.", 5) && mbox->nreaders <= 1)
         return;
 
-    char *extname = mboxname_to_external(key, &arb_namespace, NULL);
+    extname = mboxname_to_external(key, &arb_namespace, NULL);
 
     if (long_report) {
         long_report_users(mbox->readers, extname, 'r');

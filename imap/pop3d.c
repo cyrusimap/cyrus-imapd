@@ -1104,32 +1104,32 @@ done:
             }
         }
         else if (!strcmp(inputbuf, "top")) {
-            const char *p = arg;
+            const char *cp = arg;
             uint32_t num;
             uint32_t lines;
             int r;
 
-            if (!p)
-                p = "";
-            while (*p && Uisspace(*p)) {
-                p++;
+            if (!cp)
+                cp = "";
+            while (*cp && Uisspace(*cp)) {
+                cp++;
             }
 
             /* special case, can't just parse_msgno */
-            r = parseuint32(p, &p, &num);
-            if (r || !*p) {
+            r = parseuint32(cp, &cp, &num);
+            if (r || !*cp) {
                 prot_printf(popd_out, "-ERR Missing argument\r\n");
             }
             else {
                 msgno = num;
                 /* skip over whitespace */
-                while (*p && Uisspace(*p)) {
-                    p++;
+                while (*cp && Uisspace(*cp)) {
+                    cp++;
                 }
-                if (parseuint32(p, &p, &lines)) {
+                if (parseuint32(cp, &cp, &lines)) {
                     prot_printf(popd_out, "-ERR Invalid number of lines\r\n");
                 }
-                else if (*p) {
+                else if (*cp) {
                     prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
                 }
                 else if (msg_exists_or_err(msgno)) {
@@ -1237,7 +1237,7 @@ void uidl_msg(uint32_t msgno)
 }
 
 #ifdef HAVE_SSL
-static void cmd_starttls(int pop3s)
+static void cmd_starttls(int pop3sf)
 {
     int result;
     char *localip, *remoteip;
@@ -1251,14 +1251,14 @@ static void cmd_starttls(int pop3s)
 
     result=tls_init_serverengine("pop3",
                                  5,        /* depth to verify */
-                                 !pop3s,   /* can client auth? */
+                                 !pop3sf,   /* can client auth? */
                                  NULL);
 
     if (result == -1) {
 
         syslog(LOG_ERR, "[pop3d] error initializing TLS");
 
-        if (pop3s == 0)
+        if (pop3sf == 0)
             prot_printf(popd_out, "-ERR [SYS/PERM] %s\r\n", "Error initializing TLS");
         else
             shut_down(0);
@@ -1266,7 +1266,7 @@ static void cmd_starttls(int pop3s)
         return;
     }
 
-    if (pop3s == 0)
+    if (pop3sf == 0)
     {
         prot_printf(popd_out, "+OK %s\r\n", "Begin TLS negotiation now");
         /* must flush our buffers before starting tls */
@@ -1282,7 +1282,7 @@ static void cmd_starttls(int pop3s)
 
     result=tls_start_servertls(0, /* read */
                                1, /* write */
-                               pop3s ? 180 : popd_timeout,
+                               pop3sf ? 180 : popd_timeout,
                                &saslprops,
                                &tls_conn);
 
@@ -1292,7 +1292,7 @@ static void cmd_starttls(int pop3s)
 
     /* if error */
     if (result==-1) {
-        if (pop3s == 0) {
+        if (pop3sf == 0) {
             prot_printf(popd_out, "-ERR [SYS/PERM] Starttls failed\r\n");
             syslog(LOG_NOTICE, "[pop3d] STARTTLS failed: %s", popd_clienthost);
         } else {
@@ -1306,7 +1306,7 @@ static void cmd_starttls(int pop3s)
     result = saslprops_set_tls(&saslprops, popd_saslconn);
     if (result != SASL_OK) {
         syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
-        if (pop3s == 0) {
+        if (pop3sf == 0) {
             fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
         } else {
             shut_down(0);
@@ -1321,7 +1321,7 @@ static void cmd_starttls(int pop3s)
     popd_tls_required = 0;
 }
 #else
-static void cmd_starttls(int pop3s __attribute__((unused)))
+static void cmd_starttls(int pop3sf __attribute__((unused)))
 {
     fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);
 }
@@ -1778,6 +1778,8 @@ int openinbox(void)
     struct statusdata sdata = STATUSDATA_INIT;
     struct proc_limits limits;
     struct mboxevent *mboxevent;
+    const char *subfolder;
+    mbname_t *mbname;
 
     /* send a Login event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGIN))) {
@@ -1790,8 +1792,8 @@ int openinbox(void)
         mboxevent_free(&mboxevent);
     }
 
-    const char *subfolder = popd_subfolder ? popd_subfolder + 1 : NULL;
-    mbname_t *mbname = mbname_from_extsub(subfolder, &popd_namespace, popd_userid);
+    subfolder = popd_subfolder ? popd_subfolder + 1 : NULL;
+    mbname = mbname_from_extsub(subfolder, &popd_namespace, popd_userid);
 
     r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
 
@@ -1870,6 +1872,9 @@ int openinbox(void)
         /* local mailbox */
         uint32_t exists;
         int minpoll;
+        unsigned iterflags = ITER_SKIP_EXPUNGED;
+	struct mailbox_iter *iter;
+	const message_t *msg;
 
         popd_login_time = time(0);
 
@@ -1918,12 +1923,10 @@ int openinbox(void)
         config_popuseimapflags = config_getswitch(IMAPOPT_POPUSEIMAPFLAGS);
         exists = 0;
 
-        unsigned iterflags = ITER_SKIP_EXPUNGED;
         if (config_popuseimapflags) iterflags |= ITER_SKIP_DELETED;
 
-        struct mailbox_iter *iter = mailbox_iter_init(popd_mailbox, 0, iterflags);
+        iter = mailbox_iter_init(popd_mailbox, 0, iterflags);
 
-        const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
             if (popd_mailbox->i.pop3_show_after &&

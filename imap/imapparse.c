@@ -457,8 +457,10 @@ EXPORTED void eatline(struct protstream *pin, int c)
 
         /* see if it's a literal */
         if (c == '{') {
-            c = prot_getc(pin);
             uint64_t size = 0;
+
+            c = prot_getc(pin);
+
             while (cyrus_isdigit(c)) {
                 if (size > 429496729 || (size == 429496729 && (c > '5')))
                     break; /* don't fatal, just drop out of literal parsing */

@@ -577,6 +577,8 @@ static int savemsg(struct clientdata *cd,
     };
     char *addbody, *fold[5], *p;
     int addlen, nfold, i;
+    struct buf rbuf = BUF_INITIALIZER;
+    char *sid;
 
     /* Copy to spool file */
     f = func->spoolfile(m);
@@ -656,7 +658,6 @@ static int savemsg(struct clientdata *cd,
     fold[nfold++] = p;
     p += sprintf(p, " %s", datestr);
 
-    struct buf rbuf = BUF_INITIALIZER;
     buf_setcstr(&rbuf, "Received: ");
     for (i = 0, p = addbody; i < nfold; p = fold[i], i++) {
         buf_printf(&rbuf, "%.*s\r\n\t", (int) (fold[i] - p), p);
@@ -665,7 +666,7 @@ static int savemsg(struct clientdata *cd,
     fputs(buf_cstring(&rbuf), f);
     spool_append_header_raw(xstrdup("Received"), addbody, buf_release(&rbuf), m->hdrcache);
 
-    char *sid = xstrdup(session_id());
+    sid = xstrdup(session_id());
     fprintf(f, "X-Cyrus-Session-Id: %s\r\n", sid);
     spool_cache_header(xstrdup("X-Cyrus-Session-Id"), sid, m->hdrcache);
 
@@ -690,10 +691,10 @@ static int savemsg(struct clientdata *cd,
         r = IMAP_MESSAGE_BADHEADER;  /* empty message-id */
     } else {
         /* no message-id, create one */
-        pid_t p = getpid();
+        pid_t myp = getpid();
 
         m->id = xmalloc(40 + strlen(config_servername));
-        sprintf(m->id, "<cmu-lmtpd-%d-%d-%u@%s>", p, (int) now,
+        sprintf(m->id, "<cmu-lmtpd-%d-%d-%u@%s>", myp, (int) now,
                 msgid_count++, config_servername);
         fprintf(f, "Message-ID: %s\r\n", m->id);
         spool_cache_header(xstrdup("Message-ID"), xstrdup(m->id), m->hdrcache);
@@ -779,6 +780,11 @@ static int process_recipient(char *addr,
                                                 struct auth_state *),
                              message_data_t *msg)
 {
+    mbname_t *mbname = NULL;
+    int r = 0;
+    size_t sl;
+    address_data_t *ret;
+
     assert(addr != NULL && msg != NULL);
 
     if (*addr == '<') addr++;
@@ -791,18 +797,16 @@ static int process_recipient(char *addr,
         addr++;
     }
 
-    mbname_t *mbname = NULL;
-    int r = 0;
-
-    size_t sl = strlen(addr);
+    sl = strlen(addr);
     if (addr[sl-1] == '>') sl--;
 
     if (sl) {
         char *rcpt = xstrndup(addr, sl);
+        int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
+
         mbname = mbname_from_recipient(rcpt, msg->ns);
         free(rcpt);
 
-        int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
         if (forcedowncase) mbname_downcaseuser(mbname);
 
         /* strip username if postuser */
@@ -839,7 +843,7 @@ static int process_recipient(char *addr,
         return IMAP_MAILBOX_NONEXISTENT;
     }
 
-    address_data_t *ret = (address_data_t *) xzmalloc(sizeof(address_data_t));
+    ret = (address_data_t *) xzmalloc(sizeof(address_data_t));
     ret->mbname = mbname;
     ret->ignorequota = ignorequota;
     msg->rcpt[msg->rcpt_num] = ret;

@@ -108,9 +108,11 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
         if (sbuf->st_ino == sbuffile.st_ino) {
             if (debug_locks_longer_than) {
                 struct timeval endtime;
+		double locktime;
+
                 gettimeofday(&endtime, 0);
-                double locktime = (double)(endtime.tv_sec - starttime.tv_sec) +
-                                  (double)(endtime.tv_usec - starttime.tv_usec)/1000000.0;
+                locktime = (double)(endtime.tv_sec - starttime.tv_sec) +
+			   (double)(endtime.tv_usec - starttime.tv_usec)/1000000.0;
                 if (locktime > debug_locks_longer_than) /* 10ms */
                     syslog(LOG_NOTICE, "locktimer: reopen %s (%0.2fs)", filename, locktime);
             }
@@ -159,8 +161,10 @@ EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
         if (r != -1) {
             if (debug_locks_longer_than) {
                 struct timeval endtime;
+		double locktime;
+
                 gettimeofday(&endtime, 0);
-                double locktime = (double)(endtime.tv_sec - starttime.tv_sec) +
+                locktime = (double)(endtime.tv_sec - starttime.tv_sec) +
                                   (double)(endtime.tv_usec - starttime.tv_usec)/1000000.0;
                 if (locktime > debug_locks_longer_than)
                     syslog(LOG_NOTICE, "locktimer: reopen %s (%0.2fs)", filename, locktime);

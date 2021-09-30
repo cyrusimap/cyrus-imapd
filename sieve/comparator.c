@@ -190,9 +190,11 @@ static int new_var(strarray_t *match_vars)
 static void set_var(int var_num, const char* val_start, const char* val_end,
                     strarray_t *match_vars)
 {
+    char *val;
+
     if (var_num > MAX_MATCH_VARS) return;
 
-    char *val = xstrndup(val_start, val_end - val_start);
+    val = xstrndup(val_start, val_end - val_start);
     strarray_setm(match_vars, var_num, val);
 }
 
@@ -200,10 +202,11 @@ static int append_var(const char* val_start, const char* val_end,
                        strarray_t *match_vars)
 {
     int size = strarray_size(match_vars);
+    char *val;
 
     if (size-1 > MAX_MATCH_VARS) return size;
 
-    char *val = xstrndup(val_start, val_end - val_start);
+    val = xstrndup(val_start, val_end - val_start);
     return strarray_appendm(match_vars, val);
 }
 
@@ -434,14 +437,16 @@ static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
 
     if (Uisdigit(*pat)) {
         if (Uisdigit(*text)) {
+            unsigned num_digits;
+            int r;
+
             /* Count how many digits each string has */
             for (text_digit_len = 0;
                  tlen-- && Uisdigit(text[text_digit_len]);
                  text_digit_len++);
             pat_digit_len = strspn(pat, "0123456789");
 
-            unsigned num_digits = MAX(text_digit_len, pat_digit_len);
-            int r;
+            num_digits = MAX(text_digit_len, pat_digit_len);
 
             do {
                 /* Pad the shorter string with leading 0s */

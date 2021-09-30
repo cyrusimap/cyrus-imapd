@@ -46,13 +46,13 @@ struct charmap {
 };
 
 struct charset {
-    char *name;
+    const char *name;
     const struct charmap (*table)[256];
 };
 
 struct charset_alias {
-    char *name;
-    char *canon_name;
+    const char *name;
+    const char *canon_name;
 };
 
 /* unicode canon translations */

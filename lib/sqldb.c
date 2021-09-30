@@ -92,9 +92,9 @@ static void _debug(void *fname, const char *sql)
 static int _free_open(sqldb_t *open)
 {
     int rc = sqlite3_close(open->db);
+    int r = (rc == SQLITE_OK ? 0 : -1);
     free(open->fname);
     free(open);
-    int r = (rc == SQLITE_OK ? 0 : -1);
     return r;
 }
 
@@ -259,10 +259,16 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
         }
     }
 
+    /*  */ {
+	    
     struct buf buf = BUF_INITIALIZER;
+
     buf_printf(&buf, "PRAGMA user_version = %d;", version);
     rc = sqlite3_exec(open->db, buf_cstring(&buf), NULL, NULL, NULL);
     buf_free(&buf);
+    
+    }
+
     if (rc != SQLITE_OK) {
         syslog(LOG_ERR, "DBERROR: sqldb_open(%s) user_version: %s",
                open->fname, sqlite3_errmsg(open->db));
@@ -294,13 +300,15 @@ static sqlite3_stmt *_prepare_stmt(sqldb_t *open, const char *cmd)
 {
     int i;
     sqlite3_stmt *stmt;
+    int rc;
+
     for (i = 0; i < open->stmts.count; i++) {
         stmt = ptrarray_nth(&open->stmts, i);
         if (!strcmp(cmd, sqlite3_sql(stmt)))
             return stmt;
     }
     /* prepare new statement */
-    int rc = sqlite3_prepare_v2(open->db, cmd, -1, &stmt, NULL);
+    rc = sqlite3_prepare_v2(open->db, cmd, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         syslog(LOG_ERR, "DBERROR: sqldb_exec(%s) prepare <%s>: %s",
                open->fname, cmd, sqlite3_errmsg(open->db));
@@ -371,8 +379,9 @@ static int _onecmd(sqldb_t *open, const char *cmd, const char *name)
 
 EXPORTED int sqldb_begin(sqldb_t *open, const char *name)
 {
-    if (!name) name = "DUMMY";
     int r = 0;
+
+    if (!name) name = "DUMMY";
     if (!open->writelock) r = sqldb_writelock(open);
     if (!r) r = _onecmd(open, "SAVEPOINT", name);
     if (!r) strarray_push(&open->trans, name);
@@ -381,10 +390,13 @@ EXPORTED int sqldb_begin(sqldb_t *open, const char *name)
 
 EXPORTED int sqldb_commit(sqldb_t *open, const char *name)
 {
+    char *prev;
+    int r;
+
     assert(open->trans.count);
-    char *prev = strarray_pop(&open->trans);
+    prev = strarray_pop(&open->trans);
     if (name) assert(!strcmp(prev, name));
-    int r = _onecmd(open, "RELEASE SAVEPOINT", prev);
+    r = _onecmd(open, "RELEASE SAVEPOINT", prev);
     if (r) strarray_push(&open->trans, prev);
     free(prev);
     if (!r && !open->trans.count) r = sqldb_writecommit(open);
@@ -393,10 +405,14 @@ EXPORTED int sqldb_commit(sqldb_t *open, const char *name)
 
 EXPORTED int sqldb_rollback(sqldb_t *open, const char *name)
 {
+    char *prev;
+    int r;
+
     assert(open->trans.count);
-    char *prev = strarray_pop(&open->trans);
+
+    prev = strarray_pop(&open->trans);
     if (name) assert(!strcmp(prev, name));
-    int r = _onecmd(open, "ROLLBACK TO SAVEPOINT", prev);
+    r = _onecmd(open, "ROLLBACK TO SAVEPOINT", prev);
     if (r) strarray_push(&open->trans, prev);
     // it's still commit here even if we rolled back THIS savepoint,
     // because other savepoints may have committed, so we want to
@@ -408,27 +424,33 @@ EXPORTED int sqldb_rollback(sqldb_t *open, const char *name)
 
 EXPORTED int sqldb_writelock(sqldb_t *open)
 {
+    int r = sqldb_exec(open, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
+
     assert (!open->writelock);
     assert (!open->trans.count);
-    int r = sqldb_exec(open, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
+
     if (!r) open->writelock = 1;
     return r;
 }
 
 EXPORTED int sqldb_writecommit(sqldb_t *open)
 {
+    int r;
+
     if (!open->writelock) return 0;
     strarray_truncate(&open->trans, 0);
-    int r = sqldb_exec(open, "COMMIT;", NULL, NULL, NULL);
+    r = sqldb_exec(open, "COMMIT;", NULL, NULL, NULL);
     if (!r) open->writelock = 0;
     return r;
 }
 
 EXPORTED int sqldb_writeabort(sqldb_t *open)
 {
+    int r;
+
     if (!open->writelock) return 0;
     strarray_truncate(&open->trans, 0);
-    int r = sqldb_exec(open, "ROLLBACK;", NULL, NULL, NULL);
+    r = sqldb_exec(open, "ROLLBACK;", NULL, NULL, NULL);
     if (!r) open->writelock = 0;
     return r;
 }
@@ -475,15 +497,16 @@ EXPORTED int sqldb_close(sqldb_t **dbp)
 
 EXPORTED int sqldb_attach(sqldb_t *open, const char *fname)
 {
-    if (open->attached) return SQLITE_MISUSE;
     struct sqldb_bindval bval[] = {
         { ":fname",  SQLITE_TEXT, { .s = fname         } },
         { NULL,      SQLITE_NULL, { .s = NULL          } } };
-
     struct stat sbuf;
+    int r;
+
+    if (open->attached) return SQLITE_MISUSE;
     if (stat(fname, &sbuf)) return SQLITE_NOTFOUND;
 
-    int r = sqldb_exec(open, "ATTACH DATABASE :fname AS other;", bval, NULL, NULL);
+    r = sqldb_exec(open, "ATTACH DATABASE :fname AS other;", bval, NULL, NULL);
     if (r) return r;
     open->attached = 1;
     return 0;
@@ -491,8 +514,10 @@ EXPORTED int sqldb_attach(sqldb_t *open, const char *fname)
 
 EXPORTED int sqldb_detach(sqldb_t *open)
 {
+    int r;
+
     if (!open->attached) return SQLITE_MISUSE;
-    int r = sqldb_exec(open, "DETACH DATABASE other;", NULL, NULL, NULL);
+    r = sqldb_exec(open, "DETACH DATABASE other;", NULL, NULL, NULL);
     if (r) return r;
     open->attached = 0;
     return 0;

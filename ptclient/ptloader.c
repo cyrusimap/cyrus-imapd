@@ -75,7 +75,7 @@ struct pts_module *pts_modules[] = {
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
 
-static struct pts_module *pts_fromname()
+static struct pts_module *pts_fromname(void)
 {
     int i;
     const char *name = config_getstring(IMAPOPT_PTS_MODULE);

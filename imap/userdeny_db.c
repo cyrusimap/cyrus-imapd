@@ -70,7 +70,7 @@ static struct db *denydb;
 
 static int denydb_initialized = 0;
 
-static void init_internal();
+static void init_internal(void);
 
 static const char default_message[] = "Access to this service has been blocked";
 
@@ -345,7 +345,7 @@ static void done_cb(void*rock __attribute__((unused)))
     denydb_done();
 }
 
-static void init_internal()
+static void init_internal(void)
 {
     if (!denydb_initialized) {
         denydb_init(0);

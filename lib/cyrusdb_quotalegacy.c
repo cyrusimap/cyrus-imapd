@@ -402,12 +402,12 @@ static int myfetch(struct dbengine *db, char *quota_path,
         }
 
         if (tid) {
-            int r;
+            int x;
             struct stat sbuf;
             const char *lockfailaction;
 
-            r = lock_reopen(quota_fd, quota_path, &sbuf, &lockfailaction);
-            if (r == -1) {
+            x = lock_reopen(quota_fd, quota_path, &sbuf, &lockfailaction);
+            if (x == -1) {
                 syslog(LOG_ERR, "IOERROR: %s quota %s: %m", lockfailaction,
                        quota_path);
                 xclose(quota_fd);
@@ -599,7 +599,7 @@ static int foreach(struct dbengine *db,
     if (config_virtdomains && !prefixlen) {
         /* search for all virtdomain quotaroots */
         char *endp;
-        int c, i, n;
+        int c, j, n;
         DIR *qrdir;
         struct dirent *next = NULL;
 
@@ -609,7 +609,7 @@ static int foreach(struct dbengine *db,
         endp = quota_path + n;
 
         c = config_fulldirhash ? 'A' : 'a';
-        for (i = 0; i < 26; i++, c++) {
+        for (j = 0; j < 26; j++, c++) {
             endp[0] = c;
             endp[1] = '/';
             endp[2] = '\0';

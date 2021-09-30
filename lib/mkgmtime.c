@@ -92,6 +92,8 @@
 
 #include <config.h>
 
+#include "mkgmtime.h"
+
 #if HAVE_TIMEGM
 
 EXPORTED time_t mkgmtime(struct tm * const tmp)

@@ -95,9 +95,11 @@ struct gzuncat {
 
 EXPORTED struct gzuncat *gzuc_new(int fd)
 {
+    struct gzuncat *gz;
+
     if (fd < 0) return NULL;
 
-    struct gzuncat *gz = xmalloc(sizeof(*gz));
+    gz = xmalloc(sizeof(*gz));
 
     gz->fd = fd;
     gz->current_offset = -1;
@@ -136,6 +138,9 @@ static int _inflate_init(z_stream *strm, unsigned char *in_buf)
 
 EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
 {
+    off_t p;
+    int r;
+
     if (gz->current_offset >= 0 || offset < 0) {
         errno = EINVAL;
         return Z_ERRNO;
@@ -146,10 +151,10 @@ EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
 
     memset(gz->in_buf, 0, gz->in_buf_size);
 
-    off_t p = lseek(gz->fd, offset, SEEK_SET);
+    p = lseek(gz->fd, offset, SEEK_SET);
     if (p < 0) return Z_ERRNO;
 
-    int r = _inflate_init(&gz->strm, gz->in_buf);
+    r = _inflate_init(&gz->strm, gz->in_buf);
     if (r) return r;
 
     // anything else to initialise?
@@ -170,9 +175,9 @@ EXPORTED int gzuc_member_start(struct gzuncat *gz)
 
 EXPORTED int gzuc_member_end(struct gzuncat *gz, off_t *offset)
 {
-    if (gz->next_offset >= 0) return -1;
-
     int r = 0;
+
+    if (gz->next_offset >= 0) return -1;
 
     if (gz->file_eof) goto done;
 
@@ -200,10 +205,12 @@ done:
 
 EXPORTED void gzuc_free(struct gzuncat **gzp)
 {
+    struct gzuncat *gz;
+
     if (!gzp) return;
     if (!*gzp) return;
 
-    struct gzuncat *gz = *gzp;
+    gz = *gzp;
     *gzp = NULL;
 
     if (gz->current_offset >= 0)
@@ -231,15 +238,15 @@ EXPORTED int gzuc_eof(struct gzuncat *gz)
 
 EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
 {
+    ssize_t uncompressed = 0;
+    int r = 0;
+
     if (gz->current_offset < 0) return -1;
     if (gz->member_eof == 1) return 0;
     if (gz->file_eof == 1) return 0;
 
     gz->strm.avail_out = count;
     gz->strm.next_out = buf;
-
-    ssize_t uncompressed = 0;
-    int r = 0;
 
     memset(buf, 0, count);
 
@@ -301,11 +308,12 @@ EXPORTED int gzuc_skip(struct gzuncat *gz, size_t len)
 
     while (len) {
         unsigned char discard[16 * 1024];
+	ssize_t got;
 
         size_t want = len;
         if (want > sizeof(discard)) want = sizeof(discard);
 
-        ssize_t got = gzuc_read(gz, discard, want);
+        got = gzuc_read(gz, discard, want);
         if (got == 0) return -1;
         if (got < 0) return got;
 
@@ -329,11 +337,12 @@ EXPORTED int gzuc_seekto(struct gzuncat *gz, size_t pos)
     if (pos == gz->bytes_read) return 0;
 
     if (pos < gz->bytes_read) {
+        int r;
         off_t p = lseek(gz->fd, gz->current_offset, SEEK_SET);
         if (p < 0) return -1;
 
         inflateEnd(&gz->strm);
-        int r = _inflate_init(&gz->strm, gz->in_buf);
+        r = _inflate_init(&gz->strm, gz->in_buf);
         if (r) return r;
 
         gz->bytes_read = 0;

@@ -51,5 +51,7 @@
 int parser(struct protstream *sieved_out,
            struct protstream *sieved_in, struct saslprops_t *saslprops);
 
+/* xxx defined in timsieved.c, but used in parser.c */
+int reset_saslconn(sasl_conn_t **conn);
 
 #endif /* PARSER_H */

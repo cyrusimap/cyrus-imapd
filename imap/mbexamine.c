@@ -192,6 +192,10 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
     int flag = 0;
     struct mailbox *mailbox = NULL;
     int j;
+    const char *extname;
+    const char *name;
+    struct mailbox_iter *iter;
+    const message_t *msg;
 
     /* don't want partial matches */
     if (!data) return 0;
@@ -200,10 +204,10 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
     signals_poll();
 
     /* Convert internal name to external */
-    const char *extname = mbname_extname(data->mbname, &mbexamine_namespace, "cyrus");
+    extname = mbname_extname(data->mbname, &mbexamine_namespace, "cyrus");
     printf("Examining %s...", extname);
 
-    const char *name = mbname_intname(data->mbname);
+    name = mbname_intname(data->mbname);
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
@@ -263,8 +267,7 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
     printf("\n Message Info:\n");
 
     msgno = 1;
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-    const message_t *msg;
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         if (wantvalue) {
@@ -364,6 +367,10 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
     quota_t total = 0;
     const char *fname;
     struct stat sbuf;
+    const char *extname;
+    const char *name;
+    struct mailbox_iter *iter;
+    const message_t *msg;
 
     /* don't want partial matches */
     if (!data) return 0;
@@ -372,17 +379,16 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
     signals_poll();
 
     /* Convert internal name to external */
-    const char *extname = mbname_extname(data->mbname, &mbexamine_namespace, "cyrus");
+    extname = mbname_extname(data->mbname, &mbexamine_namespace, "cyrus");
     printf("Examining %s...", extname);
 
-    const char *name = mbname_intname(data->mbname);
+    name = mbname_intname(data->mbname);
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
     if (r) return r;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-    const message_t *msg;
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         fname = mailbox_record_fname(mailbox, record);
@@ -417,7 +423,7 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
     return r;
 }
 
-int numcmp(const void *a, const void *b)
+static int numcmp(const void *a, const void *b)
 {
     uint32_t *n1 = (uint32_t *) a;
     uint32_t *n2 = (uint32_t *) b;
@@ -435,6 +441,10 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
     DIR *dirp;
     struct dirent *dirent;
     uint32_t *uids = NULL, nalloc, count = 0, msgno;
+    const char *extname;
+    const char *name;
+    struct mailbox_iter *iter;
+    const message_t *msg;
 
     /* don't want partial matches */
     if (!data) return 0;
@@ -443,10 +453,10 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
     signals_poll();
 
     /* Convert internal name to external */
-    const char *extname = mbname_extname(data->mbname, &mbexamine_namespace, "cyrus");
+    extname = mbname_extname(data->mbname, &mbexamine_namespace, "cyrus");
     printf("Examining %s...", extname);
 
-    const char *name = mbname_intname(data->mbname);
+    name = mbname_intname(data->mbname);
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
@@ -494,8 +504,7 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
     printf("\n%-56s\t%s\n", " Index Record Info:", "Message File Info:");
 
     msgno = 0;
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
-    const message_t *msg;
+    iter = mailbox_iter_init(mailbox, 0, 0);
     while ((msg = mailbox_iter_step(iter)) || msgno < count) {
         const struct index_record *record = msg ? msg_record(msg) : NULL;
 

@@ -649,6 +649,9 @@ static int bc_args_parse(bytecode_input_t *bc, int pos, const char *fmt,
 EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
                              commandlist_t *cmd)
 {
+    const char *fmt;
+    const size_t *offsets;
+
     memset(cmd, 0, sizeof(commandlist_t));
     cmd->type = ntohl(bc[pos++].op);
 
@@ -657,8 +660,8 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
         return -1;
     }
 
-    const char *fmt = cmd_args_table[cmd->type].fmt;
-    const size_t *offsets = cmd_args_table[cmd->type].offsets;
+    fmt = cmd_args_table[cmd->type].fmt;
+    offsets = cmd_args_table[cmd->type].offsets;
 
     if (cmd->type == B_VACATION_ORIG && version >= 0x05) {
         /* Includes :from and :handle */
@@ -674,14 +677,16 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
 {
     int opcode = ntohl(bc[pos++].op);
     int has_index = 0;
+    const char *fmt;
+    const size_t *offsets;
 
     if (opcode >= BC_ILLEGAL_VALUE) {
         /* Unknown opcode */
         return -1;
     }
 
-    const char *fmt = test_args_table[opcode].fmt;
-    const size_t *offsets = test_args_table[opcode].offsets;
+    fmt = test_args_table[opcode].fmt;
+    offsets = test_args_table[opcode].offsets;
 
     if (version == 0x07) {
         switch (opcode) {

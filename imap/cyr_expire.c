@@ -178,7 +178,7 @@ static inline void verbosep(const char *fmt, ...)
     fputc('\n', stderr);
 }
 
-static void cyr_expire_init(const char *progname, struct cyr_expire_ctx *ctx)
+static void cyr_expire_init(const char *prgname, struct cyr_expire_ctx *ctx)
 {
     struct sigaction action;
 
@@ -197,7 +197,7 @@ static void cyr_expire_init(const char *progname, struct cyr_expire_ctx *ctx)
     strarray_init(&ctx->drock.to_delete);
     construct_hash_table(&ctx->crock.seen, 100, 1);
 
-    cyrus_init(ctx->args.altconfig, progname, 0, 0);
+    cyrus_init(ctx->args.altconfig, prgname, 0, 0);
     global_sasl_init(1, 0, NULL);
 
     ctx->erock.do_userflags = ctx->args.do_userflags;

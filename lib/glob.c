@@ -58,6 +58,7 @@
 EXPORTED glob *glob_init(const char *str, char sep)
 {
     struct buf buf = BUF_INITIALIZER;
+    glob *g;
 
     buf_appendcstr(&buf, "(^");
     while (*str) {
@@ -108,7 +109,7 @@ EXPORTED glob *glob_init(const char *str, char sep)
     buf_putc(&buf, sep);
     buf_appendcstr(&buf, "]|$)");
 
-    glob *g = xmalloc(sizeof(glob));
+    g = xmalloc(sizeof(glob));
     regcomp(&g->regex, buf_cstring(&buf), REG_EXTENDED);
     buf_free(&buf);
 

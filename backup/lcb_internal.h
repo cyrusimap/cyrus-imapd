@@ -47,6 +47,7 @@
 #include "imap/partlist.h"
 
 #ifndef LIBCYRUS_BACKUP_SOURCE
+/* XXX this mess is extremely stupid -- it requires duplicating prototypes! */
 #error "backup/lcb_internal.h is for internal use by libcyrus_backup ONLY"
 #else
 #ifndef BACKUP_LCB_INTERNAL_H
@@ -116,6 +117,7 @@ struct backup_mailbox_message *backup_mailbox_message_list_remove(
     struct backup_mailbox_message_list *list,
     struct backup_mailbox_message *mailbox_message);
 
+/* XXX the following should be in a shared header!!! */
 const char *partlist_backup_select(void);
 int partlist_backup_foreach(partlist_foreach_cb proc, void *rock);
 void partlist_backup_done(void);

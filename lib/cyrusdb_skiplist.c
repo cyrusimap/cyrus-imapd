@@ -2156,6 +2156,7 @@ static int recovery(struct dbengine *db, int flags)
     /* replay the log */
     while (!r && offset < filesize) {
         const char *p, *q;
+	unsigned size;
 
         /* refresh map, so we see the writes we've just done */
         map_refresh(db->fd, 0, &db->map_base, &db->map_len, db->map_size,
@@ -2179,9 +2180,9 @@ static int recovery(struct dbengine *db, int flags)
 
         /* if this is a commit, we've processed everything in this txn */
         if (TYPE(ptr) == COMMIT) {
-            unsigned size = RECSIZE_safe(db, ptr);
-            if (!size) break;
-            offset += size;
+            unsigned size2 = RECSIZE_safe(db, ptr);
+            if (!size2) break;
+            offset += size2;
             continue;
         }
 
@@ -2198,8 +2199,8 @@ static int recovery(struct dbengine *db, int flags)
         q = db->map_base + filesize;
         p = ptr;
         for (;;) {
-            unsigned size = RECSIZE_safe(db, p);
-            if (!size) {
+            unsigned size2 = RECSIZE_safe(db, p);
+            if (!size2) {
                 /* hmm, we can't trust this transaction */
                 syslog(LOG_ERR,
                        "DBERROR: skiplist recovery %s: found a RECSIZE of 0, "
@@ -2208,7 +2209,7 @@ static int recovery(struct dbengine *db, int flags)
                 p = q;
                 break;
             }
-            p += size;
+            p += size2;
             if (p >= q) break;
             if (TYPE(p) == COMMIT) break;
         }
@@ -2232,13 +2233,13 @@ static int recovery(struct dbengine *db, int flags)
                 keyptr = NULL;
             }
         } else { /* type == DELETE */
-            const char *p;
+            const char *o;
 
             myoff = ntohl(*((uint32_t *)(ptr + 4)));
-            p = db->map_base + myoff;
-            keyptr = find_node(db, KEY(p), KEYLEN(p), updateoffsets);
+            o = db->map_base + myoff;
+            keyptr = find_node(db, KEY(o), KEYLEN(o), updateoffsets);
             if (keyptr == db->map_base ||
-                db->compar(KEY(p), KEYLEN(p), KEY(keyptr), KEYLEN(keyptr))) {
+                db->compar(KEY(o), KEYLEN(o), KEY(keyptr), KEYLEN(keyptr))) {
                 /* didn't find exactly this node */
                 keyptr = NULL;
             }
@@ -2349,7 +2350,7 @@ static int recovery(struct dbengine *db, int flags)
         }
 
         /* move to next record */
-        unsigned size = RECSIZE_safe(db, ptr);
+        size = RECSIZE_safe(db, ptr);
         if (!size) break;
         offset += size;
     }

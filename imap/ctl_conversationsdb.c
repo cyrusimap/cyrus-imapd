@@ -148,6 +148,8 @@ static int zero_cid_cb(const mbentry_t *mbentry,
 {
     struct mailbox *mailbox = NULL;
     int r;
+    struct mailbox_iter *iter;
+    const message_t *msg;
 
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) {
@@ -155,15 +157,16 @@ static int zero_cid_cb(const mbentry_t *mbentry,
         return 0;
     }
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    const message_t *msg;
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
+	struct index_record oldrecord;
+
         /* already zero, fine */
         if (record->cid == NULLCONVERSATION)
             continue;
 
-        struct index_record oldrecord = *record;
+        oldrecord = *record;
         oldrecord.cid = NULLCONVERSATION;
         oldrecord.basecid = NULLCONVERSATION;
         oldrecord.internal_flags &= ~FLAG_INTERNAL_SPLITCONVERSATION;
@@ -208,6 +211,9 @@ static int build_cid_cb(const mbentry_t *mbentry,
     if (!cstate) return IMAP_CONVERSATIONS_NOT_OPEN;
 
     while (!r && count) {
+	struct mailbox_iter *iter;
+	const message_t *msg;
+
         r = mailbox_open_iwl(mbentry->name, &mailbox);
         if (r) {
             fprintf(stderr, "Failed to open mailbox %s, skipping\n", mbentry->name);
@@ -216,15 +222,16 @@ static int build_cid_cb(const mbentry_t *mbentry,
 
         count = 0;
 
-        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-        const message_t *msg;
+        iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
+	    struct index_record oldrecord;
+
             /* already assigned, fine */
             if (record->cid != NULLCONVERSATION)
                 continue;
 
-            struct index_record oldrecord = *record;
+            oldrecord = *record;
             r = mailbox_cacherecord(mailbox, &oldrecord);
             if (r) goto done;
 
@@ -590,7 +597,7 @@ next:
     return 0;
 }
 
-int do_checkfolders(const char *userid)
+static int do_checkfolders(const char *userid)
 {
     int r;
     struct conversations_state *state = NULL;

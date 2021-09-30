@@ -198,7 +198,7 @@ static void done_cb(void *rock __attribute__((unused))) {
     /* do nothing */
 }
 
-static void init_internal() {
+static void init_internal(void) {
     if (!mboxevent_initialized) {
         mboxevent_init();
         cyrus_modules_add(done_cb, NULL);
@@ -312,6 +312,7 @@ done:
 EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
 {
     struct mboxevent *mboxevent = NULL;
+    unsigned i;
 
     init_internal();
 
@@ -326,7 +327,6 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
     mboxevent = xmalloc(sizeof(struct mboxevent));
     memcpy(mboxevent, &event_template, sizeof(struct mboxevent));
 
-    unsigned i;
     for (i = 0; mboxevent->params[i].id; i++) {
         assert(i == mboxevent->params[i].id);
     }
@@ -814,6 +814,8 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
     int r;
+    mbname_t *mbname;
+    char *extname;
 
     if (!event)
         return;
@@ -830,8 +832,8 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     memset(&imapurl, 0, sizeof(struct imapurl));
     imapurl.server = config_servername;
 
-    mbname_t *mbname = mbname_from_intname(mailboxname);
-    char *extname = xstrdupnull(mbname_extname(mbname, &namespace, NULL));
+    mbname = mbname_from_intname(mailboxname);
+    extname = xstrdupnull(mbname_extname(mbname, &namespace, NULL));
     imapurl.mailbox = extname;
     mbname_free(&mbname);
 
@@ -1114,11 +1116,12 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     /* add message EMAILID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_EMAILID)) {
         struct message_guid guid;
+        char emailid[26];
+
         if ((r = msgrecord_get_guid(msgrec, &guid))) {
             syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
             return;
         }
-        char emailid[26];
         emailid[0] = 'M';
         memcpy(emailid+1, message_guid_encode(&guid), 24);
         emailid[25] = '\0';
@@ -1128,11 +1131,12 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     /* add message THREADID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_THREADID)) {
         bit64 cid;
+        char threadid[18];
+
         if ((r = msgrecord_get_cid(msgrec, &cid))) {
             syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
             return;
         }
-        char threadid[18];
         if (!cid) {
             threadid[0] = 'N';
             threadid[1] = 'I';
@@ -1434,11 +1438,12 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
      * quota root specified in RFC 2087. Thus we fill uri with quota root
      */
     if (!event->params[EVENT_URI].filled && event->type & QUOTA_EVENTS) {
+        /* translate internal mailbox name to external */
+        char *extname = mboxname_to_external(quota->root, &namespace, NULL);
+
         memset(&imapurl, 0, sizeof(struct imapurl));
         imapurl.server = config_servername;
 
-        /* translate internal mailbox name to external */
-        char *extname = mboxname_to_external(quota->root, &namespace, NULL);
         imapurl.mailbox = extname;
 
         imapurl_toURL(url, &imapurl);
@@ -1486,6 +1491,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 {
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
+    char *extname;
 
     if (!event)
         return;
@@ -1507,7 +1513,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     imapurl.server = config_servername;
     imapurl.uidvalidity = mailbox->i.uidvalidity;
 
-    char *extname = mboxname_to_external(mailbox->name, &namespace, NULL);
+    extname = mboxname_to_external(mailbox->name, &namespace, NULL);
     imapurl.mailbox = extname;
 
     if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND) && event->uidset) {
@@ -1593,6 +1599,7 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
 {
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
+    char *extname;
 
     if (!event)
         return;
@@ -1602,7 +1609,7 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     imapurl.uidvalidity = mailbox->i.uidvalidity;
 
     /* translate internal mailbox name to external */
-    char *extname = mboxname_to_external(mailbox->name, &namespace, NULL);
+    extname = mboxname_to_external(mailbox->name, &namespace, NULL);
     imapurl.mailbox = extname;
 
     imapurl_toURL(url, &imapurl);
@@ -1768,12 +1775,16 @@ static char *json_formatter(enum event_type type, struct event_parameter params[
                 break;
             case EVENT_PARAM_ARRAY:
                 jarray = json_array();
+		/*  */ {
+			
                 strarray_t *sarray = params[param].value.a;
-                int i;
+		int i;
 
                 for (i = 0; i < strarray_size(sarray); i++) {
                     json_array_append_new(jarray, json_string(strarray_nth(sarray, i)));
                 }
+		
+		}
 
                 json_object_set_new(event_json, params[param].name, jarray);
                 break;

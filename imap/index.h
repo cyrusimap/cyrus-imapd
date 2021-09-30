@@ -308,7 +308,7 @@ extern char *index_get_msgid(struct index_state *state, uint32_t msgno);
 extern struct nntp_overview *index_overview(struct index_state *state,
                                             uint32_t msgno);
 extern char *index_getheader(struct index_state *state, uint32_t msgno,
-                             char *hdr);
+                             const char *hdr);
 extern unsigned long index_getsize(struct index_state *state, uint32_t msgno);
 extern unsigned long index_getlines(struct index_state *state, uint32_t msgno);
 extern int index_copy_remote(struct index_state *state, char *sequence,

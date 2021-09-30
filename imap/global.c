@@ -171,7 +171,7 @@ EXPORTED void cyrus_modules_add(void (*done)(void*), void *rock)
     ptrarray_append(&cyrus_modules, cm);
 }
 
-static void cyrus_modules_done()
+static void cyrus_modules_done(void)
 {
     struct cyrus_module *cm;
     while ((cm = ptrarray_pop(&cyrus_modules))) {
@@ -191,6 +191,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     int syslog_opts = LOG_PID;
     const char *facility;
     char *ident_buf = NULL;
+    const char *locktime;
 
     if (cyrus_init_run != NOT_RUNNING) {
         fatal("cyrus_init called twice!", EX_CONFIG);
@@ -386,7 +387,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     }
 
     /* debug lock timing */
-    const char *locktime = config_getstring(IMAPOPT_LOCK_DEBUGTIME);
+    locktime = config_getstring(IMAPOPT_LOCK_DEBUGTIME);
     if (locktime) {
         debug_locks_longer_than = atof(locktime);
     }
@@ -523,7 +524,7 @@ EXPORTED const char *canonify_userid(char *user, const char *loginid,
 {
     char *domain = NULL;
     int len = strlen(user);
-    char buf[81];
+    char buf[81];			/* XXX MAXHOSTNAMELEN + MAXLOGNAME, at least!!! */
 
     /* check for domain */
     if (config_virtdomains &&
@@ -550,7 +551,7 @@ EXPORTED const char *canonify_userid(char *user, const char *loginid,
         else if (loginid) { /* used for LISTRIGHTS */
             if ((domain = strrchr(loginid, '@'))) {
                 /* append the domain from the login id */
-                snprintf(buf, sizeof(buf), "%s@%s", user, domain+1);
+                snprintf(buf, sizeof(buf), "%s@%s", user, domain+1); /* XXX asprintf()! */
                 user = buf;
             }
         }
@@ -567,7 +568,7 @@ EXPORTED const char *canonify_userid(char *user, const char *loginid,
                 if (error == 0 && (domain = strchr(hbuf, '.')) &&
                     !(config_defdomain && !strcasecmp(config_defdomain, domain+1))) {
                     /* append the domain from our IP */
-                    snprintf(buf, sizeof(buf), "%s@%s", user, domain+1);
+                    snprintf(buf, sizeof(buf), "%s@%s", user, domain+1); /* XXX asprintf()! */
                     user = buf;
 
                     if (domain_from_ip) *domain_from_ip = 1;
@@ -792,15 +793,15 @@ EXPORTED int shutdown_file(char *buf, int size)
 
     if (!shutdownfilename) {
         /* Create system shutdownfile name */
-        struct buf buf = BUF_INITIALIZER;
+        struct buf buf2 = BUF_INITIALIZER;
         size_t system_len;
 
-        buf_printf(&buf, "%s/msg/shutdown", config_dir);
-        system_len = buf_len(&buf);
+        buf_printf(&buf2, "%s/msg/shutdown", config_dir);
+        system_len = buf_len(&buf2);
 
         /* Add per-service suffix */
-        buf_printf(&buf, ".%s", config_ident);
-        shutdownfilename = buf_release(&buf);
+        buf_printf(&buf2, ".%s", config_ident);
+        shutdownfilename = buf_release(&buf2);
         suffix = shutdownfilename + system_len;
     }
 
@@ -847,6 +848,10 @@ EXPORTED void session_new_id(void)
 {
     const char *base;
     int now = time(NULL);
+#ifdef HAVE_SSL
+    unsigned long long random;
+#endif
+
     if (now != session_id_time) {
         session_id_time = now;
         session_id_count = 0;
@@ -856,7 +861,6 @@ EXPORTED void session_new_id(void)
     if (!base) base = config_servername;
 
 #ifdef HAVE_SSL
-    unsigned long long random;
     RAND_bytes((unsigned char *) &random, sizeof(random));
     snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d-%llu",
              base, session_id_time, getpid(), session_id_count, random);

@@ -51,7 +51,7 @@ struct sasl_client; /* to avoid having to include sasl sometimes */
 struct imclient_reply {
     char *keyword;              /* reply keyword */
     long msgno;                 /* message number (-1 = no message number) */
-    char *text;                 /* subsequent text */
+    const char *text;           /* subsequent text */
 };
 
 /* Flags for untagged-reply callbacks */

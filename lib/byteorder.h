@@ -61,7 +61,7 @@
 #  define ntohll(x) (x)
 
 #else /* small-endian machines */
-#  if defined(__GNUC__) && ((__GNU__ == 4 && __GNUC_MINOR >= 3) || __GNU__ > 4)
+#  if defined(__GNU__) && ((__GNU__ == 4 && __GNUC_MINOR >= 3) || __GNU__ > 4)
      /* Remove existing macros if present */
 #    undef ntohl
 #    undef htonl

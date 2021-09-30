@@ -642,6 +642,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             /* build up the response bit by bit */
             const struct mbox_name_attribute *attr;
             uint32_t attributes = 0;
+	    char *intname;
+            mbentry_t *mbentry = NULL;
 
             /* Get flags */
             buf_reset(&extraflags);
@@ -714,9 +716,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
             /* lookup name */
             exist_r = 1;
-            char *intname =
-                mboxname_from_external(name.s, &imapd_namespace, userid);
-            mbentry_t *mbentry = NULL;
+            intname = mboxname_from_external(name.s, &imapd_namespace, userid);
             exist_r = mboxlist_lookup(intname, &mbentry, NULL);
             free(intname);
             if(!exist_r && (mbentry->mbtype & MBTYPE_RESERVE))

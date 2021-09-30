@@ -366,6 +366,8 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser)
     char *oldinbox = mboxname_user_mbox(olduser, NULL);
     char *newinbox = mboxname_user_mbox(newuser, NULL);
 
+    strarray_t *subs;
+
     /* copy seen db */
     seen_rename_user(olduser, newuser);
 
@@ -376,7 +378,7 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser)
     rrock.newinbox = newinbox;
 
     /* copy/rename subscriptions - we're using the internal names here */
-    strarray_t *subs = mboxlist_sublist(olduser);
+    subs = mboxlist_sublist(olduser);
     for (i = 0; i < strarray_size(subs); i++) {
         user_renamesub(strarray_nth(subs, i), &rrock);
     }

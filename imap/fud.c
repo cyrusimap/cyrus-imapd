@@ -102,13 +102,16 @@ static int soc = 0; /* inetd (master) has handed us the port as stdin */
 #ifndef MAXDOMNAME
 #define MAXDOMNAME 20           /* should find out for real */
 #endif
+#ifndef MAXHOSTNAMELEN
+#define MAXHOSTNAMELEN 256
+#endif
 
 static int begin_handling(void)
 {
     struct sockaddr_storage sfrom_storage;
     struct sockaddr *sfrom = (struct sockaddr *)&sfrom_storage;
     socklen_t sfromsiz;
-    char buf[MAXLOGNAME + MAXDOMNAME + MAX_MAILBOX_BUFFER];
+    char buf[MAXLOGNAME + MAXHOSTNAMELEN + MAX_MAILBOX_BUFFER]; /* xxx +1? */
     char *mbox;
     int r;
 
@@ -344,12 +347,13 @@ static int handle_request(const char *who, const char *name,
     mbentry_t *mbentry = NULL;
     struct auth_state *mystate;
     int internalseen;
+    char *intname;
 
     numrecent = 0;
     lastread = 0;
     lastarrived = 0;
 
-    char *intname = mboxname_from_external(name, &fud_namespace, who);
+    intname = mboxname_from_external(name, &fud_namespace, who);
 
     r = mboxlist_lookup(intname, &mbentry, NULL);
     if (r || mbentry->mbtype & MBTYPE_RESERVE) {

@@ -290,10 +290,12 @@ EXPORTED off_t arrayu64_find(const arrayu64_t *au, uint64_t val, off_t idx)
 // needs a sorted array
 EXPORTED off_t arrayu64_bsearch(const arrayu64_t *au, uint64_t val)
 {
+    size_t low = 0;
+    size_t high;
+
     if (!au->count) return -1;
 
-    size_t low = 0;
-    size_t high = au->count - 1;
+    high = au->count - 1;
 
     while (low <= high) {
         off_t mid = (high - low)/2 + low;

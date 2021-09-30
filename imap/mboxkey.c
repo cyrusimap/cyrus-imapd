@@ -321,17 +321,17 @@ EXPORTED int mboxkey_close(struct mboxkey *mboxkeydb)
     }
 
     if (lastmboxkey) {
-        int r;
+        int r2;
 
         /* free the old database hanging around */
         abortcurrent(lastmboxkey);
-        r = cyrusdb_close(lastmboxkey->db);
-        if (r != CYRUSDB_OK) {
+        r2 = cyrusdb_close(lastmboxkey->db);
+        if (r2 != CYRUSDB_OK) {
             syslog(LOG_ERR, "DBERROR: error closing lastmboxkey: %s",
-                   cyrusdb_strerror(r));
-            r = IMAP_IOERROR;
+                   cyrusdb_strerror(r2));
+            r2 = IMAP_IOERROR;
         }
-        if(!r) lastmboxkey->db = NULL;
+        if(!r2) lastmboxkey->db = NULL;
         free(lastmboxkey->user);
         free(lastmboxkey->fname);
         free(lastmboxkey);
