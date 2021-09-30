@@ -393,7 +393,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
         case RCPT_PERMFAIL:
             /* we just need any permanent failure, though we should
                probably return data from the client-side LMTP info */
-            printf("%s: %s\n",
+            printf("554 5.6.0 %s: %s\n",
                    txn->rcpt[j].addr, error_message(txn->rcpt[j].r));
             if (r != EX_TEMPFAIL) {
                 r = EX_DATAERR;
