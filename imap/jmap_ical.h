@@ -132,11 +132,14 @@ json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
 /* Convert the jsevent to iCalendar.
  * The oldical argument points to the previous VCALENDAR of the event,
  * or NULL.
- * Returns a new ical component, or NULL on error.
+ * Returns a new VCALENDAR component, or NULL on error.
+ * If compptr is not NULL, then its value points to
+ * the newly created VEVENT.
  */
 icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
                                json_t *invalid,
                                json_t *serverset,
+                               icalcomponent **compptr,
                                struct jmapical_ctx *jmapctx);
 
 

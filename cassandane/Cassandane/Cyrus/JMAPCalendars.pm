@@ -51,6 +51,7 @@ use Storable 'dclone';
 use Cwd qw(abs_path);
 use File::Basename;
 use XML::Spice;
+use MIME::Base64 qw(encode_base64url decode_base64url);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -114,6 +115,17 @@ sub set_up
         'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
+}
+
+sub encode_eventid
+{
+    # This function hard-codes the event id format.
+    # It might break if we change the id scheme.
+    my ($id) = @_;
+    if ($id =~ /[^0-9A-Za-z\-_]/) {
+        return 'EB-' . encode_base64url($id);
+    }
+    return 'E-' . $id;
 }
 
 sub test_calendar_get
@@ -5401,38 +5413,38 @@ sub test_calendarevent_set_caldav
                             "timeZone" => undef,
                         }
                     }}, "R1"]]);
-    my $id = $res->[0][1]{created}{"1"}{id};
+    my $eventId1 = $res->[0][1]{created}{"1"}{id};
 
-    xlog $self, "get x-href of event $id";
-    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
+    xlog $self, "get x-href of event $eventId1";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$eventId1]}, "R1"]]);
     my $xhref = $res->[0][1]{list}[0]{"x-href"};
     my $state = $res->[0][1]{state};
 
-    xlog $self, "GET event $id in CalDAV";
+    xlog $self, "GET event $eventId1 in CalDAV";
     $res = $caldav->Request('GET', $xhref);
     my $ical = $res->{content};
     $self->assert_matches(qr/SUMMARY:foo/, $ical);
 
-    xlog $self, "DELETE event $id via CalDAV";
+    xlog $self, "DELETE event $eventId1 via CalDAV";
     $res = $caldav->Request('DELETE', $xhref);
 
-    xlog $self, "get (non-existent) event $id";
-    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
-    $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
+    xlog $self, "get (non-existent) event $eventId1";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$eventId1]}, "R1"]]);
+    $self->assert_str_equals($eventId1, $res->[0][1]{notFound}[0]);
 
     xlog $self, "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
-    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+    $self->assert_str_equals($eventId1, $res->[0][1]{destroyed}[0]);
     $state = $res->[0][1]{newState};
 
-    $id = '97c46ea4-4182-493c-87ef-aee4edc2d38b';
+    my $uid2 = '97c46ea4-4182-493c-87ef-aee4edc2d38b';
     $ical = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
 BEGIN:VEVENT
-UID:$id
+UID:$uid2
 SUMMARY:bar
 DESCRIPTION:
 TRANSP:OPAQUE
@@ -5441,26 +5453,27 @@ DTEND;VALUE=DATE:20151009
 END:VEVENT
 END:VCALENDAR
 EOF
+    my $eventId2 = encode_eventid($uid2);
 
-    xlog $self, "PUT event with UID $id";
-    $res = $caldav->Request('PUT', "$calid/$id.ics", $ical, 'Content-Type' => 'text/calendar');
+    xlog $self, "PUT event with UID $uid2";
+    $res = $caldav->Request('PUT', "$calid/$uid2.ics", $ical, 'Content-Type' => 'text/calendar');
 
     xlog $self, "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
-    $self->assert_equals($id, $res->[0][1]{created}[0]);
+    $self->assert_equals($eventId2, $res->[0][1]{created}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog $self, "get x-href of event $id";
-    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
+    xlog $self, "get x-href of event $eventId2";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$eventId2]}, "R1"]]);
     $xhref = $res->[0][1]{list}[0]{"x-href"};
     $state = $res->[0][1]{state};
 
-    xlog $self, "update event $id";
+    xlog $self, "update event $eventId2";
     $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
-                        "$id" => {
+                        "$eventId2" => {
                             calendarIds => {
                                 $calid => JSON::true,
                             },
@@ -5474,17 +5487,17 @@ EOF
                         }
                     }}, "R1"]]);
 
-    xlog $self, "GET event $id in CalDAV";
+    xlog $self, "GET event $eventId2 in CalDAV";
     $res = $caldav->Request('GET', $xhref);
     $ical = $res->{content};
     $self->assert_matches(qr/SUMMARY:bam/, $ical);
 
-    xlog $self, "destroy event $id";
-    $res = $jmap->CallMethods([['CalendarEvent/set', { destroy => [$id] }, "R1"]]);
+    xlog $self, "destroy event $eventId2";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { destroy => [$eventId2] }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
-    $self->assert_equals($id, $res->[0][1]{destroyed}[0]);
+    $self->assert_equals($eventId2, $res->[0][1]{destroyed}[0]);
 
-    xlog $self, "PROPFIND calendar $calid for non-existent event $id in CalDAV";
+    xlog $self, "PROPFIND calendar $calid for non-existent event UID $uid2 in CalDAV";
     # We'd like to GET the just destroyed event, to make sure that it also
     # vanished on the CalDAV layer. Unfortunately, that GET would cause
     # Net-DAVTalk to burst into flames with a 404 error. Instead, issue a
@@ -5500,7 +5513,7 @@ EOF
         'Content-Type' => 'application/xml',
         'Depth' => '1'
     );
-    $self->assert_does_not_match(qr{$id}, $res);
+    $self->assert_does_not_match(qr{$uid2}, $res);
 }
 
 sub test_calendarevent_set_schedule_request
@@ -5956,8 +5969,8 @@ sub test_calendarevent_set_uid
     my $ret = $self->createandget_event($event);
     my($filename, $dirs, $suffix) = fileparse($ret->{"x-href"}, ".ics");
     $self->assert_not_null($ret->{id});
-    $self->assert_str_equals($ret->{uid}, $ret->{id});
-    $self->assert_str_equals($filename, $ret->{id});
+    $self->assert_str_equals(encode_eventid($ret->{uid}), $ret->{id});
+    $self->assert_str_equals(encode_eventid($filename), $ret->{id});
 
     # A sane UID maps to both the JMAP id and the DAV resource.
     $event->{uid} = "458912982-some_UID";
@@ -5965,7 +5978,7 @@ sub test_calendarevent_set_uid
     $ret = $self->createandget_event($event);
     ($filename, $dirs, $suffix) = fileparse($ret->{"x-href"}, ".ics");
     $self->assert_str_equals($event->{uid}, $filename);
-    $self->assert_str_equals($event->{uid}, $ret->{id});
+    $self->assert_str_equals(encode_eventid($event->{uid}), $ret->{id});
 
     # A non-pathsafe UID maps to the JMAP id but not the DAV resource.
     $event->{uid} = "a/bogus/path#uid";
@@ -5989,7 +6002,7 @@ sub test_calendarevent_set_uid
     ($filename, $dirs, $suffix) = fileparse($ret->{"x-href"}, ".ics");
     $self->assert_not_null($filename);
     $self->assert_str_not_equals($event->{uid}, $filename);
-    $self->assert_str_equals($event->{uid}, $ret->{id});
+    $self->assert_str_equals("EB-", substr($ret->{id}, 0, 3));
 }
 
 sub test_calendarevent_copy
@@ -6636,12 +6649,12 @@ sub test_calendarevent_query_expandrecurrences
     ]);
     $self->assert_num_equals(6, $res->[0][1]{total});
     $self->assert_deep_equals([
-            'event1uid;2019-01-15T09:00:00',
-            'event1uid;2019-01-08T09:00:00',
-            'event1uid;2019-01-03T13:00:00',
-            'event2uid',
-            'event1uid;2019-01-01T14:00:00',
-            'event1uid;2019-01-01T09:00:00',
+           encode_eventid('event1uid;20190115T090000'),
+           encode_eventid('event1uid;20190108T090000'),
+           encode_eventid('event1uid;20190103T130000'),
+           encode_eventid('event2uid'),
+           encode_eventid('event1uid;20190101T140000'),
+           encode_eventid('event1uid;20190101T090000'),
     ], $res->[0][1]{ids});
 }
 
@@ -6707,11 +6720,11 @@ sub test_calendarevent_query_expandrecurrences_with_exrule
     ]);
     $self->assert_num_equals(5, $res->[0][1]{total});
     $self->assert_deep_equals([
-          "event1uid;2021-01-19T09:00:00",
-          "event1uid;2021-01-01T09:00:00",
-          "event1uid;2020-11-24T09:00:00",
-          "event1uid;2020-10-27T09:00:00",
-          "event1uid;2020-09-29T09:00:00",
+         encode_eventid("event1uid;20210119T090000"),
+         encode_eventid("event1uid;20210101T090000"),
+         encode_eventid("event1uid;20201124T090000"),
+         encode_eventid("event1uid;20201027T090000"),
+         encode_eventid("event1uid;20200929T090000"),
     ], $res->[0][1]{ids});
 }
 
@@ -6762,44 +6775,42 @@ sub test_calendarevent_get_recurrenceinstances
         }, 'R1']
     ]);
 
-    # This test hard-codes the ids of recurrence instances.
-    # This might break if we change the id scheme.
-
+    my @ids = (
+        encode_eventid('event1uid;20190108T090000'),
+        encode_eventid('event1uid;20190115T090000'),
+        encode_eventid('event1uid;20190110T120000'),
+        encode_eventid('event1uid;20190122T090000'), # is excluded
+        encode_eventid('event1uid;20191201T090000'), # does not exist
+        encode_eventid('event1uid;20190102T090000'), # from second rrule
+    );
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
-                ids => [
-                    'event1uid;2019-01-08T09:00:00',
-                    'event1uid;2019-01-15T09:00:00',
-                    'event1uid;2019-01-10T12:00:00',
-                    'event1uid;2019-01-22T09:00:00', # is excluded
-                    'event1uid;2019-12-01T09:00:00', # does not exist
-                    'event1uid;2019-01-02T09:00:00', # from second rrule
-                ],
+                ids => \@ids,
                 properties => ['start', 'title', 'recurrenceId'],
         }, 'R1'],
     ]);
     $self->assert_num_equals(4, scalar @{$res->[0][1]{list}});
 
-    $self->assert_str_equals('event1uid;2019-01-08T09:00:00', $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals($ids[0], $res->[0][1]{list}[0]{id});
     $self->assert_str_equals('2019-01-08T09:00:00', $res->[0][1]{list}[0]{start});
     $self->assert_str_equals('2019-01-08T09:00:00', $res->[0][1]{list}[0]{recurrenceId});
 
-    $self->assert_str_equals('event1uid;2019-01-15T09:00:00', $res->[0][1]{list}[1]{id});
+    $self->assert_str_equals($ids[1], $res->[0][1]{list}[1]{id});
     $self->assert_str_equals('override1', $res->[0][1]{list}[1]{title});
     $self->assert_str_equals('2019-01-15T09:00:00', $res->[0][1]{list}[1]{start});
     $self->assert_str_equals('2019-01-15T09:00:00', $res->[0][1]{list}[1]{recurrenceId});
 
-    $self->assert_str_equals('event1uid;2019-01-10T12:00:00', $res->[0][1]{list}[2]{id});
+    $self->assert_str_equals($ids[2], $res->[0][1]{list}[2]{id});
     $self->assert_str_equals('2019-01-10T12:00:00', $res->[0][1]{list}[2]{start});
     $self->assert_str_equals('2019-01-10T12:00:00', $res->[0][1]{list}[2]{recurrenceId});
 
-    $self->assert_str_equals('event1uid;2019-01-02T09:00:00', $res->[0][1]{list}[3]{id});
+    $self->assert_str_equals($ids[5], $res->[0][1]{list}[3]{id});
     $self->assert_str_equals('2019-01-02T09:00:00', $res->[0][1]{list}[3]{start});
     $self->assert_str_equals('2019-01-02T09:00:00', $res->[0][1]{list}[3]{recurrenceId});
 
     $self->assert_num_equals(2, scalar @{$res->[0][1]{notFound}});
-    $self->assert_str_equals('event1uid;2019-01-22T09:00:00', $res->[0][1]{notFound}[0]);
-    $self->assert_str_equals('event1uid;2019-12-01T09:00:00', $res->[0][1]{notFound}[1]);
+    $self->assert_str_equals($ids[3], $res->[0][1]{notFound}[0]);
+    $self->assert_str_equals($ids[4], $res->[0][1]{notFound}[1]);
 }
 
 sub test_calendarevent_set_recurrenceinstances
@@ -6834,26 +6845,28 @@ sub test_calendarevent_set_recurrenceinstances
             }
         }, 'R1']
     ]);
-    $self->assert(exists $res->[0][1]{created}{1});
+    my $eventId1 = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId1);
 
     # This test hard-codes the ids of recurrence instances.
     # This might break if we change the id scheme.
 
     xlog $self, "Override a regular recurrence instance";
+    my $overrideId1 = encode_eventid('event1uid;2019-01-15T09:00:00');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid;2019-01-15T09:00:00' => {
+                $overrideId1 => {
                     title => "override1",
                 },
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid'],
+            ids => [$eventId1],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid;2019-01-15T09:00:00'});
+    $self->assert(exists $res->[0][1]{updated}{$overrideId1});
     $self->assert_deep_equals({
             '2019-01-15T09:00:00' => {
                 title => "override1",
@@ -6865,17 +6878,17 @@ sub test_calendarevent_set_recurrenceinstances
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid;2019-01-15T09:00:00' => {
+                $overrideId1 => {
                     title => "override1_updated",
                 },
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid'],
+            ids => [$eventId1],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid;2019-01-15T09:00:00'});
+    $self->assert(exists $res->[0][1]{updated}{$overrideId1});
     $self->assert_deep_equals({
             '2019-01-15T09:00:00' => {
                 title => "override1_updated",
@@ -6887,34 +6900,35 @@ sub test_calendarevent_set_recurrenceinstances
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid;2019-01-15T09:00:00' => {
+                $overrideId1 => {
                     title => "event1", # original title
                 },
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid'],
+            ids => [$eventId1],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid;2019-01-15T09:00:00'});
+    $self->assert(exists $res->[0][1]{updated}{$overrideId1});
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
     xlog $self, "Set regular recurrence excluded";
+    my $overrideId2 = encode_eventid('event1uid;2019-01-08T09:00:00');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid;2019-01-08T09:00:00' => {
+                $overrideId2 => {
                     excluded => JSON::true,
                 }
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid'],
+            ids => [$eventId1],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid;2019-01-08T09:00:00'});
+    $self->assert(exists $res->[0][1]{updated}{$overrideId2});
     $self->assert_deep_equals({
         '2019-01-08T09:00:00' => {
             excluded => JSON::true,
@@ -6925,30 +6939,30 @@ sub test_calendarevent_set_recurrenceinstances
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid' => {
+                $eventId1 => {
                     recurrenceOverrides => undef,
                 }
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid'],
+            ids => [$eventId1],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid'});
+    $self->assert(exists $res->[0][1]{updated}{$eventId1});
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
     xlog $self, "Destroy regular recurrence instance";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
-            destroy => ['event1uid;2019-01-08T09:00:00'],
+            destroy => [$overrideId2],
         }, 'R1'],
         ['CalendarEvent/get', {
             ids => ['event1uid'],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert_str_equals('event1uid;2019-01-08T09:00:00', $res->[0][1]{destroyed}[0]);
+    $self->assert_str_equals($overrideId2, $res->[0][1]{destroyed}[0]);
     $self->assert_deep_equals({
         '2019-01-08T09:00:00' => {
             excluded => JSON::true,
@@ -6991,33 +7005,32 @@ sub test_calendarevent_set_recurrenceinstances_rdate
             }
         }, 'R1']
     ]);
-    $self->assert(exists $res->[0][1]{created}{1});
-
-    # This test hard-codes the ids of recurrence instances.
-    # This might break if we change the id scheme.
+    my $eventId1 = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId1);
 
     xlog $self, "Delete RDATE by setting it excluded";
+    my $overrideId1 = encode_eventid('event1uid;2019-01-10T14:00:00');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid;2019-01-10T14:00:00' => {
+                $overrideId1 => {
                     excluded => JSON::true,
                 }
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid'],
+            ids => [$eventId1],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid;2019-01-10T14:00:00'});
+    $self->assert(exists $res->[0][1]{updated}{$overrideId1});
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
     xlog $self, "Recreate RDATE";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
-                'event1uid' => {
+                $eventId1 => {
                     recurrenceOverrides => {
                         '2019-01-10T14:00:00' => {}
                     },
@@ -7025,11 +7038,11 @@ sub test_calendarevent_set_recurrenceinstances_rdate
             }
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid'],
+            ids => [$eventId1],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{'event1uid'});
+    $self->assert(exists $res->[0][1]{updated}{$eventId1});
     $self->assert_deep_equals({
             '2019-01-10T14:00:00' => { },
         },
@@ -7039,14 +7052,14 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     xlog $self, "Destroy RDATE";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
-            destroy => ['event1uid;2019-01-10T14:00:00'],
+            destroy => [$overrideId1],
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['event1uid'],
+            ids => [$eventId1],
             properties => ['recurrenceOverrides'],
         }, 'R2'],
     ]);
-    $self->assert_str_equals('event1uid;2019-01-10T14:00:00', $res->[0][1]{destroyed}[0]);
+    $self->assert_str_equals($overrideId1, $res->[0][1]{destroyed}[0]);
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 }
 
@@ -8285,7 +8298,7 @@ sub test_calendarevent_get_utcstart
     # Assert utcStart for regular recurrence instance.
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
-            ids => ['eventuid1local;2019-12-08T11:21:01'],
+            ids => [encode_eventid('eventuid1local;20191208T112101')],
             properties => ['utcStart', 'utcEnd'],
         }, 'R2']
     ]);
@@ -8603,7 +8616,7 @@ sub test_calendarevent_set_utcstart_recur
     $self->assert_str_equals('PT1H', $event->{duration});
 
     # Updating utcStart on a expanded recurrence instance is OK.
-    my $eventInstanceId = $eventId . ';2019-12-13T12:30:00';
+    my $eventInstanceId = encode_eventid('eventuid1local;20191213T123000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -12313,7 +12326,6 @@ sub test_calendareventnotification_aclcheck
     my $unsharedEventId = $res->[0][1]{created}{unsharedEvent}{id};
     $self->assert_not_null($unsharedEventId);
 
-    # FIXME /changes for shared mailboxes
     $res = $manjmap->CallMethods([
         ['CalendarEventNotification/get', {
             accountId => 'cassandane',
@@ -14392,52 +14404,33 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    my $event = $self->putandget_vevent('2a358cee-6489-4f14-a57f-c104db4dc357',
-        $ical, ['start', 'timeZone', 'recurrenceId', 'recurrenceIdTimeZone']);
+    $caldav->Request('PUT', 'Default/2a358cee-6489-4f14-a57f-c104db4dc357.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => [
+                'recurrenceId',
+                'recurrenceIdTimeZone',
+                'start',
+                'timeZone',
+            ],
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    my $event = $res->[1][1]{list}[0];
 
     $self->assert_str_equals('2016-09-28T16:00:00', $event->{start});
     $self->assert_str_equals('Europe/Berlin', $event->{timeZone});
     $self->assert_str_equals('2016-09-28T01:00:00', $event->{recurrenceId});
     $self->assert_str_equals('Europe/London', $event->{recurrenceIdTimeZone});
-}
-
-sub test_calendarevent_set_recurrenceid
-    :min_version_3_5 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            create => {
-                event1 => {
-                    calendarIds => {
-                        'Default' => JSON::true,
-                    },
-                    '@type' => 'Event',
-                    title => 'event1',
-                    start => '2021-01-01T01:00:00',
-                    timeZone => 'Europe/Berlin',
-                    duration => 'PT1H',
-                    recurrenceId => '2022-02-02T02:00:00',
-                    recurrenceIdTimeZone => 'Europe/London',
-                },
-            },
-        }, 'R1'],
-        ['CalendarEvent/get', {
-            ids => ['#event1'],
-            properties => ['start', 'timeZone', 'recurrenceId', 'recurrenceIdTimeZone'],
-        }, 'R2'],
-    ]);
-    $self->assert_not_null($res->[0][1]{created}{event1}{id});
-    $self->assert_str_equals('2021-01-01T01:00:00',
-        $res->[1][1]{list}[0]{start});
-    $self->assert_str_equals('Europe/Berlin',
-        $res->[1][1]{list}[0]{timeZone});
-    $self->assert_str_equals('2022-02-02T02:00:00',
-        $res->[1][1]{list}[0]{recurrenceId});
-    $self->assert_str_equals('Europe/London',
-        $res->[1][1]{list}[0]{recurrenceIdTimeZone});
 }
 
 sub assert_rewrite_webdav_attachment_url_itip
@@ -15036,6 +15029,681 @@ sub test_calendarevent_query_with_timezone
         ]);
         $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
     }
+}
+
+sub test_calendarevent_get_standalone_instances
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=America/New_York:20210101T060000
+DTSTART;TZID=Europe/Berlin:20210101T120000
+DURATION:PT1H
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:instance1
+SEQUENCE:0
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=America/New_York:20210301T060000
+DTSTART;TZID=America/New_York:20210301T080000
+DURATION:PT1H
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:instance2
+SEQUENCE:0
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => [
+                'recurrenceId',
+                'recurrenceIdTimeZone',
+                'start',
+                'timeZone',
+                'title',
+                'uid',
+            ],
+        }, 'R2'],
+    ]);
+
+    my %events = map { $_->{title} => $_ } @{$res->[1][1]{list}};
+    $self->assert_num_equals(2, scalar keys %events);
+    $self->assert_str_not_equals($events{instance1}{id}, $events{instance2}{id});
+
+    $self->assert_str_equals('2021-01-01T12:00:00',
+        $events{instance1}{start});
+    $self->assert_str_equals('Europe/Berlin',
+        $events{instance1}{timeZone});
+    $self->assert_str_equals('2021-01-01T06:00:00',
+        $events{instance1}{recurrenceId});
+    $self->assert_str_equals('America/New_York',
+        $events{instance1}{recurrenceIdTimeZone});
+    $self->assert_str_equals('2a358cee-6489-4f14-a57f-c104db4dc357',
+        $events{instance1}{uid});
+
+    $self->assert_str_equals('2021-03-01T08:00:00',
+        $events{instance2}{start});
+    $self->assert_str_equals('America/New_York',
+        $events{instance2}{timeZone});
+    $self->assert_str_equals('2021-03-01T06:00:00',
+        $events{instance2}{recurrenceId});
+    $self->assert_str_equals('America/New_York',
+        $events{instance2}{recurrenceIdTimeZone});
+    $self->assert_str_equals('2a358cee-6489-4f14-a57f-c104db4dc357',
+        $events{instance2}{uid});
+}
+
+sub test_calendarevent_set_standalone_instances_create
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Get event state";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => [],
+        }, 'R2'],
+    ]);
+    my $state = $res->[0][1]{state};
+
+    xlog "Create standalone instance";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#instance1'],
+            properties => ['start', 'timeZone', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R2'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R3'],
+    ]);
+    my $instance1Id = $res->[0][1]{created}{instance1}{id};
+    $self->assert_not_null($instance1Id);
+    my $xhref1 = $res->[0][1]{created}{instance1}{'x-href'};
+    $self->assert_not_null($xhref1);
+    $self->assert_str_equals('2021-01-01T11:11:11',
+        $res->[1][1]{list}[0]{start});
+    $self->assert_str_equals('Europe/Berlin',
+        $res->[1][1]{list}[0]{timeZone});
+    $self->assert_str_equals('2021-01-01T01:01:01',
+        $res->[1][1]{list}[0]{recurrenceId});
+    $self->assert_str_equals('Europe/London',
+        $res->[1][1]{list}[0]{recurrenceIdTimeZone});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[1][1]{state});
+    $self->assert_str_not_equals($state, $res->[2][1]{newState});
+    $self->assert_deep_equals([$instance1Id], $res->[2][1]{created});
+    $self->assert_deep_equals([], $res->[2][1]{updated});
+    $self->assert_deep_equals([], $res->[2][1]{destroyed});
+    $state = $res->[2][1]{newState};
+
+    xlog "Can't create a new standalone instance with same recurrence id";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance2',
+                    start => '2021-02-02T22:22:22',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notCreated}{instance2}{type});
+    $self->assert_deep_equals(['uid', 'recurrenceId'],
+        $res->[0][1]{notCreated}{instance2}{properties});
+
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_str_equals($state, $res->[1][1]{newState});
+    $self->assert_deep_equals([], $res->[1][1]{created});
+    $self->assert_deep_equals([], $res->[1][1]{updated});
+    $self->assert_deep_equals([], $res->[1][1]{destroyed});
+
+    xlog "Create standalone instance with same uid but different recurrence id";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance2',
+                    start => '2021-02-02T02:02:02',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-02-02T02:02:02',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#instance2'],
+            properties => ['start', 'timeZone', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R2'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R3'],
+    ]);
+    my $instance2Id = $res->[0][1]{created}{instance2}{id};
+    $self->assert_not_null($instance2Id);
+    my $xhref2 = $res->[0][1]{created}{instance2}{'x-href'};
+    $self->assert_not_null($xhref2);
+    $self->assert_str_equals('2021-02-02T02:02:02',
+        $res->[1][1]{list}[0]{start});
+    $self->assert_str_equals('Europe/Berlin',
+        $res->[1][1]{list}[0]{timeZone});
+    $self->assert_str_equals('2021-02-02T02:02:02',
+        $res->[1][1]{list}[0]{recurrenceId});
+    $self->assert_str_equals('Europe/London',
+        $res->[1][1]{list}[0]{recurrenceIdTimeZone});
+
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[1][1]{state});
+    $self->assert_str_not_equals($state, $res->[2][1]{newState});
+    $self->assert_deep_equals([$instance2Id], $res->[2][1]{created});
+    $self->assert_deep_equals([], $res->[2][1]{updated});
+    $self->assert_deep_equals([], $res->[2][1]{destroyed});
+    $state = $res->[2][1]{newState};
+
+    xlog "Assert both events exist";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$instance1Id, $instance2Id],
+            properties => ['title', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{notFound}});
+
+    xlog "Assert CalDAV resource contains both instances";
+    $res = $caldav->Request('GET', $xhref1);
+    $self->assert($res->{content} =~ m/SUMMARY:instance1/);
+    $self->assert($res->{content} =~ m/SUMMARY:instance2/);
+}
+
+sub test_calendarevent_set_standalone_instances_update
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create standalone instances";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+                instance2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance2',
+                    start => '2021-02-02T02:02:02',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-02-02T02:02:02',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $instance1Id = $res->[0][1]{created}{instance1}{id};
+    $self->assert_not_null($instance1Id);
+    my $instance2Id = $res->[0][1]{created}{instance2}{id};
+    $self->assert_not_null($instance2Id);
+    my $xhref1 = $res->[0][1]{created}{instance1}{'x-href'};
+    $self->assert_not_null($xhref1);
+    my $xhref2 = $res->[0][1]{created}{instance2}{'x-href'};
+    $self->assert_not_null($xhref2);
+    $self->assert_str_equals($xhref1, $xhref2);
+    my $state = $res->[0][1]{newState};
+
+    xlog "Update standalone instance";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $instance1Id => {
+                    title => 'instance1Updated',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$instance1Id],
+            properties => ['title', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => [$instance2Id],
+            properties => ['title', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R3'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R4'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$instance1Id});
+    $self->assert_str_equals('instance1Updated', $res->[1][1]{list}[0]{title});
+    $self->assert_str_equals('instance2', $res->[2][1]{list}[0]{title});
+
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[1][1]{state});
+    $self->assert_str_not_equals($state, $res->[2][1]{state});
+    $self->assert_str_not_equals($state, $res->[3][1]{newState});
+    $self->assert_deep_equals([], $res->[3][1]{created});
+    $self->assert_deep_equals([$instance1Id], $res->[3][1]{updated});
+    $self->assert_deep_equals([], $res->[3][1]{destroyed});
+    $state = $res->[3][1]{newState};
+
+    xlog "Assert CalDAV resource contains both instances";
+    $res = $caldav->Request('GET', $xhref1);
+    $self->assert($res->{content} =~ m/SUMMARY:instance1Updated/);
+    $self->assert($res->{content} =~ m/SUMMARY:instance2/);
+
+    xlog "Can't change the recurrenceId or recurrenceIdTimeZone property";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $instance1Id => {
+                    recurrenceId => '2021-03-03T03:03:03',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            update => {
+                $instance1Id => {
+                    recurrenceIdTimeZone => 'America/New_York',
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals(['recurrenceId'],
+        $res->[0][1]{notUpdated}{$instance1Id}{properties});
+    $self->assert_deep_equals(['recurrenceIdTimeZone'],
+        $res->[1][1]{notUpdated}{$instance1Id}{properties});
+}
+
+sub test_calendarevent_set_standalone_instances_destroy
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create standalone instances";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+                instance2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance2',
+                    start => '2021-02-02T02:02:02',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-02-02T02:02:02',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $instance1Id = $res->[0][1]{created}{instance1}{id};
+    $self->assert_not_null($instance1Id);
+    my $instance2Id = $res->[0][1]{created}{instance2}{id};
+    $self->assert_not_null($instance2Id);
+    my $xhref1 = $res->[0][1]{created}{instance1}{'x-href'};
+    $self->assert_not_null($xhref1);
+    my $xhref2 = $res->[0][1]{created}{instance2}{'x-href'};
+    $self->assert_not_null($xhref2);
+    $self->assert_str_equals($xhref1, $xhref2);
+    my $state = $res->[0][1]{newState};
+
+    xlog "Destroy first standalone instance";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            destroy => [ $instance1Id ],
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$instance1Id],
+            properties => ['title', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => [$instance2Id],
+            properties => ['title', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R3'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R4'],
+    ]);
+    $self->assert_deep_equals([$instance1Id], $res->[0][1]{destroyed});
+    $self->assert_deep_equals([$instance1Id], $res->[1][1]{notFound});
+    $self->assert_str_equals('instance2', $res->[2][1]{list}[0]{title});
+
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[1][1]{state});
+    $self->assert_str_not_equals($state, $res->[2][1]{state});
+    $self->assert_str_not_equals($state, $res->[3][1]{newState});
+    $self->assert_deep_equals([], $res->[3][1]{created});
+    $self->assert_deep_equals([], $res->[3][1]{updated});
+    $self->assert_deep_equals([$instance1Id], $res->[3][1]{destroyed});
+    $state = $res->[3][1]{newState};
+
+    xlog "Assert CalDAV resource still exists";
+    $res = $caldav->Request('GET', $xhref1);
+    $self->assert(not $res->{content} =~ m/SUMMARY:instance1/);
+    $self->assert($res->{content} =~ m/SUMMARY:instance2/);
+
+    xlog "Destroy second standalone instance";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            destroy => [ $instance2Id ],
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$instance2Id],
+            properties => ['title', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R2'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$instance2Id], $res->[0][1]{destroyed});
+    $self->assert_deep_equals([$instance2Id], $res->[1][1]{notFound});
+
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[1][1]{state});
+    $self->assert_str_not_equals($state, $res->[2][1]{newState});
+    $self->assert_deep_equals([], $res->[2][1]{created});
+    $self->assert_deep_equals([], $res->[2][1]{updated});
+    $self->assert_deep_equals([$instance2Id], $res->[2][1]{destroyed});
+    $state = $res->[3][1]{newState};
+
+    xlog "Assert CalDAV resource is gone";
+    # Can't use CalDAV talk for GET on non-existent URLs
+    my $xml = <<EOF;
+<?xml version="1.0"?>
+<a:propfind xmlns:a="DAV:">
+ <a:prop><a:resourcetype/></a:prop>
+</a:propfind>
+EOF
+    $res = $caldav->Request('PROPFIND', 'Default', $xml,
+        'Content-Type' => 'application/xml',
+        'Depth' => '1'
+    );
+    $self->assert_does_not_match(qr{event1uid}, $res);
+}
+
+sub test_calendarevent_set_standalone_instances_move
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create standalone instances";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+                instance2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance2',
+                    start => '2021-02-02T02:02:02',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-02-02T02:02:02',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+        ['Calendar/set', {
+            create => {
+                calendarA => {
+                    name => 'A',
+                },
+            },
+        }, 'R2'],
+    ]);
+    my $instance1Id = $res->[0][1]{created}{instance1}{id};
+    $self->assert_not_null($instance1Id);
+    my $instance2Id = $res->[0][1]{created}{instance2}{id};
+    $self->assert_not_null($instance2Id);
+    my $state = $res->[0][1]{newState};
+    my $calendarAId = $res->[1][1]{created}{calendarA}{id};
+    $self->assert_not_null($calendarAId);
+
+    xlog "Move standalone instance to other calendar";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $instance1Id => {
+                    calendarIds => {
+                        $calendarAId => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$instance1Id],
+            properties => ['calendarIds', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => [$instance2Id],
+            properties => ['calendarIds', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R3'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R4'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$instance1Id});
+    $self->assert_deep_equals({$calendarAId => JSON::true },
+        $res->[1][1]{list}[0]{calendarIds});
+
+    xlog "Moving one standalone instance also moves any other instances";
+    $self->assert_deep_equals({$calendarAId => JSON::true },
+        $res->[2][1]{list}[0]{calendarIds});
+
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[1][1]{state});
+    $self->assert_str_not_equals($state, $res->[2][1]{state});
+    $self->assert_str_not_equals($state, $res->[3][1]{newState});
+
+    $self->assert_deep_equals([], $res->[3][1]{created});
+    my @wantUpdated = sort ($instance1Id, $instance2Id);
+    my @haveUpdated = sort @{$res->[3][1]{updated}};
+    $self->assert_deep_equals(\@wantUpdated, \@haveUpdated);
+    $self->assert_deep_equals([], $res->[3][1]{destroyed});
+}
+
+sub test_calendarevent_set_standalone_instances_to_main
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create standalone instance";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $instance1Id = $res->[0][1]{created}{instance1}{id};
+    $self->assert_not_null($instance1Id);
+    my $state = $res->[0][1]{newState};
+
+    xlog "Can't convert a standalone instance to a main event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $instance1Id => {
+                    recurrenceId => undef,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$instance1Id}{type});
+    $self->assert_deep_equals([
+            # XXX invalidProperties doesn't deduplicate,
+            # but we'll only change this when we merged
+            # this feature branch
+            'recurrenceId', 'recurrenceId', 'recurrenceIdTimeZone'
+    ], $res->[0][1]{notUpdated}{$instance1Id}{properties});
+
+    $self->assert_str_equals($state, $res->[1][1]{newState});
+    $self->assert_deep_equals([], $res->[1][1]{created});
+    $self->assert_deep_equals([], $res->[1][1]{updated});
+    $self->assert_deep_equals([], $res->[1][1]{destroyed});
+
+    xlog "Create main event with the same uid";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'mainevent1',
+                    start => '2020-12-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceRules => [{
+                        '@type' => 'RecurrenceRule',
+                        frequency => 'monthly',
+                        count => 3,
+                    }],
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R2'],
+    ]);
+    my $event1Id = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($event1Id);
+
+    $self->assert_str_not_equals($state, $res->[1][1]{newState});
+    $self->assert_deep_equals([$event1Id], $res->[1][1]{created});
+    $self->assert_deep_equals([], $res->[1][1]{updated});
+    $self->assert_deep_equals([$instance1Id], $res->[1][1]{destroyed});
 }
 
 1;
