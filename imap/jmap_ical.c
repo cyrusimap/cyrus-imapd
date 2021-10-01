@@ -3969,7 +3969,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser,
         jmap_parser_invalid(parser, "start");
     }
 
-    /* recurrenceIdTime */
+    /* recurrenceId */
     struct jmapical_datetime recurid = JMAPICAL_DATETIME_INITIALIZER;
     jprop = json_object_get(event, "recurrenceId");
     if (json_is_string(jprop)) {
@@ -6941,6 +6941,7 @@ icalcomponent*
 jmapical_toical(json_t *jsevent, icalcomponent *oldical,
                 json_t *invalid,
                 json_t *serverset,
+                icalcomponent **compptr,
                 struct jmapical_ctx *jmapctx)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -6970,6 +6971,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical,
         icalcomponent_set_dtstamp(comp, now);
         icalcomponent_add_property(comp, icalproperty_new_created(now));
         icalcomponent_add_component(ical, comp);
+        if (compptr) *compptr = comp;
 
         /* Convert the JMAP calendar event to ical. */
         calendarevent_to_ical(comp, &parser, jsevent, &oldcomps, NULL, jmapctx);
@@ -7051,7 +7053,7 @@ EXPORTED icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf)
         return NULL;
     }
 
-    ical = jmapical_toical(obj, NULL, NULL, NULL, NULL);
+    ical = jmapical_toical(obj, NULL, NULL, NULL, NULL, NULL);
 
     json_decref(obj);
 

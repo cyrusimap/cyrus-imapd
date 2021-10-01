@@ -92,6 +92,19 @@
     " UNIQUE( mailbox, resource ) );"                                   \
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
 
+#define CMD_CREATE_JSCALOBJS                                            \
+    "CREATE TABLE IF NOT EXISTS jscal_objs ("                           \
+    " rowid INTEGER NOT NULL,"                                          \
+    " ical_recurid TEXT NOT NULL DEFAULT '',"                           \
+    " modseq INTEGER NOT NULL,"                                         \
+    " createdmodseq INTEGER NOT NULL,"                                  \
+    " dtstart TEXT NOT NULL,"                                           \
+    " dtend TEXT NOT NULL,"                                             \
+    " alive INTEGER NOT NULL,"                                          \
+    " ical_guid TEXT NOT NULL,"                                         \
+    " PRIMARY KEY (rowid, ical_recurid)"                                \
+    " FOREIGN KEY (rowid) REFERENCES ical_objs (rowid) ON DELETE CASCADE );"
+
 #define CMD_CREATE_CARD                                                 \
     "CREATE TABLE IF NOT EXISTS vcard_objs ("                           \
     " rowid INTEGER PRIMARY KEY,"                                       \
@@ -159,6 +172,7 @@
     " UNIQUE( mailbox, imap_uid ),"                                     \
     " UNIQUE( mailbox, resource ) );"                                   \
 
+// dropped in version 12
 #define CMD_CREATE_CALCACHE                                             \
     "CREATE TABLE IF NOT EXISTS ical_jmapcache ("                       \
     " rowid INTEGER NOT NULL,"                                          \
@@ -167,6 +181,16 @@
     " jmapdata TEXT NOT NULL,"                                          \
     " PRIMARY KEY (rowid, userid)"                                      \
     " FOREIGN KEY (rowid) REFERENCES ical_objs (rowid) ON DELETE CASCADE );"
+
+#define CMD_CREATE_JSCALCACHE                                           \
+    "CREATE TABLE IF NOT EXISTS jscal_cache ("                          \
+    " rowid INTEGER NOT NULL,"                                          \
+    " ical_recurid TEXT NOT NULL,"                                      \
+    " userid TEXT NOT NULL,"                                            \
+    " version INTEGER NOT NULL,"                                        \
+    " data TEXT NOT NULL,"                                              \
+    " PRIMARY KEY (rowid, ical_recurid, userid)"                             \
+    " FOREIGN KEY (rowid, ical_recurid) REFERENCES jscal_objs (rowid, ical_recurid) ON DELETE CASCADE );"
 
 #define CMD_CREATE_CARDCACHE                                            \
     "CREATE TABLE IF NOT EXISTS vcard_jmapcache ("                      \
@@ -196,7 +220,7 @@
 
 #define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_CARD CMD_CREATE_EM CMD_CREATE_GR \
                    CMD_CREATE_OBJS CMD_CREATE_CALCACHE CMD_CREATE_CARDCACHE   \
-                   CMD_CREATE_SIEVE
+                   CMD_CREATE_SIEVE CMD_CREATE_JSCALOBJS CMD_CREATE_JSCALCACHE
 
 /* leaves these unused columns around, but that's life.  A dav_reconstruct
  * will fix them */
@@ -241,6 +265,12 @@
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_object_imapuid ON dav_objs ( mailbox, imap_uid );" \
     "DROP INDEX IF EXISTS idx_res_uid;"
 
+#define CMD_DBUPGRADEv15 \
+    "DROP TABLE ical_jmapcache;" \
+    CMD_CREATE_JSCALOBJS CMD_CREATE_JSCALCACHE \
+    "INSERT INTO jscal_objs" \
+    " SELECT rowid, '', modseq, createdmodseq, dtstart, dtend, alive, '' FROM ical_objs;"
+
 #define CMD_DBUPGRADEv14 CMD_CREATE_SIEVE
 
 static int sievedb_upgrade(sqldb_t *db);
@@ -259,10 +289,11 @@ struct sqldb_upgrade davdb_upgrade[] = {
   /* Don't upgrade to version 12.  This was an intermediate Sieve DB version */
   /* Don't upgrade to version 13.  This was an intermediate Sieve DB version */
   { 14, CMD_DBUPGRADEv14, &sievedb_upgrade },
+  { 15, CMD_DBUPGRADEv15, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 14
+#define DB_VERSION 15
 
 static sqldb_t *reconstruct_db;
 
