@@ -915,6 +915,7 @@ static imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linel
         }
     }
     else if (!strncasecmp(str, sasl_cmd->fail, strlen(sasl_cmd->fail))) {
+	fprintf(stderr, "getauthline(): failed: '%s' matches sasl_cmd->fail:'%s'\n", str, sasl_cmd->fail);
         return STAT_NO;
     }
     else if (sasl_cmd->cont) {
@@ -948,6 +949,7 @@ static imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linel
                                    *line, len, (unsigned *) linelen);
         if (saslresult != SASL_OK && saslresult != SASL_CONTINUE) {
             printf("base64 decoding error\n");
+	    fprintf(stderr, "getauthline(): sasl_decode64('%s'): %s\n", str, sasl_errstring(saslresult, NULL, NULL));
             return STAT_NO;
         }
     } else {
@@ -1083,6 +1085,7 @@ static int auth_sasl(struct sasl_cmd_t *sasl_cmd, const char *mechlist)
     } while (saslresult == SASL_INTERACT);
 
     if ((saslresult != SASL_OK) && (saslresult != SASL_CONTINUE)) {
+	fprintf(stderr, "auth_sasl(): sasl_client_start() error?: %s\n", sasl_errstring(saslresult, NULL, NULL));
         return saslresult;
     }
 
@@ -1122,7 +1125,10 @@ static int auth_sasl(struct sasl_cmd_t *sasl_cmd, const char *mechlist)
             /* convert to base64 */
             saslresult = sasl_encode64(out, outlen, inbase64, sizeof(inbase64),
                                        (unsigned *) &inbase64len);
-            if (saslresult != SASL_OK) return saslresult;
+	    if (saslresult != SASL_OK) {
+		fprintf(stderr, "auth_sasl(): base64 encoding error: %s\n", sasl_errstring(saslresult, NULL, NULL));
+		return saslresult;
+	    }
 
             /* send to server */
             if (sendliteral) {
@@ -2104,25 +2110,31 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *apop_chal,
             if (!apop_chal) {
                 printf("[Server did not advertise APOP challenge]\n");
             } else {
+    	    printf("pop3_do_auth(): mech == '%s', calling auth_apop()\n", mech);
                 result = auth_apop((char *) apop_chal);
             }
         } else if (!strcasecmp(mech, "user")) {
             if (!user_enabled) {
                 printf("[Server did not advertise USER]\n");
             } else {
+    	    printf("pop3_do_auth(): mech == '%s', calling auth_pop()\n", mech);
                 result = auth_pop();
             }
         } else if (!mechlist || !stristr(mechlist, mech)) {
-            printf("[Server did not advertise SASL %s]\n", ucase(mech));
+            printf("[Server did not advertise SASL %s]\n", mech);
         } else {
+	    printf("pop3_do_auth(): mech == '%s', calling auth_sasl()\n", mech);
             result = auth_sasl(sasl_cmd, mech);
         }
     } else {
         if (mechlist) {
+	    printf("pop3_do_auth(): !mech, mechlist == '%s', calling auth_sasl()\n", mechlist);
             result = auth_sasl(sasl_cmd, mechlist);
         } else if (apop_chal) {
+	    printf("pop3_do_auth(): !mech, !mechlist, apop_chal is set, calling auth_apop()\n");
             result = auth_apop((char *) apop_chal);
         } else if (user_enabled) {
+	    printf("pop3_do_auth(): !mech, !mechlist, !rock, calling auth_pop()\n");
             result = auth_pop();
         }
     }
