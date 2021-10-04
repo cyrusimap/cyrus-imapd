@@ -752,37 +752,46 @@ struct jmap_mailbox_get_cb_rock {
     strarray_t *sublist;
 };
 
+static int is_jmap_mailbox(const mbentry_t *mbentry, int tombstones)
+{
+    /* Don't list special-purpose mailboxes. */
+    if (mbtypes_unavailable(mbentry->mbtype) ||
+        mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
+        ((mbentry->mbtype & MBTYPE_DELETED) && !tombstones))
+        return 0;
+
+    // No more returns from here
+
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    const char *topbox = strarray_nth(mbname_boxes(mbname), 0);
+    int ret = 0;
+
+    /* skip INBOX.INBOX magic intermediate */
+    if (strarray_size(mbname_boxes(mbname)) == 1 && !strcmp(topbox, "INBOX"))
+        goto done;
+
+    /* skip any of our magic mailboxes */
+    if (!strcmpsafe(topbox, config_getstring(IMAPOPT_CALENDARPREFIX))
+     || !strcmpsafe(topbox, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX))
+     || !strcmpsafe(topbox, config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX))
+     || !strcmpsafe(topbox, config_getstring(IMAPOPT_JMAPUPLOADFOLDER)))
+        goto done;
+
+    // Use this mailbox
+    ret = 1;
+
+done:
+    mbname_free(&mbname);
+    return ret;
+}
+
 static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
 {
     struct jmap_mailbox_get_cb_rock *rock = _rock;
     jmap_req_t *req = rock->req;
     json_t *list = (json_t *) rock->get->list, *obj;
 
-    /* Don't list special-purpose mailboxes. */
-    if (mbtypes_unavailable(mbentry->mbtype) ||
-        mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
-        return 0;
-    }
-
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
-    const char *topbox = strarray_nth(mbname_boxes(mbname), 0);
-
-    /* skip INBOX.INBOX magic intermediate */
-    if (strarray_size(mbname_boxes(mbname)) == 1 && !strcmp(topbox, "INBOX")) {
-        mbname_free(&mbname);
-        return 0;
-    }
-
-    /* skip any of our magic mailboxes */
-    if (!strcmpsafe(topbox, config_getstring(IMAPOPT_CALENDARPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_JMAPUPLOADFOLDER))) {
-        mbname_free(&mbname);
-        return 0;
-    }
-
-    mbname_free(&mbname);
+    if (!is_jmap_mailbox(mbentry, 0)) return 0;
 
     /* Do we need to process this mailbox? */
     if (rock->want && !hash_lookup(mbentry->uniqueid, rock->want))
@@ -1292,10 +1301,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 {
     mboxquery_t *q = rock;
 
-    if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL)
-        return 0;
-
-    if ((mbentry->mbtype & MBTYPE_DELETED) && !q->include_tombstones)
+    if (!is_jmap_mailbox(mbentry, q->include_tombstones))
         return 0;
 
     enum shared_mbox_type shared_mbtype = _shared_mbox_type(q->shared_mboxes, mbentry->name);
@@ -1303,14 +1309,6 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
         return 0;
 
     mbname_t *mbname = mbname_from_intname(mbentry->name);
-
-    /* skip INBOX.INBOX magic intermediate */
-    if (strarray_size(mbname_boxes(mbname)) == 1 &&
-        !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
-        if (mbname) mbname_free(&mbname);
-        return 0;
-    }
-
     int r = 0;
 
     /* Create record */
