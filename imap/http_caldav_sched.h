@@ -61,55 +61,8 @@
 
 #include "http_dav.h"
 #include "ical_support.h"
-#include "http_caldav.h"
+#include "itip_support.h"
 
-
-#define NEW_STAG (1<<8)         /* Make sure we skip over PREFER bits */
-
-#define REQSTAT_PENDING         "1.0;Pending"
-#define REQSTAT_SENT            "1.1;Sent"
-#define REQSTAT_DELIVERED       "1.2;Delivered"
-#define REQSTAT_SUCCESS         "2.0;Success"
-#define REQSTAT_NOUSER          "3.7;Invalid calendar user"
-#define REQSTAT_NOPRIVS         "3.8;Noauthority"
-#define REQSTAT_TEMPFAIL        "5.1;Service unavailable"
-#define REQSTAT_PERMFAIL        "5.2;Invalid calendar service"
-#define REQSTAT_REJECTED        "5.3;No scheduling support for user"
-
-struct sched_data {
-    unsigned ischedule;
-    unsigned is_reply;
-    unsigned is_update;
-    icalcomponent *itip;
-    icalcomponent *oldical;
-    icalcomponent *newical;
-    icalparameter_scheduleforcesend force_send;
-    const strarray_t *schedule_addresses;
-    const char *status;
-};
-
-/* Scheduling protocol flags */
-#define SCHEDTYPE_REMOTE        (1<<0)
-#define SCHEDTYPE_ISCHEDULE     (1<<1)
-#define SCHEDTYPE_SSL           (1<<2)
-
-struct proplist {
-    icalproperty *prop;
-    struct proplist *next;
-};
-
-/* Each calendar user address has the following scheduling protocol params */
-/* All memory must be freed with sched_param_fini. */
-struct caldav_sched_param {
-    char *userid;       /* Userid corresponding to calendar address */
-    char *server;       /* Remote server user lives on */
-    unsigned port;      /* Remote server port, default = 80 */
-    unsigned flags;     /* Flags dictating protocol to use for scheduling */
-    unsigned isyou;     /* true if the user is the same as the authenticated user */
-    struct proplist *props; /* List of attendee iCal properties */
-};
-
-extern void sched_param_fini(struct caldav_sched_param *sparam);
 
 struct freebusy {
     struct icalperiodtype per;
