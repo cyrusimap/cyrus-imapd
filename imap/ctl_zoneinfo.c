@@ -150,8 +150,8 @@ int main(int argc, char **argv)
         /* Add INFO record (overall lastmod and TZ DB source version) */
         info = xzmalloc(sizeof(struct zoneinfo));
         info->type = ZI_INFO;
-        appendstrlist(&info->data, pub);
-        appendstrlist(&info->data, ver);
+        strarray_append(&info->data, pub);
+        strarray_append(&info->data, ver);
         hash_insert(INFO_TZID, info, &tzentries);
 
         /* Add LEAP record (last updated and hash) */
@@ -181,7 +181,7 @@ int main(int argc, char **argv)
 
                         /* trim trailing whitespace */
                         for (p = hash + strlen(hash); isspace(*--p); *p = '\0');
-                        appendstrlist(&leap->data, hash);
+                        strarray_append(&leap->data, hash);
                     }
                 }
             }
@@ -386,7 +386,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
                 hash_insert(alias, zi, tzentries);
             }
             zi->type = ZI_LINK;
-            appendstrlist(&zi->data, tzid);
+            strarray_append(&zi->data, tzid);
 
             /* Create/update hash entry for tzid */
             if (!(zi = hash_lookup(tzid, tzentries))) {
@@ -394,7 +394,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
                 hash_insert(tzid, zi, tzentries);
             }
             zi->type = ZI_ZONE;
-            appendstrlist(&zi->data, alias);
+            strarray_append(&zi->data, alias);
         }
         else if (S_ISREG(sbuf.st_mode)) {
             /* Path is a regular file (zone) */
@@ -447,7 +447,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
 
             if (alias) {
                 /* Add alias to the list for this tzid */
-                appendstrlist(&zi->data, alias);
+                strarray_append(&zi->data, alias);
 
                 /* Create hash entry for alias */
                 if (!(zi = hash_lookup(alias, tzentries))) {
@@ -455,7 +455,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
                     hash_insert(alias, zi, tzentries);
                 }
                 zi->type = ZI_LINK;
-                appendstrlist(&zi->data, tzid);
+                strarray_append(&zi->data, tzid);
             }
         }
         else {
@@ -472,7 +472,7 @@ void free_zoneinfo(void *data)
 {
     struct zoneinfo *zi = (struct zoneinfo *) data;
 
-    freestrlist(zi->data);
+    strarray_fini(&zi->data);
     free(zi);
 }
 

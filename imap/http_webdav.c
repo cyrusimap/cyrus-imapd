@@ -598,7 +598,7 @@ static int webdav_get(struct transaction_t *txn,
         return HTTP_NO_PRIVS;
     }
 
-    struct strlist *action = hash_lookup("action", &txn->req_qparams);
+    const strarray_t *action = hash_lookup("action", &txn->req_qparams);
     if (!action) {
         /* Send HTML with davmount link */
         buf_reset(body);
@@ -615,7 +615,7 @@ static int webdav_get(struct transaction_t *txn,
 
         txn->resp_body.type = "text/html; charset=utf-8";
     }
-    else if (action->next || strcmp(action->s, "davmount")) {
+    else if (strarray_size(action) != 1 || strcmp(strarray_nth(action, 0), "davmount")) {
         return HTTP_BAD_REQUEST;
     }
     else {

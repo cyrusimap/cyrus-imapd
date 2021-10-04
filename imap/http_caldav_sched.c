@@ -116,9 +116,10 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
 
     char *at = strchr(param->userid, '@');
     if (at) {
-        struct strlist *domains = cua_domains;
-        for (; domains; domains = domains->next) {
-            if (!strcmp(at+1, domains->s)) {
+        int i;
+        for (i = 0; i < strarray_size(&cua_domains); i++) {
+            const char *s = strarray_nth(&cua_domains, i);
+            if (!strcmp(at+1, s)) {
                 islocal = 1;
 
                 if (!config_virtdomains) {
@@ -1258,7 +1259,8 @@ static void sched_pollstatus(const char *organizer,
          comp =icalcomponent_get_next_component(ical, ICAL_VPOLL_COMPONENT)) {
 
         icalcomponent *stat, *poll, *sub, *next;
-        struct strlist *voters = NULL;
+        strarray_t voters = STRARRAY_INITIALIZER;
+        int i;
 
         /* Make a working copy of the iTIP */
         stat = icalcomponent_clone(itip);
@@ -1284,7 +1286,7 @@ static void sched_pollstatus(const char *organizer,
 
                 /* Don't update organizer or voter that triggered POLLSTATUS */
                 if (strcmp(this_voter, organizer) && strcmp(this_voter, voter))
-                    appendstrlist(&voters, (char *) this_voter);
+                    strarray_append(&voters, this_voter);
 
                 icalproperty_remove_parameter_by_name(prop, "SCHEDULE-STATUS");
                 break;
@@ -1299,17 +1301,14 @@ static void sched_pollstatus(const char *organizer,
         }
 
         /* Attempt to deliver to each voter in the list - removing as we go */
-        while (voters) {
-            struct strlist *next = voters->next;
+        for (i = 0; i < strarray_size(&voters); i++) {
+            const char *voter = strarray_nth(&voters, i);
 
             sched_data.itip = stat;
-            sched_deliver(userid, organizer, voters->s, &sched_data, authstate);
-
-            free(voters->s);
-            free(voters);
-            voters = next;
+            sched_deliver(userid, organizer, voter, &sched_data, authstate);
         }
 
+        strarray_fini(&voters);
         icalcomponent_free(stat);
     }
 
@@ -3315,12 +3314,11 @@ void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
         }
         else {
             /* append fully qualified userids */
-            struct strlist *domains;
-
-            for (domains = cua_domains; domains; domains = domains->next) {
+            int i;
+            for (i = 0; i < strarray_size(&cua_domains); i++) {
+                const char *s = strarray_nth(&cua_domains, i);
                 buf_reset(&buf);
-                buf_printf(&buf, "%s@%s", userid, domains->s);
-
+                buf_printf(&buf, "%s@%s", userid, s);
                 strarray_add(addresses, buf_cstring(&buf));
             }
         }

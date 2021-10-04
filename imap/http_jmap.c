@@ -705,9 +705,9 @@ static int jmap_download(struct transaction_t *txn)
 
     blobid = xstrndup(blobbase, bloblen);
 
-    struct strlist *param;
+    const strarray_t *param;
     if ((param = hash_lookup("accept", &txn->req_qparams))) {
-        accept_mime = xstrdup(param->s);
+        accept_mime = xstrdup(strarray_nth(param, 0));
     }
 
     const char **hdr;
@@ -1560,9 +1560,9 @@ static int jmap_eventsource(struct transaction_t *txn)
         lastmodseq = atomodseq_t(*hdr);
     }
 
-    struct strlist *param;
+    const strarray_t *param;
     if ((param = hash_lookup("types", &txn->req_qparams))) {
-        strarray_t *types = strarray_split(param->s, ",", STRARRAY_TRIM);
+        strarray_t *types = strarray_split(strarray_nth(param, 0), ",", STRARRAY_TRIM);
 
         jpush = jmap_push_init(txn, httpd_userid, types, lastmodseq, &es_push);
         strarray_free(types);
@@ -1573,12 +1573,12 @@ static int jmap_eventsource(struct transaction_t *txn)
     }
 
     if ((param = hash_lookup("closeafter", &txn->req_qparams)) &&
-        !strcmpsafe(param->s, "state")) {
+        !strcmpsafe(strarray_nth(param, 0), "state")) {
         jpush->closeafter = 1;
     }
 
     if ((param = hash_lookup("ping", &txn->req_qparams))) {
-        jpush->ping = atoi(param->s);
+        jpush->ping = atoi(strarray_nth(param, 0));
     }
     jpush->next_ping = (jpush->ping > 0) ? now + jpush->ping : INT_MAX;
 

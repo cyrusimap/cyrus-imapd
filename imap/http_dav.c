@@ -6794,7 +6794,7 @@ static int dav_post_import(struct transaction_t *txn,
 int meth_post(struct transaction_t *txn, void *params)
 {
     struct meth_params *pparams = (struct meth_params *) params;
-    struct strlist *action;
+    const strarray_t *action = NULL;
     int r, ret;
     size_t len;
 
@@ -6841,7 +6841,7 @@ int meth_post(struct transaction_t *txn, void *params)
     }
 
     if (!(pparams->post.allowed & POST_ADDMEMBER) ||
-        !action || action->next || strcmp(action->s, "add-member")) {
+        strarray_size(action) != 1 || strcmp(strarray_nth(action, 0), "add-member")) {
         return HTTP_BAD_REQUEST;
     }
 
@@ -7889,7 +7889,7 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
 
 
 struct search_crit {
-    struct strlist *props;
+    strarray_t props;
     xmlChar *match;
     struct search_crit *next;
 };
@@ -7911,14 +7911,14 @@ static int principal_search(const char *userid, void *rock)
     /* Check against search criteria */
     for (search_crit = (struct search_crit *) fctx->filter_crit;
          search_crit; search_crit = search_crit->next) {
-        struct strlist *prop;
-
-        for (prop = search_crit->props; prop; prop = prop->next) {
-            if (!strcmp(prop->s, "displayname")) {
+        int i;
+        for (i = 0; i < strarray_size(&search_crit->props); i++) {
+            const char *prop = strarray_nth(&search_crit->props, i);
+            if (!strcmp(prop, "displayname")) {
                 if (!xmlStrcasestr(BAD_CAST userid,
                                    search_crit->match)) return 0;
             }
-            else if (!strcmp(prop->s, "calendar-user-address-set")) {
+            else if (!strcmp(prop, "calendar-user-address-set")) {
                 char email[MAX_MAILBOX_NAME+1];
 
                 snprintf(email, MAX_MAILBOX_NAME, "%s@%s",
@@ -7926,7 +7926,7 @@ static int principal_search(const char *userid, void *rock)
                 if (!xmlStrcasestr(BAD_CAST email,
                                    search_crit->match)) return 0;
             }
-            else if (!strcmp(prop->s, "calendar-user-type")) {
+            else if (!strcmp(prop, "calendar-user-type")) {
                 if (!xmlStrcasestr(BAD_CAST "INDIVIDUAL",
                                    search_crit->match)) return 0;
             }
@@ -8006,8 +8006,7 @@ static int report_prin_prop_search(struct transaction_t *txn,
                                         goto done;
                                     }
                                     else {
-                                        appendstrlist(&search_crit->props,
-                                                      (char *) entry->name);
+                                        strarray_append(&search_crit->props, entry->name);
                                     }
                                 }
                             }
@@ -8032,7 +8031,7 @@ static int report_prin_prop_search(struct transaction_t *txn,
                     }
                 }
 
-                if (!search_crit->props) {
+                if (!strarray_size(&search_crit->props)) {
                     txn->error.desc = "Missing DAV:prop XML element";
                     ret = HTTP_BAD_REQUEST;
                     goto done;
@@ -8076,7 +8075,7 @@ static int report_prin_prop_search(struct transaction_t *txn,
         next = search_crit->next;
 
         if (search_crit->match) xmlFree(search_crit->match);
-        freestrlist(search_crit->props);
+        strarray_fini(&search_crit->props);
         free(search_crit);
     }
 

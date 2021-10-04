@@ -130,7 +130,7 @@ static int icalendar_max_size;
 unsigned config_allowsched = IMAP_ENUM_CALDAV_ALLOWSCHEDULING_OFF;
 const char *ical_prodid = NULL;
 icaltimezone *utc_zone = NULL;
-struct strlist *cua_domains = NULL;
+strarray_t cua_domains = STRARRAY_INITIALIZER;
 icalarray *rscale_calendars = NULL;
 
 struct partial_comp_t {
@@ -755,7 +755,7 @@ static void my_caldav_init(struct buf *serverinfo)
     if (!domains) domains = config_servername;
 
     tok_init(&tok, domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-    while ((domain = tok_next(&tok))) appendstrlist(&cua_domains, domain);
+    while ((domain = tok_next(&tok))) strarray_append(&cua_domains, domain);
     tok_fini(&tok);
 
     utc_zone = icaltimezone_get_utc_timezone();
@@ -978,8 +978,7 @@ static void my_caldav_shutdown(void)
 
     buf_free(&ical_prodid_buf);
 
-    freestrlist(cua_domains);
-    cua_domains = NULL;
+    strarray_fini(&cua_domains);
 
     my_caldav_reset();
     webdav_done();
@@ -2950,7 +2949,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 {
     int ret = 0, r, precond;
     struct resp_body_t *resp_body = &txn->resp_body;
-    struct strlist *action, *mid, *rid;
+    const strarray_t *action, *mid, *rid;
     struct mime_type_t *mime = NULL;
     struct mailbox *calendar = NULL, *attachments = NULL;
     struct caldav_db *caldavdb = NULL;
@@ -2998,18 +2997,18 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     mid = hash_lookup("managed-id", &txn->req_qparams);
     rid = hash_lookup("rid", &txn->req_qparams);
 
-    if (!action || action->next) return HTTP_BAD_REQUEST;
-    else if (!strcmp(action->s, "attachment-add")) {
+    if (strarray_size(action) != 1) return HTTP_BAD_REQUEST;
+    else if (!strcmp(strarray_nth(action, 0), "attachment-add")) {
         op = ATTACH_ADD;
         if (mid) return HTTP_BAD_REQUEST;
     }
-    else if (!strcmp(action->s, "attachment-update")) {
+    else if (!strcmp(strarray_nth(action, 0), "attachment-update")) {
         op = ATTACH_UPDATE;
-        if (rid || !mid || mid->next) return HTTP_BAD_REQUEST;
+        if (rid || strarray_size(mid) != 1) return HTTP_BAD_REQUEST;
     }
-    else if (!strcmp(action->s, "attachment-remove")) {
+    else if (!strcmp(strarray_nth(action, 0), "attachment-remove")) {
         op = ATTACH_REMOVE;
-        if (!mid || mid->next) return HTTP_BAD_REQUEST;
+        if (strarray_size(mid) != 1) return HTTP_BAD_REQUEST;
     }
     else return HTTP_BAD_REQUEST;
 
@@ -3077,6 +3076,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     if (ret) goto done;
 
     if (mid) {
+        const char *managed_id = strarray_nth(mid, 0);
         /* Locate first ATTACH property with this MANAGED-ID */
         do {
             for (aprop = icalcomponent_get_first_property(comp,
@@ -3086,7 +3086,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
                                                          ICAL_ATTACH_PROPERTY)) {
                 param = icalproperty_get_managedid_parameter(aprop);
                 if (param &&
-                    !strcmp(mid->s, icalparameter_get_managedid(param))) break;
+                    !strcmp(managed_id, icalparameter_get_managedid(param))) break;
             }
 
             /* Check if this is master component */
@@ -3106,7 +3106,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         }
 
         /* Update reference count */
-        decrement_refcount(mid->s, attachments, webdavdb);
+        decrement_refcount(managed_id, attachments, webdavdb);
     }
 
     if (cdata->organizer) {
@@ -3214,7 +3214,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
     if (rid) {
         /* Split list of RECURRENCE-IDs */
-        rids = strarray_split(rid->s, ",", STRARRAY_TRIM);
+        rids = strarray_split(strarray_nth(rid, 0), ",", STRARRAY_TRIM);
     }
 
     /* Process each component */
@@ -3307,6 +3307,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         }
 
         if (mid) {
+            const char *managed_id = strarray_nth(mid, 0);
             /* Remove matching ATTACH property */
             for (prop = icalcomponent_get_first_property(comp,
                                                          ICAL_ATTACH_PROPERTY);
@@ -3315,7 +3316,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
                                                         ICAL_ATTACH_PROPERTY)) {
                 param = icalproperty_get_managedid_parameter(prop);
                 if (param &&
-                    !strcmp(mid->s, icalparameter_get_managedid(param))) {
+                    !strcmp(managed_id, icalparameter_get_managedid(param))) {
                     icalcomponent_remove_property(comp, prop);
                     icalproperty_free(prop);
                     break;
@@ -6356,11 +6357,11 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
         }
 
         else {
-            struct strlist *domains;
-            for (domains = cua_domains; domains; domains = domains->next) {
+            int i = 0;
+            for (i = 0; i < strarray_size(&cua_domains); i++) {
                 buf_reset(&fctx->buf);
                 buf_printf(&fctx->buf, "mailto:%s@%s",
-                           fctx->req_tgt->userid, domains->s);
+                           fctx->req_tgt->userid, strarray_nth(&cua_domains, i));
 
                 xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
             }
@@ -8132,9 +8133,9 @@ static void strip_vtimezones(icalcomponent *ical)
         if (tzid && !zoneinfo_lookup(tzid, &zi)) {
             if (zi.type == ZI_LINK) {
                 /* Add this alias to our table */
-                hash_insert(tzid, xstrdup(zi.data->s), &tzid_table);
+                hash_insert(tzid, xstrdup(strarray_nth(&zi.data, 0)), &tzid_table);
             }
-            freestrlist(zi.data);
+            strarray_fini(&zi.data);
 
             icalcomponent_remove_component(ical, vtz);
             icalcomponent_free(vtz);
@@ -8450,7 +8451,7 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
     struct meth_params *gparams = (struct meth_params *) params;
     int ret = 0, r, rights;
     struct tm *tm;
-    struct strlist *param;
+    const strarray_t *param;
     struct mime_type_t *mime = NULL;
     struct propfind_ctx fctx;
     struct freebusy_filter fbfilter;
@@ -8495,10 +8496,12 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
     /* Check/find 'format' */
     param = hash_lookup("format", &txn->req_qparams);
     if (param) {
-        if (param->next  /* once only */) return HTTP_BAD_REQUEST;
+        /* once only */
+        if (strarray_size(param) > 1) return HTTP_BAD_REQUEST;
 
+        const char *val = strarray_nth(param, 0);
         for (mime = freebusy_mime_types; mime->content_type; mime++) {
-            if (is_mediatype(param->s, mime->content_type)) break;
+            if (is_mediatype(val, mime->content_type)) break;
         }
     }
     else mime = freebusy_mime_types;
@@ -8511,9 +8514,11 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
     /* Check for 'start' */
     param = hash_lookup("start", &txn->req_qparams);
     if (param) {
-        if (param->next  /* once only */) return HTTP_BAD_REQUEST;
+        /* once only */
+        if (strarray_size(param) > 1) return HTTP_BAD_REQUEST;
 
-        fbfilter.start = icaltime_from_rfc3339_string(param->s);
+        const char *val = strarray_nth(param, 0);
+        fbfilter.start = icaltime_from_rfc3339_string(val);
         if (icaltime_is_null_time(fbfilter.start)) return HTTP_BAD_REQUEST;
 
         /* Default to end of given day */
@@ -8536,20 +8541,24 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
     /* Check for 'period' */
     param = hash_lookup("period", &txn->req_qparams);
     if (param) {
-        if (param->next  /* once only */ ||
-            hash_lookup("end", &txn->req_qparams)  /* can't use with 'end' */)
-            return HTTP_BAD_REQUEST;
+        /* once only */
+        if (strarray_size(param) > 1) return HTTP_BAD_REQUEST;
+        /* can't use with 'end' */
+        if (hash_lookup("end", &txn->req_qparams)) return HTTP_BAD_REQUEST;
 
-        period = icaldurationtype_from_string(param->s);
+        const char *val = strarray_nth(param, 0);
+        period = icaldurationtype_from_string(val);
         if (icaldurationtype_is_bad_duration(period)) return HTTP_BAD_REQUEST;
     }
 
     /* Check for 'end' */
     param = hash_lookup("end", &txn->req_qparams);
     if (param) {
-        if (param->next  /* once only */) return HTTP_BAD_REQUEST;
+        /* once only */
+        if (strarray_size(param) > 1) return HTTP_BAD_REQUEST;
 
-        fbfilter.end = icaltime_from_rfc3339_string(param->s);
+        const char *val = strarray_nth(param, 0);
+        fbfilter.end = icaltime_from_rfc3339_string(val);
         if (icaltime_is_null_time(fbfilter.end)) return HTTP_BAD_REQUEST;
     }
     else {

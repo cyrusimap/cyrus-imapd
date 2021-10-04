@@ -1990,7 +1990,7 @@ static void transaction_reset(struct transaction_t *txn)
     mboxlist_entry_free(&txn->req_tgt.mbentry);
     memset(&txn->req_tgt, 0, sizeof(struct request_target_t));
 
-    free_hash_table(&txn->req_qparams, (void (*)(void *)) &freestrlist);
+    free_hash_table(&txn->req_qparams, (void (*)(void *)) &strarray_free);
 
     if (txn->req_hdrs) spool_free_hdrcache(txn->req_hdrs);
     txn->req_hdrs = NULL;
@@ -2494,7 +2494,6 @@ void parse_query_params(struct transaction_t *txn, const char *query)
 
     tok_init(&tok, query, "&", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
     while ((param = (char *)tok_next(&tok))) {
-        struct strlist *vals;
         char *key, *value;
         size_t len;
 
@@ -2507,9 +2506,12 @@ void parse_query_params(struct transaction_t *txn, const char *query)
         len = strlen(value);
         buf_ensure(&txn->buf, len+1);
 
-        vals = hash_lookup(key, &txn->req_qparams);
-        appendstrlist(&vals, xmlURIUnescapeString(value, len, txn->buf.s));
-        hash_insert(key, vals, &txn->req_qparams);
+        strarray_t *vals = hash_lookup(key, &txn->req_qparams);
+        if (!vals) {
+            vals = strarray_new();
+            hash_insert(key, vals, &txn->req_qparams);
+        }
+        strarray_appendm(vals, xmlURIUnescapeString(value, len, txn->buf.s));
     }
     tok_fini(&tok);
 

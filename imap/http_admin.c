@@ -414,7 +414,7 @@ static int action_proc(struct transaction_t *txn)
     struct buf *body = &txn->resp_body.payload;
     piarray_t piarray;
     time_t now = time(0);
-    struct strlist *param;
+    const strarray_t *param;
     struct tm tnow;
     char key = 0;
     struct proc_columns {
@@ -448,10 +448,11 @@ static int action_proc(struct transaction_t *txn)
     /* Check for a sort key */
     param = hash_lookup("sort", &txn->req_qparams);
     if (param) {
-        char Ukey = toupper((int) *param->s);
+        const char *s = strarray_nth(param, 0);
+        char Ukey = toupper((int) *s);
         for (i = 0; columns[i].key; i++) {
             if (Ukey == columns[i].key) {
-                key = *param->s;
+                key = *s;
                 if (isupper((int) key)) columns[i].key = tolower((int) key);
                 break;
             }

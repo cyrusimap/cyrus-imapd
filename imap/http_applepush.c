@@ -99,7 +99,7 @@ static int meth_get_applepush(struct transaction_t *txn,
                               void *params __attribute__((unused)))
 {
     int rc = HTTP_BAD_REQUEST, r = 0;
-    struct strlist *vals = NULL;
+    const strarray_t *param = NULL;
     const char *token = NULL, *key = NULL, *aps_topic = NULL;
     const char *mailbox_userid = NULL, *mailbox_uniqueid = NULL;
     strarray_t *keyparts = NULL;
@@ -108,13 +108,13 @@ static int meth_get_applepush(struct transaction_t *txn,
     int mbtype = 0;
 
     /* unpack query params */
-    vals = hash_lookup("token", &txn->req_qparams);
-    if (!vals) goto done;
-    token = vals->s;
+    param = hash_lookup("token", &txn->req_qparams);
+    if (!param) goto done;
+    token = strarray_nth(param, 0);
 
-    vals = hash_lookup("key", &txn->req_qparams);
-    if (!vals) goto done;
-    key = vals->s;
+    param = hash_lookup("key", &txn->req_qparams);
+    if (!param) goto done;
+    key = strarray_nth(param, 0);
 
     /* decompose key to userid + mailbox uniqueid */
     keyparts = strarray_split(key, "/", 0);

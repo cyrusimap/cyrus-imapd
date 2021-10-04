@@ -280,36 +280,6 @@ static void init_internal();
 static int annotate_initialized = 0;
 static int annotatemore_dbopen = 0;
 
-/* String List Management */
-/*
- * Append 's' to the strlist 'l'.
- */
-EXPORTED void appendstrlist(struct strlist **l, char *s)
-{
-    struct strlist **tail = l;
-
-    while (*tail) tail = &(*tail)->next;
-
-    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
-    (*tail)->s = xstrdup(s);
-    (*tail)->next = 0;
-}
-
-/*
- * Free the strlist 'l'
- */
-EXPORTED void freestrlist(struct strlist *l)
-{
-    struct strlist *n;
-
-    while (l) {
-        n = l->next;
-        free(l->s);
-        free((char *)l);
-        l = n;
-    }
-}
-
 /* Attribute Management (also used by the ID command) */
 
 /*

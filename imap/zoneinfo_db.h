@@ -73,7 +73,7 @@
 struct zoneinfo {
     unsigned type;
     time_t dtstamp;
-    struct strlist *data;
+    strarray_t data;
 };
 
 /* zoneinfo record types */

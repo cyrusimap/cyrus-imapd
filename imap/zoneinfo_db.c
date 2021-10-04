@@ -146,7 +146,7 @@ static int parse_zoneinfo(const char *data, int datalen,
         tok_t tok;
 
         tok_initm(&tok, str, "\t", TOK_FREEBUFFER);
-        while ((p = tok_next(&tok))) appendstrlist(&zi->data, p);
+        while ((p = tok_next(&tok))) strarray_append(&zi->data, p);
         tok_fini(&tok);
     }
 
@@ -178,8 +178,7 @@ EXPORTED int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi)
 
 EXPORTED int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **tid)
 {
-    struct strlist *sl;
-    const char *sep;
+    int i;
     int r;
 
     /* Don't access DB if it hasn't been opened */
@@ -190,8 +189,10 @@ EXPORTED int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **
     /* version SP type SP dtstamp SP (string *(TAB string)) */
     buf_reset(&databuf);
     buf_printf(&databuf, "%u %u " TIME_T_FMT " ", ZONEINFO_VERSION, zi->type, zi->dtstamp);
-    for (sl = zi->data, sep = ""; sl; sl = sl->next, sep = "\t")
-        buf_printf(&databuf, "%s%s", sep, sl->s);
+    for (i = 0; i < strarray_size(&zi->data); i++) {
+        if (i) buf_putc(&databuf, '\t');
+        buf_appendcstr(&databuf, strarray_nth(&zi->data, i));
+    }
 
     r = cyrusdb_store(zoneinfodb, tzid, strlen(tzid),
                   buf_cstring(&databuf), buf_len(&databuf), tid);
@@ -284,19 +285,18 @@ static int find_cb(void *rock,
 
     r = parse_zoneinfo(data, datalen, &zi, 1);
     if (!r) {
-        struct strlist *linkto = NULL;
-
+        char *linkto = NULL;
         if (zi.type == ZI_LINK) {
-            linkto = zi.data;
-            zi.data = NULL;
+            linkto = strarray_shift(&zi.data);
+            strarray_truncate(&zi.data, 0);
 
-            tzid = linkto->s;
+            tzid = linkto;
             tzidlen = strlen(tzid);
             r = zoneinfo_lookup(tzid, &zi);
         }
         if (!r) r = (*frock->proc)(tzid, tzidlen, &zi, frock->rock);
-        freestrlist(zi.data);
-        freestrlist(linkto);
+        free(linkto);
+        strarray_fini(&zi.data);
     }
 
     return r;
