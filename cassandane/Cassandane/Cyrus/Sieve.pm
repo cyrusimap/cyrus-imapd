@@ -3737,7 +3737,7 @@ sub test_process_imip
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "vnd.cyrus.imip"];
-process_imip;
+processimip;
 EOF
     );
 
@@ -3773,8 +3773,6 @@ EOF
     xlog $self, "Deliver iMIP message";
     my $msg = Cassandane::Message->new(raw => $itip);
     $self->{instance}->deliver($msg);
-
-    sleep 1;
 
     xlog $self, "Check that the message made it to INBOX";
     $self->{store}->set_folder('INBOX');
