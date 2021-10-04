@@ -7598,4 +7598,58 @@ EOF
     $self->assert_str_equals('Europe/Vienna', $event->{timeZone});
 }
 
+sub test_calendar_get_freebusy_only
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create other user";
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user.other');
+    $admintalk->setacl('user.other', admin => 'lrswipkxtecdan') or die;
+    $admintalk->setacl('user.other', other => 'lrswipkxtecdn') or die;
+
+    my $service = $self->{instance}->get_service("http");
+    my $otherJmap = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $otherJmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $otherJmap->CallMethods([
+        ['Calendar/get', {
+            properties => ['id'],
+        }, 'R1'],
+    ]);
+    $admintalk->setacl('user.other.#calendars.Default', cassandane => 'l9') or die;
+
+    $res = $jmap->ua->get($jmap->uri(), {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    });
+    $self->assert_str_equals('200', $res->{status});
+    my $session = eval { decode_json($res->{content}) };
+    my $capabilities = $session->{accounts}{other}{accountCapabilities};
+    $self->assert_not_null($capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
+
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            accountId => 'other',
+            properties => ['id'],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{list});
+
+}
+
 1;
