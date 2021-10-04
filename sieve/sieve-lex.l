@@ -393,7 +393,7 @@ ws              [ \t]+
 <INITIAL>jmapquery             return JMAPQUERY;
 
     /* vnd.cyrus.imip */
-<INITIAL>process_imip          return PROCESSIMIP;
+<INITIAL>processimip          return PROCESSIMIP;
 
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
