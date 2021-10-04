@@ -843,11 +843,11 @@ static int do_action_list(sieve_interp_t *interp,
                          "Discarded\n");
             break;
         case ACTION_IMIP:
-            if (interp->imip)
-                ret = interp->imip(NULL, interp->interp_context,
-                                   script_context,
-                                   message_context,
-                                   &errmsg);
+            if (!interp->imip)
+                return SIEVE_INTERNAL_ERROR;
+
+            ret = interp->imip(NULL, interp->interp_context,
+                               script_context, message_context, &errmsg);
             free(interp->lastitem);
             interp->lastitem = NULL;
             if (ret == SIEVE_OK)
