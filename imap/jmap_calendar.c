@@ -55,11 +55,11 @@
 #include "acl.h"
 #include "annotate.h"
 #include "caldav_db.h"
+#include "caldav_util.h"
 #include "cyr_qsort_r.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
-#include "http_caldav.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_jmap.h"
@@ -2717,7 +2717,8 @@ static int setcalendarevents_create(jmap_req_t *req,
     struct transaction_t txn;
     memset(&txn, 0, sizeof(struct transaction_t));
     txn.req_hdrs = spool_new_hdrcache();
-    /* XXX - fix userid */
+    txn.userid = req->userid;
+    txn.authstate = req->authstate;
 
     /* Locate the mailbox */
     r = proxy_mlookup(mailbox_name(mbox), &txn.req_tgt.mbentry, NULL, NULL);
@@ -3277,7 +3278,9 @@ static int setcalendarevents_update(jmap_req_t *req,
     struct transaction_t txn;
     memset(&txn, 0, sizeof(struct transaction_t));
     txn.req_hdrs = spool_new_hdrcache();
-    /* XXX - fix userid */
+    txn.userid = req->userid;
+    txn.authstate = req->authstate;
+
     r = proxy_mlookup(mailbox_name(mbox), &txn.req_tgt.mbentry, NULL, NULL);
     if (r) {
         syslog(LOG_ERR, "mlookup(%s) failed: %s", mailbox_name(mbox), error_message(r));

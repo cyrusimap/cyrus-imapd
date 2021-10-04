@@ -745,6 +745,8 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
+    txn.userid = httpd_userid;
+    txn.authstate = httpd_authstate;
 
     /* Create minimal mbentry for request target from mailbox */
     memset(&mbentry, 0, sizeof(mbentry_t));

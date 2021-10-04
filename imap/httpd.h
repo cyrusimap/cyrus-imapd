@@ -376,6 +376,9 @@ struct transaction_t {
     void *ws_ctx;                       /* WebSocket channel context */
     void *push_ctx;                     /* Push notifications context */
 
+    const char *userid;
+    const struct auth_state *authstate;
+
     unsigned meth;                      /* Index of Method to be performed */
     struct txn_flags_t flags;           /* Flags for this txn */
     struct request_line_t req_line;     /* Parsed request-line */
