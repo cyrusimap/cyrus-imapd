@@ -575,7 +575,7 @@ static int has_calendars_cb(const mbentry_t *mbentry, void *rock)
 {
     jmap_req_t *req = rock;
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR &&
-            jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+            jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
         return CYRUSDB_DONE;
     }
     return 0;
