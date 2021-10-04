@@ -2316,7 +2316,7 @@ static int parse_expect(struct transaction_t *txn)
     /* Look for interesting expectations.  Unknown == error */
     for (i = 0; !ret && exp && exp[i]; i++) {
         tok_t tok = TOK_INITIALIZER(exp[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        char *token;
+        const char *token;
 
         while (!ret && (token = tok_next(&tok))) {
             /* Check if client wants acknowledgment before sending body */ 
@@ -2347,7 +2347,7 @@ static void parse_upgrade(struct transaction_t *txn)
 
     for (i = 0; upgrade[i]; i++) {
         tok_t tok = TOK_INITIALIZER(upgrade[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        char *token;
+        const char *token;
 
         while ((token = tok_next(&tok))) {
             if (!txn->conn->tls_ctx && httpd_tls_enabled &&
@@ -2402,7 +2402,7 @@ static int parse_connection(struct transaction_t *txn)
     /* Look for interesting connection tokens */
     for (i = 0; conn[i]; i++) {
         tok_t tok = TOK_INITIALIZER(conn[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        char *token;
+        const char *token;
 
         while ((token = tok_next(&tok))) {
             switch (txn->flags.ver) {
@@ -2457,7 +2457,7 @@ struct accept *parse_accept(const char **hdr)
 
     for (i = 0; hdr && hdr[i]; i++) {
         tok_t tok = TOK_INITIALIZER(hdr[i], ";,", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        char *token;
+        const char *token;
 
         while ((token = tok_next(&tok))) {
             if (!strncmp(token, "q=", 2)) {
@@ -2493,7 +2493,7 @@ void parse_query_params(struct transaction_t *txn, const char *query)
     assert(!buf_len(&txn->buf));  /* Unescape buffer */
 
     tok_init(&tok, query, "&", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
-    while ((param = tok_next(&tok))) {
+    while ((param = (char *)tok_next(&tok))) {
         struct strlist *vals;
         char *key, *value;
         size_t len;
@@ -4382,7 +4382,7 @@ static unsigned etag_match(const char *hdr[], const char *etag)
 {
     unsigned i, match = 0;
     tok_t tok;
-    char *token;
+    const char *token;
 
     for (i = 0; !match && hdr[i]; i++) {
         tok_init(&tok, hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
@@ -4402,7 +4402,7 @@ static int parse_ranges(const char *hdr, unsigned long len,
     int ret = HTTP_BAD_RANGE;
     struct range *new, *tail = *ranges = NULL;
     tok_t tok;
-    char *token;
+    const char *token;
 
     if (!len) return HTTP_OK;  /* need to know length of representation */
 
@@ -4822,7 +4822,7 @@ static int meth_get(struct transaction_t *txn,
     /* Local content */
     if ((urls = config_getstring(IMAPOPT_HTTPALLOWEDURLS))) {
         tok_t tok = TOK_INITIALIZER(urls, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        char *token;
+        const char *token;
 
         while ((token = tok_next(&tok)) && strcmp(token, txn->req_uri->path));
         tok_fini(&tok);

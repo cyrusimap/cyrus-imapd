@@ -687,7 +687,7 @@ static const struct cal_comp_t {
 static void my_caldav_init(struct buf *serverinfo)
 {
     const char *domains;
-    char *domain;
+    const char *domain;
     tok_t tok;
 
     buf_printf(serverinfo, " LibiCal/%s", ICAL_VERSION);

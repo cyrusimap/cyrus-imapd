@@ -1045,7 +1045,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 
             if ((p = strchr(service, '/'))) {
                 tok_t tok;
-                char *opt;
+                const char *opt;
 
                 *p++ = '\0';
                 tok_initm(&tok, p, "/", 0);

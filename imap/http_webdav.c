@@ -656,7 +656,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     struct webdav_data *wdata;
     struct index_record *oldrecord = NULL, record;
     const char **hdr;
-    char *filename = NULL;
+    const char *filename = NULL;
 
     /* Validate the data */
     if (!buf) return HTTP_FORBIDDEN;
@@ -684,7 +684,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
 
     /* Get filename of attachment */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Disposition"))) {
-        char *dparam;
+        const char *dparam;
         tok_t tok;
 
         tok_initm(&tok, (char *) *hdr, ";", TOK_TRIMLEFT|TOK_TRIMRIGHT);
@@ -693,14 +693,15 @@ static int webdav_put(struct transaction_t *txn, void *obj,
                 filename = dparam+9;
                 if (*filename == '"') {
                     filename++;
-                    filename[strlen(filename)-1] = '\0';
+                    char *backdoor = (char *)filename;
+                    backdoor[strlen(backdoor)-1] = '\0';
                 }
                 break;
             }
         }
         tok_fini(&tok);
     }
-    else filename = (char *) resource;
+    else filename = resource;
 
     /* Create and cache RFC 5322 header fields for resource */
     if (filename) {

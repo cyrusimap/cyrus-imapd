@@ -121,7 +121,7 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
     char *wild = NULL;
     const char *msg = NULL;
     tok_t tok;
-    char *pat;
+    const char *pat;
     int not;
 
     init_internal();

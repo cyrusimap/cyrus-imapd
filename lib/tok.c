@@ -66,7 +66,7 @@ EXPORTED void tok_fini(tok_t *t)
     memset(t, 0, sizeof(*t));
 }
 
-EXPORTED char *tok_next(tok_t *t)
+EXPORTED const char *tok_next(tok_t *t)
 {
     const char *sep;
     char *token;

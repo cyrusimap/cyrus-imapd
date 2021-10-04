@@ -4211,10 +4211,10 @@ static int table_lookup(const struct annotate_attrib *table,
  * point further along in the buffer.  Returns the beginning of the
  * token or NULL (and whines to syslog) if an error was encountered.
  */
-static char *get_token(struct parse_state *state, const char *extra)
+static const char *get_token(struct parse_state *state, const char *extra)
 {
-    char *token;
-    char *p;
+    const char *token;
+    const char *p;
 
     token = tok_next(&state->tok);
     if (!token) {
@@ -4247,15 +4247,16 @@ static char *get_token(struct parse_state *state, const char *extra)
 static int parse_table_lookup_bitmask(const struct annotate_attrib *table,
                                       struct parse_state *state)
 {
-    char *token = get_token(state, ".-_/ ");
-    char *p;
+    const char *token = get_token(state, ".-_/ ");
+    const char *p;
     int i;
     int result = 0;
     tok_t tok;
 
     if (!token)
         return -1;
-    tok_initm(&tok, token, NULL, 0);
+    // NOTE: we're not freeing this tokeniser
+    tok_initm(&tok, (char *)token, NULL, 0);
 
     while ((p = tok_next(&tok))) {
         state->context = p;
@@ -4295,7 +4296,7 @@ static int normalise_attribs(struct parse_state *state, int attribs)
 /* Create array of allowed annotations, both internally & externally defined */
 static void init_annotation_definitions(void)
 {
-    char *p;
+    const char *p;
     char aline[ANNOT_DEF_MAXLINELEN];
     annotate_entrydesc_t *ae;
     int i;

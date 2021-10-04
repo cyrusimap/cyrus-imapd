@@ -2416,7 +2416,7 @@ static commandlist_t *build_redirect(sieve_script_t *sscript,
     if (c->u.r.dsn_notify && !supported(SIEVE_CAPA_VARIABLES)) {
         tok_t tok =
             TOK_INITIALIZER(c->u.r.dsn_notify, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        char *token;
+        const char *token;
         int never = 0;
 
         while ((token = tok_next(&tok))) {

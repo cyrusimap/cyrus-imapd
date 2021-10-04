@@ -282,7 +282,7 @@ static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
     unsigned client_max_wbits = MAX_WBITS;
-    char *token;
+    const char *token;
 
     ctx->pmce.deflate.max_wbits = MAX_WBITS;
 
@@ -636,13 +636,13 @@ static void parse_extensions(struct transaction_t *txn)
     /* Look for interesting extensions.  Unknown == ignore */
     for (i = 0; ext_hdr && ext_hdr[i]; i++) {
         tok_t ext = TOK_INITIALIZER(ext_hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        char *token;
+        const char *token;
 
         while ((token = tok_next(&ext))) {
             struct ws_extension *extp = extensions;
             tok_t param;
 
-            tok_initm(&param, token, ";", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            tok_init(&param, token, ";", TOK_TRIMLEFT|TOK_TRIMRIGHT);
             token = tok_next(&param);
 
             /* Locate a matching extension */
@@ -765,7 +765,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
 
         for (i = 0; !found && hdr[i]; i++) {
             tok_t tok = TOK_INITIALIZER(hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-            char *token;
+            const char *token;
 
             while ((token = tok_next(&tok))) {
                 if (!strcmp(token, protocol)) {

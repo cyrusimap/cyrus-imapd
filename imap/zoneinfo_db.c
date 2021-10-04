@@ -142,10 +142,11 @@ static int parse_zoneinfo(const char *data, int datalen,
     if (all && p < dend) {
         size_t len = dend - ++p;
         char *str = xstrndup(p, len);
+        const char *p;
         tok_t tok;
 
         tok_initm(&tok, str, "\t", TOK_FREEBUFFER);
-        while ((str = tok_next(&tok))) appendstrlist(&zi->data, str);
+        while ((p = tok_next(&tok))) appendstrlist(&zi->data, p);
         tok_fini(&tok);
     }
 

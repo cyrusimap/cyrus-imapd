@@ -172,7 +172,7 @@ static int meth_get(struct transaction_t *txn,
 
     if ((urls = config_getstring(IMAPOPT_HTTPALLOWEDURLS))) {
         tok_t tok = TOK_INITIALIZER(urls, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        char *token;
+        const char *token;
 
         while ((token = tok_next(&tok)) && strcmp(token, txn->req_uri->path));
         tok_fini(&tok);

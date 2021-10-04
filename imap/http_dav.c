@@ -920,7 +920,7 @@ static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
 {
     unsigned ret = 1;
     tok_t tok;
-    char *cond;
+    const char *cond;
 
     /* Process each condition, ANDing the results */
     tok_initm(&tok, list+1, "]>", TOK_TRIMLEFT|TOK_TRIMRIGHT);
@@ -976,7 +976,7 @@ static int eval_if(const char *hdr, struct meth_params *params,
 
     /* Process each list, ORing the results */
     tok_init(&tok, hdr, ")", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-    while ((list = tok_next(&tok))) {
+    while ((list = (char *)tok_next(&tok))) {
         struct mailbox *mailbox, *my_mailbox = NULL;
         const char *etag, *lock_token;
         struct buf buf = BUF_INITIALIZER;
@@ -1236,7 +1236,7 @@ EXPORTED unsigned get_preferences(struct transaction_t *txn)
         int i;
         for (i = 0; hdr[i]; i++) {
             tok_t tok;
-            char *token;
+            const char *token;
 
             tok_init(&tok, hdr[i], ",\r\n", TOK_TRIMLEFT|TOK_TRIMRIGHT);
             while ((token = tok_next(&tok))) {

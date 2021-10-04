@@ -290,7 +290,7 @@ static int action_murder(struct transaction_t *txn)
         /* Add HTML header */
         const char *sep =
             txn->req_uri->path[strlen(txn->req_uri->path)-1] == '/' ? "" : "/";
-        char *server;
+        const char *server;
         tok_t tok;
 
         buf_reset(&resp);

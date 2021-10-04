@@ -73,7 +73,7 @@ void tok_initm(tok_t *, char *buf, const char *sep, int flags);
 void tok_fini(tok_t *);
 
 /* advance to the next token and return it */
-char *tok_next(tok_t *);
+const char *tok_next(tok_t *);
 /* return offset into the buffer of the current token, for error messages */
 unsigned int tok_offset(const tok_t *);
 

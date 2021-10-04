@@ -553,7 +553,7 @@ static int meth_post_isched(struct transaction_t *txn,
             for (i = 0; recipients[i]; i++) {
                 tok_t tok =
                     TOK_INITIALIZER(recipients[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-                char *recipient;
+                const char *recipient;
 
                 while ((recipient = tok_next(&tok))) {
                     /* Is recipient remote or local? */

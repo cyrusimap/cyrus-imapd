@@ -529,7 +529,7 @@ EXPORTED void http_proto_host(hdrcache_t req_hdrs, const char **proto, const cha
          * and more importantly, we need the tokens available after tok_fini()
          */
         tok_t tok;
-        char *token;
+        const char *token;
 
         while (fwd[1]) ++fwd;  /* Skip to last Forwarded header */
 
