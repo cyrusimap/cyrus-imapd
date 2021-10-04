@@ -284,7 +284,7 @@ extern void sieverestart(FILE *f);
 %type <test> methtags
 
 /* notify - draft-martin-sieve-notify-01 */
-%token DENOTIFY ID ANY
+%token DENOTIFY NID ANY
 %token <nval> LOW NORMAL HIGH
 %type <cl> dtags
 %type <nval> priority
@@ -1102,7 +1102,7 @@ ntags: /* empty */               {
         | ntags fcctags
 
         /* legacy-only tagged arguments */
-        | ntags ID string        {
+        | ntags NID string       {
                                      if ($$->u.n.id != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,

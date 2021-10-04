@@ -317,7 +317,7 @@ ws              [ \t]+
     /* notify - draft-martin-sieve-notify-01 */
 <INITIAL>denotify             return DENOTIFY;
 <INITIAL>:method              return METHOD;
-<INITIAL>:id                  return ID;
+<INITIAL>:id                  return NID;
 <INITIAL>:low                 return yylval->nval = LOW;
 <INITIAL>:normal              return yylval->nval = NORMAL;
 <INITIAL>:high                return yylval->nval = HIGH;
