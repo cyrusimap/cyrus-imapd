@@ -1,6 +1,6 @@
-/* http_caldav.h -- Routines for dealing with CALDAV in httpd
+/* caldav_util.h -- utility functions for dealing with CALDAV database
  *
- * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2021 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,30 +41,55 @@
  *
  */
 
-#ifndef HTTP_CALDAV_H
-#define HTTP_CALDAV_H
+#ifndef CALDAV_UTIL_H
+#define CALDAV_UTIL_H
 
-/* Create the calendar home, default calendars and scheduling
- * boxes for userid, if they don't already exist. */
-extern unsigned long config_types_to_caldav_types(void);
-extern int caldav_create_defaultcalendars(const char *userid);
+#include <libical/ical.h>
 
-extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
-                                 struct mailbox *mailbox, const char *resource,
-                                 modseq_t createdmodseq,
-                                 struct caldav_db *caldavdb, unsigned flags,
-                                 const char *userid, const strarray_t *schedule_addresses);
+#include "caldav_db.h"
+#include "hash.h"
+#include "httpd.h"
+#include "mailbox.h"
+#include "strarray.h"
 
-extern icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
-                                            const struct caldav_data *cdata,
-                                            const char *userid,
-                                            strarray_t *schedule_addresses);
+
+#define NEW_STAG (1<<8)         /* Make sure we skip over PREFER bits */
+#define TZ_STRIP (1<<9)
+
+#define SHARED_MODSEQ \
+    DAV_ANNOT_NS "<" XML_NS_CYRUS ">shared-modseq"
+
+
+extern void replace_tzid_aliases(icalcomponent *ical,
+                                 struct hash_table *tzid_table);
+
+extern void strip_vtimezones(icalcomponent *ical);
+
+extern void add_personal_data(icalcomponent *ical, struct buf *userdata);
 
 extern int caldav_is_personalized(struct mailbox *mailbox,
                                   const struct caldav_data *cdata,
                                   const char *userid,
                                   struct buf *userdata);
 
-extern char *caldav_scheddefault(const char *userid);
+extern icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
+                                            const struct caldav_data *cdata,
+                                            const char *userid,
+                                            strarray_t *schedule_addresses);
 
-#endif /* HTTP_CALDAV_H */
+extern int caldav_get_validators(struct mailbox *mailbox, void *data,
+                                 const char *userid, struct index_record *record,
+                                 const char **etag, time_t *lastmod);
+
+extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
+                                 struct mailbox *mailbox, const char *resource,
+                                 modseq_t createdmodseq, struct caldav_db *caldavdb,
+                                 unsigned flags, const char *userid,
+                                 const strarray_t *schedule_addresses);
+
+/* Create the calendar home, default calendars and scheduling
+ * boxes for userid, if they don't already exist. */
+extern unsigned long config_types_to_caldav_types(void);
+extern int caldav_create_defaultcalendars(const char *userid);
+
+#endif /* CALDAV_UTIL_H */
