@@ -1184,7 +1184,8 @@ imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
 
 if JMAP
 imap_lmtpd_SOURCES += \
-	imap/jmap_util.c imap/jmap_mail_query.c imap/jmap_mail_query_parse.c
+	imap/jmap_util.c imap/jmap_mail_query.c imap/jmap_mail_query_parse.c \
+	imap/caldav_util.c imap/dav_util.c imap/itip_support.c imap/zoneinfo_db.c
 endif # JMAP
 
 endif # SIEVE
@@ -1233,6 +1234,8 @@ nodist_imap_httpd_SOURCES = \
 	imap/tz_err.h
 
 imap_httpd_SOURCES = \
+	imap/caldav_util.c \
+	imap/caldav_util.h \
 	imap/css3_color.c \
 	imap/css3_color.h \
 	imap/http_admin.c \
@@ -1264,6 +1267,8 @@ imap_httpd_SOURCES = \
 	imap/http_ws.h \
 	imap/httpd.c \
 	imap/httpd.h \
+	imap/itip_support.c \
+	imap/itip_support.h \
 	imap/jcal.c \
 	imap/jcal.h \
 	imap/json_support.h \

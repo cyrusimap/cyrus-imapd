@@ -55,7 +55,9 @@
 
 #include "mailbox.h"
 
-#define PER_USER_CAL_DATA \
+#define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
+
+#define PER_USER_CAL_DATA                                       \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
 #ifndef HAVE_NEW_CLONE_API

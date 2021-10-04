@@ -59,7 +59,6 @@
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
-#include "http_caldav.h"
 #include "http_carddav.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"

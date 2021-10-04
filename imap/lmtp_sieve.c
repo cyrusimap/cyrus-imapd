@@ -1393,12 +1393,15 @@ done:
 #ifdef WITH_DAV
 #include "http_caldav_sched.h"
 
+char *httpd_userid = NULL;  // due to caldav_util.h including httpd.h
+struct namespace_t namespace_calendar = { .allow = ALLOW_USERDATA | ALLOW_CAL_NOTZ };
 
-static int sieve_imip(void *ac __attribute__((unused)), void *ic,
-                      void *sc __attribute__((unused)), void *mc,
+static int sieve_imip(void *ac __attribute__((unused)),
+                      void *ic, void *sc, void *mc,
                       const char **errmsg __attribute__((unused)))
 {
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
+    script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;
     message_data_t *m = mydata->m;
     icalcomponent *itip = NULL, *comp;
@@ -1513,13 +1516,23 @@ static int sieve_imip(void *ac __attribute__((unused)), void *ic,
 
     if (!originator || !recipient) goto done;
 
-//    sched_deliver_local(ctx->userid, originator, recipient, NULL, NULL, NULL);
+    struct sched_data sched_data =
+      { 0, meth == ICAL_METHOD_REPLY, 0,
+        itip, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, NULL };
+    struct caldav_sched_param sched_param =
+      { (char *) ctx->userid, NULL, 0, 0, 1, NULL };
+    unsigned r = sched_deliver_local(ctx->userid, originator, recipient,
+                                     &sched_param, &sched_data,
+                                     (struct auth_state *) sd->authstate,
+                                     NULL, NULL);
 
-    syslog(LOG_INFO, "sieve iMIP processed: %s", m->id ? m->id : "<nomsgid>");
+    syslog(LOG_INFO, "sieve iMIP processed: %s: %s",
+           m->id ? m->id : "<nomsgid>", r == 1 ? "success" : "fail");
     if (config_auditlog)
         syslog(LOG_NOTICE,
-               "auditlog: processed iMIP sessionid=<%s> message-id=%s",
-               session_id(), m->id ? m->id : "<nomsgid>");
+               "auditlog: processed iMIP sessionid=<%s> message-id=%s: %s",
+               session_id(), m->id ? m->id : "<nomsgid>",
+               r == 1 ? "success" : "fail");
 
   done:
     strarray_fini(&sched_addresses);
