@@ -2463,7 +2463,24 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
 
         case B_PROCESSIMIP:
-            do_imip(actions);
+            if (i->imip) {
+                variable_list_t *status = NULL;
+                unsigned res = i->imip(NULL, i->interp_context, sc, m, errmsg);
+
+                if (cmd.u.imip.status) {
+                    status = varlist_select(variables, cmd.u.imip.status);
+                    if (!status) {
+                        status = varlist_extend(variables);
+                        status->name = xstrdup(cmd.u.imip.status);
+                    }
+                    strarray_fini(status->var);
+                    strarray_append(status->var,
+                                    res == SIEVE_OK ? "ok" : "failed");
+                }
+            }
+            else {
+                return SIEVE_RUN_ERROR;
+            }
             break;
 
         case B_ERROR:
