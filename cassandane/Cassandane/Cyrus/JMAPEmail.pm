@@ -1074,6 +1074,51 @@ sub test_email_get_shared
     $self->assert_str_equals($emailId, $res->[0][1]{notFound}[0]);
 }
 
+sub test_email_query_shared_move
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Share account
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.other", "cassandane", "lr") or die;
+
+    # Create mailbox A
+    $admintalk->create("user.other.A") or die;
+    $admintalk->setacl("user.other.A", "cassandane", "lr") or die;
+
+    # Create message in mailbox A
+    $self->{adminstore}->set_folder('user.other.A');
+    $self->make_message("Email", store => $self->{adminstore}) or die;
+
+    my $res = $jmap->Call('Email/get', {
+      accountId => 'other',
+      ids => [],
+    });
+    $self->assert_not_null($res);
+    my $oldState = $res->{state};
+
+    # Copy message to unshared mailbox B
+    $admintalk->create("user.other.B") or die;
+    $admintalk->setacl("user.other.B", "cassandane", "") or die;
+    $admintalk->move(1, "user.other.B");
+
+    # Fetch Changes
+    $res = $jmap->Call('Email/changes', {
+      accountId => 'other',
+      sinceState => $oldState,
+    });
+    $self->assert_not_null($res);
+    $self->assert_num_equals(0, scalar @{$res->{created}});
+    $self->assert_num_equals(1, scalar @{$res->{destroyed}});
+}
+
 sub test_email_move_shared
     :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {
