@@ -67,9 +67,10 @@
 #define REQSTAT_REJECTED        "5.3;No scheduling support for user"
 
 struct sched_data {
-    unsigned ischedule;
-    unsigned is_reply;
-    unsigned is_update;
+    unsigned ischedule    : 1;
+    unsigned is_reply     : 1;
+    unsigned is_update    : 1;
+    unsigned updates_only : 1;
     icalcomponent *itip;
     icalcomponent *oldical;
     icalcomponent *newical;

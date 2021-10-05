@@ -1749,7 +1749,7 @@ static void schedule_full_cancel(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL };
+            { 0, 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
     }
 
@@ -1798,7 +1798,7 @@ static void schedule_sub_cancels(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL };
+            { 0, 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
 
     }
@@ -1882,7 +1882,7 @@ static void schedule_sub_updates(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, is_update, itip, oldical, newical, force_send, schedule_addresses, NULL };
+            { 0, 0, is_update, 0, itip, oldical, newical, force_send, schedule_addresses, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
         update_attendee_status(newical, &recurids, attendee, sched.status);
     }
@@ -1970,7 +1970,7 @@ static void schedule_full_update(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, is_update, itip, oldical, newical, force_send, schedule_addresses, NULL };
+            { 0, 0, is_update, 0, itip, oldical, newical, force_send, schedule_addresses, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
 
         update_attendee_status(newical, NULL, attendee, sched.status);
@@ -2416,7 +2416,7 @@ void sched_reply(const char *userid, const strarray_t *schedule_addresses,
 
         if (reply.do_send) {
             struct sched_data sched =
-                { 0, 1, 0, reply.itip, oldical, newical, reply.force_send, schedule_addresses, NULL };
+                { 0, 1, 0, 0, reply.itip, oldical, newical, reply.force_send, schedule_addresses, NULL };
             syslog(LOG_NOTICE, "iTIP scheduling reply from %s to %s",
                    attendee, reply.organizer ? reply.organizer : "<unknown>");
             sched_deliver(userid, attendee, reply.organizer, &sched, httpd_authstate);

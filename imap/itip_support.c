@@ -751,6 +751,12 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
             sched_data->ischedule ? REQSTAT_SUCCESS : SCHEDSTAT_DELIVERED;
         goto done;
     }
+    else if (sched_data->updates_only) {
+        /* Can't find object belonging to attendee - ignore request */
+        sched_data->status =
+            sched_data->ischedule ? REQSTAT_PERMFAIL : SCHEDSTAT_PERMFAIL;
+        goto done;
+    }
     else {
         /* Can't find object belonging to attendee - use default calendar */
         char *scheddefault = caldav_scheddefault(sparam->userid);

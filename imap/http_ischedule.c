@@ -532,7 +532,7 @@ static int meth_post_isched(struct transaction_t *txn,
         case ICAL_METHOD_REPLY:
         case ICAL_METHOD_CANCEL: {
             struct sched_data sched_data =
-                { 1, meth == ICAL_METHOD_REPLY, 0,
+                { 1, meth == ICAL_METHOD_REPLY, 0, 0,
                   ical, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL };
             xmlNodePtr root = NULL;
             xmlNsPtr ns[NUM_NAMESPACE];
