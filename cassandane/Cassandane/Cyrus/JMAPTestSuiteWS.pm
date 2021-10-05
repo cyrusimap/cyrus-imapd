@@ -37,7 +37,7 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Cyrus::JMAPTestSuite;
+package Cassandane::Cyrus::JMAPTestSuiteWS;
 use strict;
 use warnings;
 use Cwd qw(abs_path);
@@ -45,6 +45,7 @@ use File::Path qw(mkpath);
 use DateTime;
 use JSON::XS qw(encode_json);
 use File::Find;
+use Module::Load::Conditional qw(check_install);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -78,6 +79,11 @@ sub cyrus_version_supports_jmap
     return 0 if not $buildinfo->get('component', 'jmap');
 
     return 1; # supported in everything newer
+}
+
+sub have_jmap_tester_websocket
+{
+    return defined check_install(module => 'JMAP::Tester::WebSocket');
 }
 
 sub init
@@ -199,9 +205,9 @@ sub list_tests
 {
     my @tests;
 
-    if (!cyrus_version_supports_jmap())
+    if (!cyrus_version_supports_jmap() || !have_jmap_tester_websocket())
     {
-        return ( 'test_jmaptest_disabled' );
+        return ( 'test_jmaptest_websocket_disabled' );
     }
 
     if (!defined $basedir)
@@ -234,7 +240,14 @@ sub run_test
     if (!cyrus_version_supports_jmap())
     {
         xlog $self, "The version of Cyrus being tested does not support JMAP";
-        xlog $self, "JMAP-TestSuite tests skipped";
+        xlog $self, "JMAP-TestSuite WebSockets tests skipped";
+        return;
+    }
+
+    if (!have_jmap_tester_websocket())
+    {
+        xlog $self, "The JMAP::Tester::WebSockets module is not available";
+        xlog $self, "JMAP-TestSuite WebSockets tests skipped";
         return;
     }
 
@@ -277,7 +290,7 @@ sub run_test
 
     local $ENV{JMTS_TEST_OUTPUT_TO_STDERR} = 1 if get_verbose;
     local $ENV{JMTS_TELEMETRY} = 1 if get_verbose >= 3;
-    local $ENV{JMTS_USE_WEBSOCKETS} = 0;
+    local $ENV{JMTS_USE_WEBSOCKETS} = 1;
 
     # Needed so text based searching works in Email/query, etc...
     my $squatter_pid = $self->{instance}->run_command(
