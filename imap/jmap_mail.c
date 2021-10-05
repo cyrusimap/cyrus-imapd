@@ -1266,6 +1266,7 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     if (rec->part) return 0;
 
     r = jmap_openmbox_by_guidrec(check->req, rec, &mbox, 0);
+    if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
     if (r) return r;
 
     if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_EMAIL) {
