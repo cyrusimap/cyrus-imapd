@@ -8601,14 +8601,11 @@ static json_t *_header_from_text(json_t *jtext,
 {
     /* Parse a Text header into raw form */
     if (json_is_string(jtext)) {
-        size_t prefix_len = strlen(header_name) + 2;
         const char *s = json_string_value(jtext);
-        /* Q-encoding will fold lines for us */
-        int force_quote = prefix_len + strlen(s) > MIME_MAX_HEADER_LENGTH;
-        char *tmp = charset_encode_mimeheader(s, strlen(s), force_quote);
+        char *tmp = charset_encode_mimeheader(s, strlen(s), 0);
         struct buf val = BUF_INITIALIZER;
-        /* If text got force-quoted the first line of the Q-encoded
-         * text might spill over the soft 78-character limit due to
+        /* If text got folded, then the first line of the encoded
+         * header might spill over the soft 78-character limit due to
          * the Header name prefix. Looking at how most of the mail
          * clients are doing this, this seems not to be an issue and
          * allows us to not start the header value with a line fold. */
