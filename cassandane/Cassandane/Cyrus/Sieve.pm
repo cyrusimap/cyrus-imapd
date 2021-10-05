@@ -3736,8 +3736,11 @@ sub test_process_imip
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["fileinto", "vnd.cyrus.imip"];
-processimip;
+require ["variables", "imap4flags", "vnd.cyrus.imip"];
+processimip :status "status";
+if string :is "\${status}" "ok" {
+    setflag "\\\\Flagged";
+}
 EOF
     );
 
@@ -3776,6 +3779,8 @@ EOF
 
     xlog $self, "Check that the message made it to INBOX";
     $self->{store}->set_folder('INBOX');
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+    $msg->set_attribute(flags => [ '\\Recent', '\\Flagged' ]);
     $self->check_messages({ 1 => $msg }, check_guid => 0);
 
     xlog $self, "Check that the event made it to calendar";
