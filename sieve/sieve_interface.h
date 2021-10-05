@@ -249,7 +249,6 @@ void sieve_register_extlists(sieve_interp_t *interp,
 int sieve_register_duplicate(sieve_interp_t *interp, sieve_duplicate_t *d);
 
 void sieve_register_jmapquery(sieve_interp_t *interp, sieve_jmapquery *f);
-void sieve_register_imip(sieve_interp_t *interp, sieve_callback *f);
 
 typedef int sieve_parse_error(int lineno, const char *msg,
                               void *interp_context,
