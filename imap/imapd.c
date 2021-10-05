@@ -12109,7 +12109,14 @@ static void cmd_xfer(const char *tag, const char *name,
             list.allow_usersubs = 1;
         }
 
-        mboxlist_findall(NULL, mbname_intname(mbname), 1, NULL, NULL, xfer_addmbox, &list);
+        /* admin namespace, use original name */
+        mboxlist_findall(NULL, name, 1, NULL, NULL, xfer_addmbox, &list);
+    }
+
+    /* bail out if we didn't find anything to do */
+    if (!list.mboxes) {
+        r = IMAP_MAILBOX_NONEXISTENT;
+        goto done;
     }
 
     r = xfer_init(toserver, &xfer);
@@ -12222,7 +12229,7 @@ static void cmd_xfer(const char *tag, const char *name,
         next = item->next;
         free(item);
 
-        if (xfer->userid || mbox_count > 1000) {
+        if (xfer->use_replication && (xfer->userid || mbox_count > 1000)) {
             /* RESTART after each user or after every 1000 mailboxes */
             mbox_count = 0;
 
