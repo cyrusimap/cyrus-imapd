@@ -68,7 +68,6 @@ typedef enum {
     ACTION_ENOTIFY,
     ACTION_NOTIFY,
     ACTION_DENOTIFY,
-    ACTION_IMIP,
 } action_t;
 
 /* information */
@@ -160,6 +159,5 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, const char *awaken_mbox
               strarray_t *addflags, strarray_t *removeflags, const char *tzid,
               unsigned char days, arrayu64_t *times,
               strarray_t *imapflags, struct buf *headers);
-int do_imip(action_list_t *m);
 
 #endif
