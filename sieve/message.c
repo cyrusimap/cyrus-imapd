@@ -537,33 +537,6 @@ int do_duptrack(duptrack_list_t *d, sieve_duplicate_context_t *dc)
     return 0;
 }
 
-/* process an iMIP message m
- *
- * incompatible with: nothing---it doesn't cancel any actions
- */
-int do_imip(action_list_t *a)
-{
-    action_list_t *b = NULL;
-
-    /* see if this conflicts with any previous actions taken on this message */
-    while (a != NULL) {
-        if (a->a == ACTION_IMIP) /* don't bother doing twice */
-            return 0;
-
-        b = a;
-        a = a->next;
-    }
-
-    /* add to the action list */
-    a = new_action_list();
-    a->a = ACTION_IMIP;
-    a->cancel_keep = 0;
-
-    b->next = a;
-
-    return 0;
-}
-
 notify_list_t *new_notify_list(void)
 {
     return (notify_list_t *) xzmalloc(sizeof(notify_list_t));

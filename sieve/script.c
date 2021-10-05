@@ -846,19 +846,6 @@ static int do_action_list(sieve_interp_t *interp,
                          ACTIONS_STRING_LEN-strlen(actions_string),
                          "Discarded\n");
             break;
-        case ACTION_IMIP:
-            if (!interp->imip)
-                return SIEVE_INTERNAL_ERROR;
-
-            ret = interp->imip(NULL, interp->interp_context,
-                               script_context, message_context, &errmsg);
-            free(interp->lastitem);
-            interp->lastitem = NULL;
-            if (ret == SIEVE_OK)
-                snprintf(actions_string+strlen(actions_string),
-                         ACTIONS_STRING_LEN-strlen(actions_string),
-                         "Processed iMIP\n");
-            break;
 
         case ACTION_VACATION:
             {
