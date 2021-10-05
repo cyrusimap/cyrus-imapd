@@ -1411,6 +1411,8 @@ static int sieve_imip(void *ac __attribute__((unused)),
     const char *uid = NULL, *organizer = NULL;
     const char *originator = NULL, *recipient = NULL;
     strarray_t sched_addresses = STRARRAY_INITIALIZER;
+    const char *resultstr = "fail";
+    int ret = SIEVE_FAIL;
 
     prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
 
@@ -1521,18 +1523,20 @@ static int sieve_imip(void *ac __attribute__((unused)),
         itip, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, NULL };
     struct caldav_sched_param sched_param =
       { (char *) ctx->userid, NULL, 0, 0, 1, NULL };
-    unsigned r = sched_deliver_local(ctx->userid, originator, recipient,
-                                     &sched_param, &sched_data,
-                                     (struct auth_state *) sd->authstate,
-                                     NULL, NULL);
+    if (1 == sched_deliver_local(ctx->userid, originator, recipient,
+                                 &sched_param, &sched_data,
+                                 (struct auth_state *) sd->authstate,
+                                 NULL, NULL)) {
+        resultstr = "success";
+        ret = SIEVE_OK;
+    }
 
     syslog(LOG_INFO, "sieve iMIP processed: %s: %s",
-           m->id ? m->id : "<nomsgid>", r == 1 ? "success" : "fail");
+           m->id ? m->id : "<nomsgid>", resultstr)
     if (config_auditlog)
         syslog(LOG_NOTICE,
                "auditlog: processed iMIP sessionid=<%s> message-id=%s: %s",
-               session_id(), m->id ? m->id : "<nomsgid>",
-               r == 1 ? "success" : "fail");
+               session_id(), m->id ? m->id : "<nomsgid>", resultstr);
 
   done:
     strarray_fini(&sched_addresses);
@@ -1547,7 +1551,7 @@ static int sieve_imip(void *ac __attribute__((unused)),
         if (itip) icalcomponent_free(itip);
     }
 
-    return SIEVE_OK;
+    return ret;
 }
 #endif /* WITH_DAV */
 #endif /* HAVE_ICAL */
