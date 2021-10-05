@@ -1532,7 +1532,7 @@ static int sieve_imip(void *ac __attribute__((unused)),
     }
 
     syslog(LOG_INFO, "sieve iMIP processed: %s: %s",
-           m->id ? m->id : "<nomsgid>", resultstr)
+           m->id ? m->id : "<nomsgid>", resultstr);
     if (config_auditlog)
         syslog(LOG_NOTICE,
                "auditlog: processed iMIP sessionid=<%s> message-id=%s: %s",
