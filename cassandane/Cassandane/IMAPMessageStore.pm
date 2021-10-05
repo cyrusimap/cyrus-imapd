@@ -198,6 +198,13 @@ sub write_message
     $self->{client}->append($self->{folder}, @extra,
                             { Literal => $msg->as_string() } )
                             || die "$@";
+
+    # if we know the uid and uidvalidity, update the msg object
+    my $appenduid = $self->{client}->get_response_code('appenduid');
+    if (defined $appenduid and ref $appenduid eq 'ARRAY') {
+        $msg->set_attribute(uidvalidity => $appenduid->[0]);
+        $msg->set_attribute(uid => $appenduid->[1]);
+    }
 }
 
 sub write_end
