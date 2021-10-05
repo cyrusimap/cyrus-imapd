@@ -349,7 +349,7 @@ extern void sieverestart(FILE *f);
 %token JMAPQUERY
 
 /* vnd.cyrus.imip */
-%token PROCESSIMIP STATUS LOGARG
+%token PROCESSIMIP STATUS UPDATESONLY
 %type <cl> imiptags
 
 
@@ -1320,20 +1320,14 @@ imiptags: /* empty */            {
 
                                      $$->u.imip.status = $3;
                                  }
-        | imiptags LOGARG string {
-                                     if ($$->u.imip.log != NULL) {
+        | imiptags UPDATESONLY   {
+                                     if ($$->u.imip.updates_only != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
-                                                      ":log");
-                                         free($$->u.imip.log);
-                                     }
-                                     else if (!supported(SIEVE_CAPA_VARIABLES)) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_MISSING_REQUIRE,
-                                                      "variables");
+                                                      ":updatesonly");
                                      }
 
-                                     $$->u.imip.log = $3;
+                                     $$->u.imip.updates_only = 1;
                                  }
         ;
 
@@ -2871,11 +2865,11 @@ static commandlist_t *build_imip(sieve_script_t *sscript, commandlist_t *c)
     assert(c && c->type == B_PROCESSIMIP);
 
     if (c->u.imip.status) verify_identifier(sscript, c->u.imip.status);
-    if (c->u.imip.log) verify_identifier(sscript, c->u.imip.log);
+    if (c->u.imip.updates_only == -1) c->u.imip.updates_only = 0;
     
-    c->nargs = bc_precompile(c->args, "ss",
+    c->nargs = bc_precompile(c->args, "si",
                              c->u.imip.status,
-                             c->u.imip.log);
+                             c->u.imip.updates_only);
 
     return c;
 }

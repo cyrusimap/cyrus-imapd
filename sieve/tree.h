@@ -255,8 +255,8 @@ struct Commandlist {
             char *tzid;
         } sn;
         struct {
+            int updates_only;
             char *status;
-            char *log;
         } imip;
     } u;
     struct Commandlist *next;
