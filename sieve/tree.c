@@ -323,6 +323,7 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
     case B_PROCESSIMIP:
         capability = "vnd.cyrus.imip";
         supported = parse_script->support & SIEVE_CAPA_IMIP;
+        p->u.imip.updates_only = -1;
         break;
     }
 
@@ -547,7 +548,6 @@ void free_tree(commandlist_t *cl)
 
         case B_PROCESSIMIP:
             free(cl->u.imip.status);
-            free(cl->u.imip.log);
             break;
         }
 
