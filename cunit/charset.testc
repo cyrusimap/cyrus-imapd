@@ -347,6 +347,20 @@ static void test_encode_mimeheader(void)
     /* only encode display-name of address */
     TESTCASE("\"abc\xe2\x88\x97xyz\" <foo@example.com>", "=?UTF-8?Q?=22abc=E2=88=97xyz=22?= <foo@example.com>");
 
+    /* fold long lines with whitespace */
+    TESTCASE("012345678 " "012345678 " "012345678 " "012345678 "
+             "012345678 " "012345678 " "012345678 " "0123456789",
+             "012345678 " "012345678 " "012345678 " "012345678 "
+             "012345678 " "012345678 " "012345678" "\r\n "
+             "0123456789");
+
+    /* encode long lines with no whitespace */
+    TESTCASE("0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "0123456789" "0123456789",
+             "=?UTF-8?Q?" "0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "01?=\r\n "
+             "=?UTF-8?Q?" "2345678901" "23456789?=");
+
 #undef TESTCASE
 }
 

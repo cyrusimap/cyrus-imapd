@@ -3393,6 +3393,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
 
     if (!force_quote) {
         size_t prev_lf = 0;
+        size_t last_sp = 0;
         for (n = 0; n < len; n++) {
             unsigned char this = data[n];
             unsigned char next = (n < len - 1) ? data[n+1] : '\0';
@@ -3400,10 +3401,17 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             if (QPSAFECHAR[this] || this == '=' || this == ' ' || this == '\t') {
                 /* per RFC 5322: printable ASCII (decimal 33 - 126), SP, HTAB */
                 /* but only if the line doesn't exceed the 76 octet limit */
+
+                if (this == ' ' || this == '\t')
+                    last_sp = n;
+
                 if (n - prev_lf <= 74) continue;
 
                 if (isheader) {
-                    need_fold = 1;
+                    if (n - last_sp > 74)
+                        need_quote = 1;
+                    else
+                        need_fold = 1;
                     continue;
                 }
             }
