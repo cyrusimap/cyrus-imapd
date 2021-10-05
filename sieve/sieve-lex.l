@@ -394,6 +394,8 @@ ws              [ \t]+
 
     /* vnd.cyrus.imip */
 <INITIAL>processimip          return PROCESSIMIP;
+<INITIAL>:status              return STATUS;
+<INITIAL>:log                 return LOGARG;
 
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */

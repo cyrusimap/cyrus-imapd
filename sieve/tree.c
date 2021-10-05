@@ -544,6 +544,11 @@ void free_tree(commandlist_t *cl)
             arrayu64_free(cl->u.sn.times);
             free(cl->u.sn.tzid);
             break;
+
+        case B_PROCESSIMIP:
+            free(cl->u.imip.status);
+            free(cl->u.imip.log);
+            break;
         }
 
         free(cl);
