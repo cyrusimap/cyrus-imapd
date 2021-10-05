@@ -838,7 +838,9 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 
         case B_PROCESSIMIP:
-            printf("PROCESS_IMIP");
+            printf("PROCESSIMIP");
+            print_string(" STATUS", cmd.u.imip.status);
+            print_string(" LOG", cmd.u.imip.log);
             break;
 
 
@@ -1630,7 +1632,10 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_PROCESSIMIP:
-            generate_token("process_imip", indent, buf);
+            *requires |= SIEVE_CAPA_IMIP;
+            generate_token("processimip", indent, buf);
+            generate_string(":status", cmd.u.imip.status, buf);
+            generate_string(":log", cmd.u.imip.log, buf);
             break;
 
         default:

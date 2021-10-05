@@ -119,6 +119,7 @@ static commandlist_t *build_deleteheader(sieve_script_t*, commandlist_t *c,
 static commandlist_t *build_log(sieve_script_t*, char *text);
 static commandlist_t *build_snooze(sieve_script_t *sscript,
                                    commandlist_t *c, arrayu64_t *times);
+static commandlist_t *build_imip(sieve_script_t *sscript, commandlist_t *c);
 
 /* construct/canonicalize test commands */
 static test_t *build_anyof(sieve_script_t*, testlist_t *tl);
@@ -348,7 +349,8 @@ extern void sieverestart(FILE *f);
 %token JMAPQUERY
 
 /* vnd.cyrus.imip */
-%token PROCESSIMIP
+%token PROCESSIMIP STATUS LOGARG
+%type <cl> imiptags
 
 
 %%
@@ -532,7 +534,7 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
         | LOG string             { $$ = build_log(sscript, $2); }
         | SNOOZE sntags timelist { $$ = build_snooze(sscript, $2, $3); }
-        | PROCESSIMIP            { $$ = new_command(B_PROCESSIMIP, sscript); }
+        | PROCESSIMIP imiptags   { $$ = build_imip(sscript, $2); }
         ;
 
 
@@ -1296,6 +1298,43 @@ time1: time                      {
 
 
 time: STRING                     { $$ = verify_time(sscript, $1); }
+        ;
+
+
+/* PROCESSIMIP tagged arguments */
+imiptags: /* empty */            {
+                                     $$ = new_command(B_PROCESSIMIP, sscript);
+                                 }
+        | imiptags STATUS string {
+                                     if ($$->u.imip.status != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":status");
+                                         free($$->u.imip.status);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_VARIABLES)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "variables");
+                                     }
+
+                                     $$->u.imip.status = $3;
+                                 }
+        | imiptags LOGARG string {
+                                     if ($$->u.imip.log != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":log");
+                                         free($$->u.imip.log);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_VARIABLES)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "variables");
+                                     }
+
+                                     $$->u.imip.log = $3;
+                                 }
         ;
 
 
@@ -2823,6 +2862,20 @@ static commandlist_t *build_log(sieve_script_t *sscript, char *text)
     c->u.l.text = text;
 
     c->nargs = bc_precompile(c->args, "s", c->u.l.text);
+
+    return c;
+}
+
+static commandlist_t *build_imip(sieve_script_t *sscript, commandlist_t *c)
+{
+    assert(c && c->type == B_PROCESSIMIP);
+
+    if (c->u.imip.status) verify_identifier(sscript, c->u.imip.status);
+    if (c->u.imip.log) verify_identifier(sscript, c->u.imip.log);
+    
+    c->nargs = bc_precompile(c->args, "ss",
+                             c->u.imip.status,
+                             c->u.imip.log);
 
     return c;
 }

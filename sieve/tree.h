@@ -254,6 +254,10 @@ struct Commandlist {
             arrayu64_t *times;
             char *tzid;
         } sn;
+        struct {
+            char *status;
+            char *log;
+        } imip;
     } u;
     struct Commandlist *next;
 
