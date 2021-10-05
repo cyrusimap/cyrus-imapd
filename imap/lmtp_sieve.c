@@ -1396,10 +1396,10 @@ done:
 char *httpd_userid = NULL;  // due to caldav_util.h including httpd.h
 struct namespace_t namespace_calendar = { .allow = ALLOW_USERDATA | ALLOW_CAL_NOTZ };
 
-static int sieve_imip(void *ac __attribute__((unused)),
-                      void *ic, void *sc, void *mc,
+static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
                       const char **errmsg __attribute__((unused)))
 {
+    sieve_imip_context_t *imip = (sieve_imip_context_t *) ac;
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;
@@ -1519,7 +1519,7 @@ static int sieve_imip(void *ac __attribute__((unused)),
     if (!originator || !recipient) goto done;
 
     struct sched_data sched_data =
-      { 0, meth == ICAL_METHOD_REPLY, 0,
+      { 0, meth == ICAL_METHOD_REPLY, 0, imip->updates_only,
         itip, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, NULL };
     struct caldav_sched_param sched_param =
       { (char *) ctx->userid, NULL, 0, 0, 1, NULL };
