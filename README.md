@@ -17,51 +17,58 @@ active development.
 What is Cyrus
 =============
 
-Cyrus is an IMAP server, where IMAP (Internet Message Access Protocol) 
+Cyrus is an IMAP server, where IMAP (Internet Message Access Protocol)
 is a protocol for accessing mail.
 
-The Cyrus IMAP server differs from other IMAP server implementations in 
-that it is generally intended to be run on "sealed" servers, where 
-normal users are not permitted to log in. The mailbox database is stored 
-in parts of the filesystem that are private to the Cyrus IMAP system. 
-All user access to mail is through the IMAP, NNTP, or POP3 protocols. 
+The Cyrus IMAP server differs from other IMAP server implementations in
+that it is generally intended to be run on "sealed" servers, where
+normal users are not permitted to log in. The mailbox database is stored
+in parts of the filesystem that are private to the Cyrus IMAP system.
+All user access to mail is through the IMAP, NNTP, or POP3 protocols.
 
-The private mailbox database design gives the server large advantages in 
-efficiency, scalability, and administrability. Multiple concurrent 
-read/write connections to the same mailbox are permitted. The server 
-supports access control lists on mailboxes and storage quotas on mailbox 
-hierarchies. 
+The private mailbox database design gives the server large advantages in
+efficiency, scalability, and administrability. Multiple concurrent
+read/write connections to the same mailbox are permitted. The server
+supports access control lists on mailboxes and storage quotas on mailbox
+hierarchies.
 
 Cyrus goals
 ===========
 
-To be the best open source secure, scalable mail server, providing 
-breadth and depth of functionality across email, contacts, calendar 
+To be the best open source secure, scalable mail server, providing
+breadth and depth of functionality across email, contacts, calendar
 and related messaging services!
 
 How to get Cyrus
 ================
 
-Cyrus comes in three flavours: 
+Cyrus comes in three flavours:
 
 1. Our release source tarballs from https://github.com/cyrusimap/cyrus-imapd/releases
     * Recommended for most users.
     * These are packaged by the Cyrus team.
     * The docs are pre-built for you in doc/html.
-    * They're definitively tagged to a particular release version with up to date release notes.
+    * They're definitively tagged to a particular release version with up to
+      date release notes.
 2. Raw source from https://github.com/cyrusimap/cyrus-imapd
-    * Use this if you need a version of Cyrus that contains an unreleased patch/fix/feature.
-    * These bundles require a lot more dependencies to build than a packaged tarball.
+    * Use this if you need a version of Cyrus that contains an unreleased
+      patch/fix/feature.
+    * These bundles require a lot more dependencies to build than a packaged
+      tarball.
 3. Operating System distribution packages.
-    * Cyrus IMAP packages are shipped with every major distribution, including but not limited to Fedora, Red Hat Enterprise Linux, CentOS, Scientific Linux, Debian, Ubuntu, openSUSE, Gentoo, Mageia and ClearOS.
-    * Please be aware that we don't maintain these packages and as such, some distributions are out of date.
-    * If you run into problems with a packed distribution, please contact the source of the distribution.
+    * Cyrus IMAP packages are shipped with every major distribution, including
+      but not limited to Fedora, Red Hat Enterprise Linux, CentOS, Scientific
+      Linux, Debian, Ubuntu, openSUSE, Gentoo, Mageia and ClearOS.
+    * Please be aware that we don't maintain these packages and as such, some
+      distributions are out of date.
+    * If you run into problems with a packed distribution, please contact the
+      source of the distribution.
 
 How to install Cyrus from packaged releases
 ===============================================
 
-Please be sure to read the documentation. The latest version is online 
-at http://www.cyrusimap.org, but the version current for this 
+Please be sure to read the documentation. The latest version is online
+at http://www.cyrusimap.org, but the version current for this
 distribution can be found in the doc/ subdirectory.
 
 For Cyrus tarball releases, the basic installation instructions are:
@@ -95,9 +102,13 @@ Unlike releases, the git repository doesn't have a pre-built
     $ make
     $ sudo make install
 
-If you need to build a local copy of the docs current to the version of the code, these need to be built: see doc/README.docs
 
-Read through doc/html/imap/developer.html for more detailed instructions on building and contributing. The latest version is online at https://www.cyrusimap.org/imap/developer.html
+If you need to build a local copy of the docs current to the version of the
+code, these need to be built: see doc/README.docs
+
+Read through doc/html/imap/developer.html for more detailed instructions on
+building and contributing. The latest version is online at
+https://www.cyrusimap.org/imap/developer.html
 
 How to install Cyrus libraries from git source
 ==============================================
@@ -144,8 +155,8 @@ Read doc/legacy/install-upgrade.html
 Think you've found a bug or have a new feature?
 ===============================================
 
-Fantastic! We'd love to hear about it, especially if you have a patch to 
-contribute. 
+Fantastic! We'd love to hear about it, especially if you have a patch to
+contribute.
 
 The best way to make contributions to the project is to fork
 it on github, make your changes on your fork, and then send
@@ -166,10 +177,8 @@ See the COPYING file in this distribution.
 Contact us
 ==========
 
-Whether you have a success story to share, or a bug to file, or a 
-request for help or a feature to add or some documentation to contribute 
-or you'd just like to say hi, we want to hear from you! See 
+Whether you have a success story to share, or a bug to file, or a
+request for help or a feature to add or some documentation to contribute
+or you'd just like to say hi, we want to hear from you! See
 https://www.cyrusimap.org/support.html for various ways you can get hold
-of us. 
-
-
+of us.
