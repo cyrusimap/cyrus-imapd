@@ -595,7 +595,7 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
     if (!notifier) {
         return imip_send_sendmail(userid, sched_data->itip,
                                   sender, recipient,
-                                  sched_data->is_update);
+                                  SCHED_IS_UPDATE(sched_data));
     }
 
     json_t *jsevent, *patch;
@@ -636,7 +636,7 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
                             "ical", ical_str,
                             "jsevent", jsevent,
                             "patch", patch,
-                            "is_update", sched_data->is_update);
+                            "is_update", SCHED_IS_UPDATE(sched_data));
     char *serial = json_dumps(val, JSON_COMPACT);
     notify(notifier, "IMIP", NULL, userid, NULL, 0, NULL, serial, NULL);
     free(serial);
@@ -1054,12 +1054,10 @@ static void sched_deliver_remote(const char *userid,
 
         r = isched_send(sparam, recipient, sched_data->itip, &xml);
         if (r) {
-            sched_data->status = sched_data->ischedule ?
-                REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+            SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
         }
         else if (xmlStrcmp(xml->name, BAD_CAST "schedule-response")) {
-            sched_data->status = sched_data->ischedule ?
-                REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+            SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
         }
         else {
             xmlNodePtr cur;
@@ -1083,11 +1081,11 @@ static void sched_deliver_remote(const char *userid,
                 }
 
                 if (!strncmp((const char *) status, "2.0", 3)) {
-                    sched_data->status = sched_data->ischedule ?
-                        REQSTAT_DELIVERED : SCHEDSTAT_DELIVERED;
+                    SCHED_STATUS(sched_data,
+                                 REQSTAT_DELIVERED, SCHEDSTAT_DELIVERED);
                 }
                 else {
-                    if (sched_data->ischedule)
+                    if (SCHED_ISCHEDULE(sched_data))
                         strlcpy(statbuf, (const char *) status, sizeof(statbuf));
                     else
                         strlcpy(statbuf, (const char *) status, 4);
@@ -1103,12 +1101,10 @@ static void sched_deliver_remote(const char *userid,
     else {
         r = imip_send(userid, sched_data, sender, recipient);
         if (!r) {
-            sched_data->status =
-                sched_data->ischedule ? REQSTAT_SENT : SCHEDSTAT_SENT;
+            SCHED_STATUS(sched_data, REQSTAT_SENT, SCHEDSTAT_SENT);
         }
         else {
-            sched_data->status = sched_data->ischedule ?
-                REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+            SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
         }
     }
 }
@@ -1260,11 +1256,11 @@ void sched_deliver(const char *userid, const char *sender, const char *recipient
         break;
 
     case ICAL_SCHEDULEFORCESEND_REPLY:
-        islegal = sched_data->is_reply;
+        islegal = SCHED_IS_REPLY(sched_data);
         break;
 
     case ICAL_SCHEDULEFORCESEND_REQUEST:
-        islegal = !sched_data->is_reply;
+        islegal = !SCHED_IS_REPLY(sched_data);
         break;
 
     default:
@@ -1278,8 +1274,7 @@ void sched_deliver(const char *userid, const char *sender, const char *recipient
     }
 
     if (caladdress_lookup(recipient, &sparam, sched_data->schedule_addresses)) {
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_NOUSER : SCHEDSTAT_NOUSER;
+        SCHED_STATUS(sched_data, REQSTAT_NOUSER, SCHEDSTAT_NOUSER);
         /* Unknown user */
         goto done;
     }
@@ -1307,7 +1302,7 @@ void sched_deliver(const char *userid, const char *sender, const char *recipient
                                 authstate, &attendee, &ical);
 
         /* XXX  Should this be a config option? - it might have perf implications */
-        if (r == 1 && sched_data->is_reply) {
+        if (r == 1 && SCHED_IS_REPLY(sched_data)) {
             /* Send updates to attendees - skipping sender of reply */
             icalcomponent *comp = icalcomponent_get_first_real_component(ical);
             if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
@@ -1749,7 +1744,7 @@ static void schedule_full_cancel(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL };
+            { 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
     }
 
@@ -1798,7 +1793,7 @@ static void schedule_sub_cancels(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL };
+            { 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
 
     }
@@ -1827,7 +1822,7 @@ static void schedule_sub_updates(const char *userid, const strarray_t *schedule_
     icalcomponent *itip = make_itip(ICAL_METHOD_REQUEST, newical);
     strarray_t recurids = STRARRAY_INITIALIZER;
     icalparameter_scheduleforcesend force_send = ICAL_SCHEDULEFORCESEND_NONE;
-    int is_update = 0;
+    unsigned flags = 0;
 
     icalcomponent *oldmaster = find_attended_component(oldical, "", attendee);
 
@@ -1868,7 +1863,7 @@ static void schedule_sub_updates(const char *userid, const strarray_t *schedule_
         clean_component(copy);
 
         if (find_attendee(oldcomp, attendee))
-            is_update = 1;
+            flags |= SCHEDFLAG_IS_UPDATE;
 
         icalcomponent_add_component(itip, copy);
 
@@ -1882,7 +1877,7 @@ static void schedule_sub_updates(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, is_update, 0, itip, oldical, newical, force_send, schedule_addresses, NULL };
+            { flags, itip, oldical, newical, force_send, schedule_addresses, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
         update_attendee_status(newical, &recurids, attendee, sched.status);
     }
@@ -1905,7 +1900,7 @@ static void schedule_full_update(const char *userid, const strarray_t *schedule_
     icalcomponent_add_component(itip, mastercopy);
 
     int do_send = 0;
-    int is_update = 0;
+    unsigned flags = 0;
 
     icalcomponent *oldmaster = find_attended_component(oldical, "", attendee);
     if (check_changes(oldmaster, mastercopy, attendee)) {
@@ -1913,7 +1908,7 @@ static void schedule_full_update(const char *userid, const strarray_t *schedule_
         if (!icalcomponent_is_historical(mastercopy, h_cutoff)) do_send = 1;
 
         if (oldmaster) {
-            is_update = 1;
+            flags |= SCHEDFLAG_IS_UPDATE;
             if (!do_send && !icalcomponent_is_historical(oldmaster, h_cutoff))
                 do_send = 1;
         }
@@ -1942,9 +1937,9 @@ static void schedule_full_update(const char *userid, const strarray_t *schedule_
         icalcomponent *oldcomp = find_component(oldical, recurid);
 
         int has_old = !!find_attendee(oldcomp, attendee);
-        if (has_old) is_update = 1;
+        if (has_old) flags |= SCHEDFLAG_IS_UPDATE;
         if (!oldcomp && oldmaster)
-            is_update = 1;
+            flags |= SCHEDFLAG_IS_UPDATE;
 
         /* non matching are exdates on the master */
         if (!find_attendee(comp, attendee)) {
@@ -1970,7 +1965,7 @@ static void schedule_full_update(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, is_update, 0, itip, oldical, newical, force_send, schedule_addresses, NULL };
+            { flags, itip, oldical, newical, force_send, schedule_addresses, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
 
         update_attendee_status(newical, NULL, attendee, sched.status);
@@ -2415,8 +2410,9 @@ void sched_reply(const char *userid, const strarray_t *schedule_addresses,
         schedule_sub_declines(attendee, h_cutoff, oldical, newical, &reply);
 
         if (reply.do_send) {
+            unsigned flags = SCHEDFLAG_IS_REPLY;
             struct sched_data sched =
-                { 0, 1, 0, 0, reply.itip, oldical, newical, reply.force_send, schedule_addresses, NULL };
+                { flags, reply.itip, oldical, newical, reply.force_send, schedule_addresses, NULL };
             syslog(LOG_NOTICE, "iTIP scheduling reply from %s to %s",
                    attendee, reply.organizer ? reply.organizer : "<unknown>");
             sched_deliver(userid, attendee, reply.organizer, &sched, httpd_authstate);
