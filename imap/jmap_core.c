@@ -1236,7 +1236,7 @@ static int jmap_blob_set(struct jmap_req *req)
 
         if (r || !buf_base(buf)) {
             jerr = json_pack("{s:s}", "type", "invalidProperties");
-            json_object_set_new(set.not_updated, key, jerr);
+            json_object_set_new(set.not_created, key, jerr);
             buf_destroy(buf);
             continue;
         }
