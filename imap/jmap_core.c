@@ -1156,6 +1156,8 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
         jitem = json_object_get(arg, "blobId");
         if (JNOTNULL(jitem) && json_is_string(jitem)) {
             const char *blobid = json_string_value(jitem);
+            if (blobid && blobid[0] == '#')
+                blobid = jmap_lookup_id(req, blobid + 1);
             // map in the existing blob, if there is one
             jmap_getblob_context_t ctx;
             jmap_getblob_ctx_init(&ctx, req->accountid, blobid, NULL, 1);
