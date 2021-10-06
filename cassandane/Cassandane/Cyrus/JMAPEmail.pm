@@ -11074,10 +11074,20 @@ sub test_email_set_headers
             value   => "I feel \N{WHITE SMILING FACE}",
             wantRaw => " =?UTF-8?Q?I_feel_=E2=98=BA?="
         },
-        'header:X-TextHeaderLong' => {
+        'header:X-TextHeaderFold' => {
+            format  => 'asText',
+            value   => "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus dictum facilisis feugiat.",
+            wantRaw   => " Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus dictum\r\n facilisis feugiat.",
+        },
+        'header:X-TextHeaderEncodeNoWSP' => {
             format  => 'asText',
             value   => "x" x 80,
-            wantRaw => " =?UTF-8?Q?xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx?=\r\n =?UTF-8?Q?xxxxxxxxxxxxxxxxxx?="
+            wantRaw => " =?UTF-8?Q?" . ("x" x 62) . "?=\r\n =?UTF-8?Q?" . ("x" x 18) . "?="
+        },
+        'header:X-TextHeaderEncodeLongLine' => {
+            format  => 'asText',
+            value   => "xxx " . ("x" x 80) . " xxx",
+            wantRaw => " =?UTF-8?Q?xxx_" . ("x" x 58) . "?=\r\n =?UTF-8?Q?" . ("x" x 22) . "_xxx?=",
         },
         'header:X-TextHeaderShort' => {
             format  => 'asText',
