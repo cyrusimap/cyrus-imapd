@@ -1098,21 +1098,22 @@ sub test_email_query_shared_move
     $self->make_message("Email", store => $self->{adminstore}) or die;
 
     my $res = $jmap->Call('Email/get', {
-      accountId => 'other',
-      ids => [],
+        accountId => 'other',
+        ids => [],
     });
     $self->assert_not_null($res);
     my $oldState = $res->{state};
 
-    # Copy message to unshared mailbox B
+    # Move the message to invisible shared folder (leaving a
+    # removed instance in the visibile folder)
     $admintalk->create("user.other.B") or die;
     $admintalk->setacl("user.other.B", "cassandane", "") or die;
     $admintalk->move(1, "user.other.B");
 
     # Fetch Changes
     $res = $jmap->Call('Email/changes', {
-      accountId => 'other',
-      sinceState => $oldState,
+        accountId => 'other',
+        sinceState => $oldState,
     });
     $self->assert_not_null($res);
     $self->assert_num_equals(0, scalar @{$res->{created}});
