@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #
 # mkchartable.pl -- Generate character set mapping table
 #
