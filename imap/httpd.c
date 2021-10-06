@@ -2217,7 +2217,7 @@ static void cmdloop(struct http_connection *conn)
 
     } while (!conn->close);
 
-    if (conn->close_str) {
+    if (conn->close_str && strcmp(conn->close_str, PROT_EOF_STRING)) {
         syslog(LOG_WARNING, "%s, closing connection", conn->close_str);
     }
 
