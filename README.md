@@ -6,13 +6,12 @@
 Welcome
 =======
 
-This is the Cyrus IMAP Server, version series 3.0.x.
+This is the Cyrus IMAP Server, legacy version 3.0.
 
-No further development work will progress on anything older than version 2.3.
-Versions 2.3 and 2.4 still receive security updates, but new features or
-non-security bugfixes are unlikely to be backported.  Version 2.5 still
-receives security updates and non-security bugfixes. Version 3.0 is under
-active development.
+The current stable series is 3.4.
+
+Versions 3.0 and 3.2 still receive security updates, and some non-security
+bug fixes.
 
 What is Cyrus
 =============
@@ -68,7 +67,7 @@ How to install Cyrus from packaged releases
 ===============================================
 
 Please be sure to read the documentation. The latest version is online
-at http://www.cyrusimap.org, but the version current for this
+at https://www.cyrusimap.org, but the version current for this
 distribution can be found in the doc/ subdirectory.
 
 For Cyrus tarball releases, the basic installation instructions are:
@@ -92,7 +91,7 @@ from source (see next section).
 The latest development code is on the branch called 'master',
 and the latest code destined for the stable release is on
 the branch 'cyrus-imapd-$major.$minor'.  So the current
-stable release is called cyrus-imapd-3.0
+stable release is called cyrus-imapd-3.4
 
 Unlike releases, the git repository doesn't have a pre-built
 ./configure script.  You need to generate it with autoreconf:
@@ -102,6 +101,7 @@ Unlike releases, the git repository doesn't have a pre-built
     $ make
     $ sudo make install
 
+GNU Make is required.  If you're not on Linux, it might be called 'gmake'.
 
 If you need to build a local copy of the docs current to the version of the
 code, these need to be built: see doc/README.docs
@@ -150,7 +150,7 @@ Then continue to install Cyrus.
 Are you upgrading?
 ==================
 
-Read doc/legacy/install-upgrade.html
+Read doc/html/imap/download/upgrade.html
 
 Think you've found a bug or have a new feature?
 ===============================================
@@ -162,9 +162,8 @@ The best way to make contributions to the project is to fork
 it on github, make your changes on your fork, and then send
 a pull request.
 
-Check https://github.com/cyrusimap/cyrus-imapd/issues/ for any 
-outstanding bugs. Old bugs can be found at 
-https://bugzilla.cyrusimap.org/ 
+Check https://github.com/cyrusimap/cyrus-imapd/issues/ for any
+outstanding bugs.
 
 Our guide at https://www.cyrusimap.org/support.html has all the
 information about how to contact us and how best to get your change accepted.
