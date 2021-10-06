@@ -1095,6 +1095,26 @@ static const jmap_property_t blob_set_props[] = {
         0
     },
     {
+        "data:asText",
+        NULL,
+        0
+    },
+    {
+        "data:asBase64",
+        NULL,
+        0
+    },
+    {
+        "data:asHex",
+        NULL,
+        0
+    },
+    {
+        "catenate",
+        NULL,
+        0
+    },
+    {
         "type",
         NULL,
         0
