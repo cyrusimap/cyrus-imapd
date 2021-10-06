@@ -664,6 +664,201 @@ sub test_bearer_auth_jwt
         warn "JMAP " . Dumper($RawRequest, $RawResponse);
     }
     $self->assert_str_equals('401', $RawResponse->{status});
+
+sub test_blob_set_basic
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my $self = shift;
+    my $instance = $self->{instance};
+
+    xlog "Test without capability";
+    my $jmap = $self->{jmap};
+    my $res = $jmap->CallMethods([['Blob/set', { create => { b1 => { 'data:asText' => 'hello world' } } }, 'R1']]);
+    $self->assert_str_equals($res->[0][0], 'error');
+
+    # XXX: this will be replaced with the upstream one
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
+
+    xlog "Regular Blob/set works and returns a blobId";
+    $res = $jmap->CallMethods([['Blob/set', { create => { b1 => { 'data:asText' => 'hello world' } } }, 'R1']]);
+    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_not_null($res->[0][1]{created}{b1}{id});
+}
+
+sub test_blob_lookup
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my $self = shift;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog $self, "Generate a email in $inbox via IMAP";
+    my %exp_sub;
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body = "A plain text email.";
+    $exp_sub{A} = $self->make_message("foo",
+        body => $body
+    );
+
+    xlog $self, "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog $self, "get emails";
+    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    my $blobId = $msg->{textBody}[0]{blobId};
+    $self->assert_not_null($blobId);
+    my $emailId = $msg->{id};
+    $self->assert_not_null($emailId);
+    my $threadId = $msg->{threadId};
+    $self->assert_not_null($threadId);
+    my $mailboxIds = $msg->{mailboxIds};
+    my ($mailboxId) = keys %$mailboxIds;
+    $self->assert_not_null($mailboxId);
+
+    xlog "Test without capability";
+    $res = $jmap->CallMethods([['Blob/lookup', { ids => [$blobId, 'unknown'], types => ['Mailbox', 'Thread', 'Email'] }, 'R1']]);
+    $self->assert_str_equals($res->[0][0], 'error');
+
+    # XXX: this will be replaced with the upstream one
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
+
+    xlog "Regular Blob/lookup works";
+    $res = $jmap->CallMethods([['Blob/lookup', { ids => [$blobId, 'unknown'], types => ['Mailbox', 'Thread', 'Email'] }, 'R1']]);
+    $self->assert_str_equals($res->[0][0], 'Blob/lookup');
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals($blobId, $res->[0][1]{list}[0]{id});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]{types}{Mailbox}});
+    $self->assert_str_equals($mailboxId, $res->[0][1]{list}[0]{types}{Mailbox}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]{types}{Thread}});
+    $self->assert_str_equals($threadId, $res->[0][1]{list}[0]{types}{Thread}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]{types}{Email}});
+    $self->assert_str_equals($emailId, $res->[0][1]{list}[0]{types}{Email}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{notFound}});
+    $self->assert_str_equals('unknown', $res->[0][1]{notFound}[0]);
+}
+
+sub test_blob_get
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my $self = shift;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog $self, "Generate a email in $inbox via IMAP";
+    my %exp_sub;
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body = "A plain text email.";
+    $exp_sub{A} = $self->make_message("foo",
+        body => $body
+    );
+
+    xlog $self, "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog $self, "get emails";
+    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    my $blobId = $msg->{textBody}[0]{blobId};
+    $self->assert_not_null($blobId);
+
+    xlog "Test without capability";
+    # XXX -> rename to Blob/get
+    $res = $jmap->CallMethods([['Blob/xget', { ids => [$blobId], properties => [ 'data:asText', 'size' ] }, 'R1']]);
+    $self->assert_str_equals($res->[0][0], 'error');
+
+    # XXX: this will be replaced with the upstream one
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
+
+    xlog "Regular Blob/get works and returns a blobId";
+    $res = $jmap->CallMethods([['Blob/xget', { ids => [$blobId], properties => [ 'data:asText', 'data:asHex', 'data:asBase64', 'size' ] }, 'R1']]);
+    $self->assert_str_equals($res->[0][0], 'Blob/xget');
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals($blobId, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals($body, $res->[0][1]{list}[0]{'data:asText'});
+    $self->assert_str_equals(encode_base64($body, ''), $res->[0][1]{list}[0]{'data:asBase64'});
+    $self->assert_num_equals(length($body), $res->[0][1]{list}[0]{'size'});
+}
+
+sub test_blob_set_complex
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my $self = shift;
+    my $jmap = $self->{jmap};
+
+    # XXX: this will be replaced with the upstream one
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
+
+    my $data = "The quick brown fox jumped over the lazy dog.";
+    my $bdata = encode_base64($data, '');
+    my $hdata = unpack "H*", $data;
+
+    my $res;
+
+    xlog "Regular Blob/set works and returns the right data";
+    $res = $jmap->CallMethods([
+      ['Blob/set', { create => { b1 => { 'data:asText' => $data } } }, 'S1'],
+      ['Blob/xget', { ids => ['#b1'], properties => [ 'data:asText', 'size' ] }, 'G1'],
+    ]);
+    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('Blob/xget', $res->[1][0]);
+    $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
+    $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
+
+    xlog "Base64 Blob/set works and returns the right data";
+    $res = $jmap->CallMethods([
+      ['Blob/set', { create => { b2 => { 'data:asBase64' => $bdata } } }, 'S2'],
+      ['Blob/xget', { ids => ['#b2'], properties => [ 'data:asText', 'size' ] }, 'G2'],
+    ]);
+    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('Blob/xget', $res->[1][0]);
+    $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
+    $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
+
+    xlog "Hex Blob/set works and returns the right data";
+    $res = $jmap->CallMethods([
+      ['Blob/set', { create => { b3 => { 'data:asHex' => $hdata } } }, 'S3'],
+      ['Blob/xget', { ids => ['#b3'], properties => [ 'data:asText', 'size' ] }, 'G3'],
+    ]);
+    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('Blob/xget', $res->[1][0]);
+    $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
+    $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
+
+    xlog "Complex catenate expression works and returns the right data";
+    my $target = "How quick was that?";
+    $res = $jmap->CallMethods([
+      ['Blob/set', { create => { b4 => { 'data:asText' => $data } } }, 'S4'],
+      ['Blob/set', { create => { cat => { catenate => [
+        { 'data:asText' => 'How' },                      # 'How'
+        { 'blobId' => '#b4', offset => 3, length => 7 }, # ' quick '
+        { 'data:asHex' => unpack("H*", "was t") },       # 'was t'
+        { 'blobId' => '#b4', offset => 1, length => 1 }, # 'h'
+        { 'data:asBase64' => encode_base64('at?', '') }, # 'at?'
+      ] } } }, 'CAT'],
+      ['Blob/xget', { ids => ['#cat'], properties => [ 'data:asText', 'size' ] }, 'G4'],
+    ]);
+    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('Blob/set', $res->[1][0]);
+    $self->assert_str_equals('Blob/xget', $res->[2][0]);
+    $self->assert_str_equals($target, $res->[2][1]{list}[0]{'data:asText'});
+    $self->assert_num_equals(length $target, $res->[2][1]{list}[0]{size});
 }
 
 1;
