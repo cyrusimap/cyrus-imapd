@@ -1519,9 +1519,11 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
 
     if (!originator || !recipient) goto done;
 
+    unsigned flags = 0;
+    if (meth == ICAL_METHOD_REPLY) flags |= SCHEDFLAG_IS_REPLY;
+    else if (imip->updates_only) flags |= SCHEDFLAG_UPDATES_ONLY;
     struct sched_data sched_data =
-      { 0, meth == ICAL_METHOD_REPLY, 0, imip->updates_only,
-        itip, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, NULL };
+        { flags, itip, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, NULL };
     struct caldav_sched_param sched_param =
       { (char *) ctx->userid, NULL, 0, 0, 1, NULL };
     if (1 == sched_deliver_local(ctx->userid, originator, recipient,

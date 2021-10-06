@@ -680,8 +680,7 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
     if (r) {
         syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
                mailboxname, error_message(r));
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_REJECTED : SCHEDSTAT_REJECTED;
+        SCHED_STATUS(sched_data, REQSTAT_REJECTED, SCHEDSTAT_REJECTED);
         goto done;
     }
 
@@ -690,10 +689,9 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
     }
     mboxlist_entry_free(&mbentry);
 
-    reqd_privs = sched_data->is_reply ? DACL_REPLY : DACL_INVITE;
+    reqd_privs = SCHED_IS_REPLY(sched_data) ? DACL_REPLY : DACL_INVITE;
     if (!(rights & reqd_privs)) {
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_NOPRIVS : SCHEDSTAT_NOPRIVS;
+        SCHED_STATUS(sched_data, REQSTAT_NOPRIVS, SCHEDSTAT_NOPRIVS);
         syslog(LOG_DEBUG, "No scheduling receive ACL for user %s on Inbox %s",
                userid, sparam->userid);
         goto done;
@@ -703,8 +701,7 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
     if ((r = mailbox_open_iwl(mailboxname, &inbox))) {
         syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
                mailboxname, error_message(r));
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+        SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
         goto done;
     }
     free(mailboxname);
@@ -716,8 +713,7 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
     /* Search for iCal UID in recipient's calendars */
     caldavdb = caldav_open_userid(sparam->userid);
     if (!caldavdb) {
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+        SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
         goto done;
     }
 
@@ -730,8 +726,7 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
         else {
             mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
             if (!mbentry) {
-                sched_data->status = sched_data->ischedule ?
-                    REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+                SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
                 goto done;
             }
             mailboxname = xstrdup(mbentry->name);
@@ -739,22 +734,19 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
         }
         buf_setcstr(&resource, cdata->dav.resource);
     }
-    else if (sched_data->is_reply) {
+    else if (SCHED_IS_REPLY(sched_data)) {
         /* Can't find object belonging to organizer - ignore reply */
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_PERMFAIL : SCHEDSTAT_PERMFAIL;
+        SCHED_STATUS(sched_data, REQSTAT_PERMFAIL, SCHEDSTAT_PERMFAIL);
         goto done;
     }
     else if (method == ICAL_METHOD_CANCEL || method == ICAL_METHOD_POLLSTATUS) {
         /* Can't find object belonging to attendee - we're done */
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_SUCCESS : SCHEDSTAT_DELIVERED;
+        SCHED_STATUS(sched_data, REQSTAT_SUCCESS, SCHEDSTAT_DELIVERED);
         goto done;
     }
-    else if (sched_data->updates_only) {
+    else if (SCHED_UPDATES_ONLY(sched_data)) {
         /* Can't find object belonging to attendee - ignore request */
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_PERMFAIL : SCHEDSTAT_PERMFAIL;
+        SCHED_STATUS(sched_data, REQSTAT_NOPRIVS, SCHEDSTAT_NOPRIVS);
         goto done;
     }
     else {
@@ -794,8 +786,7 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
     if (r) {
         syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
                mailboxname, error_message(r));
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+        SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
         goto done;
     }
 
@@ -850,8 +841,7 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
             }
 
             if (reject) {
-                sched_data->status = sched_data->ischedule ?
-                    REQSTAT_REJECTED : SCHEDSTAT_REJECTED;
+                SCHED_STATUS(sched_data, REQSTAT_REJECTED, SCHEDSTAT_REJECTED);
                 goto done;
             }
         }
@@ -891,7 +881,7 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
         syslog(LOG_ERR, "Unknown iTIP method: %s",
                icalenum_method_to_string(method));
 
-        sched_data->is_reply = 0;
+        sched_data->flags &= ~SCHEDFLAG_IS_REPLY;
         goto inbox;
     }
 
@@ -908,15 +898,13 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
     strarray_fini(&recipient_addresses);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_SUCCESS : SCHEDSTAT_DELIVERED;
+        SCHED_STATUS(sched_data, REQSTAT_SUCCESS, SCHEDSTAT_DELIVERED);
         result = 1;
     }
     else {
         syslog(LOG_ERR, "caldav_store_resource(%s) failed: %s (%s)",
                mailbox_name(mailbox), error_message(r), txn.error.resource);
-        sched_data->status =
-            sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+        SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
         goto done;
     }
 

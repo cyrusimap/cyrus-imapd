@@ -67,10 +67,7 @@
 #define REQSTAT_REJECTED        "5.3;No scheduling support for user"
 
 struct sched_data {
-    unsigned ischedule    : 1;
-    unsigned is_reply     : 1;
-    unsigned is_update    : 1;
-    unsigned updates_only : 1;
+    unsigned flags;
     icalcomponent *itip;
     icalcomponent *oldical;
     icalcomponent *newical;
@@ -78,6 +75,19 @@ struct sched_data {
     const strarray_t *schedule_addresses;
     const char *status;
 };
+
+#define SCHEDFLAG_ISCHEDULE     (1<<0)
+#define SCHEDFLAG_IS_REPLY      (1<<1)
+#define SCHEDFLAG_IS_UPDATE     (1<<2)
+#define SCHEDFLAG_UPDATES_ONLY  (1<<4)
+
+#define SCHED_ISCHEDULE(sched)   (sched->flags & SCHEDFLAG_ISCHEDULE)
+#define SCHED_IS_REPLY(sched)    (sched->flags & SCHEDFLAG_IS_REPLY)
+#define SCHED_IS_UPDATE(sched)   (sched->flags & SCHEDFLAG_IS_UPDATE)
+#define SCHED_UPDATES_ONLY(sched) (sched->flags & SCHEDFLAG_UPDATES_ONLY)
+
+#define SCHED_STATUS(sched, isched, ical) \
+    (sched->status = SCHED_ISCHEDULE(sched) ? isched : ical)
 
 #define SCHEDSTAT_PENDING       "1.0"
 #define SCHEDSTAT_SENT          "1.1"
