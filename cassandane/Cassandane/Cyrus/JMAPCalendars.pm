@@ -7426,9 +7426,9 @@ EOF
     my $res = $jmap->CallMethods([
         ['Blob/set',
            { create => {
-               "ical1" => { content => $ical1, type => 'text/calendar' },
-               "ical2" => { content => $ical2, type => 'text/calendar' },
-               "junk" => { content => 'foo bar', type => 'text/calendar' }
+               "ical1" => { 'data:asText' => $ical1, type => 'text/calendar' },
+               "ical2" => { 'data:asText' => $ical2, type => 'text/calendar' },
+               "junk" => { 'data:asText' => 'foo bar', type => 'text/calendar' }
              } }, 'R0'],
         ['CalendarEvent/parse', {
             blobIds => [ "#ical1", "foo", "#junk", "#ical2" ],

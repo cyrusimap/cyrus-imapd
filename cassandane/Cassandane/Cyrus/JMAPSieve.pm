@@ -206,7 +206,7 @@ EOF
     $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "A" => { content => $script2 }
+               "A" => { 'data:asText' => $script2 }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -276,7 +276,7 @@ EOF
     $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "B" => { content => $script3 }
+               "B" => { 'data:asText' => $script3 }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -364,7 +364,7 @@ EOF
     $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "A" => { content => $script2 }
+               "A" => { 'data:asText' => $script2 }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -443,7 +443,7 @@ EOF
     $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "B" => { content => $script3 }
+               "B" => { 'data:asText' => $script3 }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -541,7 +541,7 @@ sub test_sieve_set_bad_script
     $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "A" => { content => "keep;" }
+               "A" => { 'data:asText' => "keep;" }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -581,10 +581,10 @@ sub test_sieve_query
     my $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "A" => { content => "keep;" },
-               "B" => { content => "discard;" },
-               "C" => { content => "redirect \"test\@example.com\";" },
-               "D" => { content => "stop;"}
+               "A" => { 'data:asText' => "keep;" },
+               "B" => { 'data:asText' => "discard;" },
+               "C" => { 'data:asText' => "redirect \"test\@example.com\";" },
+               "D" => { 'data:asText' => "stop;"}
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -739,8 +739,8 @@ sub test_sieve_validate
     my $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "A" => { content => "keepme;" },
-               "B" => { content => "keep;" }
+               "A" => { 'data:asText' => "keepme;" },
+               "B" => { 'data:asText' => "keep;" }
             }
          }, "R0"],
         ['SieveScript/validate', {
@@ -793,7 +793,7 @@ EOF
     my $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "A" => { content => $script }
+               "A" => { 'data:asText' => $script }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -985,9 +985,9 @@ EOF
     my $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-                "1" => { content => $email1 },
-                "3" => { content => $email2 },
-                "2" => { content => $script },
+                "1" => { 'data:asText' => $email1 },
+                "3" => { 'data:asText' => $email2 },
+                "2" => { 'data:asText' => $script },
             }}, 'R0'],
         ['SieveScript/test', {
             emailBlobIds => [ '#1', 'foobar', '#3' ],
@@ -1036,7 +1036,7 @@ sub test_sieve_blind_replace_active
     my $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "A" => { content => "keep;" }
+               "A" => { 'data:asText' => "keep;" }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -1091,7 +1091,7 @@ sub test_sieve_blind_replace_active
     $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "B" => { content => "discard;" }
+               "B" => { 'data:asText' => "discard;" }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -1162,7 +1162,7 @@ sub test_deliver_compile
     my $res = $jmap->CallMethods([
         ['Blob/set', {
             create => {
-               "A" => { content => "require [\"fileinto\"];\r\nfileinto \"$target\";\r\n" }
+               "A" => { 'data:asText' => "require [\"fileinto\"];\r\nfileinto \"$target\";\r\n" }
             }
          }, "R0"],
         ['SieveScript/set', {
