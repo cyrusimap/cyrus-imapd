@@ -838,7 +838,8 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 
         case B_PROCESSIMIP:
-            printf("PROCESSIMIP UPDATESONLY(%d)", cmd.u.imip.updates_only);
+            printf("PROCESSIMIP UPDATESONLY(%d) DELETECANCELED(%d)",
+                   !!cmd.u.imip.updates_only, !!cmd.u.imip.delete_canceled);
             print_string(" STATUS", cmd.u.imip.status);
             break;
 
@@ -1634,6 +1635,7 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             *requires |= SIEVE_CAPA_IMIP;
             generate_token("processimip", indent, buf);
             generate_switch(":updatesonly", cmd.u.imip.updates_only, buf);
+            generate_switch(":deletecanceled", cmd.u.imip.delete_canceled, buf);
             generate_string(":status", cmd.u.imip.status, buf);
             break;
 

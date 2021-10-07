@@ -424,8 +424,10 @@ enum bytecode {
                                      <create: int> <flag-list: string-list>
                                      <special-use: string> <mailboxid: string> */
 
-    B_PROCESSIMIP,              /* require "vnd.cyrus.imip"
+    B_PROCESSIMIP,              /* require ["vnd.cyrus.imip", "variables"]
 
+                                   <flags-bitmask: int>
+                                   <status-var: string>
                                  */
 
     /*****  insert new actions above this line  *****/
@@ -698,6 +700,11 @@ enum bytecode_tags {
 
 #define SNOOZE_WDAYS_MASK 0x7F
 #define SNOOZE_IS_ID_MASK 0x80
+
+enum bytecode_imip_bitflags {
+    IMIP_UPDATESONLY    = 1<<0,
+    IMIP_DELETECANCELED = 1<<1
+};
 
 enum bytecode_variables_bitflags {
     BFV_LOWER	        = 1<<0,

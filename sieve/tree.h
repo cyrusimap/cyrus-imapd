@@ -256,6 +256,7 @@ struct Commandlist {
         } sn;
         struct {
             int updates_only;
+            int delete_canceled;
             char *status;
         } imip;
     } u;

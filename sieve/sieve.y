@@ -349,7 +349,7 @@ extern void sieverestart(FILE *f);
 %token JMAPQUERY
 
 /* vnd.cyrus.imip */
-%token PROCESSIMIP STATUS UPDATESONLY
+%token PROCESSIMIP STATUS UPDATESONLY DELETECANCELED
 %type <cl> imiptags
 
 
@@ -1328,6 +1328,17 @@ imiptags: /* empty */            {
                                      }
 
                                      $$->u.imip.updates_only = 1;
+                                 }
+
+        | imiptags DELETECANCELED
+                                 {
+                                     if ($$->u.imip.delete_canceled != -1) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":deletecanceled");
+                                     }
+
+                                     $$->u.imip.delete_canceled = 1;
                                  }
         ;
 
@@ -2862,14 +2873,18 @@ static commandlist_t *build_log(sieve_script_t *sscript, char *text)
 
 static commandlist_t *build_imip(sieve_script_t *sscript, commandlist_t *c)
 {
+    unsigned flags = 0;
+
     assert(c && c->type == B_PROCESSIMIP);
 
+    if (c->u.imip.updates_only == 1) flags |= IMIP_UPDATESONLY;
+    if (c->u.imip.delete_canceled == 1) flags |= IMIP_DELETECANCELED;
+
     if (c->u.imip.status) verify_identifier(sscript, c->u.imip.status);
-    if (c->u.imip.updates_only == -1) c->u.imip.updates_only = 0;
     
-    c->nargs = bc_precompile(c->args, "si",
-                             c->u.imip.status,
-                             c->u.imip.updates_only);
+    c->nargs = bc_precompile(c->args, "is",
+                             flags,
+                             c->u.imip.status);
 
     return c;
 }
