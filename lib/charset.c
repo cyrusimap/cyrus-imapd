@@ -43,6 +43,7 @@
 #include <config.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 
 #include "unicode/ucnv.h"
 
@@ -97,6 +98,8 @@ struct qp_state {
 struct b64_state {
     int bytesleft;
     int codepoint;
+    const char *index;
+    int invalid;
 };
 
 struct unfold_state {
@@ -206,7 +209,7 @@ struct charset_charset {
 struct convert_rock;
 
 static void icu_reset(struct convert_rock *rock, int to_uni);
-static void icu_flush(struct convert_rock *rock);
+static int icu_flush(struct convert_rock *rock);
 static void icu_cleanup(struct convert_rock *rock, int is_free);
 
 static void table_reset(struct convert_rock *rock, int to_uni);
@@ -214,7 +217,7 @@ static void table_cleanup(struct convert_rock *rock, int is_free);
 
 typedef void convertproc_t(struct convert_rock *rock, uint32_t c);
 typedef void cleanupconvert_t(struct convert_rock *rock, int is_free);
-typedef void flushproc_t(struct convert_rock *rock);
+typedef int flushproc_t(struct convert_rock *rock);
 
 struct convert_rock {
     convertproc_t *f;
@@ -230,7 +233,9 @@ struct convert_rock {
 int charset_debug;
 static const char *convert_name(struct convert_rock *rock);
 
-#define XX 127
+#define XS 126 // whitespace character
+#define XX 127 // unknown character
+
 /*
  * Table for decoding hexadecimal in quoted-printable
  */
@@ -258,9 +263,9 @@ static const unsigned char index_hex[256] = {
  * Table for decoding base64
  */
 static const char index_64[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XS,XS,XX, XX,XS,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,63,
+    XS,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,63,
     52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,64,XX,XX,
     XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
     15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
@@ -275,7 +280,29 @@ static const char index_64[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
 };
-#define CHAR64(c)  (index_64[(unsigned char)(c)])
+
+/*
+ * Table for decoding base64url
+ */
+static const char index_64url[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XS,XS,XX, XX,XS,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XS,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,62,XX,XX,
+    52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,64,XX,XX,
+    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
+    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,63,
+    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
+    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+};
+#define CHAR64(c, index)  (index[(unsigned char)(c)])
 
 EXPORTED int encoding_lookupname(const char *s)
 {
@@ -300,6 +327,8 @@ EXPORTED int encoding_lookupname(const char *s)
     case 'b':
         if (!strcasecmp(s, "BASE64"))
             return ENCODING_BASE64;
+        if (!strcasecmp(s, "BASE64URL"))
+            return ENCODING_BASE64URL;
         if (!strcasecmp(s, "BINARY"))
             return ENCODING_NONE;
         break;
@@ -330,17 +359,23 @@ EXPORTED const char *encoding_name(int encoding)
     case ENCODING_NONE: return "NONE";
     case ENCODING_QP: return "QUOTED-PRINTABLE";
     case ENCODING_BASE64: return "BASE64";
+    case ENCODING_BASE64URL: return "BASE64URL";
     case ENCODING_UNKNOWN: return "UNKNOWN";
     default: return "WTF";
     }
 }
 
-static void convert_flush(struct convert_rock *rock)
+static int convert_flush(struct convert_rock *rock)
 {
+    int r = 0;
     while (rock) {
-        if (rock->flush) rock->flush(rock);
+        if (rock->flush) {
+            int r2 = rock->flush(rock);
+            if (!r) r = r2;
+        }
         rock = rock->next;
     }
+    return r;
 }
 
 static inline void convert_putc(struct convert_rock *rock, uint32_t c)
@@ -363,13 +398,13 @@ static void convert_cat(struct convert_rock *rock, const char *s)
     convert_flush(rock);
 }
 
-static void convert_catn(struct convert_rock *rock, const char *s, size_t len)
+static int convert_catn(struct convert_rock *rock, const char *s, size_t len)
 {
     while (len-- > 0) {
         convert_putc(rock, (unsigned char)*s);
         s++;
     }
-    convert_flush(rock);
+    return convert_flush(rock);
 }
 
 /* convertproc_t conversion functions */
@@ -421,9 +456,10 @@ static void qp_flushline(struct convert_rock *rock, int endline)
     s->len = 0;
 }
 
-static void qp_flush(struct convert_rock *rock)
+static int qp_flush(struct convert_rock *rock)
 {
     qp_flushline(rock, 0);
+    return 0;
 }
 
 static void qp2byte(struct convert_rock *rock, uint32_t c)
@@ -452,10 +488,13 @@ static void qp2byte(struct convert_rock *rock, uint32_t c)
 static void b64_2byte(struct convert_rock *rock, uint32_t c)
 {
     struct b64_state *s = (struct b64_state *)rock->state;
-    char b = CHAR64(c);
+    char b = CHAR64(c, s->index);
 
-    /* could just be whitespace, ignore it */
-    if (b == XX) return;
+    if (b >= XS) {
+        /* ignore whitespace */
+        s->invalid = s->invalid || b == XX;
+        return;
+    }
 
     /* the padding character, reset state */
     if (b == 64) {
@@ -484,6 +523,18 @@ static void b64_2byte(struct convert_rock *rock, uint32_t c)
         s->codepoint = 0;
         s->bytesleft = 0;
     }
+}
+
+static int b64_flush(struct convert_rock *rock)
+{
+    struct b64_state *s = (struct b64_state *)rock->state;
+    if (s->invalid) {
+        if (s->index == index_64url)
+            return -1;
+        else
+            xsyslog(LOG_WARNING, "ignoring invalid base64 characters", NULL);
+    }
+    return 0;
 }
 
 /*
@@ -1613,7 +1664,7 @@ static void basic_free(struct convert_rock *rock)
     }
 }
 
-static void icu_flush(struct convert_rock *rock)
+static int icu_flush(struct convert_rock *rock)
 {
     struct charset_charset *s = (struct charset_charset *) rock->state;
     s->flush = 1;
@@ -1624,6 +1675,7 @@ static void icu_flush(struct convert_rock *rock)
         uni2icu(rock, U_REPLACEMENT);
     }
     s->flush = 0;
+    return 0;
 }
 
 static void icu_cleanup(struct convert_rock *rock, int is_free)
@@ -1800,11 +1852,14 @@ static struct convert_rock *qp_init(int isheader, struct convert_rock *next)
     return rock;
 }
 
-static struct convert_rock *b64_init(struct convert_rock *next)
+static struct convert_rock *b64_init(struct convert_rock *next, int enc)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
-    rock->state = xzmalloc(sizeof(struct b64_state));
+    struct b64_state *state = xzmalloc(sizeof(struct b64_state));
+    state->index = enc == ENCODING_BASE64URL ? index_64url : index_64;
+    rock->state = state;
     rock->f = b64_2byte;
+    rock->flush = b64_flush;
     rock->next = next;
     return rock;
 }
@@ -2055,9 +2110,10 @@ static void unorm_cleanup(struct convert_rock *rock, int is_free)
     }
 }
 
-static void unorm_flush(struct convert_rock *rock)
+static int unorm_flush(struct convert_rock *rock)
 {
     unorm_drain(rock, 1);
+    return 0;
 }
 
 static void unorm_convert(struct convert_rock *rock, uint32_t c)
@@ -2387,7 +2443,7 @@ EXPORTED char *charset_convert(const char *s, charset_t charset, int flags)
 EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t charset, int encoding)
 {
     struct convert_rock *input, *tobuffer;
-    char *res;
+    char *res = NULL;
     charset_t imaputf7;
 
     /* Initialize character set mapping */
@@ -2417,7 +2473,8 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
             break;
 
         case ENCODING_BASE64:
-            input = b64_init(input);
+        case ENCODING_BASE64URL:
+            input = b64_init(input, encoding);
             /* XXX have to have nl-mapping base64 in order to
              * properly count \n as 2 raw characters
              */
@@ -2431,10 +2488,10 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
     }
 
     /* do the conversion */
-    convert_catn(input, msg_base, len);
-
-    /* extract the result */
-    res = buffer_cstring(tobuffer);
+    if (!convert_catn(input, msg_base, len)) {
+        /* extract the result */
+        res = buffer_cstring(tobuffer);
+    }
 
     /* clean up */
     convert_free(input);
@@ -2542,7 +2599,7 @@ done:
 EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t charset, int encoding)
 {
     struct convert_rock *input, *tobuffer;
-    char *res;
+    char *res = NULL;
     charset_t utf8;
 
     /* Initialize character set mapping */
@@ -2572,7 +2629,8 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t chars
         break;
 
     case ENCODING_BASE64:
-        input = b64_init(input);
+    case ENCODING_BASE64URL:
+        input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
          */
@@ -2585,8 +2643,9 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t chars
         return 0;
     }
 
-    convert_catn(input, msg_base, len);
-    res = buffer_cstring(tobuffer);
+    if (!convert_catn(input, msg_base, len))
+        res = buffer_cstring(tobuffer);
+
     convert_free(input);
     charset_free(&utf8);
 
@@ -2620,7 +2679,8 @@ EXPORTED int charset_decode(struct buf *dst, const char *src, size_t len, int en
         break;
 
     case ENCODING_BASE64:
-        input = b64_init(input);
+    case ENCODING_BASE64URL:
+        input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
          */
@@ -2632,10 +2692,65 @@ EXPORTED int charset_decode(struct buf *dst, const char *src, size_t len, int en
         return -1;
     }
 
-    convert_catn(input, src, len);
+    int r = convert_catn(input, src, len);
     convert_free(input);
+    return r;
+}
 
-    return 0;
+static void encode_b64(struct buf *dst, const char *src, size_t len, int encoding)
+{
+    static const char b64std[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static const char b64url[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const char *b64 = encoding == ENCODING_BASE64URL ? b64url : b64std;
+    char pad = encoding == ENCODING_BASE64URL ? '\0' : '=';
+
+    const uint8_t *s = (uint8_t*)src;
+    size_t r = len;
+    if (len >= 3) {
+        size_t i;
+        for (i = 0; i < len - 2; i += 3) {
+            buf_putc(dst, b64[s[i+0] >> 2]);
+            buf_putc(dst, b64[((s[i+0] & 0x03) << 4) | (s[i+1] >> 4)]);
+            buf_putc(dst, b64[((s[i+1] & 0x0f) << 2) | (s[i+2] >> 6)]);
+            buf_putc(dst, b64[s[i+2] & 0x3f]);
+        }
+        r = len - i;
+    }
+    if (r) {
+        buf_putc(dst, b64[s[len-r] >> 2]);
+        if (r == 1) {
+            buf_putc(dst, b64[(s[len-1] & 0x03) << 4]);
+            if (pad) buf_putc(dst, pad);
+        }
+        else {
+            buf_putc(dst, b64[((s[len-2] & 0x03) << 4) | (s[len-1] >> 4)]);
+            buf_putc(dst, b64[(s[len-1] & 0x0f) << 2]);
+        }
+        if (pad) buf_putc(dst, pad);
+    }
+}
+
+EXPORTED int charset_encode(struct buf *dst, const char *src, size_t len, int encoding)
+{
+    if (encoding == ENCODING_NONE) {
+        buf_setmap(dst, src, len);
+        return 0;
+    }
+    else if (encoding == ENCODING_BASE64 || encoding == ENCODING_BASE64URL) {
+        encode_b64(dst, src, len, encoding);
+        return 0;
+    }
+    else if (encoding == ENCODING_QP) {
+        size_t outlen = 0;
+        char *val = charset_qpencode_mimebody(src, len, 0, &outlen);
+        if (val && outlen)
+            buf_setmap(dst, val, outlen);
+        free(val);
+        return 0;
+    }
+    else return -1;
 }
 
 /* Decode bytes from src to sha1 of bytes */
@@ -2664,7 +2779,8 @@ EXPORTED int charset_decode_sha1(uint8_t dest[SHA1_DIGEST_LENGTH], size_t *decod
         break;
 
     case ENCODING_BASE64:
-        input = b64_init(input);
+    case ENCODING_BASE64URL:
+        input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
          */
@@ -2802,7 +2918,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
                 extract = qp_init(1, input);
             }
             else {
-                extract = b64_init(input);
+                extract = b64_init(input, ENCODING_BASE64);
             }
             /* convert */
             p = encoding+3;
@@ -2867,16 +2983,15 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
 EXPORTED char *charset_unfold(const char *s, size_t len, int flags)
 {
     struct convert_rock *tobuffer, *input;
-    char *res;
+    char *res = NULL;
 
     if (!s) return NULL;
 
     tobuffer = buffer_init(len);
     input = unfold_init(flags&CHARSET_UNFOLD_SKIPWS, tobuffer);
 
-    convert_catn(input, s, len);
-
-    res = buffer_cstring(tobuffer);
+    if (!convert_catn(input, s, len))
+        res = buffer_cstring(tobuffer);
 
     convert_free(input);
 
@@ -3130,7 +3245,8 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
         break;
 
     case ENCODING_BASE64:
-        input = b64_init(input);
+    case ENCODING_BASE64URL:
+        input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
          */
@@ -3207,7 +3323,8 @@ EXPORTED int charset_extract(int (*cb)(const struct buf *, void *),
         break;
 
     case ENCODING_BASE64:
-        input = b64_init(input);
+    case ENCODING_BASE64URL:
+        input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
          */
@@ -3276,8 +3393,9 @@ EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, i
         break;
 
     case ENCODING_BASE64:
+    case ENCODING_BASE64URL:
         tobuffer = buffer_init(len);
-        input = b64_init(tobuffer);
+        input = b64_init(tobuffer, encoding);
         break;
 
     default:

@@ -1199,26 +1199,19 @@ static void test_utf8_to_searchform(void)
 static void test_charset_decode(void)
 {
 
-#define TESTCASE(in, inlen, want, wantlen, enc) \
+#define TESTCASE(encoded, encodedlen, decoded, decodedlen, encoding) \
     { \
-        struct buf _dst = BUF_INITIALIZER; \
-        static const char _in[] = (in); \
-        static const char _want[] = (want); \
-        int _enc = (enc); \
-        size_t _inlen = (inlen); \
-        size_t _wantlen = (wantlen); \
-        int _r; \
-        _r = charset_decode(&_dst, _in, _inlen, _enc); \
-        CU_ASSERT(_r == 0); \
-        CU_ASSERT(_dst.len == _wantlen); \
-        { \
-            const char *p; \
-            for(p = _dst.s; p < _dst.s + _dst.len; p++) { \
-                if (0) fprintf(stderr, "%x\n", *p); \
-            } \
-        } \
-        CU_ASSERT(memcmp(_dst.s, _want, _wantlen) == 0); \
-        buf_free(&_dst); \
+        struct buf buf = BUF_INITIALIZER; \
+        int r = charset_decode(&buf, encoded, encodedlen, encoding); \
+        CU_ASSERT(r == 0); \
+        CU_ASSERT(buf.len == decodedlen); \
+        CU_ASSERT(memcmp(buf.s, decoded, decodedlen) == 0); \
+        buf_reset(&buf); \
+        r = charset_encode(&buf, decoded, decodedlen, encoding); \
+        CU_ASSERT(r == 0); \
+        CU_ASSERT(buf.len == encodedlen); \
+        CU_ASSERT(memcmp(buf.s, encoded, encodedlen) == 0); \
+        buf_free(&buf); \
     }
 
     TESTCASE("", 0, "", 0, ENCODING_NONE);
@@ -1233,6 +1226,10 @@ static void test_charset_decode(void)
     TESTCASE("Zm9vYg==", 8, "foob", 4, ENCODING_BASE64);
     TESTCASE("Zm9vYmE=", 8, "fooba", 5, ENCODING_BASE64);
     TESTCASE("Zm9vYmFy", 8, "foobar", 6, ENCODING_BASE64);
+
+    /* Base64 URL encoding */
+    TESTCASE("vu_A3g", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
+    TESTCASE("vu_A3g==", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
 
 #undef TESTCASE
 }

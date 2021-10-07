@@ -45,6 +45,7 @@
 #define ENCODING_NONE 0
 #define ENCODING_QP 1
 #define ENCODING_BASE64 2
+#define ENCODING_BASE64URL 3
 #define ENCODING_UNKNOWN 255
 
 #define CHARSET_SKIPDIACRIT (1<<0)
@@ -142,6 +143,7 @@ extern char *charset_encode_mimephrase(const char *header);
 extern char *charset_unfold(const char *s, size_t len, int flags);
 
 extern int charset_decode(struct buf *dst, const char *src, size_t len, int encoding);
+extern int charset_encode(struct buf *dst, const char *src, size_t len, int encoding);
 
 extern int charset_decode_sha1(uint8_t dest[SHA1_DIGEST_LENGTH], size_t *decodedlen, const char *src, size_t len, int encoding);
 
