@@ -73,6 +73,7 @@ struct sched_data {
     icalcomponent *newical;
     icalparameter_scheduleforcesend force_send;
     const strarray_t *schedule_addresses;
+    const char *calendarid;
     const char *status;
 };
 

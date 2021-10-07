@@ -831,10 +831,16 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
         goto done;
     }
     else {
-        /* Can't find object belonging to attendee - use default calendar */
-        char *scheddefault = caldav_scheddefault(sparam->userid);
-        mailboxname = caldav_mboxname(sparam->userid, scheddefault);
-        free(scheddefault);
+        /* Can't find object belonging to attendee -
+           use specified calendar, or default calendar */
+        if (sched_data->calendarid) {
+            mailboxname = caldav_mboxname(sparam->userid, sched_data->calendarid);
+        }
+        else {
+            char *scheddefault = caldav_scheddefault(sparam->userid);
+            mailboxname = caldav_mboxname(sparam->userid, scheddefault);
+            free(scheddefault);
+        }
         buf_reset(&resource);
         /* XXX - sanitize the uid? */
         buf_printf(&resource, "%s.ics",
