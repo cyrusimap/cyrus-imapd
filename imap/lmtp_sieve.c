@@ -1520,6 +1520,9 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
 
     unsigned flags = 0;
     if (meth == ICAL_METHOD_REPLY) flags |= SCHEDFLAG_IS_REPLY;
+    else if (meth == ICAL_METHOD_CANCEL) {
+        if (imip->delete_canceled) flags |= SCHEDFLAG_DELETE_CANCELED;
+    }
     else if (imip->updates_only) flags |= SCHEDFLAG_UPDATES_ONLY;
     struct sched_data sched_data =
         { flags, itip, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, NULL };

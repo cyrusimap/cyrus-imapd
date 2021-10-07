@@ -750,6 +750,10 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
     memset(&txn, 0, sizeof(struct transaction_t));
     txn.userid = userid;
 
+    /* Create header cache */
+    txn.req_hdrs = spool_new_hdrcache();
+    if (!txn.req_hdrs) goto done;
+
     /* Check ACL of sender on recipient's Scheduling Inbox */
     mailboxname = caldav_mboxname(sparam->userid, SCHED_INBOX);
     r = mboxlist_lookup(mailboxname, &mbentry, NULL);
@@ -925,9 +929,50 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
     }
 
     switch (method) {
-    case ICAL_METHOD_CANCEL:
-        deliver_merge_cancel(ical, sched_data->itip);
+    case ICAL_METHOD_CANCEL: {
+        int entire_comp = deliver_merge_cancel(ical, sched_data->itip);
+
+        if (entire_comp && SCHED_DELETE_CANCELED(sched_data)) {
+            /* Expunge the resource */
+            struct index_record record;
+            int r;
+
+            memset(&record, 0, sizeof(struct index_record));
+
+            /* Fetch index record for the resource */
+            r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+            if (r) {
+                syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
+                       mailbox_name(mailbox), cdata->dav.imap_uid, error_message(r));
+            }
+            else {
+                struct mboxevent *mboxevent =
+                    mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+
+                record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+
+                r = mailbox_rewrite_index_record(mailbox, &record);
+                if (r) {
+                    syslog(LOG_ERR, "expunging record (%s) failed: %s",
+                           mailbox_name(mailbox), error_message(r));
+                }
+                else {
+                    mboxevent_extract_record(mboxevent, mailbox, &record);
+                    mboxevent_extract_mailbox(mboxevent, mailbox);
+                    mboxevent_set_numunseen(mboxevent, mailbox, -1);
+                    mboxevent_set_access(mboxevent, NULL, NULL, sparam->userid,
+                                         mailbox_name(mailbox), 0);
+                    mboxevent_notify(&mboxevent);
+                    result = 1;
+                }
+
+                mboxevent_free(&mboxevent);
+            }
+
+            if (!r) goto inbox;
+        }
         break;
+    }
 
     case ICAL_METHOD_REPLY:
         attendee = deliver_merge_reply(ical, sched_data->itip);
@@ -952,16 +997,12 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
         goto inbox;
     }
 
-    /* Create header cache */
-    txn.req_hdrs = spool_new_hdrcache();
-    if (!txn.req_hdrs) r = HTTP_SERVER_ERROR;
-
     /* Store the (updated) object in the recipients's calendar */
     strarray_t recipient_addresses = STRARRAY_INITIALIZER;
     strarray_append(&recipient_addresses, recipient);
-    if (!r) r = caldav_store_resource(&txn, ical, mailbox,
-                                      buf_cstring(&resource), cdata->dav.createdmodseq,
-                                      caldavdb, NEW_STAG, sparam->userid, &recipient_addresses);
+    r = caldav_store_resource(&txn, ical, mailbox,
+                              buf_cstring(&resource), cdata->dav.createdmodseq,
+                              caldavdb, NEW_STAG, sparam->userid, &recipient_addresses);
     strarray_fini(&recipient_addresses);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
