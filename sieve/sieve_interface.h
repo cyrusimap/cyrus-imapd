@@ -205,6 +205,7 @@ typedef struct sieve_duplicate_context {
 typedef struct sieve_imip_context {
     unsigned updates_only    : 1;
     unsigned delete_canceled : 1;
+    char *calendarid;
 } sieve_imip_context_t;
 
 /* build a sieve interpreter */
