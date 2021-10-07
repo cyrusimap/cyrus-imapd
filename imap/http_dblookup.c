@@ -61,7 +61,7 @@ struct namespace_t namespace_dblookup = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

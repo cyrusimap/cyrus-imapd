@@ -304,7 +304,6 @@ struct namespace_t namespace_principal = {
     /*mbtype */ 0,
     ALLOW_READ | ALLOW_DAV | ALLOW_PROPPATCH,
     &my_dav_init, NULL, NULL, &my_dav_shutdown, &dav_premethod,
-    /*bearer*/NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

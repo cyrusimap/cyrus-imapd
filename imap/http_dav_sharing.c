@@ -277,7 +277,7 @@ struct namespace_t namespace_notify = {
     (ALLOW_READ | ALLOW_POST | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_ACL),
     &my_dav_init, &my_dav_auth, &my_dav_reset, &my_dav_shutdown,
-    &dav_premethod, /*bearer*/NULL,
+    &dav_premethod,
     {
         { &meth_acl,            &notify_params },      /* ACL          */
         { NULL,                 NULL },                /* BIND         */

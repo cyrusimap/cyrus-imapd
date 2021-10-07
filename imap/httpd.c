@@ -548,7 +548,7 @@ static struct namespace_t namespace_default = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -1669,11 +1669,6 @@ static int check_namespace(struct transaction_t *txn)
     /* See if this namespace whitelists auth schemes */
     if (namespace->auth_schemes) {
         avail_auth_schemes = (namespace->auth_schemes & avail_auth_schemes);
-
-        /* Bearer auth must be advertised and supported by the namespace */
-        if ((namespace->auth_schemes & AUTH_BEARER) && namespace->bearer) {
-            avail_auth_schemes |= AUTH_BEARER;
-        }
     }
 
     return 0;
@@ -1980,9 +1975,6 @@ static void transaction_reset(struct transaction_t *txn)
     txn->flags.vary = VARY_AE;
 
     memset(&txn->req_line, 0, sizeof(struct request_line_t));
-
-    /* Reset Bearer auth scheme for each transaction */
-    avail_auth_schemes &= ~AUTH_BEARER;
 
     if (txn->req_uri) xmlFreeURI(txn->req_uri);
     txn->req_uri = NULL;
@@ -4249,24 +4241,6 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         /* Successful authentication - fall through */
         httpd_extrafolder = xstrdupnull(plus);
         httpd_extradomain = xstrdupnull(extra);
-    }
-    else if (scheme->id == AUTH_BEARER) {
-        /* Bearer authentication */
-        assert(txn->req_tgt.namespace->bearer);
-
-        /* Call namespace bearer authentication.
-         * We are working with base64 buffer, so the namespace can
-         * write the canonicalized userid into the buffer */
-        base64[0] = 0;
-        status = txn->req_tgt.namespace->bearer(clientin,
-                                                base64, BASE64_BUF_SIZE);
-        if (status) return status;
-        canon_user = user = base64;
-
-        /* Successful authentication - fall through */
-        httpd_extrafolder = NULL;
-        httpd_extradomain = NULL;
-        httpd_authstate = auth_newstate(user);
     }
     else {
         /* SASL-based authentication (SCRAM_*, Digest, Negotiate, NTLM) */

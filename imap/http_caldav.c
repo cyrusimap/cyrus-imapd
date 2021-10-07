@@ -609,7 +609,7 @@ struct namespace_t namespace_calendar = {
      ALLOW_CAL_AVAIL |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL | ALLOW_CAL ),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
-    &dav_premethod, /*bearer*/NULL,
+    &dav_premethod,
     {
         { &meth_acl,            &caldav_params },       /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -642,7 +642,7 @@ struct namespace_t namespace_freebusy = {
     http_allow_noauth_get, /*authschemes*/0,
     MBTYPE_CALENDAR,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

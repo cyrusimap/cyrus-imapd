@@ -113,10 +113,10 @@ static struct connect_params ws_params = {
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "jmap", JMAP_ROOT, "/.well-known/jmap",
-    jmap_need_auth, /*authschemes*/0,
+    jmap_need_auth, 0,
     /*mbtype*/0, 
     (ALLOW_READ | ALLOW_POST | ALLOW_READONLY),
-    &jmap_init, &jmap_auth, &jmap_reset, &jmap_shutdown, NULL, /*bearer*/NULL,
+    &jmap_init, &jmap_auth, &jmap_reset, &jmap_shutdown, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
