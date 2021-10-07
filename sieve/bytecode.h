@@ -427,6 +427,7 @@ enum bytecode {
     B_PROCESSIMIP,              /* require ["vnd.cyrus.imip", "variables"]
 
                                    <flags-bitmask: int>
+                                   <calendar-id: string>
                                    <status-var: string>
                                  */
 
