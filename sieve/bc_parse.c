@@ -281,9 +281,10 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.v.handle),
         offsetof(struct Commandlist, u.v.fcc)
       } },
-    { B_PROCESSIMIP,             "si",                                   /* 46 */
-      { offsetof(struct Commandlist, u.imip.status),
-        offsetof(struct Commandlist, u.imip.updates_only)
+    { B_PROCESSIMIP,             "B2s",                                  /* 46 */
+      { offsetof(struct Commandlist, u.imip.updates_only),    IMIP_UPDATESONLY,
+        offsetof(struct Commandlist, u.imip.delete_canceled), IMIP_DELETECANCELED,
+        offsetof(struct Commandlist, u.imip.status)
       } },
 };
 

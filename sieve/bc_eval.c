@@ -2465,7 +2465,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         case B_PROCESSIMIP:
             if (i->imip) {
                 variable_list_t *status = NULL;
-                sieve_imip_context_t ctx = { !!cmd.u.imip.updates_only };
+                sieve_imip_context_t ctx =
+                    { !!cmd.u.imip.updates_only, !!cmd.u.imip.delete_canceled };
                 unsigned res = i->imip(&ctx, i->interp_context, sc, m, errmsg);
 
                 if (cmd.u.imip.status) {

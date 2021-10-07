@@ -323,7 +323,7 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
     case B_PROCESSIMIP:
         capability = "vnd.cyrus.imip";
         supported = parse_script->support & SIEVE_CAPA_IMIP;
-        p->u.imip.updates_only = -1;
+        p->u.imip.updates_only = p->u.imip.delete_canceled = -1;
         break;
     }
 

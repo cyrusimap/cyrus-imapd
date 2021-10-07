@@ -203,7 +203,8 @@ typedef struct sieve_duplicate_context {
 } sieve_duplicate_context_t;
 
 typedef struct sieve_imip_context {
-    unsigned updates_only : 1;
+    unsigned updates_only    : 1;
+    unsigned delete_canceled : 1;
 } sieve_imip_context_t;
 
 /* build a sieve interpreter */
