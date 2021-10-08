@@ -1151,7 +1151,7 @@ void lmtpmode(struct lmtp_func *func,
 
                 if (msg->size > max_msgsize) {
                     prot_printf(pout,
-                                "552 5.2.3 Message size (%d) exceeds fixed "
+                                "552 5.3.4 Message size (%d) exceeds fixed "
                                 "maximum message size (%d)\r\n",
                                 msg->size, max_msgsize);
                     continue;
@@ -1294,7 +1294,7 @@ void lmtpmode(struct lmtp_func *func,
                         if (errno == ERANGE || msg->size < 0 ||
                             msg->size > max_msgsize) {
                             prot_printf(pout,
-                                        "552 5.2.3 Message SIZE exceeds fixed "
+                                        "552 5.3.4 Message SIZE exceeds fixed "
                                         "maximum message size (%d)\r\n",
                                         max_msgsize);
                             goto nextcmd;

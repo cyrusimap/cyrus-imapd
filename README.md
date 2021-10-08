@@ -6,12 +6,12 @@
 Welcome
 =======
 
-This is the Cyrus IMAP Server, version series 3.0.x.
+This is the Cyrus IMAP Server, version series 3.4.x.
 
 No further development work will progress on anything older than version 2.3.
 Versions 2.3 and 2.4 still receive security updates, but new features or
 non-security bugfixes are unlikely to be backported.  Version 2.5 still
-receives security updates and non-security bugfixes. Version 3.0 is under
+receives security updates and non-security bugfixes. Version 3.4 is under
 active development.
 
 What is Cyrus
@@ -92,8 +92,8 @@ Unlike releases, the git repository doesn't have a pre-built
 
     $ autoreconf -i
     $ ./configure
-    $ make
-    $ sudo make install
+    $ gmake
+    $ sudo gmake install
 
 If you need to build a local copy of the docs current to the version of the code, these need to be built: see doc/README.docs
 
@@ -101,6 +101,7 @@ Read through doc/html/imap/developer.html for more detailed instructions on buil
 
 How to install Cyrus libraries from git source
 ==============================================
+
 For version 3.0 or later, it is recommended to also build the main
 dependencies from source.
 
