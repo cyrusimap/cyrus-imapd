@@ -643,76 +643,75 @@ static int deliver_merge_request(const char *attendee,
 static int deliver_merge_cancel(icalcomponent *ical, icalcomponent *cancel)
 {
     struct hash_table comp_table;
-    icalcomponent *comp, *itip;
+    icalcomponent *comp, *itip, *master_comp = NULL;
     icalcomponent_kind kind = ICAL_NO_COMPONENT;
     icalproperty *prop;
     const char *recurid;
-    int entire_comp = 0;
+    int num_canceled = 0;
 
-    /* Add each component of old object to hash table for comparison */
+    /* Add each override component of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
     comp = icalcomponent_get_first_real_component(ical);
-    if (comp) {
-        kind = icalcomponent_isa(comp);
-    }
-    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
-        prop =
-            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
-        else recurid = "";
+    kind = icalcomponent_isa(comp);
 
-        hash_insert(recurid, comp, &comp_table);
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (prop) {
+            recurid = icalproperty_get_value_as_string(prop);
+            hash_insert(recurid, comp, &comp_table);
+        }
+        else {
+            master_comp = comp;
+        }
     }
 
     /* Process each component in the iTIP request */
-    itip = icalcomponent_get_first_real_component(cancel);
-    if (kind == ICAL_NO_COMPONENT) kind = icalcomponent_isa(itip);
-    for (; itip; itip = icalcomponent_get_next_component(cancel, kind)) {
+    for (itip = icalcomponent_get_first_real_component(cancel);
+         itip; itip = icalcomponent_get_next_component(cancel, kind)) {
         /* Lookup this comp in the hash table */
-        prop =
-            icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
-        else recurid = "";
+        prop = icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
+        if (prop) {
+            /* Override */
+            recurid = icalproperty_get_value_as_string(prop);
+            comp = hash_lookup(recurid, &comp_table);
 
-        if (!*recurid) {
-            /* Set STATUS:CANCELLED on all components */
-            for (comp = icalcomponent_get_first_component(ical, kind);
-                 comp;
-                 comp = icalcomponent_get_next_component(ical, kind)) {
+            if (comp) {
+                /* Set STATUS:CANCELLED on this component */
                 icalcomponent_set_status(comp, ICAL_STATUS_CANCELLED);
                 icalcomponent_set_sequence(comp,
                                            icalcomponent_get_sequence(comp)+1);
+                num_canceled++;
             }
-            entire_comp = 1;
-            break;
-        }
-
-        comp = hash_lookup(recurid, &comp_table);
-        if (comp) {
-            /* Set STATUS:CANCELLED on this component */
-            icalcomponent_set_status(comp, ICAL_STATUS_CANCELLED);
-            icalcomponent_set_sequence(comp,
-                                       icalcomponent_get_sequence(comp)+1);
-        }
-        else {
-            /* Set EXDATE on master component */
-            comp = hash_lookup("", &comp_table);
-            if (comp) {
+            else if (master_comp) {
+                /* Set EXDATE on master component */
                 struct icaltimetype exdate = icalproperty_get_exdate(prop);
                 icalparameter *tzid =
                     icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+
                 prop = icalproperty_new_exdate(exdate);
                 if (tzid) {
                     icalproperty_add_parameter(prop, icalparameter_clone(tzid));
                 }
-                icalcomponent_add_property(comp, prop);
+
+                icalcomponent_add_property(master_comp, prop);
             }
+        }
+        else {
+            /* Master - Set STATUS:CANCELLED on all components */
+            for (comp = icalcomponent_get_first_component(ical, kind);
+                 comp; comp = icalcomponent_get_next_component(ical, kind)) {
+                icalcomponent_set_status(comp, ICAL_STATUS_CANCELLED);
+                icalcomponent_set_sequence(comp,
+                                           icalcomponent_get_sequence(comp)+1);
+                num_canceled++;
+            }
+            break;
         }
     }
 
     free_hash_table(&comp_table, NULL);
 
-    return entire_comp;
+    return (num_canceled >= hash_numrecords(&comp_table));
 }
 
 
