@@ -948,6 +948,14 @@ sub test_xfer_mailbox_altns_unixhs
 {
     my ($self) = @_;
 
+    # what we expect from this test will depend on the cyrus version being
+    # run on backend2
+    my $backend2_permits_single_mailbox = 1;
+    my ($maj, $min) = Cassandane::Instance->get_version('murder');
+    if ($maj > 3 || ($maj == 3 && $min >= 5)) {
+        $backend2_permits_single_mailbox = 0;
+    }
+
     # set up some data for cassandane on backend1
     my $expected_stay = $self->populate_user(
         $self->{backend1_store},
@@ -990,7 +998,15 @@ sub test_xfer_mailbox_altns_unixhs
     my $ret = $admintalk->_imap_cmd('xfer', 0, {},
                                     'user/cassandane/Big/Red',
                                     $backend2_servername);
-    xlog "XXX xfer returned: " . Dumper $ret;
+
+    # 3.5+ won't permit receiving just one mid-tree mailbox
+    if (not $backend2_permits_single_mailbox) {
+        $self->assert_str_equals(
+            'no', $admintalk->get_last_completion_response()
+        );
+        return; # nothing more to test here!
+    }
+
     $self->assert_str_equals('ok', $ret);
     $self->assert_str_equals(
         'ok', $admintalk->get_last_completion_response()
