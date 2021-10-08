@@ -12039,7 +12039,6 @@ struct xfer_list {
     const struct namespace *ns;
     const char *userid;
     const char *part;
-    short allow_usersubs;
     struct xfer_item *mboxes;
 };
 
@@ -12054,15 +12053,15 @@ static int xfer_addmbox(struct findall_data *data, void *rock)
         return 0;
     }
 
-    /* Only add shared mailboxes, targeted user submailboxes, or user INBOXes */
-    if (!mbname_localpart(data->mbname) || list->allow_usersubs ||
+    /* Only add shared mailboxes or user INBOXes */
+    if (!mbname_localpart(data->mbname) ||
         (!mbname_isdeleted(data->mbname) && !strarray_size(mbname_boxes(data->mbname)))) {
         const char *extname = mbname_extname(data->mbname, list->ns, list->userid);
         struct xfer_item *mbox = xzmalloc(sizeof(struct xfer_item));
 
         mbox->mbentry = mboxlist_entry_copy(data->mbentry);
         xstrncpy(mbox->extname, extname, sizeof(mbox->extname));
-        if (mbname_localpart(data->mbname) && !list->allow_usersubs) {
+        if (mbname_localpart(data->mbname)) {
             /* User INBOX */
             mbox->state = XFER_MOVING_USER;
         }
@@ -12080,7 +12079,7 @@ static void cmd_xfer(const char *tag, const char *name,
 {
     int r = 0, partial_success = 0, mbox_count = 0;
     struct xfer_header *xfer = NULL;
-    struct xfer_list list = { &imapd_namespace, imapd_userid, NULL, 0, NULL };
+    struct xfer_list list = { &imapd_namespace, imapd_userid, NULL, NULL };
     struct xfer_item *item, *next;
     mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
 
@@ -12106,7 +12105,8 @@ static void cmd_xfer(const char *tag, const char *name,
         if (mbname_localpart(mbname) &&
             (mbname_isdeleted(mbname) || strarray_size(mbname_boxes(mbname)))) {
             /* targeted a user submailbox */
-            list.allow_usersubs = 1;
+            r = IMAP_MAILBOX_NOTSUPPORTED;
+            goto done;
         }
 
         /* admin namespace, use original name */
