@@ -640,7 +640,8 @@ static int deliver_merge_request(const char *attendee,
 }
 
 
-static int deliver_merge_cancel(icalcomponent *ical, icalcomponent *cancel)
+static int deliver_merge_cancel(const char *recipient,
+                                icalcomponent *ical, icalcomponent *cancel)
 {
     struct hash_table comp_table;
     icalcomponent *comp, *itip, *master_comp = NULL;
@@ -668,6 +669,10 @@ static int deliver_merge_cancel(icalcomponent *ical, icalcomponent *cancel)
     /* Process each component in the iTIP request */
     for (itip = icalcomponent_get_first_real_component(cancel);
          itip; itip = icalcomponent_get_next_component(cancel, kind)) {
+        /* Make sure this component refers to our recipient */
+        prop = find_attendee(itip, recipient);
+        if (!prop) continue;
+
         /* Lookup this comp in the hash table */
         prop = icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
         if (prop) {
@@ -935,7 +940,8 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
 
     switch (method) {
     case ICAL_METHOD_CANCEL: {
-        int entire_comp = deliver_merge_cancel(ical, sched_data->itip);
+        int entire_comp = deliver_merge_cancel(recipient,
+                                               ical, sched_data->itip);
 
         if (entire_comp && SCHED_DELETE_CANCELED(sched_data)) {
             /* Expunge the resource */
