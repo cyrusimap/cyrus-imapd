@@ -307,12 +307,13 @@ static int stream_open_cb(ngtcp2_conn *conn __attribute__((unused)),
 }
 
 static int stream_close_cb(ngtcp2_conn *conn __attribute__((unused)),
-                           int64_t stream_id,
+                           uint32_t flags, int64_t stream_id,
                            uint64_t app_error_code,
                            void *user_data __attribute__((unused)),
                            void *stream_user_data __attribute__((unused)))
 {
-    syslog(LOG_DEBUG, "QUIC stream_close(%ld, %lu)", stream_id, app_error_code);
+    syslog(LOG_DEBUG, "QUIC stream_close(%u, %ld, %lu)",
+           flags, stream_id, app_error_code);
 
     return 0;
 }
