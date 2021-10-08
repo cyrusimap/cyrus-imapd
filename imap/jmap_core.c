@@ -1123,38 +1123,48 @@ static const jmap_property_t blob_set_props[] = {
     { NULL, NULL, 0 }
 };
 
-static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, int recurse)
+static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, int recurse, json_t **errp)
 {
     json_t *jitem;
+    int seen_one = 0;
 
     // plain text only
     jitem = json_object_get(arg, "data:asText");
     if (!jitem) jitem = json_object_get(arg, "content"); // legacy
     if (JNOTNULL(jitem) && json_is_string(jitem)) {
         buf_init_ro(buf, json_string_value(jitem), json_string_length(jitem));
-        return 0;
     }
 
     // base64 text
     jitem = json_object_get(arg, "data:asBase64");
     if (!jitem) jitem = json_object_get(arg, "content64");
     if (JNOTNULL(jitem) && json_is_string(jitem)) {
-        return charset_decode(buf, json_string_value(jitem),
+        if (seen_one++) return IMAP_MAILBOX_EXISTS;
+        int r = charset_decode(buf, json_string_value(jitem),
                               json_string_length(jitem), ENCODING_BASE64);
+        if (r) {
+            *errp = json_string("base64 decode failed");
+            return r;
+        }
     }
 
     // hex text
     jitem = json_object_get(arg, "data:asHex");
     if (JNOTNULL(jitem) && json_is_string(jitem)) {
+        if (seen_one++) return IMAP_MAILBOX_EXISTS;
         char *out = xzmalloc(json_string_length(jitem)/2);
         int done = hex_to_bin(json_string_value(jitem), json_string_length(jitem), out);
         buf_initm(buf, out, json_string_length(jitem)/2);
-        return done < 0 ? done : 0;
+        if (done < 0) {
+            *errp = json_string("hex decode failed");
+            return done;
+        }
     }
 
     if (recurse) {
         jitem = json_object_get(arg, "blobId");
         if (JNOTNULL(jitem) && json_is_string(jitem)) {
+            if (seen_one++) return IMAP_MAILBOX_EXISTS;
             const char *blobid = json_string_value(jitem);
             if (blobid && blobid[0] == '#')
                 blobid = jmap_lookup_id(req, blobid + 1);
@@ -1189,19 +1199,24 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
                 if (!r) buf_appendmap(buf, base, len);
             }
             jmap_getblob_ctx_fini(&ctx);
-            return r;
+            if (r) {
+                *errp = json_string("blob lookup failed");
+                return r;
+            }
         }
     }
     else {
         jitem = json_object_get(arg, "catenate");
         if (JNOTNULL(jitem) && json_is_array(jitem)) {
+            if (seen_one++) return IMAP_MAILBOX_EXISTS;
             size_t i;
             json_t *val;
             json_array_foreach(jitem, i, val) {
                 struct buf subbuf = BUF_INITIALIZER;
-                int r = _set_arg_to_buf(req, &subbuf, val, 1);
+                int r = _set_arg_to_buf(req, &subbuf, val, 1, errp);
                 buf_appendmap(buf, buf_base(&subbuf), buf_len(&subbuf));
                 buf_free(&subbuf);
+                if (*errp) return r; // exact code doesn't matter, err will be checked
                 if (r) return r;
             }
         }
@@ -1229,15 +1244,19 @@ static int jmap_blob_set(struct jmap_req *req)
     const char *key;
     json_t *arg;
     json_object_foreach(set.create, key, arg) {
+        json_t *err = NULL;
         struct buf *buf = buf_new();
         struct message_guid guidobj;
         char datestr[RFC3339_DATETIME_MAX];
         char blob_id[JMAP_BLOBID_SIZE];
 
-        int r = _set_arg_to_buf(req, buf, arg, 0);
+        int r = _set_arg_to_buf(req, buf, arg, 0, &err);
 
-        if (r || !buf_base(buf)) {
+        if (r || !buf_base(buf) || err) {
             jerr = json_pack("{s:s}", "type", "invalidProperties");
+            if (!err && r == IMAP_MAILBOX_EXISTS)
+                err = json_string("Multiple properties provided");
+            if (err) json_object_set_new(jerr, "description", err);
             json_object_set_new(set.not_created, key, jerr);
             buf_destroy(buf);
             continue;
