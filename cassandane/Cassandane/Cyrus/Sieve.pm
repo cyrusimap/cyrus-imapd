@@ -50,6 +50,7 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Encode qw(decode);
+use MIME::Base64 qw(encode_base64);
 
 sub new
 {
@@ -3738,7 +3739,7 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
 EOF
     );
 
-    my $itip = <<EOF;
+    my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -3767,7 +3768,167 @@ END:VCALENDAR
 EOF
 
     xlog $self, "Deliver iMIP invite";
-    my $msg = Cassandane::Message->new(raw => $itip);
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 1,
+                        flags => [ '\\Recent', '\\Flagged' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Check that the event made it to calendar";
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+}
+
+sub test_imip_invite_base64
+    :needs_component_sieve :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+
+    my $IMAP = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $IMAP->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Create calendar user";
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = 'Default';
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :status "status";
+    if string :matches "\${status}" "OK*" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    my $itip = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $itip_b64 = encode_base64($itip);
+
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+Content-Transfer-Encoding: base64
+X-Cassandane-Unique: $uuid
+
+$itip_b64
+EOF
+
+    xlog $self, "Deliver iMIP invite";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 1,
+                        flags => [ '\\Recent', '\\Flagged' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Check that the event made it to calendar";
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+}
+
+sub test_imip_invite_multipart
+    :needs_component_sieve :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+
+    my $IMAP = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $IMAP->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Create calendar user";
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = 'Default';
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :status "status";
+    if string :matches "\${status}" "OK*" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: multipart/mixed; boundary=$uuid
+Mime-Version: 1.0
+X-Cassandane-Unique: $uuid
+
+--$uuid
+Content-Type: text/plain
+Mime-Version: 1.0
+
+Invite for cassandane\@example.com
+
+--$uuid
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+Content-Disposition: attachment; filename=event.ics
+Mime-Version: 1.0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+--$uuid--
+EOF
+
+    xlog $self, "Deliver iMIP invite";
+    my $msg = Cassandane::Message->new(raw => $imip);
     $msg->set_attribute(uid => 1,
                         flags => [ '\\Recent', '\\Flagged' ]);
     $self->{instance}->deliver($msg);
@@ -3810,7 +3971,7 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
 EOF
     );
 
-    my $itip = <<EOF;
+    my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -3839,7 +4000,7 @@ END:VCALENDAR
 EOF
 
     xlog $self, "Deliver iMIP invite";
-    my $msg = Cassandane::Message->new(raw => $itip);
+    my $msg = Cassandane::Message->new(raw => $imip);
     $msg->set_attribute(uid => 1,
                         flags => [ '\\Recent', '\\Flagged' ]);
     $self->{instance}->deliver($msg);
@@ -3880,7 +4041,7 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
 EOF
     );
 
-    my $itip = <<EOF;
+    my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -3909,7 +4070,7 @@ END:VCALENDAR
 EOF
 
     xlog $self, "Deliver iMIP invite";
-    my $msg = Cassandane::Message->new(raw => $itip);
+    my $msg = Cassandane::Message->new(raw => $imip);
     $msg->set_attribute(uid => 1,
                         flags => [ '\\Recent' ]);
     $self->{instance}->deliver($msg);
@@ -3949,7 +4110,7 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
 EOF
     );
 
-    my $itip = <<EOF;
+    my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -3978,7 +4139,7 @@ END:VCALENDAR
 EOF
 
     xlog $self, "Deliver iMIP invite";
-    my $msg = Cassandane::Message->new(raw => $itip);
+    my $msg = Cassandane::Message->new(raw => $imip);
     $msg->set_attribute(uid => 1,
                         flags => [ '\\Recent', '\\Flagged' ]);
     $self->{instance}->deliver($msg);
@@ -3998,7 +4159,7 @@ EOF
     $self->assert_str_equals('2021-09-23T15:30:00', $events->[0]{start});
 
 
-    $itip = <<EOF;
+    $imip = <<EOF;
 Date: Thu, 24 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -4027,7 +4188,7 @@ END:VCALENDAR
 EOF
 
     xlog $self, "Deliver iMIP update";
-    $msg = Cassandane::Message->new(raw => $itip);
+    $msg = Cassandane::Message->new(raw => $imip);
     $msg->set_attribute(uid => 2,
                         flags => [ '\\Recent', '\\Flagged' ]);
     $self->{instance}->deliver($msg);
@@ -4070,7 +4231,7 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
 EOF
     );
 
-    my $itip = <<EOF;
+    my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -4100,7 +4261,7 @@ END:VCALENDAR
 EOF
 
     xlog $self, "Deliver iMIP invite";
-    my $msg = Cassandane::Message->new(raw => $itip);
+    my $msg = Cassandane::Message->new(raw => $imip);
     $msg->set_attribute(uid => 1,
                         flags => [ '\\Recent', '\\Flagged' ]);
     $self->{instance}->deliver($msg);
@@ -4119,7 +4280,7 @@ EOF
     $self->assert_str_equals('tentative', $events->[0]{status});
 
 
-    $itip = <<EOF;
+    $imip = <<EOF;
 Date: Thu, 24 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -4144,7 +4305,7 @@ END:VCALENDAR
 EOF
 
     xlog $self, "Deliver iMIP cancel";
-    $msg = Cassandane::Message->new(raw => $itip);
+    $msg = Cassandane::Message->new(raw => $imip);
     $msg->set_attribute(uid => 2,
                         flags => [ '\\Recent', '\\Flagged' ]);
     $self->{instance}->deliver($msg);
@@ -4186,7 +4347,7 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
 EOF
     );
 
-    my $itip = <<EOF;
+    my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -4214,7 +4375,7 @@ END:VEVENT
 END:VCALENDAR
 EOF
     xlog $self, "Deliver iMIP invite";
-    my $msg = Cassandane::Message->new(raw => $itip);
+    my $msg = Cassandane::Message->new(raw => $imip);
     $msg->set_attribute(uid => 1,
                         flags => [ '\\Recent', '\\Flagged' ]);
     $self->{instance}->deliver($msg);
@@ -4232,7 +4393,7 @@ EOF
     $self->assert_str_equals($uuid, $events->[0]{uid});
 
 
-    $itip = <<EOF;
+    $imip = <<EOF;
 Date: Thu, 24 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -4257,7 +4418,7 @@ END:VCALENDAR
 EOF
 
     xlog $self, "Deliver iMIP cancel";
-    $msg = Cassandane::Message->new(raw => $itip);
+    $msg = Cassandane::Message->new(raw => $imip);
     $msg->set_attribute(uid => 2,
                         flags => [ '\\Recent', '\\Flagged' ]);
     $self->{instance}->deliver($msg);
@@ -4331,7 +4492,7 @@ EOF
                              $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
 
 
-    my $itip = <<EOF;
+    my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -4360,7 +4521,7 @@ END:VCALENDAR
 EOF
 
     xlog $self, "Deliver iMIP reply";
-    my $msg = Cassandane::Message->new(raw => $itip);
+    my $msg = Cassandane::Message->new(raw => $imip);
     $msg->set_attribute(uid => 1,
                         flags => [ '\\Recent', '\\Flagged' ]);
     $self->{instance}->deliver($msg);
