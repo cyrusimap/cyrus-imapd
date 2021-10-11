@@ -779,16 +779,15 @@ sub test_blob_get
     $self->assert_not_null($blobId);
 
     xlog "Test without capability";
-    # XXX -> rename to Blob/get
-    $res = $jmap->CallMethods([['Blob/xget', { ids => [$blobId], properties => [ 'data:asText', 'size' ] }, 'R1']]);
+    $res = $jmap->CallMethods([['Blob/get', { ids => [$blobId], properties => [ 'data:asText', 'size' ] }, 'R1']]);
     $self->assert_str_equals($res->[0][0], 'error');
 
     # XXX: this will be replaced with the upstream one
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
 
     xlog "Regular Blob/get works and returns a blobId";
-    $res = $jmap->CallMethods([['Blob/xget', { ids => [$blobId], properties => [ 'data:asText', 'data:asHex', 'data:asBase64', 'size' ] }, 'R1']]);
-    $self->assert_str_equals($res->[0][0], 'Blob/xget');
+    $res = $jmap->CallMethods([['Blob/get', { ids => [$blobId], properties => [ 'data:asText', 'data:asHex', 'data:asBase64', 'size' ] }, 'R1']]);
+    $self->assert_str_equals($res->[0][0], 'Blob/get');
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
     $self->assert_str_equals($blobId, $res->[0][1]{list}[0]{id});
     $self->assert_str_equals($body, $res->[0][1]{list}[0]{'data:asText'});
@@ -814,30 +813,30 @@ sub test_blob_set_complex
     xlog "Regular Blob/set works and returns the right data";
     $res = $jmap->CallMethods([
       ['Blob/set', { create => { b1 => { 'data:asText' => $data } } }, 'S1'],
-      ['Blob/xget', { ids => ['#b1'], properties => [ 'data:asText', 'size' ] }, 'G1'],
+      ['Blob/get', { ids => ['#b1'], properties => [ 'data:asText', 'size' ] }, 'G1'],
     ]);
     $self->assert_str_equals('Blob/set', $res->[0][0]);
-    $self->assert_str_equals('Blob/xget', $res->[1][0]);
+    $self->assert_str_equals('Blob/get', $res->[1][0]);
     $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
     $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
 
     xlog "Base64 Blob/set works and returns the right data";
     $res = $jmap->CallMethods([
       ['Blob/set', { create => { b2 => { 'data:asBase64' => $bdata } } }, 'S2'],
-      ['Blob/xget', { ids => ['#b2'], properties => [ 'data:asText', 'size' ] }, 'G2'],
+      ['Blob/get', { ids => ['#b2'], properties => [ 'data:asText', 'size' ] }, 'G2'],
     ]);
     $self->assert_str_equals('Blob/set', $res->[0][0]);
-    $self->assert_str_equals('Blob/xget', $res->[1][0]);
+    $self->assert_str_equals('Blob/get', $res->[1][0]);
     $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
     $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
 
     xlog "Hex Blob/set works and returns the right data";
     $res = $jmap->CallMethods([
       ['Blob/set', { create => { b3 => { 'data:asHex' => $hdata } } }, 'S3'],
-      ['Blob/xget', { ids => ['#b3'], properties => [ 'data:asText', 'size' ] }, 'G3'],
+      ['Blob/get', { ids => ['#b3'], properties => [ 'data:asText', 'size' ] }, 'G3'],
     ]);
     $self->assert_str_equals('Blob/set', $res->[0][0]);
-    $self->assert_str_equals('Blob/xget', $res->[1][0]);
+    $self->assert_str_equals('Blob/get', $res->[1][0]);
     $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
     $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
 
@@ -852,11 +851,11 @@ sub test_blob_set_complex
         { 'blobId' => '#b4', offset => 1, length => 1 }, # 'h'
         { 'data:asBase64' => encode_base64('at?', '') }, # 'at?'
       ] } } }, 'CAT'],
-      ['Blob/xget', { ids => ['#cat'], properties => [ 'data:asText', 'size' ] }, 'G4'],
+      ['Blob/get', { ids => ['#cat'], properties => [ 'data:asText', 'size' ] }, 'G4'],
     ]);
     $self->assert_str_equals('Blob/set', $res->[0][0]);
     $self->assert_str_equals('Blob/set', $res->[1][0]);
-    $self->assert_str_equals('Blob/xget', $res->[2][0]);
+    $self->assert_str_equals('Blob/get', $res->[2][0]);
     $self->assert_str_equals($target, $res->[2][1]{list}[0]{'data:asText'});
     $self->assert_num_equals(length $target, $res->[2][1]{list}[0]{size});
 }
