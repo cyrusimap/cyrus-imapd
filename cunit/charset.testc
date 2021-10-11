@@ -1232,6 +1232,22 @@ static void test_charset_decode(void)
     TESTCASE("vu_A3g==", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
 
 #undef TESTCASE
+
+    struct buf buf = BUF_INITIALIZER;
+    int r;
+
+    /* Base64 with ignored whitespace */
+    r = charset_decode(&buf, "Zm 9v\rYm\nFy", 11, ENCODING_BASE64);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_STRING_EQUAL("foobar", buf_cstring(&buf));
+    buf_reset(&buf);
+
+    /* Base64 with invalid character */
+    r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64);
+    CU_ASSERT_EQUAL(-1, r);
+    buf_reset(&buf);
+
+    buf_free(&buf);
 }
 
 static void test_broken_length_hint(void)
