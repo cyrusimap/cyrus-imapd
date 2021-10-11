@@ -2685,7 +2685,7 @@ EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
     if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
         struct buf userdata = BUF_INITIALIZER;
 
-        if (caldav_is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
+        if (caldav_is_personalized(mailbox, cdata, userid, &userdata)) {
             add_personal_data(ical, &userdata);
         }
 
