@@ -67,7 +67,6 @@ static int jmap_core_echo(jmap_req_t *req);
 
 /* JMAP extension methods */
 static int jmap_blob_get(jmap_req_t *req);
-static int jmap_blob_xget(jmap_req_t *req);
 static int jmap_blob_lookup(jmap_req_t *req);
 static int jmap_blob_set(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
@@ -94,12 +93,6 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
         "Blob/get",
         JMAP_BLOB_EXTENSION,
         &jmap_blob_get,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "Blob/xget",
-        JMAP_BLOB_EXTENSION,
-        &jmap_blob_xget,
         JMAP_NEED_CSTATE
     },
     {
@@ -444,24 +437,24 @@ static const jmap_property_t blob_xprops[] = {
     { NULL, NULL, 0 }
 };
 
-struct blob_xrange {
+struct blob_range {
     size_t offset;
     size_t length;
 };
 
-static int _parse_xrange(jmap_req_t *req __attribute__((unused)),
+static int _parse_range(jmap_req_t *req __attribute__((unused)),
                          struct jmap_parser *parser,
                          const char *key,
                          json_t *arg,
                          void *rock)
 {
-    struct blob_xrange *rangep = rock;
+    struct blob_range *rangep = rock;
 
     if (!strcmp(key, "offset")) {
         long long val = -1;
         if (json_is_integer(arg)) val = json_integer_value(arg);
 
-        if (val <= 0) jmap_parser_invalid(parser, "offset");
+        if (val < 0) jmap_parser_invalid(parser, "offset");
         else rangep->offset = val;
 
         return 1;
@@ -480,7 +473,7 @@ static int _parse_xrange(jmap_req_t *req __attribute__((unused)),
     return 0;
 }
 
-static int jmap_blob_xget(jmap_req_t *req)
+static int jmap_blob_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -489,9 +482,9 @@ static int jmap_blob_xget(jmap_req_t *req)
     size_t i;
 
     /* Parse request */
-    struct blob_xrange range = { 0, 0 };
+    struct blob_range range = { 0, 0 };
     jmap_get_parse(req, &parser, blob_xprops, /*allow_null_ids*/0,
-                   &_parse_xrange, &range, &get, &err);
+                   &_parse_range, &range, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -577,178 +570,6 @@ static int jmap_blob_xget(jmap_req_t *req)
         }
         jmap_getblob_ctx_fini(&ctx);
     }
-
-    /* Reply */
-    jmap_ok(req, jmap_get_reply(&get));
-
-done:
-    jmap_parser_fini(&parser);
-    jmap_get_fini(&get);
-    return 0;
-}
-
-static const jmap_property_t blob_props[] = {
-    {
-        "mailboxIds",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "threadIds",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "emailIds",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    { NULL, NULL, 0 }
-};
-
-static int jmap_blob_get(jmap_req_t *req)
-{
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
-    json_t *err = NULL;
-    json_t *jval;
-    size_t i;
-
-    /* Parse request */
-    jmap_get_parse(req, &parser, blob_props, /*allow_null_ids*/0,
-                   NULL, NULL, &get, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
-    }
-
-    /* Sort blob lookups by mailbox */
-    hash_table getblobs_by_uniqueid = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&getblobs_by_uniqueid, 128, 0);
-    json_array_foreach(get.ids, i, jval) {
-        const char *blob_id = json_string_value(jval);
-        if (*blob_id == 'G') {
-            struct getblob_cb_rock rock = { req, blob_id, &getblobs_by_uniqueid };
-            int r = conversations_guid_foreach(req->cstate, blob_id + 1, getblob_cb, &rock);
-            if (r) {
-                syslog(LOG_ERR, "jmap_blob_get: can't lookup guid %s: %s",
-                        blob_id, error_message(r));
-            }
-        }
-    }
-
-    /* Lookup blobs by mailbox */
-    json_t *found = json_object();
-    hash_iter *iter = hash_table_iter(&getblobs_by_uniqueid);
-    while (hash_iter_next(iter)) {
-        const char *uniqueid = hash_iter_key(iter);
-        ptrarray_t *getblobs = hash_iter_val(iter);
-        struct mailbox *mbox = NULL;
-        const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, uniqueid);
-        int r = 0;
-
-        /* Open mailbox */
-        if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
-            r = IMAP_PERMISSION_DENIED;
-        }
-        else {
-            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
-            if (r) {
-                syslog(LOG_ERR, "jmap_blob_get: can't open mailbox %s: %s",
-                       mbentry->name, error_message(r));
-            }
-        }
-        if (r) continue;
-
-        int j;
-        for (j = 0; j < ptrarray_size(getblobs); j++) {
-            struct getblob_rec *getblob = ptrarray_nth(getblobs, j);
-
-            /* Read message record */
-            struct message_guid guid;
-            bit64 cid;
-            msgrecord_t *mr = NULL;
-            r = msgrecord_find(mbox, getblob->uid, &mr);
-            if (!r) r = msgrecord_get_guid(mr, &guid);
-            if (!r) r = msgrecord_get_cid(mr, &cid);
-            msgrecord_unref(&mr);
-            if (r) {
-                syslog(LOG_ERR, "jmap_blob_get: can't read msgrecord %s:%d: %s",
-                        mailbox_name(mbox), getblob->uid, error_message(r));
-                continue;
-            }
-
-            /* Report Blob entry */
-            json_t *jblob = json_object_get(found, getblob->blob_id);
-            if (!jblob) {
-                jblob = json_object();
-                json_object_set_new(found, getblob->blob_id, jblob);
-            }
-            if (jmap_wantprop(get.props, "mailboxIds")) {
-                json_t *jmailboxIds = json_object_get(jblob, "mailboxIds");
-                if (!jmailboxIds) {
-                    jmailboxIds = json_object();
-                    json_object_set_new(jblob, "mailboxIds", jmailboxIds);
-                }
-                json_object_set_new(jmailboxIds, mailbox_uniqueid(mbox), json_true());
-            }
-            if (jmap_wantprop(get.props, "emailIds")) {
-                json_t *jemailIds = json_object_get(jblob, "emailIds");
-                if (!jemailIds) {
-                    jemailIds = json_object();
-                    json_object_set_new(jblob, "emailIds", jemailIds);
-                }
-                char emailid[JMAP_EMAILID_SIZE];
-                jmap_set_emailid(&guid, emailid);
-                json_object_set_new(jemailIds, emailid, json_true());
-            }
-            if (jmap_wantprop(get.props, "threadIds")) {
-                json_t *jthreadIds = json_object_get(jblob, "threadIds");
-                if (!jthreadIds) {
-                    jthreadIds = json_object();
-                    json_object_set_new(jblob, "threadIds", jthreadIds);
-                }
-                char threadid[JMAP_THREADID_SIZE];
-                jmap_set_threadid(cid, threadid);
-                json_object_set_new(jthreadIds, threadid, json_true());
-            }
-        }
-
-       jmap_closembox(req, &mbox);
-    }
-
-    /* Clean up memory */
-    hash_iter_reset(iter);
-    while (hash_iter_next(iter)) {
-        ptrarray_t *getblobs = hash_iter_val(iter);
-        struct getblob_rec *getblob;
-        while ((getblob = ptrarray_pop(getblobs))) {
-            free(getblob->part);
-            free(getblob);
-        }
-        ptrarray_free(getblobs);
-    }
-    hash_iter_free(&iter);
-    free_hash_table(&getblobs_by_uniqueid, NULL);
-
-    /* Report found blobs */
-    if (json_object_size(found)) {
-        const char *blob_id;
-        json_t *jblob;
-        json_object_foreach(found, blob_id, jblob) {
-            json_array_append(get.list, jblob);
-        }
-    }
-
-    /* Report unknown or erroneous blobs */
-    json_array_foreach(get.ids, i, jval) {
-        const char *blob_id = json_string_value(jval);
-        if (!json_object_get(found, blob_id)) {
-            json_array_append_new(get.not_found, json_string(blob_id));
-        }
-    }
-
-    json_decref(found);
 
     /* Reply */
     jmap_ok(req, jmap_get_reply(&get));
