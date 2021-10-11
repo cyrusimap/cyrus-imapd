@@ -246,6 +246,13 @@ done:
         fprintf(stderr, "FAILED: line %d at cmd %.*s with error %s\n",
                 line, (int)cmd.len, cmd.s, error_message(r));
     }
+
+    prot_free(in);
+    prot_free(out);
+
+    buf_free(&cmd);
+    buf_free(&key);
+    buf_free(&val);
 }
 
 int main(int argc, char *argv[])
