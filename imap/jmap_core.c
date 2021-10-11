@@ -906,16 +906,6 @@ static const jmap_property_t blob_set_props[] = {
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
     },
     {
-        "content",
-        NULL,
-        0
-    },
-    {
-        "content64",
-        NULL,
-        0
-    },
-    {
         "data:asText",
         NULL,
         0
@@ -951,14 +941,12 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
 
     // plain text only
     jitem = json_object_get(arg, "data:asText");
-    if (!jitem) jitem = json_object_get(arg, "content"); // legacy
     if (JNOTNULL(jitem) && json_is_string(jitem)) {
         buf_init_ro(buf, json_string_value(jitem), json_string_length(jitem));
     }
 
     // base64 text
     jitem = json_object_get(arg, "data:asBase64");
-    if (!jitem) jitem = json_object_get(arg, "content64");
     if (JNOTNULL(jitem) && json_is_string(jitem)) {
         if (seen_one++) return IMAP_MAILBOX_EXISTS;
         int r = charset_decode(buf, json_string_value(jitem),
@@ -1034,6 +1022,7 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
             json_t *val;
             json_array_foreach(jitem, i, val) {
                 struct buf subbuf = BUF_INITIALIZER;
+                // XXX: we might need to validate the properties here too?
                 int r = _set_arg_to_buf(req, &subbuf, val, 1, errp);
                 buf_appendmap(buf, buf_base(&subbuf), buf_len(&subbuf));
                 buf_free(&subbuf);
