@@ -1075,6 +1075,43 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If set, HTTP/2 (over TLS) will be advertised as being available on the specifed
    [host]:port. */
 
+{ "http_jwt_key", NULL, STRING, "UNRELEASED" }
+/* If set, this option enables authentication of JSON Web Tokens (RFC 7519)
+   for HTTP connections. The token must be the payload of the HTTP
+   "Authorization" header, using the "Bearer" authentication scheme. Only
+   validation of authentication requests is supported, there is no
+   support to generate tokens.
+
+   The option value must have the following format:
+
+      "HS256:<b64key>"
+
+   where "<b64key>" is the secret key to compute a SHA-256 HMAC message digest
+   (RFC 4634), encoded in "base64url" without padding (RFC 4648). The decoded
+   binary key must be between 32 and 64 bytes long inclusively (the lower limit
+   of 32 bytes is recommended in RFC 2104, section 3).
+
+   The JWT token must be a JSON Web Signature in Compact Serialization (RFC 7515)
+   format. The JOSE header "alg" parameter value must be "HS256", the "typ"
+   parameter must be "JWT". A header with any other parameter is rejected. The
+   JWS Payload must include the "sub" claim with the Cyrus user identifier as
+   value. It may include the "iat" claim (see \fIhttp_jwt_max_age\fR). A
+   payload with any other claim is rejected.
+*/
+
+{ "http_jwt_max_age", "0s", DURATION, "UNRELEASED" }
+/* Defines the timespan in which a JSON Web Token is valid
+   (see \fIhttp_jwt_key\fR). The value must be zero or positive.
+
+   If non-zero, the timespan starts at the point in time specified in the
+   "iat" claim of the JWS Payload and ends after the duration of this
+   option value has passed. Tokens without an "iat" claim,
+   or with an issue date in the future, are rejected. There is no leeway
+   for clock skew.
+
+   The zero value disables validation of the "iat" JWS claim.
+*/
+
 { "icalendar_max_size", 0, INT, "UNRELEASED" }
 /* Maximum allowed iCalendar size.
    If non-zero, CalDAV and JMAP will reject storage of resources whose

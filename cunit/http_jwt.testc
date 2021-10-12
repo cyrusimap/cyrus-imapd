@@ -1,0 +1,279 @@
+#include "config.h"
+#include "cunit/cyrunit.h"
+
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <sasl/sasl.h>
+
+#include "charset.h"
+#include "util.h"
+
+#include "imap/http_jwt.h"
+
+// "01234567890123456789012345678901" (32-byte key)
+#define SECRET_KEY "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE"
+
+static void test_init(void)
+{
+    // null key
+    int r = http_jwt_init(NULL, 0);
+    CU_ASSERT_NOT_EQUAL(0, r);
+    CU_ASSERT_EQUAL(0, http_jwt_is_enabled());
+
+    // no algo: prefix
+    r = http_jwt_init(SECRET_KEY, 0);
+    CU_ASSERT_NOT_EQUAL(0, r);
+    CU_ASSERT_EQUAL(0, http_jwt_is_enabled());
+
+    // unsupported algo: prefix
+    r = http_jwt_init("HS512:" SECRET_KEY, 0);
+    CU_ASSERT_NOT_EQUAL(0, r);
+    CU_ASSERT_EQUAL(0, http_jwt_is_enabled());
+
+    // empty key
+    r = http_jwt_init("HS256:", 0);
+    CU_ASSERT_NOT_EQUAL(0, r);
+    CU_ASSERT_EQUAL(0, http_jwt_is_enabled());
+
+    // key less than recommended length of 32 bytes
+    r = http_jwt_init("HS256:secret", 0);
+    CU_ASSERT_NOT_EQUAL(0, r);
+    CU_ASSERT_EQUAL(0, http_jwt_is_enabled());
+
+    // key exceeds maximum length of 64 bytes
+    r = http_jwt_init("HS256:MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ", 0);
+    CU_ASSERT_NOT_EQUAL(0, r);
+    CU_ASSERT_EQUAL(0, http_jwt_is_enabled());
+
+    // invalid base64 key
+    r = http_jwt_init("HS256:MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg^^^5MDE", 0);
+    CU_ASSERT_NOT_EQUAL(0, r);
+    CU_ASSERT_EQUAL(0, http_jwt_is_enabled());
+
+    // invalid age
+    r = http_jwt_init("HS256:" SECRET_KEY, -10);
+    CU_ASSERT_NOT_EQUAL(0, r);
+    CU_ASSERT_EQUAL(0, http_jwt_is_enabled());
+
+    // valid (but insecure) key
+    r = http_jwt_init("HS256:" SECRET_KEY, 0);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_EQUAL(1, http_jwt_is_enabled());
+
+    // valid (but insecure) key with age
+    r = http_jwt_init("HS256:" SECRET_KEY, 10);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_EQUAL(1, http_jwt_is_enabled());
+}
+
+static void token(struct buf *buf, const char *joh, const char *jws, const char *key)
+{
+
+    buf_reset(buf);
+    if (joh)
+        charset_encode(buf, joh, strlen(joh), ENCODING_BASE64URL);
+    if (jws) {
+        buf_putc(buf, '.');
+        charset_encode(buf, jws, strlen(jws), ENCODING_BASE64URL);
+    }
+    if (key) {
+        struct buf kbuf = BUF_INITIALIZER;
+        charset_decode(&kbuf, key, strlen(key), ENCODING_BASE64URL);
+        unsigned char md[EVP_MAX_MD_SIZE];
+        unsigned int mdlen = 0;
+        HMAC(EVP_sha256(), buf_base(&kbuf), buf_len(&kbuf),
+            (unsigned char*)buf_base(buf), buf_len(buf), md, &mdlen);
+        buf_putc(buf, '.');
+        charset_encode(buf, (const char *)md, mdlen, ENCODING_BASE64URL);
+        buf_free(&kbuf);
+    }
+};
+
+static void test_auth(void)
+{
+    http_jwt_init("HS256:" SECRET_KEY, 0);
+
+    struct buf buf = BUF_INITIALIZER;
+    char out[256];
+
+    // valid token
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\"}",
+        SECRET_KEY);
+    int r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+
+    // valid token, ignored iat
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\", \"iat\":1516239022}",
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+
+    // invalid token, no signature
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\", \"iat\":1516239022}",
+        NULL);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, no header
+    token(&buf,
+        NULL,
+        "{\"sub\": \"test\", \"iat\":1516239022}",
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, no jws
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        NULL,
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, wrong key
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\", \"iat\":1516239022}",
+        "a-wrong-key");
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, wrong algo
+    token(&buf,
+        "{\"alg\": \"HS512\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\"}",
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, wrong type
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"XXX\"}",
+        "{\"sub\": \"test\"}",
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, bad JSON header
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"",
+        "{\"sub\": \"test\"}",
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, no sub
+    token(&buf,
+        "{\"alg\": \"HS512\", \"typ\": \"JWT\"}",
+        "{}",
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, bad iat
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"XXX\"}",
+        "{\"sub\": \"test\", \"iat\":\"1516239022\"}",
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, bad JWS
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\"",
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, unsupported header parameter
+    token(&buf,
+        "{\"alg\": \"HS512\", \"typ\": \"JWT\", \"iss\":\"foo\"}",
+        "{\"sub\": \"test\"}",
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token, unsupported claim
+    token(&buf,
+        "{\"alg\": \"HS512\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\", \"iss\":\"foo\"}",
+        SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    buf_free(&buf);
+}
+
+static void test_auth_iat(void)
+{
+    http_jwt_init("HS256:" SECRET_KEY, 10);
+
+    struct buf buf = BUF_INITIALIZER;
+    struct buf jws = BUF_INITIALIZER;
+    char out[256];
+    int r;
+
+    // valid iat
+    buf_printf(&jws, "{\"sub\": \"test\", \"iat\":%ld}", time(NULL));
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", buf_cstring(&jws), SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+    buf_reset(&jws);
+
+    // valid iat, aged
+    buf_printf(&jws, "{\"sub\": \"test\", \"iat\":%ld}", time(NULL) - 5);
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", buf_cstring(&jws), SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+    buf_reset(&jws);
+
+    // invalid iat, expired
+    buf_printf(&jws, "{\"sub\": \"test\", \"iat\":%ld}", time(NULL) - 11);
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", buf_cstring(&jws), SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+    buf_reset(&jws);
+
+    // invalid iat, future
+    buf_printf(&jws, "{\"sub\": \"test\", \"iat\":%ld}", ((long)time(NULL)) + 5 );
+    token(&buf,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", buf_cstring(&jws), SECRET_KEY);
+    r = http_jwt_auth(buf_base(&buf), buf_len(&buf), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+    buf_reset(&jws);
+
+    buf_free(&jws);
+    buf_free(&buf);
+}
+
+#undef SECRET_KEY
+
+/* vim: set ft=c: */

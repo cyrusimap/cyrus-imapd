@@ -69,6 +69,7 @@
 
 #include "httpd.h"
 #include "http_h2.h"
+#include "http_jwt.h"
 #include "http_proxy.h"
 #include "http_ws.h"
 
@@ -869,6 +870,7 @@ int service_init(int argc __attribute__((unused)),
             fatal("https: TLS engine initialization failure", EX_SOFTWARE);
         }
     }
+    r = 0;
 
     http2_enabled = http2_init(&http_conn, &serverinfo);
     ws_enabled = ws_init(&http_conn, &serverinfo);
@@ -902,7 +904,15 @@ int service_init(int argc __attribute__((unused)),
 
     prometheus_increment(CYRUS_HTTP_READY_LISTENERS);
 
-    return 0;
+    /* Initialize Bearer JSON Web Token authentication */
+    const char *keystr = config_getstring(IMAPOPT_HTTP_JWT_KEY);
+    if (keystr) {
+        r = http_jwt_init(keystr,
+                config_getduration(IMAPOPT_HTTP_JWT_MAX_AGE, 's'));
+    }
+    else xsyslog(LOG_DEBUG, "No http_jwt_key configured", NULL);
+
+    return r;
 }
 
 
@@ -1003,6 +1013,10 @@ int service_main(int argc __attribute__((unused)),
             }
         }
     }
+
+    if (http_jwt_is_enabled())
+        avail_auth_schemes |= AUTH_BEARER;
+
     httpd_tls_required =
         config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
 
@@ -4241,6 +4255,20 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         /* Successful authentication - fall through */
         httpd_extrafolder = xstrdupnull(plus);
         httpd_extradomain = xstrdupnull(extra);
+    }
+    else if (scheme->id == AUTH_BEARER) {
+        /* Authenticate JSON web token
+         * We are working with base64 buffer, so the namespace can
+         * write the canonicalized userid into the buffer */
+        base64[0] = 0;
+        status = http_jwt_auth(clientin, clientinlen, base64, BASE64_BUF_SIZE);
+        if (status) return status;
+        canon_user = user = base64;
+
+        /* Successful authentication - fall through */
+        httpd_extrafolder = NULL;
+        httpd_extradomain = NULL;
+        httpd_authstate = auth_newstate(user);
     }
     else {
         /* SASL-based authentication (SCRAM_*, Digest, Negotiate, NTLM) */

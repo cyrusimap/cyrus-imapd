@@ -1,0 +1,16 @@
+Description:
+
+Adds Bearer authentication for RFC 7519 JSON Web Tokens.
+
+Config changes:
+
+http_jwt_key
+http_jwt_max_age
+
+Upgrade instructions:
+
+None.
+
+GitHub issue:
+
+None.
