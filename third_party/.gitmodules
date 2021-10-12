@@ -35,3 +35,6 @@
 [submodule "cld2"]
 	path = cld2
 	url = https://github.com/cyrusimap/cld2.git
+[submodule "vzic"]
+	path = vzic
+	url = git@github.com:libical/vzic.git

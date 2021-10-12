@@ -90,6 +90,15 @@ if [ ! $ITEM ] || [ $ITEM == libical ] ; then
 )
 fi
 
+if [ ! $ITEM ] || [ $ITEM == vzic ] ; then
+(
+  cd vzic
+  git clean -f -x -d
+  TZID_PREFIX="" make
+  sudo cp vzic $PREFIX/bin
+)
+fi
+
 if [ ! $ITEM ] || [ $ITEM == timezones ] ; then
 (
   cd cyrus-timezones
