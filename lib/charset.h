@@ -62,6 +62,7 @@
 #define CHARSET_UNKNOWN_CHARSET (NULL)
 
 #include "util.h"
+#include "xsha1.h"
 
 typedef int comp_pat;
 /*
@@ -141,6 +142,8 @@ extern char *charset_encode_mimephrase(const char *header);
 extern char *charset_unfold(const char *s, size_t len, int flags);
 
 extern int charset_decode(struct buf *dst, const char *src, size_t len, int encoding);
+
+extern int charset_decode_sha1(uint8_t dest[SHA1_DIGEST_LENGTH], size_t *decodedlen, const char *src, size_t len, int encoding);
 
 /* Extract the body text contained in 'data' and with character encoding
  * 'charset' and body-part encoding 'encoding'. The 'subtype' argument

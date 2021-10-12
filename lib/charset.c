@@ -53,6 +53,7 @@
 #include "hash.h"
 #include "htmlchar.h"
 #include "util.h"
+#include "xsha1.h"
 
 #include <unicode/ustring.h>
 #include <unicode/unorm2.h>
@@ -120,6 +121,14 @@ struct search_state {
     unsigned char *substr;
     size_t patlen;
     size_t offset;
+};
+
+struct sha1_state {
+    SHA_CTX ctx;
+    uint8_t buf[4096];
+    size_t len;
+    size_t *outlen;
+    uint8_t *dest;
 };
 
 enum html_state {
@@ -705,6 +714,23 @@ static void byte2buffer(struct convert_rock *rock, uint32_t c)
     struct buf *buf = (struct buf *)rock->state;
 
     buf_putc(buf, c & 0xff);
+}
+
+static void byte2sha1(struct convert_rock *rock, uint32_t c)
+{
+    struct sha1_state *state = (struct sha1_state *)rock->state;
+
+    /* batch if needed.  Testing showed that calling SHA1_Update
+     * for every char was prohibitive, and even doing 64 chars
+     * at a time (the internal block size) had overhead due to
+     * to the upfront checks, so this is a good compromise size */
+    if (state->len == 4096) {
+        SHA1_Update(&state->ctx, state->buf, state->len);
+        if (state->outlen) *state->outlen += state->len;
+        state->len = 0;
+    }
+
+    state->buf[state->len++] = c & 0xff;
 }
 
 /* Given an octet c and an icu converter, convert c to
@@ -1538,6 +1564,7 @@ static const char *convert_name(struct convert_rock *rock)
     if (rock->f == b64_2byte) return "b64_2byte";
     if (rock->f == byte2buffer) return "byte2buffer";
     if (rock->f == byte2search) return "byte2search";
+    if (rock->f == byte2sha1) return "byte2sha1";
     if (rock->f == qp2byte) return "qp2byte";
     if (rock->f == striphtml2uni) return "striphtml2uni";
     if (rock->f == unfold2uni) return "unfold2uni";
@@ -1605,6 +1632,20 @@ static void icu_cleanup(struct convert_rock *rock, int is_free)
         if (rock->state) icu_reset(rock, -1 /*don't care*/);
         if (is_free) free(rock);
     }
+}
+
+static void sha1_cleanup(struct convert_rock *rock, int do_free)
+{
+    struct sha1_state *state = (struct sha1_state *)rock->state;
+
+    if (state->len) {
+        SHA1_Update(&state->ctx, state->buf, state->len);
+        if (state->outlen) *state->outlen += state->len;
+    }
+
+    SHA1_Final(state->dest, &state->ctx);
+
+    if (do_free) basic_free(rock);
 }
 
 static void icu_reset(struct convert_rock *rock, int to_uni)
@@ -1850,6 +1891,22 @@ static struct convert_rock *buffer_init(size_t hint)
     rock->f = byte2buffer;
     rock->cleanup = buffer_cleanup;
     rock->state = (void *)buf;
+
+    return rock;
+}
+
+static struct convert_rock *sha1_init(uint8_t *dest, size_t *outlen)
+{
+    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
+    struct sha1_state *state = xzmalloc(sizeof(struct sha1_state));
+
+    SHA1_Init(&state->ctx);
+    state->dest = dest;
+    state->outlen = outlen;
+
+    rock->f = byte2sha1;
+    rock->cleanup = sha1_cleanup;
+    rock->state = (void *)state;
 
     return rock;
 }
@@ -2552,6 +2609,50 @@ EXPORTED int charset_decode(struct buf *dst, const char *src, size_t len, int en
     /* set up the conversion path */
     input = buffer_init(len);
     buffer_setbuf(input, dst);
+
+    /* choose encoding extraction if needed */
+    switch (encoding) {
+    case ENCODING_NONE:
+        break;
+
+    case ENCODING_QP:
+        input = qp_init(0, input);
+        break;
+
+    case ENCODING_BASE64:
+        input = b64_init(input);
+        /* XXX have to have nl-mapping base64 in order to
+         * properly count \n as 2 raw characters
+         */
+        break;
+
+    default:
+        /* Don't know encoding--nothing can match */
+        convert_free(input);
+        return -1;
+    }
+
+    convert_catn(input, src, len);
+    convert_free(input);
+
+    return 0;
+}
+
+/* Decode bytes from src to sha1 of bytes */
+EXPORTED int charset_decode_sha1(uint8_t dest[SHA1_DIGEST_LENGTH], size_t *decodedlen,
+                                 const char *src, size_t len, int encoding)
+{
+    struct convert_rock *input;
+
+    if (encoding == ENCODING_NONE) {
+        // short circuit to xsha1
+        xsha1((unsigned char *)src, len, dest);
+        if (decodedlen) *decodedlen = len;
+        return 0;
+    }
+
+    /* set up the conversion path */
+    input = sha1_init(dest, decodedlen);
 
     /* choose encoding extraction if needed */
     switch (encoding) {
