@@ -1,18 +1,39 @@
 #include <stdint.h>
 #
 #include "cunit/cyrunit.h"
+#include "charset.h"
 #include "util.h"
 #include "xsha1.h"
 
 static void _checksha(const char *text, size_t len, const char *expect)
 {
-    uint8_t dest[20];
-    char hexstr[41];
+    uint8_t dest[SHA1_DIGEST_LENGTH];
+    char hexstr[2*SHA1_DIGEST_LENGTH+1];
     memset(hexstr, 0, sizeof(hexstr));
 
+    // test xsha1
     xsha1((unsigned char *)text, len, dest);
-    bin_to_hex(dest, 20, hexstr, BH_LOWER);
+    bin_to_hex(dest, SHA1_DIGEST_LENGTH, hexstr, BH_LOWER);
     CU_ASSERT_STRING_EQUAL(expect, hexstr);
+
+    // test charset version - no encoding
+    charset_decode_sha1(dest, NULL, text, len, ENCODING_NONE);
+    bin_to_hex(dest, SHA1_DIGEST_LENGTH, hexstr, BH_LOWER);
+    CU_ASSERT_STRING_EQUAL(expect, hexstr);
+
+    // test charset version - encoded
+    size_t len64 = 0;
+    charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 1 /* wrap */);
+    if (len64) {
+        char *encbuf = xmalloc(len64);
+        size_t outlen = 0;
+        charset_encode_mimebody(text, len, encbuf, &len64, NULL, 1 /* wrap */);
+        charset_decode_sha1(dest, &outlen, encbuf, len64, ENCODING_BASE64);
+        bin_to_hex(dest, SHA1_DIGEST_LENGTH, hexstr, BH_LOWER);
+        CU_ASSERT_STRING_EQUAL(expect, hexstr);
+        CU_ASSERT_EQUAL(len, outlen);
+        free(encbuf);
+    }
 }
 
 static void test_wiki(void)
