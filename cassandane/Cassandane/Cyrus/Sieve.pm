@@ -2009,8 +2009,8 @@ EOF
     # should end up folding a couple of times
     my $subject = "volutpat diam ut venenatis tellus in metus "
                 . "vulputate eu scelerisque felis imperdiet proin "
-                . "fermentum_leo_vel_orci_portad_non_pulvinar_neque_"
-                . "laoreet_suspendisse_interdum_consectetur";
+                . "fermentum leo vel orci portad non pulvinar neque "
+                . "laoreet suspendisse interdum consectetur";
 
     my $msg1 = $self->{gen}->generate(
         subject => $subject,
