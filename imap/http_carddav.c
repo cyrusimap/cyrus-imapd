@@ -89,7 +89,6 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-static struct carddav_db *auth_carddavdb = NULL;
 static time_t compile_time;
 static int vcard_max_size;
 
@@ -509,18 +508,10 @@ static int my_carddav_auth(const char *userid)
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
         return 0;
     }
-    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV databases */
         return 0;
-    }
-    else {
-        /* Open CardDAV DB for 'userid' */
-        my_carddav_reset();
-        auth_carddavdb = carddav_open_userid(userid);
-        if (!auth_carddavdb) {
-            syslog(LOG_ERR, "Unable to open CardDAV DB for userid: %s", userid);
-            return HTTP_UNAVAILABLE;
-        }
     }
 
     /* Auto-provision an addressbook for 'userid' */
@@ -536,8 +527,7 @@ static int my_carddav_auth(const char *userid)
 
 static void my_carddav_reset(void)
 {
-    if (auth_carddavdb) carddav_close(auth_carddavdb);
-    auth_carddavdb = NULL;
+    // nothing
 }
 
 

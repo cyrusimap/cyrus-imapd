@@ -122,7 +122,6 @@ static int rscale_cmp(const void *a, const void *b)
 #endif /* HAVE_RSCALE */
 
 
-static struct caldav_db *auth_caldavdb = NULL;
 static time_t compile_time;
 static struct buf ical_prodid_buf = BUF_INITIALIZER;
 static int icalendar_max_size;
@@ -940,18 +939,10 @@ static int my_caldav_auth(const char *userid)
         /* admin or proxy from frontend - won't have DAV database */
         return 0;
     }
+
     if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV database */
         return 0;
-    }
-    else {
-        /* Open CalDAV DB for 'userid' */
-        my_caldav_reset();
-        auth_caldavdb = caldav_open_userid(userid);
-        if (!auth_caldavdb) {
-            syslog(LOG_ERR, "Unable to open CalDAV DB for userid %s", userid);
-            return HTTP_UNAVAILABLE;
-        }
     }
 
     /* Auto-provision calendars for 'userid' */
@@ -967,8 +958,7 @@ static int my_caldav_auth(const char *userid)
 
 static void my_caldav_reset(void)
 {
-    if (auth_caldavdb) caldav_close(auth_caldavdb);
-    auth_caldavdb = NULL;
+    // nothing to do
 }
 
 static void my_caldav_shutdown(void)
