@@ -708,6 +708,14 @@ static void _end_channel(struct transaction_t *txn)
 
     free(ctx);
 
+    /* conn's lifetime is much longer than txn's; the pointer
+     * into txn will be invalid after txn goes out of scope.
+     * We know now that it's no longer useful, so clean it up
+     * while we're here.
+     */
+    if (txn->conn && txn->conn->ws_ctx == &txn->ws_ctx)
+        txn->conn->ws_ctx = NULL;
+
     txn->ws_ctx = NULL;
 }
 
