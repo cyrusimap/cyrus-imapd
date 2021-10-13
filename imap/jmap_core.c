@@ -182,11 +182,19 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                 JMAP_PERFORMANCE_EXTENSION, json_object());
         json_object_set_new(settings->server_capabilities,
                 JMAP_DEBUG_EXTENSION, json_object());
+        json_t *typenames = json_array();
+        // XXX - have a way to register these from each object?  Would
+        // also need to register the lookup logic at the same time though
+        json_array_append_new(typenames, json_string("Mailbox"));
+        json_array_append_new(typenames, json_string("Thread"));
+        json_array_append_new(typenames, json_string("Email"));
         json_object_set_new(settings->server_capabilities,
                 JMAP_BLOB_EXTENSION,
-                json_pack("{s:i}",
+                json_pack("{s:i, s:o}",
                     "maxSizeBlobSet",
-                    settings->limits[MAX_SIZE_BLOB_SET]));
+                    settings->limits[MAX_SIZE_BLOB_SET],
+                    "supportedTypeNames",
+                    typenames));
         json_object_set_new(settings->server_capabilities,
                 JMAP_USERCOUNTERS_EXTENSION, json_object());
 
