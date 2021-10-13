@@ -331,8 +331,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
     icalproperty *prop, *att;
     icalparameter *param;
     icalparameter_partstat partstat = ICAL_PARTSTAT_NONE;
-    icalparameter_rsvp rsvp = ICAL_RSVP_NONE;
-    const char *recurid, *attendee = NULL, *req_stat = SCHEDSTAT_SUCCESS;
+    const char *recurid, *attendee = NULL, *cn = NULL;
 
     /* Add each component of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
@@ -420,15 +419,8 @@ static const char *deliver_merge_reply(icalcomponent *ical,
         attendee = icalproperty_get_invitee(att);
         param = icalproperty_get_first_parameter(att, ICAL_PARTSTAT_PARAMETER);
         if (param) partstat = icalparameter_get_partstat(param);
-        param = icalproperty_get_first_parameter(att, ICAL_RSVP_PARAMETER);
-        if (param) rsvp = icalparameter_get_rsvp(param);
-
-        prop =
-            icalcomponent_get_first_property(itip, ICAL_REQUESTSTATUS_PROPERTY);
-        if (prop) {
-            struct icalreqstattype rq = icalproperty_get_requeststatus(prop);
-            req_stat = icalenum_reqstat_code(rq.code);
-        }
+        param = icalproperty_get_first_parameter(att, ICAL_CN_PARAMETER);
+        if (param) cn = icalparameter_get_cn(param);
 
         /* Find matching attendee in existing object */
         for (prop = icalcomponent_get_first_invitee(comp);
@@ -447,16 +439,16 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             icalproperty_set_parameter(prop, param);
         }
 
-        /* Set RSVP */
-        icalproperty_remove_parameter_by_kind(prop, ICAL_RSVP_PARAMETER);
-        if (rsvp != ICAL_RSVP_NONE) {
-            param = icalparameter_new_rsvp(rsvp);
-            icalproperty_add_parameter(prop, param);
+        /* Set CN, if provided */
+        if (cn &&
+            !(param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER))) {
+            param = icalparameter_new_cn(cn);
+            icalproperty_set_parameter(prop, param);
         }
 
-        /* Set SCHEDULE-STATUS */
-        param = icalparameter_new_schedulestatus(req_stat);
-        icalproperty_set_parameter(prop, param);
+        /* Remove RSVP and SCHEDULE-STATUS */
+        icalproperty_remove_parameter_by_kind(prop, ICAL_RSVP_PARAMETER);
+        icalproperty_remove_parameter_by_kind(prop, ICAL_SCHEDULESTATUS_PARAMETER);
 
         /* Handle VPOLL reply */
         if (kind == ICAL_VPOLL_COMPONENT) deliver_merge_vpoll_reply(comp, itip);
