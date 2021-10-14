@@ -23,7 +23,8 @@ The Cyrus IMAP server differs from other IMAP server implementations in
 that it is generally intended to be run on "sealed" servers, where
 normal users are not permitted to log in. The mailbox database is stored
 in parts of the filesystem that are private to the Cyrus IMAP system.
-All user access to mail is through the IMAP, NNTP, or POP3 protocols.
+All user access to content is through JMAP, IMAP, NNTP, POP3, CalDAV, CardDAV,
+and WebDAV protocols.
 
 The private mailbox database design gives the server large advantages in
 efficiency, scalability, and administrability. Multiple concurrent
