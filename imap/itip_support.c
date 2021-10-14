@@ -372,42 +372,16 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 
             /* create a new recurrence from master component. */
             comp = master_to_recurrence(master, prop);
-
-            /* Replace DTSTART, DTEND, SEQUENCE */
-            prop =
-                icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-            if (prop) {
-                icalcomponent_remove_property(comp, prop);
-                icalproperty_free(prop);
-            }
-            prop =
-                icalcomponent_get_first_property(itip, ICAL_DTSTART_PROPERTY);
-            if (prop)
-                icalcomponent_add_property(comp, icalproperty_clone(prop));
-
-            prop =
-                icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-            if (prop) {
-                icalcomponent_remove_property(comp, prop);
-                icalproperty_free(prop);
-            }
-            prop =
-                icalcomponent_get_first_property(itip, ICAL_DTEND_PROPERTY);
-            if (prop)
-                icalcomponent_add_property(comp, icalproperty_clone(prop));
-
-            prop =
-                icalcomponent_get_first_property(comp, ICAL_SEQUENCE_PROPERTY);
-            if (prop) {
-                icalcomponent_remove_property(comp, prop);
-                icalproperty_free(prop);
-            }
-            prop =
-                icalcomponent_get_first_property(itip, ICAL_SEQUENCE_PROPERTY);
-            if (prop)
-                icalcomponent_add_property(comp, icalproperty_clone(prop));
-
             icalcomponent_add_component(ical, comp);
+
+            /* Replace SEQUENCE */
+            prop = icalcomponent_get_first_property(comp, ICAL_SEQUENCE_PROPERTY);
+            if (prop) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
+            prop = icalcomponent_get_first_property(itip, ICAL_SEQUENCE_PROPERTY);
+            if (prop) icalcomponent_add_property(comp, icalproperty_clone(prop));
         }
         else if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) {
             /* This component has been cancelled - ignore the reply */
