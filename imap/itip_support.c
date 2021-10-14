@@ -331,22 +331,18 @@ static const char *deliver_merge_reply(icalcomponent *ical,
     icalproperty *prop, *att;
     icalparameter *param;
     icalparameter_partstat partstat = ICAL_PARTSTAT_NONE;
-    const char *recurid, *attendee = NULL, *cn = NULL;
+    const char *attendee = NULL, *cn = NULL;
 
     /* Add each component of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
     do {
-        prop =
-            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
-        else {
+        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (prop)
+            hash_insert(icalproperty_get_value_as_string(prop), comp, &comp_table);
+        else
             master = comp;
-            recurid = "";
-        }
-
-        hash_insert(recurid, comp, &comp_table);
 
     } while ((comp = icalcomponent_get_next_component(ical, kind)));
 
@@ -357,16 +353,36 @@ static const char *deliver_merge_reply(icalcomponent *ical,
          itip = icalcomponent_get_next_component(reply, kind)) {
 
         /* Lookup this comp in the hash table */
-        prop =
-            icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
-        else recurid = "";
+        prop = icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
+        if (prop)
+            comp = hash_lookup(icalproperty_get_value_as_string(prop), &comp_table);
+        else
+            comp = master;
 
-        comp = hash_lookup(recurid, &comp_table);
         if (!comp) {
             /* New recurrence overridden by attendee. */
             if (icalcomponent_get_status(master) == ICAL_STATUS_CANCELLED) {
                 /* The master event has been cancelled - ignore this override. */
+                continue;
+            }
+
+            icaltimetype occur = icaltime_null_time();
+            icaltimetype recurid = icalproperty_get_recurrenceid(prop);
+            icalproperty *rrule =
+                icalcomponent_get_first_property(master, ICAL_RRULE_PROPERTY);
+
+            if (rrule) {
+                icalrecur_iterator *ritr =
+                    icalrecur_iterator_new(icalproperty_get_rrule(rrule),
+                                           icalcomponent_get_dtstart(master));
+
+                icalrecur_iterator_set_start(ritr, recurid);
+                occur = icalrecur_iterator_next(ritr);
+                icalrecur_iterator_free(ritr);
+            }
+
+            if (icaltime_compare(occur, recurid) != 0) {
+                /* RECURRENCE-ID is not a valid occurrence */
                 continue;
             }
 
