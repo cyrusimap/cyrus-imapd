@@ -4650,4 +4650,200 @@ EOF
                              $events->[0]{recurrenceOverrides}{'2021-10-21T15:30:00'}{participants}{'foo@example.net'}{scheduleStatus});
 }
 
+sub test_imip_reply_override_invalid
+    :needs_component_sieve :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+
+    my $IMAP = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $IMAP->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Create calendar user";
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = 'Default';
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$CalendarId/$uuid.ics";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :status "status";
+    if string :matches "\${status}" "OK*" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20211014T034327Z
+UID:$uuid
+TRANSP:OPAQUE
+SUMMARY:A Recurring Event
+DTSTART;TZID=American/New_York:20211014T153000
+DTEND;TZID=America/New_York:20211014T183000
+DTSTAMP:20211014T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Cassandane;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:foo\@example.net
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Create an event on calendar";
+    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Check that the event made it to calendar";
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('',
+                             $events->[0]{participants}{'foo@example.net'}{name});
+    $self->assert_str_equals('needs-action',
+                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+    $self->assert_null($events->[0]{recurrenceRule});
+
+
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-0\@example.net>
+Content-Type: text/calendar; method=REPLY; component=VEVENT
+X-Cassandane-Unique: $uuid-0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REPLY
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Test User;PARTSTAT=DECLINED:MAILTO:foo\@example.net
+RECURRENCE-ID;TZID=American/New_York:20211021T153000
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP reply";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 1,
+                        flags => [ '\\Recent' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Expunge the message";
+    $IMAP->store('1', '+flags', '(\\Deleted)');
+    $IMAP->expunge();
+
+    xlog $self, "Check that the reply was ignored";
+    $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('needs-action',
+                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+    $self->assert_null($events->[0]{recurrenceRule});
+    $self->assert_null($events->[0]{recurrenceOverrides});
+
+
+    $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20211014T034327Z
+UID:$uuid
+TRANSP:OPAQUE
+SUMMARY:A Recurring Event
+DTSTART;TZID=American/New_York:20211014T153000
+DTEND;TZID=America/New_York:20211014T183000
+RRULE:FREQ=WEEKLY
+DTSTAMP:20211014T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Cassandane;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:foo\@example.net
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Create a recurring event on calendar";
+    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Check that the event made it to calendar";
+    $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('',
+                             $events->[0]{participants}{'foo@example.net'}{name});
+    $self->assert_str_equals('needs-action',
+                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+    $self->assert_not_null($events->[0]{recurrenceRule});
+    $self->assert_null($events->[0]{recurrenceOverrides});
+
+
+    $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-1\@example.net>
+Content-Type: text/calendar; method=REPLY; component=VEVENT
+X-Cassandane-Unique: $uuid-1
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REPLY
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+END:VEVENT
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Test User;PARTSTAT=DECLINED:MAILTO:foo\@example.net
+RECURRENCE-ID;TZID=American/New_York:20211022T153000
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP reply";
+    $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 2,
+                        flags => [ '\\Recent', '\\Flagged' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Check that the reply (master only) made it to calendar";
+    $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('Test User',
+                             $events->[0]{participants}{'foo@example.net'}{name});
+    $self->assert_str_equals('accepted',
+                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+
+    $self->assert_not_null($events->[0]{recurrenceRule});
+    $self->assert_null($events->[0]{recurrenceOverrides});
+}
+
 1;
