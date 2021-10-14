@@ -1164,6 +1164,8 @@ void shut_down(int code)
 
     saslprops_free(&saslprops);
 
+    buflen_log("httpd");
+
     cyrus_done();
 
     exit(code);

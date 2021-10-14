@@ -286,9 +286,10 @@ struct buf {
     char *s;
     size_t len;
     size_t alloc;
+    size_t maxlen; // XXX debug only
     unsigned flags;
 };
-#define BUF_INITIALIZER { NULL, 0, 0, 0 }
+#define BUF_INITIALIZER { NULL, 0, 0, 0, 0 }
 
 #define buf_new() ((struct buf *) xzmalloc(sizeof(struct buf)))
 #define buf_destroy(b) do { buf_free((b)); free((b)); } while (0)
@@ -351,6 +352,8 @@ const char *buf_lcase(struct buf *buf);
 const char *buf_ucase(struct buf *buf);
 const char *buf_tocrlf(struct buf *buf);
 void buf_trim(struct buf *buf);
+
+void buflen_log(const char *service); // XXX debug only
 
 /*
  * Given a list of strings, terminated by (char *)NULL,

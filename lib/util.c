@@ -1045,6 +1045,53 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 
 /* buffer handling functions */
 
+static size_t buflen_hist[5] = { 0 };
+
+static void buflen_addhist(struct buf *buf)
+{
+    if (!buf->maxlen) return;
+
+    int slot = 4;
+    if (buf->maxlen <= 64)
+        slot--;
+    if (buf->maxlen <= 32)
+        slot--;
+    if (buf->maxlen <= 16)
+        slot--;
+    if (buf->maxlen <= 8)
+        slot--;
+    if (buflen_hist[slot] < SIZE_MAX)
+        buflen_hist[slot]++;
+}
+
+static void buflen_update(struct buf *buf)
+{
+    if (buf && buf->alloc && buf->len > buf->maxlen)
+        buf->maxlen = buf->len;
+}
+
+EXPORTED void buflen_log(const char *service)
+{
+    struct buf tmp = BUF_INITIALIZER;
+
+    // flush and reset histogram
+
+    buf_printf(&tmp, "[\"%s\",[", service);
+    size_t i;
+    for (i = 0; i < 5; i++) {
+        buf_printf(&tmp, "%s%zu", i ? "," : "", buflen_hist[i]);
+        buflen_hist[i] = 0;
+    }
+    buf_putc(&tmp, ']');
+    buf_putc(&tmp, ']');
+
+    xsyslog(LOG_NOTICE, "tracking buf length",
+            "buflen_hist=<%s>", buf_cstring(&tmp));
+
+    free(tmp.s); // don't add to histogram
+}
+
+
 #ifdef HAVE_DECLARE_OPTIMIZE
 static inline size_t roundup(size_t size)
     __attribute__((pure, always_inline, optimize("-O3")));
@@ -1069,6 +1116,8 @@ EXPORTED void _buf_ensure(struct buf *buf, size_t n)
 {
     size_t newlen = buf->len + n;
     char *s;
+
+    buflen_update(buf);
 
     assert(newlen); /* we never alloc zero bytes */
 
@@ -1119,6 +1168,7 @@ EXPORTED char *buf_newcstring(struct buf *buf)
 EXPORTED char *buf_release(struct buf *buf)
 {
     char *ret = (char *)buf_cstring(buf);
+    buflen_addhist(buf);
     buf->alloc = 0;
     buf->s = NULL;
     buf_free(buf);
@@ -1140,6 +1190,7 @@ EXPORTED const char *buf_cstringnull_ifempty(const struct buf *buf)
 EXPORTED char *buf_releasenull(struct buf *buf)
 {
     char *ret = (char *)buf_cstringnull(buf);
+    buflen_addhist(buf);
     buf->alloc = 0;
     buf->s = NULL;
     buf_free(buf);
@@ -1196,6 +1247,7 @@ EXPORTED inline const char *buf_base(const struct buf *buf)
 
 EXPORTED void buf_reset(struct buf *buf)
 {
+    buflen_update(buf);
     if (buf->flags & BUF_MMAP)
         map_free((const char **)&buf->s, &buf->len);
     buf->len = 0;
@@ -1214,6 +1266,7 @@ EXPORTED void buf_truncate(struct buf *buf, ssize_t len)
         buf_ensure(buf, more);
         memset(buf->s + buf->len, 0, more);
     }
+    buflen_update(buf);
     buf->len = len;
 }
 
@@ -1228,6 +1281,7 @@ EXPORTED void buf_setmap(struct buf *buf, const char *base, size_t len)
     if (len) {
         buf_ensure(buf, len);
         memcpy(buf->s, base, len);
+        buflen_update(buf);
         buf->len = len;
     }
 }
@@ -1288,6 +1342,7 @@ EXPORTED void buf_appendmap(struct buf *buf, const char *base, size_t len)
     if (len) {
         buf_ensure(buf, len);
         memcpy(buf->s + buf->len, base, len);
+        buflen_update(buf);
         buf->len += len;
     }
 }
@@ -1372,6 +1427,7 @@ static void buf_replace_buf(struct buf *buf,
         memmove(buf->s + offset + replace->len,
                 buf->s + offset + length,
                 buf->len - offset - length + 1);
+        buflen_update(buf);
         buf->len += (replace->len - length);
     }
     if (replace->len)
@@ -1575,6 +1631,7 @@ EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)
 {
     buf_free(buf);
     buf->s = (char *)str;
+    buflen_update(buf);
     buf->len = (str ? strlen(str) : 0);
 }
 
@@ -1595,6 +1652,11 @@ EXPORTED void buf_refresh_mmap(struct buf *buf, int onceonly, int fd,
 EXPORTED void buf_free(struct buf *buf)
 {
     if (!buf) return;
+
+    if (buf->alloc) {
+        buflen_update(buf);
+        buflen_addhist(buf);
+    }
 
     if (buf->alloc)
         free(buf->s);

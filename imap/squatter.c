@@ -1231,5 +1231,7 @@ int main(int argc, char **argv)
     }
 
     strarray_fini(&mboxnames);
+
+    buflen_log("squatter");
     shut_down(r ? EX_TEMPFAIL : 0);
 }

@@ -1159,6 +1159,8 @@ void shut_down(int code)
 
     saslprops_free(&saslprops);
 
+    buflen_log("imapd");
+
     cyrus_done();
 
     exit(code);
