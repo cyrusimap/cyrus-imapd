@@ -52,6 +52,7 @@
 #include "http_dav.h"
 #include "httpd.h"
 #include "ical_support.h"
+#include "jmap_ical.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -352,6 +353,11 @@ static const char *deliver_merge_reply(icalcomponent *ical,
          itip;
          itip = icalcomponent_get_next_component(reply, kind)) {
 
+        icalproperty *sequence =
+            icalcomponent_get_first_property(itip, ICAL_SEQUENCE_PROPERTY);
+        icalproperty *dtstamp =
+            icalcomponent_get_first_property(itip, ICAL_DTSTAMP_PROPERTY);
+
         /* Lookup this comp in the hash table */
         prop = icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
         if (prop)
@@ -396,8 +402,8 @@ static const char *deliver_merge_reply(icalcomponent *ical,
                 icalcomponent_remove_property(comp, prop);
                 icalproperty_free(prop);
             }
-            prop = icalcomponent_get_first_property(itip, ICAL_SEQUENCE_PROPERTY);
-            if (prop) icalcomponent_add_property(comp, icalproperty_clone(prop));
+            if (sequence) icalcomponent_add_property(comp,
+                                                     icalproperty_clone(sequence));
         }
         else if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) {
             /* This component has been cancelled - ignore the reply */
@@ -428,6 +434,13 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             param = icalparameter_new_partstat(partstat);
             icalproperty_set_parameter(prop, param);
         }
+
+        /* Set X-DTSTAMP and X-SEQUENCE */
+        const char *val = icalproperty_get_value_as_string(dtstamp);
+        icalproperty_set_xparam(prop, JMAPICAL_XPARAM_DTSTAMP, val, 1);
+
+        val = sequence ? icalproperty_get_value_as_string(sequence) : "0";
+        icalproperty_set_xparam(prop, JMAPICAL_XPARAM_SEQUENCE, val, 1);
 
         /* Set CN, if provided */
         if (cn &&
