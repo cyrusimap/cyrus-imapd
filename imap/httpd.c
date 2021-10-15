@@ -740,6 +740,7 @@ static void httpd_reset(struct http_connection *conn)
     conn->close = 0;
     conn->close_str = NULL;
     conn->clienthost = "[local]";
+    conn->ws_ctx = NULL;
     buf_reset(&conn->logbuf);
     if (conn->logfd != -1) {
         close(conn->logfd);
