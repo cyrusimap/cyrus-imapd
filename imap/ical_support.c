@@ -1968,4 +1968,33 @@ EXPORTED const char *icaltime_get_location_tzid(icaltimetype t)
     return icaltimezone_get_location_tzid(t.zone);
 }
 
+static void icalproperty_remove_xparam(icalproperty *prop, const char *name)
+{
+    icalparameter *param, *next;
+
+    for (param = icalproperty_get_first_parameter(prop, ICAL_ANY_PARAMETER);
+         param;
+         param = next) {
+
+        next = icalproperty_get_next_parameter(prop, ICAL_ANY_PARAMETER);
+        if (strcasecmpsafe(icalparameter_get_xname(param), name)) {
+            continue;
+        }
+        icalproperty_remove_parameter_by_ref(prop, param);
+    }
+}
+
+EXPORTED void icalproperty_set_xparam(icalproperty *prop,
+                                      const char *name, const char *val, int purge)
+{
+    icalparameter *param;
+
+    if (purge) icalproperty_remove_xparam(prop, name);
+
+    param = icalparameter_new(ICAL_X_PARAMETER);
+    icalparameter_set_xname(param, name);
+    icalparameter_set_xvalue(param, val);
+    icalproperty_add_parameter(prop, param);
+}
+
 #endif /* HAVE_ICAL */

@@ -76,6 +76,8 @@ extern const char *icalparameter_get_value_as_string(icalparameter *param);
 extern struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop);
 extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
+extern void icalproperty_set_xparam(icalproperty *prop,
+                                    const char *name, const char *val, int purge);
 
 /* If range is a NULL period, callback() is executed for ALL occurrences,
    otherwise callback() is only executed for occurrences that overlap the range.
