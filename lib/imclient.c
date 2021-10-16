@@ -1131,7 +1131,7 @@ static void interaction(struct imclient *context, sasl_interact_t *t, char *user
     strarray_appendm(&context->interact_results, str);
 }
 
-EXPORTED void fillin_interactions(struct imclient *context,
+static void fillin_interactions(struct imclient *context,
                          sasl_interact_t *tlist, char *user)
 {
     assert(context);
@@ -1826,8 +1826,8 @@ static void apps_ssl_info_callback(SSL * s, int where, int ret)
 }
 #endif
 
-EXPORTED int tls_start_clienttls(struct imclient *imclient,
-                        unsigned *layer, char **authid, int fd)
+static int tls_start_clienttls(struct imclient *imclient,
+                        unsigned *layer, const char **authid, int fd)
 {
     int sts;
     SSL_SESSION *session;
@@ -1835,7 +1835,7 @@ EXPORTED int tls_start_clienttls(struct imclient *imclient,
     X509 *peer;
     int tls_cipher_usebits = 0;
     int tls_cipher_algbits = 0;
-    char *tls_peer_CN = "";
+    const char *tls_peer_CN = "";
 
     if (!imclient->tls_conn)
         imclient->tls_conn = (SSL *) SSL_new(imclient->tls_ctx);
@@ -1924,7 +1924,7 @@ EXPORTED int imclient_starttls(struct imclient *imclient,
   int result;
   struct authresult theresult;
   sasl_ssf_t ssf;
-  char *auth_id;
+  const char *auth_id;
 
   imclient_send(imclient, tlsresult, (void *)&theresult,
                 "STARTTLS");

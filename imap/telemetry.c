@@ -55,6 +55,7 @@
 
 #include "prot.h"
 #include "global.h"
+#include "telemetry.h"
 
 /* create telemetry log; return fd of log */
 EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
@@ -106,7 +107,7 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
     return fd;
 }
 
-EXPORTED void telemetry_rusage(char *userid)
+EXPORTED void telemetry_rusage(const char *userid)
 {
     static struct rusage        previous;
     struct rusage               current;

@@ -83,7 +83,7 @@ static int load(int fd, bytecode_input_t ** d)
     size_t len=0;
 
     if (fstat(fd, &sbuf) == -1) {
-        fprintf(stderr, "IOERROR: fstating sieve script: %m");
+        fprintf(stderr, "IOERROR: fstating sieve script: %s", strerror(errno));
         return SIEVE_FAIL;
     }
 
@@ -805,7 +805,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
         case B_SNOOZE_TZID:
         case B_SNOOZE: {
             const char *sep = "";
-            int i;
+            int j;
 
             printf("SNOOZE");
             if (cmd.type >= B_SNOOZE_TZID) {
@@ -825,9 +825,9 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_stringlist("\n\tADDFLAGS", cmd.u.sn.addflags);
             print_stringlist("\n\tREMOVEFLAGS", cmd.u.sn.removeflags);
             printf("\n\tWEEKDAYS [");
-            for (i = 0; i < 7; i++) {
-                if (cmd.u.sn.days & (1<<i)) {
-                    printf("%s %u", sep, i);
+            for (j = 0; j < 7; j++) {
+                if (cmd.u.sn.days & (1<<j)) {
+                    printf("%s %u", sep, j);
                     sep = ",";
                 }
             }
@@ -1655,7 +1655,7 @@ static void generate_script(bytecode_input_t *d, int bc_len)
 
     if (requires) {
         unsigned long long capa;
-        char *sep = "";
+        const char *sep = "";
         int n;
 
         printf("require [");

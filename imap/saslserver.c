@@ -54,6 +54,12 @@
 
 #define BASE64_BUF_SIZE 21848   /* per RFC 2222bis: ((16K / 3) + 1) * 4  */
 
+extern int saslserver(sasl_conn_t *conn, const char *mech, 		/* XXX WTF!?!?  no header!?!? */
+                      const char *init_resp, const char *resp_prefix,
+                      const char *continuation, const char *empty_resp,
+                      struct protstream *pin, struct protstream *pout,
+                      int *sasl_result, char **success_data);
+
 /* NOTE: success_data will need to be free()d by the caller */
 EXPORTED int saslserver(sasl_conn_t *conn, const char *mech,
                const char *init_resp, const char *resp_prefix,

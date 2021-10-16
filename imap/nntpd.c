@@ -929,13 +929,13 @@ static void cmdloop(void)
             if (!strcmp(cmd.s, "Date")) {
                 time_t now = time(NULL);
                 struct tm *my_tm = gmtime(&now);
-                char buf[15];
+                char buf2[15];
 
                 if (c == '\r') c = prot_getc(nntp_in);
                 if (c != '\n') goto extraargs;
 
-                strftime(buf, sizeof(buf), "%Y%m%d%H%M%S", my_tm);
-                prot_printf(nntp_out, "111 %s\r\n", buf);
+                strftime(buf2, sizeof(buf), "%Y%m%d%H%M%S", my_tm);
+                prot_printf(nntp_out, "111 %s\r\n", buf2);
             }
             else goto badcmd;
             break;
@@ -2030,7 +2030,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     int r, sasl_result;
     char *success_data;
     sasl_ssf_t ssf;
-    char *ssfmsg = NULL;
+    const char *ssfmsg = NULL;
     const void *val;
     int failedloginpause;
     struct proc_limits limits;
@@ -2445,12 +2445,12 @@ static int list_cb(const mbentry_t *mbentry, void *rock)
 
     if (mbentry->server) {
         /* remote group */
-        struct list_rock *lrock = (struct list_rock *) rock;
+        struct list_rock *rlrock = (struct list_rock *) rock;
 
-        if (!hash_lookup(mbentry->server, &lrock->server_table)) {
+        if (!hash_lookup(mbentry->server, &rlrock->server_table)) {
             /* add this server to our table */
             hash_insert(mbentry->server,
-                        (void *)0xDEADBEEF, &lrock->server_table);
+                        (void *)0xDEADBEEF, &rlrock->server_table);
         }
 
         return 0;
@@ -2556,13 +2556,13 @@ static void cmd_list(char *arg1, char *arg2)
     if (!arg1)
         arg1 = "active";
     else
-        lcase(arg1);
+        lcase(arg1);	/* XXX avoid this by using case-insensitive compares thus allowing const! */
 
     if (!strcmp(arg1, "active")) {
         struct list_rock lrock;
         struct enum_rock erock;
 
-        if (!arg2) arg2 = "*";
+        if (!arg2) arg2 = "*";		/* xxx should be a writeable string! */
 
         erock.cmd = "ACTIVE";
         erock.wild = xstrdup(arg2); /* make a copy before we munge it */
@@ -2619,7 +2619,7 @@ static void cmd_list(char *arg1, char *arg2)
         struct list_rock lrock;
         struct enum_rock erock;
 
-        if (!arg2) arg2 = "*";
+        if (!arg2) arg2 = "*";		/* xxx should be a writeable string! */
 
         erock.cmd = "NEWSGROUPS";
         erock.wild = xstrdup(arg2); /* make a copy before we munge it */
@@ -3983,7 +3983,7 @@ static void cmd_post(char *msgid, int mode)
 }
 
 #ifdef HAVE_SSL
-static void cmd_starttls(int nntps)
+static void cmd_starttls(int nntpssl)
 {
     int result;
 
@@ -4000,14 +4000,14 @@ static void cmd_starttls(int nntps)
 
     result=tls_init_serverengine("nntp",
                                  5,        /* depth to verify */
-                                 !nntps,   /* can client auth? */
+                                 !nntpssl,   /* can client auth? */
                                  NULL);
 
     if (result == -1) {
 
         syslog(LOG_ERR, "[nntpd] error initializing TLS");
 
-        if (nntps == 0)
+        if (nntpssl == 0)
             prot_printf(nntp_out, "580 %s\r\n", "Error initializing TLS");
         else
             fatal("tls_init() failed",EX_TEMPFAIL);
@@ -4015,7 +4015,7 @@ static void cmd_starttls(int nntps)
         return;
     }
 
-    if (nntps == 0)
+    if (nntpssl == 0)
     {
         prot_printf(nntp_out, "382 %s\r\n", "Begin TLS negotiation now");
         /* must flush our buffers before starting tls */
@@ -4024,13 +4024,13 @@ static void cmd_starttls(int nntps)
 
     result=tls_start_servertls(0, /* read */
                                1, /* write */
-                               nntps ? 180 : nntp_timeout,
+                               nntpssl ? 180 : nntp_timeout,
                                &saslprops,
                                &tls_conn);
 
     /* if error */
     if (result == -1) {
-        if (nntps == 0) {
+        if (nntpssl == 0) {
             prot_printf(nntp_out, "580 Starttls failed\r\n");
             syslog(LOG_NOTICE, "[nntpd] STARTTLS failed: %s", nntp_clienthost);
             return;
@@ -4044,7 +4044,7 @@ static void cmd_starttls(int nntps)
     result = saslprops_set_tls(&saslprops, nntp_saslconn);
     if (result != SASL_OK) {
         syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
-        if (nntps == 0) {
+        if (nntpssl == 0) {
             fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
         } else {
             shut_down(0);
@@ -4071,7 +4071,7 @@ static void cmd_starttls(int nntps)
     }
 }
 #else
-static void cmd_starttls(int nntps __attribute__((unused)))
+static void cmd_starttls(int nntpssl __attribute__((unused)))
 {
     /* XXX should never get here */
     fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);

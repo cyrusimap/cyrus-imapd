@@ -41,6 +41,7 @@
  */
 
 #include <config.h>
+#include "gmtoff.h"
 
 /*
  * Returns the GMT offset of the struct tm 'tm', obtained from 'time'.

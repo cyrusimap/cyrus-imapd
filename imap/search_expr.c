@@ -656,16 +656,18 @@ static void setnext(void *p, void *next)
 
 static int maxcost(const search_expr_t *e, hashu64_table *costcache)
 {
+    int cost;
+    search_expr_t *child;
+
     if (!e) return 0;
 
     if (costcache) {
-        intptr_t cost = (intptr_t) hashu64_lookup((uint64_t) e, costcache);
-        assert(cost > INT_MIN && cost < INT_MAX);
-        if (cost) return cost > 0 ? cost : 0;
+        intptr_t costp = (intptr_t) hashu64_lookup((uint64_t) e, costcache);
+        assert(costp > INT_MIN && costp < INT_MAX);
+        if (costp) return costp > 0 ? costp : 0;
     }
 
-    int cost = e->attr ? e->attr->cost : 0;
-    search_expr_t *child;
+    cost = e->attr ? e->attr->cost : 0;
     for (child = e->children ; child ; child = child->next) {
         int childcost = maxcost(child, costcache);
         if (childcost > cost) cost = childcost;
@@ -732,8 +734,10 @@ static void sort_children(search_expr_t *e)
 {
     search_expr_t *child;
     hashu64_table maxcostcache = HASHU64_TABLE_INITIALIZER;
+    hashu64_table *costcache;
+
     construct_hashu64_table(&maxcostcache, 512, 0);
-    hashu64_table *costcache = &maxcostcache;
+    costcache = &maxcostcache;
 
     if (sizeof(uint64_t) < sizeof(search_expr_t*)) {
         costcache = NULL; // woot?
@@ -1093,6 +1097,8 @@ static int is_folder_or_indexed(search_expr_t *e, void *rock __attribute__((unus
  * queries because we won't want to open those mailboxes! */
 EXPORTED char *search_expr_firstmailbox(const search_expr_t *e)
 {
+    const search_expr_t *child;
+
     // don't descend into "NOT" because we won't want to open those mailboxes
     if (e->op == SEOP_NOT) return NULL;
 
@@ -1101,7 +1107,6 @@ EXPORTED char *search_expr_firstmailbox(const search_expr_t *e)
         if (res) return res;
     }
 
-    const search_expr_t *child;
     for (child = e->children; child; child = child->next) {
         char *res = search_expr_firstmailbox(child);
         if (res) return res;
@@ -1295,8 +1300,10 @@ static int search_list_match(message_t *m,
 
 static void search_list_serialise(struct buf *b, const union search_value *v)
 {
-    buf_putc(b, '(');
     int i;
+
+    buf_putc(b, '(');
+
     for (i = 0; i < strarray_size(v->list); i++) {
         if (i) buf_putc(b, ' ');
         buf_putc(b, '"');
@@ -1650,7 +1657,7 @@ static int search_indexflags_unserialise(struct protstream *prot, union search_v
     return c;
 }
 
-unsigned int search_indexflags_get_countability(const union search_value *v)
+static unsigned int search_indexflags_get_countability(const union search_value *v)
 {
     switch (v->u) {
     case MESSAGE_SEEN: return SEC_SEEN;
@@ -1850,7 +1857,7 @@ static int search_folder_match(message_t *m __attribute__((unused)),
     return (int)(unsigned long)internalised;
 }
 
-unsigned int search_folder_get_countability(const union search_value *v
+static unsigned int search_folder_get_countability(const union search_value *v
                                             __attribute__((unused)))
 {
     return 0;
@@ -2138,7 +2145,7 @@ static int search_allconvflags_match(message_t *m,
     return r;
 }
 
-unsigned int search_convflags_get_countability(const union search_value *v)
+static unsigned int search_convflags_get_countability(const union search_value *v)
 {
     if (!strcasecmp(v->s, "\\Seen"))
         return SEC_CONVSEEN;
@@ -2359,7 +2366,7 @@ static void done_cb(void *rock __attribute__((unused))) {
     /* do nothing */
 }
 
-static void init_internal() {
+static void init_internal(void) {
     if (!search_attr_initialized) {
         search_attr_init();
         cyrus_modules_add(done_cb, NULL);

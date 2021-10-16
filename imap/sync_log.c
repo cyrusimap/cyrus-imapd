@@ -84,7 +84,7 @@ static void done_cb(void *rock __attribute__((unused))) {
     sync_log_done();
 }
 
-static void init_internal() {
+static void init_internal(void) {
     if (!sync_log_initialized) {
         sync_log_init();
         cyrus_modules_add(done_cb, NULL);
@@ -232,7 +232,7 @@ static void sync_log_base(const char *channel, const char *string)
     xclose(fd);
 }
 
-EXPORTED struct buf *sync_log_rightnow_buf()
+EXPORTED struct buf *sync_log_rightnow_buf(void)
 {
     if (!channels) return NULL;
     if (!rightnow_log) return NULL;
@@ -240,7 +240,7 @@ EXPORTED struct buf *sync_log_rightnow_buf()
     return rightnow_log;
 }
 
-EXPORTED void sync_log_reset()
+EXPORTED void sync_log_reset(void)
 {
     if (!channels) return;
     if (!rightnow_log) return;

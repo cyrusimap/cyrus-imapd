@@ -158,10 +158,10 @@ int handle_response(int res,int version,struct protstream *pin,
       r = -1;
   } else {
       /* ok */
-      int res;
+      int lres;
 
       /* SASL response */
-      res = yylex(&state, pin);
+      lres = yylex(&state, pin);
       if(res == ' ') {
           if (yylex(&state, pin) != '(')
               parseerror("expected LPAREN");
@@ -179,13 +179,13 @@ int handle_response(int res,int version,struct protstream *pin,
           } else {
               parseerror("unexpected response code with OK response");
           }
-      } else if (version != OLD_VERSION && res == EOL) {
+      } else if (version != OLD_VERSION && lres == EOL) {
           return r;
       }
 
       /* old version of protocol had strings with ok responses too */
       if (version == OLD_VERSION) {
-          if (res !=' ')
+          if (lres !=' ')
               parseerror("expected sp");
 
           if (yylex(&state, pin)!=STRING)

@@ -44,6 +44,8 @@
 
 #include <sasl/sasl.h>
 
+#include "mutex.h"
+
 EXPORTED void *cyrus_mutex_alloc(void)
 {
     return (void *)0x1;

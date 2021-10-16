@@ -551,10 +551,10 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
     if (rlen > 0) {
         switch(tv_precision) {
         case timeval_ms:
-            rlen += snprintf(buf+rlen, len-rlen, ".%.3lu", t->tv_usec/1000);
+            rlen += snprintf(buf+rlen, len-rlen, ".%.3lu", (unsigned long)t->tv_usec/1000);
             break;
         case timeval_us:
-            rlen += snprintf(buf+rlen, len-rlen, ".%.6lu", t->tv_usec);
+            rlen += snprintf(buf+rlen, len-rlen, ".%.6lu", (unsigned long)t->tv_usec);
             break;
         case timeval_s:
             break;
@@ -1164,6 +1164,8 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
 
     ch = rfc5322_usascii_charset[c + 1];
     if (ch & Alpha) {       /* Most likely a weekday at the start. */
+        int j;
+
         if (!get_next_token(buf, &str_token, &len))
             goto failed;
 
@@ -1172,10 +1174,9 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
             goto failed;
 
         /* Determine week day */
-        int i ;
-        for (i = 0; i < 7; i++) {
-            if (!strncasecmp(wday[i], str_token, len)) {
-                tm->tm_wday = i;
+        for (j = 0; j < 7; j++) {
+            if (!strncasecmp(wday[j], str_token, len)) {
+                tm->tm_wday = j;
                 break;
             }
         }

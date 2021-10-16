@@ -302,6 +302,8 @@ static void match(search_builder_t *bx, int part, const char *str)
     struct opstack *parent = opstack_top(bb);
     struct opstack *top;
     int r;
+    charset_t utf8;
+    char *mystr;
 
 #if DEBUG
     if (bb->verbose > 1)
@@ -316,8 +318,8 @@ static void match(search_builder_t *bx, int part, const char *str)
     top = opstack_push(bb, /*doesn't matter*/0);
     bb->part_types = doctypes_by_part[part];
 
-    charset_t utf8 = charset_lookupname("utf-8");
-    char *mystr = charset_convert(str, utf8, charset_flags);
+    utf8 = charset_lookupname("utf-8");
+    mystr = charset_convert(str, utf8, charset_flags);
     r = squat_search_execute(bb->index, mystr, strlen(mystr),
                              fill_with_hits, bb);
     free(mystr);

@@ -13,6 +13,8 @@
 //    machines.
 #include <config.h>
 
+#include "murmurhash2.h"
+
 unsigned int murmurhash2(const void * key, int len, const unsigned int seed)
 {
 	// 'm' and 'r' are mixing constants generated offline.

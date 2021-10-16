@@ -154,12 +154,13 @@ static int set_specialuse(struct findall_data *data, void *rock)
 
 int main (int argc, char **argv)
 {
-    save_argv0(argv[0]);
 
     int opt, i, r = 0;
     char *alt_config = NULL;
     hash_table xlist = HASH_TABLE_INITIALIZER;
     strarray_t patterns = STRARRAY_INITIALIZER;
+
+    save_argv0(argv[0]);
 
     while ((opt = getopt(argc, argv, "C:v")) != -1) {
         switch (opt) {

@@ -43,6 +43,13 @@ static int is_number(char *s)
 /* TODO: implement parse_string() with a proper yacc/bison lexer/parser */
 HIDDEN char *parse_string(const char *s, variable_list_t *vars)
 {
+    strarray_t stringparts = STRARRAY_INITIALIZER;
+    variable_list_t *variable = NULL;
+    char *test_str;
+    int is_match_var;
+    int match_var;
+    int fail = 0;
+
     /* protect against being called with no string - this is possible in some places */
     if (!s) return NULL;
 
@@ -54,12 +61,6 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
      * num-variable        =  1*DIGIT
      * identifier          =  (ALPHA / "_") *(ALPHA / DIGIT / "_")
      */
-    strarray_t stringparts = STRARRAY_INITIALIZER;
-    variable_list_t *variable = NULL;
-    char *test_str;
-    int is_match_var;
-    int match_var;
-    int fail = 0;
     strarray_append(&stringparts, s);
     test_str = stringparts.data[stringparts.count-1];
     while (test_str && *test_str) {

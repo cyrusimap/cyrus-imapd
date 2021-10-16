@@ -198,7 +198,7 @@ static int conn_pipe[2];
 static pthread_mutex_t mailboxes_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct conn *updatelist = NULL;
 
-/* --- prototypes --- */
+/* --- prototypes XXX MUST go in a shared header!!! --- */
 static void conn_free(struct conn *C);
 static mupdate_docmd_result_t docmd(struct conn *c);
 static void cmd_authenticate(struct conn *C,
@@ -226,10 +226,6 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
                       const char *continuation, const char *empty_chal,
                       struct protstream *pin, struct protstream *pout,
                       int *sasl_result, char **success_data);
-
-/* --- prototypes in mupdate-slave.c */
-void *mupdate_client_start(void *rock);
-void *mupdate_placebo_kick_start(void *rock);
 
 /* --- main() for each thread */
 static void *thread_main(void *rock);
@@ -568,11 +564,11 @@ int service_init(int argc, char **argv,
             pthread_cond_wait(&synced_cond, &synced_mutex);
         pthread_mutex_unlock(&synced_mutex);
     } else {
-        pthread_t t;
+        pthread_t th;
 
-        r = pthread_create(&t, NULL, &mupdate_placebo_kick_start, NULL);
+        r = pthread_create(&th, NULL, &mupdate_placebo_kick_start, NULL);
         if (r == 0) {
-            pthread_detach(t);
+            pthread_detach(th);
         } else {
             syslog(LOG_ERR, "could not start placebo kick thread");
             return EX_SOFTWARE;
@@ -2341,7 +2337,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
     struct mbent *l,*r;
     struct sync_rock rock;
     struct txn *tid = NULL;
-    int ret = 0;
+    int ret = 0;			/* xxx always, or should it return ret2? */
     int err = 0;
     char *c;
 
@@ -2369,8 +2365,8 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
     for(l = local_boxes.head, r = remote_boxes->head; l && r;
         l = local_boxes.head, r = remote_boxes->head)
     {
-        int ret = strcmp(l->mailbox, r->mailbox);
-        if (!ret) {
+        int ret2 = strcmp(l->mailbox, r->mailbox);
+        if (!ret2) {
             /* Match */
             if (l->t != r->t ||
                strcmp(l->location, r->location) ||
@@ -2405,7 +2401,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
             /* Okay, dump these two */
             local_boxes.head = l->next;
             remote_boxes->head = r->next;
-        } else if (ret < 0) {
+        } else if (ret2 < 0) {
             /* Local without corresponding remote, delete it */
                 /*
                  * In a unified murder, we don't want to delete locally
@@ -2428,7 +2424,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
                 mboxlist_deleteremote(l->mailbox, &tid);
             }
             local_boxes.head = l->next;
-        } else /* (ret > 0) */ {
+        } else /* (ret2 > 0) */ {
             /* Remote without corresponding local, insert it */
             mbentry_t *mbentry = mboxlist_entry_create();
             mbentry->name = xstrdupnull(r->mailbox);

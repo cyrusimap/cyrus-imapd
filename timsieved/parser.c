@@ -72,6 +72,7 @@
 #include "timsieved/actions.h"
 #include "timsieved/codes.h"
 #include "timsieved/lex.h"
+#include "timsieved/parser.h"
 
 extern const char *sieved_clienthost;
 extern int sieved_domainfromip;

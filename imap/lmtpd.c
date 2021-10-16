@@ -373,10 +373,13 @@ static int fuzzy_match_cb(const mbentry_t *mbentry, void *rock)
     int depth = 0;
     /* XXX - WSP_CHARS */
     for (i = 0; i < strarray_size(wantboxes); i++) {
+        const char *want;
+        const char *have;
+
         if (strarray_size(haveboxes) <= i)
             break;
-        const char *want = strarray_nth(wantboxes, i);
-        const char *have = strarray_nth(haveboxes, i);
+        want = strarray_nth(wantboxes, i);
+        have = strarray_nth(haveboxes, i);
         if (!fuzzyeq(want, have))
             break;
         depth = i+1;
@@ -477,7 +480,7 @@ done:
  */
 int deliver_mailbox(FILE *f,
                     struct message_content *content,
-                    struct stagemsg *stage,
+                    struct stagemsg *stagem,
                     unsigned size,
                     struct imap4flags *imap4flags,
                     struct entryattlist *annotations,
@@ -583,7 +586,7 @@ int deliver_mailbox(FILE *f,
             }
         }
 
-        r = append_fromstage_full(&as, &content->body, stage,
+        r = append_fromstage_full(&as, &content->body, stagem,
                                   internaldate, savedate, /*createdmodseq*/0,
                                   flags, !singleinstance, &annotations);
 
@@ -720,6 +723,7 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
     message_data_t *md = mydata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
     int ret = 1;
+    mbname_t *mbname;
 
     /* case 1: shared mailbox request */
     if (!mbname_userid(origmbname)) {
@@ -731,7 +735,7 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
                                0 /*savedate*/, quotaoverride, 0);
     }
 
-    mbname_t *mbname = mbname_dup(origmbname);
+    mbname = mbname_dup(origmbname);
 
     if (strarray_size(mbname_boxes(mbname))) {
         ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
@@ -756,9 +760,11 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
     }
 
     if (ret) {
+        struct auth_state *authstate;
+
         /* normal delivery to INBOX */
         mbname_truncate_boxes(mbname, 0);
-        struct auth_state *authstate = auth_newstate(mbname_userid(mbname));
+        authstate = auth_newstate(mbname_userid(mbname));
 
         ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
                               md->size, imap4flags, NULL,
@@ -852,6 +858,8 @@ int deliver(message_data_t *msgdata, char *authuser,
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
+	    /*  */ {
+		    
             struct sieve_interp_ctx ctx = { mbname_userid(mbname), NULL };
             sieve_interp_t *interp = setup_sieve(&ctx);
 
@@ -867,6 +875,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 #endif
             sieve_srs_free();
             sieve_interp_free(&interp);
+	    
+	    }
             /* if there was no sieve script, or an error during execution,
                r is non-zero and we'll do normal delivery */
 #else

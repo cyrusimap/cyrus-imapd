@@ -887,6 +887,9 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     struct entryattlist *user_annots = user_annotsp ? *user_annotsp : NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
+    uint32_t uid;
+    FILE *destfile;
+    int in_object_storage = 0;
 #if defined ENABLE_OBJECTSTORE
     int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 #endif
@@ -963,7 +966,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         mboxevent = mboxevent_enqueue(as->event_type, &as->mboxevents);
     }
 
-    uint32_t uid = as->baseuid + as->nummsg;
+    uid = as->baseuid + as->nummsg;
 
     /* we need to parse the record first */
     msgrec = msgrecord_new(mailbox);
@@ -1007,7 +1010,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     r = mailbox_copyfile(stagefile, fname, nolink);
     if (r) goto out;
 
-    FILE *destfile = fopen(fname, "r");
+    destfile = fopen(fname, "r");
     if (destfile) {
         /* this will hopefully ensure that the link() actually happened
            and makes sure that the file actually hits disk */
@@ -1034,7 +1037,6 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     }
 
     /* straight to archive? */
-    int in_object_storage = 0;
 #if defined ENABLE_OBJECTSTORE
 
     if (object_storage_enabled)
@@ -1254,6 +1256,8 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     strarray_t *flags = NULL;
     struct body *body = NULL;
     int r = 0;
+    uint32_t system_flags;
+    uint32_t user_flags[MAX_USER_FLAGS/32];
 
     if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
         return 0;
@@ -1287,7 +1291,6 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     if (r) goto out;
 
     /* Reset system flags */
-    uint32_t system_flags;
     r = msgrecord_get_systemflags(msgrec, &system_flags);
     if (!r) {
         system_flags &= (FLAG_SEEN);
@@ -1296,7 +1299,6 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     if (r) goto out;
 
     /* Reset user flags */
-    uint32_t user_flags[MAX_USER_FLAGS/32];
     memset(user_flags, 0, sizeof(user_flags));
     r = msgrecord_set_userflags(msgrec, user_flags);
     if (r) goto out;
@@ -1353,14 +1355,15 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
     char *srcfname = NULL;
     char *destfname = NULL;
     int object_storage_enabled = 0 ;
-#if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
-#endif
     int r = 0;
     int userflag;
     int i;
     struct mboxevent *mboxevent = NULL;
     msgrecord_t *dst_msgrec = NULL;
+
+#if defined ENABLE_OBJECTSTORE
+    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
 
     if (!msgrecs->count) {
         append_abort(as);
@@ -1378,6 +1381,11 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         uint32_t src_uid;
         uint32_t src_system_flags;
         uint32_t src_internal_flags;
+        uint32_t dst_system_flags, dst_internal_flags;
+        uint32_t dst_user_flags[MAX_USER_FLAGS/32];
+	uint32_t dst_uid;
+        const char *tmp;
+        annotate_state_t *astate = NULL;
 
         r = msgrecord_get_uid(src_msgrec, &src_uid);
         if (r) goto out;
@@ -1392,9 +1400,6 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         if (r) goto out;
 
         /* wipe out the bits that aren't magically copied */
-        uint32_t dst_system_flags, dst_internal_flags;
-        uint32_t dst_user_flags[MAX_USER_FLAGS/32];
-
         dst_msgrec = msgrecord_copy_msgrecord(as->mailbox, src_msgrec);
 
         /* clear savedate */
@@ -1424,7 +1429,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         if (r) goto out;
 
         /* renumber the message into the new mailbox */
-        uint32_t dst_uid = as->mailbox->i.last_uid + 1;
+        dst_uid = as->mailbox->i.last_uid + 1;
         r = msgrecord_set_uid(dst_msgrec, dst_uid);
         if (r) goto out;
         as->nummsg++;
@@ -1490,7 +1495,6 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         free(srcfname);
         free(destfname);
 
-        const char *tmp;
         r = msgrecord_get_fname(src_msgrec, &tmp);
         if (r) goto out;
         srcfname = xstrdup(tmp);
@@ -1521,7 +1525,6 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         /* ensure we have an astate connected to the destination
          * mailbox, so that the annotation txn will be committed
          * when we close the mailbox */
-        annotate_state_t *astate = NULL;
         r = mailbox_get_annotate_state(as->mailbox, dst_uid, &astate);
         if (r) goto out;
         r = annotate_msg_copy(mailbox, src_uid,

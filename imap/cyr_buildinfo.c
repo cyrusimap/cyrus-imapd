@@ -75,7 +75,7 @@ static void usage(void)
 }
 
 /* Gather the build configuration parameters as JSON object */
-static json_t *buildinfo()
+static json_t *buildinfo(void)
 {
     json_t *component = json_pack("{}");
     json_t *dependency = json_pack("{}");

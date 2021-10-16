@@ -48,6 +48,7 @@
 #include <config.h>
 
 #include <sysexits.h>
+#include "convert_code.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

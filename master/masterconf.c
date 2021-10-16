@@ -307,8 +307,8 @@ void masterconf_getsection(const char *section, masterconf_process *f,
         infile = fopen(MASTER_CONFIG_FILENAME, "r");
 
     if (!infile)
-        fatalf(EX_CONFIG, "can't open configuration file %s: %m",
-                MASTER_CONFIG_FILENAME);
+        fatalf(EX_CONFIG, "can't open configuration file %s: %s",
+                MASTER_CONFIG_FILENAME, strerror(errno));
 
     while (fgets(buf, sizeof(buf), infile)) {
         char *p, *q;

@@ -638,11 +638,13 @@ static int add_found_uid(const char *mboxname, uint32_t uidvalidity,
         bv_set(&folder->found_uids, uid);
         folder->found_dirty = 1;
         if (partids && !qr->is_excluded) {
+            strarray_t *have_partids;
+
             if (!folder->partids.size) {
                 if (!construct_hashu64_table(&folder->partids, 4096, 0))
                     return IMAP_INTERNAL;
             }
-            strarray_t *have_partids = hashu64_lookup(uid, &folder->partids);
+            have_partids = hashu64_lookup(uid, &folder->partids);
             if (have_partids) {
                 int i;
                 for (i = 0; i < strarray_size(partids); i++) {
@@ -665,6 +667,7 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
     search_builder_t *bx;
     struct subquery_rock qr;
     int r;
+    int opts;
 
     if (query->error) return;
 
@@ -674,7 +677,7 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
         free(s);
     }
 
-    int opts = SEARCH_VERBOSE(query->verbose);
+    opts = SEARCH_VERBOSE(query->verbose);
     if (query->multiple) opts |= SEARCH_MULTIPLE;
     if (query->attachments_in_any) opts |= SEARCH_ATTACHMENTS_IN_ANY;
 
@@ -689,8 +692,9 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
             child = child->next;
         }
         if (!child) {
-            excluded = search_expr_new(NULL, SEOP_OR);
             search_expr_t *dupl = search_expr_duplicate(sub->indexed);
+
+            excluded = search_expr_new(NULL, SEOP_OR);
             child = dupl->children;
             while (child) {
                 search_expr_t *expr = child->children;
@@ -772,6 +776,7 @@ static int subquery_run_one_folder(search_query_t *query,
     unsigned nmsgs = 0;
     unsigned *msgno_list = NULL;
     int r = 0;
+    modseq_t sincemodseq;
 
     if (query->verbose) {
         char *s = search_expr_serialise(e);
@@ -792,10 +797,10 @@ static int subquery_run_one_folder(search_query_t *query,
         goto out;
     }
 
-    modseq_t sincemodseq = _get_sincemodseq(e);
+    sincemodseq = _get_sincemodseq(e);
     if (sincemodseq) {
         struct statusdata sdata = STATUSDATA_INIT;
-        int r = status_lookup_mboxname(mboxname, query->state->userid,
+        r = status_lookup_mboxname(mboxname, query->state->userid,
                                        STATUS_HIGHESTMODSEQ, &sdata);
         // if unchangedsince, then we can skip the index query
         if (!r && sdata.highestmodseq <= sincemodseq) goto out;

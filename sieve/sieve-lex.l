@@ -60,9 +60,9 @@ static struct buf buf;   /* buffer for multi-line text and quoted strings */
 extern int encoded_char; /* used to receive encoded-char feedback from parser */
 
 static unsigned long long tonum(const char *str);
-static int decode_string(struct buf *buf);
-extern void sieveerror(sieve_script_t *, char *);
-extern void sieveerror_f(sieve_script_t *, char *fmt, ...);
+static int decode_string(struct buf *sbuf);
+extern void sieveerror(sieve_script_t *, const char *);/* XXX gak! public prototypes! */
+extern void sieveerror_f(sieve_script_t *, const char *fmt, ...);/* XXX gak! public prototypes! */
 %}
 
 %option yylineno
@@ -422,29 +422,29 @@ static unsigned long long tonum(const char *str)
 }
 
 /* convert unicode to sequence of UTF-8 characters */
-static size_t unicode_to_utf8(unsigned char buf[], unsigned int code)
+static size_t unicode_to_utf8(unsigned char ubuf[], unsigned int code)
 {
     if (code <= 0x7F) {
-        buf[0] = code;
+        ubuf[0] = code;
         return 1;
     }
     if (code <= 0x7FF) {
-        buf[0] = 0xC0 | (code >> 6);            /* 110xxxxx */
-        buf[1] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
+        ubuf[0] = 0xC0 | (code >> 6);            /* 110xxxxx */
+        ubuf[1] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
         return 2;
     }
     if (code < 0xE000 && code > 0xD7FF) return 0;
     if (code <= 0xFFFF) {
-        buf[0] = 0xE0 | (code >> 12);           /* 1110xxxx */
-        buf[1] = 0x80 | ((code >> 6) & 0x3F);   /* 10xxxxxx */
-        buf[2] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
+        ubuf[0] = 0xE0 | (code >> 12);           /* 1110xxxx */
+        ubuf[1] = 0x80 | ((code >> 6) & 0x3F);   /* 10xxxxxx */
+        ubuf[2] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
         return 3;
     }
     if (code <= 0x10FFFF) {
-        buf[0] = 0xF0 | (code >> 18);           /* 11110xxx */
-        buf[1] = 0x80 | ((code >> 12) & 0x3F);  /* 10xxxxxx */
-        buf[2] = 0x80 | ((code >> 6) & 0x3F);   /* 10xxxxxx */
-        buf[3] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
+        ubuf[0] = 0xF0 | (code >> 18);           /* 11110xxx */
+        ubuf[1] = 0x80 | ((code >> 12) & 0x3F);  /* 10xxxxxx */
+        ubuf[2] = 0x80 | ((code >> 6) & 0x3F);   /* 10xxxxxx */
+        ubuf[3] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
         return 4;
     }
     return 0;
@@ -465,12 +465,12 @@ static size_t unicode_to_utf8(unsigned char buf[], unsigned int code)
   WSP                  =  SP / HTAB 
   HEXDIG               =  DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
 */
-static int decode_string(struct buf *buf)
+static int decode_string(struct buf *sbuf)
 {
     static struct buf decode_buf = BUF_INITIALIZER;
     const char *cp, *enc_start;
 
-    for (cp = buf_cstring(buf); (enc_start = strstr(cp, "${")); ) {
+    for (cp = buf_cstring(sbuf); (enc_start = strstr(cp, "${")); ) {
         unsigned is_unicode = 0;
         size_t len;
 
@@ -537,13 +537,13 @@ static int decode_string(struct buf *buf)
 
         if ((len = buf_len(&decode_buf))) {
             /* replace the encoded string with its decoded value */
-            size_t offset = enc_start - buf_base(buf);
+            size_t offset = enc_start - buf_base(sbuf);
 
-            buf_remove(buf, offset, cp - enc_start + 1);
-            buf_insert(buf, offset, &decode_buf);
+            buf_remove(sbuf, offset, cp - enc_start + 1);
+            buf_insert(sbuf, offset, &decode_buf);
 
             /* buffer may have been reallocated - reposition our pointer */
-            cp = buf_cstring(buf) + offset + len;
+            cp = buf_cstring(sbuf) + offset + len;
         }
     }
 

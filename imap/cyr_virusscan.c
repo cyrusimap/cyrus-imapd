@@ -409,15 +409,18 @@ static void print_header(void)
 
 int scan_me(struct findall_data *data, void *rock)
 {
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
-
     struct mailbox *mailbox = NULL;
     int r;
     struct infected_mbox *i_mbox = NULL;
-    const char *name = mbname_intname(data->mbname);
-    const char *userid = mbname_userid(data->mbname);
     struct scan_rock *srock = (struct scan_rock *) rock;
+    const char *name;
+    const char *userid;
+
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
+
+    name = mbname_intname(data->mbname);
+    userid = mbname_userid(data->mbname);
 
     /* reset infected count when user changes, without choking
      * on shared mailboxes, which don't have a user. */
@@ -487,7 +490,7 @@ int scan_me(struct findall_data *data, void *rock)
     return 0;
 }
 
-void create_digest(struct infected_mbox *i_mbox, struct mailbox *mailbox,
+static void create_digest(struct infected_mbox *i_mbox, struct mailbox *mailbox,
                    const struct index_record *record, const char *virname)
 {
     struct infected_msg *i_msg = xzmalloc(sizeof(struct infected_msg));
@@ -541,12 +544,12 @@ unsigned virus_check(struct mailbox *mailbox,
     }
 
     if (r) {
-        /* print header if this is the first infection seen for this user */
-        if (verbose || !srock->user_infected) print_header();
-
         char *extname = mboxname_to_external(mailbox->name,
                                              srock->namespace,
                                              NULL);
+
+        /* print header if this is the first infection seen for this user */
+        if (verbose || !srock->user_infected) print_header();
 
         printf("%-40s\t%10u\t%6s\t%s\n", extname, record->uid,
                (record->system_flags & FLAG_SEEN) ? "READ" : "UNREAD",
@@ -573,13 +576,14 @@ static int load_notification_template(struct buf *dst)
     const char *template_fname =
         config_getstring(IMAPOPT_VIRUSSCAN_NOTIFICATION_TEMPLATE);
     int r;
+    int fd;
 
     if (!template_fname) {
         buf_setcstr(dst, default_notification_template);
         return 0;
     }
 
-    int fd = open(template_fname, O_RDONLY);
+    fd = open(template_fname, O_RDONLY);
     if (fd == -1) {
         syslog(LOG_WARNING, "unable to read notification template file %s (%m), "
                             "using default instead",
@@ -608,6 +612,7 @@ static int check_notification_template(const struct buf *template)
     size_t msgsize;
     size_t i;
     int r;
+    char *encoded_chunk;
 
     const char *subs[] = {
         "%MAILBOX%",
@@ -637,7 +642,7 @@ static int check_notification_template(const struct buf *template)
     buf_copy(&chunk, template);
     buf_tocrlf(&chunk);
     /* not bothering to perform substitutions */
-    char *encoded_chunk = charset_qpencode_mimebody(buf_base(&chunk),
+    encoded_chunk = charset_qpencode_mimebody(buf_base(&chunk),
                                                     buf_len(&chunk),
                                                     /* force_quote */ 0, NULL);
     fputs(encoded_chunk, f);
@@ -706,6 +711,7 @@ static void append_notifications(const struct buf *template)
             struct buf message = BUF_INITIALIZER;
             int first;
             int r;
+	    char *encoded_message;
 
             t = time(NULL);
             put_notification_headers(f, outgoing_count++, t, owner);
@@ -715,6 +721,8 @@ static void append_notifications(const struct buf *template)
                 struct buf chunk = BUF_INITIALIZER;
                 char uidbuf[16]; /* UINT32_MAX is 4294967295 */
                 int n;
+		mbname_t *mailbox;
+		const char *extname;
 
                 /* stringify the uid */
                 n = snprintf(uidbuf, sizeof(uidbuf), "%lu", msg->uid);
@@ -723,8 +731,8 @@ static void append_notifications(const struct buf *template)
                 buf_copy(&chunk, template);
                 buf_tocrlf(&chunk);
 
-                mbname_t *mailbox = mbname_from_intname(msg->mboxname);
-                const char *extname = mbname_extname(mailbox,
+                mailbox = mbname_from_intname(msg->mboxname);
+                extname = mbname_extname(mailbox,
                                                      &notification_namespace,
                                                      mbname_userid(owner));
                 buf_replace_all(&chunk, "%MAILBOX%", extname);
@@ -755,7 +763,7 @@ static void append_notifications(const struct buf *template)
                 free(msg);
             }
 
-            char *encoded_message = charset_qpencode_mimebody(
+            encoded_message = charset_qpencode_mimebody(
                                         buf_base(&message), buf_len(&message),
                                         /* force_quote */ 0, NULL);
             fputs(encoded_message, f);

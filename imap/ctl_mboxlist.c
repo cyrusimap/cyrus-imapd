@@ -189,13 +189,15 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
         break;
     case M_POPULATE:
     {
+        char *realpart;
+        int skip_flag = 0;
+
         if (mbentry->mbtype & MBTYPE_DELETED)
             return 0;
 
         /* realpart is 'hostname!partition' */
-        char *realpart =
+        realpart =
             strconcat(config_servername, "!", mbentry->partition, (char *)NULL);
-        int skip_flag = 0;
 
         /* If it is marked MBTYPE_MOVING, and it DOES match the entry,
          * we need to unmark it.  If it does not match the entry in our
@@ -412,6 +414,7 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
     struct dumprock d;
     int ret;
     char buf[8192];
+    int flags = MBOXTREE_TOMBSTONES;
 
     assert(op == DUMP || op == M_POPULATE);
     assert(op == DUMP || !purge);
@@ -461,7 +464,6 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
     }
 
     /* Dump Database */
-    int flags = MBOXTREE_TOMBSTONES;
     if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
     mboxlist_allmbox("", &dump_cb, &d, flags);
 
@@ -525,9 +527,11 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
 
         while (wipe_head) {
             struct mb_node *me = wipe_head;
+	    struct mboxlock *namespacelock;
+
             wipe_head = wipe_head->next;
 
-            struct mboxlock *namespacelock = mboxname_usernamespacelock(me->mailbox);
+            namespacelock = mboxname_usernamespacelock(me->mailbox);
 
             if (!mboxlist_delayed_delete_isenabled()) {
                 ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL,
@@ -802,12 +806,12 @@ static void do_verify(void)
 
         if (config_hashimapspool && (found.data[i].type & ROOT)) {
             /* need to add hashed directories */
-            int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
+            int config_fulldirhash2 = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
             char *tail;
             int j, c;
 
             /* make the toplevel partition /a */
-            if (config_fulldirhash) {
+            if (config_fulldirhash2) {
                 strcat(found.data[i].path, "/A");
                 c = 'B';
             } else {

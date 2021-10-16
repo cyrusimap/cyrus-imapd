@@ -348,8 +348,9 @@ EXPORTED void hash_enumerate_sorted(hash_table *table, void (*func)(const char *
                     void *rock, strarray_cmp_fn_t *cmp)
 {
     strarray_t *sa = hash_keys(table);
-    strarray_sort(sa, cmp);
     int i;
+
+    strarray_sort(sa, cmp);
     for (i = 0; i < strarray_size(sa); i++) {
         const char *key = strarray_nth(sa, i);
         void *val = hash_lookup(key, table);

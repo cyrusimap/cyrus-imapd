@@ -136,7 +136,7 @@ struct mboxlock *mboxname_usernamespacelock(const char *mboxname);
 /* Create namespace based on config options. */
 int mboxname_init_namespace(struct namespace *namespace, int isadmin);
 
-struct namespace *mboxname_get_adminnamespace();
+struct namespace *mboxname_get_adminnamespace(void);
 
 /* Return nonzero if 'userid' owns the (internal) mailbox 'name'. */
 int mboxname_userownsmailbox(const char *userid, const char *name);

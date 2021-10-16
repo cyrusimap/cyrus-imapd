@@ -112,4 +112,8 @@ int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
 /* ping a local slave */
 void kick_mupdate(void);
 
+/* --- prototypes for mupdate-slave.c */
+void *mupdate_client_start(void *rock);
+void *mupdate_placebo_kick_start(void *rock);
+
 #endif

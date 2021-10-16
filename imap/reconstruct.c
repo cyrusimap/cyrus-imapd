@@ -265,13 +265,15 @@ int main(int argc, char **argv)
         /* do any of the mailboxes exist in mboxlist already? */
         /* Do they look like mailboxes? */
         for (i = optind; i < argc; i++) {
+            char *intname;
+
             if (strchr(argv[i],'%') || strchr(argv[i],'*')) {
                 fprintf(stderr, "Using wildcards with -p is not supported.\n");
                 exit(EX_USAGE);
             }
 
             /* Translate mailboxname */
-            char *intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
+            intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
 
             /* Does it exist */
             do {
@@ -321,12 +323,13 @@ int main(int argc, char **argv)
     }
 
     for (i = optind; i < argc; i++) {
+        char *domain = NULL;
+
         if (dousers) {
             mboxlist_usermboxtree(argv[i], NULL, do_reconstruct_p, &rrock,
                                   MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
             continue;
         }
-        char *domain = NULL;
 
         /* save domain */
         if (config_virtdomains) domain = strchr(argv[i], '@');
@@ -355,7 +358,6 @@ int main(int argc, char **argv)
     /* examine our list to see if we discovered anything */
     while (rrock.discovered && rrock.discovered->count) {
         char *name = strarray_shift(rrock.discovered);
-        int r = 0;
 
         /* create p (database only) and reconstruct it */
         /* partition is defined by the parent mailbox */
@@ -435,13 +437,15 @@ static int do_reconstruct_p(const mbentry_t *mbentry, void *rock)
  */
 static int do_reconstruct(struct findall_data *data, void *rock)
 {
-    if (!data) return 0;
     struct reconstruct_rock *rrock = (struct reconstruct_rock *) rock;
+    char *extname;
     int r;
     char *other;
     struct mailbox *mailbox = NULL;
     char outpath[MAX_MAILBOX_PATH];
     const char *name = NULL;
+
+    if (!data) return 0;
 
     /* ignore intermediates */
     if ((data->mbentry->mbtype & MBTYPE_INTERMEDIATE))
@@ -495,7 +499,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     hash_insert(mailbox->uniqueid, xstrdup(mailbox->name), &unqid_table);
 
     /* Convert internal name to external */
-    char *extname = mboxname_to_external(name, &recon_namespace, NULL);
+    extname = mboxname_to_external(name, &recon_namespace, NULL);
     if (!(reconstruct_flags & RECONSTRUCT_QUIET))
         printf("%s\n", extname);
 
@@ -504,7 +508,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     if (setversion && setversion != mailbox->i.minor_version) {
         int oldversion = mailbox->i.minor_version;
         /* need to re-set the version! */
-        int r = mailbox_setversion(mailbox, setversion);
+        r = mailbox_setversion(mailbox, setversion);
         if (r) {
             printf("FAILED TO REPACK %s with new version %s\n", extname, error_message(r));
         }
@@ -535,6 +539,8 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         if (!dirp) return 0;
 
         while ((dirent = readdir(dirp)) != NULL) {
+            char buf[MAX_MAILBOX_NAME + MAXNAMLEN + 1];
+
             /* mailbox directories never have a dot in them */
             if (strchr(dirent->d_name, '.')) continue;
             if (stat(dirent->d_name, &sbuf) < 0) continue;
@@ -547,8 +553,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             if (stat(fnamebuf, &sbuf) < 0) continue;
 
             /* ok, we have a real mailbox directory */
-            char buf[MAX_MAILBOX_NAME];
-            snprintf(buf, MAX_MAILBOX_NAME, "%s.%s",
+            snprintf(buf, MAX_MAILBOX_NAME + MAXNAMLEN, "%s.%s",
                      name, dirent->d_name);
 
             /* does fnamebuf exist as a mailbox in mboxlist? */

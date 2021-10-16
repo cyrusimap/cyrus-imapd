@@ -55,7 +55,7 @@ char* notify_log(const char *class, const char *priority,
                  const char *fname __attribute__((unused)))
 {
     char opt_str[1024] = "";
-    char *sep = "";
+    const char *sep = "";
     int i;
 
     if (nopt) {

@@ -187,7 +187,7 @@ struct search_engine {
 };
 
 /* Returns the configured search engine */
-extern const struct search_engine *search_engine();
+extern const struct search_engine *search_engine(void);
 
 /*
  * Search for messages which could match the query built with the

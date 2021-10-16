@@ -117,6 +117,12 @@ static int verify_chunk_checksums(struct backup *backup, struct backup_chunk *ch
                                   struct gzuncat *gzuc, int verbose, FILE *out)
 {
     int r;
+    char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
+    char buf[8192]; /* FIXME whatever */
+    size_t len = 0;
+    SHA_CTX sha_ctx;
+    unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
+    char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
 
     if (out && verbose)
         fprintf(out, "checking chunk %d checksums...\n", chunk->id);
@@ -124,7 +130,6 @@ static int verify_chunk_checksums(struct backup *backup, struct backup_chunk *ch
     /* validate file-prior-to-this-chunk checksum */
     if (out && verbose > 1)
         fprintf(out, "  checking file checksum...\n");
-    char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
     sha1_file(backup->fd, backup->data_fname, chunk->offset, file_sha1);
     r = strncmp(chunk->file_sha1, file_sha1, sizeof(file_sha1));
     if (r) {
@@ -141,9 +146,6 @@ static int verify_chunk_checksums(struct backup *backup, struct backup_chunk *ch
     //       detect and correctly report case where this hasn't occurred.
     if (out && verbose > 1)
         fprintf(out, "  checking data length\n");
-    char buf[8192]; /* FIXME whatever */
-    size_t len = 0;
-    SHA_CTX sha_ctx;
     SHA1_Init(&sha_ctx);
     gzuc_member_start_from(gzuc, chunk->offset);
     while (!gzuc_member_eof(gzuc)) {
@@ -170,8 +172,6 @@ static int verify_chunk_checksums(struct backup *backup, struct backup_chunk *ch
 
     if (out && verbose > 1)
         fprintf(out, "  checking data checksum...\n");
-    unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
-    char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
     SHA1_Final(sha1_raw, &sha_ctx);
     r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, data_sha1, BH_LOWER);
     assert(r == 2 * SHA1_DIGEST_LENGTH);
@@ -219,6 +219,8 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
      * cause expensive reverse seeks in decompression stream
      */
     if (!vmrock->cached_dlist || vmrock->cached_offset != message->offset) {
+        struct protstream *ps;
+
         if (vmrock->cached_dlist) {
             dlist_unlink_files(vmrock->cached_dlist);
             dlist_free(&vmrock->cached_dlist);
@@ -227,7 +229,7 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
         r = gzuc_seekto(vmrock->gzuc, message->offset);
         if (r) return r;
 
-        struct protstream *ps = prot_readcb(_prot_fill_cb, vmrock->gzuc);
+        ps = prot_readcb(_prot_fill_cb, vmrock->gzuc);
         prot_setisclient(ps, 1); /* don't sync literals */
         r = parse_backup_line(ps, NULL, NULL, &dl);
 
@@ -475,6 +477,8 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
     struct backup_mailbox *mailbox = NULL;
     struct backup_mailbox_message *mailbox_message = NULL;
     int r;
+    struct protstream *ps;
+    struct buf cmd = BUF_INITIALIZER;
 
     if (out && verbose)
         fprintf(out, "checking chunk %d mailbox links...\n", chunk->id);
@@ -526,10 +530,9 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
                     chunk->id, chunk->offset, zError(r));
         goto done;
     }
-    struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
+    ps = prot_readcb(_prot_fill_cb, gzuc);
     prot_setisclient(ps, 1); /* don't sync literals */
 
-    struct buf cmd = BUF_INITIALIZER;
     while (1) {
         struct dlist *dl = NULL;
         struct dlist *record = NULL;

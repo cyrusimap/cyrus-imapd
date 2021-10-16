@@ -119,7 +119,7 @@ struct mboxlist_entry {
 
 typedef struct mboxlist_entry mbentry_t;
 
-mbentry_t *mboxlist_entry_create();
+mbentry_t *mboxlist_entry_create(void);
 
 char *mbentry_metapath(const struct mboxlist_entry *mbentry, int metatype, int isnew);
 char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t);

@@ -86,7 +86,7 @@ static int verbose = 0;
 static int lockfd = -1;
 static int newfile = 0;
 
-void notify_master(int fd, int msg)
+static void notify_master(int fd, int msg)
 {
     struct notify_message notifymsg;
     if (verbose) syslog(LOG_DEBUG, "telling master %x", msg);
@@ -304,6 +304,8 @@ int main(int argc, char **argv, char **envp)
     off_t start_size;
     time_t start_mtime;
 
+    extern const int config_need_data;
+
     /*
      * service_init and service_main need argv and argc, so they can process
      * service-specific options.  They need argv[0] to point into the real argv
@@ -397,7 +399,6 @@ int main(int argc, char **argv, char **envp)
     if (reuse_timeout)
         reuse_timeout = reuse_timeout + (rand() % reuse_timeout);
 
-    extern const int config_need_data;
     cyrus_init(alt_config, service, 0, config_need_data);
 
     if (call_debugger) {
@@ -566,7 +567,6 @@ int main(int argc, char **argv, char **envp)
                 struct sockaddr_storage from;
                 socklen_t fromlen;
                 char ch;
-                int r;
 
                 if (safe_wait_readable(LISTEN_FD) < 0)
                     continue;

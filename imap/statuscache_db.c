@@ -79,14 +79,17 @@ static int _initted = 0;
 
 static void statuscache_open(void)
 {
+    char *fname;
+    int r;
+
     if (!config_getswitch(IMAPOPT_STATUSCACHE))
         return;
 
-    char *fname = xstrdupnull(config_getstring(IMAPOPT_STATUSCACHE_DB_PATH));
+    fname = xstrdupnull(config_getstring(IMAPOPT_STATUSCACHE_DB_PATH));
     if (!fname)
         fname = strconcat(config_dir, FNAME_STATUSCACHEDB, (char *)NULL);
 
-    int r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
+    r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
     if (r) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
                cyrusdb_strerror(r));
@@ -99,9 +102,11 @@ static void statuscache_open(void)
 
 static void statuscache_close(void)
 {
+    int r;
+
     if (!statuscachedb) return;
 
-    int r = cyrusdb_close(statuscachedb);
+    r = cyrusdb_close(statuscachedb);
     if (r) {
         syslog(LOG_ERR, "DBERROR: error closing statuscache: %s",
               cyrusdb_strerror(r));
@@ -115,7 +120,7 @@ static void done_cb(void *rock __attribute__((unused)))
     statuscache_close();
 }
 
-static void init_internal()
+static void init_internal(void)
 {
     if (_initted) return;
     statuscache_open();
@@ -140,6 +145,10 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
     struct buf keybuf = BUF_INITIALIZER;
     const char *data = NULL;
     size_t datalen = 0;
+    int r;
+    const char *dend;
+    unsigned version;
+    char *p;
 
     /* Don't access DB if it hasn't been opened */
     if (!statuscachedb)
@@ -147,19 +156,19 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
 
     /* Check if there is an entry in the database */
     statuscache_buildkey(mboxname, NULL, &keybuf);
-    int r = cyrusdb_fetch(statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
+    r = cyrusdb_fetch(statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
     buf_free(&keybuf);
 
     if (r || !data || !datalen)
         return;
 
-    const char *dend = data + datalen;
+    dend = data + datalen;
 
-    char *p = (char *)data;
+    p = (char *)data;
     if (*p++ != 'I') return;
     if (*p++ != ' ') return;
 
-    unsigned version = (unsigned) strtoul(p, &p, 10);
+    version = (unsigned) strtoul(p, &p, 10);
     if (version != (unsigned) STATUSCACHE_VERSION) {
         /* Wrong version */
         return;
@@ -192,6 +201,11 @@ static void statuscache_read_seen(const char *mboxname, const char *userid,
     struct buf keybuf = BUF_INITIALIZER;
     const char *data = NULL;
     size_t datalen = 0;
+    int r;
+    const char *dend;
+    char *p;
+    unsigned version;
+    modseq_t highestmodseq;
 
     if (!userid)
         return;
@@ -215,18 +229,18 @@ static void statuscache_read_seen(const char *mboxname, const char *userid,
 
     /* Check if there is an entry in the database */
     statuscache_buildkey(mboxname, userid, &keybuf);
-    int r = cyrusdb_fetch(statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
+    r = cyrusdb_fetch(statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
     buf_free(&keybuf);
 
     if (r || !data || !datalen)
         return;
 
-    const char *dend = data + datalen;
-    char *p = (char *)data;
+    dend = data + datalen;
+    p = (char *)data;
     if (*p++ != 'S') return;
     if (*p++ != ' ') return;
 
-    unsigned version = (unsigned) strtoul(p, &p, 10);
+    version = (unsigned) strtoul(p, &p, 10);
     if (version != (unsigned) STATUSCACHE_VERSION) {
         /* Wrong version */
         return;
@@ -238,7 +252,7 @@ static void statuscache_read_seen(const char *mboxname, const char *userid,
     // read the matched items
     if (p < dend) sdata->recent = strtoul(p, &p, 10);
     if (p < dend) sdata->unseen = strtoul(p, &p, 10);
-    modseq_t highestmodseq = strtoull(p, &p, 10);
+    highestmodseq = strtoull(p, &p, 10);
 
     if (*p++ != ')') return;
 
@@ -344,6 +358,7 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
 {
     int doclose = 0;
     struct txn *tid = NULL;
+    int r;
 
     /* if it's disabled then skip */
     if (!config_getswitch(IMAPOPT_STATUSCACHE))
@@ -358,7 +373,7 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
         doclose = 1;
     }
 
-    int r = statuscache_store(mboxname, sdata, &tid);
+    r = statuscache_store(mboxname, sdata, &tid);
 
     if (!r) {
         cyrusdb_commit(statuscachedb, tid);
@@ -437,6 +452,8 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
         struct seqset *seq = NULL;
         int internalseen = mailbox_internal_seen(mailbox, userid);
         unsigned recentuid;
+	struct mailbox_iter *iter;
+        const message_t *msg;
 
         if (internalseen) {
             recentuid = mailbox->i.recentuid;
@@ -454,8 +471,7 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
             seen_freedata(&sd);
         }
 
-        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-        const message_t *msg;
+        iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
             if (record->uid > recentuid)

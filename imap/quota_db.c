@@ -74,7 +74,7 @@ HIDDEN struct db *qdb;
  * them to something more general and use them elsewhere */
 static struct mboxlock *qchangelock;
 
-static void init_internal();
+static void init_internal(void);
 
 static int quota_initialized = 0;
 static int quota_dbopen = 0;
@@ -391,7 +391,7 @@ EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
                   void *rock, struct txn **tid)
 {
     int r;
-    char *search = prefix ? (char *)prefix : "";
+    const char *search = prefix ? (char *)prefix : "";
     struct quota_foreach_t foreach_d;
 
     init_internal();
@@ -678,7 +678,8 @@ static void done_cb(void*rock __attribute__((unused)))
     quotadb_done();
 }
 
-static void init_internal() {
+static void init_internal(void)
+{
     if (!quota_initialized) {
         quotadb_init(0);
         quota_initialized = 1;

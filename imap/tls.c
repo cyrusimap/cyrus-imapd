@@ -176,7 +176,7 @@ EXPORTED int tls_enabled(void)
 
 static void apps_ssl_info_callback(const SSL * s, int where, int ret)
 {
-    char   *str;
+    const char   *str;
     int     w;
 
     if (var_imapd_tls_loglevel==0) return;
@@ -453,14 +453,21 @@ static int tls_dump(const char *s, int len)
 static int set_cert_stuff(SSL_CTX * ctx,
                           const char *cert_file, const char *key_file)
 {
-    if (!cert_file) return 1;
 
     int res = 0; // error state for any early exit
     int err;
-    char *cf1 = xstrdup(cert_file);
-    char *kf1 = xstrdup(key_file ? key_file : cert_file);
-    char *cf2 = strchr(cf1, ',');
-    char *kf2 = strchr(kf1, ',');
+    char *cf1;
+    char *kf1;
+    char *cf2;
+    char *kf2;
+
+    if (!cert_file) return 1;
+
+    cf1 = xstrdup(cert_file);
+    kf1 = xstrdup(key_file ? key_file : cert_file);
+    cf2 = strchr(cf1, ',');
+    kf2 = strchr(kf1, ',');
+
     /* SSL_CTX_use_certificate_chain_file() requires an empty error stack.
      * To make sure there is no error from previous op, we clear it here...
      */
@@ -745,6 +752,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     enum enum_value tls_client_certs;
     int server_cipher_order;
     int timeout;
+    int use_client_certs = 1;
+    const char *tls_versions = config_getstring(IMAPOPT_TLS_VERSIONS);
 
     if (ret) *ret = s_ctx;
 
@@ -754,7 +763,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
      * This is initially switched off by a value of "off" for the
      * tls_client_certs setting, or should no client_ca_dir nor
      * client_ca_file be specified. */
-    int use_client_certs = 1;
 
     if (tls_serverengine)
         return (0);                             /* already running */
@@ -780,11 +788,14 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     };
 
     off |= SSL_OP_ALL;            /* Work around all known bugs */
-    off |= SSL_OP_NO_SSLv2;       /* Disable insecure SSLv2 */
-    off |= SSL_OP_NO_SSLv3;       /* Disable insecure SSLv3 */
+#if 0
+    /* xxx this is stupid -- it is user configurable with tls_ciphers (was tls_cipher_list) */
+    if (tlsonly) {
+        off |= SSL_OP_NO_SSLv2;   /* Disable insecure SSLv2 */
+        off |= SSL_OP_NO_SSLv3;   /* Disable insecure SSLv3 */
+    }
+#endif
     off |= SSL_OP_NO_COMPRESSION; /* Disable TLS compression */
-
-    const char *tls_versions = config_getstring(IMAPOPT_TLS_VERSIONS);
 
     if (strstr(tls_versions, "tls1_3") == NULL) {
 #if (OPENSSL_VERSION_NUMBER >= 0x1010100fL)
@@ -899,8 +910,10 @@ EXPORTED int     tls_init_serverengine(const char *ident,
      * SSL/TLS on this server.
      */
     if (server_ca_file && !strcasecmp(server_cert_file, "disabled")) {
+        BIO *filebio;
+
         SSL_CTX_set_mode(s_ctx,SSL_CTX_get_mode(s_ctx) | SSL_MODE_NO_AUTO_CHAIN);
-        BIO *filebio = BIO_new_file(server_ca_file, "r");
+        filebio = BIO_new_file(server_ca_file, "r");
 
         if (filebio) {
             X509 *cacert;
@@ -956,6 +969,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 #endif
 
 #if (OPENSSL_VERSION_NUMBER >= 0x1000103fL)
+    /*  */ {
+	    
     const char *ec = config_getstring(IMAPOPT_TLS_ECCURVE);
     int openssl_nid = OBJ_sn2nid(ec);
     if (openssl_nid != 0) {
@@ -965,6 +980,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
             SSL_CTX_set_tmp_ecdh(s_ctx, ecdh);
             EC_KEY_free(ecdh);
         }
+    }
+    
     }
 #endif
 
@@ -1559,7 +1576,10 @@ HIDDEN int tls_init_clientengine(int verifydepth,
 
     off |= SSL_OP_ALL;            /* Work around all known bugs */
     off |= SSL_OP_NO_SSLv2;       /* Disable insecure SSLv2 */
+#if 0
+    /* xxx there is no sense in doing this -- it just blocks access to legacy servers */
     off |= SSL_OP_NO_SSLv3;       /* Disable insecure SSLv3 */
+#endif
     off |= SSL_OP_NO_COMPRESSION; /* Disable TLS compression */
 
     SSL_CTX_set_options(c_ctx, off);

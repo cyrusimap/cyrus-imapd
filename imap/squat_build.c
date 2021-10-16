@@ -454,11 +454,11 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
 
     if (options != NULL &&
         (options->option_mask & SQUAT_OPTION_VALID_CHARS) != 0) {
-        int i;
+        int j;
 
         memset(index->valid_char_bits, 0, sizeof(index->valid_char_bits));
-        for (i = 0; options->valid_chars[i] != 0; i++) {
-            int ch = (unsigned char)options->valid_chars[i];
+        for (j = 0; options->valid_chars[j] != 0; j++) {
+            int ch = (unsigned char)options->valid_chars[j];
 
             index->valid_char_bits[ch >> 3] |= 1 << (ch & 7);
         }
@@ -936,20 +936,20 @@ static int write_words(SquatIndex *index, SquatWriteBuffer *b,
                    the performance of the entire indexer. That's why we need
                    the valid_entry fields! */
                 SquatWordTableLeafPresence *p = e->leaf_presence;
-                int i;
+                int x;
                 int last_byte = p->last_valid_entry >> 3;
 
-                for (i = p->first_valid_entry >> 3; i <= last_byte; i++) {
-                    if ((unsigned)i >= VECTOR_SIZE(p->presence)) {
+                for (x = p->first_valid_entry >> 3; x <= last_byte; x++) {
+                    if ((unsigned)x >= VECTOR_SIZE(p->presence)) {
                         return SQUAT_ERR;
                     } else {
-                        int bits = (unsigned char)p->presence[i];
+                        int bits = (unsigned char)p->presence[x];
                         int j;
 
                         for (j = 0; bits > 0; j++, bits >>= 1) {
                             if ((bits & 1) != 0) {
                                 /* Output a word for each bit that is set */
-                                word[1] = (char)(i * 8 + j);
+                                word[1] = (char)(x * 8 + j);
                                 if (output_word
                                     (b,
                                      word - (SQUAT_WORD_SIZE - 3)) !=

@@ -53,7 +53,7 @@
 #include "sieve/sieve_interface.h"
 #include "sieve/bytecode.h"
 
-extern void sieveerror_c(sieve_script_t *parse_script, int code, ...);
+extern void sieveerror_c(sieve_script_t *parse_script, int code, ...); /* XXX gak! */
 
 static void init_comptags(comp_t *c)
 {

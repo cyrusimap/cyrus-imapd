@@ -158,18 +158,18 @@ struct protocol_t;
 
 struct banner_t {
     u_char is_capa;     /* banner is capability response */
-    char *resp;         /* end of banner response */
+    const char *resp;         /* end of banner response */
     void *(*parse_banner)(char *str);
                         /* [OPTIONAL] parse banner, returns 'rock' */
 };
 
 struct capa_cmd_t {
-    char *cmd;          /* capability command string (NULL = no capa cmd) */
-    char *resp;         /* end of capability response */
-    char *tls;          /* [OPTIONAL] TLS capability string */
-    char *login;        /* [OPTIONAL] plaintext login cmd capability string */
-    char *auth;         /* [OPTIONAL] AUTH (SASL) capability string */
-    char *compress;     /* [OPTIONAL] COMPRESS capability string */
+    const char *cmd;          /* capability command string (NULL = no capa cmd) */
+    const char *resp;         /* end of capability response */
+    const char *tls;          /* [OPTIONAL] TLS capability string */
+    const char *login;        /* [OPTIONAL] plaintext login cmd capability string */
+    const char *auth;         /* [OPTIONAL] AUTH (SASL) capability string */
+    const char *compress;     /* [OPTIONAL] COMPRESS capability string */
     void (*parse_mechlist)(struct buf *list, const char *str,
                            struct protocol_t *prot, unsigned long *capabilities);
                         /* [OPTIONAL] parse capability string,
@@ -177,22 +177,22 @@ struct capa_cmd_t {
 };
 
 struct tls_cmd_t {
-    char *cmd;          /* tls command string */
-    char *ok;           /* start tls prompt */
-    char *fail;         /* failure response */
+    const char *cmd;          /* tls command string */
+    const char *ok;           /* start tls prompt */
+    const char *fail;         /* failure response */
     u_char auto_capa;   /* capability response sent automatically after TLS */
 };
 
 struct sasl_cmd_t {
-    char *cmd;          /* auth command string */
+    const char *cmd;          /* auth command string */
     u_short maxlen;     /* maximum command line length,
                            (0 = initial response unsupported by protocol) */
     u_char quote;       /* quote arguments (literal for base64 data) */
-    char *ok;           /* success response string */
-    char *fail;         /* failure response string */
-    char *cont;         /* continue response string
+    const char *ok;           /* success response string */
+    const char *fail;         /* failure response string */
+    const char *cont;         /* continue response string
                            (NULL = send/receive literals) */
-    char *cancel;       /* cancel auth string */
+    const char *cancel;       /* cancel auth string */
     char *(*parse_success)(char *str);
                         /* [OPTIONAL] parse response for success data */
     u_char auto_capa;   /* capability response sent automatically
@@ -200,20 +200,20 @@ struct sasl_cmd_t {
 };
 
 struct compress_cmd_t {
-    char *cmd;          /* compress command string */
-    char *ok;           /* success response string */
-    char *fail;         /* failure response string */
+    const char *cmd;          /* compress command string */
+    const char *ok;           /* success response string */
+    const char *fail;         /* failure response string */
 };
 
 struct logout_cmd_t {
-    char *cmd;          /* logout command string */
-    char *resp;         /* logout response */
+    const char *cmd;          /* logout command string */
+    const char *resp;         /* logout response */
 };
 
 struct protocol_t {
-    char *protocol;     /* protocol service name */
-    char *sprotocol;    /* SSL-wrapped service name (NULL = unsupported) */
-    char *service;      /* SASL service name */
+    const char *protocol;     /* protocol service name */
+    const char *sprotocol;    /* SSL-wrapped service name (NULL = unsupported) */
+    const char *service;      /* SASL service name */
     int login_enabled;  /* [OPTIONAL] login command on/off by default;
                            toggled by capability string */
     struct banner_t banner;
@@ -222,11 +222,11 @@ struct protocol_t {
     struct sasl_cmd_t sasl_cmd;
     struct compress_cmd_t compress_cmd;
     int (*do_auth)(struct sasl_cmd_t *sasl_cmd, void *rock,
-                   int login_enabled, char *mech, const char *mechlist);
+                   int login_enabled, const char *mech, const char *mechlist);
                         /* [OPTIONAL] perform protocol-specific authentication;
                            based on rock, login_enabled, mech, mechlist */
     struct logout_cmd_t logout_cmd;
-    char *unauth_cmd;
+    const char *unauth_cmd;
 
     /* these 3 are used for maintaining connection state */
     void *(*init_conn)(void); /* generate a context (if needed). This context
@@ -423,7 +423,7 @@ static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
 
 static void apps_ssl_info_callback(const SSL * s, int where, int ret)
 {
-    char   *str;
+    const char   *str;
     int     w;
 
     if (verbose==0) return;
@@ -471,8 +471,8 @@ static int tls_rand_init(void)
 }
 
 
-static char *var_tls_CAfile="";
-static char *var_tls_CApath="";
+static const char *var_tls_CAfile="";
+static const char *var_tls_CApath="";
 /*
  * This is the setup routine for the SSL client.
  *
@@ -483,10 +483,10 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
 {
     int     off = 0;
     int     verify_flags = SSL_VERIFY_NONE;
-    char   *CApath;
-    char   *CAfile;
-    char   *c_cert_file;
-    char   *c_key_file;
+    const char   *CApath;
+    const char   *CAfile;
+    const char   *c_cert_file;
+    const char   *c_key_file;
 
 
     if (verbose==1)
@@ -748,7 +748,7 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
     return IMTEST_OK;
 }
 
-static void do_starttls(int ssl, char *keyfile, unsigned *ssf)
+static void do_starttls(int ssl, const char *keyfile, unsigned *ssf)
 {
     int result;
     char *auth_id;
@@ -788,6 +788,8 @@ static void do_starttls(int ssl, char *keyfile, unsigned *ssf)
         imtest_fatal("Error setting SASL property (external auth_id)");
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+    /*  */ {
+	    
     static unsigned char finished[EVP_MAX_MD_SIZE];
     static struct sasl_channel_binding cbinding;
 
@@ -806,6 +808,8 @@ static void do_starttls(int ssl, char *keyfile, unsigned *ssf)
     result = sasl_setprop(conn, SASL_CHANNEL_BINDING, &cbinding);
     if (result!=SASL_OK)
         imtest_fatal("Error setting SASL property (channel binding)");
+    
+    }
 #endif /* (OPENSSL_VERSION_NUMBER >= 0x0090800fL) */
 
     prot_settls (pin,  tls_conn);
@@ -833,7 +837,7 @@ static sasl_security_properties_t *make_secprops(int min,int max)
 /*
  * Initialize SASL and set necessary options
  */
-static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
+static int init_sasl(const char *service, char *serverFQDN, int minssf, int maxssf,
                      unsigned flags)
 {
     int saslresult;
@@ -937,7 +941,7 @@ static imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linel
         if (p >= str && *p == '\r') *p-- = '\0';
 
         /* alloc space for decoded response */
-        len = strlen(str) + 1;
+        len = strlen(str) + 1;		/* XXX horrible assumption! */
         *line = malloc(len);
         if ((*line) == NULL) {
             return STAT_NO;
@@ -1027,7 +1031,7 @@ static void fillin_interactions(sasl_interact_t *tlist)
 
 }
 
-static char *waitfor(char *tag, char *tag2, int echo)
+static char *waitfor(const char *tag, const char *tag2, int echo)
 {
     static char str[1024];
 
@@ -1273,6 +1277,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
     int fd = 0, fd_out = 1, listen_sock = -1;
     void *rock = NULL;
     int donewritingfile = 0;
+    int unauth = 0;
 
     struct sockaddr_un sunsock;
     int salen;
@@ -1361,7 +1366,6 @@ static void interactive(struct protocol_t *protocol, char *filename)
     signal(SIGINT, sigint_handler);
 
     /* loop reading from network and from stdin as applicable */
-    int unauth = 0;
     while (1) {
         rset = read_set;
         wset = write_set;
@@ -1562,7 +1566,8 @@ static struct buf *ask_capability(struct protocol_t *prot,
                                   unsigned long *capabilities, int automatic)
 {
     char str[1024] = "";
-    char *tmp, *resp;
+    char *tmp;
+    const char *resp;
     static struct buf ret = BUF_INITIALIZER;
 
     buf_reset(&ret);
@@ -1745,20 +1750,20 @@ static int auth_imap(void)
 {
     char str[1024];
     /* we need username and password to do "login" */
-    char *username;
+    char *usernm;
     unsigned int userlen;
     char *pass;
     unsigned int passlen;
-    char *tag = "L01 ";
+    const char *tag = "L01 ";
 
     str[0] = '\0';
 
-    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
-    interaction(SASL_CB_PASS, NULL, "Please enter your password",
+    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &usernm, &userlen);
+    interaction(SASL_CB_PASS, NULL, "Please enter your IMAP password",
                 &pass, &passlen);
 
-    printf("C: %sLOGIN %s {%d}\r\n", tag, username, passlen);
-    prot_printf(pout,"%sLOGIN %s {%d}\r\n", tag, username, passlen);
+    printf("C: %sLOGIN %s {%d}\r\n", tag, usernm, passlen);
+    prot_printf(pout,"%sLOGIN %s {%d}\r\n", tag, usernm, passlen);
     prot_flush(pout);
 
     if (!strncmp(waitfor("+", tag, 1), "+", 1)) {
@@ -1784,7 +1789,7 @@ static int auth_imap(void)
 static int imap_do_auth(struct sasl_cmd_t *sasl_cmd,
                         void *rock __attribute__((unused)),
                         int login_enabled,
-                        char *mech, const char *mechlist)
+                        const char *mech, const char *mechlist)
 {
     int result = IMTEST_FAIL;
 
@@ -1793,17 +1798,21 @@ static int imap_do_auth(struct sasl_cmd_t *sasl_cmd,
             if (!login_enabled) {
                 printf("[Server advertised LOGINDISABLED]\n");
             } else {
+                printf("imap_do_auth(): mech == '%s', calling auth_imap()\n", mech);
                 result = auth_imap();
             }
         } else if (!mechlist || !stristr(mechlist, mech)) {
-            printf("[Server did not advertise AUTH=%s]\n", ucase(mech));
+            printf("[Server did not advertise AUTH=%s]\n", mech);
         } else {
+	    printf("imap_do_auth(): mech == '%s', calling auth_sasl()\n", mech);
             result = auth_sasl(sasl_cmd, mech);
         }
     } else {
         if (mechlist) {
+	    printf("imap_do_auth(): !mech, mechlist='%s', calling auth_sasl()\n", mechlist);
             result = auth_sasl(sasl_cmd, mechlist);
         } else if (login_enabled) {
+	    printf("imap_do_auth(): !mech, !mechlist, calling auth_imap()\n");
             result = auth_imap();
         }
     }
@@ -1921,7 +1930,7 @@ Message-Id: <B27397-0100000@Blurdybloop.COM>\r\n \
 MIME-Version: 1.0\r\n \
 Content-Type: TEXT/PLAIN; CHARSET=US-ASCII\r\n\r\n"
 
-static int append_msg(char *mbox, int size)
+static int append_msg(const char *mbox, int size)
 {
     int lup;
 
@@ -1955,7 +1964,7 @@ static int append_msg(char *mbox, int size)
 
 static void send_recv_test(void)
 {
-    char *mboxname="inbox.imtest";
+    const char *mboxname="inbox.imtest";
     time_t start, end;
     int lup;
 
@@ -2012,15 +2021,15 @@ static int auth_pop(void)
 {
     char str[1024];
     /* we need username and password to do USER/PASS */
-    char *username;
+    char *usernm;
     unsigned int userlen;
     char *pass;
     unsigned int passlen;
 
-    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
+    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &usernm, &userlen);
 
-    printf("C: USER %s\r\n", username);
-    prot_printf(pout,"USER %s\r\n", username);
+    printf("C: USER %s\r\n", usernm);
+    prot_printf(pout,"USER %s\r\n", usernm);
     prot_flush(pout);
 
     if (prot_fgets(str, 1024, pin) == NULL) {
@@ -2031,7 +2040,7 @@ static int auth_pop(void)
 
     if (strncasecmp(str, "+OK", 3)) return IMTEST_FAIL;
 
-    interaction(SASL_CB_PASS, NULL, "Please enter your password",
+    interaction(SASL_CB_PASS, NULL, "Please enter your POP password",
                 &pass, &passlen);
 
     printf("C: PASS <omitted>\r\n");
@@ -2055,7 +2064,7 @@ static int auth_apop(char *apop_chal)
 {
     char str[1024];
     /* we need username and password to do "APOP" */
-    char *username;
+    char *usernm;
     unsigned int userlen;
     char *pass;
     unsigned int passlen;
@@ -2064,8 +2073,8 @@ static int auth_apop(char *apop_chal)
     unsigned char digest[MD5_DIGEST_LENGTH];
     char digeststr[2*MD5_DIGEST_LENGTH+1];
 
-    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
-    interaction(SASL_CB_PASS,NULL, "Please enter your password",
+    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &usernm, &userlen);
+    interaction(SASL_CB_PASS,NULL, "Please enter your APOP password",
                 &pass, &passlen);
 
     MD5Init(&ctx);
@@ -2077,8 +2086,8 @@ static int auth_apop(char *apop_chal)
     for (i = 0; i < 16; i++)
         sprintf(digeststr + (i*2), "%02x", digest[i]);
 
-    printf("C: APOP %s %s\r\n", username, digeststr);
-    prot_printf(pout,"APOP %s %s\r\n", username, digeststr);
+    printf("C: APOP %s %s\r\n", usernm, digeststr);
+    prot_printf(pout,"APOP %s %s\r\n", usernm, digeststr);
     prot_flush(pout);
 
     if(prot_fgets(str, 1024, pin) == NULL) {
@@ -2095,7 +2104,7 @@ static int auth_apop(char *apop_chal)
 }
 
 static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *apop_chal,
-                        int user_enabled, char *mech, const char *mechlist)
+                        int user_enabled, const char *mech, const char *mechlist)
 {
     int result = IMTEST_FAIL;
 
@@ -2132,19 +2141,19 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *apop_chal,
 
 /********************************** NNTP *************************************/
 
-static int auth_nntp()
+static int auth_nntp(void)
 {
     char str[1024];
     /* we need username and password to do AUTHINFO USER/PASS */
-    char *username;
+    char *usernm;
     unsigned int userlen;
     char *pass;
     unsigned int passlen;
 
-    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
+    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &usernm, &userlen);
 
-    printf("C: AUTHINFO USER %s\r\n", username);
-    prot_printf(pout,"AUTHINFO USER %s\r\n", username);
+    printf("C: AUTHINFO USER %s\r\n", usernm);
+    prot_printf(pout,"AUTHINFO USER %s\r\n", usernm);
     prot_flush(pout);
 
     if (prot_fgets(str, 1024, pin) == NULL) {
@@ -2154,7 +2163,7 @@ static int auth_nntp()
     printf("S: %s", str);
 
     if (!strncmp(str, "381", 3)) {
-        interaction(SASL_CB_PASS, NULL, "Please enter your password",
+        interaction(SASL_CB_PASS, NULL, "Please enter your NNTP password",
                     &pass, &passlen);
 
         printf("C: AUTHINFO PASS <omitted>\r\n");
@@ -2177,7 +2186,7 @@ static int auth_nntp()
 
 static int nntp_do_auth(struct sasl_cmd_t *sasl_cmd,
                         void *rock __attribute__((unused)),
-                        int user_enabled, char *mech, const char *mechlist)
+                        int user_enabled, const char *mech, const char *mechlist)
 {
     int result = IMTEST_OK;
 
@@ -2190,7 +2199,7 @@ static int nntp_do_auth(struct sasl_cmd_t *sasl_cmd,
                 result = auth_nntp();
             }
         } else if (!mechlist || !stristr(mechlist, mech)) {
-            printf("[Server did not advertise SASL %s]\n", ucase(mech));
+            printf("[Server did not advertise SASL %s]\n", mech);
             result = IMTEST_FAIL;
         } else {
             result = auth_sasl(sasl_cmd, mech);
@@ -2224,7 +2233,7 @@ static char *nntp_parse_success(char *str)
 static int xmtp_do_auth(struct sasl_cmd_t *sasl_cmd,
                         void *rock __attribute__((unused)),
                         int login_enabled __attribute__((unused)),
-                        char *mech, const char *mechlist)
+                        const char *mech, const char *mechlist)
 {
     int result = IMTEST_OK;
 
@@ -2343,7 +2352,7 @@ static void http_parse_mechlist(struct buf *ret, const char *str,
                                 struct protocol_t *prot __attribute__((unused)),
                                 unsigned long *capabilities)
 {
-    char *scheme;
+    const char *scheme;
     size_t len;
 
     scheme = strchr(str, ':');
@@ -2372,9 +2381,9 @@ static int auth_http_basic(const char *servername)
 {
     char str[1024];
     /* we need username and password to do HTTP Basic */
-    char *authname;
+    char *authnm;
     unsigned int authlen;
-    char *username;
+    char *usernm;
     unsigned int userlen;
     char *pass;
     unsigned int passlen;
@@ -2382,24 +2391,24 @@ static int auth_http_basic(const char *servername)
     int credslen;
     char *resp;
 
-    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &authname, &authlen);
-    interaction(SASL_CB_USER, NULL, "Username", &username, &userlen);
-    interaction(SASL_CB_PASS, NULL, "Please enter your password",
+    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &authnm, &authlen);
+    interaction(SASL_CB_USER, NULL, "Username", &usernm, &userlen);
+    interaction(SASL_CB_PASS, NULL, "Please enter your HTTP password",
                 &pass, &passlen);
 
-    snprintf(str, sizeof(str), "%s:%s", authname, pass);
+    snprintf(str, sizeof(str), "%s:%s", authnm, pass);
     if (sasl_encode64(str, strlen(str), creds, sizeof(creds),
                       (unsigned *) &credslen) != SASL_OK) {
         return IMTEST_FAIL;
     }
 
     print_command(HTTP_OPTIONS, servername);
-    if (username && *username) printf("Authorize-As: %s\r\nC: ", username);
+    if (usernm && *usernm) printf("Authorize-As: %s\r\nC: ", usernm);
     printf("Authorization: Basic %.*s\r\nC: \r\n", credslen, creds);
 
     prot_printf(pout, HTTP_OPTIONS, servername);
-    if (username && *username)
-        prot_printf(pout, "Authorize-As: %s\r\n", username);
+    if (usernm && *usernm)
+        prot_printf(pout, "Authorize-As: %s\r\n", usernm);
     prot_printf(pout, "Authorization: Basic %.*s\r\n", credslen, creds);
     prot_puts(pout, "\r\n");
     prot_flush(pout);
@@ -2425,9 +2434,9 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
     int inlen;
     const char *mechusing;
     char buf[BASE64_BUF_SIZE+1], *base64 = buf;
-    int initial_response = 1, do_base64 = 1, use_params = 0;;
+    int initial_response = 1, do_base64 = 1, use_params = 0;
     imt_stat status;
-    char *username;
+    char *usernm;
     unsigned int userlen;
 
 #ifdef SASL_HTTP_REQUEST
@@ -2440,7 +2449,7 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
     sasl_setprop(conn, SASL_HTTP_REQUEST, &httpreq);
 #endif
 
-    interaction(SASL_CB_USER, NULL, "Username", &username, &userlen);
+    interaction(SASL_CB_USER, NULL, "Usernm", &usernm, &userlen);
 
     do { /* start authentication */
         saslresult = sasl_client_start(conn, mechlist, &client_interact,
@@ -2468,12 +2477,12 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
     do {
         /* build the auth command */
         print_command(HTTP_OPTIONS, servername);
-        if (username && *username) printf("Authorize-As: %s\r\nC: ", username);
+        if (usernm && *usernm) printf("Authorize-As: %s\r\nC: ", usernm);
         printf("Authorization: %s", mechusing);
 
         prot_printf(pout, HTTP_OPTIONS, servername);
-        if (username && *username)
-            prot_printf(pout, "Authorize-As: %s\r\n", username);
+        if (usernm && *usernm)
+            prot_printf(pout, "Authorize-As: %s\r\n", usernm);
         prot_printf(pout, "Authorization: %s", mechusing);
 
         if (out) { /* response */
@@ -2650,7 +2659,7 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
 
 static int http_do_auth(struct sasl_cmd_t *sasl_cmd __attribute__((unused)),
                         void *servername, int basic_enabled,
-                        char *mech, const char *mechlist)
+                        const char *mech, const char *mechlist)
 {
     int result = IMTEST_OK;
 
@@ -2667,7 +2676,7 @@ static int http_do_auth(struct sasl_cmd_t *sasl_cmd __attribute__((unused)),
             else if (!strcasecmp(mech, "negotiate")) mech = "GSS-SPNEGO";
 
             if (!mechlist || !stristr(mechlist, mech)) {
-                printf("[Server did not advertise HTTP %s]\n", ucase(mech));
+                printf("[Server did not advertise HTTP %s]\n", mech);
                 result = IMTEST_FAIL;
             } else {
                 result = auth_http_sasl(servername, mech);
@@ -2687,7 +2696,7 @@ static int http_do_auth(struct sasl_cmd_t *sasl_cmd __attribute__((unused)),
 /*****************************************************************************/
 
 /* didn't give correct parameters; let's exit */
-static void usage(char *prog, char *prot)
+static void usage(const char *prog, const char *prot)
 {
     printf("Usage: %s [options] hostname\n", prog);
     printf("  -p port  : port to use (default=standard port for protocol)\n");
@@ -2857,8 +2866,9 @@ int main(int argc, char **argv)
 #endif
 
     char *prog;
-    char *tls_keyfile WITH_SSL_ONLY = "";
-    char *port = "", *prot = "";
+    const char *tls_keyfile WITH_SSL_ONLY = "";
+    char *port = "";
+    const char *prot = "";
     int run_stress_test=0;
     int dotls WITH_SSL_ONLY = 0, dossl = 0, docompress WITH_ZLIB_ONLY = 0;
     unsigned long capabilities = 0;
@@ -3214,7 +3224,7 @@ int main(int argc, char **argv)
         result = sasl_getprop(conn, SASL_SSF, &ssfp);
         ssf = *((sasl_ssf_t *) ssfp);
         if (result != SASL_OK) {
-            printf("SSF: unable to determine (SASL ERROR %d)\n", result);
+	    fprintf(stderr, "SSF: unable to determine (SASL ERROR %d:%s)\n", result, sasl_errstring(result, NULL, NULL));
         } else {
             printf("Security strength factor: %d\n", ext_ssf + ssf);
 

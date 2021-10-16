@@ -49,6 +49,9 @@ typedef struct msgrecord msgrecord_t;
 struct mailbox;
 
 extern int msgrecord_find(struct mailbox *mbox, uint32_t uid, msgrecord_t **mr);
+#if 0
+extern int msgrecord_find_latest(struct mailbox *mbox, msgrecord_t **mr);
+#endif
 extern int msgrecord_find_index_record(struct mailbox *mbox, struct index_record record,
                                        msgrecord_t **mrp);
 extern int msgrecord_append(msgrecord_t *mr);

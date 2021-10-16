@@ -111,14 +111,15 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
 static int _index_expunge(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing EXPUNGE at " OFF_T_FMT "...\n", dl_offset);
-
     const char *mboxname;
+    mbname_t *mbname;
     const char *uniqueid;
     struct dlist *uidl;
     struct dlist *di;
     struct backup_mailbox *mailbox = NULL;
     int r = 0;
+
+    syslog(LOG_DEBUG, "indexing EXPUNGE at " OFF_T_FMT "...\n", dl_offset);
 
     if (!dlist_getatom(dl, "MBOXNAME", &mboxname))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -127,7 +128,7 @@ static int _index_expunge(struct backup *backup, struct dlist *dl,
     if (!dlist_getlist(dl, "UID", &uidl))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    mbname_t *mbname = mbname_from_intname(mboxname);
+    mbname = mbname_from_intname(mboxname);
     mailbox = backup_get_mailbox_by_name(backup, mbname, 0);
     mbname_free(&mbname);
 
@@ -184,8 +185,6 @@ static int _get_magic_flags(struct dlist *flags, int *is_expunged)
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing MAILBOX at " OFF_T_FMT "...\n", dl_offset);
-
     const char *uniqueid = NULL;
     const char *mboxname = NULL;
     const char *mboxtype = NULL;
@@ -207,6 +206,8 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
     struct buf annotations_buf = BUF_INITIALIZER;
     struct dlist *record = NULL;
     int r;
+
+    syslog(LOG_DEBUG, "indexing MAILBOX at " OFF_T_FMT "...\n", dl_offset);
 
     if (!dlist_getatom(dl, "UNIQUEID", &uniqueid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -253,6 +254,8 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         dlist_printbuf(annotations, 0, &annotations_buf);
     }
 
+    /*  */ {
+	    
     struct sqldb_bindval mbox_bval[] = {
         { ":last_chunk_id",     SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
         { ":uniqueid",          SQLITE_TEXT,    { .s = uniqueid } },
@@ -293,6 +296,8 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         syslog(LOG_DEBUG, "%s: something went wrong: %i update %s\n",
                           __func__, r, mboxname);
     }
+    
+    }
 
     buf_free(&annotations_buf);
 
@@ -310,8 +315,8 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
             struct buf flags_buf = BUF_INITIALIZER;
             uint32_t internaldate;
             const char *guid;
-            struct dlist *annotations = NULL;
-            struct buf annotations_buf = BUF_INITIALIZER;
+            struct dlist *annotations2 = NULL;
+            struct buf annotations2_buf = BUF_INITIALIZER;
             int message_id = -1;
             time_t expunged = 0;
 
@@ -359,11 +364,13 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                                   __func__, guid, buf_cstring(&flags_buf));
             }
 
-            dlist_getlist(ki, "ANNOTATIONS", &annotations);
-            if (annotations) {
-                dlist_printbuf(annotations, 0, &annotations_buf);
+            dlist_getlist(ki, "ANNOTATIONS", &annotations2);
+            if (annotations2) {
+                dlist_printbuf(annotations2, 0, &annotations2_buf);
             }
 
+	    /*  */ {
+		    
             struct sqldb_bindval record_bval[] = {
                 { ":mailbox_id",        SQLITE_INTEGER, { .i = mailbox_id } },
                 { ":message_id",        SQLITE_INTEGER, { .i = message_id } },
@@ -373,7 +380,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                 { ":last_updated",      SQLITE_INTEGER, { .i = last_updated } },
                 { ":flags",             SQLITE_TEXT,    { .s = buf_cstring(&flags_buf) } },
                 { ":internaldate",      SQLITE_INTEGER, { .i = internaldate } },
-                { ":annotations",       SQLITE_TEXT,    { .s = buf_cstring(&annotations_buf) } },
+                { ":annotations",       SQLITE_TEXT,    { .s = buf_cstring(&annotations2_buf) } },
                 { ":expunged",          SQLITE_NULL,    { .s = NULL      } },
                 { NULL,                 SQLITE_NULL,    { .s = NULL      } },
             };
@@ -401,8 +408,10 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                 syslog(LOG_DEBUG, "%s: something went wrong: %i update %s %s\n",
                                   __func__, r, mboxname, guid);
             }
+	    
+	    }
 
-            buf_free(&annotations_buf);
+            buf_free(&annotations2_buf);
             buf_free(&flags_buf);
 
             if (r) goto error;
@@ -423,8 +432,6 @@ error:
 static int _index_unmailbox(struct backup *backup, struct dlist *dl,
                             time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing UNMAILBOX at " OFF_T_FMT "...\n", dl_offset);
-
     const char *mboxname = dl->sval;
 
     struct sqldb_bindval bval[] = {
@@ -432,8 +439,11 @@ static int _index_unmailbox(struct backup *backup, struct dlist *dl,
         { ":deleted",   SQLITE_INTEGER, { .i = ts        } },
         { NULL,         SQLITE_NULL,    { .s = NULL      } },
     };
+    int r;
 
-    int r = sqldb_exec(backup->db, backup_index_mailbox_delete_sql, bval, NULL,
+    syslog(LOG_DEBUG, "indexing UNMAILBOX at " OFF_T_FMT "...\n", dl_offset);
+
+    r = sqldb_exec(backup->db, backup_index_mailbox_delete_sql, bval, NULL,
                         NULL);
     if (r) {
         syslog(LOG_DEBUG, "%s: something went wrong: %i %s\n",
@@ -446,11 +456,11 @@ static int _index_unmailbox(struct backup *backup, struct dlist *dl,
 static int _index_message(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset, size_t dl_len)
 {
-    syslog(LOG_DEBUG, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...\n", dl_offset, dl_len);
-    (void) ts;
-
     struct dlist *di;
     int r = 0;
+
+    syslog(LOG_DEBUG, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...\n", dl_offset, dl_len);
+    (void) ts;
 
     /* n.b. APPLY MESSAGE contains a list of messages, not just one */
     for (di = dl->head; di && !r; di = di->next) {
@@ -461,6 +471,8 @@ static int _index_message(struct backup *backup, struct dlist *dl,
         if (!dlist_tofile(di, &partition, &guid, &size, NULL))
             continue;
 
+	/*  */ {
+		
         struct sqldb_bindval bval[] = {
             { ":guid",      SQLITE_TEXT,    { .s = message_guid_encode(guid) } },
             { ":partition", SQLITE_TEXT,    { .s = partition } },
@@ -485,6 +497,8 @@ static int _index_message(struct backup *backup, struct dlist *dl,
             syslog(LOG_DEBUG, "%s: something went wrong: %i update message %s\n",
                    __func__, r, message_guid_encode(guid));
         }
+	
+	}
     }
 
     return r ? IMAP_INTERNAL : 0;
@@ -493,15 +507,15 @@ static int _index_message(struct backup *backup, struct dlist *dl,
 static int _index_rename(struct backup *backup, struct dlist *dl,
                          time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing RENAME at " OFF_T_FMT "\n", dl_offset);
-    (void) ts;
-
     const char *uniqueid = NULL;
     const char *oldmboxname = NULL;
     const char *newmboxname = NULL;
     const char *partition = NULL;
     uint32_t uidvalidity = 0;
     int r = 0;
+
+    syslog(LOG_DEBUG, "indexing RENAME at " OFF_T_FMT "\n", dl_offset);
+    (void) ts;
 
     /* XXX use uniqueid once sync proto includes it (D73) */
     dlist_getatom(dl, "UNIQUEID", &uniqueid);
@@ -516,6 +530,8 @@ static int _index_rename(struct backup *backup, struct dlist *dl,
     if (!dlist_getnum32(dl, "UIDVALIDITY", &uidvalidity))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    /*  */ {
+	    
     struct sqldb_bindval mbox_bval[] = {
 //        { ":uniqueid",          SQLITE_TEXT,    { .s = uniqueid } },
         { ":oldmboxname",       SQLITE_TEXT,    { .s = oldmboxname } },
@@ -527,6 +543,8 @@ static int _index_rename(struct backup *backup, struct dlist *dl,
 
     r = sqldb_exec(backup->db, backup_index_mailbox_rename_sql,
                        mbox_bval, NULL, NULL);
+    
+    }
 
     if (r) {
         syslog(LOG_DEBUG, "%s: something went wrong: %i rename %s => %s\n",
@@ -539,15 +557,15 @@ static int _index_rename(struct backup *backup, struct dlist *dl,
 static int _index_seen(struct backup *backup, struct dlist *dl,
                        time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
-    (void) ts;
-
     const char *uniqueid;
     time_t lastread;
     uint32_t lastuid;
     time_t lastchange;
     const char *seenuids;
     int r;
+
+    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
+    (void) ts;
 
     if (!dlist_getatom(dl, "UNIQUEID", &uniqueid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -560,6 +578,8 @@ static int _index_seen(struct backup *backup, struct dlist *dl,
     if (!dlist_getatom(dl, "SEENUIDS", &seenuids))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    /*  */ {
+	    
     struct sqldb_bindval bval[] =  {
         { ":last_chunk_id", SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
         { ":uniqueid",      SQLITE_TEXT,    { .s = uniqueid } },
@@ -585,6 +605,8 @@ static int _index_seen(struct backup *backup, struct dlist *dl,
         syslog(LOG_DEBUG, "%s: something went wrong: %i update seen %s",
                __func__, r, uniqueid);
     }
+    
+    }
 
     return r ? IMAP_INTERNAL : 0;
 }
@@ -592,14 +614,16 @@ static int _index_seen(struct backup *backup, struct dlist *dl,
 static int _index_sub(struct backup *backup, struct dlist *dl,
                       time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
-
     const char *mboxname = NULL;
     int r;
+
+    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
 
     if (!dlist_getatom(dl, "MBOXNAME", &mboxname))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    /*  */ {
+	    
     struct sqldb_bindval bval[] = {
         { ":last_chunk_id", SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
         { ":mboxname",      SQLITE_TEXT,    { .s = mboxname } },
@@ -609,8 +633,9 @@ static int _index_sub(struct backup *backup, struct dlist *dl,
 
     /* set the unsubscribed time if this is an UNSUB */
     if (!strcmp(dl->name, "UNSUB")) {
-        syslog(LOG_DEBUG, "setting unsubscribed to %ld for %s", ts, mboxname);
         struct sqldb_bindval *unsubscribed_bval = &bval[2];
+
+        syslog(LOG_DEBUG, "setting unsubscribed to %ld for %s", ts, mboxname);
         assert(strcmp(unsubscribed_bval->name, ":unsubscribed") == 0);
         unsubscribed_bval->type = SQLITE_INTEGER;
         unsubscribed_bval->val.i = ts;
@@ -631,6 +656,8 @@ static int _index_sub(struct backup *backup, struct dlist *dl,
         syslog(LOG_DEBUG, "%s: something went wrong: %i update subscription %s",
                __func__, r, mboxname);
     }
+    
+    }
 
     return r ? IMAP_INTERNAL : 0;
 }
@@ -638,14 +665,16 @@ static int _index_sub(struct backup *backup, struct dlist *dl,
 static int _index_sieve(struct backup *backup, struct dlist *dl,
                         time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
-
     const char *filename;
     int r;
+
+    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
 
     if (!dlist_getatom(dl, "FILENAME", &filename))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    /*  */ {
+	    
     struct sqldb_bindval bval[] = {
         { ":chunk_id",      SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
         { ":last_update",   SQLITE_NULL,    { .s = NULL } },
@@ -670,6 +699,9 @@ static int _index_sieve(struct backup *backup, struct dlist *dl,
         const char *content;
         size_t content_len;
         struct message_guid guid;
+	struct sqldb_bindval *last_update_bval;
+	struct sqldb_bindval *guid_bval;
+	struct sqldb_bindval *deleted_bval;
 
         if (!dlist_getdate(dl, "LAST_UPDATE", &last_update))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -678,18 +710,18 @@ static int _index_sieve(struct backup *backup, struct dlist *dl,
 
         message_guid_generate(&guid, content, content_len);
 
-        struct sqldb_bindval *last_update_bval = &bval[1];
+        last_update_bval = &bval[1];
         assert(strcmp(last_update_bval->name, ":last_update") == 0);
         last_update_bval->type = SQLITE_INTEGER;
         last_update_bval->val.i = last_update;
 
-        struct sqldb_bindval *guid_bval = &bval[3];
+        guid_bval = &bval[3];
         assert(strcmp(guid_bval->name, ":guid") == 0);
         guid_bval->type = SQLITE_TEXT;
         guid_bval->val.s = message_guid_encode(&guid);
 
         /* insert doesn't use :deleted, but clear it still just in case */
-        struct sqldb_bindval *deleted_bval = &bval[5];
+        deleted_bval = &bval[5];
         assert(strcmp(deleted_bval->name, ":deleted") == 0);
         deleted_bval->type = SQLITE_NULL;
         deleted_bval->val.s = NULL;
@@ -702,6 +734,8 @@ static int _index_sieve(struct backup *backup, struct dlist *dl,
             syslog(LOG_DEBUG, "%s: something went wrong: %i insert sieve %s",
                 __func__, r, filename);
         }
+    }
+    
     }
 
     return r ? IMAP_INTERNAL : 0;

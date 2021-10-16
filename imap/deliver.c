@@ -136,7 +136,7 @@ EXPORTED void fatal(const char* s, int code)
  * Here we're just an intermediatory piping stdin to lmtp socket
  * and lmtp socket to stdout
  */
-void pipe_through(struct backend *conn)
+static void pipe_through(struct backend *conn)
 {
     struct protgroup *protin = protgroup_new(2);
 

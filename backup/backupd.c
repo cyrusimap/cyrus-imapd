@@ -182,6 +182,8 @@ EXPORTED int service_init(int argc __attribute__((unused)),
                  char **argv __attribute__((unused)),
                  char **envp __attribute__((unused)))
 {
+    int opt;
+
     // FIXME should this be calling fatal? fatal exits directly
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
     setproctitle_init(argc, argv, envp);
@@ -193,7 +195,6 @@ EXPORTED int service_init(int argc __attribute__((unused)),
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    int opt;
     while ((opt = getopt(argc, argv, "p:f")) != EOF) {
         switch(opt) {
         case 'p': /* external protection */
@@ -858,12 +859,13 @@ static void cmd_authenticate(char *mech, char *resp)
 static int cmd_apply_mailbox(struct dlist *dl)
 {
     const char *mboxname = NULL;
+    mbname_t *mbname;
     struct open_backup *open = NULL;
     int r;
 
     if (!dlist_getatom(dl, "MBOXNAME", &mboxname)) return IMAP_PROTOCOL_ERROR;
 
-    mbname_t *mbname = mbname_from_intname(mboxname);
+    mbname = mbname_from_intname(mboxname);
     r = backupd_open_backup(&open, mbname);
     mbname_free(&mbname);
 
@@ -894,6 +896,8 @@ static int cmd_apply_message(struct dlist *dl)
     struct sync_msgid_list *guids = sync_msgid_list_create(0);
     struct dlist *di;
     int r = 0;
+    struct open_backup *openbkp;
+    int appended = 0;
 
     /* dig out each guid */
     for (di = dl->head; di; di = di->next) {
@@ -940,21 +944,19 @@ static int cmd_apply_message(struct dlist *dl)
     /* find each open backup that wants a copy of any of these guids,
      * and append the entire MESSAGE line to it
      */
-    struct open_backup *open;
-    int appended = 0;
-    for (open = backupd_open_backups.head; open; open = open->next) {
+    for (openbkp = backupd_open_backups.head; openbkp; openbkp = openbkp->next) {
         struct sync_msgid *msgid;
         int want_append = 0;
 
         for (msgid = guids->head; msgid; msgid = msgid->next) {
-            if (sync_msgid_lookup(open->reserved_guids, &msgid->guid)) {
+            if (sync_msgid_lookup(openbkp->reserved_guids, &msgid->guid)) {
                 want_append++;
-                sync_msgid_remove(open->reserved_guids, &msgid->guid);
+                sync_msgid_remove(openbkp->reserved_guids, &msgid->guid);
             }
         }
 
         if (want_append) {
-            r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
+            r = backup_append(openbkp->backup, dl, NULL, BACKUP_APPEND_FLUSH);
             if (r) break;
             appended++;
         }
@@ -973,9 +975,9 @@ static int cmd_apply_message(struct dlist *dl)
                    "received unreserved messages, applying to all ("
                    SIZE_T_FMT ") open backups...",
                    backupd_open_backups.count);
-            for (open = backupd_open_backups.head; open; open = open->next) {
-                syslog(LOG_DEBUG, "applying unreserved messages to %s", open->name);
-                r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
+            for (openbkp = backupd_open_backups.head; openbkp; openbkp = openbkp->next) {
+                syslog(LOG_DEBUG, "applying unreserved messages to %s", openbkp->name);
+                r = backup_append(openbkp->backup, dl, NULL, BACKUP_APPEND_FLUSH);
                 if (r) break;
             }
         }
@@ -1008,11 +1010,12 @@ static int reserve_one(const mbname_t *mbname,
     for (di = gl->head; di; di = di->next) {
         struct message_guid *guid = NULL;
         const char *guid_str;
+	int message_id;
 
         if (!dlist_toguid(di, &guid)) continue;
         guid_str = message_guid_encode(guid);
 
-        int message_id = backup_get_message_id(open->backup, guid_str);
+        message_id = backup_get_message_id(open->backup, guid_str);
 
         if (message_id <= 0) {
             syslog(LOG_DEBUG, "%s: %s wants message %s",
@@ -1038,6 +1041,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     strarray_t userids = STRARRAY_INITIALIZER;
     mbname_t *shared_mbname = NULL;
     int i, r;
+    struct sync_msgid_list *missing;
 
     if (!dlist_getatom(dl, "PARTITION", &partition)) return IMAP_PROTOCOL_ERROR;
     if (!dlist_getlist(dl, "MBOXNAME", &ml)) return IMAP_PROTOCOL_ERROR;
@@ -1061,7 +1065,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     strarray_uniq(&userids);
 
     /* track the missing guids */
-    struct sync_msgid_list *missing = sync_msgid_list_create(0);
+    missing = sync_msgid_list_create(0);
 
     /* log the entire reserve to all relevant backups, and accumulate missing list */
     for (i = 0; i < strarray_size(&userids); i++) {
@@ -1104,12 +1108,14 @@ static int cmd_apply_rename(struct dlist *dl)
     int r;
     const char *old_mboxname = NULL;
     const char *new_mboxname = NULL;
+    mbname_t *old;
+    mbname_t *new;
 
     if (!dlist_getatom(dl, "OLDMBOXNAME", &old_mboxname)) return IMAP_PROTOCOL_ERROR;
     if (!dlist_getatom(dl, "NEWMBOXNAME", &new_mboxname)) return IMAP_PROTOCOL_ERROR;
 
-    mbname_t *old = mbname_from_intname(old_mboxname);
-    mbname_t *new = mbname_from_intname(old_mboxname);
+    old = mbname_from_intname(old_mboxname);
+    new = mbname_from_intname(old_mboxname);
 
     if (strcmpnull(mbname_userid(old), mbname_userid(new)) == 0) {
         // same user, unremarkable folder rename *whew*
@@ -1278,9 +1284,11 @@ static void cmd_compress(const char *alg)
 static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
                                  void *rock __attribute__((__unused__)))
 {
+    struct dlist *dlist;
+
     if (mailbox->deleted) return 0;
 
-    struct dlist *dlist = backup_mailbox_to_dlist(mailbox);
+    dlist = backup_mailbox_to_dlist(mailbox);
     if (!dlist) return IMAP_INTERNAL;
 
     prot_puts(backupd_out, "* ");
@@ -1458,9 +1466,11 @@ static int is_mailboxes_single_user(struct dlist *dl)
     struct dlist *di;
 
     for (di = dl->head; di; di = di->next) {
+        mbname_t *mbname;
+
         if (!di->sval) continue;
 
-        mbname_t *mbname = mbname_from_intname(di->sval);
+        mbname = mbname_from_intname(di->sval);
 
         if (!userid) {
             userid = xstrdupnull(mbname_userid(mbname));

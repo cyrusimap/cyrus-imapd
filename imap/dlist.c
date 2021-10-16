@@ -927,11 +927,11 @@ static int _parseitem(struct dlistsax_state *s, struct buf *buf)
 static int _parsesax(struct dlistsax_state *s, int parsekey)
 {
     int r = 0;
+    struct buf *backdoor = (struct buf *)(&s->d.kbuf);
 
     s->depth++;
 
     /* handle the key if wanted */
-    struct buf *backdoor = (struct buf *)(&s->d.kbuf);
     if (parsekey) {
         r = _parseitem(s, backdoor);
         if (r) return r;

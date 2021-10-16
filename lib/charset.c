@@ -589,7 +589,7 @@ static void uni2searchform(struct convert_rock *rock, uint32_t c)
 
     /* case - multiple characters */
     for (i = -code; chartables_translation_multichar[i]; i++) {
-        int c = chartables_translation_multichar[i];
+        int d = chartables_translation_multichar[i];
         /* diacritical character range.  This duplicates the
          * behaviour of Cyrus versions before 2.5 */
         if (s->flags & CHARSET_SKIPDIACRIT) {
@@ -599,7 +599,7 @@ static void uni2searchform(struct convert_rock *rock, uint32_t c)
                 continue;
         }
         /* note: whitespace already stripped from multichar sequences... */
-        convert_putc(rock->next, c);
+        convert_putc(rock->next, d);
     }
 }
 
@@ -736,6 +736,8 @@ static void icu2uni(struct convert_rock *rock, uint32_t c)
         const char *src = s->src_base;
         const char *src_limit = s->src_next;
 
+	UChar *t;
+
         /* Convert the source buffer to Unicode. */
         err = U_ZERO_ERROR;
         ucnv_toUnicode(s->conv, &tgt, tgt_limit, &src, src_limit, NULL,
@@ -753,7 +755,7 @@ static void icu2uni(struct convert_rock *rock, uint32_t c)
         }
 
         /* Emit any complete codepoints. */
-        UChar *t = (UChar *) s->tgt_base;
+        t = (UChar *) s->tgt_base;
         while (t < tgt && (U16_IS_SINGLE(*t) || t < tgt-1)) {
             ssize_t i = 0;
             U16_NEXT(t, i, tgt - t, cp);
@@ -1227,7 +1229,7 @@ static void html_saw_tag(struct convert_rock *rock)
 #define html_isspace(c) \
     ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
 
-void striphtml2uni(struct convert_rock *rock, uint32_t c)
+static void striphtml2uni(struct convert_rock *rock, uint32_t c)
 {
     struct striphtml_state *s = (struct striphtml_state *)rock->state;
 
@@ -1850,7 +1852,7 @@ static void buffer_setbuf(struct convert_rock *rock, struct buf *dst)
     rock->cleanup = dont_free;
 }
 
-struct convert_rock *striphtml_init(struct convert_rock *next)
+static struct convert_rock *striphtml_init(struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct striphtml_state *s = xzmalloc(sizeof(struct striphtml_state));
@@ -2172,6 +2174,8 @@ EXPORTED char *charset_utf8_normalize(const char *src)
     int32_t nfclen = 0;
     char *ret = NULL;
     int32_t retlen = 0;
+    UErrorCode err = U_ZERO_ERROR;
+    const UNormalizer2 *norm;
 
     /* Fast-path for ASCII.
      * Unicode Standard Annex #15, section 1.3: "Text exclusively
@@ -2186,7 +2190,6 @@ EXPORTED char *charset_utf8_normalize(const char *src)
     }
 
     /* Convert the UTF-8 string to UChar */
-    UErrorCode err = U_ZERO_ERROR;
     u_strFromUTF8(uni, unilen, &unilen, src, srclen, &err);
     if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
         goto done;
@@ -2201,7 +2204,7 @@ EXPORTED char *charset_utf8_normalize(const char *src)
 
     /* Normalize the UChars to NFC */
     err = U_ZERO_ERROR;
-    const UNormalizer2 *norm = unorm2_getNFCInstance(&err);
+    norm = unorm2_getNFCInstance(&err);
     if (!norm || U_FAILURE(err)) {
         goto done;
     }
@@ -2359,14 +2362,14 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
     const char *p;
     charset_t defaultcs, cs;
 
-    if (!s) return;
-
     /* Keep track of the decoding pipeline before the current
      * encoded-word. This allows to share decoding state for
      * multi-octet characters that are broken across words. */
     int lastenc = ENCODING_UNKNOWN;
     charset_t lastcs = CHARSET_UNKNOWN_CHARSET;
     struct convert_rock *extract = NULL;
+
+    if (!s) return;
 
     /* set up the conversion path */
     if (flags & CHARSET_MIME_UTF8) {
@@ -2382,6 +2385,8 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
 
     start = s;
     while ((start = (const char*) strchr(start, '=')) != 0) {
+        int enc;
+
         start++;
         if (*start != '?') continue;
         endcharset = NULL;
@@ -2436,7 +2441,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
          */
         start++;
         cs = lookup_buf(start, endcharset-start);
-        int enc = encoding[1] == 'q' || encoding[1] == 'Q' ? ENCODING_QP : ENCODING_BASE64;
+        enc = encoding[1] == 'q' || encoding[1] == 'Q' ? ENCODING_QP : ENCODING_BASE64;
 
         if (cs == CHARSET_UNKNOWN_CHARSET) {
             /* Unrecognized charset, nothing will match here */
@@ -2594,11 +2599,12 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
  * header, nor returns the value verbatim. */
 EXPORTED char *charset_parse_mimexvalue(const char *s, struct buf *lang)
 {
-    if (!s) return NULL;
     const char *p, *q;
     struct buf buf = BUF_INITIALIZER;
     charset_t cs;
     char *ret = NULL;
+
+    if (!s) return NULL;
 
     /* Determine charset */
     p = s;
@@ -2724,13 +2730,14 @@ EXPORTED void charset_freepat(comp_pat *pat)
 EXPORTED int charset_searchstring(const char *substr, comp_pat *pat,
                          const char *s, size_t len, int flags)
 {
-    if (!substr[0])
-        return 1; /* zero length string always matches */
-
     struct convert_rock *tosearch;
     struct convert_rock *input;
     int res;
     charset_t utf8from, utf8to;
+
+    if (!substr[0])
+        return 1; /* zero length string always matches */
+
     utf8from = charset_lookupname("utf-8");
     utf8to = charset_lookupname("utf-8");
 
@@ -3369,12 +3376,15 @@ static char *encode_addrheader(const char *header, size_t len, int force_quote,
  */
 EXPORTED char *charset_encode_mimeheader(const char *header, size_t len, int force_quote)
 {
+    size_t addr_len;
+    const char *addr;
+
     if (!header) return NULL;
 
     if (!len) len = strlen(header);
 
-    size_t addr_len = 0;
-    const char *addr = find_addr(header, len, &addr_len);
+    addr_len = 0;
+    addr = find_addr(header, len, &addr_len);
 
     if (addr) {
         /* "Q" encode as an address header */
@@ -3512,15 +3522,14 @@ EXPORTED char *charset_extract_plain(const char *html) {
 
 EXPORTED struct char_counts charset_count_validutf8(const char *data, size_t datalen)
 {
-
-    if (datalen > INT32_MAX) {
-        datalen = INT32_MAX;
-    }
-
     struct char_counts counts = { 0, 0, 0 };
     int32_t i = 0;
     int32_t length = (int32_t) datalen;
     const uint8_t *data8 = (const uint8_t *) data;
+
+    if (datalen > INT32_MAX) {
+        datalen = INT32_MAX;
+    }
 
     while (i < length) {
         UChar32 c;

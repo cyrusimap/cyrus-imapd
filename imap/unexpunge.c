@@ -106,6 +106,8 @@ static void list_expunged(const char *mboxname)
     int num = 0;
     int i;
     int r;
+    struct mailbox_iter *iter;
+    const message_t *msg;
 
     r = mailbox_open_irl(mboxname, &mailbox);
     if (r) {
@@ -116,8 +118,7 @@ static void list_expunged(const char *mboxname)
 
     /* first pass - read the records.  Don't print until we release the
      * lock */
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    const message_t *msg;
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* still active */
@@ -178,13 +179,16 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
     const char *fname;
     char *userid = mboxname_to_userid(mailbox->name);
     int r = 0;
+    struct mailbox_iter *iter;
+    const message_t *msg;
 
     *numrestored = 0;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    const message_t *msg;
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
+	struct index_record oldrecord;
+
         /* still active */
         if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED))
             continue;
@@ -251,7 +255,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
                    extname, record->uid, newrecord.uid);
 
         /* mark the old one unlinked so we don't see it again */
-        struct index_record oldrecord = *record;
+        oldrecord = *record;
         oldrecord.internal_flags |= FLAG_INTERNAL_UNLINKED |
             FLAG_INTERNAL_NEEDS_CLEANUP;
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);

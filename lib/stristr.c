@@ -22,6 +22,7 @@
 #include <ctype.h>
 
 #include "config.h"
+#include "stristr.h"
 
 #if defined(__cplusplus) && __cplusplus
  extern "C" {

@@ -176,28 +176,33 @@ static int do_timestamp(const mbname_t *mbname)
     struct mailbox *mailbox = NULL;
     char olddate[RFC5322_DATETIME_MAX+1];
     char newdate[RFC5322_DATETIME_MAX+1];
+    const char *extname;
+    const char *name;
+    struct mailbox_iter *iter;
+    const message_t *msg;
 
     signals_poll();
 
     /* Convert internal name to external */
-    const char *extname = mbname_extname(mbname, &mbtool_namespace, "cyrus");
+    extname = mbname_extname(mbname, &mbtool_namespace, "cyrus");
     printf("Working on %s...\n", extname);
 
-    const char *name = mbname_intname(mbname);
+    name = mbname_intname(mbname);
 
     /* Open/lock header */
     r = mailbox_open_iwl(name, &mailbox);
     if (r) return r;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-    const message_t *msg;
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
+	struct index_record copyrecord;
+
         /* 1 day is close enough */
         if (labs(record->internaldate - record->gmtime) < 86400)
             continue;
 
-        struct index_record copyrecord = *record;
+        copyrecord = *record;
 
         time_to_rfc5322(copyrecord.internaldate, olddate, sizeof(olddate));
         time_to_rfc5322(copyrecord.gmtime, newdate, sizeof(newdate));
@@ -222,12 +227,13 @@ static int do_reid(const mbname_t *mbname)
     int r = 0;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
+    const char *name;
 
     /* Convert internal name to external */
     const char *extname = mbname_extname(mbname, &mbtool_namespace, "cyrus");
     printf("Working on %s...\n", extname);
 
-    const char *name = mbname_intname(mbname);
+    name = mbname_intname(mbname);
 
     r = mailbox_open_iwl(name, &mailbox);
     if (r) return r;
@@ -251,10 +257,10 @@ static int do_reid(const mbname_t *mbname)
 
 int do_cmd(struct findall_data *data, void *rock)
 {
+    int *valp = (int *)rock;
+
     if (!data) return 0;
     if (!data->is_exactmatch) return 0;
-
-    int *valp = (int *)rock;
 
     if (*valp == CMD_TIME)
         return do_timestamp(data->mbname);

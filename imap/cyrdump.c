@@ -83,6 +83,7 @@ int main(int argc, char *argv[])
     int i;
     char *alt_config = NULL;
     struct incremental_record irec;
+    strarray_t *array;
 
     progname = basename(argv[0]);
 
@@ -111,7 +112,7 @@ int main(int argc, char *argv[])
     search_attr_init();
 
     irec.incruid = 0;
-    strarray_t *array = strarray_new();
+    array = strarray_new();
     for (i = optind; i < argc; i++) {
         strarray_append(array, argv[i]);
     }
@@ -168,12 +169,13 @@ static int dump_me(struct findall_data *data, void *rock)
     unsigned *uidseq = NULL;
     int i, n, numuids;
     unsigned msgno;
+    const char *name;
 
     /* don't want partial matches */
     if (!data) return 0;
     if (!data->is_exactmatch) return 0;
 
-    const char *name = mbname_intname(data->mbname);
+    name = mbname_intname(data->mbname);
 
     r = index_open(name, NULL, &state);
     if (r) {

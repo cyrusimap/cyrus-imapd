@@ -737,6 +737,9 @@ static void reportquota(void)
     for (i = 0; i < quota_num; i++) {
         struct quota localq;
         int r;
+	mbname_t *mbname;
+	const char *extname;
+        json_t *jsonroot = NULL;
 
         if (quotaroots[i].deleted) continue;
 
@@ -748,10 +751,9 @@ static void reportquota(void)
             return;
         }
 
-        mbname_t *mbname = mbname_from_intname(quotaroots[i].name);
-        const char *extname = mbname_extname(mbname, &quota_namespace, NULL);
+        mbname = mbname_from_intname(quotaroots[i].name);
+        extname = mbname_extname(mbname, &quota_namespace, NULL);
 
-        json_t *jsonroot = NULL;
         if (jsonout) {
             jsonroot = json_object();
             json_object_set_new(jsonout, extname, jsonroot);

@@ -636,6 +636,9 @@ static int backend_authenticate(struct backend *s, const char *userid,
     socklen_t addrsize;
     char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
+    const char *c_cert_file;
+    const char *c_key_file;
+
     if (prot->type != TYPE_STD) return SASL_FAIL;
 
     /* set the IP addresses */
@@ -701,7 +704,7 @@ static int backend_authenticate(struct backend *s, const char *userid,
     if (p) *p = '\0';
 
     strlcat(optstr, "_client_cert", sizeof(optstr));
-    const char *c_cert_file = config_getoverflowstring(optstr, NULL);
+    c_cert_file = config_getoverflowstring(optstr, NULL);
 
     if (!c_cert_file) {
         c_cert_file = config_getstring(IMAPOPT_TLS_CLIENT_CERT);
@@ -713,7 +716,7 @@ static int backend_authenticate(struct backend *s, const char *userid,
 
     strlcat(optstr, "_client_key", sizeof(optstr));
 
-    const char *c_key_file = config_getoverflowstring(optstr, NULL);
+    c_key_file = config_getoverflowstring(optstr, NULL);
     if (!c_key_file) {
         c_key_file = config_getstring(IMAPOPT_TLS_CLIENT_KEY);
     }

@@ -250,8 +250,6 @@ static enum cyrbu_cmd parse_cmd_string(const char *command, const char *sub)
 
 int main(int argc, char **argv)
 {
-    save_argv0(argv[0]);
-
     struct cyrbu_cmd_options options = {0};
     enum cyrbu_mode mode = CYRBU_MODE_UNSPECIFIED;
     enum cyrbu_cmd cmd = CYRBU_CMD_UNSPECIFIED;
@@ -262,6 +260,8 @@ int main(int argc, char **argv)
     struct backup *backup = NULL;
     mbname_t *mbname = NULL;
     int i, opt, r = 0;
+
+    save_argv0(argv[0]);
 
     while ((opt = getopt(argc, argv, "C:fmuv")) != EOF) {
         switch (opt) {

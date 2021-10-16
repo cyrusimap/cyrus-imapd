@@ -216,6 +216,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     ptrarray_t batch = PTRARRAY_INITIALIZER;
     const message_t *msg;
     int reindex_partials = flags & SEARCH_UPDATE_REINDEX_PARTIALS;
+    struct mailbox_iter *iter;
 
     r = rx->begin_mailbox(rx, mailbox, flags);
     if (r) goto done;
@@ -223,12 +224,15 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     /* we want to index EXPUNGED messages too, because otherwise when we check the
      * ranges matching the GUID in conversations DB later, we might think we've
      * indexed it when we actually haven't */
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     if ((flags & SEARCH_UPDATE_INCREMENTAL) && !reindex_partials)
         mailbox_iter_startuid(iter, rx->first_unindexed_uid(rx));
 
     while ((msg = mailbox_iter_step(iter))) {
+	message_t *msg2;
         const struct index_record *record = msg_record(msg);
+	uint8_t indexlevel;
+
         if ((flags & SEARCH_UPDATE_BATCH) && batch.count >= batch_size) {
             syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
                    batch.count, mailbox->name);
@@ -236,9 +240,9 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
             break;
         }
 
-        message_t *msg = message_new_from_record(mailbox, record);
+        msg2 = message_new_from_record(mailbox, record);
 
-        uint8_t indexlevel = rx->is_indexed(rx, msg);
+        indexlevel = rx->is_indexed(rx, msg2);
         if ((reindex_partials && (indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) ||
             (min_indexlevel && indexlevel < min_indexlevel)) {
             /* Reindex that message */
@@ -246,9 +250,9 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         }
 
         if (!indexlevel)
-            ptrarray_append(&batch, msg);
+            ptrarray_append(&batch, msg2);
         else
-            message_unref(&msg);
+            message_unref(&msg2);
     }
     mailbox_iter_done(&iter);
 

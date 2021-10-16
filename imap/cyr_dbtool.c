@@ -141,7 +141,7 @@ static int aprinter_cb(void *rock,
     return 0;
 }
 
-static void batch_commands(struct db *db)
+static void batch_commands(struct db *db2)
 {
     struct buf cmd = BUF_INITIALIZER;
     struct buf key = BUF_INITIALIZER;
@@ -185,24 +185,24 @@ static void batch_commands(struct db *db)
                 tidp = &tid;
             }
             else if (!strcmp(cmd.s, "SHOW")) {
-                r = cyrusdb_foreach(db, key.s, key.len, NULL, aprinter_cb, out, tidp);
+                r = cyrusdb_foreach(db2, key.s, key.len, NULL, aprinter_cb, out, tidp);
                 if (r) goto done;
                 prot_flush(out);
             }
             else if (!strcmp(cmd.s, "SET")) {
-                r = cyrusdb_store(db, key.s, key.len, val.s, val.len, tidp);
+                r = cyrusdb_store(db2, key.s, key.len, val.s, val.len, tidp);
                 if (r) goto done;
             }
             else if (!strcmp(cmd.s, "GET")) {
                 const char *res;
                 size_t reslen;
-                r = cyrusdb_fetch(db, key.s, key.len, &res, &reslen, tidp);
+                r = cyrusdb_fetch(db2, key.s, key.len, &res, &reslen, tidp);
                 if (r) goto done;
                 aprinter_cb(out, key.s, key.len, res, reslen);
                 prot_flush(out);
             }
             else if (!strcmp(cmd.s, "DELETE")) {
-                r = cyrusdb_delete(db, key.s, key.len, tidp, 1);
+                r = cyrusdb_delete(db2, key.s, key.len, tidp, 1);
                 if (r) goto done;
             }
             else if (!strcmp(cmd.s, "COMMIT")) {
@@ -210,7 +210,7 @@ static void batch_commands(struct db *db)
                     r = IMAP_NOTFOUND;
                     goto done;
                 }
-                r = cyrusdb_commit(db, tid);
+                r = cyrusdb_commit(db2, tid);
                 if (r) goto done;
                 tid = NULL;
                 tidp = NULL;
@@ -220,7 +220,7 @@ static void batch_commands(struct db *db)
                     r = IMAP_NOTFOUND;
                     goto done;
                 }
-                r = cyrusdb_abort(db, tid);
+                r = cyrusdb_abort(db2, tid);
                 if (r) goto done;
                 tid = NULL;
                 tidp = NULL;
@@ -234,7 +234,7 @@ static void batch_commands(struct db *db)
 
 done:
     if (r) {
-        if (tid) cyrusdb_abort(db, tid);
+        if (tid) cyrusdb_abort(db2, tid);
         fprintf(stderr, "FAILED: line %d at cmd %.*s with error %s\n",
                 line, (int)cmd.len, cmd.s, error_message(r));
     }

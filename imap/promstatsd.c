@@ -294,8 +294,12 @@ static void do_collate_report(struct buf *buf)
                             prom_metric_type_names[prom_metric_descs[i].type]);
         }
 
+	/*  */ {
+		
         struct format_metric_rock fmrock = { buf, i };
         hash_enumerate(&all_stats, &format_metric, &fmrock);
+	
+	}
     }
 
     /* clean up the copy */
@@ -623,12 +627,10 @@ static void do_write_report(struct mappedfile *mf, const struct buf *report)
 
 int main(int argc, char **argv)
 {
-    save_argv0(argv[0]);
-
     const char *alt_config = NULL;
     int call_debugger = 0;
     char *report_fname = NULL;
-    struct mappedfile *report_file = NULL;
+    struct mappedfile *report_f = NULL;
     const char *p;
     int cleanup = 0;
     int debugmode = 0;
@@ -637,6 +639,8 @@ int main(int argc, char **argv)
     int oneshot = 0;
     int opt;
     int r;
+
+    save_argv0(argv[0]);
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
@@ -727,7 +731,7 @@ int main(int argc, char **argv)
     syslog(LOG_DEBUG, "updating %s every %d seconds", report_fname, frequency);
 
     unlink(report_fname);
-    r = mappedfile_open(&report_file, report_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
+    r = mappedfile_open(&report_f, report_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
     free(report_fname);
     if (r) fatal("couldn't open report file", EX_IOERR);
 
@@ -758,7 +762,7 @@ int main(int argc, char **argv)
         syslog(LOG_DEBUG, "collated usage report in %f seconds",
                 (now_ms() - starttime) / 1000.0);
 
-        do_write_report(report_file, &report_buf);
+        do_write_report(report_f, &report_buf);
 
         if (oneshot) {
             shut_down(0);

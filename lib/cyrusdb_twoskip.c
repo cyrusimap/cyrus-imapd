@@ -561,10 +561,12 @@ static int commit_header(struct dbengine *db)
 
 static int check_tailcrc(struct dbengine *db, struct skiprecord *record)
 {
+    uint32_t crc;
+
     if ((db->open_flags & CYRUSDB_NOCRC))
         return 0;
 
-    uint32_t crc = crc32_map(BASE(db) + record->keyoffset,
+    crc = crc32_map(BASE(db) + record->keyoffset,
                              roundup(record->keylen + record->vallen, 8));
     if (crc != record->crc32_tail) {
         syslog(LOG_ERR, "DBERROR: invalid tail crc %s at %llX",
@@ -586,6 +588,7 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 {
     const char *base;
     int i;
+    uint32_t crc;
 
     memset(record, 0, sizeof(struct skiprecord));
 
@@ -652,7 +655,7 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     if ((db->open_flags & CYRUSDB_NOCRC))
         return 0;
 
-    uint32_t crc = crc32_map(BASE(db) + record->offset, (offset - record->offset));
+    crc = crc32_map(BASE(db) + record->offset, (offset - record->offset));
     if (crc != record->crc32_head) {
         syslog(LOG_ERR, "DBERROR: twoskip checksum head error for %s at %08llX",
                FNAME(db), (LLU)offset);
@@ -1291,6 +1294,7 @@ static int read_lock(struct dbengine *db)
 static int newtxn(struct dbengine *db, int shared, struct txn **tidptr)
 {
     int r;
+    struct txn *txn;
 
     assert(!db->current_txn);
     assert(!*tidptr);
@@ -1302,7 +1306,7 @@ static int newtxn(struct dbengine *db, int shared, struct txn **tidptr)
     db->txn_num++;
 
     /* create the transaction */
-    struct txn *txn = xzmalloc(sizeof(struct txn));
+    txn = xzmalloc(sizeof(struct txn));
     txn->num = db->txn_num;
     txn->shared = shared;
     db->current_txn = txn;
@@ -2199,6 +2203,7 @@ static int recovery2(struct dbengine *db, int *count)
     char newfname[1024];
     size_t offset;
     int r = 0;
+    int dirty;
 
     /* open fname.NEW */
     snprintf(newfname, sizeof(newfname), "%s.NEW", FNAME(db));
@@ -2211,7 +2216,7 @@ static int recovery2(struct dbengine *db, int *count)
     newdb->header.generation = db->header.generation + 1;
 
     /* start with the dummy */
-    int dirty = 0;
+    dirty = 0;
     for (offset = DUMMY_OFFSET; offset < SIZE(db); offset += record.len) {
         // skip over blanks
         if (!memcmp(BASE(db) + offset, BLANK, 8)) {

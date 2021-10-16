@@ -275,7 +275,7 @@ static void annotate_begin(annotate_db_t *d);
 static void annotate_abort(annotate_db_t *d);
 static int annotate_commit(annotate_db_t *d);
 
-static void init_internal();
+static void init_internal(void);
 
 static int annotate_initialized = 0;
 static int annotatemore_dbopen = 0;
@@ -421,12 +421,14 @@ EXPORTED char *dumpentryatt(const struct entryattlist *l)
     struct buf buf = BUF_INITIALIZER;
 
     const struct entryattlist *ee;
-    buf_printf(&buf, "(");
     const char *sp = "";
     const struct attvaluelist *av;
+
+    buf_printf(&buf, "(");
     for (ee = l ; ee ; ee = ee->next) {
-        buf_printf(&buf, "%s%s (", sp, ee->entry);
         const char *insp = "";
+
+        buf_printf(&buf, "%s%s (", sp, ee->entry);
         for (av = ee->attvalues ; av ; av = av->next) {
             buf_printf(&buf, "%s%s %s", insp, av->attrib, buf_cstring(&av->value));
             insp = " ";
@@ -526,7 +528,7 @@ static void done_cb(void*rock __attribute__((unused)))
     annotate_done();
 }
 
-static void init_internal()
+static void init_internal(void)
 {
     if (!annotate_initialized) {
         annotate_init(NULL, NULL);
@@ -1836,12 +1838,13 @@ static void annotation_get_usercounters(annotate_state_t *state,
     struct buf value = BUF_INITIALIZER;
     struct mboxname_counters counters;
     char *mboxname = NULL;
+    int r;
 
     assert(state);
     assert(state->userid);
 
     mboxname = mboxname_user_mbox(state->userid, NULL);
-    int r = mboxname_read_counters(mboxname, &counters);
+    r = mboxname_read_counters(mboxname, &counters);
 
     if (!r) buf_printf(&value, "%u %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %u",
                        counters.version, counters.highestmodseq,
@@ -2868,6 +2871,7 @@ static int write_entry(struct mailbox *mailbox,
     struct buf oldval = BUF_INITIALIZER;
     const char *mboxname = mailbox ? mailbox->name : "";
     modseq_t modseq = mdata ? mdata->modseq : 0;
+    struct annotate_metadata oldmdata;
 
     r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
     if (r)
@@ -2878,7 +2882,6 @@ static int write_entry(struct mailbox *mailbox,
 
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
-    struct annotate_metadata oldmdata;
     r = read_old_value(d, key, keylen, &oldval, &oldmdata);
     if (r) goto out;
 

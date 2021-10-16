@@ -151,13 +151,15 @@ EXPORTED void bv_andeq(bitvector_t *a, const bitvector_t *b)
 {
     unsigned int n;
     unsigned int i;
+    unsigned char *abits;
+    const unsigned char *bbits;
 
     bv_ensure(a, b->length);
     if (!a->length)
         return;
 
-    unsigned char *abits = bv_bits(a);
-    const unsigned char *bbits = bv_bits(b);
+    abits = bv_bits(a);
+    bbits = bv_bits(b);
 
     n = vlen(b->length);
     for (i = 0; i < n; i++)
@@ -172,11 +174,13 @@ EXPORTED void bv_oreq(bitvector_t *a, const bitvector_t *b)
 {
     unsigned int n;
     unsigned int i;
+    unsigned char *abits;
+    const unsigned char *bbits;
 
     bv_ensure(a, b->length);
 
-    unsigned char *abits = bv_bits(a);
-    const unsigned char *bbits = bv_bits(b);
+    abits = bv_bits(a);
+    bbits = bv_bits(b);
 
     n = vlen(b->length);
     for (i = 0 ; i < n ; i++)
@@ -192,10 +196,11 @@ EXPORTED void bv_oreq(bitvector_t *a, const bitvector_t *b)
 EXPORTED int bv_next_set(const bitvector_t *bv, int start)
 {
     int i;
+    const unsigned char *bits;
 
     if (start < 0 || start >= (int)bv->length) return -1;
 
-    const unsigned char *bits = bv_bits(bv);
+    bits = bv_bits(bv);
 
     for (i = start ; i < (int)bv->length && !visaligned(i) ; i++)
         if (bits[vidx(i)] & vmask(i))
@@ -224,10 +229,11 @@ EXPORTED int bv_next_set(const bitvector_t *bv, int start)
 EXPORTED int bv_prev_set(const bitvector_t *bv, int start)
 {
     int i;
+    const unsigned char *bits;
 
     if (start < 0 || start >= (int)bv->length) return -1;
 
-    const unsigned char *bits = bv_bits(bv);
+    bits = bv_bits(bv);
 
     for (i = start ; i < (int)bv->length && !visaligned(i) ; i--)
         if (bits[vidx(i)] & vmask(i))

@@ -1775,8 +1775,9 @@ EXPORTED size_t prot_lookahead(struct protstream *s,
                                size_t len,
                                int *sep)
 {
-    assert(!s->write);
     int short_match = 0;
+
+    assert(!s->write);
 
     if (prot_peek(s) == EOF) return 0;
 

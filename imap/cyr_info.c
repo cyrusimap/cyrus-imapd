@@ -408,13 +408,16 @@ static void do_lint(void)
 
     /* XXX - check directories and permissions? */
 
-    /* clean up */
+    /* clean up */ {
+	    
     struct service_item *ks = rock.known_services;
     while (ks) {
         struct service_item *next = ks->next;
         free(ks->prefix);
         free(ks);
         ks = next;
+    }
+    
     }
     strarray_free(rock.known_channels);
 }

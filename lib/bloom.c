@@ -51,16 +51,16 @@ inline static int test_bit_set_bit(unsigned char * buf,
 static int bloom_check_add(struct bloom * bloom,
                            const void * buffer, int len, int add)
 {
-  if (bloom->ready == 0) {
-    printf("bloom at %p not initialized!\n", (void *)bloom);
-    return -1;
-  }
-
   int hits = 0;
   register unsigned int a = murmurhash2(buffer, len, 0x9747b28c);
   register unsigned int b = murmurhash2(buffer, len, a);
   register unsigned int x;
   register unsigned int i;
+
+  if (bloom->ready == 0) {
+    printf("bloom at %p not initialized!\n", (void *)bloom);
+    return -1;
+  }
 
   for (i = 0; i < (unsigned)bloom->hashes; i++) {
     x = (a + i*b) % bloom->bits;
@@ -86,6 +86,10 @@ int bloom_init_size(struct bloom * bloom, int entries, double error,
 
 EXPORTED int bloom_init(struct bloom * bloom, int entries, double error)
 {
+  double num = log(bloom->error);
+  double denom = 0.480453013918201; // ln(2)^2
+  double dentries = (double)entries;
+
   bloom->ready = 0;
 
   if (entries < 1 || error == 0) {
@@ -95,11 +99,8 @@ EXPORTED int bloom_init(struct bloom * bloom, int entries, double error)
   bloom->entries = entries;
   bloom->error = error;
 
-  double num = log(bloom->error);
-  double denom = 0.480453013918201; // ln(2)^2
   bloom->bpe = -(num / denom);
 
-  double dentries = (double)entries;
   bloom->bits = (int)(dentries * bloom->bpe);
 
   if (bloom->bits % 8) {
@@ -108,7 +109,7 @@ EXPORTED int bloom_init(struct bloom * bloom, int entries, double error)
     bloom->bytes = bloom->bits / 8;
   }
 
-  bloom->hashes = (int)ceil(0.693147180559945 * bloom->bpe);  // ln(2)
+  bloom->hashes = (int)lrint(ceil(0.693147180559945 * bloom->bpe));  // ln(2)
 
   bloom->bf = (unsigned char *)calloc(bloom->bytes, sizeof(unsigned char));
   if (bloom->bf == NULL) {
@@ -153,7 +154,7 @@ EXPORTED void bloom_free(struct bloom * bloom)
 }
 
 
-const char * bloom_version()
+const char * bloom_version(void)
 {
   return MAKESTRING(BLOOM_VERSION);
 }

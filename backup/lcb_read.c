@@ -102,6 +102,7 @@ EXPORTED int backup_read_message_data(struct backup *backup,
     struct dlist *dl = NULL;
     struct dlist *di;
     int r;
+    struct protstream *ps;
 
     chunk = backup_get_chunk(backup, message->chunk_id);
     if (!chunk) return -1;
@@ -112,7 +113,7 @@ EXPORTED int backup_read_message_data(struct backup *backup,
     r = gzuc_seekto(gzuc, message->offset);
     if (r) return r;
 
-    struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
+    ps = prot_readcb(_prot_fill_cb, gzuc);
     prot_setisclient(ps, 1); /* don't sync literals */
     r = parse_backup_line(ps, NULL, NULL, &dl);
     prot_free(ps);

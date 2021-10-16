@@ -46,6 +46,7 @@
 #include <sasl/sasl.h>
 
 #include "xmalloc.h"
+#include "mutex.h"
 
 EXPORTED void *cyrus_mutex_alloc(void)
 {

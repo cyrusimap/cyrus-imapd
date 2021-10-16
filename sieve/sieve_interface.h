@@ -206,7 +206,7 @@ typedef struct sieve_duplicate_context {
 sieve_interp_t *sieve_interp_alloc(void *interp_context);
 int sieve_interp_free(sieve_interp_t **interp);
 
-sieve_interp_t *sieve_build_nonexec_interp();
+sieve_interp_t *sieve_build_nonexec_interp(void);
 
 /* add the callbacks for actions. undefined behavior results if these
    are called after sieve_script_parse is called! */

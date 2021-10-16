@@ -228,7 +228,7 @@ struct mboxevent {
 /*
  * Call this initializer once only at start
  */
-int mboxevent_init();
+int mboxevent_init(void);
 
 /*
  * Set the namespace to translate internal mailbox name to external name

@@ -226,8 +226,9 @@ EXPORTED const char *message_guid_encode(const struct message_guid *guid)
 
 EXPORTED const char *message_guid_encode_short(const struct message_guid *guid, size_t len)
 {
-    assert(len > 0 && len < MESSAGE_GUID_SIZE*2);
     char *backdoor = (char *)message_guid_encode(guid);
+
+    assert(len > 0 && len < MESSAGE_GUID_SIZE*2);
     backdoor[len] = '\0';
     return backdoor;
 }

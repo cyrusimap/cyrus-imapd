@@ -226,7 +226,7 @@ static void usage(void)
 EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unused)))
 {
     int opt;
-    char *method = "null";
+    const char *method = "null";
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 

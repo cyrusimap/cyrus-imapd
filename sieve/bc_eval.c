@@ -451,16 +451,16 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
     {
         int s;
         int sizevar = test.u.sz.t;
-        int x = test.u.sz.n;
+        int n = test.u.sz.n;
 
         if (interp->getsize(m, &s) != SIEVE_OK) break;
 
         if (sizevar == B_OVER) {
             /* over */
-            res = s > x;
+            res = s > n;
         } else {
             /* under */
-            res = s < x;
+            res = s < n;
         }
         break;
     }
@@ -1079,11 +1079,11 @@ envelope_err:
                     (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
             }
             else {
-                struct tm tm;
+                struct tm tm2;
                 time_t now = time(NULL);
 
-                localtime_r(&now, &tm);
-                timezone_offset = gmtoff_of(&tm, now) / 60;
+                localtime_r(&now, &tm2);
+                timezone_offset = gmtoff_of(&tm2, now) / 60;
             }
         }
 
@@ -1174,14 +1174,14 @@ envelope_err:
 
             /* timezone offset */
             if (zone == B_ORIGINALZONE) {
-                char *zone;
+                char *zone2;
                 char sign;
                 int hours;
                 int minutes;
 
-                zone = strrchr(header, ' ');
-                if (!zone ||
-                    3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
+                zone2 = strrchr(header, ' ');
+                if (!zone2 ||
+                    3 != sscanf(zone2 + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
                     res = 0;
                     goto date_err;
                 }
@@ -1352,15 +1352,16 @@ envelope_err:
     case BC_ENVIRONMENT:
     case BC_NOTIFYMETHODCAPABILITY:
     {
-        res = 0;
         const char *extname = NULL;
         const char *keyname = NULL;
         char *val = NULL;
-        i++;
         int match = test.u.mm.comp.match;
         int relation = test.u.mm.comp.relation;
         int comparator = test.u.mm.comp.collation;
         int ctag = 0;
+
+        res = 0;
+        i++;
 
         /* set up variables needed for compiling regex */
         if (match == B_REGEX) {
@@ -1413,9 +1414,9 @@ envelope_err:
     case BC_METADATAEXISTS:
     case BC_SERVERMETADATAEXISTS:
     {
-        res = 1;
-
         const char *extname = NULL;
+
+        res = 1;
 
         if (op == BC_METADATAEXISTS) {
             extname = test.u.mm.extname;
@@ -1479,8 +1480,10 @@ envelope_err:
             str = strarray_nth(test.u.sl, x);
 
             if (requires & BFE_VARIABLES) {
+                char *p;
+
                 str = parse_string(str, variables);
-                char *p = strchr(str, ':');
+                p = strchr(str, ':');
                 if (p) p[1] = '\0';
             }
 
@@ -1538,10 +1541,10 @@ envelope_err:
 
     case BC_SPECIALUSEEXISTS:
     {
-        res = 1;
         const char *extname = NULL;
         strarray_t uses = STRARRAY_INITIALIZER;
 
+        res = 1;
         extname = test.u.mm.extname;
 
         list_len = strarray_size(test.u.mm.keylist);
@@ -1591,12 +1594,14 @@ envelope_err:
     return res;
 }
 
-void unwrap_flaglist(strarray_t *strlist, strarray_t **flaglist,
+static void unwrap_flaglist(strarray_t *strlist, strarray_t **flaglist,
                      variable_list_t *variables)
 {
+    int len;
+
     if (!strlist) return;
 
-    int len = strarray_size(strlist);
+    len = strarray_size(strlist);
 
     if (len) {
         int i;
@@ -1623,7 +1628,7 @@ void unwrap_flaglist(strarray_t *strlist, strarray_t **flaglist,
     free(strarray_takevf(strlist));
 }
 
-const char *priority_to_string(int priority)
+static const char *priority_to_string(int priority)
 {
     switch (priority) {
     case B_LOW:    return "low";
@@ -1881,6 +1886,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             if (bytime) {
                 long sec;
+                static char by_value[14];
 
                 if (bytime[0] == '+') {
                     /* Relative time ("+" 1*9DIGIT) */
@@ -1912,7 +1918,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                   by-mode  = "N" / "R"           ; "Notify" or "Return"
                   by-trace = "T"                 ; "Trace"
                 */
-                static char by_value[14];
                 snprintf(by_value, sizeof(by_value), "%+ld;%c%s",
                          sec, toupper(bymode[0]), cmd.u.r.bytrace ? "T" : "");
                 deliverby = by_value;
@@ -2097,11 +2102,11 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	     * Removed denotify action. */
 	  
             if (comparator == B_REGEX) {
-                char errmsg[1024]; /* Basically unused */
+                char errmsg2[1024]; /* Basically unused */
 
                 reg = bc_compile_regex(pattern,
                                        REG_EXTENDED | REG_NOSUB | REG_ICASE,
-                                       errmsg, sizeof(errmsg));
+                                       errmsg2, sizeof(errmsg2));
                 if (!reg) {
                     res = SIEVE_RUN_ERROR;
                     break;

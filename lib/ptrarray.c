@@ -197,8 +197,9 @@ EXPORTED void **ptrarray_takevf(ptrarray_t *pa)
 
 EXPORTED int ptrarray_find(const ptrarray_t *pa, void *match, int starting)
 {
-    if (!pa) return -1;
     int i;
+
+    if (!pa) return -1;
 
     for (i = starting ; i < pa->count ; i++)
         if (match == pa->data[i])
