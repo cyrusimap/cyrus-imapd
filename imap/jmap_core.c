@@ -974,7 +974,7 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
     if (JNOTNULL(jitem) && json_is_string(jitem)) {
         if (seen_one++) return IMAP_MAILBOX_EXISTS;
         int r = charset_decode(buf, json_string_value(jitem),
-                              json_string_length(jitem), ENCODING_BASE64);
+                               json_string_length(jitem), ENCODING_BASE64);
         if (r) {
             *errp = json_string("base64 decode failed");
             return r;
@@ -1001,6 +1001,12 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
             const char *blobid = json_string_value(jitem);
             if (blobid && blobid[0] == '#')
                 blobid = jmap_lookup_id(req, blobid + 1);
+            if (!blobid) {
+                char *error = strconcat("Unknown reference ", json_string_value(jitem), (char *)NULL);
+                *errp = json_string(error);
+                free(error);
+                return IMAP_INTERNAL;
+            }
             // map in the existing blob, if there is one
             jmap_getblob_context_t ctx;
             jmap_getblob_ctx_init(&ctx, req->accountid, blobid, NULL, 1);
@@ -1033,8 +1039,10 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
             }
             jmap_getblob_ctx_fini(&ctx);
             if (r) {
-                *errp = json_string("blob lookup failed");
-                return r;
+                char *error = strconcat("Missing blobId ", blobid, (char *)NULL);
+                *errp = json_string(error);
+                free(error);
+                return IMAP_NOTFOUND;
             }
         }
     }
@@ -1095,6 +1103,8 @@ static int jmap_blob_set(struct jmap_req *req)
             jerr = json_pack("{s:s}", "type", "invalidProperties");
             if (!err && r == IMAP_MAILBOX_EXISTS)
                 err = json_string("Multiple properties provided");
+            if (r == IMAP_NOTFOUND)
+                json_object_set_new(jerr, "type", json_string("blobNotFound"));
             if (err) json_object_set_new(jerr, "description", err);
             json_object_set_new(set.not_created, key, jerr);
             buf_destroy(buf);
