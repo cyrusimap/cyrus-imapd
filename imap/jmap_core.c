@@ -623,9 +623,10 @@ static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
 {
     int32_t *datatypesp = rock;
 
-    if (!strcmp(key, "types")) {
+    // support both "types" and "typeNames" selectors for now
+    if (!strcmp(key, "types") || !strcmp(key, "typeNames")) {
         if (!json_is_array(arg)) {
-            jmap_parser_invalid(parser, "types");
+            jmap_parser_invalid(parser, key);
             // field known, type wrong
             return 1;
         }
@@ -647,7 +648,7 @@ static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
                 *datatypesp |= typenum;
             }
             else {
-                jmap_parser_push_index(parser, "types", i, NULL);
+                jmap_parser_push_index(parser, key, i, NULL);
                 jmap_parser_invalid(parser, NULL);
                 jmap_parser_pop(parser);
             }
@@ -688,10 +689,12 @@ static int jmap_blob_lookup(jmap_req_t *req)
     }
 
     if (!datatypes) {
-        err = json_pack("{s:s s:[s]}", "type", "invalidArguments", "arguments", "types");
+        err = json_pack("{s:s s:[s]}", "type", "invalidArguments", "arguments", "typeNames");
         jmap_error(req, err);
         goto done;
     }
+
+    const char *resname = json_object_get(req->args, "typeNames") ? "matchedIds" : "types";
 
     /* Sort blob lookups by mailbox */
     hash_table getblobs_by_uniqueid = HASH_TABLE_INITIALIZER;
@@ -888,7 +891,8 @@ static int jmap_blob_lookup(jmap_req_t *req)
                     json_array_append_new(list, json_string(strarray_nth(ids, k)));
                 json_object_set_new(dtvalue, item->name, list);
             }
-            json_array_append_new(get.list, json_pack("{s:s, s:o}", "id", blob_id, "types", dtvalue));
+            // XXX: replace the following two lines with this one line:
+            json_array_append_new(get.list, json_pack("{s:s, s:o}", "id", blob_id, resname, dtvalue));
         }
         else {
             json_array_append_new(get.not_found, json_string(blob_id));
