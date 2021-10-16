@@ -85,6 +85,7 @@ enum {
     MAX_SIZE_UPLOAD,
     MAX_CONCURRENT_UPLOAD,
     MAX_SIZE_BLOB_SET,
+    MAX_CATENATE_ITEMS,
     JMAP_NUM_LIMITS  /* MUST be last */
 };
 

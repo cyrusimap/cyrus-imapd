@@ -149,6 +149,8 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
               IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
     _read_opt(settings->limits[MAX_SIZE_BLOB_SET],
               IMAPOPT_JMAP_MAX_SIZE_BLOB_SET);
+    _read_opt(settings->limits[MAX_CATENATE_ITEMS],
+              IMAPOPT_JMAP_MAX_CATENATE_ITEMS);
 #undef _read_opt
 
     json_object_set_new(settings->server_capabilities,
@@ -194,7 +196,7 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                     "maxSizeBlobSet",
                     settings->limits[MAX_SIZE_BLOB_SET],
                     "maxCatenateItems",
-                    100,
+                    settings->limits[MAX_CATENATE_ITEMS],
                     "supportedTypeNames",
                     typenames));
         json_object_set_new(settings->server_capabilities,
@@ -503,7 +505,6 @@ static int jmap_blob_get(jmap_req_t *req)
     /* Lookup the content for each blob */
     json_array_foreach(get.ids, i, jval) {
         int is_truncated = 0;
-        int is_nonutf8 = 0;
         const char *blob_id = json_string_value(jval);
         jmap_getblob_context_t ctx;
         jmap_getblob_ctx_init(&ctx, req->accountid, blob_id, NULL, 1);
