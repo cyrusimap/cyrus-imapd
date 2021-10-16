@@ -74,9 +74,7 @@
 #include "annotate.h"
 #include "append.h"
 #include "auth.h"
-#ifdef USE_AUTOCREATE
 #include "autocreate.h"
-#endif // USE_AUTOCREATE
 #include "assert.h"
 #include "backend.h"
 #include "bsearch.h"
@@ -2540,7 +2538,6 @@ done:
     cmd_syncrestart(NULL, &reserve_list, 0);
 }
 
-#ifdef USE_AUTOCREATE
 /*
  * Autocreate Inbox and subfolders upon login
  */
@@ -2557,7 +2554,6 @@ static void autocreate_inbox(void)
         autocreate_user(&imapd_namespace, imapd_userid);
     }
 }
-#endif // USE_AUTOCREATE
 
 static void authentication_success(void)
 {
@@ -2595,9 +2591,7 @@ static void authentication_success(void)
         mboxevent_free(&mboxevent);
     }
 
-#ifdef USE_AUTOCREATE
     autocreate_inbox();
-#endif // USE_AUTOCREATE
 }
 
 static int checklimits(const char *tag)
@@ -7172,7 +7166,6 @@ localcreate:
                                imapd_userid, imapd_authstate,
                                flags, &mailbox);
 
-#ifdef USE_AUTOCREATE
     // Clausing autocreate for the INBOX
     if (r == IMAP_PERMISSION_DENIED) {
         if (!strarray_size(mbname_boxes(mbname)) && !strcmpsafe(imapd_userid, mbname_userid(mbname))) {
@@ -7207,7 +7200,6 @@ localcreate:
             }
         }
     }
-#endif
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -8222,9 +8214,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
         goto freeargs;
     }
 
-#ifdef USE_AUTOCREATE
     autocreate_inbox();
-#endif // USE_AUTOCREATE
 
     return;
 
