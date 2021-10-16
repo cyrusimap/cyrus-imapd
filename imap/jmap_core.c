@@ -190,9 +190,11 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
         json_array_append_new(typenames, json_string("Email"));
         json_object_set_new(settings->server_capabilities,
                 JMAP_BLOB_EXTENSION,
-                json_pack("{s:i, s:o}",
+                json_pack("{s:i, s:i, s:o}",
                     "maxSizeBlobSet",
                     settings->limits[MAX_SIZE_BLOB_SET],
+                    "maxCatenateItems",
+                    100,
                     "supportedTypeNames",
                     typenames));
         json_object_set_new(settings->server_capabilities,
@@ -500,6 +502,8 @@ static int jmap_blob_get(jmap_req_t *req)
 
     /* Lookup the content for each blob */
     json_array_foreach(get.ids, i, jval) {
+        int is_truncated = 0;
+        int is_nonutf8 = 0;
         const char *blob_id = json_string_value(jval);
         jmap_getblob_context_t ctx;
         jmap_getblob_ctx_init(&ctx, req->accountid, blob_id, NULL, 1);
@@ -511,41 +515,47 @@ static int jmap_blob_get(jmap_req_t *req)
             const char *base = buf_base(&ctx.blob);
             size_t len = buf_len(&ctx.blob);
 
-            if (range.offset <= len) {
-                base += range.offset;
-                len -= range.offset;
+            if (range.offset) {
+                if (range.offset < len) {
+                    base += range.offset;
+                    len -= range.offset;
+                }
+                else {
+                    is_truncated = 1;
+                    len = 0;
+                }
             }
-            if (range.length && len > range.length)
-                len = range.length;
+            if (range.length) {
+                if (len >= range.length) len = range.length;
+                else is_truncated = 1;
+            }
 
             json_t *item = json_object();
             json_array_append_new(get.list, item);
             json_object_set_new(item, "id", json_string(blob_id));
 
+            if (is_truncated)
+                json_object_set_new(item, "isTruncated", json_true());
+
             // the various data types, only output them if there's data to send
             int want_text = 0;
             int want_base64 = 0;
-            if (jmap_wantprop(get.props, "data:asText")) {
-                want_text = 1;
-            }
-            if (jmap_wantprop(get.props, "data:asBase64")) {
-                want_base64 = 1;
-            }
-            if (jmap_wantprop(get.props, "data")) {
+            if (jmap_wantprop(get.props, "data:asText")) want_text = 1;
+            if (jmap_wantprop(get.props, "data:asBase64")) want_base64 = 1;
+            if (jmap_wantprop(get.props, "data")) want_text = 2;
+
+            if (want_text) {
                 struct char_counts guess_counts = charset_count_validutf8(base, len);
-                if (!guess_counts.invalid && !guess_counts.replacement)
-                    want_text = 1;
-                else
-                    want_base64 = 1;
-            }
-            if (want_text && len > 0) {
-                if (len) {
+                if (!guess_counts.invalid && !guess_counts.replacement) {
                     json_object_set_new(item, "data:asText", json_stringn(base, len));
                 }
                 else {
-                    json_object_set_new(item, "data:asText", json_string(""));
+                    json_object_set_new(item, "isEncodingProblem", json_true());
+                    // if we asked for 'data' then the encoding problem means we get base64
+                    if (want_text == 2) want_base64 = 1;
                 }
             }
+
             if (want_base64) {
                 if (len) {
                     size_t len64 = 0;
@@ -559,6 +569,7 @@ static int jmap_blob_get(jmap_req_t *req)
                     json_object_set_new(item, "data:asBase64", json_string(""));
                 }
             }
+
             if (jmap_wantprop(get.props, "data:asHex")) {
                 if (len) {
                     char *encbuf = xzmalloc(len*2);
