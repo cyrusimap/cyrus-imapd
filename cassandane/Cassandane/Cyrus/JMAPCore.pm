@@ -725,23 +725,23 @@ sub test_blob_lookup
     $self->assert_not_null($mailboxId);
 
     xlog "Test without capability";
-    $res = $jmap->CallMethods([['Blob/lookup', { ids => [$blobId, 'unknown'], types => ['Mailbox', 'Thread', 'Email'] }, 'R1']]);
+    $res = $jmap->CallMethods([['Blob/lookup', { ids => [$blobId, 'unknown'], typeNames => ['Mailbox', 'Thread', 'Email'] }, 'R1']]);
     $self->assert_str_equals($res->[0][0], 'error');
 
     # XXX: this will be replaced with the upstream one
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
 
     xlog "Regular Blob/lookup works";
-    $res = $jmap->CallMethods([['Blob/lookup', { ids => [$blobId, 'unknown'], types => ['Mailbox', 'Thread', 'Email'] }, 'R1']]);
+    $res = $jmap->CallMethods([['Blob/lookup', { ids => [$blobId, 'unknown'], typeNames => ['Mailbox', 'Thread', 'Email'] }, 'R1']]);
     $self->assert_str_equals($res->[0][0], 'Blob/lookup');
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
     $self->assert_str_equals($blobId, $res->[0][1]{list}[0]{id});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]{types}{Mailbox}});
-    $self->assert_str_equals($mailboxId, $res->[0][1]{list}[0]{types}{Mailbox}[0]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]{types}{Thread}});
-    $self->assert_str_equals($threadId, $res->[0][1]{list}[0]{types}{Thread}[0]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]{types}{Email}});
-    $self->assert_str_equals($emailId, $res->[0][1]{list}[0]{types}{Email}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]{matchedIds}{Mailbox}});
+    $self->assert_str_equals($mailboxId, $res->[0][1]{list}[0]{matchedIds}{Mailbox}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]{matchedIds}{Thread}});
+    $self->assert_str_equals($threadId, $res->[0][1]{list}[0]{matchedIds}{Thread}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]{matchedIds}{Email}});
+    $self->assert_str_equals($emailId, $res->[0][1]{list}[0]{matchedIds}{Email}[0]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{notFound}});
     $self->assert_str_equals('unknown', $res->[0][1]{notFound}[0]);
 }
