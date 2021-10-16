@@ -1042,6 +1042,11 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
         jitem = json_object_get(arg, "catenate");
         if (JNOTNULL(jitem) && json_is_array(jitem)) {
             if (seen_one++) return IMAP_MAILBOX_EXISTS;
+            size_t limit = config_getint(IMAPOPT_JMAP_MAX_CATENATE_ITEMS);
+            if (json_array_size(jitem) > limit) {
+                *errp = json_string("too many catenate items");
+                return IMAP_QUOTA_EXCEEDED;
+            }
             size_t i;
             json_t *val;
             json_array_foreach(jitem, i, val) {
