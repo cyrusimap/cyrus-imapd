@@ -53,7 +53,7 @@ sub new
     my $self = $class->SUPER::new(@_);
     $self->{remove_me_in_cassandane_child} = 1;
 
-    my $cassini = Cassandane::Cassini::instance();
+    my $cassini = Cassandane::Cassini->instance();
     my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
     my $failed_file = "$rootdir/failed";
     $self->{failed_fh} = IO::File->new($failed_file, 'w');

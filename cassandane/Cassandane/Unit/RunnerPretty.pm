@@ -53,7 +53,7 @@ sub new
         # reports to $rootdir/reports (if we can) rather than terminal
         $self->{_quiet} = 1;
 
-        my $cassini = Cassandane::Cassini::instance();
+        my $cassini = Cassandane::Cassini->instance();
         my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
         my $quiet_report_file = "$rootdir/reports";
 

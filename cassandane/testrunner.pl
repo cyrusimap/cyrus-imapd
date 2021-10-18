@@ -278,7 +278,7 @@ while (my $a = shift)
     }
     elsif ($a eq '--rerun')
     {
-        my $cassini = Cassandane::Cassini::instance();
+        my $cassini = Cassandane::Cassini->instance();
         my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
         my $failed_file = "$rootdir/failed";
 
