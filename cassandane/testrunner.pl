@@ -194,6 +194,7 @@ sub usage
 
 my $cassini_filename;
 my @cassini_overrides;
+my $want_rerun;
 
 while (my $a = shift)
 {
@@ -278,25 +279,7 @@ while (my $a = shift)
     }
     elsif ($a eq '--rerun')
     {
-        my $cassini = Cassandane::Cassini->instance();
-        my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
-        my $failed_file = "$rootdir/failed";
-
-        my @failed = eval { read_file($failed_file, { chomp => 1 }) };
-        if ($@) {
-            print STDERR "Cannot --rerun without an existing failed file.\n";
-            exit 1;
-        }
-
-        if (scalar @failed) {
-            push @names, @failed;
-        }
-        else {
-            # prevent accidentally running everything by default!
-            print STDERR "The failed file is empty; there is nothing to ",
-                         "re-run.\n";
-            exit 0;
-        }
+        $want_rerun = 1;
     }
     elsif ($a =~ m/^-/)
     {
@@ -313,6 +296,27 @@ map { $cassini->override(@$_); } @cassini_overrides;
 
 Cassandane::Instance::cleanup_leftovers()
     if ($cassini->bool_val('cassandane', 'cleanup'));
+
+if ($want_rerun) {
+    my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+    my $failed_file = "$rootdir/failed";
+
+    my @failed = eval { read_file($failed_file, { chomp => 1 }) };
+    if ($@) {
+        print STDERR "Cannot --rerun without an existing failed file.\n";
+        exit 1;
+    }
+
+    if (scalar @failed) {
+        push @names, @failed;
+    }
+    else {
+        # prevent accidentally running everything by default!
+        print STDERR "The failed file is empty; there is nothing to ",
+                        "re-run.\n";
+        exit 0;
+    }
+}
 
 my $plan = Cassandane::Unit::TestPlan->new(
         keep_going => $keep_going,
