@@ -706,6 +706,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
         goto done;
     }
 
+    // we'll just make this 'matchedIds' later
     const char *resname = json_object_get(req->args, "typeNames") ? "matchedIds" : "types";
 
     /* Sort blob lookups by mailbox */
@@ -903,7 +904,6 @@ static int jmap_blob_lookup(jmap_req_t *req)
                     json_array_append_new(list, json_string(strarray_nth(ids, k)));
                 json_object_set_new(dtvalue, item->name, list);
             }
-            // XXX: replace the following two lines with this one line:
             json_array_append_new(get.list, json_pack("{s:s, s:o}", "id", blob_id, resname, dtvalue));
         }
         else {
