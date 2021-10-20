@@ -90,6 +90,8 @@ sub new
             }
         }
     }
+
+    die "couldn't find a cassandane.ini file" if not $filename;
     $filename = abs_path($filename);
 
     my $inifile = new Config::IniFiles();
