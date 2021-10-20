@@ -234,6 +234,7 @@ out:
 EXPORTED int quota_read_withconversations(struct quota *quota)
 {
     int r = quota_read(quota, NULL, 0);
+    if (r) return r;
 
     if (config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS)) {
         struct conversations_state *local_cstate = NULL;
@@ -251,7 +252,7 @@ EXPORTED int quota_read_withconversations(struct quota *quota)
         if (local_cstate) conversations_commit(&local_cstate);
     }
 
-    return r;
+    return 0;
 }
 
 /*
