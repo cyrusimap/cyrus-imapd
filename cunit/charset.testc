@@ -1242,8 +1242,14 @@ static void test_charset_decode(void)
     CU_ASSERT_STRING_EQUAL("foobar", buf_cstring(&buf));
     buf_reset(&buf);
 
-    /* Base64 with invalid character */
+    /* Base64 with invalid characters */
     r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_STRING_EQUAL("foobar", buf_cstring(&buf));
+    buf_reset(&buf);
+
+    /* Base64url with invalid characters */
+    r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64URL);
     CU_ASSERT_EQUAL(-1, r);
     buf_reset(&buf);
 

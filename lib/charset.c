@@ -528,7 +528,13 @@ static void b64_2byte(struct convert_rock *rock, uint32_t c)
 static int b64_flush(struct convert_rock *rock)
 {
     struct b64_state *s = (struct b64_state *)rock->state;
-    return s->invalid ? -1 : 0;
+    if (s->invalid) {
+        if (s->index == index_64url)
+            return -1;
+        else
+            xsyslog(LOG_WARNING, "ignoring invalid base64 characters", NULL);
+    }
+    return 0;
 }
 
 /*
