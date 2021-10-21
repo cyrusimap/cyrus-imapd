@@ -952,7 +952,7 @@ EXPORTED int sieve_script_rebuild(const char *userid,
     struct sieve_data *sdata = NULL;
     struct sieve_db *db = NULL;
     const char *content = NULL;
-    time_t lastupdated;
+    time_t lastupdated = 0;
     struct stat bc_stat;
     int r;
 
