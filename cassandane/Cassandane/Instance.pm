@@ -1827,7 +1827,7 @@ sub _fork_command
         or die "Cannot cd to $cd: $!";
 
     # ulimit -c ...
-    my $cassini = Cassandane::Cassini::instance();
+    my $cassini = Cassandane::Cassini->instance();
     my $coresizelimit = 0 + $cassini->val("cyrus $self->{installation}",
                                           'coresizelimit', '100');
     if ($coresizelimit <= 0) {

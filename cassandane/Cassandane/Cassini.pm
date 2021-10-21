@@ -50,13 +50,48 @@ use Cassandane::Util::Log;
 
 my $instance;
 
+sub homedir {
+    my ($uid) = @_;
+
+    my @pw = getpwuid($uid);
+    return $pw[7]; # dir field
+}
+
 sub new
 {
     my ($class, %params) = @_;
 
-    my $filename = 'cassandane.ini';
-    $filename = $params{filename}
-        if defined $params{filename};
+    my $filename;
+
+    if (defined $params{filename}) {
+        # explicitly requested filename: just use it
+        $filename = $params{filename};
+    }
+    else {
+        # check some likely places, in order
+        foreach my $dir (q{.},
+                         q{..},
+                         homedir($>),
+                         homedir($<),
+                         homedir($ENV{SUDO_UID})
+        ) {
+            next if not $dir;
+
+            # might be called "cassandane.ini"
+            if (-e "$dir/cassandane.ini") {
+                $filename = "$dir/cassandane.ini";
+                last;
+            }
+
+            # might be called ".cassandane.ini"
+            if (-e "$dir/.cassandane.ini") {
+                $filename = "$dir/.cassandane.ini";
+                last;
+            }
+        }
+    }
+
+    die "couldn't find a cassandane.ini file" if not $filename;
     $filename = abs_path($filename);
 
     my $inifile = new Config::IniFiles();
