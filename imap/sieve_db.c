@@ -918,7 +918,7 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
         mbentry.mbtype = MBTYPE_SIEVE;
 
         r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                                   0/*isadmin*/, userid, NULL/*auth_state*/,
+                                   1/*isadmin*/, userid, NULL/*auth_state*/,
                                    0/*flags*/, &mailbox);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
