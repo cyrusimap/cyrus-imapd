@@ -53,6 +53,8 @@ my $instance;
 sub homedir {
     my ($uid) = @_;
 
+    return undef if not $uid;
+
     my @pw = getpwuid($uid);
     return $pw[7]; # dir field
 }
