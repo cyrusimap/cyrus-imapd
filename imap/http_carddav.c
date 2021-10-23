@@ -612,8 +612,10 @@ static int store_resource(struct transaction_t *txn,
 
     /* Sanity check data */
     if (!version || !uid || !fullname) {
+        #define v34 " is missing (RFC 2426 Section 3, RFC 6350 Section 6)"
+        txn->error.desc = version ? uid ? "FN" v34 : "UID" v34 : "VERSION" v34;
+        #undef v34
         txn->error.precond = CARDDAV_VALID_DATA;
-        txn->error.desc = "Missing a mandatory vCard property";
         return HTTP_FORBIDDEN;
     }
 
