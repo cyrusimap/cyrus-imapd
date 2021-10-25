@@ -668,7 +668,8 @@ cunit_TESTS += \
 	cunit/times.testc \
 	cunit/tok.testc \
 	cunit/vparse.testc \
-	cunit/dynarray.testc
+	cunit/dynarray.testc \
+	cunit/xsha1.testc
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 		imap/mutex_fake.c imap/spool.c

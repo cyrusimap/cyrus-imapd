@@ -738,21 +738,20 @@ message_header_lookup(const char *buf, const char **valp)
 static void body_add_content_guid(const char *base, struct body *body)
 {
     int encoding = ENCODING_NONE;
-    char *decbuf = NULL;
+    uint8_t dest[SHA1_DIGEST_LENGTH];
+    size_t decodedlen = 0;
     charset_t cs = NULL;
-    size_t len = body->content_size;
+
     message_parse_charset(body, &encoding, &cs);
-    base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
-    if (base) {
-        message_guid_generate(&body->content_guid, base, len);
-        body->decoded_content_size = len;
+    if (!charset_decode_sha1(dest, &decodedlen, base, body->content_size, encoding)) {
+        message_guid_import(&body->content_guid, (void *)dest);
+        body->decoded_content_size = decodedlen;
     }
     else {
         message_guid_set_null(&body->content_guid);
         body->decoded_content_size = 0;
     }
     charset_free(&cs);
-    free(decbuf);
 }
 
 
