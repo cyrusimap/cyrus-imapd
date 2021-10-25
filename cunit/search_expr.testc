@@ -679,9 +679,9 @@ static void test_normalise(void)
      * under a NOT node is already in DNF.
      */
     TESTCASE("(not (false))",
-             "(not (false))");
+             "(true)");
     TESTCASE("(not (true))",
-             "(not (true))");
+             "(false)");
     TESTCASE("(not (match subject \"ETSY\"))",
              "(not (match subject \"ETSY\"))");
     TESTCASE("(not (le size 123))",
@@ -1053,6 +1053,115 @@ static void test_normalise(void)
                 " "
                 "(match subject \"ETSY\")"
              ")");
+
+    // Detrivialisation.
+
+    TESTCASE("(or "
+                "(not (true))"
+                " "
+                "(not (le size 123))"
+            ")",
+            "(not (le size 123))");
+
+    TESTCASE("(or "
+                "(and "
+                    "(true)"
+                    " "
+                    "(match subject \"ETSY\")"
+                    " "
+                    "(not (le size 789))"
+                ")"
+                " "
+                "(and "
+                    "(true)"
+                    " "
+                    "(not (true))"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+            ")",
+            "(and "
+                "(not (le size 789))"
+                " "
+                "(match subject \"ETSY\")"
+            ")");
+
+    TESTCASE("(or "
+                "(and "
+                    "(true)"
+                    " "
+                    "(not (le size 123))"
+                    " "
+                    "(match body \"COSBY\")"
+                ")"
+                " "
+                "(and "
+                    "(true)"
+                    " "
+                    "(not (true))"
+                    " "
+                    "(match body \"COSBY\")"
+                ")"
+            ")",
+            "(and "
+                "(not (le size 123))"
+                " "
+                "(match body \"COSBY\")"
+            ")");
+    TESTCASE("(or "
+                "(and "
+                    "(true)"
+                    " "
+                    "(true)"
+                    " "
+                    "(match subject \"ETSY\")"
+                    " "
+                    "(not (le size 789))"
+                    " "
+                    "(match body \"COSBY\")"
+                ")"
+                " "
+                "(and "
+                    "(true)"
+                    " "
+                    "(true)"
+                    " "
+                    "(not (true))"
+                    " "
+                    "(match body \"COSBY\")"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+            ")",
+            "(and "
+                "(not (le size 789))"
+                " "
+                "(match subject \"ETSY\")"
+                " "
+                "(match body \"COSBY\")"
+            ")");
+
+    TESTCASE("(or "
+                "(and "
+                    "(true)"
+                    " "
+                    "(ge size 5)"
+                ")"
+                " "
+                "(and "
+                    "(true)"
+                    " "
+                    "(le size 10)"
+                ")"
+            ")",
+            "(or "
+                "(le size 10)"
+                " "
+                "(ge size 5)"
+            ")");
+
+
+
 
 #undef TESTCASE
 }

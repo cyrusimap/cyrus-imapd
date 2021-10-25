@@ -594,6 +594,102 @@ static void combine(search_expr_t **ep, search_expr_t **prevp)
     }
 }
 
+static int detrivialise(search_expr_t **ep)
+{
+    if (!ep || !*ep) return 0;
+
+    int r = 0;
+
+    search_expr_t *e = *ep;
+    search_expr_t *c, *next;
+    for (c = e->children; c; c = next) {
+        next = c->next;
+        int r2 = detrivialise(&c);
+        if (!r2) r = r2;
+    }
+
+    search_expr_t *detached_children = NULL;
+
+    switch (e->op) {
+        case SEOP_AND:
+        case SEOP_OR:
+            {
+                enum search_op trivop = e->op == SEOP_AND ?
+                    SEOP_FALSE : SEOP_TRUE;
+                enum search_op noop = e->op == SEOP_AND ?
+                    SEOP_TRUE : SEOP_FALSE;
+                for (c = e->children; c; c = next) {
+                    next = c->next;
+                    if (c->op == trivop) {
+                        detached_children = e->children;
+                        e->children = NULL;
+                        e->op = trivop;
+                        r = 1;
+                        break;
+                    }
+                    else if (c->op == noop) {
+                        search_expr_detach(e, c);
+                        search_expr_free(c);
+                        r = 1;
+                    }
+                }
+                break;
+            }
+        case SEOP_NOT:
+            if (e->children) {
+                int childop = e->children->op;
+                if (childop == SEOP_TRUE || childop == SEOP_FALSE) {
+                    detached_children = e->children;
+                    e->children = NULL;
+                    e->op = childop == SEOP_TRUE ? SEOP_FALSE : SEOP_TRUE;
+                    r = 1;
+                }
+            }
+            break;
+        default:
+            // do nothing
+            ;
+    }
+
+    for (c = detached_children; c; c = next) {
+        next = c->next;
+        search_expr_free(c);
+    }
+
+    if (e->op == SEOP_AND || e->op == SEOP_OR) {
+        if (e->children && !e->children->next) {
+            if (e->parent) {
+                // Prepend sole child to parent children
+                search_expr_t *p = e->parent;
+                c = e->children;
+                e->children = NULL;
+                search_expr_detach(e->parent, e);
+                search_expr_free(e);
+                c->next = p->children;
+                p->children = c;
+                c->parent = p;
+            }
+            else {
+                *ep = e->children;
+                e->children = NULL;
+                search_expr_free(e);
+            }
+            r = 1;
+        }
+        else if (!e->children) {
+            e->op = e->op == SEOP_AND ? SEOP_TRUE : SEOP_FALSE;
+            r = 1;
+        }
+    }
+
+    return r;
+}
+
+EXPORTED void search_expr_detrivialise(search_expr_t **ep)
+{
+    detrivialise(ep); // ignore return code
+}
+
 /*
  * Top-level normalisation step.  Returns 1 if it changed the subtree, 0
  * if it didn't, and -1 on error (such as exceeding a complexity limit).
@@ -801,11 +897,16 @@ static int search_expr_normalise_nnodes(search_expr_t **ep, unsigned *nnodes)
     the_rootp = ep;
 #endif
     r = normalise(ep, nnodes);
+    if (r >= 0) {
+        int r2 = detrivialise(ep);
+        if (!r) r = r2;
+    }
     sort_children(*ep);
 #if DEBUG
     the_rootp = NULL;
     the_focus = NULL;
 #endif
+
     return r;
 }
 
