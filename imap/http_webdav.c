@@ -63,8 +63,6 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-static struct webdav_db *auth_webdavdb = NULL;
-
 static void my_webdav_init(struct buf *serverinfo);
 static int my_webdav_auth(const char *userid);
 static void my_webdav_reset(void);
@@ -315,18 +313,10 @@ static int my_webdav_auth(const char *userid)
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
         return 0;
     }
-    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV databases */
         return 0;
-    }
-    else {
-        /* Open WebDAV DB for 'userid' */
-        my_webdav_reset();
-        auth_webdavdb = webdav_open_userid(userid);
-        if (!auth_webdavdb) {
-            syslog(LOG_ERR, "Unable to open WebDAV DB for userid: %s", userid);
-            return HTTP_UNAVAILABLE;
-        }
     }
 
     /* Auto-provision toplevel DAV drive collection for 'userid' */
@@ -382,8 +372,7 @@ static int my_webdav_auth(const char *userid)
 
 static void my_webdav_reset(void)
 {
-    if (auth_webdavdb) webdav_close(auth_webdavdb);
-    auth_webdavdb = NULL;
+    // nothing
 }
 
 
