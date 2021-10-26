@@ -1075,7 +1075,7 @@ sub test_email_get_shared
 }
 
 sub test_email_query_shared_move
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11218,6 +11218,13 @@ sub test_email_set_headers
            wantRaw => (' <foourl>,' x 6)."\r\n".(' <foourl>,' x 4).' <foourl>',
        },
     };
+
+    # header fold/encode behaviour has changed -- discard some tests for
+    # older cyruses
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj == 3 && $min < 5)) {
+        delete $headers->{'header:X-TextHeaderFold'};
+    }
 
     # Prepare test email
     my $email =  {
