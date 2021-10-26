@@ -1421,8 +1421,6 @@ static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
 
-    *body = NULL;
-
     if (!m->cache_full) fill_cache(m);
 
     *body = spool_getheader(m->cache, phead);
