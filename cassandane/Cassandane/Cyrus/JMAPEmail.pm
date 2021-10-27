@@ -19492,7 +19492,15 @@ EOF
     }, $res->[0][1]{list}[0]{mailboxIds});
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
     $self->assert_deep_equals([], $res->[1][1]{ids});
-    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj ==3 && $min < 5)) {
+        $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    }
+    else {
+        # Due to improved JMAP Email query optimizer
+        $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isGuidSearch});
+    }
+
     $self->assert_deep_equals([], $res->[2][1]{ids});
 
     xlog "Create message in inbox";
