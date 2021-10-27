@@ -3730,10 +3730,9 @@ sub test_imip_invite
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip {
         setflag "\\\\Flagged";
     }
 }
@@ -3800,10 +3799,9 @@ sub test_imip_invite_base64
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip {
         setflag "\\\\Flagged";
     }
 }
@@ -3877,10 +3875,9 @@ sub test_imip_invite_multipart
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip {
         setflag "\\\\Flagged";
     }
 }
@@ -3962,10 +3959,9 @@ sub test_imip_invite_calendarid
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :calendarid "$CalendarId" :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip :calendarid "$CalendarId" {
         setflag "\\\\Flagged";
     }
 }
@@ -4032,11 +4028,13 @@ sub test_imip_invite_updatesonly
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip", "editheader"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :updatesonly :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip :updatesonly :errstr "errstr" {
         setflag "\\\\Flagged";
+    }
+    else {
+        addheader :last "X-iMIP-Status" "\${errstr}";
     }
 }
 EOF
@@ -4077,7 +4075,11 @@ EOF
     $self->{instance}->deliver($msg);
 
     xlog $self, "Check that the message made it to INBOX";
-    $self->check_messages({ 1 => $msg }, check_guid => 0);
+    $IMAP->select("INBOX");
+    my $res = $IMAP->fetch(1, 'rfc822');
+    $msg = $res->{1}->{rfc822};
+    $self->assert_matches(qr/\r\nX-Cassandane-Unique: $uuid\r\n/, $msg);
+    $self->assert_matches(qr/\r\nX-iMIP-Status: .*\r\n/, $msg);
 
     xlog $self, "Check that the event did NOT make it to calendar";
     my $events = $CalDAV->GetEvents($CalendarId);
@@ -4101,10 +4103,9 @@ sub test_imip_update
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip {
         setflag "\\\\Flagged";
     }
 }
@@ -4222,10 +4223,9 @@ sub test_imip_cancel
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip {
         setflag "\\\\Flagged";
     }
 }
@@ -4338,10 +4338,9 @@ sub test_imip_cancel_delete
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :deletecanceled :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip :deletecanceled {
         setflag "\\\\Flagged";
     }
 }
@@ -4450,10 +4449,9 @@ sub test_imip_reply
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip {
         setflag "\\\\Flagged";
     }
 }
@@ -4552,10 +4550,9 @@ sub test_imip_reply_override
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip {
         setflag "\\\\Flagged";
     }
 }
@@ -4668,10 +4665,9 @@ sub test_imip_reply_override_invalid
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :status "status";
-    if string :matches "\${status}" "OK*" {
+    if processimip {
         setflag "\\\\Flagged";
     }
 }
