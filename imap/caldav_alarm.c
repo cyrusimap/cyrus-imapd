@@ -1592,7 +1592,15 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         syslog(LOG_ERR, "smtpclient_open failed: %s", err);
     }
     else {
-        smtpclient_set_auth(sm, json_string_value(identity));
+        /* Set AUTH ID */
+        char *authid = mboxname_to_userid(mailbox_name(mailbox));
+        smtpclient_set_auth(sm, authid);
+        free(authid);
+
+        /* Set IDENTITY ID */
+        if (JNOTNULL(identity)) {
+            smtpclient_set_jmapid(sm, json_string_value(identity));
+        }
 
         /* Prepare envelope */
         smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;

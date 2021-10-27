@@ -302,6 +302,10 @@ static void address_to_smtp(smtp_addr_t *smtpaddr, json_t *addr)
         else if (!strcasecmp(key, "HOLDFOR") || !strcasecmp(key, "HOLDUNTIL")) {
             continue;
         }
+        /* We handle IDENTITY ourselves */
+        else if (!strcasecmp(key, "IDENTITY")) {
+            continue;
+        }
         /* Encode xtext value */
         if (json_is_string(val)) {
             smtp_encode_esmtp_value(json_string_value(val), &xtext);
