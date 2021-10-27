@@ -214,7 +214,7 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
     sieve_register_extlists(interpreter,
                             (sieve_list_validator *) &stub_generic,
                             (sieve_list_comparator *) &stub_generic);
-    sieve_register_imip(interpreter, (sieve_callback *) &stub_generic);
+    sieve_register_imip(interpreter, (sieve_processimip *) &stub_generic);
 #endif
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interpreter, (sieve_jmapquery *) &stub_generic);

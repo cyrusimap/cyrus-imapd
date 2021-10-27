@@ -49,7 +49,7 @@
 struct sieve_interp {
     /* standard callbacks for actions */
     sieve_callback *redirect, *discard, *reject, *fileinto, *snooze, *keep;
-    sieve_callback *notify, *imip;
+    sieve_callback *notify;
     sieve_vacation_t *vacation;
 
     sieve_get_size *getsize;
@@ -74,6 +74,7 @@ struct sieve_interp {
 
     sieve_duplicate_t *duplicate;
     sieve_jmapquery *jmapquery;
+    sieve_processimip *imip;
 
     sieve_parse_error *err;
 

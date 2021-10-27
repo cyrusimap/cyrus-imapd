@@ -397,7 +397,7 @@ ws              [ \t]+
 <INITIAL>:updatesonly         return UPDATESONLY;
 <INITIAL>:deletecanceled      return DELETECANCELED;
 <INITIAL>:calendarid          return CALENDARID;
-<INITIAL>:status              return STATUS;
+<INITIAL>:errstr              return ERRSTR;
 
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */

@@ -1396,10 +1396,9 @@ done:
 char *httpd_userid = NULL;  // due to caldav_util.h including httpd.h
 struct namespace_t namespace_calendar = { .allow = ALLOW_USERDATA | ALLOW_CAL_NOTZ };
 
-static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
-                      const char **errmsg __attribute__((unused)))
+static int sieve_imip(void *ic, void *sc, void *mc,
+                      sieve_imip_context_t *imip)
 {
-    sieve_imip_context_t *imip = (sieve_imip_context_t *) ac;
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;
@@ -1411,15 +1410,17 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     const char *uid = NULL, *organizer = NULL;
     const char *originator = NULL, *recipient = NULL;
     strarray_t sched_addresses = STRARRAY_INITIALIZER;
-    const char *resultstr = "fail";
-    int ret = SIEVE_FAIL;
+    int ret = 0;
 
     prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
+
+    buf_reset(&imip->errstr);
 
     /* parse the message body if we haven't already */
     if (!mydata->content->body &&
         message_parse_file_buf(m->f, &mydata->content->map,
                                &mydata->content->body, NULL)) {
+        buf_setcstr(&imip->errstr, "unable to parse iMIP message");
         goto done;
     }
 
@@ -1436,20 +1437,42 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
         buf_free(&buf);
     }
 
-    if (!itip) goto done;
+    if (!itip) {
+        buf_setcstr(&imip->errstr, "unable to find & parse text/calendar part");
+        goto done;
+    }
 
     icalrestriction_check(itip);
-    if (get_icalcomponent_errstr(itip)) goto done;
+    if (get_icalcomponent_errstr(itip)) {
+        buf_setcstr(&imip->errstr, "invalid iCalendar data");
+        goto done;
+    }
 
     meth = icalcomponent_get_method(itip);
-    comp = icalcomponent_get_first_real_component(itip);
-    if (comp) {
-        kind = icalcomponent_isa(comp);
-        uid = icalcomponent_get_uid(comp);
-        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-        if (prop) organizer = icalproperty_get_organizer(prop);
+    if (meth == ICAL_METHOD_NONE) {
+        buf_setcstr(&imip->errstr, "missing METHOD property");
+        goto done;
     }
-    if (!uid || !organizer) goto done;
+
+    comp = icalcomponent_get_first_real_component(itip);
+    if (!comp) {
+        buf_setcstr(&imip->errstr, "no component to schedule");
+        goto done;
+    }
+
+    kind = icalcomponent_isa(comp);
+    uid = icalcomponent_get_uid(comp);
+    if (!uid) {
+        buf_setcstr(&imip->errstr, "missing UID property");
+        goto done;
+    }
+
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (!prop) {
+        buf_setcstr(&imip->errstr, "missing ORGANIZER property");
+        goto done;
+    }
+    organizer = icalproperty_get_organizer(prop);
 
     if (strchr(ctx->userid, '@')) {
         strarray_add(&sched_addresses, ctx->userid);
@@ -1477,7 +1500,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     case ICAL_VPOLL_COMPONENT:
         switch (meth) {
         case ICAL_METHOD_POLLSTATUS:
-            if (kind != ICAL_VPOLL_COMPONENT) break;
+            if (kind != ICAL_VPOLL_COMPONENT) goto unsupported_method;
 
             GCC_FALLTHROUGH
 
@@ -1496,27 +1519,39 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
                     break;
                 }
             }
+            if (!recipient) {
+                buf_setcstr(&imip->errstr,
+                            "could not find matching ATTENDEE property");
+                goto done;
+            }
             break;
 
         case ICAL_METHOD_REPLY:
             /* Organizer better match owner of script */
             recipient = organizer;
             prop = icalcomponent_get_first_invitee(comp);
-            if (prop) originator = icalproperty_get_invitee(prop);
+            if (!prop) {
+                buf_setcstr(&imip->errstr, "missing ATTENDEE property");
+                goto done;
+            }
+            originator = icalproperty_get_invitee(prop);
             break;
 
+        unsupported_method:
         default:
             /* Unsupported method */
-            break;
+            buf_printf(&imip->errstr, "unsupported method: '%s'",
+                       icalproperty_method_to_string(meth));
+            goto done;
         }
         break;
 
     default:
         /* Unsupported component */
-        break;
+        buf_printf(&imip->errstr, "unsupported component: '%s'",
+                   icalcomponent_kind_to_string(kind));
+        goto done;
     }
-
-    if (!originator || !recipient) goto done;
 
     unsigned flags = 0;
     if (meth == ICAL_METHOD_REPLY) flags |= SCHEDFLAG_IS_REPLY;
@@ -1527,22 +1562,27 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     struct sched_data sched_data =
         { flags, itip, NULL, NULL,
           ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, imip->calendarid, NULL };
-    struct caldav_sched_param sched_param =
-      { (char *) ctx->userid, NULL, 0, 0, 1, NULL };
-    if (1 == sched_deliver_local(ctx->userid, originator, recipient,
-                                 &sched_param, &sched_data,
-                                 (struct auth_state *) sd->authstate,
-                                 NULL, NULL)) {
-        resultstr = "success";
-        ret = SIEVE_OK;
+    struct caldav_sched_param sched_param = {
+        (char *) ctx->userid, NULL, 0, 0, 1, NULL
+    };
+    ret = sched_deliver_local(ctx->userid, originator, recipient,
+                              &sched_param, &sched_data,
+                              (struct auth_state *) sd->authstate,
+                              NULL, NULL);
+syslog(LOG_INFO, "XXXXXXXX  %d", ret);
+    if (ret != 1) {
+        buf_setcstr(&imip->errstr, sched_data.status ? sched_data.status :
+                    "failed to deliver iMIP message");
+        ret = 0;
     }
 
     syslog(LOG_INFO, "sieve iMIP processed: %s: %s",
-           m->id ? m->id : "<nomsgid>", resultstr);
+           m->id ? m->id : "<nomsgid>", buf_cstring(&imip->errstr));
     if (config_auditlog)
         syslog(LOG_NOTICE,
                "auditlog: processed iMIP sessionid=<%s> message-id=%s: %s",
-               session_id(), m->id ? m->id : "<nomsgid>", resultstr);
+               session_id(), m->id ? m->id : "<nomsgid>",
+               buf_cstring(&imip->errstr));
 
   done:
     strarray_fini(&sched_addresses);

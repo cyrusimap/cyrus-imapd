@@ -424,13 +424,6 @@ enum bytecode {
                                      <create: int> <flag-list: string-list>
                                      <special-use: string> <mailboxid: string> */
 
-    B_PROCESSIMIP,              /* require ["vnd.cyrus.imip", "variables"]
-
-                                   <flags-bitmask: int>
-                                   <calendar-id: string>
-                                   <status-var: string>
-                                 */
-
     /*****  insert new actions above this line  *****/
     B_ILLEGAL_VALUE             /* any value >= this code is illegal */
 };
@@ -568,6 +561,13 @@ enum bytecode_comps {
                                    <zonetag: int> <tzoffset: string>
                                    <COMPARATOR> <date-part: int>
                                    <patterns: string-list>                     */
+
+    BC_PROCESSIMIP,             /* require ["vnd.cyrus.imip", "variables"]
+
+                                   <flags-bitmask: int>
+                                   <calendar-id: string>
+                                   <errstr-var: string>
+                                 */
 
     /*****  insert new tests above this line  *****/
     BC_ILLEGAL_VALUE    /* any value >= this code is illegal */
