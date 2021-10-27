@@ -157,6 +157,15 @@ extern void smtpclient_set_ret(smtpclient_t *sm, const char *value);
  * Setting this to NULL resets the value. */
 extern void smtpclient_set_by(smtpclient_t *sm, const char *value);
 
+/* Add the IDENTITY=value parameter to MAIL FROM commands, if the
+ * SMTP backend advertised support for the JMAPIDENTITY extension.
+ *
+ * An IDENTITY parameter in the SMTP envelope of the smtpclient_from
+ * function overrides this value, regardless of advertised extensions.
+ *
+* Setting this to NULL resets the value. */
+extern void smtpclient_set_jmapid(smtpclient_t *sm, const char *value);
+
 /* Add the SIZE=value parameter to MAIL FROM commands, if the
  * SMTP backend advertised support for the RFC 1870 SIZE extension.
  *

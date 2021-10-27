@@ -86,6 +86,7 @@ struct smtpclient {
     char *notify;
     char *ret;
     char *by;
+    char *jmapid;
     unsigned long msgsize;
     smtp_resp_t resp;
 };
@@ -97,7 +98,8 @@ enum {
     SMTPCLIENT_CAPA_STATUS    = (1 << 6),
     SMTPCLIENT_CAPA_FUTURE    = (1 << 7),
     SMTPCLIENT_CAPA_PRIORITY  = (1 << 8),
-    SMTPCLIENT_CAPA_SENDCHECK = (1 << 9)
+    SMTPCLIENT_CAPA_SENDCHECK = (1 << 9),
+    SMTPCLIENT_CAPA_JMAPID    = (1 << 10),
 };
 
 static struct protocol_t smtp_protocol =
@@ -114,6 +116,7 @@ static struct protocol_t smtp_protocol =
           { "FUTURERELEASE", SMTPCLIENT_CAPA_FUTURE },
           { "MT-PRIORITY", SMTPCLIENT_CAPA_PRIORITY },
           { "SENDCHECK", SMTPCLIENT_CAPA_SENDCHECK },
+          { "JMAPIDENTITY", SMTPCLIENT_CAPA_JMAPID },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
@@ -190,6 +193,7 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
     free(sm->ret);
     free(sm->notify);
     free(sm->authid);
+    free(sm->jmapid);
     buf_free(&sm->resp.text);
 
     free(sm);
@@ -532,6 +536,10 @@ static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
     if (sm->by && CAPA(sm->backend, SMTPCLIENT_CAPA_DELIVERBY)) {
         smtp_params_set_extra(&addr->params, &extra_params, "BY", sm->by);
     }
+    if (sm->jmapid && CAPA(sm->backend, SMTPCLIENT_CAPA_JMAPID)) {
+        smtp_params_set_extra(&addr->params,
+                              &extra_params, "IDENTITY", sm->jmapid);
+    }
     if (sm->msgsize && CAPA(sm->backend, SMTPCLIENT_CAPA_SIZE)) {
         char szbuf[21];
         snprintf(szbuf, sizeof(szbuf), "%lu", sm->msgsize);
@@ -768,6 +776,20 @@ EXPORTED void smtpclient_set_by(smtpclient_t *sm, const char *value)
 {
     free(sm->by);
     sm->by = xstrdupnull(value);
+}
+
+EXPORTED void smtpclient_set_jmapid(smtpclient_t *sm, const char *value)
+{
+    free(sm->jmapid);
+    sm->jmapid = NULL;
+
+    if (value) {
+        struct buf xtext = BUF_INITIALIZER;
+
+        smtp_encode_esmtp_value(value, &xtext);
+        sm->jmapid = buf_release(&xtext);
+        buf_free(&xtext);
+    }
 }
 
 EXPORTED void smtpclient_set_size(smtpclient_t *sm, unsigned long value)
