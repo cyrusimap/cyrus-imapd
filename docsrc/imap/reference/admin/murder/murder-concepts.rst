@@ -579,7 +579,7 @@ IMAP connection
 client
     A client is a process on a remote computer that communicates with
     the set of servers distributing mail data, be they ACAP, IMAP,
-    LDAP, or IMSP servers. A client opens one or more connections to
+    or LDAP servers. A client opens one or more connections to
     various servers.
     
 mailbox tree

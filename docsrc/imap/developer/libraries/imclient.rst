@@ -8,7 +8,7 @@
 **imclient** library
 ====================
 
-Authenticating callback interface to IMAP/IMSP servers
+Authenticating callback interface to IMAP servers
 
 Synopsis
 ========
@@ -41,8 +41,8 @@ Synopsis
 Description
 ===========
 
-The imclient library functions are distributed with Cyrus IMAP and IMSP.
-These functions are used for building IMAP/IMSP client software. These
+The imclient library functions are distributed with Cyrus IMAP.
+These functions are used for building IMAP client software. These
 functions handle Kerberos authentication and can set callbacks based on the
 keyword in untagged replies or based on the command tag at the end of
 command replies.
@@ -280,4 +280,4 @@ See Also
 Keywords
 ========
 
-IMAP, ACAP, IMSP, Kerberos, Authentication
+IMAP, ACAP, Kerberos, Authentication
