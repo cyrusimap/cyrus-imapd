@@ -233,6 +233,12 @@ static int should_index(const char *name)
         goto done;
     }
 
+    // skip sieve scripts
+    if (mboxname_issievemailbox(mbentry->name, mbentry->mbtype)) {
+        ret = 0;
+        goto done;
+    }
+
     // skip COLLECTION mailboxes (just files)
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_COLLECTION) {
         ret = 0;
