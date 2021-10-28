@@ -152,8 +152,7 @@ int actions_setuser(const char *userid)
 
 void actions_unsetuser(void)
 {
-    free(sieved_userid);
-    sieved_userid = NULL;
+    xzfree(sieved_userid);
 
     mailbox_close(&sieve_mailbox);
     sieve_mailbox = NULL;
