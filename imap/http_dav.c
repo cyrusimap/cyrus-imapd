@@ -111,7 +111,7 @@ static const struct dav_namespace_t {
     { XML_NS_SYSFLAG, "SF" },
 };
 
-const struct match_type_t dav_match_types[] = {
+static const struct match_type_t dav_match_types[] = {
     { "contains", MATCH_TYPE_CONTAINS },
     { "equals", MATCH_TYPE_EQUALS },
     { "starts-with", MATCH_TYPE_PREFIX },

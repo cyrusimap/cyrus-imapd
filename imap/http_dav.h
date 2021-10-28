@@ -609,8 +609,6 @@ struct match_type_t {
     unsigned value;
 };
 
-extern const struct match_type_t dav_match_types[];
-
 enum {
     COLLATION_UNICODE = 0,
     COLLATION_ASCII,
