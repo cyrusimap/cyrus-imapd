@@ -79,7 +79,10 @@ static const struct dav_namespace_t {
 #define NUM_KNOWN_NAMESPACES                                    \
     (sizeof(known_namespaces) / sizeof(struct dav_namespace_t))
 
-static const struct match_type_t dav_match_types[] = {
+static const struct match_type_t {
+    const char *name;
+    unsigned value;
+} dav_match_types[] = {
     { "contains", MATCH_TYPE_CONTAINS },
     { "equals", MATCH_TYPE_EQUALS },
     { "starts-with", MATCH_TYPE_PREFIX },
