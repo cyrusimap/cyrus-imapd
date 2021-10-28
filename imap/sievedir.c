@@ -260,18 +260,16 @@ EXPORTED int sievedir_deactivate_script(const char *sievedir)
 EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
 {
     char path[PATH_MAX];
-    int r;
 
     /* delete bytecode */
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-    r = unlink(path);
-    if (r && errno != ENOENT) {
+    if (unlink(path) != 0 && errno != ENOENT) {
         xsyslog(LOG_ERR, "IOERROR: failed to delete bytecode file",
                 "path=<%s>", path);
-        r = 0;
+        return SIEVEDIR_IOERROR;
     }
 
-    return (r ? SIEVEDIR_IOERROR : SIEVEDIR_OK);
+    return SIEVEDIR_OK;
 }
 
 EXPORTED int sievedir_rename_script(const char *sievedir,
