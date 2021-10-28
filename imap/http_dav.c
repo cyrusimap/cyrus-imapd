@@ -119,7 +119,7 @@ static const struct match_type_t dav_match_types[] = {
     { NULL, 0 }
 };
 
-const struct collation_t dav_collations[] = {
+static const struct collation_t dav_collations[] = {
     { "i;unicode-casemap", COLLATION_UNICODE },
     { "i;ascii-casemap", COLLATION_ASCII },
     { "i;octet", COLLATION_OCTET },

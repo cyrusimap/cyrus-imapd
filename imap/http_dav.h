@@ -620,8 +620,6 @@ struct collation_t {
     unsigned value;
 };
 
-extern const struct collation_t dav_collations[];
-    
 struct text_match_t {
     xmlChar *text;
     unsigned negate    : 1;
