@@ -1017,20 +1017,27 @@ EXPORTED void vparse_replace_entry(struct vparse_card *card, const char *group, 
 {
     struct vparse_entry *entry = vparse_get_entry(card, group, name);
     if (entry) {
-        if (entry->multivaluesep) {
-            /* FN isn't allowed to be a multi-value, but let's
-             * rather check than deal with corrupt memory */
-            strarray_free(entry->v.values);
-            entry->v.values = NULL;
-        } else {
-            free(entry->v.value);
-        }
-        entry->v.value = xstrdupnull(value);
-        entry->multivaluesep = '\0';
+        vparse_set_value(entry, value);
     }
     else {
         vparse_add_entry(card, group, name, value);
     }
+}
+
+EXPORTED void vparse_set_value(struct vparse_entry *entry, const char *value)
+{
+    if (!entry) return;
+
+    if (entry->multivaluesep) {
+        /* FN isn't allowed to be a multi-value, but let's
+         * rather check than deal with corrupt memory */
+        strarray_free(entry->v.values);
+        entry->v.values = NULL;
+    } else {
+        free(entry->v.value);
+    }
+    entry->v.value = xstrdupnull(value);
+    entry->multivaluesep = '\0';
 }
 
 EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group, const char *name)
