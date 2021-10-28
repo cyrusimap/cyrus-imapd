@@ -4159,7 +4159,7 @@ static int eventquery_search_run(jmap_req_t *req,
     init.want_mbtype = MBTYPE_CALENDAR;
     init.examine_mode = 1;
 
-    char *mboxname = mboxname_user_mbox(req->accountid, "#calendars");
+    char *mboxname = mboxname_user_mbox(req->accountid, config_getstring(IMAPOPT_CALENDARPREFIX));
     r = index_open(mboxname, &init, &state);
     free(mboxname);
     if (r) goto done;
