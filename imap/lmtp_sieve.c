@@ -2009,7 +2009,7 @@ static int sieve_find_script(const char *user, const char *domain,
         return 0;
     }
 
-    /* look in sieve_dir */        
+    /* look in sieve_dir */
     struct buf buf = BUF_INITIALIZER;
 
     if (user) buf_setcstr(&buf, user);
