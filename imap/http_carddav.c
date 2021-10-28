@@ -105,7 +105,8 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
                         void *destdb, unsigned flags);
 
 static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                       struct index_record *record, void *data, void **obj);
+                       struct index_record *record, void *data, void **obj,
+                       struct mime_type_t *mime);
 
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
@@ -1092,7 +1093,8 @@ static int carddav_get(struct transaction_t *txn,
                        struct mailbox *mailbox __attribute__((unused)),
                        struct index_record *record,
                        void *data __attribute__((unused)),
-                       void **obj __attribute__((unused)))
+                       void **obj __attribute__((unused)),
+                       struct mime_type_t *mime __attribute__((unused)))
 {
     if (!(txn->req_tgt.collection || txn->req_tgt.userid))
         return HTTP_NO_CONTENT;

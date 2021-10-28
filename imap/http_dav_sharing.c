@@ -75,7 +75,8 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
                              const char **resultstr);
 
 static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data, void **obj);
+                      struct index_record *record, void *data, void **obj,
+                      struct mime_type_t *mime);
 static int notify_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
                       void *davdb, unsigned flags);
@@ -471,7 +472,8 @@ static void my_dav_shutdown(void)
 /* Perform a GET/HEAD request on a WebDAV notification resource */
 static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data,
-                      void **obj __attribute__((unused)))
+                      void **obj __attribute__((unused)),
+                      struct mime_type_t *mime __attribute__((unused)))
 {
     const char **hdr;
     struct webdav_data *wdata = (struct webdav_data *) data;

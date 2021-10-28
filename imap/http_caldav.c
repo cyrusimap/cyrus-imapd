@@ -178,7 +178,9 @@ static int caldav_delete_cal(struct transaction_t *txn,
                              struct mailbox *mailbox,
                              struct index_record *record, void *data);
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data, void **obj);
+                      struct index_record *record, void *data, void **obj,
+                      struct mime_type_t *mime);
+
 static int caldav_mkcol(struct mailbox *mailbox);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_patch(struct transaction_t *txn, void *obj);
@@ -2688,7 +2690,8 @@ EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
 
 /* Perform a GET/HEAD request on a CalDAV resource */
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data, void **obj)
+                      struct index_record *record, void *data, void **obj,
+                      struct mime_type_t *mime __attribute__((unused)))
 {
     int r;
 

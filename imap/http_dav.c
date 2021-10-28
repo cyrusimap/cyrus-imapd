@@ -5274,7 +5274,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
 
     if (!txn->req_tgt.resource) {
         /* Do any collection processing */
-        if (gparams->get) return gparams->get(txn, NULL, NULL, NULL, NULL);
+        if (gparams->get) return gparams->get(txn, NULL, NULL, NULL, NULL, mime);
 
         /* We don't handle GET on a collection */
         return HTTP_NO_CONTENT;
@@ -5351,7 +5351,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
 
     /* Do any special processing */
     if (gparams->get) {
-        ret = gparams->get(txn, mailbox, &record, ddata, &obj);
+        ret = gparams->get(txn, mailbox, &record, ddata, &obj, mime);
         if (ret != HTTP_CONTINUE) goto done;
 
         ret = 0;
@@ -7261,7 +7261,8 @@ int meth_put(struct transaction_t *txn, void *params)
             txn->resp_body.lastmod = lastmod;
 
             if (pparams->get) {
-                r = pparams->get(txn, mailbox, &oldrecord, (void *) ddata, &obj);
+                r = pparams->get(txn, mailbox, &oldrecord,
+                                 (void *) ddata, &obj, mime);
                 if (r != HTTP_CONTINUE) flags &= ~PREFER_REP;
             }
             else {
