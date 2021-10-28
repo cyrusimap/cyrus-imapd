@@ -2155,6 +2155,7 @@ struct conv_rock {
     struct conversations_state *cstate;
     int cstate_is_ours;
     int num;        /* -1=invalid, 0=\Seen, 1+=index into cstate->counted_flags+1 */
+    int include_trash;
 };
 
 static void conv_rock_new(struct mailbox *mailbox,
@@ -2176,6 +2177,11 @@ static void search_convflags_internalise(struct index_state *state,
         if (rock->cstate) {
             if (!strcasecmp(v->s, "\\Seen")) {
                 rock->num = 0;
+            }
+            else if (!strcasecmp(v->s, "\\SeenInclTrash")) {
+                // XXX workaround for conv.unseen not counting Trash mailbox
+                rock->num = 0;
+                rock->include_trash = 1;
             }
             else if (!rock->cstate->counted_flags) {
                 rock->num = -1;
@@ -2203,13 +2209,26 @@ static int search_convflags_match(message_t *m,
     if (!rock->cstate) return 0;
 
     message_get_cid(m, &cid);
-    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/0)) return 0;
+    int flags = rock->include_trash ? CONV_WITHFOLDERS : 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, flags)) return 0;
     if (!conv.exists) return 0;
 
-    if (rock->num == 0)
-        r = (conv.unseen != conv.exists);
-    else if (rock->num > 0)
+    if (rock->num == 0) {
+        uint64_t unseen = conv.unseen;
+        if (rock->include_trash) {
+            conv_folder_t *folder;
+            for (folder = conv.folders; folder; folder = folder->next) {
+                if (folder->number == rock->cstate->trashfolder) {
+                    unseen += folder->unseen;
+                    break;
+                }
+            }
+        }
+        r = (unseen != conv.exists);
+    }
+    else if (rock->num > 0) {
         r = !!conv.counts[rock->num-1];
+    }
 
     conversation_fini(&conv);
     return r;
@@ -2228,11 +2247,23 @@ static int search_allconvflags_match(message_t *m,
     if (!rock->cstate) return 0;
 
     message_get_cid(m, &cid);
-    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/0)) return 0;
+    int flags = rock->include_trash ? CONV_WITHFOLDERS : 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, flags)) return 0;
     if (!conv.exists) return 0;
 
-    if (rock->num == 0)
-        r = !conv.unseen;
+    if (rock->num == 0) {
+        uint64_t unseen = conv.unseen;
+        if (rock->include_trash) {
+            conv_folder_t *folder;
+            for (folder = conv.folders; folder; folder = folder->next) {
+                if (folder->number == rock->cstate->trashfolder) {
+                    unseen += folder->unseen;
+                    break;
+                }
+            }
+        }
+        r = !unseen;
+    }
     else if (rock->num > 0)
         r = (conv.counts[rock->num-1] == conv.exists);
 

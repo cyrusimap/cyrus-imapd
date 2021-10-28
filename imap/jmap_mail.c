@@ -1457,6 +1457,9 @@ static void _email_search_threadkeyword(search_expr_t *parent, const char *keywo
     const char *flag = jmap_keyword_to_imap(keyword);
     if (!flag) return;
 
+    if (!strcasecmp(flag, "\\Seen"))
+        flag = "\\SeenInclTrash";
+
     search_expr_t *e = search_expr_new(parent, SEOP_MATCH);
     e->attr = search_attr_find(matchall ? "allconvflags" : "convflags");
     e->value.s = xstrdup(flag);
@@ -2200,49 +2203,113 @@ static void convert_folderclause(search_expr_t *clause,
     }
 }
 
-static int emailsearch_normalise(search_expr_t **rootp, int *is_imapfolderptr)
+static void convert_seentrash_clause(search_expr_t *clause, int trashnum)
 {
-    if (is_imapfolderptr) *is_imapfolderptr = 0;
+    if (clause->op != SEOP_AND) return;
 
-    /* Convert tree to DNF, it will converted in search_query anyway */
-    if (search_expr_normalise(rootp) < 0) {
+    // Determine if clause excludes Trash folder from search
+    int excludes_trash = 0;
+    search_expr_t *c;
+    for (c = clause->children; c; c = c->next) {
+        search_expr_t *e = c->op == SEOP_NOT ? c->children : c;
+        int is_not = c->op == SEOP_NOT;
+
+        if (e->op != SEOP_MATCH)
+            continue;
+
+        if (!strcmp(e->attr->name, "jmap_folders")) {
+            struct emailsearch_folders_value *val = e->value.v;
+            if (bv_isset(&val->foldernums, trashnum)) {
+                excludes_trash = !!val->is_otherthan != is_not;
+                if (excludes_trash) break;
+            }
+        }
+    }
+    if (!excludes_trash) return;
+
+    // Rewrite convflags attributes flag value
+    for (c = clause->children; c; c = c->next) {
+        search_expr_t *e = c->op == SEOP_NOT ? c->children : c;
+
+        if (e->op != SEOP_MATCH)
+            continue;
+
+        if ((!strcmp(e->attr->name, "allconvflags") ||
+             !strcmp(e->attr->name, "convflags")) &&
+                !strcasecmp(e->value.s, "\\SeenInclTrash")) {
+            free(e->value.s);
+            e->value.s = xstrdup("\\Seen");
+        }
+    }
+}
+
+struct emailsearch {
+    int want_expunged;
+    int want_partids;
+    int ignore_timer;
+    int is_mutable;
+    search_expr_t *expr_dnf;
+    search_expr_t *expr_orig;
+    struct sortcrit *sort;
+    strarray_t perf_filters;
+    int sort_savedate;
+    int is_imapfolder;
+    /* Internal state for UID search */
+    search_query_t *query;
+    struct searchargs *args;
+    struct index_state *state;
+    struct index_init init;
+};
+
+static void emailsearch_fini(struct emailsearch *search)
+{
+    if (!search) return;
+
+    search_expr_free(search->expr_dnf);
+    search_expr_free(search->expr_orig);
+    freesortcrit(search->sort);
+    strarray_fini(&search->perf_filters);
+
+    index_close(&search->state);
+    search_query_free(search->query);
+    freesearchargs(search->args);
+
+    memset(search, 0, sizeof(struct emailsearch));
+}
+
+
+static int emailsearch_normalise(struct emailsearch *search, jmap_req_t *req)
+{
+    if (!search->expr_orig) return 0;
+
+    /* Convert tree to DNF */
+    search_expr_t *dnf = search_expr_duplicate(search->expr_orig);
+    if (search_expr_normalise(&dnf) < 0) {
+        search_expr_free(dnf);
         return IMAP_SEARCH_SLOW;
     }
 
-    search_expr_t *root = *rootp;
-
-    /* Is there any JMAP folder expression we could optimize? */
-    int has_inmailbox_expr = 0;
-    ptrarray_t work = PTRARRAY_INITIALIZER;
-    ptrarray_push(&work, root);
-    search_expr_t *e;
-    while ((e = ptrarray_pop(&work))) {
-        if (is_single_inmailbox_expr(e)) {
-            has_inmailbox_expr = 1;
-            break;
-        }
+    /*
+     * Rewrite DNF expression tree:
+     * (1) workaround \Seen flag not being counted for conversations in Trash
+     * (2) optimize inMailbox queries to use IMAP folder search where applicable
+     */
+    search->is_imapfolder = 0;
+    strarray_t preferred_folders = STRARRAY_INITIALIZER;
+    if (dnf->op == SEOP_OR) {
         search_expr_t *c;
-        for (c = e->children; c; c = c->next) {
-            ptrarray_push(&work, c);
+        for (c = dnf->children; c; c = c->next) {
+            convert_seentrash_clause(c, req->cstate->trashfolder);
+            convert_folderclause(c, &preferred_folders, &search->is_imapfolder);
         }
     }
-    ptrarray_fini(&work);
+    else {
+        convert_seentrash_clause(dnf, req->cstate->trashfolder);
+        convert_folderclause(dnf, &preferred_folders, &search->is_imapfolder);
+    }
+    strarray_fini(&preferred_folders);
 
-    if (has_inmailbox_expr) {
-        /* Convert at most one inMailboxId expression in each clause to an
-         * IMAP folder search expression. Prefer to convert the same folders. */
-        strarray_t preferred_folders = STRARRAY_INITIALIZER;
-        if (root->op == SEOP_OR) {
-            search_expr_t *c;
-            for (c = root->children; c; c = c->next) {
-                convert_folderclause(c, &preferred_folders, is_imapfolderptr);
-            }
-        }
-        else {
-            convert_folderclause(root, &preferred_folders, is_imapfolderptr);
-        }
-        strarray_fini(&preferred_folders);
-    }
+    search->expr_dnf = dnf;
 
     return 0;
 }
@@ -2417,40 +2484,6 @@ static void _email_querychanges_destroyed(struct jmap_querychanges *query,
     json_array_append_new(query->removed, json_string(email_id));
 }
 
-struct emailsearch {
-    int want_expunged;
-    int want_partids;
-    int ignore_timer;
-    int is_mutable;
-    search_expr_t *expr_dnf;
-    search_expr_t *expr_orig;
-    struct sortcrit *sort;
-    strarray_t perf_filters;
-    int sort_savedate;
-    int is_imapfolder;
-    /* Internal state for UID search */
-    search_query_t *query;
-    struct searchargs *args;
-    struct index_state *state;
-    struct index_init init;
-};
-
-static void emailsearch_fini(struct emailsearch *search)
-{
-    if (!search) return;
-
-    search_expr_free(search->expr_dnf);
-    search_expr_free(search->expr_orig);
-    freesortcrit(search->sort);
-    strarray_fini(&search->perf_filters);
-
-    index_close(&search->state);
-    search_query_free(search->query);
-    freesearchargs(search->args);
-
-    memset(search, 0, sizeof(struct emailsearch));
-}
-
 static int _jmap_checkfolder(const char *mboxname, void *rock)
 {
     jmap_req_t *req = (jmap_req_t *)rock;
@@ -2477,10 +2510,9 @@ static void emailsearch_init(struct emailsearch *search,
     search->expr_orig = _email_buildsearchexpr(req, filter, NULL,
             contactgroups, want_expunged, &search->perf_filters);
     if (!search->expr_orig) return;
+    search_expr_detrivialise(&search->expr_orig);
 
-    search->expr_dnf = search_expr_duplicate(search->expr_orig);
-
-    int r = emailsearch_normalise(&search->expr_dnf, &search->is_imapfolder);
+    int r = emailsearch_normalise(search, req);
     if (r == IMAP_SEARCH_SLOW) {
         *err = json_pack("{s:s s:s}", "type", "unsupportedFilter",
                 "description", "search too complex");
@@ -2752,6 +2784,10 @@ enum guidsearch_expr_op {
 union guidsearch_expr_value {
     uint32_t num;
     void *v;
+    struct {
+        uint32_t num;
+        uint8_t include_trash;
+    } convflag;
 };
 
 struct guidsearch_expr {
@@ -2926,7 +2962,11 @@ static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state 
                         GSEOP_ALLCONVFLAGS : GSEOP_CONVFLAGS;
                     // set num: 0 for \Seen or index in counted_flags + 1
                     if (!strcasecmp(e->value.s, "\\Seen")) {
-                        ge->v.num = 0;
+                        ge->v.convflag.num = 0;
+                    }
+                    else if (!strcasecmp(e->value.s, "\\SeenInclTrash")) {
+                        ge->v.convflag.num = 0;
+                        ge->v.convflag.include_trash = 1;
                     }
                     else {
                         // Determine maximum number of counted flags
@@ -2940,7 +2980,7 @@ static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state 
 
                         }
                         if (idx >= 0 && idx + 1 <= (int) ncounts) {
-                            ge->v.num = (uint32_t) idx + 1;
+                            ge->v.convflag.num = (uint32_t) idx + 1;
                         }
                         else {
                             syslog(LOG_ERR, "%s: ignoring unsupported convflag: %s",
@@ -3079,23 +3119,32 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
         case GSEOP_ALLCONVFLAGS:
             {
                 conversation_t conv = CONVERSATION_INIT;
-                if (conversation_load_advanced(cstate, match->cid, &conv, 0)) {
+                int flags = e->v.convflag.include_trash ? CONV_WITHFOLDERS : 0;
+                if (conversation_load_advanced(cstate, match->cid, &conv, flags)) {
                     syslog(LOG_ERR, "%s: can't load cid %llx",
                             __func__, match->cid);
                     return 1;
                 }
-
                 int ret = 0;
                 if (conv.exists) {
-                    if (e->v.num == 0) {
-                        // check \Seen
+                    if (e->v.convflag.num == 0) {
+                        uint64_t unseen = conv.unseen;
+                        if (e->v.convflag.include_trash) {
+                            conv_folder_t *folder;
+                            for (folder = conv.folders; folder; folder = folder->next) {
+                                if (folder->number == cstate->trashfolder) {
+                                    unseen += folder->unseen;
+                                    break;
+                                }
+                            }
+                        }
                         ret = e->op == GSEOP_ALLCONVFLAGS ?
-                            !conv.unseen : conv.unseen != conv.exists;
+                            !unseen : unseen != conv.exists;
                     }
                     else {
                         ret = e->op == GSEOP_ALLCONVFLAGS ?
-                            conv.counts[e->v.num-1] == conv.exists :
-                            conv.counts[e->v.num-1] > 0;
+                            conv.counts[e->v.convflag.num-1] == conv.exists :
+                            conv.counts[e->v.convflag.num-1] > 0;
                     }
                 }
                 conversation_fini(&conv);
@@ -3117,7 +3166,8 @@ static inline void guidsearch_hash_expr(const search_expr_t *e, struct buf *buf)
 
 static int guidsearch_rank_clause(struct conversations_state *cstate,
                                   const search_expr_t *e,
-                                  struct buf *nonxapian_hash)
+                                  struct buf *nonxapian_hash,
+                                  int *use_dnf)
 {
     assert(e->op != SEOP_OR);
 
@@ -3134,7 +3184,7 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                 strarray_t child_hashes = STRARRAY_INITIALIZER;
                 for (child = e->children ; child ; child = child->next) {
                     int childrank = guidsearch_rank_clause(cstate, child,
-                            nonxapian_hash);
+                            nonxapian_hash, use_dnf);
                     if (childrank == -1) {
                         return -1;
                     }
@@ -3191,10 +3241,21 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                 /* allInThreadHaveKeyword
                  * someInThreadHaveKeyword
                  * noneInThreadHaveKeyword */
-                if (!strcasecmp(e->value.s, "\\Seen")) {
-                    // always supported
+                if (!strcasecmp(e->value.s, "\\Seen") ||
+                    !strcasecmp(e->value.s, "\\SeenInclTrash")) {
+
                     if (nonxapian_hash) {
+                        // Seen and SeenInclTrash must have the same hash
+                        char c = e->value.s[5];
+                        if (c) e->value.s[5] = '\0';
                         guidsearch_hash_expr(e, nonxapian_hash);
+                        if (c) e->value.s[5] = 'I';
+                    }
+
+                    if (!strcasecmp(e->value.s, "\\Seen")) {
+                        // normalise rewrote Seen flag search to exclude
+                        // seen counts of Trash mailbox. Need to use DNF.
+                        *use_dnf = 1;
                     }
                     return 1;
                 }
@@ -3227,7 +3288,8 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
 }
 
 static int guidsearch_rank_expr(struct conversations_state *cstate,
-                                const search_expr_t *e)
+                                const search_expr_t *e,
+                                int *use_dnf)
 {
     if (!e) return 0;
 
@@ -3246,13 +3308,14 @@ static int guidsearch_rank_expr(struct conversations_state *cstate,
          * criteria across the DNF clauses. */
         struct buf hash0 = BUF_INITIALIZER, hash = BUF_INITIALIZER;
         search_expr_t *child = e->children;
-        int rank = guidsearch_rank_clause(cstate, child, &hash0);
+        int rank = guidsearch_rank_clause(cstate, child, &hash0, use_dnf);
+
         if (rank == 1 || rank == -1) {
             rank = -1;
         }
         else {
             for (child = child->next ; child; child = child->next) {
-                int childrank = guidsearch_rank_clause(cstate, child, &hash);
+                int childrank = guidsearch_rank_clause(cstate, child, &hash, use_dnf);
                 if (childrank == 1 || childrank == -1 || buf_cmp(&hash0, &hash)) {
                     rank = -1;
                     break;
@@ -3264,7 +3327,7 @@ static int guidsearch_rank_expr(struct conversations_state *cstate,
         buf_free(&hash);
         return rank;
     }
-    return guidsearch_rank_clause(cstate, e, NULL);
+    return guidsearch_rank_clause(cstate, e, NULL, use_dnf);
 }
 
 static int is_guidsearch_sort(struct sortcrit *sort)
@@ -3414,11 +3477,13 @@ done:
 static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
                           struct guidsearch_query *gsq)
 {
-
-    int exprrank = guidsearch_rank_expr(req->cstate, search->expr_dnf);
+    int use_dnf = 0;
+    int exprrank = guidsearch_rank_expr(req->cstate, search->expr_dnf, &use_dnf);
     if (exprrank < 2 || !is_guidsearch_sort(search->sort)) {
         return IMAP_SEARCH_NOT_SUPPORTED;
     }
+
+    search_expr_t *expr = use_dnf ? search->expr_dnf : search->expr_orig;
 
     /* Determine readable folders for userid */
     uint32_t numfolders = conversations_num_folders(req->cstate);
@@ -3464,7 +3529,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         }
 
         int need_folders = 0;
-        gsq->matchexpr = guidsearch_expr_build(req->cstate, NULL, search->expr_orig,
+        gsq->matchexpr = guidsearch_expr_build(req->cstate, NULL, expr,
                                                &foldernum_by_mboxname,
                                                &need_folders);
         gsq->numfolders = need_folders ? numfolders : 0;
