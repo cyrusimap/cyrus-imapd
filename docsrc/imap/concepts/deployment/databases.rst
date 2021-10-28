@@ -352,7 +352,7 @@ DAV Index (<userid>.dav)
 This embedded SQLite database is per-user and primarily maintains a
 mapping from DAV resource names (URLs) to the corresponding Cyrus
 mailboxes and IMAP message UIDs.  The database is designed to have
-one table per resource type (iCalendar, vCard, etc) with each table
+one table per resource type (iCalendar, vCard, Sieve, etc) with each table
 containing metadata specific to that resource type.
 
 CalDAV
@@ -412,6 +412,35 @@ The format of the vCard table used by CardDAV is as follows::
         email TEXT,
         UNIQUE( mailbox, resource )
     );
+
+
+Sieve
+#######
+
+The format of the Sieve table used by JMAP and ManageSieve is as follows::
+
+    CREATE TABLE sieve_scripts (
+        rowid INTEGER PRIMARY KEY,
+        creationdate INTEGER,
+        lastupdated INTEGER,
+        mailbox TEXT NOT NULL,
+        imap_uid INTEGER,
+        modseq INTEGER,
+        createdmodseq INTEGER,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        content TEXT NOT NULL,
+        isactive INTEGER,
+        alive INTEGER,
+        UNIQUE( mailbox, imap_uid ),
+        UNIQUE( id )
+    );
+
+
+Because ManageSieve requires the server to locate a resource
+by name, the Sieve table has an additional index as follows::
+
+  CREATE INDEX idx_sieve_name ON sieve_scripts ( name );
 
 
 .. _storagetypes:
