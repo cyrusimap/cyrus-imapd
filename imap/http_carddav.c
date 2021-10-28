@@ -152,6 +152,16 @@ static struct mime_type_t carddav_mime_types[] = {
       (void * (*)(const struct buf*)) &vcard_parse_buf,
       (void (*)(void *)) &vparse_free_card, NULL, NULL
     },
+    { "text/directory; charset=utf-8", "3.0", "vcf",
+      (struct buf* (*)(void *)) &vcard_as_buf,
+      (void * (*)(const struct buf*)) &vcard_parse_buf,
+      (void (*)(void *)) &vparse_free_card, NULL, NULL
+    },
+    { "text/vcard", "4.0", "vcf",
+      (struct buf* (*)(void *)) &vcard_as_buf,
+      (void * (*)(const struct buf*)) &vcard_parse_buf,
+      (void (*)(void *)) &vparse_free_card, NULL, NULL
+    },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
@@ -1089,18 +1099,24 @@ static int list_addressbooks(struct transaction_t *txn)
 
 
 /* Perform a GET/HEAD request on a CardDAV resource */
-static int carddav_get(struct transaction_t *txn,
-                       struct mailbox *mailbox __attribute__((unused)),
-                       struct index_record *record,
-                       void *data __attribute__((unused)),
-                       void **obj __attribute__((unused)),
-                       struct mime_type_t *mime __attribute__((unused)))
+static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
+                       struct index_record *record, void *data, void **obj,
+                       struct mime_type_t *mime)
 {
     if (!(txn->req_tgt.collection || txn->req_tgt.userid))
         return HTTP_NO_CONTENT;
 
     if (record && record->uid) {
         /* GET on a resource */
+        struct carddav_data *cdata = (struct carddav_data *) data;
+        unsigned want_ver = (mime && !strcmp(mime->version, "4.0")) ? 4 : 3;
+        
+        if (cdata->version != want_ver) {
+            *obj = record_to_vcard(mailbox, record);
+            if (want_ver == 4) vcard_to_v4(*obj);
+            else vcard_to_v3(*obj);
+        }
+
         return HTTP_CONTINUE;
     }
 
