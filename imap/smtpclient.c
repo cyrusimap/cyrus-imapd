@@ -780,15 +780,13 @@ EXPORTED void smtpclient_set_by(smtpclient_t *sm, const char *value)
 
 EXPORTED void smtpclient_set_jmapid(smtpclient_t *sm, const char *value)
 {
-    free(sm->jmapid);
-    sm->jmapid = NULL;
+    xzfree(sm->jmapid);
 
     if (value) {
         struct buf xtext = BUF_INITIALIZER;
 
         smtp_encode_esmtp_value(value, &xtext);
         sm->jmapid = buf_release(&xtext);
-        buf_free(&xtext);
     }
 }
 
