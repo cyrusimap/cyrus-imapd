@@ -251,3 +251,92 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
     return size;
 }
 
+EXPORTED void vcard_to_v3(struct vparse_card *vcard)
+{
+    struct vparse_entry *ventry, *next;
+    struct buf buf = BUF_INITIALIZER;
+
+    for (ventry = vcard->objects->properties; ventry; ventry = next) {
+        const char *name = ventry->name;
+        const char *propval = ventry->v.value;
+
+        next = ventry->next;
+
+        if (!name) continue;
+        if (!propval) continue;
+
+        if (!strcasecmp(name, "version")) {
+            /* Set proper VERSION */
+            vparse_set_value(ventry, "3.0");
+        }
+        else if (!strcasecmp(name, "photo")) {
+            if (!strncmp(propval, "data:", 5)) {
+                /* Rewrite PHOTO property */
+                const char *type = propval + 5;
+                char *encoding = strchr(type, ';');
+                char *data = strchr(encoding ? encoding : type, ',');
+
+                if (encoding) {
+                    *encoding++ = '\0';
+                }
+                if (data && !strcmpnull(encoding, "base64")) {
+                    *data++ = '\0';
+                    vparse_set_value(ventry, data);
+                    vparse_add_param(ventry, "ENCODING", "b");
+                    if ((type = strchr(type, '/'))) {
+                        buf_setcstr(&buf, type+1);
+                        vparse_add_param(ventry, "TYPE", buf_ucase(&buf));
+                    }
+                }
+            }
+        }
+    }
+
+    buf_free(&buf);
+}
+
+EXPORTED void vcard_to_v4(struct vparse_card *vcard)
+{
+    struct vparse_entry *ventry, *next;
+    struct vparse_param *vparam;
+    struct buf buf = BUF_INITIALIZER;
+
+    for (ventry = vcard->objects->properties; ventry; ventry = next) {
+        const char *name = ventry->name;
+        const char *propval = ventry->v.value;
+
+        next = ventry->next;
+
+        if (!name) continue;
+        if (!propval) continue;
+
+        if (!strcasecmp(name, "version")) {
+            /* Set proper VERSION */
+            vparse_set_value(ventry, "4.0");
+        }
+        else if (!strcasecmp(name, "photo")) {
+            vparam = vparse_get_param(ventry, "value");
+            if (!vparam || strcasecmp(vparam->value, "uri")) {
+                /* Rewrite PHOTO property */
+                buf_setcstr(&buf, "data:");
+
+                vparam = vparse_get_param(ventry, "type");
+                if (vparam && vparam->value) {
+                    buf_printf(&buf, "image/%s", lcase(vparam->value));
+                }
+                vparse_delete_params(ventry, "type");
+
+                vparam = vparse_get_param(ventry, "encoding");
+                if (vparam && !strcasecmpsafe(vparam->value, "b")) {
+                    buf_appendcstr(&buf, ";base64");
+                }
+                vparse_delete_params(ventry, "encoding");
+
+                buf_printf(&buf, ",%s", propval);
+                vparse_set_value(ventry, buf_cstring(&buf));
+            }
+        }
+    }
+
+    buf_free(&buf);
+}
