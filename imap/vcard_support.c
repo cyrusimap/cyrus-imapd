@@ -258,7 +258,7 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
 
     for (ventry = vcard->objects->properties; ventry; ventry = next) {
         const char *name = ventry->name;
-        const char *propval = ventry->v.value;
+        char *propval = ventry->v.value;
 
         next = ventry->next;
 
@@ -272,7 +272,7 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
         else if (!strcasecmp(name, "photo")) {
             if (!strncmp(propval, "data:", 5)) {
                 /* Rewrite PHOTO property */
-                const char *type = propval + 5;
+                char *type = propval + 5;
                 char *encoding = strchr(type, ';');
                 char *data = strchr(encoding ? encoding : type, ',');
 
