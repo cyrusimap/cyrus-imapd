@@ -1109,7 +1109,7 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
     if (record && record->uid) {
         /* GET on a resource */
         struct carddav_data *cdata = (struct carddav_data *) data;
-        unsigned want_ver = (mime && !strcmp(mime->version, "4.0")) ? 4 : 3;
+        unsigned want_ver = (mime && mime->version[0] == '4') ? 4 : 3;
         
         if (cdata->version != want_ver) {
             *obj = record_to_vcard(mailbox, record);
