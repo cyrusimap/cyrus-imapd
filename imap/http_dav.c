@@ -1285,11 +1285,16 @@ struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types)
             struct mime_type_t *m;
 
             for (m = types; !ret && m->content_type; m++) {
-                if (is_mediatype(e->token, m->content_type)) ret = m;
+                if (is_mediatype(e->token, m->content_type) &&
+                    (!e->version || !strcmpsafe(e->version, m->version))) {
+                    ret = m;
+                }
             }
         }
 
         free(e->token);
+        free(e->version);
+        free(e->charset);
     }
     if (enc) free(enc);
 
