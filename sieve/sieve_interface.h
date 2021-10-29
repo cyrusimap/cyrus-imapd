@@ -298,12 +298,6 @@ int sieve_emit_bytecode(int fd, bytecode_info_t *bc);
 /* Free a bytecode_info_t */
 void sieve_free_bytecode(bytecode_info_t **p);
 
-/* Get path of bc file pointed to by defaultbc symlink.
- * Caller must free return value
- * Returns NULL if unable to perform conversion
- */
-char *sieve_getdefaultbcfname(const char *defaultbc);
-
 /* Rebuild bc_fname from script_fname if needed or forced.
  * At least one of script_fname or bc_fname must be provided.
  */
